@@ -1,0 +1,62 @@
+# Production overlay. Use with the base file (override.yaml is NOT auto-loaded
+# when you pass -f explicitly):
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+#
+# Adds a Caddy edge: terminates HTTP/HTTPS — auto-provisioning and renewing a
+# Let's Encrypt certificate when SITE_ADDRESS is a real domain — serves nothing
+# itself, and reverse-proxies /api, /docs and the OpenAPI UIs to the backend,
+# everything else to the web SPA. Internal services aren't published; only the
+# edge is. See ./Caddyfile.
+
+services:
+  postgres:
+    # Data only; no published port in prod.
+    expose:
+      - "5432"
+
+  minio:
+    # S3 API only inside the compose network; the console isn't published.
+    # (If you ever need direct browser access to objects via presigned URLs,
+    # route a path through the edge in the Caddyfile.)
+    expose:
+      - "9000"
+
+  backend:
+    environment:
+      ENV: prod
+      DEBUG: "false"
+      DOCS_DIR: /docs
+    expose:
+      - "8000"
+    volumes:
+      # The docs/ tree is rendered live at /docs; the repo is present on the
+      # host, so bind it in (the backend image doesn't bundle it).
+      - ../docs:/docs:ro
+
+  web:
+    expose:
+      - "80"
+
+  edge:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - backend
+    environment:
+      # A domain → automatic HTTPS via Let's Encrypt. ":80" → plain HTTP only.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"        # HTTP — also the ACME HTTP-01 challenge / HTTPS redirect
+      - "443:443"      # HTTPS
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data       # certificates + ACME account state — must persist
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

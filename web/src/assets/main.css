@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/* Project design tokens / theme overrides go here, e.g.:
+@theme {
+  --color-brand-500: oklch(0.55 0.15 250);
+}
+*/
+
+html,
+body,
+#app {
+  height: 100%;
+}

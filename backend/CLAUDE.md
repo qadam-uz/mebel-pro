@@ -1,0 +1,111 @@
+# Backend — `mebel-pro/backend`
+
+FastAPI service. Async end-to-end: `asyncio` + `asyncpg` + SQLAlchemy 2.0 ORM,
+migrations via Alembic, settings via `pydantic-settings`. Managed with **uv**.
+
+## Toolchain
+
+| Concern        | Tool                              |
+| -------------- | --------------------------------- |
+| Runtime        | Python **3.12** (`.python-version`) |
+| Package / venv | **uv** (`pyproject.toml` + `uv.lock`) |
+| Web framework  | FastAPI (`fastapi[standard]` → uvicorn, CLI) |
+| ORM            | SQLAlchemy 2.0 (async, typed `Mapped[...]`) |
+| DB driver      | asyncpg (Postgres); aiosqlite in tests |
+| Object store   | MinIO / S3-compatible, via **boto3** (`files` module) |
+| Migrations     | Alembic (async env, autogenerate)  |
+| Settings       | pydantic-settings (`app/core/config.py`) |
+| Lint + format  | **ruff** (one tool for both)       |
+| Types          | **mypy** (`strict`)                |
+| Tests          | pytest + pytest-asyncio + httpx (`ASGITransport`) |
+| Logging        | structlog                          |
+
+## Commands
+
+Run everything through `uv run` (no manual venv activation needed).
+
+```bash
+uv sync                                  # install/refresh deps from uv.lock
+uv sync --upgrade                         # bump within constraints, update lock
+uv add <pkg>            / uv add --dev <pkg>
+
+uv run fastapi dev app/main.py            # dev server, autoreload, :8000
+uv run uvicorn app.main:app --reload      # equivalent
+
+uv run pytest                             # full suite + coverage
+uv run pytest tests/test_health.py -q     # one file
+uv run pytest -k readyz                    # by name
+
+uv run ruff check . --fix                 # lint (autofix)
+uv run ruff format .                       # format
+uv run mypy app                            # type check
+
+uv run alembic revision --autogenerate -m "add products"
+uv run alembic upgrade head
+uv run alembic downgrade -1
+uv run alembic history
+```
+
+Pre-commit equivalent (run before pushing): `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`.
+
+## Layout
+
+```
+backend/
+  pyproject.toml          # deps, ruff/mypy/pytest config (single source)
+  uv.lock                 # pinned, committed
+  alembic.ini             # script_location = app/migrations; URL injected at runtime
+  app/
+    main.py               # create_app() factory + module-level `app`; lifespan hook
+    docs_site.py          # serves the repo's docs/ as HTML at /docs (Markdown rendered live); also exports `require_docs_auth`
+    docs_assets/          # docs-site assets: style.css (theme) + docs.js (nav filter, on-this-page scroll-spy)
+    core/
+      config.py           # Settings (env / .env); `settings` singleton; sqlalchemy_database_uri; S3_*; DOCS_DIR; DOCS_AUTH_*
+      db.py               # async engine, SessionLocal, get_session() dependency
+    api/
+      deps.py             # Annotated DI aliases — `Session = Annotated[AsyncSession, Depends(get_session)]`
+      router.py           # api_router; include feature routers here
+      routes/             # one module per resource (health.py, …)
+    models/
+      __init__.py         # re-exports Base; MUST import every model module (Alembic autogenerate)
+      base.py             # DeclarativeBase `Base` + mixins (UUIDPrimaryKey, Timestamped)
+    schemas/              # Pydantic request/response models (APIModel = from_attributes base)
+    services/             # business logic; routes stay thin, call into here
+    migrations/           # Alembic: env.py (async), script.py.mako, versions/
+  tests/
+    conftest.py           # db_session (in-memory sqlite, schema via metadata.create_all) + httpx client w/ get_session override
+    test_*.py
+  Dockerfile              # multi-stage, uv in builder, non-root runtime; CMD runs `alembic upgrade head` then uvicorn
+  .env.example            # local non-Docker env (Compose uses deploy/.env)
+```
+
+## Conventions
+
+- **Async only.** Route handlers `async def`; DB access via the injected `AsyncSession`. Never call blocking I/O in a handler — offload with `anyio.to_thread` if unavoidable.
+- **Sessions** come from the `Session` dependency in `app/api/deps.py`. `get_session` commits on success, rolls back on exception. Don't create engines/sessions ad hoc outside `app/core/db.py` (tests are the exception).
+- **Models**: typed `Mapped[...]` / `mapped_column(...)` style (SQLAlchemy 2.0). Inherit `Base`; compose `UUIDPrimaryKey` / `Timestamped` mixins as needed. Every new model module must be imported in `app/models/__init__.py` or Alembic won't see it.
+- **Migrations**: never edit a DB by hand. `alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some things — enum changes, server defaults, renames), then `alembic upgrade head`. Migrations are auto-formatted by ruff via a post-write hook.
+- **Schemas vs models**: ORM objects never cross the API boundary — convert to a `schemas/` Pydantic model (`response_model=...`). Response schemas extend `APIModel` (`from_attributes=True`).
+- **Routes thin, services fat**: non-trivial logic lives in `app/services/`; routes parse input, call a service, shape the response.
+- **Module boundaries**: the codebase is layer-first (`models/` `schemas/` `services/` `api/routes/`), but the domain is split into logical *modules* — the module map in [`docs/spec/architecture.md`](../docs/spec/architecture.md). A feature's files (model/schema/service/route) belong to one module; code in one module calls another module's **service** functions, never reads another module's tables or imports its ORM models.
+- **Config**: add new settings to `Settings` in `app/core/config.py` with a sensible dev default; surface them in `.env.example` and `deploy/.env.example`. Read config via the `settings` singleton.
+- **Errors**: raise `fastapi.HTTPException` (or a subclass) for client-facing failures; let unexpected errors propagate (they 500 + log).
+- **API prefix**: everything under `settings.API_V1_PREFIX` (`/api/v1`). `GET /api/v1/healthz` (liveness) and `/readyz` (DB-check) already exist.
+- **Built-in pages**: `/docs` serves the project's `docs/` Markdown tree rendered live (`app/docs_site.py`; directory = `settings.DOCS_DIR`, default `<repo>/docs`; no build step — edit a file and refresh `:8000/docs`). The OpenAPI UIs moved to **`/api-docs`** (Swagger) and `/api-redoc` (ReDoc); the schema stays at `/api/v1/openapi.json`. **All four are behind HTTP Basic** with the same credentials — `settings.DOCS_AUTH_USERNAME` / `DOCS_AUTH_PASSWORD` (dev default `docs`/`docs`; change in any non-local deploy). Health endpoints (`/api/v1/healthz`, `/readyz`) stay open.
+- **Lint/type clean** is required: `ruff check`, `ruff format --check`, `mypy app` must all pass. Prefer fixing over `# noqa` / `# type: ignore`; when you must suppress, scope it to the line with a reason.
+
+## Database / object store / running locally
+
+- Postgres is expected on `localhost:5432` (db `mebel`, user/pass `mebel/mebel`) and MinIO on `localhost:9000` (key/secret `mebel/mebel`, bucket `mebel`) — `cd deploy && docker compose up -d postgres minio createbuckets` brings up both (the `createbuckets` one-shot creates the bucket and exits).
+- Then `uv run alembic upgrade head` and `uv run fastapi dev app/main.py`. The S3 endpoint/creds/bucket come from `S3_*` in `.env` (defaults already point at the local MinIO).
+- Tests need **no** database and **no** object store — they use in-memory SQLite and should stub/fake S3. Point `DATABASE_URL` at a real Postgres to run the suite against it.
+
+## Adding a feature (typical flow)
+
+1. `app/models/<thing>.py` → model; import it in `app/models/__init__.py`.
+2. `uv run alembic revision --autogenerate -m "add <thing>"`; review; `alembic upgrade head`.
+3. `app/schemas/<thing>.py` → request/response Pydantic models.
+4. `app/services/<thing>.py` → logic.
+5. `app/api/routes/<thing>.py` → router; register it in `app/api/router.py`.
+6. `tests/test_<thing>.py` → cover the routes.
+7. `ruff check --fix . && ruff format . && mypy app && pytest`.

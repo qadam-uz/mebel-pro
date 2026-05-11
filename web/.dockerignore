@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+.eslintcache
+*.log
+CLAUDE.md
+README.md
+.dockerignore
+Dockerfile

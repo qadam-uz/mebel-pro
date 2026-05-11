@@ -1,0 +1,207 @@
+---
+name: software-architecture
+description: >-
+  Use when designing or restructuring software architecture, choosing a tech stack or system
+  topology, making or reviewing a consequential technical-design decision, weighing patterns
+  (monolith vs. microservices, sync vs. async, SQL vs. NoSQL, where module/service boundaries
+  go, what to cache, where a queue earns its keep), or producing the architecture content of
+  project documentation (overviews, ADRs). Reach for this skill whenever a decision will be
+  costly to reverse, whenever someone proposes adding a service / queue / cache / layer /
+  abstraction, and whenever "scalable", "flexible", "enterprise", "future-proof",
+  "event-driven", "clean architecture", or "microservices" enters a design discussion without
+  numbers behind it. It calibrates the design to the system's real operating envelope — scale,
+  criticality, security, latency, lifespan, team — and pushes back hard on over-engineering
+  (the default failure mode) without letting genuinely high-stakes systems be under-built.
+---
+
+# Software Architecture
+
+> Architecture is the set of decisions that are expensive to change later — so the job is to
+> choose those few deliberately and keep everything else cheap to change. Every such decision
+> is a trade-off, and the right trade-off is the one that fits *this* system's situation. So:
+> establish the situation first, design to fit it, and resist the pull to build more than the
+> situation needs.
+
+This skill is the system-design voice in the `shape` pipeline (ideation → docs). Use it to make
+architecture decisions, to critique proposed ones, and to produce the architecture content the
+documentation needs. Keep its output **structured** — see "What this skill produces" — because
+downstream steps consume it.
+
+## The one habit this skill exists to install
+
+Most bad architecture comes from skipping a single step: jumping to a solution without naming the
+situation it has to fit. That situation is the *operating envelope*. **State the envelope before
+you propose the design.** If the human hasn't given you the numbers, ask for them or state your
+assumption out loud — *"assuming an internal tool, low hundreds of users, no payments, two-person
+team; correct me if not."* Half of over-engineering and most of under-engineering trace back to
+an unexamined envelope.
+
+## The operating envelope — five axes
+
+| Axis | Low end → high end | What the high end demands |
+|---|---|---|
+| **Scale + trajectory** | tens of users, flat → millions, fast growth | horizontal scaling, statelessness, caching, async, capacity math |
+| **Criticality / blast radius** | re-run a report → lose money / break the law | correctness guarantees, idempotency, audit trails, strong consistency |
+| **Security & privacy** | internal behind VPN, no PII → public, holds secrets/PII/payments | hard authn/authz, encryption, untrusted input, small attack surface |
+| **Latency sensitivity** | "a few seconds is fine" → "every 100ms costs conversions" | sync work moved off the hot path, aggressive caching, queues |
+| **Lifespan × churn × team** | weekend spike, one dev → decade-long core, dozen engineers | the full strategic-design investment; an architecture the team can operate |
+
+1. **Scale + trajectory** — users, data volume, request rate, *and the growth curve*. Tens vs.
+   thousands vs. millions is a different system. Small-but-flat: design for today, full stop.
+   Small-but-10×-ing: design for the *next* tier, on purpose. Demand a real number or a real
+   growth estimate before designing for scale — "it might get big" is not one.
+2. **Criticality / blast radius** — what happens when it's wrong or down? *Inconvenience* (re-run
+   a report) → low rigor. *Lost work / annoyed users* → moderate. *Money moves wrong* (billing,
+   payments, inventory backing real orders) → high: idempotency, audit trails, reconciliation.
+   *Legal / regulatory / governance / safety* (records an auditor or regulator inspects; data
+   that determines someone's rights, benefits, money, or status) → highest: strong consistency,
+   append-only / tamper-evident history, least-privilege access, tested restores, immutability of
+   the past, a real answer to "prove the state on date X." (Consistency requirements ride here:
+   the higher the criticality, the less eventual consistency / at-least-once / approximate
+   answers you can tolerate.)
+3. **Security & privacy exposure** — internal-behind-VPN vs. public on the internet; whether it
+   holds PII, secrets, payment or health data; whether it's worth attacking. High exposure makes
+   authn/authz rigor, encryption, secret hygiene, untrusted-input handling, an audit trail, and a
+   small attack surface a *baseline, not a phase 2*.
+4. **Latency / performance sensitivity** — "a few seconds is fine" (back-office, batch) vs.
+   "every 100ms costs conversions" (consumer-facing) vs. hard real-time. Decides whether
+   expensive work can be synchronous, how aggressively you cache, where async / queues actually
+   earn their keep.
+5. **Lifespan × change-rate × team** — a weekend prototype; an internal tool that runs quietly
+   for years with rare edits; a core product a dozen people change weekly for a decade. Multiply:
+   long-lived × high-churn × big-team is where the strategic-design investment (below) has its
+   highest return; throwaway × static × one-dev is where it's closest to zero. And sophisticated
+   architectures have a *running cost* in expertise and 3am toil — match the architecture to the
+   team that has to operate it. Two people should not run nine services.
+
+**Then: design to the level each axis demands — no higher, no lower.** Over-shooting a low-stakes
+axis is over-engineering: waste, drag, a permanent complexity tax for users you'll never have.
+Under-shooting a high-stakes axis is negligence: data loss, breaches, outages, failed audits.
+Both are failures. Most real systems are low-to-moderate on most axes and high on one or two —
+find which, and put the rigor *there*.
+
+For worked playbooks per tier — the throwaway spike, the internal tool, the public product, the
+high-traffic service, the high-assurance/governance system — with concrete do / don't lists
+(including the two cases this skill was built around: an internal furniture-business app for a few
+hundred users, and a governance/compliance system), read `references/envelope-tiers.md`.
+
+## Over-engineering is the default failure — lean against it
+
+You will be tempted to add boxes to the diagram. Public engineering writing overrepresents
+big-tech-scale problems; adding patterns *feels* like demonstrating competence; symmetry and
+"what if we need to…" are seductive. Resist:
+
+- **YAGNI, and mean it.** Build for the requirements you have plus the near-term ones you can
+  *name concretely* — on the roadmap, with a date. A vague future ("what if we go multi-tenant?")
+  earns design effort only once it's concrete and likely, not before.
+- **Rule of three for abstraction.** Don't extract the general form on the first use, or the
+  second. Three real, *different* uses, then abstract — the first two are guesses about what
+  varies; the third is data. A wrong abstraction costs more than the duplication it replaced,
+  because it's harder to back out.
+- **Default to the boring, smaller thing — for this envelope.** Monolith over services. One
+  database over many. Synchronous over async. A library over a service. A function over a
+  framework. SQL over a bespoke query layer. Widely-known tech over exciting tech. Deviate only
+  when a *named, present* requirement forces it — and say which requirement, with its number.
+- **Architecture-pattern names are not arguments.** "Clean Architecture", "Hexagonal"/"Onion",
+  and the *tactical* side of DDD (aggregates, value objects, repositories, mappers, a DTO at every
+  boundary) are genuine tools that earn their keep at Tier 2+ with a real domain model and a real
+  team. Dropped into a Tier-1 CRUD app they reliably collapse into pass-through layers
+  (`references/design-heuristics.md` §6) — ceremony with no payoff, in a stack (FastAPI + Vue)
+  where the framework already gives you the structure. If someone reaches for one, ask which
+  concrete *present* problem it solves; if the honest answer is "it felt more professional,"
+  that's not a problem.
+- **Count the carrying cost.** Every service, queue, cache, layer, and abstraction is something
+  that must be understood, deployed, monitored, secured, paid for, and debugged at 3am — forever,
+  by whoever inherits it. Before adding one, name the concrete problem it solves *today*.
+  "Scalability" and "flexibility" are not problems; "the export query takes 40s and times out" is.
+- **Robust ≠ elaborate.** Robustness comes from care — tests, monitoring, careful error handling,
+  backups you've actually restored — not from architectural elaboration. Adding services doesn't
+  make you robust; it makes you distributed, which is *harder* to make robust. Want resilience?
+  Add tests and observability, not boxes.
+
+**Over-engineering smell test** — run it on your leading design; each "yes" is a prompt to delete
+something:
+- more services than teams?
+- a message queue / event bus but no measured throughput problem?
+- an interface with exactly one implementation that isn't a test double?
+- a cache in front of something never measured as slow?
+- a config option no one will ever change?
+- a "manager" / "service" / "handler" layer that just forwards calls (a pass-through layer)?
+- the words "scalable" / "enterprise" / "flexible" / "future-proof" doing argumentative work with
+  no number behind them?
+
+**But — calibrated, not reflexive.** Anti-over-engineering is *not* "always do the crudest thing."
+On a high-stakes axis — correctness for money, auditability for governance, security for exposed
+PII, scaling for genuinely-high traffic — the simple thing is the *wrong* thing, and cutting it is
+the under-engineering failure. The envelope step is what tells you which axis is which: trim
+ruthlessly on the low-stakes ones, invest deliberately on the high-stakes ones.
+
+## How to decide — the loop
+
+Run this for any architectural decision worth the name:
+
+1. **Frame the envelope.** The five axes, stated. Plus: is this a *one-way door* (DB engine, core
+   data model, public API contract, auth model, a cloud's proprietary primitives) or a *two-way
+   door* (an internal module boundary, a library choice, a caching layer you can pull out)? Spend
+   your design budget on the one-way doors; two-way doors get a sane default and a one-line note,
+   not a deliberation.
+2. **State the problem, not a solution.** What concretely must be true? Which forces are in
+   tension? Reject solution-shaped problem statements: not "we need a queue" but "expensive jobs
+   block the request for 30s and users abandon" — *that's* the problem; the queue is one answer
+   among several.
+3. **Design it twice — and one option is always the minimal / null one.** Generate at least two
+   genuinely different approaches; one of them must be "the smallest thing that could work" (or
+   even "do nothing / don't build it yet"). Forcing the minimal option onto the table is the
+   single best anti-over-engineering move there is — it makes you say out loud why the bigger
+   option is worth its cost, and often it isn't. The act of finding a second option routinely
+   surfaces a better third.
+4. **Name the trade-offs against the envelope.** For each option: how it works; what it costs (to
+   build, to run, to operate, to understand, in dollars); what it forecloses; what it assumes.
+   Then map each cost and benefit to an envelope axis and reason from there — *"Option A caps at
+   ~X rps; our envelope is internal, <1k users, flat growth, so that cap is irrelevant and A
+   wins."* The reasoning from envelope to choice is the deliverable, not just the choice.
+5. **Check both failure directions.** Smell test (above) on the leading option. And if any
+   high-stakes axis is in play: did we actually address consistency / audit / security / real
+   scaling — or hand-wave it?
+6. **Decide, and record why.** Pick. Write it down: context (the envelope), the decision, the
+   alternatives considered, the consequences *including the bad ones you're accepting*. The
+   rejected options and the "why" are the valuable part — they're what stops the decision being
+   silently re-litigated, or silently violated by someone who didn't know it was a decision.
+7. **Name the revisit triggers.** What concrete change would reopen this? — "traffic crosses X",
+   "we start taking payments", "we go multi-tenant". Two-way doors: revisit freely. One-way doors:
+   revisit only on a real trigger, deliberately — not on vibes, not on a schedule.
+
+## The timeless techniques
+
+The above is the *judgment* layer. The *construction* layer — deep modules, information hiding,
+pulling complexity downward, layers that earn their place, defining errors out of existence,
+comments that capture intent, names, consistency, strategic vs. tactical programming — lives in
+`references/design-heuristics.md`. Read it when you're shaping the internals of a component, not
+just the boxes and arrows. Each technique there is written context-aware: when it matters more,
+when less, and where it must itself bend to the envelope (e.g. "just crash on error" is fine for a
+CLI tool and negligent for a governance system).
+
+The one-line version: **complexity — anything that makes the system hard to understand and change
+— is the enemy; it accretes from many small concessions, so you fight it with many small refusals;
+and how hard you fight scales with how long the thing will live and how many people will touch it.**
+
+## What this skill produces
+
+When you use this skill to produce architecture content for the documentation, emit it in this
+shape so downstream steps can consume it predictably:
+
+- **Envelope** — the five axes with the actual numbers / answers (or the explicit assumption).
+  This doubles as the system's *"not built for"* statement — pin it down so no one later assumes
+  otherwise.
+- **Overview** — the major components and how they communicate (one clear diagram beats a wall of
+  UML; a context view + a component view, C4-ish, is a fine default), the data model at a high
+  level, and the cross-cutting concerns: auth, errors, logging, config, deployment.
+- **Decisions** — a list of ADR-style records: context (the relevant slice of the envelope),
+  decision, alternatives considered, consequences (including accepted downsides). Append-only —
+  supersede, don't delete; the history is the point.
+- **Open questions / revisit triggers** — what's undecided and why, and what would reopen settled
+  decisions.
+
+Stop at the *content and the reasoning*. Doc *form* — the file layout, the ADR template, how the
+docs are kept honest and maintained — is a separate job; reproducing that scope here would be the
+over-engineering this skill warns about, applied to itself.

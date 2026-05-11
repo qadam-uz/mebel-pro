@@ -1,0 +1,104 @@
+# Deploy the full stack to the production server.
+#
+# Trigger: every push to `main` (and manual `workflow_dispatch`). There are NO
+# verification jobs here on purpose — run the per-directory check gates locally
+# before you push (see the repo CLAUDE.md). This workflow only ships and
+# (re)starts the stack.
+#
+# What it does: rsync the repo to the server over SSH, then run
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build --remove-orphans
+# in deploy/ on the server.
+#
+# Required GitHub config (Settings → Secrets and variables → Actions):
+#   secrets.DEPLOY_SSH_HOST         host / IP of the prod server
+#   secrets.DEPLOY_SSH_USER         SSH user (must be able to run `docker`)
+#   secrets.DEPLOY_SSH_KEY          private key for that user (PEM, no passphrase)
+#   secrets.DEPLOY_SSH_PORT         optional — SSH port (default 22)
+#   secrets.DEPLOY_SSH_KNOWN_HOSTS  optional but recommended — the server's SSH
+#                                   host key(s); if unset the key is discovered
+#                                   with ssh-keyscan (trust-on-first-use)
+#   vars.DEPLOY_PATH                optional — path on the server to sync into
+#                                   (default /srv/mebel-pro)
+#
+# One-time server prerequisites: Docker Engine + the Compose v2 plugin; ports
+# 80 and 443 open; `deploy/.env` created from `deploy/.env.example` at
+# <DEPLOY_PATH>/deploy/.env (set SITE_ADDRESS, POSTGRES_PASSWORD, …). See
+# deploy/CLAUDE.md.
+
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; queue, don't cancel a deploy mid-flight.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Ship & restart the stack
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    env:
+      SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+      SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+      SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "${SSH_KEY:-}"  || { echo "secret DEPLOY_SSH_KEY is not set";  exit 1; }
+          test -n "${SSH_HOST:-}" || { echo "secret DEPLOY_SSH_HOST is not set"; exit 1; }
+          test -n "${SSH_USER:-}" || { echo "secret DEPLOY_SSH_USER is not set"; exit 1; }
+          port="${SSH_PORT:-22}"
+          path="${DEPLOY_PATH:-/srv/mebel-pro}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "DEPLOY_SSH_KNOWN_HOSTS not set — falling back to ssh-keyscan (trust-on-first-use)."
+            ssh-keyscan -p "$port" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+          # Resolved values for the remaining steps.
+          {
+            echo "SSH_PORT=$port"
+            echo "DEPLOY_PATH=$path"
+            echo "SSH_DEST=$SSH_USER@$SSH_HOST"
+          } >> "$GITHUB_ENV"
+
+      - name: Sync the repo to the server
+        run: |
+          set -eu
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_DEST" "mkdir -p '$DEPLOY_PATH'"
+          rsync -az --delete \
+            --exclude='.git/' --exclude='.github/' --exclude='.env' \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT" \
+            ./ "$SSH_DEST:$DEPLOY_PATH/"
+
+      - name: Build & (re)start the stack
+        run: |
+          set -eu
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_DEST" "
+            set -eu
+            cd '$DEPLOY_PATH/deploy'
+            if [ ! -f .env ]; then
+              echo 'deploy/.env is missing on the server — create it from deploy/.env.example.'
+              exit 1
+            fi
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --build --remove-orphans
+            docker image prune -f
+          "

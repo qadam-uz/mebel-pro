@@ -1,0 +1,32 @@
+# Edge reverse proxy for the production stack — the only container published to
+# the host. Terminates HTTP/HTTPS and routes to the internal services. Mounted
+# into the `edge` service by compose.prod.yaml.
+#
+# SITE_ADDRESS (from deploy/.env):
+#   • a domain, e.g. "mebel.example.com"  → Caddy obtains and auto-renews a
+#     Let's Encrypt certificate (this container must be reachable on 80 and 443)
+#   • "localhost"                          → HTTPS using Caddy's internal CA
+#   • ":80"                                → plain HTTP, no certificates (default)
+# ACME_EMAIL (optional) is registered with the ACME CA for expiry notices.
+
+{
+	email {$ACME_EMAIL:}
+}
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+	log
+
+	# Cap request bodies (was nginx `client_max_body_size 25m`).
+	request_body {
+		max_size 25MB
+	}
+
+	# FastAPI: the JSON API, the live docs site, and the OpenAPI UIs.
+	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
+	reverse_proxy @backend backend:8000
+
+	# Everything else → the built SPA (the web container's own nginx does the
+	# HTML5-history fallback).
+	reverse_proxy web:80
+}

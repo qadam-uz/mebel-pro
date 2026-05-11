@@ -1,0 +1,47 @@
+# Dev overrides — applied automatically by `docker compose` (no -f needed).
+# Source-mounted, hot-reloading, ports published to the host.
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  minio:
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console (http://localhost:9001 — login mebel/mebel)
+
+  backend:
+    environment:
+      ENV: dev
+      DEBUG: "true"
+      DOCS_DIR: /docs   # the repo's docs/ is bind-mounted there (see volumes below)
+    # `fastapi dev` = uvicorn with autoreload. The image's venv is on PATH.
+    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - ../backend:/app
+      - backend-venv:/app/.venv   # keep the image's venv; don't shadow it with the host
+      - ../docs:/docs:ro          # live-rendered docs site at :8000/docs (DOCS_DIR defaults to /docs)
+    ports:
+      - "8000:8000"
+
+  # Dev frontend: Vite dev server (HMR) instead of the static nginx image.
+  # `!reset` drops the `build:` from compose.yaml so we just run the node image.
+  web:
+    build: !reset null
+    image: node:22-slim
+    working_dir: /app
+    command: ["sh", "-c", "corepack enable && pnpm install && pnpm dev --host 0.0.0.0 --port 5173"]
+    environment:
+      # Inside the compose network the backend is at http://backend:8000;
+      # Vite's proxy target is overridable, but default works from the host too.
+      VITE_API_BASE_URL: ""
+    volumes:
+      - ../web:/app
+      - web-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
+
+volumes:
+  backend-venv:
+  web-node-modules:
