@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mebel Pro — Seh (workshop) app (static prototype)</title>
+<style>
+/* Variant C — "Terra" : warm, friendly, roomy. Cream surfaces, clay/terracotta primary,
+   big rounded corners, soft warm shadows, generous spacing, rounded-first font stack.
+   Same class API as the Aurora stylesheet. */
+:root{
+  --bg:#f7f3ec; --surface:#fffdf9; --border:#e7ddcd; --text:#2b2620; --muted:#7a7264; --muted2:#a89e8c;
+  --primary:#c2410c; --primary-fg:#fff; --primary-weak:#fdeee4;     /* clay-700 */
+  --success:#15803d; --success-weak:#e9f5ec; --warning:#b45309; --warning-weak:#fbf0dd;
+  --danger:#be123c; --danger-weak:#fbe9ed; --info:#0e7490; --info-weak:#e6f3f5;
+  --indigo:#5b54c9; --indigo-weak:#eeedfb; --violet:#7c3aed; --violet-weak:#f3eefb;
+  --r:11px; --r-lg:18px; --shadow:0 2px 6px rgba(120,90,40,.06),0 1px 2px rgba(120,90,40,.05); --shadow-lg:0 16px 38px rgba(90,60,20,.16);
+  --nav-w:248px; --nav-bg:#f3ece0;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15.5px;line-height:1.6}
+a{color:var(--primary);text-decoration:none} a:hover{text-decoration:underline}
+h1,h2,h3,h4{margin:0;letter-spacing:-.01em}
+.app{display:grid;grid-template-columns:var(--nav-w) 1fr;grid-template-rows:62px 1fr auto;min-height:100vh}
+.topbar{grid-column:1/3;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:30}
+.brand{font-weight:800;font-size:17px;display:flex;align-items:center;gap:10px}
+.brand .logo{width:30px;height:30px;border-radius:10px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:900}
+.brand .tag{font-size:11px;font-weight:800;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px 9px;margin-left:2px}
+.spacer{flex:1}
+.ctx{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:8px 14px;border:1px solid var(--border);border-radius:999px;cursor:pointer;background:var(--surface);color:var(--text)}
+.ctx:hover{background:var(--bg)} .ctx .ic{opacity:.55;font-size:11px}
+.notif{position:relative;cursor:pointer;font-size:18px;color:var(--muted);padding:8px;border-radius:999px} .notif:hover{background:var(--bg);color:var(--text)}
+.notif .dot{position:absolute;top:1px;right:1px;background:var(--danger);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:0 5px;min-width:16px;text-align:center;line-height:16px}
+.lang{font-size:12px;font-weight:800;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 10px;cursor:pointer}
+.avatar{width:33px;height:33px;border-radius:999px;background:var(--primary-weak);color:var(--primary);display:grid;place-items:center;font-weight:800;font-size:13px;cursor:pointer}
+.sidenav{background:var(--nav-bg);border-right:1px solid var(--border);padding:14px 12px 24px;overflow:auto}
+.nav-section{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted2);padding:18px 13px 7px;font-weight:800}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;color:#52493c;cursor:pointer;font-size:14.5px;font-weight:700;margin-bottom:3px;user-select:none}
+.nav-item:hover{background:#ece3d3}
+.nav-item.active{background:var(--surface);color:var(--primary);box-shadow:0 1px 3px rgba(120,90,40,.10)}
+.nav-item .ic{width:19px;text-align:center;font-size:16px;opacity:.85}
+.nav-item .tail{margin-left:auto;font-size:11px;font-weight:800;background:var(--danger-weak);color:var(--danger);border-radius:999px;padding:2px 8px}
+.main{padding:28px 34px 40px;overflow:auto}
+.wrap{max-width:1160px;margin:0 auto}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+.page-header h1{font-size:25px;font-weight:800}
+.page-header .crumb{font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;gap:7px;align-items:center}
+.page-header .sub{font-size:14.5px;color:var(--muted);margin-top:6px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:11px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14.5px;font-weight:700;cursor:pointer;line-height:1;white-space:nowrap;font-family:inherit;transition:transform .1s}
+.btn:hover{background:var(--bg)} .btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 3px 10px rgba(194,65,12,.22)} .btn.primary:hover{filter:brightness(1.06);background:var(--primary)}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff} .btn.danger:hover{filter:brightness(1.05);background:var(--danger)}
+.btn.success{background:var(--success);border-color:var(--success);color:#fff} .btn.success:hover{filter:brightness(1.05);background:var(--success)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)} .btn.ghost:hover{background:var(--bg);color:var(--text)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:9px} .btn.lg{padding:13px 24px;font-size:16px} .btn[disabled]{opacity:.5;cursor:not-allowed;box-shadow:none} .btn.block{width:100%;justify-content:center}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}
+.card.pad{padding:22px} .card.pad-lg{padding:28px} .card-h{padding:16px 22px;border-bottom:1px solid var(--border);font-weight:800;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+.card-b{padding:22px} .card-b.tight{padding:0}
+.grid{display:grid;gap:18px}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))} .cols-3{grid-template-columns:repeat(3,minmax(0,1fr))} .cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.split{display:grid;grid-template-columns:1fr 330px;gap:22px;align-items:start} .split.wide{grid-template-columns:1fr 370px}
+.kpi .label{font-size:13.5px;color:var(--muted);font-weight:800} .kpi .val{font-size:28px;font-weight:800;margin-top:8px;letter-spacing:-.02em} .kpi .delta{font-size:12.5px;font-weight:800;margin-top:6px} .delta.up{color:var(--success)} .delta.down{color:var(--danger)} .delta.flat{color:var(--muted)}
+.muted{color:var(--muted)} .small{font-size:13px} .b{font-weight:800} .nowrap{white-space:nowrap} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid transparent;line-height:1.6;white-space:nowrap}
+.badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.b-neutral{background:#efe9dd;color:#6b6253} .b-info{background:var(--info-weak);color:var(--info)} .b-primary{background:var(--primary-weak);color:var(--primary)}
+.b-indigo{background:var(--indigo-weak);color:var(--indigo)} .b-warning{background:var(--warning-weak);color:var(--warning)} .b-violet{background:var(--violet-weak);color:var(--violet)}
+.b-success{background:var(--success-weak);color:var(--success)} .b-danger{background:var(--danger-weak);color:var(--danger)}
+.badge.plain::before{display:none} .badge.plain{padding:3px 11px}
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:800;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg)}
+.card td{padding:13px 16px;border-bottom:1px solid var(--border)} .card tr:last-child td{border-bottom:none}
+.card .row-link{cursor:pointer} .card tbody .row-link:hover{background:var(--bg)}
+td .actions{display:flex;gap:7px;justify-content:flex-end}
+.toolbar{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:18px}
+.input,select,textarea{font:inherit;font-size:14.5px;padding:10px 13px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text);width:100%;outline:none}
+.input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+textarea{resize:vertical;min-height:76px}
+.field{margin-bottom:16px} .field>label{display:block;font-size:13.5px;font-weight:800;margin-bottom:7px} .field .hint{font-size:12.5px;color:var(--muted);margin-top:6px} .field .err{font-size:12.5px;color:var(--danger);margin-top:6px;font-weight:700}
+.row-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.search{position:relative;flex:none;width:290px;max-width:100%} .search input{padding-left:36px} .search .ic{position:absolute;left:13px;top:11px;color:var(--muted2);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:800;cursor:pointer;color:#6b6253;user-select:none}
+.chip:hover{background:var(--bg)} .chip.on{background:var(--primary-weak);border-color:#f3c9af;color:var(--primary)} .chip .c{width:8px;height:8px;border-radius:50%}
+.pill-tabs{display:inline-flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:4px}
+.pill-tabs button{border:none;background:transparent;padding:7px 17px;border-radius:999px;font:inherit;font-weight:800;font-size:13px;cursor:pointer;color:var(--muted)}
+.pill-tabs button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.view{display:none} .view.active{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:11px 17px;font-size:14.5px;font-weight:800;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab:hover{color:var(--text)} .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tabpane{display:none} .tabpane.active{display:block}
+.stepper{display:flex;align-items:center;margin-bottom:28px;max-width:660px}
+.step{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:800;color:var(--muted)}
+.step .n{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:#e7ddcd;color:#7a7264;font-size:13px;font-weight:800;flex:none}
+.step.on .n{background:var(--primary);color:#fff} .step.on{color:var(--text)} .step.done .n{background:var(--success);color:#fff}
+.step-sep{flex:1;height:2px;background:#e7ddcd;margin:0 14px;min-width:22px;border-radius:2px} .step-sep.done{background:var(--success)}
+.kv{display:grid;grid-template-columns:152px 1fr;gap:11px 18px;font-size:14.5px} .kv dt{color:var(--muted);font-weight:800} .kv dd{margin:0}
+.list-rows>div{display:flex;align-items:center;gap:13px;padding:13px 0;border-bottom:1px solid var(--border)} .list-rows>div:last-child{border-bottom:none}
+.modal-bg{position:fixed;inset:0;background:rgba(43,38,32,.45);display:none;align-items:flex-start;justify-content:center;padding:76px 16px 16px;z-index:60;overflow:auto}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border-radius:18px;width:500px;max-width:100%;box-shadow:var(--shadow-lg);overflow:hidden;animation:pop .18s ease}
+.modal.wide{width:680px}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.modal h3{padding:18px 22px;border-bottom:1px solid var(--border);font-size:16.5px;display:flex;justify-content:space-between;align-items:center}
+.modal h3 .x{cursor:pointer;color:var(--muted);font-size:19px;font-weight:600} .modal h3 .x:hover{color:var(--text)}
+.modal .body{padding:22px}
+.modal .foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:11px;background:var(--bg)}
+.notebox{background:var(--info-weak);border:1px solid #bfe0e4;color:#0b5563;border-radius:11px;padding:12px 14px;font-size:13.5px;display:flex;gap:9px;align-items:flex-start} .notebox.warn{background:var(--warning-weak);border-color:#ecd2a3;color:#8a4d05} .notebox.danger{background:var(--danger-weak);border-color:#f0bfca;color:#9f1239}
+.secret{font-family:ui-monospace,Menlo,monospace;background:#2b2620;color:#f3ece0;padding:11px 13px;border-radius:11px;font-size:13.5px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.secret .cp{cursor:pointer;color:#a89e8c;font-size:12px;font-weight:700;background:#3a342b;border-radius:7px;padding:4px 9px}
+.empty{text-align:center;padding:56px 20px;color:var(--muted)} .empty .ic{font-size:38px;margin-bottom:14px;opacity:.45} .empty h3{margin:0 0 7px;color:var(--text);font-size:17px} .empty p{margin:0 0 18px;font-size:14.5px}
+.timeline{position:relative;padding-left:30px} .timeline::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--border);border-radius:2px}
+.tl-item{position:relative;padding-bottom:22px} .tl-item:last-child{padding-bottom:0} .tl-item::before{content:'';position:absolute;left:-25px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--primary)}
+.tl-item.sys::before{border-color:var(--muted2)} .tl-item.warn::before{border-color:var(--warning)} .tl-item.done::before{background:var(--success);border-color:var(--success)}
+.tl-item .who{font-size:14.5px;font-weight:800} .tl-item .when{font-size:12.5px;color:var(--muted)} .tl-item .det{font-size:13.5px;color:#5e564a;margin-top:3px}
+.kanban{display:grid;grid-template-columns:repeat(6,minmax(178px,1fr));gap:14px;overflow-x:auto;padding-bottom:10px}
+.kcol{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:11px;min-height:250px}
+.kcol h4{margin:0 0 11px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.kcol h4 .count{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:11px;color:var(--text)}
+.kcard{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:9px;cursor:pointer;font-size:13.5px;box-shadow:var(--shadow)} .kcard:hover{border-color:var(--primary)}
+.kcard .id{font-weight:800} .kcard .meta{color:var(--muted);font-size:12.5px;margin-top:4px;display:flex;justify-content:space-between} .kcard .amt{font-weight:800;color:var(--text)}
+.legend{list-style:none;padding:0;margin:0} .legend li{display:flex;align-items:center;gap:9px;font-size:13.5px;margin-bottom:8px} .legend .sw{width:12px;height:12px;border-radius:4px;flex:none} .legend .v{margin-left:auto;font-weight:800}
+.matrix th,.matrix td{text-align:center;font-size:13.5px} .matrix td:first-child,.matrix th:first-child{text-align:left;font-weight:800}
+.tg{width:42px;height:24px;border-radius:999px;background:#d6cbb6;position:relative;cursor:pointer;display:inline-block;vertical-align:middle;transition:background .15s} .tg.on{background:var(--primary)} .tg::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)} .tg.on::after{left:20px}
+.thumb{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#fbe5d3,#f6d2b5);display:grid;place-items:center;color:#c2410c;font-size:19px;flex:none}
+.thumb.lg{width:92px;height:92px;font-size:32px;border-radius:16px}
+.mat-card{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;background:var(--surface);box-shadow:var(--shadow)} .mat-card:hover{border-color:var(--primary)} .mat-card.sel{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.mat-card .img{height:110px;background:linear-gradient(135deg,#fbe5d3,#f6d2b5);display:grid;place-items:center;font-size:32px;color:#c2410c}
+.mat-card .b{padding:13px 15px} .mat-card .nm{font-weight:800;font-size:14.5px} .mat-card .sp{font-size:13px;color:var(--muted);margin-top:4px}
+.branch-card{border:1px solid var(--border);border-radius:16px;padding:18px;background:var(--surface);cursor:pointer;box-shadow:var(--shadow)} .branch-card:hover{border-color:var(--primary)} .branch-card.closed{opacity:.7;cursor:default} .branch-card.closed:hover{border-color:var(--border)}
+.branch-card .ws{font-size:12px;color:var(--muted);font-weight:800}
+.branch-card .nm{font-size:17px;font-weight:800;margin:3px 0 7px}
+.parts-table{width:100%;font-size:13.5px} .parts-table th{padding:8px 8px;font-size:11px} .parts-table td{padding:6px 6px;border-bottom:1px solid var(--border)} .parts-table input,.parts-table select{padding:6px 8px;font-size:13.5px}
+.parts-table input.n{text-align:center} .parts-table .rm{cursor:pointer;color:var(--muted);font-weight:700} .parts-table .rm:hover{color:var(--danger)}
+.metric{padding:16px;border:1px solid var(--border);border-radius:12px;text-align:center;background:var(--surface)} .metric .v{font-size:23px;font-weight:800;letter-spacing:-.02em} .metric .l{font-size:11.5px;color:var(--muted);font-weight:800;margin-top:4px;text-transform:uppercase;letter-spacing:.03em}
+.sheet-tabs{display:flex;gap:7px;margin-bottom:13px} .sheet-tabs .st{padding:6px 14px;border:1px solid var(--border);border-radius:999px;font-size:13.5px;font-weight:800;cursor:pointer;background:var(--surface);color:var(--muted)} .sheet-tabs .st.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.foot-bar{grid-column:1/3;border-top:1px solid var(--border);background:var(--surface);padding:11px 20px;font-size:12px;color:var(--muted);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.foot-bar a{color:var(--muted)} .dot-sep::before{content:'·';margin-right:16px;color:var(--border)}
+.tot-row{display:flex;justify-content:space-between;padding:8px 0;font-size:14.5px} .tot-row.grand{border-top:2px solid var(--text);margin-top:7px;padding-top:11px;font-weight:800;font-size:17px} .tot-row .l{color:var(--muted)}
+.gif-badge{position:fixed;bottom:14px;right:14px;background:#2b2620;color:#e7ddcd;font-size:11px;font-weight:800;padding:7px 13px;border-radius:999px;box-shadow:var(--shadow-lg);z-index:80}
+.auth-screen{min-height:100vh;display:grid;place-items:center;background:radial-gradient(1100px 560px at 50% -10%,#fbeede,#f7f3ec)}
+.auth-card{width:386px;max-width:92vw;background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-lg);padding:34px 32px;text-align:center}
+.auth-card .logo{width:48px;height:48px;border-radius:15px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:21px;font-weight:900;margin:0 auto 16px}
+.tg-btn{display:inline-flex;align-items:center;gap:10px;background:#2aabee;color:#fff;font-weight:800;font-size:15px;padding:12px 22px;border-radius:11px;border:none;cursor:pointer;width:100%;justify-content:center}
+.donutwrap{position:relative;width:152px;height:152px;flex:none} .donutwrap .hole{position:absolute;inset:28px;background:var(--surface);border-radius:50%;display:grid;place-items:center;text-align:center} .donutwrap .hole .n{font-size:23px;font-weight:800;line-height:1} .donutwrap .hole .t{font-size:11px;color:var(--muted);font-weight:800}
+.spark{display:flex;align-items:flex-end;gap:5px;height:66px} .spark span{flex:1;background:#f6d8c2;border-radius:4px 4px 0 0} .spark span.hi{background:var(--primary)}
+@media(max-width:880px){
+  .app{grid-template-columns:1fr;grid-template-rows:62px 1fr auto} .sidenav{display:none} .main{padding:20px 14px 28px}
+  .cols-2,.cols-3,.cols-4{grid-template-columns:1fr} .split,.split.wide{grid-template-columns:1fr} .kanban{grid-template-columns:repeat(6,82vw)} .row-fields{grid-template-columns:1fr} .kv{grid-template-columns:1fr}
+  .brand .tag{display:none}
+}
+</style>
+</head>
+<body data-app="seh">
+
+<!-- ============ LOGIN ============ -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card" style="text-align:left">
+    <div class="logo" style="margin:0 0 16px">M</div>
+    <h1 style="font-size:20px;margin-bottom:4px">Mebel Pro — Workshop</h1>
+    <p class="muted" style="margin:0 0 20px;font-size:14px">Sign in to run your branches, orders and warehouse.</p>
+    <div class="field"><label>Login</label><input class="input" value="oqdaraxt.owner"></div>
+    <div class="field"><label>Password</label><input class="input" type="password" value="••••••••••"></div>
+    <button class="btn primary block lg" onclick="enterApp();go('dashboard')">Sign in</button>
+    <p class="small muted" style="margin-top:14px">Staff accounts are created by the workshop owner; the platform creates the owner. Forgot it? Ask your owner to reset it.</p>
+    <p class="small muted" style="margin-top:14px"><a href="index.html">← back to prototype index</a> &nbsp;·&nbsp; <a onclick="document.getElementById('authScreen').innerHTML=document.getElementById('forcedTpl').innerHTML" style="cursor:pointer">see "forced password change"</a></p>
+  </div>
+  <template id="forcedTpl"><div class="auth-card" style="text-align:left"><div class="logo" style="margin:0 0 16px;background:var(--warning)">!</div><h1 style="font-size:19px;margin-bottom:4px">Set a new password</h1><p class="muted" style="margin:0 0 18px;font-size:14px">Your account uses a temporary password. Choose a new one to continue — nothing else is available until you do.</p><div class="field"><label>New password</label><input class="input" type="password"></div><div class="field"><label>Confirm</label><input class="input" type="password"></div><button class="btn primary block lg" onclick="location.reload()">Save & continue</button></div></template>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div class="app" id="appShell" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="logo">M</span> Mebel Pro <span class="tag">seh</span></div>
+    <div class="ctx" title="Branch context — owner sees all branches" onclick="document.getElementById('branchPop').classList.toggle('open')">🏬 All branches (4) <span class="ic">▾</span></div>
+    <div class="spacer"></div>
+    <div class="notif" title="Notifications" onclick="document.getElementById('notifPop').classList.toggle('open')">🔔<span class="dot">5</span></div>
+    <div class="lang">UZ</div>
+    <div class="avatar" title="Bekzod Rahimov — owner" onclick="document.getElementById('userPop').classList.toggle('open')">BR</div>
+  </header>
+
+  <nav class="sidenav">
+    <div class="nav-section">Operations</div>
+    <div class="nav-item" data-go="dashboard"><span class="ic">📊</span> Dashboard</div>
+    <div class="nav-item" data-go="orders"><span class="ic">📦</span> Orders <span class="tail">7</span></div>
+    <div class="nav-item" data-go="refunds"><span class="ic">↩</span> Refunds <span class="tail">2</span></div>
+    <div class="nav-section">Workshop</div>
+    <div class="nav-item" data-go="branches"><span class="ic">🏬</span> Branches</div>
+    <div class="nav-item" data-go="materials"><span class="ic">🪵</span> Materials</div>
+    <div class="nav-item" data-go="inventory"><span class="ic">📥</span> Inventory</div>
+    <div class="nav-item" data-go="workers"><span class="ic">👷</span> Workers</div>
+    <div class="nav-section">Owner</div>
+    <div class="nav-item" data-go="settings-workshop"><span class="ic">⚙️</span> Workshop settings</div>
+    <div class="nav-item" data-go="settings-users"><span class="ic">👥</span> Users &amp; permissions</div>
+    <div class="nav-item" data-go="audit"><span class="ic">📜</span> Audit log</div>
+    <div class="nav-section">Account</div>
+    <div class="nav-item" data-go="profile"><span class="ic">👤</span> My profile</div>
+    <div style="margin-top:18px;padding:0 12px"><div class="notebox" style="font-size:12px">Static prototype — owner view (staff see only what they're granted). <a href="index.html" style="color:inherit;font-weight:700">all apps →</a></div></div>
+  </nav>
+
+  <main class="main"><div class="wrap">
+
+    <!-- ===== DASHBOARD ===== -->
+    <section class="view" data-view="dashboard">
+      <div class="page-header"><div><div class="crumb">Oq Daraxt Mebel</div><h1>Dashboard</h1><div class="sub">All branches · today, 11 May 2026</div></div><div class="pill-tabs"><button class="on">Today</button><button>7 days</button><button>30 days</button></div></div>
+      <div class="grid cols-4" style="margin-bottom:18px">
+        <div class="card kpi pad"><div class="label">Orders today</div><div class="val">12</div><div class="delta up">▲ 3 vs yesterday</div></div>
+        <div class="card kpi pad"><div class="label">Revenue recorded</div><div class="val">4.18M so'm</div><div class="delta up">▲ 12%</div></div>
+        <div class="card kpi pad"><div class="label">Awaiting payment</div><div class="val">5</div><div class="delta flat">2 over 24h</div></div>
+        <div class="card kpi pad"><div class="label">Pending refunds</div><div class="val" style="color:var(--danger)">2</div><div class="delta down">1 stale &gt; 7 days</div></div>
+      </div>
+      <div class="split">
+        <div class="card pad"><h3 style="font-size:15px;margin-bottom:14px">Orders by status</h3>
+          <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+            <div class="donutwrap"><svg viewBox="0 0 36 36" class="donut"><circle cx="18" cy="18" r="15.9" fill="none" stroke="#e2e8f0" stroke-width="4"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#0284c7" stroke-width="4" stroke-dasharray="20 80" stroke-dashoffset="0"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#4f46e5" stroke-width="4" stroke-dasharray="14 86" stroke-dashoffset="-20"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#6366f1" stroke-width="4" stroke-dasharray="22 78" stroke-dashoffset="-34"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#d97706" stroke-width="4" stroke-dasharray="10 90" stroke-dashoffset="-56"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#7c3aed" stroke-width="4" stroke-dasharray="8 92" stroke-dashoffset="-66"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#059669" stroke-width="4" stroke-dasharray="26 74" stroke-dashoffset="-74"/></svg><div class="hole"><div class="n">63</div><div class="t">open + recent</div></div></div>
+            <ul class="legend">
+              <li><span class="sw" style="background:#0284c7"></span> Awaiting payment <span class="v">5</span></li>
+              <li><span class="sw" style="background:#4f46e5"></span> Confirmed <span class="v">9</span></li>
+              <li><span class="sw" style="background:#6366f1"></span> In production <span class="v">14</span></li>
+              <li><span class="sw" style="background:#d97706"></span> Ready <span class="v">6</span></li>
+              <li><span class="sw" style="background:#7c3aed"></span> In delivery <span class="v">5</span></li>
+              <li><span class="sw" style="background:#059669"></span> Completed (30d) <span class="v">24</span></li>
+            </ul>
+          </div>
+          <h3 style="font-size:15px;margin:22px 0 10px">Orders / day — last 14 days</h3>
+          <div class="spark"><span style="height:30%"></span><span style="height:55%"></span><span style="height:40%"></span><span style="height:70%"></span><span style="height:50%"></span><span style="height:80%"></span><span style="height:35%"></span><span style="height:60%"></span><span style="height:75%"></span><span style="height:45%"></span><span style="height:90%"></span><span style="height:65%"></span><span style="height:70%"></span><span class="hi" style="height:100%"></span></div>
+        </div>
+        <div>
+          <div class="card"><div class="card-h" style="color:var(--danger)">Refund SLA ⚠</div><div class="card-b tight"><table><tbody>
+            <tr><td><b>MP-10088</b><div class="small muted">Yunusobod · 89 200 so'm</div></td><td class="actions"><span class="badge b-danger plain">9 days</span></td></tr>
+            <tr><td><b>MP-10210</b><div class="small muted">Chilonzor · 142 000 so'm</div></td><td class="actions"><span class="badge b-warning plain">4 days</span></td></tr>
+          </tbody></table></div><div style="padding:11px 16px;border-top:1px solid var(--border)"><a class="small" data-go="refunds">Go to refund queue →</a></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-h">Low stock</div><div class="card-b tight"><table><tbody>
+            <tr><td>LDSP White W1000 <span class="small muted">— Chilonzor</span></td><td class="actions"><span class="badge b-warning plain">3 sheets</span></td></tr>
+            <tr><td>MDF 16 mm raw <span class="small muted">— Sergeli... </span></td><td class="actions"><span class="badge b-danger plain">0 sheets</span></td></tr>
+            <tr><td>Edge 2.0 mm white <span class="small muted">— Chilonzor</span></td><td class="actions"><span class="badge b-warning plain">12 m</span></td></tr>
+          </tbody></table></div><div style="padding:11px 16px;border-top:1px solid var(--border)"><a class="small" data-go="inventory">Inventory →</a></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-h">Audit highlights</div><div class="card-b" style="font-size:13px"><div style="margin-bottom:8px">Sardor force-cancelled <b>MP-10221</b> <span class="muted small">— 2h ago</span></div><div style="margin-bottom:8px">Bekzod (owner) reverted refund on <b>MP-10044</b> <span class="muted small">— yesterday</span></div><div>Dilnoza recorded 6 payments <span class="muted small">— today</span></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ORDERS ===== -->
+    <section class="view" data-view="orders">
+      <div class="page-header"><div><h1>Orders</h1><div class="sub">All branches · branch order queue</div></div><div class="pill-tabs" id="ordView"><button class="on" data-ov="board">Board</button><button data-ov="table">Table</button></div></div>
+      <div class="toolbar"><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Order #, client, phone…"></div><span class="chip on">All branches</span><span class="chip">Chilonzor</span><span class="chip">Yunusobod</span><span class="chip">Sergeli</span><div class="spacer"></div><span class="chip">Today</span><span class="chip">This week</span></div>
+      <div id="ordBoard"><div class="kanban">
+        <div class="kcol"><h4>New / awaiting pay <span class="count">5</span></h4>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10247</div><div class="meta"><span>Akmal Y. · Chilonzor</span><span class="amt">374 120</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10245</div><div class="meta"><span>Olim T. · Yunusobod</span><span class="amt">128 900</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10244</div><div class="meta"><span>Nodira K. · Chilonzor</span><span class="amt">512 000</span></div></div>
+        </div>
+        <div class="kcol"><h4>Confirmed <span class="count">9</span></h4>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10240</div><div class="meta"><span>Sherzod B. · Sergeli</span><span class="amt">219 500</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10238</div><div class="meta"><span>Gulnora M. · Chilonzor</span><span class="amt">98 200</span></div></div>
+        </div>
+        <div class="kcol"><h4>In production <span class="count">14</span></h4>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10231</div><div class="meta"><span>Akmal Y. · Chilonzor</span><span class="amt">612 400</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10229</div><div class="meta"><span>Bahodir R. · Yunusobod</span><span class="amt">441 000</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10225</div><div class="meta"><span>Dilshod A. · Sergeli</span><span class="amt">187 600</span></div></div>
+        </div>
+        <div class="kcol"><h4>Ready <span class="count">6</span></h4>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10220</div><div class="meta"><span>Madina S. · Chilonzor</span><span class="amt">76 400</span></div></div>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10217</div><div class="meta"><span>Jasur N. · Yunusobod</span><span class="amt">333 000</span></div></div>
+        </div>
+        <div class="kcol"><h4>In delivery <span class="count">5</span></h4>
+          <div class="kcard" onclick="go('order-detail')"><div class="id">MP-10198</div><div class="meta"><span>Olim T. · Sergeli</span><span class="amt">148 900</span></div></div>
+        </div>
+        <div class="kcol"><h4>Completed <span class="count">24</span></h4>
+          <div class="kcard" style="opacity:.7" onclick="go('order-detail')"><div class="id">MP-10120</div><div class="meta"><span>Akmal Y. · Andijon</span><span class="amt">921 000</span></div></div>
+        </div>
+      </div><p class="small muted" style="margin-top:10px">No drag-and-drop — status moves through a card's action menu (transitions are restricted). Keyboard: focus a card, Enter to open.</p></div>
+      <div id="ordTable" hidden><div class="card"><table><thead><tr><th>Order</th><th>Client</th><th>Branch</th><th>Items</th><th>Total</th><th>Paid</th><th>Status</th><th>Updated</th></tr></thead><tbody>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10247</td><td>Akmal Yusupov</td><td>Chilonzor</td><td>15 parts</td><td>374 120</td><td>—</td><td><span class="badge b-info">Awaiting payment</span></td><td>just now</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10240</td><td>Sherzod Bek</td><td>Sergeli</td><td>8 parts</td><td>219 500</td><td>219 500</td><td><span class="badge b-primary">Confirmed</span></td><td>20 min ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10231</td><td>Akmal Yusupov</td><td>Chilonzor</td><td>21 parts</td><td>612 400</td><td>612 400</td><td><span class="badge b-indigo">In production</span></td><td>2h ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10220</td><td>Madina Saidova</td><td>Chilonzor</td><td>5 parts</td><td>76 400</td><td>22 920 (advance)</td><td><span class="badge b-warning">Ready</span></td><td>4h ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10198</td><td>Olim Tursunov</td><td>Sergeli</td><td>6 parts</td><td>148 900</td><td>148 900</td><td><span class="badge b-violet">In delivery</span></td><td>yesterday</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10221</td><td>Aziz Komilov</td><td>Yunusobod</td><td>11 parts</td><td>205 000</td><td>205 000</td><td><span class="badge b-danger">Cancelled (force) — refund pending</span></td><td>2h ago</td></tr>
+      </tbody></table></div></div>
+    </section>
+
+    <!-- ===== ORDER DETAIL (workshop) ===== -->
+    <section class="view" data-view="order-detail">
+      <div class="page-header"><div><div class="crumb"><a onclick="go('orders')" style="cursor:pointer">Orders</a> › MP-10231</div><h1>MP-10231 <span class="badge b-indigo" style="vertical-align:middle">In production</span></h1><div class="sub">Chilonzor · client Akmal Yusupov (+998 90 123 45 67) · delivery · placed 8 May 2026</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-modal="mDiscount">Apply discount</button><button class="btn success" data-modal="mReady">Mark ready</button><button class="btn danger" data-modal="mForceCancel">Force-cancel <span class="badge b-neutral plain" style="margin-left:4px">owner</span></button></div></div>
+      <div class="notebox warn" style="margin-bottom:16px">Workflow actions depend on status & your grants. From <b>in_production</b>: mark <b>ready</b> (consumes stock) → assign driver / mark completed. Owner-only here: <b>force-cancel</b>.</div>
+      <div class="tabs" data-tabs><div class="tab active" data-tab="ov">Overview</div><div class="tab" data-tab="cut">Cutting</div><div class="tab" data-tab="pay">Payments</div><div class="tab" data-tab="ref">Refunds</div><div class="tab" data-tab="tl">Timeline</div></div>
+
+      <div class="tabpane active" data-pane="ov"><div class="split">
+        <div>
+          <div class="card"><div class="card-h">Items <span class="small muted">snapshot</span></div><div class="card-b tight"><table><thead><tr><th>№</th><th>Dimensions</th><th>Qty</th><th>Grain</th><th>Edges</th></tr></thead><tbody><tr><td>1</td><td>600×400</td><td>4</td><td>any</td><td>—</td></tr><tr><td>2</td><td>720×500</td><td>2</td><td>required</td><td>T:2.0 L/R:0.4</td></tr><tr><td>3</td><td>1800×300</td><td>1</td><td>required</td><td>all 2.0</td></tr><tr><td>4</td><td>280×280</td><td>8</td><td>any</td><td>—</td></tr><tr><td>5</td><td>900×450</td><td>3</td><td>required</td><td>T/B:2.0</td></tr></tbody></table></div></div>
+          <div class="card" style="margin-top:16px"><div class="card-h">Material & worker</div><div class="card-b"><div class="kv"><dt>Material</dt><dd>LDSP Egger 18 mm — White W1000 · <b>source: shop</b> · 3 sheets reserved → consumed at "ready"</dd><dt>Assigned worker</dt><dd>Jasur Normatov (cutter) · <a href="#" data-modal="mWorker">change</a></dd><dt>Material source note</dt><dd>Stock reserved on confirm; releases automatically if cancelled before "ready".</dd></div></div></div>
+        </div>
+        <div>
+          <div class="card pad"><h3 style="font-size:14px;margin-bottom:8px">Price (snapshot)</h3><div class="tot-row"><span class="l">Cutting</span><span>132 000</span></div><div class="tot-row"><span class="l">Material — 3 sheets</span><span>405 600</span></div><div class="tot-row"><span class="l">Edge banding</span><span>54 800</span></div><div class="tot-row"><span class="l">Delivery — Markaziy</span><span>35 000</span></div><div class="tot-row"><span class="l">Discount</span><span>−15 000</span></div><div class="tot-row grand"><span>Total</span><span>612 400 so'm</span></div><div class="tot-row" style="color:var(--success)"><span class="l">Paid</span><span>612 400 (full)</span></div></div>
+          <div class="card pad" style="margin-top:16px"><h3 style="font-size:14px;margin-bottom:8px">Delivery</h3><div class="small">Bobur ko'chasi 14, kv. 32 · Toshkent<br>Zone: Markaziy · fee 35 000<br><span class="muted">Driver assigned when you mark "ready".</span></div></div>
+          <div class="card pad" style="margin-top:16px"><h3 style="font-size:14px;margin-bottom:8px">Client note</h3><div class="small muted">"Please keep the offcuts, I'll collect them too."</div></div>
+        </div>
+      </div></div>
+
+      <div class="tabpane" data-pane="cut"><div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3>Confirmed cutting result · algorithm v2</h3><button class="btn primary sm" onclick="alert('Opens the PDF cutting map for the saw operator.')">⬇ Open cutting PDF</button></div><p class="small muted" style="margin-bottom:14px">3 sheets · 9.1% waste · 14.6 m cut · edge 2.0: 6.1 m, 0.4: 1.8 m · result is immutable (only modify → invalidates & re-cuts)</p><div style="background:#f1f5f9;border-radius:8px;padding:10px"><svg viewBox="0 0 700 260" width="100%" style="max-width:760px;background:#fff;border:1px solid #cbd5e1;display:block"><rect x="2" y="2" width="696" height="256" fill="#fafafa" stroke="#94a3b8"/><g font-family="Inter" font-size="10" text-anchor="middle"><rect x="6" y="6" width="180" height="130" fill="#dbeafe" stroke="#3b82f6"/><text x="96" y="74">#2 720×500</text><rect x="190" y="6" width="180" height="130" fill="#dbeafe" stroke="#3b82f6"/><text x="280" y="74">#2 720×500</text><rect x="374" y="6" width="225" height="115" fill="#fef3c7" stroke="#d97706"/><text x="486" y="66">#3 1800×300</text><rect x="6" y="140" width="150" height="100" fill="#e0e7ff" stroke="#6366f1"/><text x="81" y="194">#1 600×400</text><rect x="160" y="140" width="150" height="100" fill="#e0e7ff" stroke="#6366f1"/><text x="235" y="194">#1 600×400</text><rect x="314" y="140" width="112" height="112" fill="#dcfce7" stroke="#16a34a"/><text x="370" y="200">#5 900×450</text><rect x="603" y="6" width="89" height="246" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 3"/><text x="647" y="130" transform="rotate(90 647 130)" fill="#94a3b8">waste</text></g></svg></div></div></div>
+
+      <div class="tabpane" data-pane="pay"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h3>Payments</h3><div style="display:flex;gap:8px"><button class="btn" data-modal="mPayLater">Approve pay-later <span class="badge b-neutral plain" style="margin-left:4px">owner</span></button><button class="btn primary" data-modal="mRecordPay">Record payment</button></div></div>
+        <div class="card"><table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Recorded by</th><th>Status</th></tr></thead><tbody>
+          <tr><td>8 May 2026, 14:20</td><td>Bank transfer</td><td>612 400 so'm</td><td>Dilnoza</td><td><span class="badge b-success">Paid in full</span></td></tr>
+        </tbody></table></div>
+        <div class="notebox" style="margin-top:14px">v1: no gateway — staff record cash/bank payments here. Recording the first payment moves <b>new → confirmed</b>; with <code>shop</code> material, stock is reserved. An advance-paid order needs the balance recorded before handover.</div></div>
+
+      <div class="tabpane" data-pane="ref"><div class="empty"><div class="ic">↩</div><h3>No refunds on this order</h3><p>Cancelling a paid order — or modifying it down — creates a pending refund record here and in the refund queue.</p></div></div>
+
+      <div class="tabpane" data-pane="tl"><div class="card pad"><div class="timeline">
+        <div class="tl-item"><div class="who">Order placed <span class="muted">— client Akmal Yusupov</span></div><div class="when">8 May 2026, 14:02</div><div class="det">new · cutting confirmed & bound · items snapshotted</div></div>
+        <div class="tl-item done"><div class="who">Payment recorded <span class="muted">— Dilnoza (order desk, Chilonzor)</span></div><div class="when">8 May 2026, 14:20</div><div class="det">bank transfer 612 400 → confirmed · 3 sheets reserved</div></div>
+        <div class="tl-item"><div class="who">Discount applied <span class="muted">— Sardor (branch manager)</span></div><div class="when">8 May 2026, 16:40</div><div class="det">−15 000 — reason: "loyalty, repeat customer"</div></div>
+        <div class="tl-item"><div class="who">Moved to production <span class="muted">— Dilnoza · worker: Jasur Normatov</span></div><div class="when">9 May 2026, 09:15</div></div>
+        <div class="tl-item sys" style="opacity:.6"><div class="who">Awaiting "ready"</div><div class="when">in progress · 2 days · ⚠ stale wait</div></div>
+      </div></div></div>
+    </section>
+
+    <!-- ===== REFUNDS ===== -->
+    <section class="view" data-view="refunds">
+      <div class="page-header"><div><h1>Refund queue</h1><div class="sub">All branches · pending refunds — money moved offline, then recorded here</div></div></div>
+      <div class="toolbar"><span class="chip on">Pending</span><span class="chip"><span class="c" style="background:#e11d48"></span>Stale &gt; 7 days</span><span class="chip">Completed</span></div>
+      <div class="card"><table><thead><tr><th>Order</th><th>Client</th><th>Branch</th><th>Amount</th><th>Reason</th><th>Age</th><th></th></tr></thead><tbody>
+        <tr><td class="b">MP-10088</td><td>Akmal Yusupov</td><td>Yunusobod</td><td>89 200 so'm</td><td>Cancelled by client (new)</td><td><span class="badge b-danger plain">9 days · stale</span></td><td class="actions"><button class="btn sm primary" data-modal="mRefund">Record refund</button></td></tr>
+        <tr><td class="b">MP-10210</td><td>Nargiza Yuldasheva</td><td>Chilonzor</td><td>142 000 so'm</td><td>Modified down — fewer parts</td><td><span class="badge b-warning plain">4 days</span></td><td class="actions"><button class="btn sm primary" data-modal="mRefund">Record refund</button></td></tr>
+        <tr><td class="b">MP-10221</td><td>Aziz Komilov</td><td>Yunusobod</td><td>205 000 so'm</td><td>Force-cancelled (defective sheet)</td><td><span class="badge b-neutral plain">2 hours</span></td><td class="actions"><button class="btn sm primary" data-modal="mRefund">Record refund</button></td></tr>
+      </tbody></table></div>
+      <div class="notebox" style="margin-top:14px">A pending refund over 7 days is flagged stale and the owner is notified. Recording a refund needs: method, amount, a mandatory note (bank ref / receipt), optional receipt scan → refund <b>completed</b>, payment <b>refunded</b>, client notified.</div>
+    </section>
+
+    <!-- ===== BRANCHES ===== -->
+    <section class="view" data-view="branches">
+      <div class="page-header"><div><h1>Branches</h1><div class="sub">Owner only — create / configure branches. Staff see only the sub-views they're granted.</div></div><button class="btn primary" data-modal="mBranch">+ New branch</button></div>
+      <div class="grid cols-2">
+        <div class="card pad row-link" onclick="go('branch-detail')"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">Chilonzor branch</h3><div class="small muted">Tashkent · Bunyodkor ko'chasi 12 · +998 71 200 11 22</div></div><span class="badge b-success">Active</span></div><div class="grid cols-4" style="margin-top:14px;gap:10px"><div class="metric"><div class="v">28</div><div class="l">Materials</div></div><div class="metric"><div class="v">6</div><div class="l">Workers</div></div><div class="metric"><div class="v">31</div><div class="l">Open orders</div></div><div class="metric"><div class="v">4</div><div class="l">Staff users</div></div></div></div>
+        <div class="card pad row-link" onclick="go('branch-detail')"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">Yunusobod branch</h3><div class="small muted">Tashkent · Amir Temur 108 · +998 71 244 55 66</div></div><span class="badge b-success">Active</span></div><div class="grid cols-4" style="margin-top:14px;gap:10px"><div class="metric"><div class="v">22</div><div class="l">Materials</div></div><div class="metric"><div class="v">4</div><div class="l">Workers</div></div><div class="metric"><div class="v">18</div><div class="l">Open orders</div></div><div class="metric"><div class="v">3</div><div class="l">Staff users</div></div></div></div>
+        <div class="card pad row-link" onclick="go('branch-detail')"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">Sergeli branch</h3><div class="small muted">Tashkent · Yangi Sergeli 4-mavze</div></div><span class="badge b-success">Active</span></div><div class="grid cols-4" style="margin-top:14px;gap:10px"><div class="metric"><div class="v">31</div><div class="l">Materials</div></div><div class="metric"><div class="v">5</div><div class="l">Workers</div></div><div class="metric"><div class="v">14</div><div class="l">Open orders</div></div><div class="metric"><div class="v">2</div><div class="l">Staff users</div></div></div></div>
+        <div class="card pad" style="opacity:.75"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px">Andijon branch</h3><div class="small muted">Andijon · Navoiy 55</div></div><span class="badge b-warning">Temporarily closed</span></div><div class="small muted" style="margin-top:12px">Closed reason: "seasonal — re-opening September". Existing orders frozen; not visible to new clients.</div></div>
+      </div>
+    </section>
+
+    <!-- ===== BRANCH DETAIL ===== -->
+    <section class="view" data-view="branch-detail">
+      <div class="page-header"><div><div class="crumb"><a onclick="go('branches')" style="cursor:pointer">Branches</a> › Chilonzor</div><h1>Chilonzor branch <span class="badge b-success" style="vertical-align:middle">Active</span></h1><div class="sub">Tashkent · Bunyodkor ko'chasi 12</div></div><button class="btn">Edit branch</button></div>
+      <div class="tabs" data-tabs><div class="tab active" data-tab="ov">Overview</div><div class="tab" data-tab="mat">Materials</div><div class="tab" data-tab="stk">Stock</div><div class="tab" data-tab="wrk">Workers</div><div class="tab" data-tab="prc">Pricing</div><div class="tab" data-tab="stf">Staff</div><div class="tab" data-tab="ord">Orders</div></div>
+      <div class="tabpane active" data-pane="ov"><div class="split"><div class="card pad"><h3 style="margin-bottom:12px">Working hours</h3><table><tbody>
+        <tr><td>Mon–Fri</td><td>09:00 – 19:00</td></tr><tr><td>Sat</td><td>10:00 – 16:00</td></tr><tr><td>Sun</td><td><span class="badge b-neutral plain">Closed</span></td></tr></tbody></table>
+        <h3 style="margin:18px 0 12px">Contact</h3><div class="kv"><dt>Phone</dt><dd>+998 71 200 11 22</dd><dt>Address</dt><dd>Bunyodkor ko'chasi 12, Chilonzor, Tashkent</dd><dt>Coordinates</dt><dd>41.2856, 69.2034</dd></div></div>
+      <div class="card pad"><h3 style="margin-bottom:12px">At a glance</h3><div class="grid cols-2" style="gap:12px"><div class="metric"><div class="v">28</div><div class="l">Active materials</div></div><div class="metric"><div class="v">3</div><div class="l">Low-stock items</div></div><div class="metric"><div class="v">31</div><div class="l">Open orders</div></div><div class="metric"><div class="v">142</div><div class="l">Orders this month</div></div></div></div></div></div>
+      <div class="tabpane" data-pane="mat"><div class="toolbar"><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Material…"></div><div class="spacer"></div><button class="btn primary sm" data-modal="mMaterial">+ Add material</button></div><div class="card"><table><thead><tr><th>Material</th><th>Thickness</th><th>Sheet size</th><th>Stock</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP Egger — White W1000</div></td><td>18 mm</td><td>2800×2070</td><td><span class="badge b-warning plain">3 sheets</span></td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP Egger — Sonoma Oak H1145</div></td><td>18 mm</td><td>2800×2070</td><td>41 sheets</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>MDF 16 mm — raw</div></td><td>16 mm</td><td>2440×1220</td><td>12 sheets</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr style="opacity:.6"><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP — Beige (discontinued)</div></td><td>18 mm</td><td>2800×2070</td><td>0</td><td><span class="badge b-neutral plain">Inactive</span></td><td class="actions"><button class="btn sm ghost">Reactivate</button></td></tr>
+      </tbody></table></div></div>
+      <div class="tabpane" data-pane="stk"><div class="toolbar"><div class="spacer"></div><button class="btn sm" data-modal="mStockIn">＋ Stock in</button><button class="btn sm" data-modal="mAdjust">± Adjust</button><button class="btn sm" data-modal="mTransfer">⇄ Transfer <span class="badge b-neutral plain" style="margin-left:4px">owner</span></button></div>
+        <div class="card"><div class="card-h">Current stock</div><div class="card-b tight"><table><thead><tr><th>Material</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Threshold</th></tr></thead><tbody>
+          <tr><td>LDSP White W1000</td><td>9 sheets</td><td>6</td><td><span class="badge b-warning plain">3</span></td><td>5</td></tr><tr><td>Sonoma Oak H1145</td><td>43</td><td>2</td><td>41</td><td>5</td></tr><tr><td>MDF 16 mm raw</td><td>13</td><td>1</td><td>12</td><td>3</td></tr><tr><td>Edge band 2.0 mm white</td><td>12 m</td><td>0</td><td><span class="badge b-warning plain">12 m</span></td><td>20 m</td></tr>
+        </tbody></table></div></div>
+        <div class="card" style="margin-top:16px"><div class="card-h">Recent transactions</div><div class="card-b tight"><table><tbody>
+          <tr><td>−3 sheets · LDSP White</td><td class="small muted">consumed · order MP-10221</td><td class="small muted">2h ago · Sardor</td></tr>
+          <tr><td>+50 sheets · Sonoma Oak</td><td class="small muted">stock-in · supplier inv. #4421</td><td class="small muted">yesterday · Bekzod</td></tr>
+          <tr><td>−6 sheets · LDSP White</td><td class="small muted">reserved · order MP-10231</td><td class="small muted">8 May · Dilnoza</td></tr>
+          <tr><td>⇄ −10 / +10 · MDF raw</td><td class="small muted">transfer Chilonzor → Sergeli</td><td class="small muted">6 May · Bekzod</td></tr>
+        </tbody></table></div></div>
+      </div>
+      <div class="tabpane" data-pane="wrk"><div class="toolbar"><div class="spacer"></div><button class="btn primary sm" data-modal="mWorkerAdd">+ Add worker</button></div><div class="card"><table><thead><tr><th>Name</th><th>Role</th><th>Active orders</th><th></th></tr></thead><tbody>
+        <tr><td>Jasur Normatov</td><td>Cutter</td><td>3</td><td class="actions"><button class="btn sm">Edit</button></td></tr><tr><td>Olimjon Karimov</td><td>Edge bander</td><td>2</td><td class="actions"><button class="btn sm">Edit</button></td></tr><tr><td>Rustam Aliyev</td><td>Driver</td><td>1 (delivery)</td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+      </tbody></table></div></div>
+      <div class="tabpane" data-pane="prc"><div class="card pad"><h3 style="margin-bottom:6px">Cutting price model</h3><p class="small muted" style="margin-bottom:14px">Owner-only. Changes apply to <b>new</b> orders only — existing orders keep their snapshot.</p>
+        <div class="row-fields" style="max-width:560px"><div class="field"><label>Model</label><select><option>Per cut line (so'm / metre)</option><option>Per part (flat so'm)</option><option>Per area (so'm / m²)</option></select></div><div class="field"><label>Rate</label><input class="input" value="2 500 so'm / m"></div></div>
+        <div class="field" style="max-width:560px"><label>Minimum charge per order</label><input class="input" value="20 000 so'm"></div>
+        <h3 style="margin:20px 0 10px">Edge-banding rates (so'm / metre)</h3><div class="card" style="max-width:560px"><table><thead><tr><th>Thickness</th><th>Rate</th><th></th></tr></thead><tbody><tr><td>0.4 mm</td><td><input class="input" value="1 200" style="max-width:140px"></td><td class="actions"><span class="rm" style="cursor:pointer;color:var(--muted)">✕</span></td></tr><tr><td>2.0 mm</td><td><input class="input" value="2 800" style="max-width:140px"></td><td class="actions"><span class="rm" style="cursor:pointer;color:var(--muted)">✕</span></td></tr></tbody></table><div style="padding:10px 14px;border-top:1px solid var(--border)"><button class="btn sm">+ Add thickness</button></div></div>
+        <div style="margin-top:18px"><button class="btn primary">Save pricing</button></div></div></div>
+      <div class="tabpane" data-pane="stf"><div class="card"><div class="card-h">Staff with grants on this branch</div><div class="card-b tight"><table><thead><tr><th>User</th><th>Grants here</th><th></th></tr></thead><tbody>
+        <tr><td>Dilnoza Toirova <div class="small muted">order desk</div></td><td><span class="badge b-primary plain">view_dashboard</span> <span class="badge b-primary plain">manage_orders</span></td><td class="actions"><button class="btn sm" data-go="user-detail">Manage</button></td></tr>
+        <tr><td>Sardor Mirzaev <div class="small muted">branch manager</div></td><td><span class="badge b-primary plain">view_dashboard</span> <span class="badge b-primary plain">manage_orders</span> <span class="badge b-primary plain">manage_catalog</span> <span class="badge b-primary plain">manage_inventory</span></td><td class="actions"><button class="btn sm" data-go="user-detail">Manage</button></td></tr>
+        <tr><td>Aziza Yusupova <div class="small muted">warehouse</div></td><td><span class="badge b-primary plain">manage_inventory</span></td><td class="actions"><button class="btn sm" data-go="user-detail">Manage</button></td></tr>
+      </tbody></table></div></div></div>
+      <div class="tabpane" data-pane="ord"><div class="card"><table><thead><tr><th>Order</th><th>Client</th><th>Total</th><th>Status</th></tr></thead><tbody><tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10247</td><td>Akmal Y.</td><td>374 120</td><td><span class="badge b-info">Awaiting payment</span></td></tr><tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10231</td><td>Akmal Y.</td><td>612 400</td><td><span class="badge b-indigo">In production</span></td></tr><tr class="row-link" onclick="go('order-detail')"><td class="b">MP-10220</td><td>Madina S.</td><td>76 400</td><td><span class="badge b-warning">Ready</span></td></tr></tbody></table></div></div>
+    </section>
+
+    <!-- ===== MATERIALS (workshop-wide) ===== -->
+    <section class="view" data-view="materials">
+      <div class="page-header"><div><h1>Materials</h1><div class="sub">Across all branches · materials are configured per branch</div></div><button class="btn primary" data-modal="mMaterial">+ Add material</button></div>
+      <div class="toolbar"><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Search materials…"></div><span class="chip on">All branches</span><span class="chip">Chilonzor</span><span class="chip">Yunusobod</span><span class="chip">Sergeli</span><div class="spacer"></div><span class="chip"><span class="c" style="background:#d97706"></span>Low stock</span><span class="chip">Inactive</span></div>
+      <div class="card"><table><thead><tr><th>Material</th><th>Branch</th><th>Thickness</th><th>Sheet size</th><th>Price (m²)</th><th>Stock</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP Egger — White W1000</div></td><td>Chilonzor</td><td>18 mm</td><td>2800×2070</td><td>12 000</td><td><span class="badge b-warning plain">3</span></td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP Egger — Sonoma Oak H1145</div></td><td>Chilonzor</td><td>18 mm</td><td>2800×2070</td><td>13 500</td><td>41</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>MDF 16 mm — raw</div></td><td>Sergeli</td><td>16 mm</td><td>2440×1220</td><td>9 800</td><td><span class="badge b-danger plain">0</span></td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>LDSP Kronospan 25 mm — Anthracite</div></td><td>Yunusobod</td><td>25 mm</td><td>2800×2070</td><td>21 000</td><td>9</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td><div style="display:flex;gap:10px;align-items:center"><div class="thumb">🪵</div>Plywood birch 18 mm</div></td><td>Sergeli</td><td>18 mm</td><td>1525×1525</td><td>38 000</td><td>22</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <!-- ===== INVENTORY (workshop-wide) ===== -->
+    <section class="view" data-view="inventory">
+      <div class="page-header"><div><h1>Inventory</h1><div class="sub">Stock & transactions across branches</div></div><div style="display:flex;gap:8px"><button class="btn" data-modal="mStockIn">＋ Stock in</button><button class="btn" data-modal="mAdjust">± Adjust</button><button class="btn primary" data-modal="mTransfer">⇄ Transfer <span class="badge b-neutral plain" style="margin-left:4px;background:rgba(255,255,255,.25);color:#fff">owner</span></button></div></div>
+      <div class="toolbar"><span class="chip on">All branches</span><span class="chip">Chilonzor</span><span class="chip">Yunusobod</span><span class="chip">Sergeli</span><div class="spacer"></div><span class="chip"><span class="c" style="background:#d97706"></span>Below threshold</span></div>
+      <div class="split">
+        <div class="card"><div class="card-h">Stock items</div><div class="card-b tight"><table><thead><tr><th>Material</th><th>Branch</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Threshold</th></tr></thead><tbody>
+          <tr><td>LDSP White W1000</td><td>Chilonzor</td><td>9</td><td>6</td><td><span class="badge b-warning plain">3</span></td><td>5</td></tr>
+          <tr><td>MDF 16 mm raw</td><td>Sergeli</td><td>1</td><td>1</td><td><span class="badge b-danger plain">0</span></td><td>3</td></tr>
+          <tr><td>Sonoma Oak H1145</td><td>Chilonzor</td><td>43</td><td>2</td><td>41</td><td>5</td></tr>
+          <tr><td>Anthracite 25 mm</td><td>Yunusobod</td><td>10</td><td>1</td><td>9</td><td>4</td></tr>
+          <tr><td>Edge band 2.0 white</td><td>Chilonzor</td><td>12 m</td><td>0</td><td><span class="badge b-warning plain">12 m</span></td><td>20 m</td></tr>
+        </tbody></table></div></div>
+        <div class="card"><div class="card-h">Recent transactions</div><div class="card-b tight"><table><tbody>
+          <tr><td><b>−3</b> LDSP White <span class="small muted">consumed</span></td><td class="small muted">MP-10221 · Chilonzor · 2h</td></tr>
+          <tr><td><b>−10 / +10</b> MDF raw <span class="small muted">transfer</span></td><td class="small muted">Chilonzor → Sergeli · 6 May</td></tr>
+          <tr><td><b>+50</b> Sonoma Oak <span class="small muted">stock-in</span></td><td class="small muted">inv #4421 · Chilonzor · yesterday</td></tr>
+          <tr><td><b>−6</b> LDSP White <span class="small muted">reserved</span></td><td class="small muted">MP-10231 · 8 May</td></tr>
+          <tr><td><b>+2</b> Anthracite <span class="small muted">adjust</span></td><td class="small muted">"recount" · Yunusobod · 5 May</td></tr>
+        </tbody></table></div></div>
+      </div>
+    </section>
+
+    <!-- ===== WORKERS (workshop-wide) ===== -->
+    <section class="view" data-view="workers">
+      <div class="page-header"><div><h1>Workers</h1><div class="sub">Cutters, edge banders, drivers — assignable to orders</div></div><button class="btn primary" data-modal="mWorkerAdd">+ Add worker</button></div>
+      <div class="toolbar"><span class="chip on">All branches</span><span class="chip">Chilonzor</span><span class="chip">Yunusobod</span><span class="chip">Sergeli</span></div>
+      <div class="card"><table><thead><tr><th>Name</th><th>Branch</th><th>Role</th><th>Active assignments</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr><td>Jasur Normatov</td><td>Chilonzor</td><td>Cutter</td><td>3 orders</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td>Olimjon Karimov</td><td>Chilonzor</td><td>Edge bander</td><td>2 orders</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td>Rustam Aliyev</td><td>Chilonzor</td><td>Driver</td><td>1 delivery</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr><td>Botir Egamberdiyev</td><td>Yunusobod</td><td>Cutter</td><td>4 orders</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Edit</button></td></tr>
+        <tr style="opacity:.6"><td>Kamol Subhonov</td><td>Sergeli</td><td>Driver</td><td>0</td><td><span class="badge b-neutral plain">Inactive</span></td><td class="actions"><button class="btn sm ghost">Reactivate</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <!-- ===== WORKSHOP SETTINGS ===== -->
+    <section class="view" data-view="settings-workshop">
+      <div class="page-header"><div><div class="crumb">Owner</div><h1>Workshop settings</h1></div><button class="btn primary">Save changes</button></div>
+      <div class="split">
+        <div>
+          <div class="card pad"><h3 style="margin-bottom:14px">Profile</h3><div class="field"><label>Workshop name</label><input class="input" value="Oq Daraxt Mebel"></div><div class="row-fields"><div class="field"><label>Contact phone</label><input class="input" value="+998 71 200 11 22"></div><div class="field"><label>Contact email</label><input class="input" value="info@oqdaraxt.uz"></div></div><div class="field"><label>Logo</label><div style="display:flex;gap:14px;align-items:center"><div class="thumb lg">🪵</div><button class="btn sm">⬆ Upload new logo</button></div></div></div>
+          <div class="card pad" style="margin-top:16px"><h3 style="margin-bottom:6px">Delivery</h3><p class="small muted" style="margin-bottom:12px">Toggle delivery on per workshop; define zones + fees. Addresses use manual lat/lng in v1.</p><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span class="tg on"></span> Delivery enabled</div>
+            <div class="card"><table><thead><tr><th>Zone</th><th>Fee (so'm)</th><th></th></tr></thead><tbody><tr><td><input class="input" value="Markaziy" style="max-width:200px"></td><td><input class="input" value="35 000" style="max-width:140px"></td><td class="actions"><span class="rm" style="cursor:pointer;color:var(--muted)">✕</span></td></tr><tr><td><input class="input" value="Chekka tumanlar" style="max-width:200px"></td><td><input class="input" value="55 000" style="max-width:140px"></td><td class="actions"><span class="rm" style="cursor:pointer;color:var(--muted)">✕</span></td></tr><tr><td><input class="input" value="Viloyat" style="max-width:200px"></td><td><input class="input" value="120 000" style="max-width:140px"></td><td class="actions"><span class="rm" style="cursor:pointer;color:var(--muted)">✕</span></td></tr></tbody></table><div style="padding:10px 14px;border-top:1px solid var(--border)"><button class="btn sm">+ Add zone</button></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="card pad"><h3 style="margin-bottom:6px">Payment channels</h3><p class="small muted" style="margin-bottom:12px">Stored now, <b>inactive in v1</b> — payments are recorded manually by staff. Merchant credentials are masked and owner-visible only.</p>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="tg"></span> Click <span class="badge b-neutral plain">v1.1</span></div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span class="tg"></span> Payme <span class="badge b-neutral plain">v1.1</span></div>
+            <div class="field"><label>Click merchant ID</label><div class="secret">•••• •••• 4827 <span class="cp">reveal</span></div></div>
+            <div class="field"><label>Payme merchant key</label><div class="secret">•••••••••••••• <span class="cp">reveal</span></div></div>
+          </div>
+          <div class="card pad" style="margin-top:16px"><h3 style="margin-bottom:14px">Defaults</h3><div class="field"><label>Default advance %</label><input class="input" value="30" style="max-width:120px"><div class="hint">Pre-selected for clients choosing the "advance" payment option.</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== USERS & PERMISSIONS ===== -->
+    <section class="view" data-view="settings-users">
+      <div class="page-header"><div><div class="crumb">Owner</div><h1>Users &amp; permissions</h1><div class="sub">Staff accounts and their per-branch grants. Workshop-wide powers (branches, pricing, settings, reports, user mgmt) are owner-only in v1.</div></div><button class="btn primary" data-modal="mCreateStaff">+ Create staff user</button></div>
+      <div class="card"><table><thead><tr><th>User</th><th>Login</th><th>Role</th><th>Grants</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr class="row-link" onclick="go('user-detail')"><td><div style="display:flex;gap:10px;align-items:center"><div class="avatar">BR</div><div><b>Bekzod Rahimov</b><div class="small muted">you</div></div></div></td><td class="mono">oqdaraxt.owner</td><td><span class="badge b-violet plain">Owner</span></td><td class="small muted">all branches · all powers</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">View</button></td></tr>
+        <tr class="row-link" onclick="go('user-detail')"><td><div style="display:flex;gap:10px;align-items:center"><div class="avatar">DT</div><div><b>Dilnoza Toirova</b><div class="small muted">order desk</div></div></div></td><td class="mono">oqdaraxt.dilnoza</td><td><span class="badge b-neutral plain">Staff</span></td><td class="small">Chilonzor: <span class="badge b-primary plain">view_dashboard</span> <span class="badge b-primary plain">manage_orders</span></td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Manage</button></td></tr>
+        <tr class="row-link" onclick="go('user-detail')"><td><div style="display:flex;gap:10px;align-items:center"><div class="avatar">SM</div><div><b>Sardor Mirzaev</b><div class="small muted">branch manager</div></div></div></td><td class="mono">oqdaraxt.sardor</td><td><span class="badge b-neutral plain">Staff</span></td><td class="small">Chilonzor: 4 grants · Yunusobod: 2</td><td><span class="badge b-success plain">Active</span></td><td class="actions"><button class="btn sm">Manage</button></td></tr>
+        <tr class="row-link" onclick="go('user-detail')"><td><div style="display:flex;gap:10px;align-items:center"><div class="avatar">AY</div><div><b>Aziza Yusupova</b><div class="small muted">warehouse</div></div></div></td><td class="mono">oqdaraxt.aziza</td><td><span class="badge b-neutral plain">Staff</span></td><td class="small">Chilonzor: <span class="badge b-primary plain">manage_inventory</span></td><td><span class="badge b-warning plain">Force change pw</span></td><td class="actions"><button class="btn sm">Manage</button></td></tr>
+        <tr style="opacity:.6"><td><div style="display:flex;gap:10px;align-items:center"><div class="avatar">QN</div><div><b>Qodir Nazarov</b></div></div></td><td class="mono">oqdaraxt.qodir</td><td><span class="badge b-neutral plain">Staff</span></td><td class="small muted">no grants — can log in, sees nothing actionable</td><td><span class="badge b-neutral plain">Inactive</span></td><td class="actions"><button class="btn sm ghost">Reactivate</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <!-- ===== USER DETAIL (grants matrix) ===== -->
+    <section class="view" data-view="user-detail">
+      <div class="page-header"><div><div class="crumb"><a onclick="go('settings-users')" style="cursor:pointer">Users</a> › Sardor Mirzaev</div><h1>Sardor Mirzaev <span class="badge b-neutral" style="vertical-align:middle">Staff</span></h1><div class="sub">Login: oqdaraxt.sardor · branch manager · created 12 Mar 2026</div></div><div style="display:flex;gap:8px"><button class="btn" data-modal="mResetPw">Reset password</button><button class="btn danger">Deactivate</button></div></div>
+      <div class="tabs" data-tabs><div class="tab active" data-tab="prf">Profile</div><div class="tab" data-tab="prm">Permissions</div><div class="tab" data-tab="ses">Sessions</div><div class="tab" data-tab="aud">Audit</div></div>
+      <div class="tabpane active" data-pane="prf"><div class="card pad" style="max-width:560px"><div class="field"><label>Full name</label><input class="input" value="Sardor Mirzaev"></div><div class="field"><label>Login</label><input class="input mono" value="oqdaraxt.sardor" disabled></div><div class="field"><label>Phone</label><input class="input" value="+998 90 555 22 11"></div><div style="margin-top:14px"><button class="btn primary">Save</button></div></div></div>
+      <div class="tabpane" data-pane="prm"><div class="card pad"><h3 style="margin-bottom:4px">Permission grants</h3><p class="small muted" style="margin-bottom:16px">Toggle a cell to add/remove a <code>(permission, branch)</code> grant. Workshop-wide powers aren't delegable to staff in v1 — owner-only. <b>Unsaved changes</b> are guarded.</p>
+        <div style="overflow:auto"><table class="matrix"><thead><tr><th>Permission</th><th>Chilonzor</th><th>Yunusobod</th><th>Sergeli</th><th>Andijon</th></tr></thead><tbody>
+          <tr><td>view_dashboard <div class="small muted">see the branch dashboard</div></td><td><span class="tg on"></span></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td></tr>
+          <tr><td>manage_orders <div class="small muted">full order workflow + payments + refunds</div></td><td><span class="tg on"></span></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td></tr>
+          <tr><td>manage_catalog <div class="small muted">materials for the branch</div></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td></tr>
+          <tr><td>manage_inventory <div class="small muted">stock-in / adjust (not transfer)</div></td><td><span class="tg on"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td></tr>
+          <tr><td>manage_workers <div class="small muted">workers for the branch</div></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td><td><span class="tg"></span></td></tr>
+        </tbody></table></div>
+        <div class="notebox" style="margin:14px 0">Greyed-out workshop-wide powers — <i>manage_branches, manage_pricing, manage_settings, view_reports, manage_users, transfer_stock, force_cancel, revert_refund</i> — are owner-only and can't be toggled here.</div>
+        <div style="display:flex;gap:10px"><button class="btn primary">Save grants</button><button class="btn ghost">Discard</button></div></div></div>
+      <div class="tabpane" data-pane="ses"><div class="card"><div class="card-h">Active sessions <button class="btn sm danger">Revoke all</button></div><div class="card-b tight"><table><tbody>
+        <tr><td>Chrome — Windows <div class="small muted">Tashkent · started today 08:40 · last active 12 min ago</div></td><td class="actions"><button class="btn sm ghost">Revoke</button></td></tr>
+        <tr><td>Android — Chrome <div class="small muted">last active yesterday</div></td><td class="actions"><button class="btn sm ghost">Revoke</button></td></tr>
+      </tbody></table></div><div style="padding:11px 16px;border-top:1px solid var(--border)" class="small muted">Opaque DB-backed sessions · access 24h / refresh 7d · max 5 concurrent. Revoking takes effect immediately.</div></div></div>
+      <div class="tabpane" data-pane="aud"><div class="card"><table><thead><tr><th>When</th><th>Action</th><th>Target</th></tr></thead><tbody>
+        <tr><td class="small muted">today 16:40</td><td>Applied discount</td><td>order MP-10231 (−15 000, "loyalty")</td></tr>
+        <tr><td class="small muted">today 11:02</td><td>Recorded payment</td><td>order MP-10238 (cash 98 200)</td></tr>
+        <tr><td class="small muted">yesterday</td><td>Force-cancelled order</td><td>MP-10221 ("defective sheet — wrong batch")</td></tr>
+        <tr><td class="small muted">6 May</td><td>Edited material</td><td>LDSP White W1000 — price 11 500 → 12 000</td></tr>
+      </tbody></table></div></div>
+    </section>
+
+    <!-- ===== AUDIT ===== -->
+    <section class="view" data-view="audit">
+      <div class="page-header"><div><div class="crumb">Owner / view_reports</div><h1>Audit log</h1><div class="sub">Append-only — who did what, when. Status changes have their own tab.</div></div></div>
+      <div class="tabs" data-tabs><div class="tab active" data-tab="act">Action log</div><div class="tab" data-tab="sta">Status changes</div></div>
+      <div class="tabpane active" data-pane="act"><div class="toolbar"><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Actor, target, action…"></div><span class="chip on">All</span><span class="chip">Orders</span><span class="chip">Inventory</span><span class="chip">Users</span><span class="chip">Pricing</span><div class="spacer"></div><input class="input" type="date" style="max-width:160px" value="2026-05-11"></div>
+        <div class="card"><table><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th><th>Trace</th></tr></thead><tbody>
+          <tr><td class="small muted nowrap">11 May 16:40</td><td>Sardor Mirzaev</td><td>discount.apply</td><td>order MP-10231</td><td>−15 000 — "loyalty, repeat customer"</td><td class="mono small">a91c…</td></tr>
+          <tr><td class="small muted nowrap">11 May 14:22</td><td>Dilnoza Toirova</td><td>payment.record</td><td>order MP-10247</td><td>—</td><td class="mono small">7f3b…</td></tr>
+          <tr><td class="small muted nowrap">11 May 11:05</td><td>Bekzod Rahimov (owner)</td><td>refund.revert</td><td>refund on MP-10044</td><td>"client disputed receipt — reissued"</td><td class="mono small">c204…</td></tr>
+          <tr><td class="small muted nowrap">10 May 18:30</td><td>Sardor Mirzaev</td><td>order.force_cancel</td><td>order MP-10221</td><td>before: in_production — "defective sheet, wrong batch"</td><td class="mono small">e88a…</td></tr>
+          <tr><td class="small muted nowrap">10 May 09:14</td><td>Bekzod Rahimov (owner)</td><td>stock.transfer</td><td>MDF 16 raw</td><td>Chilonzor −10 → Sergeli +10</td><td class="mono small">2bb7…</td></tr>
+          <tr><td class="small muted nowrap">9 May 12:00</td><td>Bekzod Rahimov (owner)</td><td>user.grant.add</td><td>Sardor → Yunusobod</td><td>+ manage_orders, + view_dashboard</td><td class="mono small">55cd…</td></tr>
+        </tbody></table></div></div>
+      <div class="tabpane" data-pane="sta"><div class="card"><table><thead><tr><th>When</th><th>Order</th><th>From → To</th><th>By</th></tr></thead><tbody>
+        <tr><td class="small muted nowrap">11 May 09:15</td><td class="b">MP-10231</td><td><span class="badge b-primary plain">confirmed</span> → <span class="badge b-indigo plain">in_production</span></td><td>Dilnoza Toirova</td></tr>
+        <tr><td class="small muted nowrap">11 May 08:01</td><td class="b">MP-10240</td><td><span class="badge b-info plain">new</span> → <span class="badge b-primary plain">confirmed</span></td><td>Dilnoza Toirova (payment)</td></tr>
+        <tr><td class="small muted nowrap">10 May 18:30</td><td class="b">MP-10221</td><td><span class="badge b-indigo plain">in_production</span> → <span class="badge b-danger plain">cancelled</span></td><td>Sardor Mirzaev (force)</td></tr>
+        <tr><td class="small muted nowrap">10 May 16:10</td><td class="b">MP-10198</td><td><span class="badge b-warning plain">ready</span> → <span class="badge b-violet plain">in_delivery</span></td><td>Aziza (driver: Rustam)</td></tr>
+      </tbody></table></div></div>
+    </section>
+
+    <!-- ===== MY PROFILE ===== -->
+    <section class="view" data-view="profile">
+      <div class="page-header"><div><h1>My profile</h1></div></div>
+      <div class="split">
+        <div class="card pad" style="max-width:560px"><div style="display:flex;gap:14px;align-items:center;margin-bottom:18px"><div class="avatar" style="width:56px;height:56px;font-size:18px">BR</div><div><div style="font-size:17px;font-weight:800">Bekzod Rahimov</div><div class="muted small">Workshop owner · Oq Daraxt Mebel</div></div></div><div class="field"><label>Full name</label><input class="input" value="Bekzod Rahimov"></div><div class="field"><label>Login</label><input class="input mono" value="oqdaraxt.owner" disabled></div><div class="field"><label>Phone</label><input class="input" value="+998 90 100 11 22"></div><div style="margin-top:6px"><button class="btn primary">Save</button> <button class="btn" data-modal="mChangePw">Change password</button></div></div>
+        <div class="card"><div class="card-h">My sessions</div><div class="card-b tight"><table><tbody>
+          <tr><td><b>This device</b><div class="small muted">Chrome · Tashkent · started today</div></td><td class="actions"><span class="badge b-success plain">current</span></td></tr>
+          <tr><td>iPad — Safari<div class="small muted">last active 4 days ago</div></td><td class="actions"><button class="btn sm ghost">Revoke</button></td></tr>
+        </tbody></table></div><div style="padding:12px 16px;border-top:1px solid var(--border)"><button class="btn danger sm">Sign out everywhere</button></div></div>
+      </div>
+    </section>
+
+  </div></main>
+
+  <footer class="foot-bar"><span>Mebel Pro · seh</span><span class="dot-sep">Oq Daraxt Mebel</span><span class="dot-sep">build dev-prototype</span><span class="dot-sep mono">trace: 7f3b-a91c-…  ⧉</span><span class="dot-sep"><a href="index.html">all prototypes</a></span></footer>
+</div>
+
+<!-- popovers -->
+<div id="branchPop" style="display:none;position:fixed;top:50px;left:174px;width:230px;z-index:70" class="card"><div class="card-b tight">
+  <div class="nav-item active">🏬 All branches (owner)</div><div class="nav-item">Chilonzor</div><div class="nav-item">Yunusobod</div><div class="nav-item">Sergeli</div><div class="nav-item" style="opacity:.6">Andijon (closed)</div>
+</div></div>
+<div id="notifPop" style="display:none;position:fixed;top:50px;right:84px;width:320px;z-index:70" class="card"><div class="card-h">Notifications <a class="small" style="font-weight:600">mark all read</a></div><div class="card-b tight">
+  <div style="padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px">⚠ Refund on <b>MP-10088</b> is stale (9 days) <div class="small muted">today</div></div>
+  <div style="padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px">New order <b>MP-10247</b> · Chilonzor <div class="small muted">22 min ago</div></div>
+  <div style="padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px">Low stock: MDF 16 raw — Sergeli (0 sheets) <div class="small muted">1h ago</div></div>
+  <div style="padding:11px 14px;font-size:13px">Pay-later overdue on <b>MP-10173</b> <div class="small muted">yesterday</div></div>
+</div><div style="padding:10px 14px;border-top:1px solid var(--border);text-align:center"><a class="small">See all</a></div></div>
+<div id="userPop" style="display:none;position:fixed;top:50px;right:14px;width:200px;z-index:70" class="card"><div class="card-b tight">
+  <div class="nav-item" data-go="profile" onclick="document.getElementById('userPop').style.display='none'">👤 My profile</div>
+  <div class="nav-item" onclick="alert('Language: Uzbek only in v1')">🌐 Language: UZ</div>
+  <div class="nav-item" style="color:var(--danger)" onclick="signOut()">⎋ Sign out</div>
+</div></div>
+
+<!-- modals -->
+<div class="modal-bg" id="mRecordPay"><div class="modal"><h3>Record payment — MP-10231 <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Method</label><select><option>Cash</option><option selected>Bank transfer</option></select></div><div class="field"><label>Amount (so'm)</label><input class="input" value="612400"></div></div><div class="field"><label>Note / reference</label><input class="input" placeholder="Bank ref, receipt #…"></div><div class="field"><label>Receipt scan (optional)</label><button class="btn sm">⬆ Upload</button></div><div class="notebox">Recording the first payment moves <b>new → confirmed</b>; with <code>shop</code> material, stock is reserved automatically.</div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Record payment</button></div></div></div>
+<div class="modal-bg" id="mPayLater"><div class="modal"><h3>Approve pay-later — MP-10231 <span class="x" data-close>×</span></h3><div class="body"><div class="notebox warn" style="margin-bottom:14px">Owner-only. Moves the order to <b>confirmed</b> without a recorded payment. The balance must still be settled before handover.</div><div class="field"><label>Reason (required)</label><textarea placeholder="Why is pay-later approved for this client/order?"></textarea></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Approve pay-later</button></div></div></div>
+<div class="modal-bg" id="mDiscount"><div class="modal"><h3>Apply discount — MP-10231 <span class="x" data-close>×</span></h3><div class="body"><div class="field"><label>Discount amount (so'm)</label><input class="input" value="15000"></div><div class="field"><label>Reason (required)</label><textarea placeholder="Why the discount?">loyalty, repeat customer</textarea></div><p class="small muted">Re-prices the order; the new total is re-snapshotted.</p></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Apply discount</button></div></div></div>
+<div class="modal-bg" id="mReady"><div class="modal"><h3>Mark MP-10231 as ready <span class="x" data-close>×</span></h3><div class="body"><div class="notebox warn">Marking ready <b>consumes</b> the reserved stock (3 sheets of LDSP White). If an advance was paid, the balance must be recorded before handover.</div><div class="field" style="margin-top:14px"><label>Assign delivery driver (delivery order)</label><select><option>Rustam Aliyev (driver)</option><option>— assign later —</option></select></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn success" data-close>Mark ready</button></div></div></div>
+<div class="modal-bg" id="mForceCancel"><div class="modal"><h3>Force-cancel MP-10231 <span class="x" data-close>×</span></h3><div class="body"><div class="notebox danger" style="margin-bottom:14px">Owner-only, exceptional, audited. The order is in production — cancelling now releases/handles stock and creates a pending refund for the 612 400 paid.</div><div class="field"><label>Reason (required)</label><textarea placeholder="What happened?"></textarea></div></div><div class="foot"><button class="btn" data-close>Keep order</button><button class="btn danger" data-close>Force-cancel</button></div></div></div>
+<div class="modal-bg" id="mRefund"><div class="modal"><h3>Record refund <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Method</label><select><option selected>Bank transfer</option><option>Cash</option></select></div><div class="field"><label>Amount (so'm)</label><input class="input" value="89200"></div></div><div class="field"><label>Note (required) — bank reference / receipt</label><textarea placeholder="e.g. transfer to card 8600… ref 4421-998"></textarea></div><div class="field"><label>Receipt scan (optional)</label><button class="btn sm">⬆ Upload</button></div><div class="notebox">On record: refund <b>completed</b>, payment <b>refunded</b>, client notified.</div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Record refund</button></div></div></div>
+<div class="modal-bg" id="mWorker"><div class="modal"><h3>Assign worker — MP-10231 <span class="x" data-close>×</span></h3><div class="body"><div class="field"><label>Worker</label><select><option selected>Jasur Normatov (cutter)</option><option>Botir Egamberdiyev (cutter)</option><option>— none —</option></select></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Assign</button></div></div></div>
+<div class="modal-bg" id="mBranch"><div class="modal"><h3>New branch <span class="x" data-close>×</span></h3><div class="body"><div class="field"><label>Branch name</label><input class="input" placeholder="e.g. Olmazor branch"></div><div class="row-fields"><div class="field"><label>City</label><input class="input" value="Toshkent"></div><div class="field"><label>Phone</label><input class="input"></div></div><div class="field"><label>Address</label><input class="input"></div><div class="row-fields"><div class="field"><label>Latitude</label><input class="input"></div><div class="field"><label>Longitude</label><input class="input"></div></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Create branch</button></div></div></div>
+<div class="modal-bg" id="mMaterial"><div class="modal"><h3>Add material <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Branch</label><select><option>Chilonzor</option><option>Yunusobod</option><option>Sergeli</option></select></div><div class="field"><label>Name</label><input class="input" placeholder="LDSP Egger 18 mm — …"></div></div><div class="row-fields"><div class="field"><label>Thickness (mm)</label><input class="input" value="18"></div><div class="field"><label>Price (so'm / m²)</label><input class="input"></div></div><div class="row-fields"><div class="field"><label>Sheet length (mm)</label><input class="input" value="2800"></div><div class="field"><label>Sheet width (mm)</label><input class="input" value="2070"></div></div><div class="row-fields"><div class="field"><label>Kerf (mm)</label><input class="input" value="3.2"></div><div class="field"><label>Edge trim (mm)</label><input class="input" value="10"></div></div><div class="field"><label>Image</label><button class="btn sm">⬆ Upload</button></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Add material</button></div></div></div>
+<div class="modal-bg" id="mStockIn"><div class="modal"><h3>Stock in <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Material</label><select><option>LDSP White W1000 — Chilonzor</option><option>MDF 16 raw — Sergeli</option></select></div><div class="field"><label>Quantity (sheets)</label><input class="input" value="50"></div></div><div class="field"><label>Reference</label><input class="input" placeholder="Supplier invoice #"></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Add stock</button></div></div></div>
+<div class="modal-bg" id="mAdjust"><div class="modal"><h3>Adjust stock <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Material</label><select><option>LDSP White W1000 — Chilonzor</option></select></div><div class="field"><label>Delta (+/−)</label><input class="input" value="-2"></div></div><div class="field"><label>Reason (required)</label><textarea placeholder="e.g. damaged sheets, recount difference"></textarea></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Adjust</button></div></div></div>
+<div class="modal-bg" id="mTransfer"><div class="modal"><h3>Transfer stock <span class="badge b-neutral plain" style="margin-left:6px">owner only</span><span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Material</label><select><option>MDF 16 raw</option><option>LDSP White W1000</option></select></div><div class="field"><label>Quantity (sheets)</label><input class="input" value="10"></div></div><div class="row-fields"><div class="field"><label>From branch</label><select><option>Chilonzor</option></select></div><div class="field"><label>To branch</label><select><option>Sergeli</option><option>Yunusobod</option></select></div></div><div class="notebox">Records two atomic transactions (−from / +to). Reserved stock can't be transferred.</div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Transfer</button></div></div></div>
+<div class="modal-bg" id="mWorkerAdd"><div class="modal"><h3>Add worker <span class="x" data-close>×</span></h3><div class="body"><div class="row-fields"><div class="field"><label>Branch</label><select><option>Chilonzor</option><option>Yunusobod</option></select></div><div class="field"><label>Name</label><input class="input"></div></div><div class="row-fields"><div class="field"><label>Role</label><select><option>Cutter</option><option>Edge bander</option><option>Driver</option><option>Other</option></select></div><div class="field"><label>Phone</label><input class="input"></div></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Add worker</button></div></div></div>
+<div class="modal-bg" id="mCreateStaff"><div class="modal"><h3>Create staff user <span class="x" data-close>×</span></h3><div class="body" id="createStaffBody"><div class="row-fields"><div class="field"><label>Full name</label><input class="input" placeholder="e.g. Nodira Karimova"></div><div class="field"><label>Phone</label><input class="input"></div></div><div class="field"><label>Login</label><input class="input mono" value="oqdaraxt.nodira"><div class="hint">Auto-suggested; must be unique within the workshop.</div></div><div class="notebox">A temporary password is generated; the user must change it on first login. Grant per-branch permissions after creating (a user with no grants can log in but sees nothing actionable).</div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" onclick="document.getElementById('createStaffBody').innerHTML='<div class=\u0027notebox\u0027 style=\u0027margin-bottom:14px\u0027>User created. Share these credentials now — the password is shown only once.</div><div class=\u0027field\u0027><label>Login</label><div class=\u0027secret\u0027>oqdaraxt.nodira<span class=\u0027cp\u0027>⧉ copy</span></div></div><div class=\u0027field\u0027><label>Temporary password</label><div class=\u0027secret\u0027>Tz7-q4Wm-9hKp<span class=\u0027cp\u0027>⧉ copy</span></div></div>';this.textContent='Done — go to permissions';this.setAttribute('data-close','')">Create user</button></div></div></div>
+<div class="modal-bg" id="mResetPw"><div class="modal"><h3>Reset password — Sardor Mirzaev <span class="x" data-close>×</span></h3><div class="body"><div class="notebox warn" style="margin-bottom:14px">Generates a new temporary password and sets <code>force_password_change</code>. The user's current sessions are revoked.</div><div class="field"><label>New temporary password</label><div class="secret">Bq2-mX8t-r5Lf<span class="cp">⧉ copy</span></div><div class="hint">Shown only once — share it with the user now.</div></div></div><div class="foot"><button class="btn" data-close>Done</button></div></div></div>
+<div class="modal-bg" id="mChangePw"><div class="modal"><h3>Change my password <span class="x" data-close>×</span></h3><div class="body"><div class="field"><label>Current password</label><input class="input" type="password"></div><div class="field"><label>New password</label><input class="input" type="password"></div><div class="field"><label>Confirm new password</label><input class="input" type="password"></div></div><div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" data-close>Change password</button></div></div></div>
+
+<div class="gif-badge">▶ static prototype</div>
+
+<script>
+function enterApp(){document.getElementById('authScreen').style.display='none';document.getElementById('appShell').hidden=false;}
+function signOut(){document.getElementById('appShell').hidden=true;const a=document.getElementById('authScreen');a.style.display='grid';['notifPop','userPop','branchPop'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
+function go(view){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===view));document.querySelectorAll('.nav-item[data-go]').forEach(n=>n.classList.toggle('active',n.dataset.go===view));['notifPop','userPop','branchPop'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});const m=document.querySelector('.main');if(m)m.scrollTop=0;window.scrollTo(0,0);}
+document.addEventListener('click',function(e){
+  const n=e.target.closest('[data-go]');if(n){go(n.dataset.go);return;}
+  const t=e.target.closest('.tab[data-tab]');if(t){const g=t.closest('[data-tabs]')||document;g.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.toggle('active',x===t));const root=g.parentElement||document;root.querySelectorAll('.tabpane[data-pane]').forEach(p=>p.classList.toggle('active',p.dataset.pane===t.dataset.tab));return;}
+  const md=e.target.closest('[data-modal]');if(md){const el=document.getElementById(md.dataset.modal);if(el)el.classList.add('open');return;}
+  if(e.target.closest('[data-close]')||e.target.classList.contains('modal-bg')){document.querySelectorAll('.modal-bg.open').forEach(x=>x.classList.remove('open'));}
+  const ov=e.target.closest('#ordView button');if(ov){ov.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===ov));document.getElementById('ordBoard').hidden=ov.dataset.ov!=='board';document.getElementById('ordTable').hidden=ov.dataset.ov!=='table';}
+  const ch=e.target.closest('.chip');if(ch&&ch.parentNode){ch.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));ch.classList.add('on');}
+  const pt=e.target.closest('.pill-tabs button');if(pt&&pt.parentNode.id!=='ordView'){pt.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===pt));}
+  const tg=e.target.closest('.tg');if(tg){tg.classList.toggle('on');}
+});
+</script>
+</body>
+</html>

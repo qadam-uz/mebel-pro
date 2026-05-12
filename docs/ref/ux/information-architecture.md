@@ -2,7 +2,7 @@
 title: Information architecture
 status: stable
 owner: shape
-updated: 2026-05-11
+updated: 2026-05-12
 related:
   - docs/spec/personas.md
   - docs/spec/architecture.md
@@ -13,6 +13,8 @@ related:
 
 The navigation model, the route inventory, and the shell, across the three apps + the landing page.
 The "why three apps" decision is [`docs/spec/architecture.md`](../../spec/architecture.md); per-feature screen detail (states, layouts, interactions) lives in each `ref/features/*` doc's **UX** section; shared component specs are in [`docs/ref/ux/components.md`](components.md).
+
+> **Static UI prototypes (temporary):** clickable mockups of every surface below, in four candidate design systems, live under `docs/misc/` — [compare all four](../../misc/prototype-variants.html) (or jump straight in: [Aurora](../../misc/prototype/index.html) · [Carbon](../../misc/prototype-b/index.html) · [Terra](../../misc/prototype-c/index.html) · [Mono](../../misc/prototype-d/index.html)). No backend — canned data, navigation/tabs/modals/wizards all work; built to look at while we settle the visual direction. **To be cleaned up once a variant is chosen** (the others removed; the keeper either deleted or, if worth keeping, promoted to a real `ref/ux/` page with its assets in `docs/assets/`).
 
 ## The surfaces
 
