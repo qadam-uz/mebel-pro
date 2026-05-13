@@ -115,8 +115,8 @@ nav.side ul ul {
   border-left: 1px solid var(--border);
 }
 nav.side a {
-  display: block; padding: 0.25rem 0.55rem; border-radius: 5px;
-  font-size: 0.95rem; line-height: 1.35; color: var(--ink-soft);
+  display: block; padding: 0.3rem 0.6rem; border-radius: 5px;
+  font-size: 1.02rem; line-height: 1.4; color: var(--ink-soft);
 }
 nav.side a:hover { background: rgba(192, 121, 47, 0.14); color: var(--ink); }
 nav.side a.active {
@@ -212,6 +212,13 @@ article pre {
 article pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; white-space: pre; }
 article .highlight { background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px; margin: 1.1rem 0; }
 article .highlight pre { margin: 0; border: 0; background: transparent; }
+
+/* Mermaid: the JS replaces the <pre class="mermaid"> source with an inline <svg>.
+   Until that happens the source text is visible; we hide it to avoid a flash,
+   and let the rendered diagram center itself with a touch of breathing room. */
+article pre.mermaid { background: transparent; border: 0; padding: 0; text-align: center; overflow-x: auto; }
+article pre.mermaid:not([data-processed="true"]) { visibility: hidden; min-height: 2rem; }
+article pre.mermaid svg { max-width: 100%; height: auto; }
 
 article table {
   display: block; width: 100%; overflow-x: auto;

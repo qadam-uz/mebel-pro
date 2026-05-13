@@ -5,29 +5,29 @@ for routing, Tailwind v4 for styling. Package manager: **pnpm**.
 
 ## Target shape vs. current state
 
-The design ([`docs/spec/architecture.md`](../docs/spec/architecture.md) → *Why three SPAs + a static landing*; route maps in [`docs/ref/ux/information-architecture.md`](../docs/ref/ux/information-architecture.md)) is:
+The design [`docs/architecture.md`](../docs/architecture.md) → _Why three SPAs + a static landing_ is:
 
-1. a **static, SEO-optimized landing page** — plain HTML + minimal CSS/JS, served at `/`, *not* part of this Vue tree;
-2. **three Vue SPAs** in this repo, each its own Vite entry, auth surface, and route set — **client** (Telegram-auth customers: cutting + ordering + tracking), **seh** (login-auth workshop owner & staff, every screen gated by permission grants), **superadmin** (login-auth platform operators);
+1. a **static, SEO-optimized landing page** — plain HTML + minimal CSS/JS, served at `/`, _not_ part of this Vue tree;
+2. **three Vue SPAs** in this repo, each its own Vite entry, auth surface, and route set — **client** (Telegram-auth customers: cutting + ordering + tracking), **workshop** (login-auth workshop owner & staff, every screen gated by permission grants), **superadmin** (login-auth platform operators);
 3. shared UI primitives, the API client, design tokens, and i18n living once in the repo, consumed by all three.
 
-**Current state:** this repo is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. The split into three entries + extracting shared code + the static landing is pending build work; until then, treat the scaffold as the client app and don't add seh/superadmin screens to it.
+**Current state:** this repo is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. The split into three entries + extracting shared code + the static landing is pending build work; until then, treat the scaffold as the client app and don't add workshop/superadmin screens to it.
 
 ## Toolchain
 
-| Concern        | Tool                                   |
-| -------------- | -------------------------------------- |
-| Runtime / PM   | Node **22+**, **pnpm** (`packageManager` pinned; `engine-strict`) |
-| Build / dev    | **Vite 7** (`@vitejs/plugin-vue`, `vite-plugin-vue-devtools`) |
-| Framework      | Vue **3.5** (`<script setup lang="ts">`, Composition API) |
-| Routing        | Vue Router 4 (`createWebHistory`)      |
-| State          | Pinia (setup-style stores)             |
-| Styling        | Tailwind CSS **v4** (`@tailwindcss/vite`; config-less, `@import "tailwindcss"` in `src/assets/main.css`) |
-| Types          | TypeScript (project references: `tsconfig.{app,node,vitest}.json`); `vue-tsc` for `.vue` |
-| Lint           | **ESLint 9** flat config (`eslint-plugin-vue`, `@vue/eslint-config-typescript`, prettier-skip) |
-| Format         | **Prettier** (no semicolons, single quotes, width 100) |
-| Unit tests     | **Vitest** + `@vue/test-utils` + jsdom |
-| HTTP           | native `fetch` wrapper — `src/api/client.ts` (no axios) |
+| Concern      | Tool                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| Runtime / PM | Node **22+**, **pnpm** (`packageManager` pinned; `engine-strict`)                                        |
+| Build / dev  | **Vite 7** (`@vitejs/plugin-vue`, `vite-plugin-vue-devtools`)                                            |
+| Framework    | Vue **3.5** (`<script setup lang="ts">`, Composition API)                                                |
+| Routing      | Vue Router 4 (`createWebHistory`)                                                                        |
+| State        | Pinia (setup-style stores)                                                                               |
+| Styling      | Tailwind CSS **v4** (`@tailwindcss/vite`; config-less, `@import "tailwindcss"` in `src/assets/main.css`) |
+| Types        | TypeScript (project references: `tsconfig.{app,node,vitest}.json`); `vue-tsc` for `.vue`                 |
+| Lint         | **ESLint 9** flat config (`eslint-plugin-vue`, `@vue/eslint-config-typescript`, prettier-skip)           |
+| Format       | **Prettier** (no semicolons, single quotes, width 100)                                                   |
+| Unit tests   | **Vitest** + `@vue/test-utils` + jsdom                                                                   |
+| HTTP         | native `fetch` wrapper — `src/api/client.ts` (no axios)                                                  |
 
 E2E tests live in the sibling `e2e/` package (Playwright), not here.
 
@@ -95,6 +95,10 @@ web/
 ## Backend contract
 
 The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. In prod, the **Caddy edge** (`deploy/Caddyfile`) routes `/api` (and `/docs`, `/api-docs`, `/api-redoc`) to the backend container and everything else to the `web` container (which is a plain nginx static server, `web/nginx.conf`, doing the HTML5-history fallback).
+
+## Design system
+
+[`DESIGN.md`](./DESIGN.md) is the deterministic design contract: tokens, UI primitives, composed components, the shell, route maps for all three SPAs, i18n namespaces, API boundary patterns, and the accessibility baseline. Read it before adding components or screens.
 
 ## Related skills
 

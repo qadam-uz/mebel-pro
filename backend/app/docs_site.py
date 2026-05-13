@@ -22,11 +22,12 @@ from xml.etree.ElementTree import Element
 
 import markdown
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from markdown.extensions import Extension
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.toc import TocExtension
+from markdown.preprocessors import Preprocessor
 from markdown.treeprocessors import Treeprocessor
 
 from app.core.config import settings
@@ -153,6 +154,7 @@ def build_nav() -> list[NavItem]:
         return []
 
     def walk(directory: Path) -> list[NavItem]:
+        is_root = directory == root
         items: list[NavItem] = []
         for child in sorted(directory.iterdir(), key=lambda p: p.name.lower()):
             if _is_hidden(child):
@@ -169,18 +171,30 @@ def build_nav() -> list[NavItem]:
                         children=kids,
                     )
                 )
-            elif child.suffix == ".md" and child.name.lower() not in {"index.md", "readme.md"}:
+            elif child.suffix == ".md":
+                # README.md is never a nav entry. index.md is the Getting-Started
+                # landing at the docs root and earns a sidebar entry there; the
+                # docs skill forbids index.md anywhere else, but if one slips in
+                # we still hide it (the folder's overview is enough).
+                name = child.name.lower()
+                if name == "readme.md":
+                    continue
+                if name == "index.md" and not is_root:
+                    continue
                 rel = child.relative_to(root).as_posix()
                 meta = _read_meta(child)
+                url = "/docs" if name == "index.md" else "/docs/" + rel[: -len(".md")]
                 items.append(
                     NavItem(
                         title=meta.title or _humanize(child.stem),
                         order=meta.order,
-                        url="/docs/" + rel[: -len(".md")],
+                        url=url,
                         rel=rel,
                     )
                 )
-        items.sort(key=lambda i: (i.order, i.title.lower()))
+        # Files first, then folders — so the canon at docs/ sits above ref/ in
+        # the sidebar even when ref/'s deepest order overlaps with a canon file.
+        items.sort(key=lambda i: (1 if i.is_folder else 0, i.order, i.title.lower()))
         return items
 
     return walk(root)
@@ -216,7 +230,7 @@ def _render_nav(items: list[NavItem], cur_rel: str) -> str:
 class _RelLinkTreeprocessor(Treeprocessor):
     """Rewrite in-repo Markdown links/images so they resolve under ``/docs``.
 
-    ``[x](scope-v1.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope-v1``;
+    ``[x](scope.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope``;
     image ``src``\\ s point at their ``/docs/...`` byte route. Absolute URLs,
     anchors, ``mailto:``/``tel:``, and links that climb out of the docs tree are
     left untouched.
@@ -266,6 +280,37 @@ class _RelLinkExtension(Extension):
         md.treeprocessors.register(_RelLinkTreeprocessor(md, self._cur_rel), "docs_rellinks", 3)
 
 
+class _MermaidPreprocessor(Preprocessor):
+    """Lift fenced ``mermaid`` blocks out of Markdown processing entirely.
+
+    A ```` ```mermaid ```` fence is replaced — *before* ``fenced_code`` and
+    ``codehilite`` see it — with a raw ``<pre class="mermaid">…</pre>`` HTML
+    block, which the Mermaid JS picks up on load and renders as inline SVG.
+    """
+
+    _FENCE_RE = re.compile(
+        r"^( {0,3})(`{3,}|~{3,})[ \t]*mermaid[ \t]*\n(.*?)\n\1\2[ \t]*$",
+        re.DOTALL | re.MULTILINE,
+    )
+
+    def run(self, lines: list[str]) -> list[str]:
+        text = "\n".join(lines)
+
+        def replace(m: re.Match[str]) -> str:
+            source = m.group(3)
+            return f'\n<pre class="mermaid">{escape(source, quote=False)}</pre>\n'
+
+        return self._FENCE_RE.sub(replace, text).split("\n")
+
+
+class _MermaidExtension(Extension):
+    def extendMarkdown(self, md: markdown.Markdown) -> None:
+        # Run *before* fenced_code (priority 25) so the mermaid block never enters
+        # the code-block pipeline. md_in_html (priority 30) then leaves the raw
+        # <pre class="mermaid"> alone.
+        md.preprocessors.register(_MermaidPreprocessor(md), "docs_mermaid", 27)
+
+
 def render_markdown(text: str, cur_rel: str) -> tuple[str, _Meta, str, str]:
     """Render a Markdown document → (title, frontmatter, HTML body, on-this-page HTML)."""
     meta, body = _split_frontmatter(text)
@@ -282,6 +327,7 @@ def render_markdown(text: str, cur_rel: str) -> tuple[str, _Meta, str, str]:
             CodeHiliteExtension(css_class="highlight", guess_lang=False),
             TocExtension(permalink="#", toc_depth="2-4"),
             _RelLinkExtension(cur_rel),
+            _MermaidExtension(),
         ],
         output_format="html",
         tab_length=2,
@@ -393,6 +439,14 @@ def _page(
         else ""
     )
     shell_cls = "shell" if toc_html else "shell no-toc"
+    mermaid_html = (
+        '<script type="module">'
+        'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";'
+        'mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });'
+        "</script>"
+        if 'class="mermaid"' in content
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -429,6 +483,7 @@ def _page(
   {aside}
 </div>
 <script>{_scripts()}</script>
+{mermaid_html}
 </body>
 </html>"""
 
@@ -492,8 +547,10 @@ async def docs_page(doc_path: str) -> Response:
     if not doc_path:
         return await docs_home()
     target = _resolve(doc_path)
+    # Anything under /docs that doesn't resolve to a real file/folder — a stale
+    # link, a typo, a `..`-escape — sends the reader home rather than dead-ending.
     if target is None:
-        raise HTTPException(status_code=404, detail="Not found")
+        return RedirectResponse("/docs", status_code=status.HTTP_302_FOUND)
 
     # An exact file: an asset, or an explicit `.md` link.
     if target.is_file():
@@ -510,4 +567,4 @@ async def docs_page(doc_path: str) -> Response:
                 return _render_doc_file(f)
         return _render_folder(target)
 
-    raise HTTPException(status_code=404, detail="Not found")
+    return RedirectResponse("/docs", status_code=status.HTTP_302_FOUND)

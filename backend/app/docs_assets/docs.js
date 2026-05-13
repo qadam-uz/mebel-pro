@@ -10,7 +10,7 @@
   if (search && nav) {
     var anchors = [].slice.call(nav.querySelectorAll("a"));
     var groups = [].slice.call(nav.querySelectorAll("details"));
-    search.addEventListener("input", function () {
+    function applyFilter() {
       var q = search.value.trim().toLowerCase();
       anchors.forEach(function (a) {
         var hit = !q || a.textContent.toLowerCase().indexOf(q) !== -1;
@@ -25,12 +25,31 @@
         d.classList.toggle("hidden", !visible);
         if (q && visible) d.open = true;
       });
-    });
+    }
+    search.addEventListener("input", applyFilter);
     // tapping a link closes the mobile nav drawer
     nav.addEventListener("click", function (e) {
       if (e.target.closest && e.target.closest("a")) {
         var toggle = document.getElementById("nav-toggle");
         if (toggle) toggle.checked = false;
+      }
+    });
+
+    // ⌘K / Ctrl+K → focus & select the filter; Esc while focused → clear & blur.
+    var isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+    search.placeholder = "Filter pages…  " + (isMac ? "⌘K" : "Ctrl+K");
+    document.addEventListener("keydown", function (e) {
+      if ((e.key === "k" || e.key === "K") && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey) {
+        e.preventDefault();
+        search.focus();
+        search.select();
+      } else if (e.key === "Escape" && document.activeElement === search) {
+        if (search.value) {
+          search.value = "";
+          applyFilter();
+        } else {
+          search.blur();
+        }
       }
     });
   }

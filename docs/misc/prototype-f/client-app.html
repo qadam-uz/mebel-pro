@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mebel Pro — Client app (static prototype · Variant F · Signal)</title>
+<style>
+/* Variant F — "Signal": industrial / operator-console. (Same tokens as the workshop app.) */
+:root{
+  --bg:#f5f5f4; --surface:#ffffff; --soft:#fafaf9; --line:#d4d4d4; --line-2:#e7e5e4; --line-strong:#0a0a0a;
+  --text:#0a0a0a; --text-2:#171717; --muted:#525252; --muted-2:#737373;
+  --signal:#1d4ed8; --signal-fg:#fff; --signal-weak:#dbeafe; --signal-dark:#1e3a8a;
+  --ok:#15803d; --ok-weak:#dcfce7; --warn:#a16207; --warn-weak:#fef3c7;
+  --danger:#b91c1c; --danger-weak:#fee2e2; --info:#0369a1; --info-weak:#e0f2fe;
+  --indigo:#4338ca; --indigo-weak:#e0e7ff; --violet:#6d28d9; --violet-weak:#ede9fe;
+  --hazard:#facc15;
+  --nav-w:228px;
+  --press: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.45);
+  --press-light: inset 0 1px 0 #ffffff, inset 0 -1px 0 #d4d4d4;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.5;letter-spacing:-.005em;font-feature-settings:'cv11','tnum'}
+a{color:var(--signal);text-decoration:none} a:hover{text-decoration:underline}
+h1,h2,h3,h4{margin:0}
+
+.app{display:grid;grid-template-columns:var(--nav-w) 1fr;grid-template-rows:48px 1fr auto;min-height:100vh}
+.topbar{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 14px;background:#0a0a0a;border-bottom:1px solid #171717;position:sticky;top:0;z-index:30;color:#e5e5e5}
+.brand{font-weight:800;font-size:14px;display:flex;align-items:center;gap:9px;letter-spacing:-.005em;color:#fff}
+.brand .logo{width:24px;height:24px;border-radius:2px;background:var(--hazard);color:#0a0a0a;display:grid;place-items:center;font-size:12px;font-weight:900;border:1px solid var(--hazard);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.3)}
+.brand .tag{font-size:9.5px;font-weight:900;color:#fff;background:var(--signal);border:1px solid var(--signal);border-radius:2px;padding:2px 7px;margin-left:2px;text-transform:uppercase;letter-spacing:.08em}
+.spacer{flex:1}
+.tbar-status{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;color:#a3a3a3;text-transform:uppercase;letter-spacing:.06em;padding:5px 10px;border:1px solid #262626;border-radius:2px;background:#0a0a0a}
+.tbar-status .led{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 5px rgba(34,197,94,.7)}
+.notif{position:relative;cursor:pointer;font-size:14px;color:#a3a3a3;padding:6px 8px;border-radius:2px;border:1px solid transparent}
+.notif:hover{background:#171717;color:#fff;border-color:#262626}
+.notif .dot{position:absolute;top:1px;right:1px;background:var(--danger);color:#fff;font-size:9px;font-weight:900;border-radius:2px;padding:0 4px;min-width:14px;text-align:center;line-height:14px}
+.lang{font-size:10px;font-weight:900;color:#e5e5e5;border:1px solid #404040;border-radius:2px;padding:5px 8px;cursor:pointer;background:#171717;letter-spacing:.06em;text-transform:uppercase}
+.avatar{width:28px;height:28px;border-radius:2px;background:#fff;color:#0a0a0a;display:grid;place-items:center;font-weight:900;font-size:11px;cursor:pointer;border:1px solid var(--hazard);box-shadow:0 0 0 1px #0a0a0a}
+
+.sidenav{background:#171717;border-right:1px solid #0a0a0a;padding:10px 8px 18px;overflow:auto;color:#a3a3a3}
+.nav-section{font-size:9.5px;text-transform:uppercase;letter-spacing:.12em;color:#737373;padding:14px 10px 6px;font-weight:900;display:flex;align-items:center;gap:8px}
+.nav-section::after{content:'';flex:1;height:1px;background:#262626}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:2px;color:#d4d4d4;cursor:pointer;font-size:12.5px;font-weight:700;margin-bottom:1px;user-select:none;border:1px solid transparent}
+.nav-item:hover{background:#262626;color:#fff;border-color:#404040}
+.nav-item.active{background:#0a0a0a;color:#fff;border-color:var(--hazard);box-shadow:inset 3px 0 0 var(--hazard)}
+.nav-item .ic{width:17px;text-align:center;font-size:13px;opacity:.85}
+.sidenav .note-mini{margin-top:18px;padding:10px 12px;background:#0a0a0a;border:1px solid #262626;border-radius:2px;color:#a3a3a3;font-size:11.5px;line-height:1.5}
+.sidenav .note-mini a{color:var(--hazard);font-weight:800}
+
+.main{padding:22px 26px 32px;overflow:auto}
+.wrap{max-width:1240px;margin:0 auto}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:18px}
+.page-header h1{font-size:22px;letter-spacing:-.02em;font-weight:800}
+.page-header .crumb{font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;gap:6px;align-items:center;text-transform:uppercase;letter-spacing:.06em;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+.page-header .sub{font-size:13px;color:var(--muted);margin-top:6px;line-height:1.5}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:2px;border:1px solid var(--text);background:#fff;color:var(--text);font-size:12.5px;font-weight:700;cursor:pointer;line-height:1;white-space:nowrap;font-family:inherit;letter-spacing:.01em;box-shadow:var(--press-light);transition:transform .06s,background .12s}
+.btn:hover{background:#fafaf9}
+.btn:active{transform:translate(0,1px);box-shadow:inset 0 1px 0 #d4d4d4,inset 0 -1px 0 #fff}
+.btn.primary{background:var(--signal);border-color:var(--signal-dark);color:#fff;box-shadow:var(--press)} .btn.primary:hover{background:var(--signal-dark)}
+.btn.danger{background:var(--danger);border-color:#7f1d1d;color:#fff;box-shadow:var(--press)} .btn.danger:hover{background:#991b1b}
+.btn.success{background:var(--ok);border-color:#14532d;color:#fff;box-shadow:var(--press)} .btn.success:hover{background:#166534}
+.btn.dark{background:var(--text);border-color:var(--text);color:#fff;box-shadow:var(--press)} .btn.dark:hover{background:#171717}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);box-shadow:none} .btn.ghost:hover{background:#f5f5f4;color:var(--text);border-color:var(--line)}
+.btn.sm{padding:4px 9px;font-size:11.5px} .btn.lg{padding:10px 18px;font-size:13.5px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn.block{width:100%;justify-content:center}
+
+.card{background:var(--surface);border:1px solid var(--text);border-radius:2px}
+.card.pad{padding:16px}.card.pad-lg{padding:20px}
+.card-h{padding:9px 14px;border-bottom:1px solid var(--text);font-weight:900;font-size:11px;display:flex;justify-content:space-between;align-items:center;background:#0a0a0a;color:#fff;text-transform:uppercase;letter-spacing:.08em;gap:8px}
+.card-h.alt{background:#fafaf9;color:var(--text);border-bottom-color:var(--line)}
+.card-b{padding:16px} .card-b.tight{padding:0}
+
+.grid{display:grid;gap:12px}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))} .cols-3{grid-template-columns:repeat(3,minmax(0,1fr))} .cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.split{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start} .split.wide{grid-template-columns:1fr 360px}
+
+.muted{color:var(--muted)} .small{font-size:11.5px} .b{font-weight:700} .nowrap{white-space:nowrap}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;letter-spacing:0;font-feature-settings:normal}
+
+.badge{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:2px;font-size:10.5px;font-weight:900;line-height:1.6;white-space:nowrap;text-transform:uppercase;letter-spacing:.06em;border:1px solid transparent}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;box-shadow:0 0 4px currentColor}
+.b-neutral{background:#f5f5f4;color:#525252;border-color:var(--line)} .b-neutral::before{box-shadow:none}
+.b-info{background:var(--info-weak);color:var(--info);border-color:#bae0ec}
+.b-primary{background:var(--signal-weak);color:var(--signal-dark);border-color:#93c5fd}
+.b-indigo{background:var(--indigo-weak);color:var(--indigo);border-color:#a5b4fc}
+.b-warning{background:var(--warn-weak);color:var(--warn);border-color:#fde68a}
+.b-violet{background:var(--violet-weak);color:var(--violet);border-color:#c4b5fd}
+.b-success{background:var(--ok-weak);color:var(--ok);border-color:#86efac}
+.b-danger{background:var(--danger-weak);color:var(--danger);border-color:#fca5a5}
+.badge.plain::before{display:none} .badge.plain{padding:2px 7px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:900;padding:8px 12px;border-bottom:1px solid var(--text);background:#fafaf9}
+.card td{padding:9px 12px;border-bottom:1px solid var(--line-2);font-feature-settings:'tnum','cv11'} .card tr:last-child td{border-bottom:none}
+.card .row-link{cursor:pointer} .card tbody .row-link:hover{background:#fef9c3}
+.card tbody tr:nth-child(even):not(.row-link){background:#fafaf9}
+td .actions{display:flex;gap:6px;justify-content:flex-end}
+
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.input,select,textarea{font:inherit;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--text);width:100%;outline:none;font-feature-settings:'tnum','cv11'}
+.input:focus,select:focus,textarea:focus{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal-weak)}
+textarea{resize:vertical;min-height:68px}
+.field{margin-bottom:14px} .field>label{display:block;font-size:10.5px;font-weight:900;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)} .field .hint{font-size:11px;color:var(--muted);margin-top:5px}
+.row-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.search{position:relative;flex:none;width:280px;max-width:100%}.search input{padding-left:30px}.search .ic{position:absolute;left:10px;top:8px;color:var(--muted-2);font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:2px;border:1px solid var(--text);background:#fff;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--text);user-select:none;text-transform:uppercase;letter-spacing:.04em;box-shadow:var(--press-light)}
+.chip:hover{background:#fafaf9}
+.chip.on{background:var(--text);color:#fff;box-shadow:var(--press)}
+.chip .c{width:6px;height:6px;border-radius:50%;flex:none;box-shadow:0 0 3px currentColor}
+
+.pill-tabs{display:inline-flex;background:#fff;border:1px solid var(--text);border-radius:2px;padding:0}
+.pill-tabs button{border:none;background:transparent;padding:6px 13px;border-radius:0;font:inherit;font-weight:800;font-size:11.5px;cursor:pointer;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-right:1px solid var(--line)}
+.pill-tabs button:last-child{border-right:none}
+.pill-tabs button.on{background:var(--text);color:#fff}
+
+.view{display:none} .view.active{display:block;animation:fade .12s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--text);margin-bottom:18px;overflow-x:auto;background:#fafaf9}
+.tab{padding:10px 16px;font-size:11.5px;font-weight:800;color:var(--muted);cursor:pointer;border-right:1px solid var(--line);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;text-transform:uppercase;letter-spacing:.06em}
+.tab:hover{color:var(--text);background:#f5f5f4}
+.tab.active{color:var(--text);background:#fff;border-bottom-color:var(--text)}
+.tabpane{display:none} .tabpane.active{display:block}
+
+.stepper{display:flex;align-items:center;margin-bottom:24px;max-width:680px}
+.step{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.step .n{width:26px;height:26px;border-radius:2px;display:grid;place-items:center;background:#fff;color:var(--muted);font-size:11.5px;font-weight:900;flex:none;border:1px solid var(--line);font-feature-settings:'tnum'}
+.step.on .n{background:var(--text);color:var(--hazard);border-color:var(--text);box-shadow:var(--press)} .step.on{color:var(--text)} .step.done .n{background:var(--ok);color:#fff;border-color:#14532d;box-shadow:var(--press)}
+.step-sep{flex:1;height:2px;background:var(--line);margin:0 10px;min-width:18px} .step-sep.done{background:var(--ok)}
+
+.kv{display:grid;grid-template-columns:160px 1fr;gap:9px 16px;font-size:12.5px}
+.kv dt{color:var(--muted);font-weight:800;text-transform:uppercase;font-size:10.5px;letter-spacing:.06em;align-self:center}
+.kv dd{margin:0;font-feature-settings:'tnum'}
+
+.modal-bg{position:fixed;inset:0;background:rgba(10,10,10,.6);display:none;align-items:flex-start;justify-content:center;padding:64px 16px 16px;z-index:60;overflow:auto}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--text);border-radius:2px;width:520px;max-width:100%;overflow:hidden;position:relative}
+.modal.danger-frame{border-color:var(--danger)}
+.modal h3{padding:13px 18px;border-bottom:1px solid var(--text);font-size:12px;display:flex;justify-content:space-between;align-items:center;background:#0a0a0a;color:#fff;text-transform:uppercase;letter-spacing:.07em;font-weight:900}
+.modal h3 .x{cursor:pointer;color:#a3a3a3;font-size:18px;line-height:1;width:24px;height:24px;display:grid;place-items:center;border-radius:2px}
+.modal h3 .x:hover{background:#262626;color:#fff}
+.modal .body{padding:18px}
+.modal .foot{padding:12px 18px;border-top:1px solid var(--text);display:flex;justify-content:flex-end;gap:8px;background:#fafaf9}
+
+.notebox{background:#fffbeb;border:1px solid var(--text);border-radius:2px;padding:10px 12px;font-size:12px;display:flex;gap:8px;align-items:flex-start;color:var(--text);line-height:1.5;position:relative}
+.notebox::before{content:'';position:absolute;left:-1px;top:-1px;bottom:-1px;width:3px;background:var(--hazard)}
+.notebox.info{background:#eff6ff} .notebox.info::before{background:var(--signal)}
+.notebox.warn{background:#fef3c7} .notebox.warn::before{background:repeating-linear-gradient(180deg,var(--hazard) 0 4px,#0a0a0a 4px 8px);width:5px}
+.notebox.danger{background:var(--danger-weak)} .notebox.danger::before{background:var(--danger);width:5px}
+
+.empty{text-align:center;padding:52px 20px;color:var(--muted);background:#fafaf9;border:1px dashed var(--line);border-radius:2px}
+.empty .ic{font-size:34px;margin-bottom:10px;opacity:.4}
+.empty h3{margin:0 0 6px;color:var(--text);font-size:15px;font-weight:800}
+
+.timeline{position:relative;padding-left:26px}
+.timeline::before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--text)}
+.tl-item{position:relative;padding-bottom:18px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{content:'';position:absolute;left:-23px;top:4px;width:13px;height:13px;border-radius:2px;background:#fff;border:2px solid var(--signal)}
+.tl-item.sys::before{border-color:var(--muted-2)} .tl-item.warn::before{border-color:var(--warn);background:var(--hazard)} .tl-item.done::before{background:var(--ok);border-color:#14532d}
+.tl-item .who{font-size:12.5px;font-weight:800}
+.tl-item .when{font-size:10.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.04em}
+.tl-item .det{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5}
+
+.mat-card{display:flex;flex-direction:column;gap:0;border:1px solid var(--text);border-radius:2px;overflow:hidden;cursor:pointer;background:#fff;transition:background .12s}
+.mat-card:hover{background:#fafaf9}
+.mat-card.sel{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal-weak)}
+.mat-card .img{height:100px;background:#fafaf9;display:grid;place-items:center;font-size:30px;color:#525252;border-bottom:1px solid var(--text)}
+.mat-card.sel .img{background:var(--signal-weak)}
+.mat-card .b{padding:10px 12px} .mat-card .nm{font-weight:800;font-size:12.5px;letter-spacing:-.005em} .mat-card .sp{font-size:11px;color:var(--muted);margin-top:3px;font-feature-settings:'tnum'} .mat-card .sp.price{color:var(--text);font-weight:800;margin-top:5px}
+
+.branch-card{border:1px solid var(--text);border-radius:2px;padding:16px;background:#fff;cursor:pointer;transition:background .12s}
+.branch-card:hover{background:#fafaf9}
+.branch-card.sel{box-shadow:0 0 0 2px var(--signal-weak);border-color:var(--signal)}
+.branch-card.closed{opacity:.65;cursor:default} .branch-card.closed:hover{background:#fff}
+.branch-card .ws{font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+.branch-card .nm{font-size:15px;font-weight:800;margin:4px 0 6px;letter-spacing:-.01em}
+
+.parts-table{width:100%;font-size:12px}
+.parts-table th{padding:6px 7px;font-size:9.5px}
+.parts-table td{padding:5px 5px;border-bottom:1px solid var(--line-2)}
+.parts-table input,.parts-table select{padding:5px 7px;font-size:12px}
+.parts-table input.n{text-align:center;font-feature-settings:'tnum'}
+.parts-table .rm{cursor:pointer;color:var(--muted);font-weight:700}.parts-table .rm:hover{color:var(--danger)}
+
+.metric{padding:14px;border:1px solid var(--text);border-radius:2px;text-align:left;background:#fff}
+.metric .v{font-size:22px;font-weight:800;letter-spacing:-.02em;font-feature-settings:'tnum';line-height:1}
+.metric .l{font-size:10px;color:var(--muted);font-weight:900;margin-top:6px;text-transform:uppercase;letter-spacing:.08em}
+.metric .v.sm{font-size:14px;letter-spacing:0}
+
+.sheet-tabs{display:flex;gap:0;margin-bottom:11px;border:1px solid var(--text);width:fit-content;border-radius:2px}
+.sheet-tabs .st{padding:5px 13px;border:none;border-right:1px solid var(--line);font-size:11.5px;font-weight:800;cursor:pointer;background:#fff;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sheet-tabs .st:last-child{border-right:none}
+.sheet-tabs .st.on{background:var(--text);color:#fff}
+
+.tot-row{display:flex;justify-content:space-between;padding:6px 0;font-size:12.5px;font-feature-settings:'tnum';border-bottom:1px dotted var(--line-2)}
+.tot-row:last-child{border-bottom:none}
+.tot-row.grand{border-top:2px solid var(--text);border-bottom:none;margin-top:6px;padding-top:10px;font-weight:900;font-size:15px}
+.tot-row .l{color:var(--muted);text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.04em}
+.tot-row.grand .l{color:var(--text);font-size:13px}
+
+.legend{list-style:none;padding:0;margin:0}
+.legend li{display:flex;align-items:center;gap:9px;font-size:12px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line-2)}
+.legend li:last-child{border-bottom:none}
+.legend .sw{width:11px;height:11px;border-radius:2px;flex:none;border:1px solid var(--text)}
+.legend .v{margin-left:auto;font-weight:800;font-family:ui-monospace,Menlo,monospace;font-feature-settings:'tnum'}
+
+.foot-bar{grid-column:1/3;border-top:1px solid #262626;background:#0a0a0a;padding:8px 16px;font-size:10.5px;color:#a3a3a3;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace;letter-spacing:.03em}
+.foot-bar a{color:#facc15;font-weight:800}
+.dot-sep::before{content:'·';margin-right:14px;color:#525252}
+.foot-bar .led{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,.7);display:inline-block;margin-right:6px}
+
+.auth-screen{min-height:100vh;display:grid;place-items:center;background:#0a0a0a;background-image:repeating-linear-gradient(135deg,transparent 0 16px,rgba(255,255,255,.025) 16px 17px)}
+.auth-card{width:400px;max-width:92vw;background:var(--surface);border:1px solid #0a0a0a;border-radius:2px;padding:30px 28px;text-align:center;position:relative}
+.auth-card::before{content:'';position:absolute;left:-1px;top:-1px;right:-1px;height:4px;background:repeating-linear-gradient(135deg,var(--hazard) 0 8px,#0a0a0a 8px 16px)}
+.auth-card .logo{width:46px;height:46px;border-radius:2px;background:#0a0a0a;color:var(--hazard);display:grid;place-items:center;font-size:19px;font-weight:900;margin:14px auto 14px;border:1px solid #0a0a0a;box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 -1px 0 rgba(0,0,0,.5)}
+.auth-card .tag-strip{display:inline-block;font-size:10px;font-weight:900;color:var(--text);background:var(--hazard);padding:3px 9px;border:1px solid var(--text);border-radius:2px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.tg-btn{display:inline-flex;align-items:center;gap:9px;background:#0088cc;color:#fff;font-weight:800;font-size:13.5px;padding:11px 18px;border-radius:2px;border:1px solid #006699;cursor:pointer;width:100%;justify-content:center;text-transform:uppercase;letter-spacing:.05em;box-shadow:var(--press);font-family:inherit}
+.tg-btn:hover{background:#006699}
+
+.gif-badge{position:fixed;bottom:12px;right:12px;background:#0a0a0a;color:var(--hazard);font-size:10px;font-weight:900;padding:6px 12px;border-radius:2px;z-index:80;border:1px solid var(--hazard);text-transform:uppercase;letter-spacing:.08em;font-family:ui-monospace,Menlo,monospace}
+
+.vbar{background:#0a0a0a;color:#e7e5e4;display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:7px 16px;font-size:10.5px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid #262626;position:sticky;top:0;z-index:50}
+.vbar .lbl{opacity:.55;margin-right:8px}
+.vbar .vb-link{color:rgba(255,255,255,.65);padding:3px 8px;border:1px solid transparent;border-radius:2px}
+.vbar .vb-link:hover{background:#171717;color:#fff;text-decoration:none;border-color:#404040}
+.vbar .vb-link.cur{background:var(--hazard);color:#0a0a0a;border-color:var(--hazard)}
+.vbar .all{color:var(--hazard);font-weight:900;border-bottom:1px dashed #525252;padding-bottom:1px;margin-left:auto;text-decoration:none}
+
+@media(max-width:880px){
+  .app{grid-template-columns:1fr;grid-template-rows:48px 1fr auto}
+  .sidenav{display:none}
+  .main{padding:16px 12px 24px}
+  .cols-2,.cols-3,.cols-4{grid-template-columns:1fr}
+  .split,.split.wide{grid-template-columns:1fr}
+  .row-fields{grid-template-columns:1fr}
+  .kv{grid-template-columns:1fr}
+  .brand .tag{display:none}
+}
+</style>
+</head>
+<body data-app="client">
+
+<div class="vbar"><span class="lbl">Variant</span><a class="vb-link" href="../prototype/index.html">A · Aurora</a><a class="vb-link" href="../prototype-b/index.html">B · Carbon</a><a class="vb-link" href="../prototype-c/index.html">C · Terra</a><a class="vb-link" href="../prototype-d/index.html">D · Mono</a><a class="vb-link" href="../prototype-e/index.html">E · Atelier</a><a class="vb-link cur" href="index.html">F · Signal</a><a class="all" href="../prototype-variants.html">⊞ Compare all</a></div>
+
+<!-- SIGN IN -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:6px"><div class="logo" style="margin:0">M</div><span class="tag-strip">Customer portal</span></div>
+    <h1 style="font-size:20px;margin:14px 0 4px;letter-spacing:-.015em">Mebel Pro</h1>
+    <p class="muted" style="margin:0 0 22px;font-size:13px">Sign in to design your cutting plan and place an order.</p>
+    <button class="tg-btn" onclick="enterApp();go('branches')">
+      <span style="font-size:18px">✈</span> Continue with Telegram
+    </button>
+    <p class="small muted" style="margin-top:16px">First time? Your account is created automatically — no password.</p>
+    <p class="small muted" style="margin-top:14px"><a href="index.html">← back to prototype index</a></p>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="app" id="appShell" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="logo">M</span> MEBEL.PRO <span class="tag">CLIENT</span></div>
+    <div class="tbar-status"><span class="led"></span> Connected · session 24h</div>
+    <div class="spacer"></div>
+    <div class="notif" onclick="document.getElementById('notifPop').classList.toggle('open')">🔔<span class="dot">3</span></div>
+    <div class="lang">UZ</div>
+    <div class="avatar" onclick="document.getElementById('userPop').classList.toggle('open')">AY</div>
+  </header>
+
+  <nav class="sidenav">
+    <div class="nav-section">Order</div>
+    <div class="nav-item" data-go="branches"><span class="ic">🏬</span> Branches</div>
+    <div class="nav-item" data-go="cutting-new"><span class="ic">✂</span> New cutting</div>
+    <div class="nav-item" data-go="drafts"><span class="ic">📐</span> My drafts</div>
+    <div class="nav-item" data-go="orders"><span class="ic">📦</span> My orders</div>
+    <div class="nav-section">Account</div>
+    <div class="nav-item" data-go="profile"><span class="ic">👤</span> Profile</div>
+    <div class="note-mini">Static prototype · clickable, no backend. <a href="index.html">all modules →</a></div>
+  </nav>
+
+  <main class="main"><div class="wrap">
+
+    <!-- BRANCHES -->
+    <section class="view" data-view="branches">
+      <div class="page-header"><div><div class="crumb">MEBEL.PRO</div><h1>Choose a branch</h1><div class="sub">Pick where you want your panels cut — then start a cutting plan.</div></div><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Search by name or city…"></div></div>
+      <div class="toolbar">
+        <span class="chip on">All</span><span class="chip">Tashkent</span><span class="chip">Samarqand</span><span class="chip">Andijon</span>
+        <div class="spacer"></div><span class="small muted">14 branches · 6 workshops</span>
+      </div>
+      <div class="grid cols-3">
+        <div class="branch-card" onclick="enterApp();go('cutting-new')"><div class="ws">Oq Daraxt Mebel</div><div class="nm">Chilonzor branch</div><div class="small muted">Tashkent · Bunyodkor ko'chasi 12</div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span class="badge b-success">Open</span><span class="small muted">28 materials · cuts daily</span></div></div>
+        <div class="branch-card" onclick="go('cutting-new')"><div class="ws">Oq Daraxt Mebel</div><div class="nm">Yunusobod branch</div><div class="small muted">Tashkent · Amir Temur shoh ko'chasi 108</div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span class="badge b-success">Open</span><span class="small muted">22 materials</span></div></div>
+        <div class="branch-card" onclick="go('cutting-new')"><div class="ws">MebelMaster</div><div class="nm">Sergeli branch</div><div class="small muted">Tashkent · Yangi Sergeli 4-mavze</div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span class="badge b-success">Open</span><span class="small muted">31 materials</span></div></div>
+        <div class="branch-card closed"><div class="ws">MebelMaster</div><div class="nm">Samarqand branch</div><div class="small muted">Samarqand · Registon ko'chasi 7</div><div style="margin-top:12px;display:flex;flex-direction:column;gap:4px"><span class="badge b-warning">Temporarily closed</span><div class="small muted">Re-opens 18 May — equipment maintenance</div></div></div>
+        <div class="branch-card" onclick="go('cutting-new')"><div class="ws">Yog'och Dunyosi</div><div class="nm">Andijon central</div><div class="small muted">Andijon · Navoiy shoh ko'chasi 55</div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span class="badge b-success">Open</span><span class="small muted">19 materials</span></div></div>
+        <div class="branch-card" onclick="go('cutting-new')"><div class="ws">Yangi Mebel</div><div class="nm">Buxoro branch</div><div class="small muted">Buxoro · Mustaqillik 21</div><div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><span class="badge b-success">Open</span><span class="small muted">17 materials</span></div></div>
+      </div>
+    </section>
+
+    <!-- CUTTING WIZARD -->
+    <section class="view" data-view="cutting-new">
+      <div class="page-header"><div><div class="crumb"><a onclick="go('branches')" style="cursor:pointer">BRANCHES</a> › OQ DARAXT — CHILONZOR</div><h1>New cutting</h1></div><button class="btn ghost" onclick="go('branches')">✕ Cancel</button></div>
+      <div class="stepper" id="cutStepper">
+        <div class="step on" data-cs="1"><span class="n">1</span> Material</div><div class="step-sep"></div>
+        <div class="step" data-cs="2"><span class="n">2</span> Parts</div><div class="step-sep"></div>
+        <div class="step" data-cs="3"><span class="n">3</span> Result</div>
+      </div>
+
+      <div class="cs-pane" data-csp="1">
+        <div class="toolbar">
+          <span class="chip on">🏬 Chilonzor branch</span>
+          <div class="pill-tabs" id="srcToggle"><button class="on" data-src="shop">From the shop</button><button data-src="own">My own material</button></div>
+          <div class="spacer"></div><div class="search"><span class="ic">🔍</span><input class="input" placeholder="Search materials…"></div>
+        </div>
+        <div class="grid cols-4">
+          <div class="mat-card sel" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">LDSP Egger — White W1000</div><div class="sp">18 mm · 2800×2070 mm · 1.0 kerf</div><div class="sp price">12 000 so'm / m²</div></div></div>
+          <div class="mat-card" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">LDSP Egger — Sonoma Oak H1145</div><div class="sp">18 mm · 2800×2070 mm</div><div class="sp price">13 500 so'm / m²</div></div></div>
+          <div class="mat-card" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">MDF — raw</div><div class="sp">16 mm · 2440×1220 mm</div><div class="sp price">9 800 so'm / m²</div></div></div>
+          <div class="mat-card" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">LDSP Kronospan — Anthracite</div><div class="sp">25 mm · 2800×2070 mm</div><div class="sp price">21 000 so'm / m²</div></div></div>
+          <div class="mat-card" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">Plywood birch</div><div class="sp">18 mm · 1525×1525 mm</div><div class="sp price">38 000 so'm / m²</div></div></div>
+          <div class="mat-card" onclick="selMat(this)"><div class="img">🪵</div><div class="b"><div class="nm">LDSP Egger — Grey U708</div><div class="sp">18 mm · 2800×2070 mm</div><div class="sp price">12 500 so'm / m²</div></div></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:22px"><button class="btn primary lg" onclick="cutStep(2)">Continue → Parts</button></div>
+      </div>
+
+      <div class="cs-pane" data-csp="2" hidden>
+        <div class="split">
+          <div class="card">
+            <div class="card-h">Parts list <span style="opacity:.6;font-weight:600;letter-spacing:0;text-transform:none">— LDSP Egger 18 mm · White W1000</span></div>
+            <div class="card-b">
+              <table class="parts-table"><thead><tr><th>№</th><th>Length mm</th><th>Width mm</th><th>Qty</th><th>Grain</th><th>Edge T</th><th>Edge B</th><th>Edge L</th><th>Edge R</th><th></th></tr></thead><tbody id="partsBody">
+                <tr><td>1</td><td><input class="input n" value="600"></td><td><input class="input n" value="400"></td><td><input class="input n" value="4"></td><td><select><option>any</option><option>required</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><span class="rm" onclick="this.closest('tr').remove();renumber()">✕</span></td></tr>
+                <tr><td>2</td><td><input class="input n" value="720"></td><td><input class="input n" value="500"></td><td><input class="input n" value="2"></td><td><select><option selected>required</option><option>any</option></select></td><td><select><option selected>2.0</option><option>0.4</option><option>none</option></select></td><td><select><option>2.0</option><option>0.4</option><option selected>none</option></select></td><td><select><option selected>0.4</option><option>2.0</option><option>none</option></select></td><td><select><option selected>0.4</option><option>2.0</option><option>none</option></select></td><td><span class="rm" onclick="this.closest('tr').remove();renumber()">✕</span></td></tr>
+                <tr><td>3</td><td><input class="input n" value="1800"></td><td><input class="input n" value="300"></td><td><input class="input n" value="1"></td><td><select><option selected>required</option><option>any</option></select></td><td><select><option selected>2.0</option><option>0.4</option><option>none</option></select></td><td><select><option selected>2.0</option><option>0.4</option><option>none</option></select></td><td><select><option selected>2.0</option><option>0.4</option><option>none</option></select></td><td><select><option selected>2.0</option><option>0.4</option><option>none</option></select></td><td><span class="rm" onclick="this.closest('tr').remove();renumber()">✕</span></td></tr>
+                <tr><td>4</td><td><input class="input n" value="280"></td><td><input class="input n" value="280"></td><td><input class="input n" value="8"></td><td><select><option selected>any</option><option>required</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><select><option>0.4</option><option>2.0</option><option selected>none</option></select></td><td><span class="rm" onclick="this.closest('tr').remove();renumber()">✕</span></td></tr>
+              </tbody></table>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn sm" onclick="addPart()">+ Add row</button><button class="btn sm" onclick="addPart()">⎘ Duplicate last</button></div>
+              <div class="field" style="margin-top:18px"><label>Bulk paste — one per line, <span class="mono">LxWxQty</span></label><textarea placeholder="600x400x4&#10;720x500x2&#10;1800x300x1"></textarea><div class="hint">We'll parse these into rows above.</div></div>
+            </div>
+          </div>
+          <div class="card pad" style="position:sticky;top:80px">
+            <h3 style="font-size:13px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Summary</h3>
+            <dl class="kv" style="grid-template-columns:1fr auto;gap:8px 12px"><dt>Parts</dt><dd class="b">15 pcs · 4 rows</dd><dt>Total area</dt><dd class="b">2.94 m²</dd><dt>Sheet size</dt><dd class="b">2800 × 2070 mm</dd><dt>Kerf / trim</dt><dd class="b">1.0 mm · 10 mm</dd></dl>
+            <div class="notebox warn" style="margin-top:14px;font-size:12px"><div>Row 3 (1800×300) needs grain along the length — feasible on this sheet.</div></div>
+            <button class="btn primary block lg" style="margin-top:16px" onclick="runOpt()">▶ RUN OPTIMIZATION</button>
+            <p class="small muted" style="margin-top:8px;text-align:center">synchronous · 5 s timeout · ≤ 100 parts</p>
+            <div style="display:flex;justify-content:space-between;margin-top:14px"><button class="btn ghost sm" onclick="cutStep(1)">← Material</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cs-pane" data-csp="3" hidden>
+        <div class="grid cols-4" style="margin-bottom:18px">
+          <div class="metric"><div class="v">7.4%</div><div class="l">Waste</div></div>
+          <div class="metric"><div class="v">2</div><div class="l">Sheets used</div></div>
+          <div class="metric"><div class="v">11.8 m</div><div class="l">Total cut length</div></div>
+          <div class="metric"><div class="v sm">2.0: 4.6 m · 0.4: 1.2 m</div><div class="l">Edge banding</div></div>
+        </div>
+        <div class="split wide">
+          <div class="card">
+            <div class="card-h">Cutting layout <span style="opacity:.6;font-weight:600;letter-spacing:0;text-transform:none">— algorithm v2 · FFD + guillotine</span></div>
+            <div class="card-b">
+              <div class="sheet-tabs"><span class="st on">Sheet 1</span><span class="st">Sheet 2</span></div>
+              <div style="background:#fafaf9;border:1px solid var(--text);padding:10px">
+              <svg viewBox="0 0 700 518" width="100%" style="background:#fff;border:1px solid var(--text);display:block">
+                <rect x="2" y="2" width="696" height="514" fill="#fafaf9" stroke="#0a0a0a"/>
+                <g font-family="Inter" font-size="11" text-anchor="middle" font-weight="700">
+                  <rect x="6" y="6" width="150" height="100" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="81" y="58" fill="#1e3a8a">#1 600×400 (1/4)</text>
+                  <rect x="160" y="6" width="150" height="100" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="235" y="58" fill="#1e3a8a">#1 (2/4)</text>
+                  <rect x="314" y="6" width="150" height="100" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="389" y="58" fill="#1e3a8a">#1 (3/4)</text>
+                  <rect x="468" y="6" width="150" height="100" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="543" y="58" fill="#1e3a8a">#1 (4/4)</text>
+                  <rect x="6" y="110" width="180" height="125" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5"/><text x="96" y="174" fill="#312e81">#2 720×500 (1/2)</text>
+                  <rect x="190" y="110" width="180" height="125" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5"/><text x="280" y="174" fill="#312e81">#2 (2/2)</text>
+                  <rect x="6" y="239" width="450" height="75" fill="#fef3c7" stroke="#a16207" stroke-width="1.5"/><text x="231" y="280" fill="#854d0e">#3 1800×300 (1/1)</text>
+                  <rect x="460" y="239" width="70" height="70" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="495" y="277" fill="#14532d" font-size="9">#4 (1/8)</text>
+                  <rect x="534" y="239" width="70" height="70" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="569" y="277" fill="#14532d" font-size="9">#4 (2/8)</text>
+                  <rect x="6" y="318" width="70" height="70" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="41" y="356" fill="#14532d" font-size="9">#4 (3/8)</text>
+                  <rect x="80" y="318" width="70" height="70" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="115" y="356" fill="#14532d" font-size="9">#4 (4/8)</text>
+                  <rect x="154" y="318" width="70" height="70" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="189" y="356" fill="#14532d" font-size="9">#4 (5/8)</text>
+                  <rect x="624" y="6" width="68" height="380" fill="#f5f5f4" stroke="#737373" stroke-dasharray="4 3"/><text x="658" y="200" fill="#525252" font-size="10" transform="rotate(90 658 200)" font-weight="800">OFFCUT → WASTE</text>
+                  <rect x="6" y="392" width="686" height="120" fill="#f5f5f4" stroke="#737373" stroke-dasharray="4 3"/><text x="349" y="456" fill="#525252" font-weight="800">OFFCUT STRIP → REUSABLE / WASTE</text>
+                </g>
+              </svg></div>
+              <p class="small muted" style="margin-top:8px">Pan/zoom on touch · hover a piece to highlight its row · drafts are kept 7 days.</p>
+            </div>
+          </div>
+          <div>
+            <div class="card"><div class="card-h">Legend · sheet 1</div><div class="card-b"><ul class="legend">
+              <li><span class="sw" style="background:#1d4ed8"></span> #1 — 600 × 400 mm <span class="v">×4</span></li>
+              <li><span class="sw" style="background:#4338ca"></span> #2 — 720 × 500 mm <span class="v">×2</span></li>
+              <li><span class="sw" style="background:#a16207"></span> #3 — 1800 × 300 mm <span class="v">×1</span></li>
+              <li><span class="sw" style="background:#15803d"></span> #4 — 280 × 280 mm <span class="v">×5 here</span></li>
+            </ul></div></div>
+            <div class="card pad" style="margin-top:16px">
+              <button class="btn primary block" onclick="alert('PDF: title page → one page per sheet → edge-banding summary')">⬇ DOWNLOAD PDF</button>
+              <button class="btn block" style="margin-top:8px" onclick="cutStep(2)">✎ Edit parts</button>
+              <button class="btn success block" style="margin-top:8px" onclick="go('order-new')">Order with this cutting →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MY DRAFTS -->
+    <section class="view" data-view="drafts">
+      <div class="page-header"><div><h1>My drafts</h1><div class="sub">Cutting plans you haven't ordered yet — kept for 7 days.</div></div><button class="btn primary" data-go="cutting-new">+ New cutting</button></div>
+      <div class="card"><table><thead><tr><th>Material</th><th>Branch</th><th>Parts</th><th>Sheets</th><th>Waste</th><th>Created</th><th></th></tr></thead><tbody>
+        <tr class="row-link" onclick="go('cutting-new');cutStep(3)"><td>LDSP Egger 18 mm — White W1000</td><td>Oq Daraxt — Chilonzor</td><td>15 pcs</td><td>2</td><td>7.4%</td><td>2h ago</td><td class="actions"><button class="btn sm">Open</button><button class="btn sm ghost">Delete</button></td></tr>
+        <tr class="row-link"><td>MDF 16 mm — raw</td><td>MebelMaster — Sergeli</td><td>6 pcs</td><td>1</td><td>14.2%</td><td>yesterday</td><td class="actions"><button class="btn sm">Open</button><button class="btn sm ghost">Delete</button></td></tr>
+        <tr class="row-link"><td>LDSP Egger 18 mm — Sonoma Oak</td><td>Oq Daraxt — Chilonzor</td><td>22 pcs</td><td>3</td><td>9.1%</td><td>3 days ago</td><td class="actions"><button class="btn sm">Open</button><button class="btn sm ghost">Delete</button></td></tr>
+      </tbody></table></div>
+    </section>
+
+    <!-- ORDER CREATE WIZARD -->
+    <section class="view" data-view="order-new">
+      <div class="page-header"><div><div class="crumb">FROM DRAFT · LDSP EGGER 18 MM — WHITE W1000</div><h1>Place order</h1></div><button class="btn ghost" onclick="go('cutting-new');cutStep(3)">← Back to result</button></div>
+      <div class="stepper"><div class="step done"><span class="n">✓</span> Cutting</div><div class="step-sep done"></div><div class="step on" data-os="1"><span class="n">2</span> Delivery</div><div class="step-sep"></div><div class="step" data-os="2"><span class="n">3</span> Payment</div><div class="step-sep"></div><div class="step" data-os="3"><span class="n">4</span> Confirm</div></div>
+      <div class="split wide">
+        <div>
+          <div class="os-pane" data-osp="1">
+            <div class="card pad-lg">
+              <h3 style="margin-bottom:14px;text-transform:uppercase;letter-spacing:.06em;font-size:13px">How do you want it?</h3>
+              <div class="grid cols-2" style="margin-bottom:16px">
+                <label class="branch-card" style="cursor:pointer" onclick="this.parentNode.querySelectorAll('.branch-card').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');document.getElementById('addrBlock').hidden=true"><div class="b">🏬 Pickup at the branch</div><div class="small muted" style="margin-top:4px">Collect at Oq Daraxt — Chilonzor when ready. No fee.</div></label>
+                <label class="branch-card sel" style="cursor:pointer" onclick="this.parentNode.querySelectorAll('.branch-card').forEach(x=>x.classList.remove('sel'));this.classList.add('sel');document.getElementById('addrBlock').hidden=false"><div class="b">🚚 Delivery</div><div class="small muted" style="margin-top:4px">Driver brings it to your address. Fee depends on zone.</div></label>
+              </div>
+              <div id="addrBlock">
+                <div class="row-fields"><div class="field"><label>Street</label><input class="input" value="Bobur ko'chasi 14, kv. 32"></div><div class="field"><label>City</label><input class="input" value="Toshkent"></div></div>
+                <div class="row-fields"><div class="field"><label>Latitude</label><input class="input mono" value="41.3111"></div><div class="field"><label>Longitude</label><input class="input mono" value="69.2797"></div></div>
+                <div class="field"><label>Note for the driver</label><input class="input" placeholder="Entrance code, landmark…"></div>
+                <div class="notebox info">📍 <div><b>Zone:</b> Toshkent — Markaziy &nbsp; <b>Delivery fee:</b> 35 000 so'm. <span class="muted">(Manual lat/lng in v1 — map picker is v1.1.)</span></div></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn primary lg" onclick="orderStep(2)">Continue → Payment</button></div>
+          </div>
+          <div class="os-pane" data-osp="2" hidden>
+            <div class="card pad-lg">
+              <h3 style="margin-bottom:14px;text-transform:uppercase;letter-spacing:.06em;font-size:13px">How will you pay?</h3>
+              <div class="branch-card sel" style="margin-bottom:10px;cursor:pointer" onclick="this.parentNode.querySelectorAll('.branch-card').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><div class="b">💵 Pay in full</div><div class="small muted" style="margin-top:3px">Pay the whole amount. The workshop records it when you pay (cash / bank) — there's no in-app gateway in v1.</div></div>
+              <div class="branch-card" style="margin-bottom:10px;cursor:pointer" onclick="this.parentNode.querySelectorAll('.branch-card').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')"><div class="b">💳 Advance — 30%</div><div class="small muted" style="margin-top:3px">Pay 30% now, the rest before handover. Default advance set by the workshop.</div></div>
+              <div class="branch-card" style="opacity:.55;cursor:not-allowed"><div class="b">🧾 Buy now, pay later <span class="badge b-neutral plain" style="margin-left:6px">v1.1</span></div><div class="small muted" style="margin-top:3px">Installments — not available yet.</div></div>
+              <div class="notebox warn" style="margin-top:14px"><div>After you confirm, your order sits as <b>awaiting payment</b> until workshop staff record your payment.</div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:16px"><button class="btn ghost" onclick="orderStep(1)">← Delivery</button><button class="btn primary lg" onclick="orderStep(3)">Continue → Confirm</button></div>
+          </div>
+          <div class="os-pane" data-osp="3" hidden>
+            <div class="card"><div class="card-h">Review</div><div class="card-b">
+              <dl class="kv"><dt>Branch</dt><dd>Oq Daraxt Mebel — Chilonzor</dd><dt>Material</dt><dd>LDSP Egger 18 mm — White W1000 <span class="muted">(from the shop)</span></dd><dt>Cutting</dt><dd>2 sheets · 7.4% waste · 15 parts <a onclick="go('cutting-new');cutStep(3)" style="cursor:pointer">view layout</a></dd><dt>Fulfilment</dt><dd>Delivery → Bobur ko'chasi 14, Toshkent · zone Markaziy</dd><dt>Payment</dt><dd>Pay in full (recorded by staff)</dd></dl>
+              <div class="field" style="margin-top:16px"><label>Note for the workshop (optional)</label><textarea placeholder="Anything they should know about this order…"></textarea></div>
+            </div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:16px"><button class="btn ghost" onclick="orderStep(2)">← Payment</button><button class="btn success lg" onclick="alert('Order MP-10247 created — status: new (awaiting payment).');go('orders')">✓ Place order</button></div>
+          </div>
+        </div>
+        <div class="card pad" style="position:sticky;top:80px">
+          <h3 style="font-size:13px;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Order total</h3>
+          <div class="tot-row"><span class="l">Cutting service</span><span>96 000 so'm</span></div>
+          <div class="tot-row"><span class="l">Material — 2 sheets</span><span>208 320 so'm</span></div>
+          <div class="tot-row"><span class="l">Edge banding</span><span>34 800 so'm</span></div>
+          <div class="tot-row"><span class="l">Delivery — Markaziy</span><span>35 000 so'm</span></div>
+          <div class="tot-row"><span class="l">Discount</span><span>0 so'm</span></div>
+          <div class="tot-row grand"><span class="l">Total</span><span>374 120 so'm</span></div>
+          <p class="small muted" style="margin-top:10px">Locked in (snapshot) the moment you place the order — later catalog/price changes won't affect it.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- MY ORDERS -->
+    <section class="view" data-view="orders">
+      <div class="page-header"><div><h1>My orders</h1></div><button class="btn primary" data-go="branches">+ New order</button></div>
+      <div class="toolbar"><span class="chip on">All</span><span class="chip"><span class="c" style="background:#0369a1"></span>Awaiting payment</span><span class="chip"><span class="c" style="background:#4338ca"></span>In progress</span><span class="chip"><span class="c" style="background:#15803d"></span>Completed</span><span class="chip"><span class="c" style="background:#b91c1c"></span>Cancelled</span></div>
+      <div class="card"><table><thead><tr><th>Order</th><th>Branch</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th></tr></thead><tbody>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b mono">MP-10247</td><td>Oq Daraxt — Chilonzor</td><td>15 parts · LDSP White</td><td>374 120</td><td><span class="badge b-info">Awaiting</span></td><td>just now</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b mono">MP-10231</td><td>Oq Daraxt — Chilonzor</td><td>22 parts · Sonoma Oak</td><td>612 400</td><td><span class="badge b-indigo">In production</span></td><td>3 days ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b mono">MP-10198</td><td>MebelMaster — Sergeli</td><td>6 parts · MDF raw</td><td>148 900</td><td><span class="badge b-violet">In delivery</span></td><td>5 days ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b mono">MP-10120</td><td>Yog'och Dunyosi — Andijon</td><td>9 parts · Plywood</td><td>921 000</td><td><span class="badge b-success">Completed</span></td><td>3 weeks ago</td></tr>
+        <tr class="row-link" onclick="go('order-detail')"><td class="b mono">MP-10088</td><td>Oq Daraxt — Yunusobod</td><td>4 parts · Grey U708</td><td>89 200</td><td><span class="badge b-danger">Cancelled · refund pending</span></td><td>1 month ago</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <!-- ORDER DETAIL -->
+    <section class="view" data-view="order-detail">
+      <div class="page-header"><div><div class="crumb"><a onclick="go('orders')" style="cursor:pointer">MY ORDERS</a> › MP-10231</div><h1><span class="mono">MP-10231</span> <span class="badge b-indigo" style="vertical-align:middle">In production</span></h1><div class="sub">Oq Daraxt Mebel — Chilonzor · placed 8 May 2026 · delivery</div></div>
+        <div style="display:flex;gap:8px"><button class="btn" disabled>Modify</button><button class="btn danger" disabled title="Can only cancel while new / awaiting payment">Cancel order</button></div></div>
+      <div class="tabs" data-tabs><div class="tab active" data-tab="ov">Overview</div><div class="tab" data-tab="cut">Cutting</div><div class="tab" data-tab="pay">Payments</div><div class="tab" data-tab="ref">Refunds</div><div class="tab" data-tab="tl">Timeline</div></div>
+
+      <div class="tabpane active" data-pane="ov"><div class="split">
+        <div class="card"><div class="card-h">Items <span style="opacity:.6;font-weight:600;letter-spacing:0;text-transform:none">— snapshot, frozen</span></div><div class="card-b tight"><table><thead><tr><th>№</th><th>Dimensions</th><th>Qty</th><th>Grain</th><th>Edges</th></tr></thead><tbody>
+          <tr><td>1</td><td>600 × 400 mm</td><td>4</td><td>any</td><td>—</td></tr><tr><td>2</td><td>720 × 500 mm</td><td>2</td><td>required</td><td>T:2.0 L:0.4 R:0.4</td></tr><tr><td>3</td><td>1800 × 300 mm</td><td>1</td><td>required</td><td>all 2.0</td></tr><tr><td>4</td><td>280 × 280 mm</td><td>8</td><td>any</td><td>—</td></tr><tr><td>5</td><td>900 × 450 mm</td><td>3</td><td>required</td><td>T:2.0 B:2.0</td></tr>
+        </tbody></table></div></div>
+        <div>
+          <div class="card pad"><h3 style="font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Summary</h3>
+            <div class="tot-row"><span class="l">Cutting</span><span>132 000</span></div><div class="tot-row"><span class="l">Material — 3 sheets</span><span>405 600</span></div><div class="tot-row"><span class="l">Edge banding</span><span>54 800</span></div><div class="tot-row"><span class="l">Delivery</span><span>35 000</span></div><div class="tot-row"><span class="l">Discount</span><span>−15 000</span></div><div class="tot-row grand"><span class="l">Total</span><span>612 400</span></div>
+          </div>
+          <div class="card pad" style="margin-top:16px"><h3 style="font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Delivery</h3><div class="small" style="line-height:1.55">Bobur ko'chasi 14, kv. 32 · Toshkent<br>Zone: Markaziy · arrives after handover<br><span class="muted">Driver assigned at the "ready" step.</span></div></div>
+        </div>
+      </div></div>
+
+      <div class="tabpane" data-pane="cut"><div class="card pad"><h3 style="text-transform:uppercase;letter-spacing:.06em;font-size:13px;margin-bottom:4px">Confirmed cutting result</h3><p class="small muted" style="margin-bottom:14px">3 sheets · 9.1% waste · 14.6 m cut · edge 2.0 mm: 6.1 m, 0.4 mm: 1.8 m · algorithm v2 — <a onclick="go('cutting-new');cutStep(3)" style="cursor:pointer">view full layout</a> · <a href="#">download PDF</a></p>
+        <div style="background:#fafaf9;border:1px solid var(--text);padding:10px"><svg viewBox="0 0 700 260" width="100%" style="background:#fff;border:1px solid var(--text);display:block"><rect x="2" y="2" width="696" height="256" fill="#fafaf9" stroke="#0a0a0a"/><g font-family="Inter" font-size="10" text-anchor="middle" font-weight="700"><rect x="6" y="6" width="180" height="130" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="96" y="74">#2 720×500</text><rect x="190" y="6" width="180" height="130" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.5"/><text x="280" y="74">#2 720×500</text><rect x="374" y="6" width="225" height="115" fill="#fef3c7" stroke="#a16207" stroke-width="1.5"/><text x="486" y="66">#3 1800×300</text><rect x="6" y="140" width="150" height="100" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5"/><text x="81" y="194">#1 600×400</text><rect x="160" y="140" width="150" height="100" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5"/><text x="235" y="194">#1 600×400</text><rect x="314" y="140" width="112" height="112" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/><text x="370" y="200">#5 900×450</text><rect x="603" y="6" width="89" height="246" fill="#f5f5f4" stroke="#737373" stroke-dasharray="4 3"/><text x="647" y="130" transform="rotate(90 647 130)" fill="#525252" font-weight="800">WASTE</text></g></svg></div></div></div>
+
+      <div class="tabpane" data-pane="pay"><div class="card"><div class="card-h">Payments</div><div class="card-b tight"><table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Recorded by</th><th>Status</th></tr></thead><tbody>
+        <tr><td>8 May 2026, 14:20</td><td>Bank transfer</td><td>612 400 so'm</td><td>Dilnoza (order desk)</td><td><span class="badge b-success">Paid in full</span></td></tr>
+      </tbody></table></div></div><div class="notebox info" style="margin-top:14px"><div>In v1 there's no in-app gateway — the workshop records what you paid (cash / bank). Once recorded, the order moves to <b>confirmed</b>.</div></div></div>
+
+      <div class="tabpane" data-pane="ref"><div class="empty"><div class="ic">↩</div><h3>No refunds</h3><p>If an order is cancelled or modified down after payment, a refund record shows here.</p></div></div>
+
+      <div class="tabpane" data-pane="tl"><div class="card pad"><div class="timeline">
+        <div class="tl-item"><div class="who">Order placed <span class="muted" style="font-weight:600">— by you</span></div><div class="when">8 May 2026 · 14:02</div><div class="det">Status: new · cutting result confirmed &amp; bound</div></div>
+        <div class="tl-item done"><div class="who">Payment recorded <span class="muted" style="font-weight:600">— Dilnoza, order desk</span></div><div class="when">8 May 2026 · 14:20</div><div class="det">Bank transfer · 612 400 so'm → status: confirmed · stock reserved</div></div>
+        <div class="tl-item"><div class="who">Discount applied <span class="muted" style="font-weight:600">— Sardor, branch manager</span></div><div class="when">8 May 2026 · 16:40</div><div class="det">−15 000 so'm — "loyalty, repeat customer"</div></div>
+        <div class="tl-item"><div class="who">Moved to production <span class="muted" style="font-weight:600">— Dilnoza · worker: Jasur</span></div><div class="when">9 May 2026 · 09:15</div><div class="det">Status: in_production · cutting PDF opened</div></div>
+        <div class="tl-item warn"><div class="who">Awaiting "ready"</div><div class="when">in progress · 2 days</div></div>
+      </div></div></div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="view" data-view="profile">
+      <div class="page-header"><div><h1>Profile</h1><div class="sub">Synced from your Telegram account.</div></div></div>
+      <div class="split">
+        <div class="card pad-lg"><div style="display:flex;gap:16px;align-items:center;margin-bottom:18px"><div class="avatar" style="width:64px;height:64px;font-size:22px;background:var(--hazard)">AY</div><div><div style="font-size:18px;font-weight:800">Akmal Yusupov</div><div class="muted small mono">@akmal_y · Telegram ID 58213004</div></div></div>
+          <dl class="kv"><dt>Name</dt><dd>Akmal Yusupov <span class="muted small">(from Telegram)</span></dd><dt>Username</dt><dd class="mono">@akmal_y</dd><dt>Phone</dt><dd class="mono">+998 90 123 45 67</dd><dt>Joined</dt><dd>14 Feb 2026</dd><dt>Orders</dt><dd>5 total · 1 active</dd></dl>
+          <div class="notebox info" style="margin-top:16px"><div>Your name and username come from Telegram and refresh on each sign-in — there's nothing to edit here.</div></div></div>
+        <div class="card"><div class="card-h">Active sessions</div><div class="card-b tight"><table><tbody>
+          <tr><td><b>This device</b><div class="small muted">Chrome · Tashkent · started today</div></td><td class="actions"><span class="badge b-success">current</span></td></tr>
+          <tr><td>iPhone — Telegram WebApp<div class="small muted">last active 2 days ago</div></td><td class="actions"><button class="btn sm ghost">Sign out</button></td></tr>
+        </tbody></table></div><div style="padding:14px 18px;border-top:1px solid var(--line)"><button class="btn danger sm">Sign out everywhere</button></div></div>
+      </div>
+    </section>
+
+  </div></main>
+
+  <footer class="foot-bar"><span><span class="led"></span>Mebel Pro · client</span><span class="dot-sep">build dev-prototype</span><span class="dot-sep">trace 8f3a-c1d9-…</span><span class="dot-sep"><a href="index.html">all prototypes →</a></span></footer>
+</div>
+
+<div id="notifPop" style="display:none;position:fixed;top:48px;right:90px;width:320px;z-index:70;background:#fff;border:1px solid var(--text);border-radius:2px"><div class="card-h"><span>Notifications</span><a class="small b" style="color:var(--hazard);text-transform:uppercase;letter-spacing:.05em">mark all read</a></div><div class="card-b tight">
+  <div style="padding:11px 14px;border-bottom:1px solid var(--line-2);font-size:12.5px"><b class="mono">MP-10231</b> moved to production <div class="small muted">2 days ago</div></div>
+  <div style="padding:11px 14px;border-bottom:1px solid var(--line-2);font-size:12.5px"><b class="mono">MP-10198</b> is out for delivery <div class="small muted">3 days ago</div></div>
+  <div style="padding:11px 14px;font-size:12.5px">Payment recorded on <b class="mono">MP-10231</b> <div class="small muted">3 days ago</div></div>
+</div></div>
+<div id="userPop" style="display:none;position:fixed;top:48px;right:14px;width:210px;z-index:70;background:#fff;border:1px solid var(--text);border-radius:2px"><div style="padding:6px"><div class="nav-item" data-go="profile" style="color:var(--text)" onclick="document.getElementById('userPop').style.display='none'">👤 Profile</div><div class="nav-item" style="color:var(--text)">🌐 Language: UZ</div><div class="nav-item" style="color:var(--danger)" onclick="signOut()">⎋ Sign out</div></div></div>
+
+<div class="gif-badge">▶ STATIC PROTOTYPE</div>
+
+<script>
+function enterApp(){document.getElementById('authScreen').style.display='none';document.getElementById('appShell').hidden=false;}
+function signOut(){document.getElementById('appShell').hidden=true;document.getElementById('authScreen').style.display='grid';['notifPop','userPop'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
+function go(view){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===view));document.querySelectorAll('.nav-item[data-go]').forEach(n=>n.classList.toggle('active',n.dataset.go===view));['notifPop','userPop'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});const m=document.querySelector('.main');if(m)m.scrollTop=0;window.scrollTo(0,0);}
+function cutStep(n){document.querySelectorAll('.cs-pane').forEach(p=>p.hidden=(+p.dataset.csp!==n));document.querySelectorAll('#cutStepper .step').forEach(s=>{const i=+s.dataset.cs;s.classList.toggle('on',i===n);s.classList.toggle('done',i<n);});window.scrollTo(0,0);}
+function orderStep(n){document.querySelectorAll('.os-pane').forEach(p=>p.hidden=(+p.dataset.osp!==n));document.querySelectorAll('[data-os]').forEach(s=>{const i=+s.dataset.os;s.classList.toggle('on',i===n);s.classList.toggle('done',i<n);});window.scrollTo(0,0);}
+function selMat(el){el.parentNode.querySelectorAll('.mat-card').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
+function renumber(){document.querySelectorAll('#partsBody tr').forEach((tr,i)=>tr.firstElementChild.textContent=i+1);}
+function addPart(){const b=document.getElementById('partsBody');const tr=b.firstElementChild.cloneNode(true);b.appendChild(tr);renumber();}
+function runOpt(){const btn=event.target;btn.disabled=true;btn.textContent='Optimizing…';setTimeout(()=>{btn.disabled=false;btn.textContent='▶ RUN OPTIMIZATION';cutStep(3);},700);}
+document.addEventListener('click',function(e){
+  const n=e.target.closest('[data-go]');if(n){go(n.dataset.go);return;}
+  const t=e.target.closest('[data-tab]');if(t){const g=t.closest('[data-tabs]')||document;g.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.toggle('active',x===t));document.querySelectorAll('.tabpane[data-pane]').forEach(p=>p.classList.toggle('active',p.dataset.pane===t.dataset.tab));return;}
+  const st=e.target.closest('#srcToggle button');if(st){st.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===st));}
+  const ch=e.target.closest('.chip');if(ch&&ch.parentNode){ch.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));ch.classList.add('on');}
+  const pt=e.target.closest('.pill-tabs button:not(#srcToggle button)');if(pt){pt.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===pt));}
+  const ss=e.target.closest('.sheet-tabs .st');if(ss){ss.parentNode.querySelectorAll('.st').forEach(x=>x.classList.toggle('on',x===ss));}
+});
+</script>
+</body>
+</html>

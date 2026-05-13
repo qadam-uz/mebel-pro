@@ -1,21 +1,21 @@
 # Mebel Pro
 
 Furniture-management application. Monorepo: a FastAPI modular-monolith backend, a
-Vue 3 web repo (the design is three SPAs — **client** / **seh** workshop /
+Vue 3 web repo (the design is three SPAs — **client** / **workshop** /
 **superadmin** — plus a static SEO landing page; the current `web/` tree is the
 initial single-app scaffold, not yet split — see [`web/CLAUDE.md`](web/CLAUDE.md)
-and [`docs/spec/architecture.md`](docs/spec/architecture.md)), Playwright E2E
+and [`docs/architecture.md`](docs/architecture.md)), Playwright E2E
 tests, and Docker Compose deployment.
 
 ## Repo map
 
-| Path       | What                                               | Stack                                                                              | Details                                   |
-| ---------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------- |
+| Path       | What                                               | Stack                                                                                 | Details                                   |
+| ---------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `backend/` | REST API (JSON, `/api/v1`)                         | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/CLAUDE.md`](backend/CLAUDE.md)  |
-| `web/`     | Web client (target: 3 SPAs + static landing)       | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm** | [`web/CLAUDE.md`](web/CLAUDE.md)          |
-| `e2e/`     | End-to-end browser tests                           | Playwright · TypeScript · **pnpm**                                                 | [`e2e/CLAUDE.md`](e2e/CLAUDE.md)          |
-| `deploy/`  | Container orchestration                            | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                | [`deploy/CLAUDE.md`](deploy/CLAUDE.md)    |
-| `docs/`    | Project documentation (served live by the backend) | Markdown                                                                           | managed via the **docs-management** skill |
+| `web/`     | Web client (target: 3 SPAs + static landing)       | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/CLAUDE.md`](web/CLAUDE.md)          |
+| `e2e/`     | End-to-end browser tests                           | Playwright · TypeScript · **pnpm**                                                    | [`e2e/CLAUDE.md`](e2e/CLAUDE.md)          |
+| `deploy/`  | Container orchestration                            | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/CLAUDE.md`](deploy/CLAUDE.md)    |
+| `docs/`    | Project documentation (served live by the backend) | Markdown                                                                              | managed via the **docs-management** skill |
 
 Each subproject is self-contained with its own toolchain and `CLAUDE.md` —
 **read the relevant one before working in that directory.** There is no

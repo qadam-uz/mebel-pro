@@ -55,6 +55,7 @@ htmlcov/
 # Web (Vue.js / Node)
 # ---------------------------------------------------------------------------
 node_modules/
+web/.pnpm-store/
 web/dist/
 web/dist-ssr/
 *.local

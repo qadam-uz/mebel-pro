@@ -18,12 +18,12 @@ def docs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (root / "index.md").write_text("# Home\n\nWelcome. See [the vision](spec/vision.md).\n")
     (root / "spec" / "vision.md").write_text(
         "---\ntitle: Product Vision\nstatus: stable\nupdated: 2026-05-11\norder: 10\n---\n\n"
-        "# Vision\n\nBack to [scope](scope-v1.md) and the [home page](../index.md).\n\n"
+        "# Vision\n\nBack to [scope](scope.md) and the [home page](../index.md).\n\n"
         "External: <https://example.com> stays put.\n\n"
         "## Why\n\nReasons.\n\n### Detail\n\nMore.\n\n## How\n\nSteps.\n\n"
         "```python\nprint('hi')\n```\n"
     )
-    (root / "spec" / "scope-v1.md").write_text("---\ntitle: Scope\norder: 20\n---\n\n# Scope\n")
+    (root / "spec" / "scope.md").write_text("---\ntitle: Scope\norder: 20\n---\n\n# Scope\n")
     (root / "assets" / "diagram.txt").write_text("hello-asset")
     monkeypatch.setattr(settings, "DOCS_DIR", root)
     return root
@@ -67,7 +67,7 @@ async def test_markdown_page_link_rewriting_and_toc(client: AsyncClient, docs_di
     assert "Product Vision · Mebel Pro docs" in body
     assert "stable" in body and "updated 2026-05-11" in body
     # Sibling and parent .md links rewritten under /docs, with .md stripped.
-    assert 'href="/docs/spec/scope-v1"' in body
+    assert 'href="/docs/spec/scope"' in body
     assert 'href="/docs/index"' in body
     # External links untouched.
     assert 'href="https://example.com"' in body
@@ -82,8 +82,8 @@ async def test_markdown_page_link_rewriting_and_toc(client: AsyncClient, docs_di
 async def test_extensionless_and_explicit_md_resolve_same(
     client: AsyncClient, docs_dir: Path
 ) -> None:
-    a = await client.get("/docs/spec/scope-v1", auth=AUTH)
-    b = await client.get("/docs/spec/scope-v1.md", auth=AUTH)
+    a = await client.get("/docs/spec/scope", auth=AUTH)
+    b = await client.get("/docs/spec/scope.md", auth=AUTH)
     assert a.status_code == b.status_code == 200
     assert "Scope" in a.text
 
@@ -101,14 +101,19 @@ async def test_non_markdown_files_served_raw(client: AsyncClient, docs_dir: Path
     assert resp.text == "hello-asset"
 
 
-async def test_missing_doc_is_404(client: AsyncClient, docs_dir: Path) -> None:
-    assert (await client.get("/docs/spec/nope", auth=AUTH)).status_code == 404
+async def test_missing_doc_redirects_to_docs_home(client: AsyncClient, docs_dir: Path) -> None:
+    # Stale or mistyped paths under /docs send the reader home rather than 404ing.
+    resp = await client.get("/docs/spec/nope", auth=AUTH)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/docs"
 
 
-async def test_path_traversal_blocked(client: AsyncClient, docs_dir: Path) -> None:
-    # %2e%2e decodes to ".." inside the path param; must not escape the docs root.
+async def test_path_traversal_redirects_to_docs_home(client: AsyncClient, docs_dir: Path) -> None:
+    # %2e%2e decodes to ".." inside the path param; must not escape the docs root —
+    # we redirect to the home instead of serving anything from outside it.
     resp = await client.get("/docs/%2e%2e/%2e%2e/secret", auth=AUTH)
-    assert resp.status_code == 404
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/docs"
 
 
 async def test_missing_docs_dir_yields_404(

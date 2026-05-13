@@ -5,20 +5,20 @@ migrations via Alembic, settings via `pydantic-settings`. Managed with **uv**.
 
 ## Toolchain
 
-| Concern        | Tool                              |
-| -------------- | --------------------------------- |
-| Runtime        | Python **3.12** (`.python-version`) |
-| Package / venv | **uv** (`pyproject.toml` + `uv.lock`) |
-| Web framework  | FastAPI (`fastapi[standard]` → uvicorn, CLI) |
-| ORM            | SQLAlchemy 2.0 (async, typed `Mapped[...]`) |
-| DB driver      | asyncpg (Postgres); aiosqlite in tests |
+| Concern        | Tool                                                  |
+| -------------- | ----------------------------------------------------- |
+| Runtime        | Python **3.12** (`.python-version`)                   |
+| Package / venv | **uv** (`pyproject.toml` + `uv.lock`)                 |
+| Web framework  | FastAPI (`fastapi[standard]` → uvicorn, CLI)          |
+| ORM            | SQLAlchemy 2.0 (async, typed `Mapped[...]`)           |
+| DB driver      | asyncpg (Postgres); aiosqlite in tests                |
 | Object store   | MinIO / S3-compatible, via **boto3** (`files` module) |
-| Migrations     | Alembic (async env, autogenerate)  |
-| Settings       | pydantic-settings (`app/core/config.py`) |
-| Lint + format  | **ruff** (one tool for both)       |
-| Types          | **mypy** (`strict`)                |
-| Tests          | pytest + pytest-asyncio + httpx (`ASGITransport`) |
-| Logging        | structlog                          |
+| Migrations     | Alembic (async env, autogenerate)                     |
+| Settings       | pydantic-settings (`app/core/config.py`)              |
+| Lint + format  | **ruff** (one tool for both)                          |
+| Types          | **mypy** (`strict`)                                   |
+| Tests          | pytest + pytest-asyncio + httpx (`ASGITransport`)     |
+| Logging        | structlog                                             |
 
 ## Commands
 
@@ -87,7 +87,7 @@ backend/
 - **Migrations**: never edit a DB by hand. `alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some things — enum changes, server defaults, renames), then `alembic upgrade head`. Migrations are auto-formatted by ruff via a post-write hook.
 - **Schemas vs models**: ORM objects never cross the API boundary — convert to a `schemas/` Pydantic model (`response_model=...`). Response schemas extend `APIModel` (`from_attributes=True`).
 - **Routes thin, services fat**: non-trivial logic lives in `app/services/`; routes parse input, call a service, shape the response.
-- **Module boundaries**: the codebase is layer-first (`models/` `schemas/` `services/` `api/routes/`), but the domain is split into logical *modules* — the module map in [`docs/spec/architecture.md`](../docs/spec/architecture.md). A feature's files (model/schema/service/route) belong to one module; code in one module calls another module's **service** functions, never reads another module's tables or imports its ORM models.
+- **Module boundaries**: the codebase is layer-first (`models/` `schemas/` `services/` `api/routes/`), but the domain is split into logical _modules_ — the module map in [`docs/architecture.md`](../docs/architecture.md). A feature's files (model/schema/service/route) belong to one module; code in one module calls another module's **service** functions, never reads another module's tables or imports its ORM models.
 - **Config**: add new settings to `Settings` in `app/core/config.py` with a sensible dev default; surface them in `.env.example` and `deploy/.env.example`. Read config via the `settings` singleton.
 - **Errors**: raise `fastapi.HTTPException` (or a subclass) for client-facing failures; let unexpected errors propagate (they 500 + log).
 - **API prefix**: everything under `settings.API_V1_PREFIX` (`/api/v1`). `GET /api/v1/healthz` (liveness) and `/readyz` (DB-check) already exist.

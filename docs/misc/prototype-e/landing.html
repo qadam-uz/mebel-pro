@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mebel Pro — panellaringizni onlayn o'lchamga kesing | Furniture-panel cutting in Uzbekistan</title>
+<meta name="description" content="Mebel Pro — furniture workshops in Uzbekistan run their branches, materials, warehouse, workers, pricing and orders in one place; their customers design a cutting plan online and order panels cut to size.">
+<style>
+/* Variant E — "Atelier" landing page. Paper-and-evergreen; serif display; sparing terracotta accent. */
+:root{
+  --ink:#2a2e29; --mut:#5e6358; --mut2:#9a9d92;
+  --bg:#fbf8f2; --soft:#f4f0e8; --bd:#e1dccf;
+  --pri:#3a6b52; --prid:#2a523f; --pri-w:#e7efe9;
+  --acc:#c66848; --accd:#a3543a; --acc-w:#f7e6dd;
+  --moss:#2c3a31; --cream:#f5f1e8;
+  --ok:#4a7a3c;
+  --serif:'Source Serif 4','Source Serif Pro',Charter,'Iowan Old Style',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);line-height:1.65;font-size:16.5px;background:var(--bg);font-feature-settings:"cv11","ss01"}
+a{color:var(--prid);text-decoration:none}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+header{position:sticky;top:0;background:rgba(251,248,242,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd);z-index:10}
+header .wrap{display:flex;align-items:center;gap:18px;height:64px}
+.logo{display:flex;align-items:center;gap:11px;font-weight:600;font-size:19px;font-family:var(--serif);letter-spacing:-.01em}
+.logo .m{width:32px;height:32px;border-radius:9px;background:var(--pri);color:var(--cream);display:grid;place-items:center;font-weight:900;font-size:15px;font-family:Inter,sans-serif;box-shadow:inset 0 -2px 0 rgba(0,0,0,.14)}
+header nav{margin-left:auto;display:flex;gap:24px;align-items:center;font-size:14.5px;font-weight:600}
+header nav a{color:var(--mut)} header nav a:hover{color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;padding:10px 18px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--ink);transition:transform .08s,background .12s,border-color .12s}
+.btn:hover{background:var(--soft);border-color:var(--pri-w)} .btn:active{transform:translateY(1px)}
+.btn.p{background:var(--pri);border-color:var(--pri);color:var(--cream);box-shadow:0 2px 8px rgba(58,107,82,.24),inset 0 -1.5px 0 rgba(0,0,0,.14)}
+.btn.p:hover{background:var(--prid);border-color:var(--prid)}
+.btn.a{background:var(--acc);border-color:var(--acc);color:var(--cream);box-shadow:0 2px 8px rgba(198,104,72,.24),inset 0 -1.5px 0 rgba(0,0,0,.14)}
+.btn.a:hover{background:var(--accd);border-color:var(--accd)}
+.btn.lg{padding:13px 24px;font-size:16px}
+section{padding:84px 0}
+.hero{padding:96px 0 78px;background:radial-gradient(900px 460px at 72% -10%, #d6e2da, var(--bg) 60%)}
+.hero h1{font-family:var(--serif);font-size:52px;line-height:1.08;letter-spacing:-.02em;font-weight:600;max-width:780px}
+.hero h1 .ac{color:var(--acc);font-style:italic;font-weight:500}
+.hero p.lead{font-size:19px;color:var(--mut);max-width:640px;margin-top:20px;line-height:1.55}
+.hero .cta{margin-top:32px;display:flex;gap:13px;flex-wrap:wrap}
+.kicker{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--prid);margin-bottom:22px}
+.kicker::before{content:'';width:18px;height:1px;background:var(--prid)}
+.heroart{margin-top:52px;border:1px solid var(--bd);border-radius:18px;overflow:hidden;box-shadow:0 24px 56px rgba(60,40,20,.16);background:var(--soft)}
+.heroart .bar{height:36px;background:var(--bg);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:7px;padding:0 16px}
+.heroart .bar i{width:11px;height:11px;border-radius:50%;background:var(--bd);display:inline-block}
+.heroart .bar i:first-child{background:#d0a098}
+.heroart .body{padding:24px;display:grid;grid-template-columns:1.3fr 1fr;gap:22px;align-items:center}
+.heroart svg{width:100%;height:auto;background:var(--bg);border:1px solid var(--bd);border-radius:12px}
+.heroart .stat{background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:15px 17px}
+.heroart .stat .v{font-family:var(--serif);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.heroart .stat .l{font-size:12px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+h2{font-family:var(--serif);font-size:36px;letter-spacing:-.015em;font-weight:600;line-height:1.15}
+.sub{color:var(--mut);font-size:17.5px;margin-top:12px;max-width:660px;line-height:1.55}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:44px}
+.card{border:1px solid var(--bd);border-radius:16px;padding:30px;background:var(--bg);box-shadow:0 1px 2px rgba(60,40,20,.04)}
+.card.alt{background:var(--bg);border-left:3px solid var(--pri)}
+.card h3{font-family:var(--serif);font-size:23px;font-weight:600;margin-bottom:11px;letter-spacing:-.01em}
+.card ul{list-style:none;margin-top:18px}
+.card li{padding:8px 0 8px 28px;position:relative;color:var(--mut);font-size:15px}
+.card li::before{content:"";position:absolute;left:6px;top:14px;width:12px;height:7px;border-left:2px solid var(--pri);border-bottom:2px solid var(--pri);transform:rotate(-45deg)}
+.card .icon{width:50px;height:50px;border-radius:13px;display:grid;place-items:center;font-size:22px;margin-bottom:16px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:46px;counter-reset:s}
+.step{position:relative;padding-top:18px}
+.step::before{counter-increment:s;content:counter(s);position:absolute;top:-18px;left:0;width:38px;height:38px;border-radius:50%;background:var(--bg);border:2px solid var(--pri);color:var(--prid);font-family:var(--serif);font-weight:600;display:grid;place-items:center;font-size:18px;font-variant-numeric:tabular-nums}
+.step h4{font-family:var(--serif);font-size:18.5px;font-weight:600;margin:28px 0 7px;letter-spacing:-.005em}
+.step p{color:var(--mut);font-size:14.5px;line-height:1.55}
+.cta-band{background:linear-gradient(135deg,var(--moss),#3d5147);color:var(--cream);border-radius:20px;padding:54px;text-align:center;margin:0 22px;position:relative;overflow:hidden}
+.cta-band::after{content:'';position:absolute;right:-40px;top:-40px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle, rgba(198,104,72,.25), transparent 65%);pointer-events:none}
+.cta-band h2{color:var(--cream)}
+.cta-band p{color:rgba(245,241,232,.78);margin-top:12px;font-size:18px;max-width:620px;margin-left:auto;margin-right:auto}
+.cta-band .row{margin-top:30px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative}
+.cta-band .btn{background:var(--cream);color:var(--prid);border:none;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.cta-band .btn.o{background:transparent;color:var(--cream);border:1px solid rgba(245,241,232,.5);box-shadow:none}
+.cta-band .btn.o:hover{background:rgba(245,241,232,.1)}
+footer{border-top:1px solid var(--bd);padding:46px 0;color:var(--mut);font-size:14.5px;margin-top:78px;background:var(--soft)}
+footer .wrap{display:flex;justify-content:space-between;gap:22px;flex-wrap:wrap}
+footer .cols{display:flex;gap:52px;flex-wrap:wrap}
+footer a{color:var(--mut)} footer a:hover{color:var(--ink)}
+.proto{background:var(--moss);color:var(--cream);font-size:13px;padding:9px 0;text-align:center;letter-spacing:.01em}
+.proto a{color:#f7e6dd;font-weight:700;text-decoration:underline}
+:focus-visible{outline:2.5px solid var(--pri);outline-offset:2px;border-radius:6px}
+@media(max-width:820px){.hero h1{font-size:36px}.two,.steps,.heroart .body{grid-template-columns:1fr}.heroart .body{gap:14px}header nav a:not(.btn){display:none}section{padding:58px 0}.cta-band{padding:38px 22px}h2{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="proto">Static prototype of the SEO landing page · <a href="index.html">back to prototype index →</a> · the real one is a single hand-built HTML file, not part of the Vue repo</div>
+
+<header><div class="wrap">
+  <a class="logo" href="#"><span class="m">M</span> Mebel Pro</a>
+  <nav>
+    <a href="#customers">For customers</a>
+    <a href="#workshops">For workshops</a>
+    <a href="#how">How it works</a>
+    <a class="btn" href="client-app.html">Customer sign‑in</a>
+    <a class="btn p" href="seh-app.html">Workshop login</a>
+  </nav>
+</div></header>
+
+<!-- HERO -->
+<section class="hero"><div class="wrap">
+  <span class="kicker">Furniture‑panel cutting · O'zbekiston</span>
+  <h1>Panellaringizni onlayn o'lchamga kesing — narxini va chiqindisini darrov ko'ring.</h1>
+  <p class="lead">Mebel Pro furniture workshops run their branches, materials, warehouse, workers, pricing and orders in one system — and their customers design a cutting plan online, see the layout, the waste, the price, get a PDF, and order panels cut to size.</p>
+  <div class="cta">
+    <a class="btn p lg" href="client-app.html">Start a cutting plan →</a>
+    <a class="btn lg" href="#workshops">I run a workshop</a>
+  </div>
+  <div class="heroart">
+    <div class="bar"><i></i><i></i><i></i></div>
+    <div class="body">
+      <svg viewBox="0 0 520 300"><rect x="2" y="2" width="516" height="296" fill="#fafafa" stroke="#94a3b8"/>
+        <rect x="8" y="8" width="150" height="100" fill="#dbeafe" stroke="#3b82f6"/><rect x="162" y="8" width="150" height="100" fill="#dbeafe" stroke="#3b82f6"/>
+        <rect x="8" y="112" width="200" height="130" fill="#e0e7ff" stroke="#6366f1"/><rect x="212" y="112" width="100" height="130" fill="#dcfce7" stroke="#16a34a"/>
+        <rect x="316" y="8" width="195" height="80" fill="#fef3c7" stroke="#d97706"/>
+        <rect x="316" y="92" width="195" height="150" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="5 4"/>
+        <rect x="8" y="246" width="503" height="46" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="5 4"/>
+        <text x="265" y="270" font-family="Inter" font-size="13" fill="#94a3b8" text-anchor="middle">offcut → reusable / waste</text>
+      </svg>
+      <div>
+        <div class="stat" style="margin-bottom:12px"><div class="v">7.4%</div><div class="l">Waste on this layout</div></div>
+        <div class="stat" style="margin-bottom:12px"><div class="v">2 sheets · 374 120 so'm</div><div class="l">Material + cutting + edge banding</div></div>
+        <div class="stat"><div class="v">⬇ PDF for the saw operator</div><div class="l">One page per sheet, with coords & grain</div></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- CUSTOMERS -->
+<section id="customers"><div class="wrap">
+  <h2>For customers</h2><p class="sub">No more phone calls and verbal prices. Enter your parts, optimise, see everything, order.</p>
+  <div class="two">
+    <div class="card"><div class="icon" style="background:#eef2ff;color:#4f46e5">📐</div><h3>Design it yourself</h3><p>Pick a workshop branch and a material, type in your parts list — dimensions, quantity, grain, edge banding — and run the optimiser.</p><ul><li>Interactive layout, sheet by sheet</li><li>Waste %, sheets used, total cut length</li><li>Edge banding by thickness</li><li>Iterate freely — each run is saved as a draft</li></ul></div>
+    <div class="card"><div class="icon" style="background:#ecfdf5;color:#059669">📦</div><h3>Order &amp; track</h3><p>Turn a draft into an order — pickup or delivery (fee shown up front), pick how you'll pay, confirm. The price is locked in the moment you order.</p><ul><li>Live status: confirmed → in production → ready → delivered</li><li>Modify or cancel while it's still early</li><li>Sign in with Telegram — no password to remember</li><li>Mobile‑first — works on the phone in the shop</li></ul></div>
+  </div>
+</div></section>
+
+<!-- WORKSHOPS -->
+<section id="workshops" style="background:var(--soft)"><div class="wrap">
+  <h2>For workshops</h2><p class="sub">Run the whole shop — branches, catalogue, warehouse, workers, pricing, orders — in one place.</p>
+  <div class="two">
+    <div class="card alt"><div class="icon" style="background:#fff;color:#4f46e5">🏬</div><h3>One system, many branches</h3><ul><li>Branches with materials, stock, workers, pricing per branch</li><li>An order board: new → confirmed → production → ready → delivery → done</li><li>Record cash / bank payments; approve pay‑later; process refunds</li><li>Dashboard: KPIs, status mix, refund SLA, low stock, audit highlights</li></ul></div>
+    <div class="card alt"><div class="icon" style="background:#fff;color:#059669">👥</div><h3>Owner &amp; staff, done right</h3><ul><li>The owner runs everything; staff get exactly the per‑branch permissions you grant</li><li>Atomic stock — no double‑spending the last sheet</li><li>Snapshot pricing — old orders don't drift when you change rates</li><li>Append‑only audit — who did what, when</li></ul></div>
+  </div>
+  <div style="margin-top:30px"><a class="btn p lg" href="seh-app.html">Open the workshop app →</a> &nbsp; <span style="color:var(--mut);font-size:14.5px">New workshop? We provision your account and your owner login.</span></div>
+</div></div></section>
+
+<!-- HOW -->
+<section id="how"><div class="wrap">
+  <h2>How it works</h2><p class="sub">From a parts list to cut panels — a couple of steps.</p>
+  <div class="steps">
+    <div class="step"><h4>Pick a branch &amp; material</h4><p>Choose where you want it cut and which sheet material — from the shop or your own.</p></div>
+    <div class="step"><h4>Enter parts, optimise</h4><p>Type or paste your parts; the optimiser lays them out and shows waste, sheets, cut length.</p></div>
+    <div class="step"><h4>Order it</h4><p>Pickup or delivery, choose how to pay, confirm — the price and the cutting are locked in.</p></div>
+    <div class="step"><h4>Track to handover</h4><p>The workshop cuts to the PDF; you watch it go confirmed → production → ready → delivered.</p></div>
+  </div>
+</div></section>
+
+<!-- CTA -->
+<section style="padding-top:0"><div class="cta-band">
+  <h2>Ready to cut?</h2>
+  <p>Customers: design your first plan in minutes. Workshops: bring your shop online.</p>
+  <div class="row">
+    <a class="btn lg" href="client-app.html">I'm a customer →</a>
+    <a class="btn o lg" href="seh-app.html">I run a workshop →</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div><a class="logo" href="#" style="font-size:16px"><span class="m" style="width:24px;height:24px;font-size:12px">M</span> Mebel Pro</a><div style="margin-top:8px">Furniture‑panel cutting · O'zbekiston · © 2026</div></div>
+  <div class="cols">
+    <div><div style="font-weight:800;color:var(--ink);margin-bottom:8px">Customers</div><div><a href="client-app.html">Sign in</a></div><div><a href="#how">How it works</a></div></div>
+    <div><div style="font-weight:800;color:var(--ink);margin-bottom:8px">Workshops</div><div><a href="seh-app.html">Workshop app</a></div><div><a href="#workshops">Features</a></div></div>
+    <div><div style="font-weight:800;color:var(--ink);margin-bottom:8px">Platform</div><div><a href="superadmin-app.html">Superadmin</a></div><div><a href="index.html">Prototype index</a></div></div>
+  </div>
+</div></footer>
+</body>
+</html>
