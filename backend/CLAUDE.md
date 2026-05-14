@@ -60,7 +60,7 @@ backend/
     docs_site.py          # serves the repo's docs/ as HTML at /docs (Markdown rendered live); also exports `require_docs_auth`
     docs_assets/          # docs-site assets: style.css (theme) + docs.js (nav filter, on-this-page scroll-spy)
     core/
-      config.py           # Settings (env / .env); `settings` singleton; sqlalchemy_database_uri; S3_*; DOCS_DIR; DOCS_AUTH_*
+      config.py           # Settings (env / .env); `settings` singleton; sqlalchemy_database_uri; MINIO_*; DOCS_DIR; DOCS_AUTH_*
       db.py               # async engine, SessionLocal, get_session() dependency
     api/
       deps.py             # Annotated DI aliases — `Session = Annotated[AsyncSession, Depends(get_session)]`
@@ -97,7 +97,7 @@ backend/
 ## Database / object store / running locally
 
 - Postgres is expected on `localhost:5432` (db `mebel`, user/pass `mebel/mebel`) and MinIO on `localhost:9000` (key/secret `mebel/mebel`, bucket `mebel`) — `cd deploy && docker compose up -d postgres minio createbuckets` brings up both (the `createbuckets` one-shot creates the bucket and exits).
-- Then `uv run alembic upgrade head` and `uv run fastapi dev app/main.py`. The S3 endpoint/creds/bucket come from `S3_*` in `.env` (defaults already point at the local MinIO).
+- Then `uv run alembic upgrade head` and `uv run fastapi dev app/main.py`. The MinIO endpoint / access key / bucket come from `MINIO_*` in `.env` (defaults already point at the local MinIO).
 - Tests need **no** database and **no** object store — they use in-memory SQLite and should stub/fake S3. Point `DATABASE_URL` at a real Postgres to run the suite against it.
 
 ## Adding a feature (typical flow)

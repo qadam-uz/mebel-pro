@@ -2,21 +2,24 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-14
 order: 50
 ---
 
 # Sales
 
 The order header + its items, payments, refunds, status events, and the single cancel event.
-Lifecycle rules, pricing, and the warehouse contract are in [`orders.md`](../features/orders.md).
+Lifecycle rules, pricing, the state machine, and the warehouse contract are in
+[`orders.md`](../features/orders.md).
 
 ## Order
 
 A client's request for panels cut to size at a branch — the header that owns the items,
-payments, status history, cancellation, and refunds. Created only by a client, from a confirmed
-cutting draft. Carries a **snapshot** of its pricing and a reference to its confirmed cutting
-result.
+payments, status history, cancellation, refunds, and the production stamps that feed
+payroll. Created only by a client, from a confirmed cutting draft. Carries a **snapshot** of
+its pricing and a reference to its confirmed cutting result.
+
+**Identity & lifecycle**
 
 | Field | Type | Notes |
 |---|---|---|
@@ -24,33 +27,68 @@ result.
 | `order_number` | text | human-readable, `ORD-2026-000123` (per-year sequence); unique |
 | `client_id` | UUID | the client who placed it |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
+| `cutting_result_id` | UUID | the confirmed (current) cutting result |
 | `material_source` | enum | `own` / `shop` |
 | `delivery_type` | enum | `pickup` / `delivery` |
 | `delivery_address` | json? | `{ street, city, lat, lng, note }`; required if `delivery` |
 | `delivery_zone_id` | UUID? | the resolved static zone; required if `delivery` |
-| `status` | enum | `new` / `pending_payment` / `confirmed` / `in_production` / `ready` / `in_delivery` / `completed` / `cancelled`; default `new` |
-| `cutting_result_id` | UUID | the confirmed (current) cutting result |
+| `status` | enum | `new` / `pending_payment` / `confirmed` / `cutting` / `edge_banding` / `ready` / `in_delivery` / `completed` / `cancelled`; default `new` |
+| `version` | int | optimistic-lock counter for status transitions |
+| `priority_score` | int | manager-controlled queue priority (higher = sooner); default 0; used in the cutter / edger / driver queues |
+| `pay_later_approved` / `pay_later_approved_by_user_id` / `pay_later_reason` | bool / UUID? / text? | the second / third required if the first is true |
+| `reserve_status` | enum? | `ok` / `failed` — set when reserve is attempted after a money-already-moved confirm; null otherwise |
+| `note_client` / `note_workshop` | text? | client and staff notes |
+| `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
+
+**Pricing snapshot** (frozen at creation and at re-pricing on modify; later catalog / pricing
+changes never reach the order)
+
+| Field | Type | Notes |
+|---|---|---|
 | `subtotal_cutting_tiyin` / `subtotal_materials_tiyin` / `subtotal_edge_banding_tiyin` / `delivery_fee_tiyin` | bigint | snapshot subtotals (materials = 0 unless `shop`; delivery = 0 unless `delivery`); each ≥ 0 |
 | `discount_tiyin` | bigint | applied by staff; ≥ 0; ≤ pre-discount total |
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
 | `total_tiyin` | bigint | `cutting + materials + edge banding + delivery − discount`; ≥ 0 |
 | `currency` | enum | `UZS` (only value in v1) |
-| `cutter_worker_id` | UUID? | assigned when `→ in_production`; worker in the branch |
-| `driver_worker_id` | UUID? | assigned when `→ in_delivery`; worker in the branch |
-| `pay_later_approved` / `pay_later_approved_by_user_id` / `pay_later_reason` | bool / UUID? / text? | the second/third required if the first is true |
-| `reserve_status` | enum? | `ok` / `failed` — set when reserve is attempted after a money-already-moved confirm; null otherwise |
-| `version` | int | optimistic-lock counter for status transitions |
-| `note_client` / `note_workshop` | text? | client and staff notes |
-| `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
+
+**Worker pre-assignment (optional hints; set by the office)**
+
+| Field | Type | Notes |
+|---|---|---|
+| `assigned_cutter_user_id` | UUID? | optional pre-assignment; pins the order to that cutter's queue; nullable |
+| `assigned_edger_user_id` | UUID? | same for edge banding |
+| `assigned_driver_user_id` | UUID? | same for delivery |
+
+**Production stamps (immutable once set; what payroll reads — see
+[`finance.md`](../features/finance.md))**
+
+| Field | Type | Set at | Notes |
+|---|---|---|---|
+| `cutter_user_id` | UUID? | `confirmed → cutting` | the workshop user who claimed (or was acted on behalf of); must hold `process_production` on the branch and have `home_branch_id = order.branch_id` |
+| `cut_started_at` | timestamp? | `confirmed → cutting` | |
+| `cut_completed_at` | timestamp? | `cutting → next` | |
+| `sheets_used_snapshot` | int? | `cutting → next` | from the cutting result; `per_sheet` payroll input |
+| `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; `per_cut` payroll input |
+| `edger_user_id` | UUID? | `cutting → edge_banding` | nullable — set only when the order has banded parts; same grant / home_branch rules |
+| `edge_started_at` | timestamp? | `cutting → edge_banding` | |
+| `edge_completed_at` | timestamp? | `edge_banding → ready` | |
+| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "0.4": 12500, "2.0": 4800 }` metres-of-banding by thickness; `per_metre_banding` payroll input |
+| `driver_user_id` | UUID? | `ready → in_delivery` | nullable — set only on delivery orders; holds `process_delivery` on the branch |
+| `driver_started_at` | timestamp? | `ready → in_delivery` | |
+| `delivered_at` | timestamp? | `in_delivery → completed` | |
+| `picked_up_at` | timestamp? | `ready → completed` (pickup) | |
 
 Invariants: created only by a client, only from a `draft` cutting result (which becomes
 `confirmed` and bound); all money fields are integer tiyin; `total_tiyin` follows the formula
-and can't go negative; pricing fields are a **snapshot** at creation/re-pricing time (later
-catalog/pricing changes don't reach the order); status transitions follow the state machine
-only; concurrent transitions serialize by `version`; `cutter_worker_id` / `driver_worker_id`
-belong to the order's branch; a `completed` order is terminal; never deleted (goes
-`cancelled`); for `shop`, stock is reserved on `→ confirmed`, consumed on `→ ready`, released on
-cancel-before-production.
+and can't go negative; pricing fields are a snapshot at creation / re-pricing (later catalog
+or pricing changes don't reach the order); status transitions follow the state machine only;
+concurrent transitions serialize by `version`; `cutter_user_id`, `edger_user_id`,
+`driver_user_id` reference workshop users whose `home_branch_id = order.branch_id` and who
+hold the matching `process_production` / `process_delivery` grant; production stamps are
+immutable once set (set in the same atomic transaction as the relevant transition); for
+`shop`, stock is reserved on `→ confirmed`, consumed on `cutting → next`, released on
+`confirmed → cancelled` or `cutting → cancelled`; a `completed` order is terminal; never
+deleted (goes `cancelled`).
 
 ## Order item
 
@@ -143,16 +181,18 @@ is owed. An order is cancelled at most once (it's terminal afterwards).
 | `order_id` | UUID | required; **unique** (one cancellation per order) |
 | `cancelled_by_type` | enum | `client` / `workshop_user` |
 | `cancelled_by_user_id` / `cancelled_by_client_id` | UUID? / UUID? | mutually exclusive |
-| `is_owner_force_cancel` | bool | `true` if owner force-cancel of an `in_production`+ order; default `false` |
+| `is_owner_force_cancel` | bool | `true` if owner force-cancel from `cutting` / `edge_banding` / `ready` / `in_delivery`; default `false` |
 | `reason` | text | mandatory; non-trivially short |
 | `refund_required` | bool | whether the order had a completed payment |
 | `cancelled_at` | timestamp | |
 
-Invariants: exactly one cancellation per order (DB unique); `reason` mandatory; the cancelling
-party must be allowed at the order's status per the eligibility matrix; an `in_production`+
-cancellation requires `is_owner_force_cancel = true` and the owner; if `refund_required`, a
-`pending` order refund is created in the same operation; for a `shop` order cancelled before
-production, the reserved stock is released in the same operation.
+Invariants: exactly one cancellation per order (DB unique); `reason` mandatory; the
+cancelling party must be allowed at the order's status per the eligibility matrix; a
+cancellation from `cutting` or later requires `is_owner_force_cancel = true` and the owner;
+if `refund_required`, a `pending` order refund is created in the same operation; for a
+`shop` order cancelled from `confirmed` or `cutting`, the reservation is released in the
+same operation (and the cancel dialog optionally records an `adjust-stock` waste write-off
+for any sheets the cutter physically used).
 
 ## Order refund
 

@@ -49,7 +49,9 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
 - `web/`: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`
 - `e2e/`: `pnpm typecheck && pnpm test`
 
-There is **no CI verification** — these gates are the contract, run them locally. Pushing to `main` triggers `.github/workflows/deploy.yml`, which deploys straight to prod (rsync + `docker compose … up -d --build` on the server; auto-HTTPS via the Caddy edge). See [`deploy/CLAUDE.md`](deploy/CLAUDE.md).
+CI mirrors these. `.github/workflows/ci.yml` runs the per-directory gates (backend, web, e2e typecheck) and a docker-build smoke job on every PR and every push to `main`; on a green push to `main` it then SSHes to the VPS and runs `deploy/scripts/deploy.sh`, which `git fetch`s the commit and brings the prod stack up (no registry, no rsync). Auto-HTTPS via the Caddy edge. See [`deploy/CLAUDE.md`](deploy/CLAUDE.md).
+
+The prod stack does **not** run its own Postgres / MinIO — the VPS already provides them on an external Docker network (`infra-net`); the backend joins that network and reaches them by service name. Local dev still spins up its own data services via `compose.yaml`.
 
 ## Development workflow
 

@@ -585,20 +585,34 @@ def _dir_entry(label: str, path_suffix: str, mono: str) -> str:
     )
 
 
+def _find_in_nav(items: list[NavItem], rel: str) -> NavItem | None:
+    for it in items:
+        if it.rel == rel:
+            return it
+        if it.is_folder and rel.startswith(it.rel + "/"):
+            return _find_in_nav(it.children, rel)
+    return None
+
+
 def _render_folder(path: Path) -> HTMLResponse:
+    # Render the folder index from the same NavItem tree the sidebar uses, so the
+    # body's listing matches the sidebar's order (frontmatter `order`, then title)
+    # rather than alphabetical-by-filename.
     root = _docs_root()
     rel = path.relative_to(root).as_posix() if path != root else ""
+    nav_root = build_nav()
+    items: list[NavItem] = nav_root if not rel else []
+    if rel:
+        folder = _find_in_nav(nav_root, rel)
+        if folder and folder.is_folder:
+            items = folder.children
     entries: list[str] = []
-    for child in sorted(path.iterdir(), key=lambda p: p.name.lower()):
-        if _is_hidden(child):
-            continue
-        sub_rel = child.relative_to(root).as_posix()
-        if child.is_dir():
-            entries.append(_dir_entry(f"{_humanize(child.name)}/", sub_rel, f"{sub_rel}/"))
-        elif child.suffix == ".md":
-            meta = _read_meta(child)
-            label = meta.title or _humanize(child.stem)
-            entries.append(_dir_entry(label, sub_rel[: -len(".md")], sub_rel))
+    for it in items:
+        if it.is_folder:
+            entries.append(_dir_entry(f"{it.title}/", it.rel, f"{it.rel}/"))
+        else:
+            path_suffix = it.rel[: -len(".md")] if it.rel.endswith(".md") else it.rel
+            entries.append(_dir_entry(it.title, path_suffix, it.rel))
     title = _humanize(path.name) if rel else "Documentation"
     listing = "".join(entries) or "<li>Empty.</li>"
     body = f'<h1>{escape(title)}</h1><ul class="dir-index">{listing}</ul>'

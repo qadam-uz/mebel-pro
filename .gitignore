@@ -13,10 +13,11 @@ Thumbs.db
 .vscode/
 *.sublime-workspace
 
-# Environment / secrets
+# Environment / secrets — every `.env*` is gitignored except the two templates.
 .env
 .env.*
 !.env.example
+!.env.production
 *.pem
 *.key
 

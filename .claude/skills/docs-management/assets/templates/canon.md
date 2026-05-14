@@ -9,16 +9,21 @@ updated: <YYYY-MM-DD>
 
 # <System-wide concern name>
 
-<One short paragraph framing what this concern is and where the broader context lives (link
-`architecture.md` only if a reader genuinely needs it for the rules below; otherwise skip the
-link). State what must be true; link out for detail; keep this canon-lean.>
+<One short paragraph framing what this concern is. State what must be true; link out for
+detail; keep this canon-lean.>
 
 <!--
 Use this template ONLY for a *new* system-wide concern that genuinely earns its own canon
 doc — a cross-cutting concern every feature has to obey (the existing example is
-`docs/access.md`: auth / authz / tenancy). The bar is high: most "concerns" are really feature
-domains and belong in `docs/ref/features/<domain>.md`, where their rules and UX live together
-on one page.
+`docs/access-patterns.md`: principals, the access model, tenancy). The bar is high: most
+"concerns" are really feature domains and belong in `docs/ref/features/<domain>.md`, where
+their mechanics and UX live together on one page.
+
+This is the MODEL layer. What belongs: the abstract model, the normative rules every feature
+obeys, the rationale woven inline. What does NOT belong: endpoint paths, request / response
+field names, permission catalogs, session-table schemas, screen / wizard descriptions, error
+code catalogs, library versions — push all of that down to the feature doc that implements
+this concern. See SKILL.md → "Three layers — what each owns" for the leakage tests.
 
 The canon doc lives flat at the top of `docs/` — `docs/<concern>.md`, not under any subfolder.
 There is no `spec/` directory; the canon is the flat top-level of `docs/`.
@@ -36,8 +41,8 @@ There is no `spec/` directory; the canon is the flat top-level of `docs/`.
 - …
 
 ## Flow
-<The main path, step by step (a numbered list, or a small diagram → `docs/assets/`). Branches
-and failure paths go below.>
+<The main path. Prefer a mermaid diagram; a numbered list is fine for short flows. Branches
+and failure paths go below. No ASCII art.>
 
 ## Edge cases & failure paths
 - <Case> → <what happens>

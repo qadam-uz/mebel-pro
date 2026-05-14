@@ -1,44 +1,102 @@
-# Production overlay. Use with the base file (override.yaml is NOT auto-loaded
-# when you pass -f explicitly):
+# Production stack — standalone, NOT an overlay.
 #
-#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+# Usage on the server (from this directory):
 #
-# Adds a Caddy edge: terminates HTTP/HTTPS — auto-provisioning and renewing a
-# Let's Encrypt certificate per host derived from BASE_DOMAIN (apex, app.*,
-# workshop.*, admin.*) — serves nothing itself, and reverse-proxies by
-# subdomain: apex → landing; app.*/workshop.*/admin.* → the web SPA;
-# `/api/*` on every SPA subdomain (and `/docs`, `/api-docs`, `/api-redoc` on
-# `admin.*`) → the backend. Internal services aren't published; only the edge
-# is. See ./Caddyfile.
+#   docker compose -f compose.prod.yaml up -d --build
+#
+# Key differences from compose.yaml (dev):
+#   - NO local `postgres` / `minio` services. The VPS already runs them in
+#     an external Docker network called `infra-net` (also used by other
+#     projects on the same box, e.g. taqsim). The backend joins that
+#     network and reaches them by service name: `postgres`, `minio`.
+#   - Adds a `caddy` edge — the only published service (80/443; auto-HTTPS
+#     per host). Routes by subdomain derived from BASE_DOMAIN. See ./Caddyfile.
+#   - Built images (no source bind-mounts, no autoreload). `web` is the
+#     nginx image serving the built SPA bundle.
+#   - Resource limits + log rotation, so a runaway query/leak can't OOM
+#     the host and JSON logs can't fill the disk.
+#   - The repo's docs/ tree is bind-mounted into `backend` at /docs — the
+#     live docs site at admin.<BASE_DOMAIN>/docs reads it on every request.
+#
+# Required env in deploy/.env (see .env.production):
+#   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
+#   the SHARED minio), BACKEND_CORS_ORIGINS, DOCS_AUTH_*, BASE_DOMAIN,
+#   ACME_EMAIL, VITE_API_BASE_URL.
+
+name: mebel-pro
 
 services:
-  postgres:
-    # Data only; no published port in prod.
-    expose:
-      - "5432"
-
-  minio:
-    # S3 API only inside the compose network; the console isn't published.
-    # (If you ever need direct browser access to objects via presigned URLs,
-    # route a path through the edge in the Caddyfile.)
-    expose:
-      - "9000"
-
   backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
     environment:
       ENV: prod
       DEBUG: "false"
+      # Shared infra reachable by service name on `infra-net`.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MINIO_ENDPOINT_URL: http://minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
+      MINIO_USE_SSL: "false"
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-[]}
       DOCS_DIR: /docs
+      DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
+      DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
+    volumes:
+      # Live docs site reads this on every request — no build step. The
+      # repo is present on the host (the deploy pulls it).
+      - ../docs:/docs:ro
     expose:
       - "8000"
-    volumes:
-      # The docs/ tree is rendered live at /docs; the repo is present on the
-      # host, so bind it in (the backend image doesn't bundle it).
-      - ../docs:/docs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/healthz').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    networks:
+      - default
+      - infra-net
 
   web:
+    build:
+      context: ../web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
     expose:
       - "80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
 
   edge:
     image: caddy:2.8-alpine
@@ -47,9 +105,9 @@ services:
       - web
       - backend
     environment:
-      # The apex; Caddy serves apex + app.* + workshop.* + admin.* derived
-      # from it. Each gets a Let's Encrypt cert automatically (DNS must point
-      # here and ports 80/443 must be reachable).
+      # The apex. Caddy serves apex + app.* + workshop.* + admin.* derived
+      # from it. Each gets a Let's Encrypt cert automatically (DNS must
+      # point here and ports 80/443 must be reachable).
       BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN must be set in deploy/.env}
       ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
@@ -58,9 +116,22 @@ services:
       - "443:443/udp"  # HTTP/3 (QUIC)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data       # certificates + ACME account state — must persist
+      - caddy-data:/data       # certs + ACME state — must persist
       - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   caddy-data:
   caddy-config:
+
+networks:
+  # Created out-of-band on the VPS:
+  #   docker network create infra-net
+  # The shared `postgres` and `minio` services are attached to it; we join
+  # it here so the backend can resolve them by name.
+  infra-net:
+    external: true

@@ -9,115 +9,103 @@ order: 40
 # Workshop administration
 
 The owner-and-staff surfaces for keeping a workshop running — workshop settings, branch CRUD,
-worker registry, and the audit viewer. Identity & access (sign-in, sessions, provisioning,
-staff management with the permission grants matrix) is in [`access-management.md`](access-management.md).
+and the audit viewer. Sign-in, sessions, provisioning, and staff (incl. cutters and drivers)
+management live in [`access-management.md`](access-management.md); compensation, expenses,
+and payroll live in [`finance.md`](finance.md).
 
-## Workshop administration (superadmin + workshop apps)
+## Workshop settings
 
-### Endpoints
+The workshop's mutable profile and operational parameters:
 
-| Endpoint                                | Caller                                            | What                                                                                                                                                                                                                                                                                                                                |
-| --------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update-workshop`                       | platform operator; or the owner for their own | edit name, logo, phone, address                                                                                                                                                                                                                                                                                                     |
-| `update-workshop-settings`              | platform operator or owner                        | `delivery_enabled`, `delivery_zones` (list of name + label/polygon + fee in tiyin), `default_advance_percent` (0–100), `currency` (UZS, fixed), `payment_channels` (per-channel enabled flag + merchant credentials — **stored, inert in v1**; credentials owner-visible only) |
-| `list-workshops` / `get-workshop`       | platform operator (all); owner (own)              | cross-workshop list (superadmin) / per-workshop detail                                                                                                                                                                                                                                                                              |
+- **Profile** — name, logo, phone, address. Editable by the workshop's owner (and by a
+  platform operator for incident response).
+- **Delivery** — `delivery_enabled` flag; `delivery_zones`, each a name + a label / polygon +
+  a fixed fee (integer tiyin). No geocoder in v1 — zones are workshop-entered.
+- **Default advance %** — 0–100; drives the client's order wizard when payment-type is
+  `advance`.
+- **Currency** — UZS, fixed in v1; named here for future-proofing.
+- **Payment channels** — per-channel enabled flag plus merchant credentials. **Stored, inert
+  in v1** (no gateway integration yet); credentials are owner-visible only and masked by
+  default.
 
-Creation, blocking, and unblocking of a workshop live in [`access-management.md`](access-management.md) — they
-cascade into the identity domain (owner creation, session revocation).
+Owner-only powers covered by `is_owner` (see the access-management permission catalog): editing
+settings; viewing payment credentials.
 
 ### UX (superadmin app)
 
-- **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge
-  (`active` / `blocked`), created, branches count, orders-30d count; search by name; status
-  filter; "+ Workshop" (creation flow in [`access-management.md`](access-management.md)). Empty: "No workshops
-  yet."
-- **Workshop detail** — header (name, status badge, owner, created); tabs: **Profile** (edit),
-  **Settings** (delivery + advance % + payment channels grid — credentials masked, reveal on
-  click), **Branches** (read-only list), **Block** (block/unblock with a mandatory reason;
-  warning that staff sessions are revoked and open orders freeze — destructive-styled).
+- **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge,
+  created, branches count, orders-30d count. Status filter; name search;
+  **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet."
+- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (edit),
+  **Settings** (delivery + advance % + payment channels grid, credentials masked, reveal on
+  click), **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
+  destructive-styled; warns that staff sessions are revoked and open orders freeze).
 
 ### UX (workshop app)
 
-- **Workshop settings** (`/workshop/settings`, owner-only): tabs Profile, Delivery zones,
-  Advance %, Payment channels (credentials owner-visible, masked by default).
+- **Workshop settings** (`/workshop/settings`, owner-only): tabs Profile · Delivery zones ·
+  Advance % · Payment channels (credentials owner-visible, masked by default, reveal on click).
 
-## Branches (workshop app)
+## Branches
 
-### Endpoints
+A workshop owns one or more branches. Each branch has a physical address, working hours, a
+manually-entered `(lat, lng)`, and a `status` — semantics in
+[`access-patterns.md`](../../access-patterns.md#tenancy).
 
-| Endpoint                            | Caller                                                                                | What                                                                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create-branch` / `update-branch`   | owner only                                                                            | name, address (text), phone, latitude, longitude (manual numeric — no geocoder in v1), `working_hours` (per-weekday open/close), `status` (default `active`). Creates an empty `branch_pricing` row and the branch's stock as materials are added.                                                                                                          |
-| `change-branch-status`              | owner                                                                                 | `active ↔ temporarily_closed ↔ inactive`; `temporarily_closed` takes an optional `closed_reason`; setting `inactive` while the branch has active orders is allowed (those finish) but the UI warns. Never deleted. Status changes do **not** revoke staff sessions or grants.                                                                              |
-| `list-branches` / `get-branch`      | owner; staff see only granted branches; clients see active + temporarily-closed of any workshop |                                                                                                                                                                                                                                                                                                                                                            |
+**Operations (owner only):**
 
-Branch status governs client visibility/ordering: `active` — visible, accepts orders;
-`temporarily_closed` — visible, no new orders; `inactive` — invisible, no new orders.
+- **Create / edit a branch** — name, address, phone, lat / lng, per-weekday working hours.
+  Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
+  branch's material selection is built up.
+- **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
+  carry an optional reason. **Status changes do not revoke staff sessions or grants** — a
+  staff grant on an `inactive` branch just stays inert until the branch is reactivated. A
+  branch is never deleted.
 
-### UX
+Setting a branch to `inactive` while it has open orders is allowed (those orders finish
+normally); the UI warns and lists how many.
 
-- **Branches list** (`/workshop/branches`) — table: name, address, phone, status badge, materials
-  count, workers count, low-stock count, active-orders count, action menu. "+ Branch" (owner).
-  Empty: "No branches yet — add one to start taking orders."
-- **Branch form dialog** — name, address, phone, lat/lng (numeric, range-validated),
-  working-hours grid (per weekday open/close, with "closed this day"), status.
-- **Branch detail** (`/workshop/branches/:id`) — header (name, address, status badge, action set:
-  change status / edit / retire); tabs: Overview (status, active-orders count, revenue 30d,
-  low-stock count), **Materials**, **Stock**, **Workers**, **Pricing**, **Staff** (read-only
-  here; managed via Workshop Users in [`access-management.md`](access-management.md)), **Orders**. The first four
-  tabs are [`catalog-inventory.md`](catalog-inventory.md) / Workers below / Pricing in
-  catalog-inventory; the last is [`orders.md`](orders.md).
-- States: a "this branch is temporarily closed" banner with the reason; an "inactive" banner.
-
-## Workers (workshop app)
-
-### Endpoints
-
-| Endpoint                                                          | Caller                                  | What                                                                                                                                                                                                  |
-| ----------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create-worker` / `update-worker` / `toggle-worker-status`        | owner or `manage_workers` on the branch | `branch_id` (in scope), `full_name`, `phone` (`+998…`), `position` (`cutter` / `driver` / `assembler` / `other`), `status`. Workers are **not system users**. `inactive` workers can't be assigned to new orders. No delete. |
-| `list-branch-workers` / `get-worker`                              | same                                    |                                                                                                                                                                                                       |
-
-Only a worker of an order's branch can be assigned as the order's cutter (on `→ in_production`)
-or driver (on `→ in_delivery`).
+Visibility for read operations:
+- Owner sees every branch of their workshop.
+- Staff see only branches they hold a grant on.
+- Clients see `active` and `temporarily_closed` branches of any workshop (per the picker).
 
 ### UX
 
-Under a branch's **Workers** tab (and an owner-wide view with a branch filter):
+- **Branches list** (`/workshop/branches`) — table: name, address, phone, status badge,
+  materials count, workers count, low-stock count, active-orders count, action menu.
+  **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
+- **Branch form dialog** — name, address, phone, lat / lng (numeric, range-validated),
+  working-hours grid (per weekday open / close, with a "closed this day" toggle), status.
+- **Branch detail** (`/workshop/branches/:id`) — header (name, address, status, action set:
+  change status · edit). Tabs: **Overview** (status, active-orders count, revenue 30d,
+  low-stock count) · **Materials** · **Stock** · **Pricing** · **Staff** (read-only here;
+  shows everyone with this branch as their `home_branch` plus everyone with a grant on it;
+  managed in [`access-management.md`](access-management.md)) · **Orders**. The Materials,
+  Stock, and Pricing tabs are owned by [`catalog-inventory.md`](catalog-inventory.md);
+  Orders by [`orders.md`](orders.md).
+- A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
+  inactive banner.
 
-- **Workers list** — table: `full_name`, phone, position, branch (workshop-wide view), status,
-  action menu. "+ Worker". Empty: "No workers in this branch yet."
-- **Worker form dialog** — branch (defaults to current), full_name, phone, position select,
-  status.
-- Row actions: Edit, Activate/Deactivate (confirm; deactivate warns about in-progress
-  assignments). No Delete.
-- **Worker picker** (in the order workflow) — a select limited to the order's branch's `active`
-  workers of the relevant position (cutters when starting production, drivers when starting
-  delivery).
+## Audit viewer
 
-## Audit (workshop + superadmin apps)
+Two append-only logs back this feature: the **action log** (every mutating use case writes a
+row — actor, action, entity, branch, masked details) and the **status change log** (every
+order status transition). Both are write-only at source; this feature only reads them.
 
-### Endpoints
-
-| Endpoint                  | Caller                                                                          | What                                                                                                                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list-action-log`         | workshop owner (scoped to their workshop & granted branches); platform operator (all) | paginated, newest first; filters: action code (or family), actor, entity (type + id), date range, branch, workshop (platform operator only)                                                    |
-| `list-status-change-log`  | same                                                                            | filters: entity type + id, from/to status, actor, date range, branch, workshop                                                                                                                |
-
-The log is **append-only** — never edited or deleted; this feature only reads it. Pagination is
-cursor-friendly for a growing log.
+- Owner sees their workshop's rows (scoped to the branches they touch).
+- Platform operators see everything, plus a workshop filter.
 
 ### UX
 
-- In the **workshop app** (owner / `view_reports`): **Audit** section with two tabs — **Action
-  log** (filters: action type/family, module, actor search, entity type+id, date range, branch;
-  rows with a JSON-collapsible `details` preview) and **Status changes** (filters: entity
-  type+id, from→to, actor, date range; rows showing the transition). Each row links to the
-  affected entity where one exists. Read-only.
-- In the **superadmin app**: the same, plus a workshop filter and no workshop scoping (sees
-  all).
-- States: loading (skeleton rows), empty (no matching entries), error (`trace_id`); the
-  `details` expander.
+- In the workshop app (owner / `view_reports`): **Audit** section with two tabs —
+  **Action log** (filters: action type / family, module, actor search, entity type + id, date
+  range, branch; rows with a JSON-collapsible `details` preview) and
+  **Status changes** (filters: entity type + id, from→to, actor, date range; rows showing the
+  transition). Each row links to the affected entity where one exists. Read-only.
+- In the superadmin app: the same, plus a workshop filter and no workshop scoping.
+- States: loading (skeleton rows), empty, error (with `trace_id`); the `details` expander
+  reveals masked JSON.
 
 ## Edge cases
 
@@ -125,9 +113,6 @@ cursor-friendly for a growing log.
   orders complete normally.
 - **`temporarily_closed` branch in a client's branch picker** — shown with the reason and a
   disabled "start cutting" CTA.
-- **Deactivate a worker assigned to in-progress orders** — allowed, with a warning listing those
-  orders; staff should reassign them.
-- **Assign a worker from another branch** — rejected.
 - **Sensitive fields in audit `details`** — masked at write time; never shown.
 
 ## Next

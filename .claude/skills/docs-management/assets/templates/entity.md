@@ -10,8 +10,8 @@ updated: <YYYY-MM-DD>
 
 <One-paragraph framing of what this context owns — link the doc that holds the normative
 rules (the feature page that owns the domain — e.g. `docs/ref/features/orders.md` for sales —
-or a canon doc like `docs/access.md`), and tell the reader where to look for those rules vs.
-the field shapes they're about to see.>
+or a canon doc like `docs/access-patterns.md`), and tell the reader where to look for those
+rules vs. the field shapes they're about to see.>
 
 <!--
 This file is the single home for the entities of one bounded context — NOT one entity per

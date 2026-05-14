@@ -44,38 +44,52 @@ meaningful changes, not typo fixes.
 ### `docs/index.md` — Getting Started landing
 The home page. Open with a one-paragraph product summary (what it is, who it's for, the bet);
 then a numbered **"Read in this order"** ladder that walks a new contributor through the canon
-(architecture → domain model → orders → cutting → access → personas/journeys → envelope/nfr),
-then features, then entities, then open questions. Optionally close with a brief pointer to the
-repo-root README for local setup, and a one-line note on how the docs are served. Keep it
-short — ≤ 80 lines is a good ceiling. When the canon set changes, update the ladder.
+(scope → personas → domain model → access patterns → architecture), then features, then
+entities. Optionally close with a brief pointer to the repo-root README for local setup, and a
+one-line note on how the docs are served. Keep it short — ≤ 80 lines is a good ceiling. When
+the canon set changes, update the ladder.
 
 ### Canon docs (`docs/<canon>.md`) — lean, normative, mandatory; rationale included
-Lead with the point; don't bury it. Headings stable and predictable — a link to `#rules` should
-still resolve next quarter, because it's a URL fragment now. Prefer a tight structure — short
-sections, tables for the facts — over prose sprawl. State **what must be true** *and why it's
-that way* — the forces in play, the alternatives weighed, the trade-offs accepted, the concrete
-revisit trigger — woven into the relevant section, **not** kept in a separate ADR/`decisions/`
-register. (`architecture.md` carries the topology/stack/data-model decisions; `domain-model.md`
-carries the domain-shape decisions; `scope.md` carries the in/out-of-scope calls; `access.md`
-or another canon concern doc carries that concern's decisions — each with its why.) Link `ref/`
-for the detail, `ref/entities/` for entity specifics. Length is a signal: a long canon doc is
-usually carrying detail that belongs in `ref/`, or it's two docs. The whole canon is meant to be
-read in a sitting — protect that.
+The canon owns the **model** and the **normative rules** every contributor must know; the
+mechanics that implement those rules belong in `ref/features/`. (See `SKILL.md` → "Three
+layers — what each owns" for the leakage tests.) Lead with the point; don't bury it. Headings
+stable and predictable — a link to `#rules` should still resolve next quarter, because it's a
+URL fragment now. Prefer a tight structure — short sections, **mermaid diagrams** for
+structure, **tables** for comparison, prose for rationale — over prose sprawl. State **what
+must be true** *and why it's that way* — the forces in play, the alternatives weighed, the
+trade-offs accepted, the concrete revisit trigger — woven into the relevant section, **not**
+kept in a separate ADR / `decisions/` register. (`architecture.md` carries the topology /
+stack / data-model decisions; `domain-model.md` carries the domain-shape decisions; `scope.md`
+carries the in / out-of-scope calls; `access-patterns.md` or another canon concern doc carries
+that concern's decisions — each with its why.) Link `ref/` for the detail, `ref/entities/` for
+entity specifics. Length is a signal: a long canon doc is usually carrying detail that belongs
+in `ref/`, or it's two docs. The whole canon is meant to be read in a sitting — protect that.
 
-A *new* canon concern doc is created from the `canon` template; most canon docs are bespoke
-(architecture, envelope, nfr, scope, personas, journeys, domain-model, open-questions are
-each one-off shapes — no template).
+A *new* canon concern doc is created from the `canon` template; existing canon docs
+(`architecture`, `scope`, `personas`, `domain-model`, `access-patterns`) are bespoke shapes —
+no template.
 
 ### `ref/features/<domain>.md` — the working spec for a cohesive domain
 From the `feature` template. **One file per cohesive domain, not per CRUD.** This page is the
-**single home** for everything about the domain — rules + UX live on one page. Sections:
+**single home** for the domain's **mechanics** — rules, UX, edge cases. Sections:
 **Problem** (what's broken or missing, and for whom — the user pain, not the solution) ·
 **Domain rules** (the state machine, invariants, who-may-do-what, pricing or warehouse contract
 if any — *and where a rule is a real decision, the why right next to it*) · **User stories**
-(or stories-flavoured framing) · **Endpoints** (the API shape, optional) · **UX** (the
-interface design — flows, screen states, key screens; component specs live in `web/DESIGN.md`;
-diagrams in `docs/assets/`) · **Edge cases**. Trivial CRUDs are **sections inside the right
-home**, not solo files (a worker registry lives in `workshop.md`'s "Workers" section).
+(or stories-flavoured framing) · **UX** (the interface design — flows, screen states, key
+screens; component specs live in `web/DESIGN.md`; mermaid diagrams inline, raster images in
+`docs/assets/`) · **Edge cases**. Trivial CRUDs are **sections inside the right home**, not
+solo files (a worker registry lives in `workshop.md`'s "Workers" section).
+
+> **No endpoint table.** Operations are named in domain language inside Domain rules / User
+> stories. The HTTP shape — paths, request / response schemas, status codes — is the OpenAPI
+> spec's job, rendered live at `/api-docs` and `/api-redoc` and curated under `ref/api/` when
+> it earns one. A hand-written endpoint table inside a feature doc is a parallel copy that
+> drifts. The exception: citing a specific status code in **Edge cases** when the UX must
+> react to it (`optimization_timeout` → 504) — that's a domain fact, not an endpoint table.
+
+> **Don't restate canon here.** The principal types, the tenancy hierarchy, system-wide
+> invariants live in canon (`access-patterns.md`, `architecture.md`). One critical inline link
+> at most; let the canon doc be the single home.
 
 > **No "Out of scope" section in feature docs.** Out-of-scope for v1 is in
 > `docs/scope.md` — one home. A feature page doesn't restate it.
@@ -181,11 +195,22 @@ Run these at end-of-cycle, and any time on request:
   other to link); check whether a decision is implicated.
 - **Duplication** — the same fact maintained in two homes. Collapse to one; link from the
   other.
-- **Section coherence** — a doc whose sections are out of logical reading order, or whose
-  headings have drifted from the content beneath them. Re-order; re-head (deliberately —
-  headings are URL fragments).
+- **Layer leakage** — a canon doc carrying feature mechanics (endpoint paths, permission
+  catalogs, screen descriptions, session-table schemas), or a feature doc restating canon
+  rules (principal types, tenancy hierarchy, money-as-tiyin). Push leakage down to the right
+  layer, or collapse the restatement and link once. (See `SKILL.md` → "Three layers — what
+  each owns" for the tests.)
+- **Section coherence** — a doc whose sections are out of logical reading order (templated
+  doc breaking template order; bespoke doc not running overview → detail → edge cases), or
+  whose headings have drifted from the content beneath them. Re-order; re-head (deliberately
+  — headings are URL fragments).
 - **Cross-link bloat** — a doc with > ~5 inline cross-doc links is probably restating something
   that lives elsewhere; collapse and link once.
+- **ASCII art** — any box-and-pipe diagram or hand-drawn tree in a rendered doc. Replace with
+  mermaid (or a real image in `docs/assets/`).
+- **Hand-written endpoint tables in feature docs** — a `| Endpoint | … |` table or a paragraph
+  listing `POST /api/v1/...` paths inside `ref/features/*`. The OpenAPI spec is the single
+  home for HTTP shape; convert the prose to domain-language operations and drop the table.
 - **Stale drafts in the canon** — any `status: draft` in a canon path at end-of-cycle is a
   gap; finish it or move it out of the canon.
 - **Broken links** — any path in body text or `related:` that doesn't resolve; any `assets/`
@@ -198,7 +223,7 @@ Run these at end-of-cycle, and any time on request:
 - **Stale content** — docs whose `updated` is far back while the thing they describe has moved
   on. Flag for refresh.
 - **Frontmatter health** — every `docs/` doc outside `misc/` has `title`, `status`, `owner`,
-  `updated`.
+  `updated`; the shape (keys, casing) is identical across docs.
 - **Forbidden artefacts** — no `README.md` under `docs/`; no extra `index.md` (only
   `docs/index.md` is allowed); no `docs/spec/` directory (the canon is flat); no `docs/ref/ux/`
   (the frontend design system lives in `web/DESIGN.md`).
@@ -215,31 +240,32 @@ for v1" actually means. The cycle isn't done until every box holds:
   this order" ladder that covers the canon, features, and entities.
 - [ ] `docs/scope.md` exists and is `stable` — and is the single home for what's out of v1.
 - [ ] `docs/personas.md` covers every role that touches v1.
-- [ ] `docs/journeys.md` covers every end-to-end flow in scope.
-- [ ] `docs/architecture.md`, `docs/envelope.md`, `docs/nfr.md` exist and are `stable`; the
-  envelope names the tier, states the explicit "not built for" line, and calls out any
-  per-module exception.
 - [ ] `docs/domain-model.md` exists; every bounded context it names has a page under
   `ref/entities/`; every entity referenced anywhere in the canon or `ref/features/` has a
   section under its bounded-context page.
-- [ ] Every cross-cutting concern that genuinely earns a canon doc has one at `docs/<concern>.md`
-  (today: `docs/access.md`).
+- [ ] `docs/access-patterns.md` exists and is `stable` — the principals, the access model, and
+  tenancy. Its mechanics live in `ref/features/access-management.md`, not in the canon doc.
+- [ ] `docs/architecture.md` exists and is `stable`; it carries the operating envelope (tier,
+  the "not built for" line), the topology, the stack, the data-model invariants, and the
+  quality requirements (audit, performance, observability, i18n).
+- [ ] Every cross-cutting concern that genuinely earns a canon doc has one at
+  `docs/<concern>.md` (today: `docs/access-patterns.md`).
 - [ ] Every in-scope **feature domain** has a `ref/features/<domain>.md` with all template
-  sections filled — including domain rules and a UX section. Trivial CRUDs are sections inside
-  the right home, not solo files.
+  sections filled — problem, domain rules, stories, UX, edge cases. No hand-written endpoint
+  tables (OpenAPI is the HTTP-shape home). Trivial CRUDs are sections inside the right home,
+  not solo files.
 - [ ] Every consequential, costly-to-reverse decision is recorded — with its rationale (forces
   · alternatives weighed · trade-offs accepted) and a concrete revisit trigger — **inside the
-  canon or feature doc that owns the area**. No separate ADR/`decisions/` register; no decision
-  left implicit.
-- [ ] `docs/open-questions.md` has no *blocking* unknowns left; the remaining ones each have
-  an owner and a concrete revisit trigger.
+  canon or feature doc that owns the area**. No separate ADR / `decisions/` register; no
+  decision left implicit.
 - [ ] **`web/DESIGN.md` exists and covers the design system the v1 SPAs need** — tokens,
   primitives, composed components, the shell, the route maps, the accessibility baseline.
   (Lives in the web repo, not under `docs/`.)
 - [ ] Every doc has a `title` and a current `status`; the corpus audits come back clean — no
-  orphans, contradictions, duplication, broken links, dangling `assets/` references, stale
-  drafts in the canon, renamed-without-redirect paths, or forbidden artefacts (no
-  `docs/README.md`, no extra `index.md`s, no `docs/spec/` directory, no `docs/ref/ux/`).
+  orphans, contradictions, duplication, layer leakage, broken links, dangling `assets/`
+  references, stale drafts in the canon, renamed-without-redirect paths, ASCII art used in
+  place of mermaid diagrams, or forbidden artefacts (no `docs/README.md`, no extra `index.md`s,
+  no `docs/spec/` directory, no `docs/ref/ux/`).
 - [ ] The canon is still readable in one sitting — a person can read the flat top-level of
   `docs/` start to finish and come away understanding all of v1, and it didn't take them all
   day.

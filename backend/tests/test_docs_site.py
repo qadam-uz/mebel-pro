@@ -100,6 +100,9 @@ async def test_folder_index_listing(client: AsyncClient, docs_dir: Path) -> None
     assert resp.status_code == 200
     assert 'href="/docs/spec/vision"' in resp.text
     assert "dir-index" in resp.text
+    # Listing follows frontmatter `order:` (vision=10, scope=20) — same as sidebar,
+    # not alphabetical-by-filename (which would put scope before vision).
+    assert resp.text.index("/docs/spec/vision") < resp.text.index("/docs/spec/scope")
 
 
 async def test_non_markdown_files_served_raw(client: AsyncClient, docs_dir: Path) -> None:

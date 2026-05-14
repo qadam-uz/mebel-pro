@@ -26,7 +26,7 @@ and never touch object storage directly.
 | `content_type` | text | MIME type; validated against the allowed set for the attach context |
 | `size_bytes` | bigint | ≤ configured max (default 10 MB) |
 | `storage_status` | enum | `pending` / `stored` / `deleted` |
-| `entity_type` | text? | what it's attached to (`material` / `workshop` / `order_payment` / `order_refund` / `cutting_result` / …) |
+| `entity_type` | text? | what it's attached to (`material` / `workshop` / `order_payment` / `order_refund` / `cutting_result` / `expense` / `payroll_payment` / …) |
 | `entity_id` | UUID? | the attached entity's id |
 | `sort_order` | int? | ordering when an entity has several files |
 | `uploaded_by_type` / `uploaded_by_id` | enum / UUID | the principal who uploaded it |
@@ -98,7 +98,7 @@ state" half of the audit log. Append-only.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `entity_type` | text | `order` / `branch` / `material` / `worker` / `workshop` / `workshop_user` / `client` / `order_refund` / … |
+| `entity_type` | text | `order` / `branch` / `material` / `workshop` / `workshop_user` / `client` / `order_refund` / `expense` / `payroll_run` / `payroll_entry` / … |
 | `entity_id` | UUID | the entity's id |
 | `workshop_id` / `branch_id` | UUID? / UUID? | for scoping the viewer |
 | `from_status` | text? | null for the first |

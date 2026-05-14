@@ -1,14 +1,25 @@
-# Base stack: Postgres + MinIO + backend (FastAPI) + web (built SPA behind nginx).
+# Dev stack — standalone, self-contained. Runs everything on the host:
+# local Postgres + local MinIO + backend (autoreload) + web (Vite dev server).
 #
-#   Dev   : `docker compose up`                       (adds compose.override.yaml automatically)
-#   Prod  : `docker compose -f compose.yaml -f compose.prod.yaml up -d`
+# Usage from this directory (`deploy/`):
 #
-# Run from this directory (deploy/). Build contexts are ../backend and ../web.
-# Environment comes from `.env` in this directory — copy `.env.example`.
+#   docker compose up --build                          # full stack with HMR
+#   docker compose up -d postgres minio createbuckets  # data services only
+#   docker compose logs -f backend
+#   docker compose down                                # add -v to drop volumes
+#
+# Build contexts are `../backend` and `../web`; env comes from `deploy/.env`
+# (copy `.env.example`). For production use `compose.prod.yaml` — these files
+# are deliberately NOT overlays, they are two separate stacks; keep service
+# names and env-var names consistent so the contract for `backend` and `web`
+# stays the same in both.
 
 name: mebel-pro
 
 services:
+  # Local Postgres for development. In prod the backend connects to the
+  # shared Postgres on the external `infra-net` network instead — see
+  # `compose.prod.yaml`.
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -23,16 +34,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "5432:5432"
 
-  # S3-compatible object store for the `files` module (material images, logos,
-  # receipts, cutting PDFs). Pin a known-good RELEASE tag — bump deliberately.
+  # Local MinIO. The container's `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`
+  # (the env-var names MinIO insists on for its admin creds) are wired to the
+  # same MINIO_ACCESS_KEY_ID / MINIO_SECRET_ACCESS_KEY the backend uses — one
+  # set of creds in .env.
   minio:
     image: minio/minio:RELEASE.2024-01-16T16-07-38Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mebel}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-mebel}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID:-mebel}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY:-mebel}
     volumes:
       - minio-data:/data
     healthcheck:
@@ -40,8 +55,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console (http://localhost:9001)
 
-  # One-shot: create the bucket the backend expects, then exit.
+  # One-shot: ensure the bucket exists, then exit. `Exited (0)` is success.
   createbuckets:
     image: minio/mc:RELEASE.2024-01-18T07-03-39Z
     depends_on:
@@ -49,11 +67,13 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-mebel} ${MINIO_ROOT_PASSWORD:-mebel} &&
-      mc mb --ignore-existing local/${S3_BUCKET:-mebel}
+      mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY_ID:-mebel} ${MINIO_SECRET_ACCESS_KEY:-mebel} &&
+      mc mb --ignore-existing local/${MINIO_BUCKET:-mebel}
       "
     restart: "no"
 
+  # Backend, source-mounted, autoreload. The image's venv is kept on the
+  # `backend-venv` named volume so the bind-mount doesn't shadow it.
   backend:
     build:
       context: ../backend
@@ -64,21 +84,30 @@ services:
       minio:
         condition: service_healthy
     environment:
-      ENV: ${ENV:-prod}
-      DEBUG: ${DEBUG:-false}
+      ENV: dev
+      DEBUG: "true"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-mebel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mebel}
       POSTGRES_DB: ${POSTGRES_DB:-mebel}
-      S3_ENDPOINT_URL: http://minio:9000
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-mebel}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-mebel}
-      S3_BUCKET: ${S3_BUCKET:-mebel}
-      S3_USE_SSL: "false"
+      MINIO_ENDPOINT_URL: http://minio:9000
+      MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID:-mebel}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY:-mebel}
+      MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
+      MINIO_USE_SSL: "false"
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
+      DOCS_DIR: /docs
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
+    # `fastapi dev` = uvicorn with autoreload.
+    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - ../backend:/app
+      - backend-venv:/app/.venv
+      - ../docs:/docs:ro
+    ports:
+      - "8000:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/healthz').status==200 else 1)\""]
       interval: 10s
@@ -86,15 +115,27 @@ services:
       retries: 5
       start_period: 20s
 
+  # Dev frontend: Vite dev server (HMR). Not built — runs the node image and
+  # `pnpm dev` against the source bind-mount.
   web:
-    build:
-      context: ../web
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    image: node:22-slim
+    working_dir: /app
     restart: unless-stopped
     depends_on:
       - backend
+    command: ["sh", "-c", "corepack enable && pnpm install && pnpm dev --host 0.0.0.0 --port 5173"]
+    environment:
+      # Vite proxies /api → http://backend:8000 in dev; same-origin via the
+      # edge in prod. Leave empty.
+      VITE_API_BASE_URL: ""
+    volumes:
+      - ../web:/app
+      - web-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
 
 volumes:
   postgres-data:
   minio-data:
+  backend-venv:
+  web-node-modules:

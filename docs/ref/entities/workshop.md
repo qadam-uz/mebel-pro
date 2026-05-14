@@ -2,16 +2,19 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-14
 order: 20
 ---
 
 # Workshop
 
-The tenant — and what each tenant publishes per branch: branches and workers. The catalog
-(materials, the branch's selection from them, and branch pricing) lives in
-[`catalog.md`](catalog.md). Rules: [`access-patterns.md`](../../access-patterns.md) (tenancy + branch status),
-[`orders.md`](../features/orders.md) (pricing).
+The tenant — and what each tenant publishes per branch: branches. The catalog (materials,
+the branch's selection from them, and branch pricing) lives in [`catalog.md`](catalog.md);
+workshop users (cutters, edgers, drivers, office staff) live in
+[`identity.md`](identity.md); compensation, expenses, and payroll live in
+[`finance.md`](finance.md). Rules: [`access-patterns.md`](../../access-patterns.md) (tenancy
++ branch status), [`orders.md`](../features/orders.md) (the order state machine + production
+stamps).
 
 ## Workshop
 
@@ -47,8 +50,9 @@ the owner; `default_advance_percent ∈ [0, 100]`; never deleted.
 
 ## Branch
 
-A physical location of a workshop. Owns its workers, its warehouse stock, its pricing, and its
-selection from the platform's material catalog (see [`catalog.md`](catalog.md)). Status governs
+A physical location of a workshop. Owns its warehouse stock, its pricing, and its selection
+from the platform's material catalog (see [`catalog.md`](catalog.md)). Workshop users who
+work here have it as their `home_branch_id` ([`identity.md`](identity.md)). Status governs
 whether clients see it and order from it.
 
 | Field | Type | Notes |
@@ -67,27 +71,10 @@ visible (shown as closed, with `closed_reason`), no new orders; `inactive` — i
 clients, no new orders, existing orders complete. Transitions owner-only. Never deleted.
 Changing status does **not** revoke staff sessions or grants.
 
-Invariants: everything under the branch (branch material selections, stock, workers, pricing)
-belongs to the same workshop; a branch with active orders can be set `inactive` (orders finish;
-UI warns).
-
-## Worker
-
-A physical employee of a branch — saw operator (cutter), driver, assembler. **Not a system
-user** (no login, no auth). Registered only so an order can be assigned to one (a cutter when
-production starts, a driver when delivery starts).
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID | PK |
-| `branch_id` | UUID | required |
-| `full_name` / `phone` | text | required; phone `+998XXXXXXXXX` |
-| `position` | enum | `cutter` / `driver` / `assembler` / `other` |
-| `status` | enum | `active` / `inactive` (soft delete only) |
-| `created_at` / `updated_at` | timestamp | |
-
-Invariants: belongs to exactly one branch; only workers of an order's branch can be assigned to
-it (as cutter on `→ in_production` or driver on `→ in_delivery`); never deleted.
+Invariants: everything under the branch (branch material selections, stock, pricing) belongs
+to the same workshop; a branch with active orders can be set `inactive` (orders finish; UI
+warns).
 
 Material, Branch material (the per-branch selection), and Branch pricing live in
-[`catalog.md`](catalog.md).
+[`catalog.md`](catalog.md). Cutters, edgers, drivers, and office staff are all workshop
+users in [`identity.md`](identity.md) — there is no separate `worker` entity in v1.

@@ -2,15 +2,17 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-14
 order: 30
 ---
 
 # Inventory
 
 A branch's warehouse balance per material, plus the append-only transaction log that records
-every change. The reserve/consume/release contract driven by the order state machine is in
-[`orders.md`](../features/orders.md) → *Warehouse contract*.
+every change. The reserve / consume / release contract driven by the order state machine —
+**reserve at `→ confirmed`, consume at cutting completion (`cutting →` next), release on
+cancel from `confirmed` or `cutting`** — is in [`orders.md`](../features/orders.md) →
+*Warehouse contract*.
 
 ## Stock item
 

@@ -38,16 +38,17 @@ class Settings(BaseSettings):
     DOCS_AUTH_USERNAME: str = "docs"
     DOCS_AUTH_PASSWORD: str = "docs"  # noqa: S105 — dev default; override in prod
 
-    # --- Object storage (MinIO / S3-compatible) ----------------------------
+    # --- Object storage (MinIO) --------------------------------------------
     # The `files` module stores material images, workshop logos, receipts, and
-    # cutting PDFs here. In dev/Compose this is the bundled MinIO container; in
-    # other environments point it at any S3-compatible endpoint.
-    S3_ENDPOINT_URL: str = "http://localhost:9000"
-    S3_REGION: str = "us-east-1"
-    S3_ACCESS_KEY_ID: str = "mebel"
-    S3_SECRET_ACCESS_KEY: str = "mebel"  # noqa: S105 — dev default; override in prod
-    S3_BUCKET: str = "mebel"
-    S3_USE_SSL: bool = False
+    # cutting PDFs in MinIO. In dev/Compose this is the bundled MinIO container;
+    # in prod it's the shared MinIO on the VPS's `infra-net` Docker network.
+    # The protocol is S3-compatible, so any boto3-style client works.
+    MINIO_ENDPOINT_URL: str = "http://localhost:9000"
+    MINIO_REGION: str = "us-east-1"
+    MINIO_ACCESS_KEY_ID: str = "mebel"
+    MINIO_SECRET_ACCESS_KEY: str = "mebel"  # noqa: S105 — dev default; override in prod
+    MINIO_BUCKET: str = "mebel"
+    MINIO_USE_SSL: bool = False
 
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
