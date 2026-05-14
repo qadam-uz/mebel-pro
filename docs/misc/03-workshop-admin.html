@@ -17,6 +17,7 @@
     --warn:#A36417; --warn-tint:#F4E4CB;
     --info:#2A4D6B; --info-tint:#D8E2EB;
     --danger:#8C2E1C; --danger-tint:#F2D6CE;
+    --olive:#566F2A; --olive-tint:#DCE5C5;
     --f-display:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
     --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --f-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
@@ -25,204 +26,158 @@
   html,body{margin:0;padding:0;background:var(--bg)}
   body{font-family:var(--f-ui);color:var(--ink-12);-webkit-font-smoothing:antialiased;line-height:1.5;font-size:14px}
   ::selection{background:var(--accent);color:#fff}
+  [hidden]{display:none!important}
   .num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
-  button{font-family:inherit}
+  button{font-family:inherit;cursor:pointer}
+  a{color:inherit}
+  input,select,textarea{font-family:inherit}
 
   /* APP SHELL */
   .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
   @media (min-width:1600px){.app{grid-template-columns:268px 1fr}}
 
   /* SIDEBAR */
-  aside.sb{
-    background:var(--deep);color:#D6CDBE;display:flex;flex-direction:column;
-    position:sticky;top:0;height:100vh;overflow-y:auto;padding:18px 14px 14px;
-  }
-  .sb-brand{display:flex;align-items:center;gap:11px;padding:4px 6px 18px;margin-bottom:8px;border-bottom:1px solid var(--deep-3)}
-  .sb-brand .mk{
-    width:30px;height:30px;background:var(--accent);color:#fff;display:grid;place-items:center;
-    border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:16px;
-    position:relative;transform:rotate(-3deg);
-  }
+  aside.sb{background:var(--deep);color:#D6CDBE;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;padding:18px 14px 14px}
+  .sb-brand{display:flex;align-items:center;gap:11px;padding:4px 6px 18px;margin-bottom:8px;border-bottom:1px solid var(--deep-3);background:none;border-top:0;border-left:0;border-right:0;width:100%;cursor:pointer;text-align:left;color:inherit}
+  .mk{width:30px;height:30px;background:var(--accent);color:#fff;display:grid;place-items:center;border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:16px;position:relative;transform:rotate(-3deg);flex:none}
   .sb-brand .nm{font-family:var(--f-display);font-size:17px;font-weight:600;color:#fff;letter-spacing:-.01em}
   .sb-brand .nm small{display:block;font-family:var(--f-ui);font-size:10.5px;color:var(--ink-4);font-weight:500;letter-spacing:.04em;text-transform:uppercase}
-
-  .sb-tenant{
-    background:var(--deep-2);border:1px solid var(--deep-3);border-radius:7px;padding:10px 12px;margin:6px 4px 18px;
-    display:flex;align-items:center;gap:10px;cursor:pointer;
-  }
-  .sb-tenant:hover{border-color:var(--ink-6)}
-  .sb-tenant .av{
-    width:28px;height:28px;border-radius:5px;background:linear-gradient(135deg,#A6471F,#8C3814);
-    color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center;flex:none;
-  }
+  .sb-tenant{background:var(--deep-2);border:1px solid var(--deep-3);border-radius:7px;padding:10px 12px;margin:6px 4px 18px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .sb-tenant .av{width:28px;height:28px;border-radius:5px;background:linear-gradient(135deg,#A6471F,#8C3814);color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center;flex:none}
   .sb-tenant .info{min-width:0;flex:1}
   .sb-tenant .nm{font-size:13px;font-weight:600;color:#fff;line-height:1.2}
   .sb-tenant .role{font-size:11px;color:var(--ink-4);font-family:var(--f-mono)}
   .sb-tenant::after{content:"⌄";color:var(--ink-6);font-size:10px}
-
   .sb-nav{flex:1;display:flex;flex-direction:column;gap:2px}
-  .sb-grp{margin-top:14px}
-  .sb-grp:first-child{margin-top:0}
-  .sb-grp .lbl{
-    font-size:10.5px;font-weight:700;color:var(--ink-6);letter-spacing:.14em;
-    text-transform:uppercase;padding:4px 10px;margin-bottom:4px;
-  }
-  .sb-it{
-    display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
-    color:#D6CDBE;text-decoration:none;font-size:13.5px;font-weight:500;
-    cursor:pointer;transition:background .12s,color .12s;
-  }
+  .sb-grp{margin-top:14px}.sb-grp:first-child{margin-top:0}
+  .sb-grp .lbl{font-size:10.5px;font-weight:700;color:var(--ink-6);letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;margin-bottom:4px}
+  .sb-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:#D6CDBE;text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:background .12s,color .12s;background:none;border:0;width:100%;text-align:left}
   .sb-it:hover{background:var(--deep-2);color:#fff}
   .sb-it.on{background:var(--accent);color:#fff;font-weight:600}
+  .sb-it .ic{flex:none;color:var(--ink-4);font-size:15px;width:18px;display:grid;place-items:center;font-family:var(--f-display)}
   .sb-it.on .ic{color:#fff}
-  .sb-it .ic{flex:none;color:var(--ink-4);font-size:15px;width:18px;display:grid;place-items:center}
   .sb-it .ct{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);padding:1px 6px;background:var(--deep-2);border-radius:3px}
   .sb-it.on .ct{background:rgba(0,0,0,.20);color:#F0EAE0}
-
   .sb-foot{padding-top:14px;border-top:1px solid var(--deep-3);margin-top:14px;display:flex;flex-direction:column;gap:8px}
   .sb-user{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--deep-2);border-radius:7px;cursor:pointer}
-  .sb-user:hover{background:var(--deep-3)}
-  .sb-user .av{
-    width:30px;height:30px;border-radius:50%;background:#A6471F;color:#fff;
-    font:700 13px/1 var(--f-ui);display:grid;place-items:center;
-  }
-  .sb-user .info{min-width:0}
+  .sb-user .av{width:30px;height:30px;border-radius:50%;background:#A6471F;color:#fff;font:700 13px/1 var(--f-ui);display:grid;place-items:center}
   .sb-user .nm{font-size:13px;font-weight:600;color:#fff;line-height:1.2}
   .sb-user .rl{font-size:11px;color:var(--ink-4);font-family:var(--f-mono)}
-  .sb-tools{display:flex;gap:6px}
-  .sb-tools button{
-    flex:1;background:transparent;border:1px solid var(--deep-3);color:var(--ink-4);
-    border-radius:5px;padding:6px 0;font-size:11px;font-weight:500;cursor:pointer;
-  }
-  .sb-tools button:hover{color:#fff;border-color:var(--ink-6)}
 
   /* MAIN */
   main{display:flex;flex-direction:column;min-width:0}
 
   /* TOP BAR */
-  .tb{
-    height:64px;padding:0 28px;display:flex;align-items:center;gap:16px;
-    border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:20;
-  }
+  .tb{height:64px;padding:0 28px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:20}
   @media (min-width:1600px){.tb{padding:0 40px}}
-  .br-picker{
-    display:flex;align-items:center;gap:9px;padding:7px 12px;background:var(--elev);
-    border:1px solid var(--line);border-radius:7px;cursor:pointer;
-  }
+  .br-picker{display:flex;align-items:center;gap:9px;padding:7px 12px;background:var(--elev);border:1px solid var(--line);border-radius:7px;cursor:pointer;position:relative}
   .br-picker:hover{border-color:var(--ink-12)}
   .br-picker .ic{width:6px;height:6px;border-radius:50%;background:var(--success)}
   .br-picker .nm{font-size:13px;font-weight:600}
   .br-picker .sub{font-size:11.5px;color:var(--ink-6);font-family:var(--f-mono)}
   .br-picker::after{content:"⌄";font-size:10px;color:var(--ink-6);margin-left:4px}
-
-  .tb-search{
-    flex:1;max-width:480px;display:flex;align-items:center;gap:8px;
-    background:var(--elev);border:1px solid var(--line);border-radius:7px;padding:7px 12px;color:var(--ink-6);
+  .br-pop{
+    position:absolute;top:46px;left:0;background:var(--elev);border:1px solid var(--line-strong);
+    border-radius:10px;box-shadow:0 20px 40px -16px rgba(26,22,20,.20);min-width:300px;z-index:50;padding:6px;
   }
+  .br-pop .it{display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:9px 11px;border-radius:6px;cursor:pointer;align-items:center}
+  .br-pop .it:hover{background:var(--sunk)}
+  .br-pop .it.on{background:var(--accent-tint);color:var(--accent-h)}
+  .br-pop .it .pin{width:8px;height:8px;border-radius:50%;background:var(--success)}
+  .br-pop .it .nm{font-size:13.5px;font-weight:600;line-height:1.25;color:var(--ink-12)}
+  .br-pop .it .nm small{display:block;color:var(--ink-6);font-size:11.5px;font-weight:400;font-family:var(--f-mono)}
+  .br-pop .it.on .nm{color:var(--accent-h)}
+  .br-pop .it .ck{color:var(--accent);font-size:14px;font-weight:700;display:none}
+  .br-pop .it.on .ck{display:inline}
+
+  .tb-search{flex:1;max-width:480px;display:flex;align-items:center;gap:8px;background:var(--elev);border:1px solid var(--line);border-radius:7px;padding:7px 12px;color:var(--ink-6)}
   .tb-search input{border:0;outline:0;background:transparent;width:100%;font:500 13.5px/1 var(--f-ui);color:var(--ink-12)}
   .tb-search input::placeholder{color:var(--ink-6)}
   .tb-search .kbd{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);background:var(--sunk);border:1px solid var(--line);border-radius:3px;padding:1px 5px}
-
   .tb-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
-  .ib{
-    width:36px;height:36px;display:grid;place-items:center;background:transparent;border:1px solid transparent;
-    border-radius:7px;cursor:pointer;color:var(--ink-10);position:relative;
-  }
+  .ib{width:36px;height:36px;display:grid;place-items:center;background:transparent;border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--ink-10);position:relative}
   .ib:hover{background:var(--sunk);border-color:var(--line)}
-  .ib .dot{
-    position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;
-    background:var(--accent);border:2px solid var(--bg);
-  }
-  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:6px;padding:8px 13px;font:600 13px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s}
+  .ib .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:6px;padding:8px 13px;font:600 13px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s;background:none}
   .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
   .btn-primary:hover{background:var(--accent-h);border-color:var(--accent-h)}
   .btn-outline{background:var(--elev);color:var(--ink-12);border-color:var(--line-strong)}
   .btn-outline:hover{border-color:var(--ink-12)}
-  .btn-ghost{background:transparent;color:var(--ink-10);border:1px solid transparent}
+  .btn-ghost{background:transparent;color:var(--ink-10);border:0}
   .btn-ghost:hover{background:var(--sunk)}
   .btn-sm{padding:6px 10px;font-size:12px}
+  .btn-lg{padding:12px 18px;font-size:14px}
+  .btn-block{width:100%}
+  .btn-acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-acc:hover{background:var(--accent-h);border-color:var(--accent-h)}
+  .btn-deep{background:var(--deep);color:#fff;border-color:var(--deep)}
+  .btn-deep:hover{background:var(--deep-2);border-color:var(--deep-2)}
 
   /* PAGE */
   .page{padding:28px;flex:1}
   @media (min-width:1600px){.page{padding:36px 40px}}
-
   .page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:26px;flex-wrap:wrap;gap:14px}
-  .page-head h1{
-    font-family:var(--f-display);font-size:34px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.1;
-  }
+  .page-head h1{font-family:var(--f-display);font-size:34px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.1}
   .page-head .date{color:var(--ink-6);font-size:13.5px;margin-top:5px;font-family:var(--f-mono)}
   .page-head .date b{color:var(--ink-12);font-weight:500;font-family:var(--f-ui)}
   .page-head .tools{display:flex;gap:8px;flex-wrap:wrap}
 
   /* KPI STRIP */
-  .kpis{
-    display:grid;gap:14px;margin-bottom:24px;
-    grid-template-columns:repeat(2,1fr);
-  }
+  .kpis{display:grid;gap:14px;margin-bottom:24px;grid-template-columns:repeat(2,1fr)}
   @media (min-width:900px){.kpis{grid-template-columns:repeat(4,1fr)}}
-  .kpi{
-    background:var(--elev);border:1px solid var(--line);border-radius:10px;
-    padding:18px 20px 16px;position:relative;overflow:hidden;
-  }
+  .kpi{background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:18px 20px 16px;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .12s}
+  .kpi:hover{transform:translateY(-2px);border-color:var(--ink-10)}
   .kpi .lbl{font-size:11.5px;color:var(--ink-6);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
   .kpi .v{font-family:var(--f-display);font-size:clamp(28px,2.8vw,38px);font-weight:600;letter-spacing:-.02em;line-height:1}
   .kpi .v small{font-size:.45em;color:var(--ink-6);font-weight:500;font-family:var(--f-ui);letter-spacing:0;margin-left:4px}
-  .kpi .d{margin-top:10px;font-size:12px;color:var(--ink-8);display:flex;justify-content:space-between;align-items:center}
-  .kpi .d b{font-weight:600}
+  .kpi .d{margin-top:10px;font-size:12px;color:var(--ink-8);display:flex;justify-content:space-between;align-items:center;gap:8px}
   .kpi .d .up{color:var(--success)}
   .kpi .d .dn{color:var(--danger)}
   .kpi .d .warn{color:var(--warn)}
+  .kpi .d a{color:var(--accent);text-decoration:none;font-weight:600;background:none;border:0;padding:0;font-size:12px;cursor:pointer}
+  .kpi .d a:hover{text-decoration:underline}
   .kpi .spark{position:absolute;bottom:0;right:14px;display:flex;gap:2px;height:24px;align-items:flex-end;opacity:.7}
   .kpi .spark i{display:block;width:4px;background:var(--ink-2);border-radius:1px 1px 0 0}
   .kpi.warn{background:linear-gradient(180deg,var(--bg) 0%,var(--bg) 50%,var(--warn-tint) 50%)}
   .kpi.warn::before{content:"";position:absolute;top:0;left:0;width:3px;height:100%;background:var(--warn)}
 
-  /* MAIN GRID */
-  .grid{
-    display:grid;gap:18px;
-    grid-template-columns:1fr;
-  }
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
   @media (min-width:1100px){.grid{grid-template-columns:1.4fr .8fr}}
   @media (min-width:1600px){.grid{grid-template-columns:1.55fr .75fr;gap:24px}}
 
-  /* CARD */
   .card{background:var(--elev);border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .card-h{display:flex;align-items:baseline;justify-content:space-between;padding:18px 22px 12px;gap:14px}
   .card-h h2{font-family:var(--f-display);font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
   .card-h .sub{font-size:12.5px;color:var(--ink-6)}
   .card-h .ts{margin-left:auto;display:flex;gap:6px}
-  .card-h .ts button{
-    background:transparent;border:1px solid var(--line);color:var(--ink-8);
-    border-radius:5px;padding:4px 9px;font-size:11.5px;font-weight:500;cursor:pointer;
-  }
+  .card-h .ts button{background:transparent;border:1px solid var(--line);color:var(--ink-8);border-radius:5px;padding:4px 9px;font-size:11.5px;font-weight:500;cursor:pointer}
   .card-h .ts button.on{background:var(--ink-12);color:#fff;border-color:var(--ink-12)}
   .card-b{padding:0 22px 22px}
+  .card-h .more{margin-left:auto;font-size:12.5px;color:var(--accent);text-decoration:none;font-weight:600;background:none;border:0;cursor:pointer}
+  .card-h .more:hover{text-decoration:underline}
 
-  /* REVENUE CHART */
+  /* CHART */
   .rev-chart{height:200px;display:block;width:100%;margin-top:8px}
   .rev-chart .grid line{stroke:var(--line);stroke-dasharray:2,3}
-  .rev-chart .bars rect{fill:var(--ink-2);transition:fill .15s}
+  .rev-chart .bars rect{fill:var(--ink-2);transition:fill .15s;cursor:pointer}
+  .rev-chart .bars rect:hover{fill:var(--accent-h)}
   .rev-chart .bars rect.hi{fill:var(--accent)}
   .rev-chart .bars rect.md{fill:var(--ink-10)}
   .rev-chart text{font:500 10.5px var(--f-mono);fill:var(--ink-6)}
   .rev-chart .axis line{stroke:var(--line)}
 
-  /* RECENT ORDERS */
+  /* TABLES */
   .ord-tbl{width:100%;border-collapse:collapse;font-size:13px}
-  .ord-tbl th{
-    text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;
-    color:var(--ink-6);padding:10px 10px 10px 0;border-bottom:1px solid var(--line);
-  }
+  .ord-tbl th{text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);padding:10px 10px 10px 0;border-bottom:1px solid var(--line)}
   .ord-tbl td{padding:11px 10px 11px 0;border-bottom:1px solid var(--line);vertical-align:middle}
   .ord-tbl tr:last-child td{border-bottom:0}
-  .ord-tbl tr:hover{background:var(--sunk)}
+  .ord-tbl tr:hover{background:var(--sunk);cursor:pointer}
   .ord-tbl .id{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-8);white-space:nowrap}
   .ord-tbl .nm{font-weight:500;color:var(--ink-12)}
   .ord-tbl .nm small{display:block;color:var(--ink-6);font-weight:400;font-size:11.5px}
   .ord-tbl .amt{text-align:right;font-family:var(--f-mono);font-weight:600;color:var(--ink-12);white-space:nowrap}
   .ord-tbl .br{color:var(--ink-8);font-size:12px}
 
-  /* PILLS */
   .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
   .pill .pd{width:5px;height:5px;border-radius:50%}
   .p-new{background:#E8E2D5;color:var(--ink-10)} .p-new .pd{background:var(--ink-8)}
@@ -231,13 +186,14 @@
   .p-cut{background:var(--accent-tint);color:var(--accent-h)} .p-cut .pd{background:var(--accent)}
   .p-eb{background:var(--accent-soft);color:var(--accent-h)} .p-eb .pd{background:var(--accent)}
   .p-rdy{background:var(--success-tint);color:var(--success)} .p-rdy .pd{background:var(--success)}
-  .p-del{background:#DCE5C5;color:#566F2A} .p-del .pd{background:#789035}
+  .p-del{background:var(--olive-tint);color:var(--olive)} .p-del .pd{background:var(--olive)}
   .p-dn{background:var(--sunk);color:var(--ink-6)} .p-dn .pd{background:var(--ink-4)}
 
-  /* PRODUCTION HEALTH */
+  /* PRODUCTION */
   .prod{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:8px;overflow:hidden;margin-top:4px;border:1px solid var(--line)}
   @media (max-width:780px){.prod{grid-template-columns:1fr}}
-  .prod-cell{background:var(--elev);padding:14px 16px}
+  .prod-cell{background:var(--elev);padding:14px 16px;cursor:pointer;transition:background .12s}
+  .prod-cell:hover{background:var(--sunk)}
   .prod-cell .br{font-size:11px;color:var(--ink-6);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:8px}
   .prod-cell .tot{font-family:var(--f-display);font-size:28px;font-weight:600;line-height:1;letter-spacing:-.01em}
   .prod-cell .tot small{font-size:.45em;color:var(--ink-6);font-weight:500;font-family:var(--f-ui);letter-spacing:0;margin-left:5px}
@@ -257,9 +213,7 @@
   .payroll .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
   .payroll .hd h2{font-family:var(--f-display);font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
   .payroll .stat{font-size:11px;text-transform:uppercase;font-weight:700;letter-spacing:.08em;padding:3px 9px;background:var(--accent-tint);color:var(--accent-h);border-radius:4px}
-  .payroll .big{
-    font-family:var(--f-display);font-size:42px;font-weight:600;letter-spacing:-.025em;line-height:1;margin:6px 0 4px;
-  }
+  .payroll .big{font-family:var(--f-display);font-size:42px;font-weight:600;letter-spacing:-.025em;line-height:1;margin:6px 0 4px}
   .payroll .when{color:var(--ink-8);font-size:13px}
   .payroll .when b{color:var(--ink-12)}
   .payroll .bd{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
@@ -267,16 +221,17 @@
   .payroll .row .num{color:var(--ink-12);font-weight:500}
   .payroll .act{margin-top:14px;display:flex;gap:8px}
 
-  /* LOW STOCK */
+  /* LOW STOCK / FEEDS */
   .lst{padding:6px 22px 18px}
-  .lst-it{display:grid;grid-template-columns:auto 1fr auto;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+  .lst-it{display:grid;grid-template-columns:auto 1fr auto;gap:11px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center;cursor:pointer}
   .lst-it:last-child{border-bottom:0}
+  .lst-it:hover{background:var(--sunk)}
   .lst-it .sw{width:30px;height:30px;border-radius:5px;border:1px solid var(--line);flex:none}
   .lst-it .nm{font-size:13.5px;font-weight:500;color:var(--ink-12);line-height:1.3}
   .lst-it .nm small{display:block;color:var(--ink-6);font-size:11.5px;font-family:var(--f-mono);font-weight:400}
   .lst-it .q{text-align:right;font-family:var(--f-mono);font-size:13px;font-weight:600;color:var(--warn);white-space:nowrap}
   .lst-it .q small{display:block;font-size:10.5px;color:var(--ink-6);font-weight:400;text-transform:uppercase;letter-spacing:.04em}
-  .sw-1{background:linear-gradient(110deg,#C8A06B 0%,#A66E2F 100%)}
+  .sw-1{background:linear-gradient(110deg,#C8A06B,#A66E2F)}
   .sw-2{background:#F1EAE0}
   .sw-3{background:linear-gradient(135deg,#E8D5B7,#D4B58C)}
   .sw-4{background:#2A2825}
@@ -284,22 +239,119 @@
   .sw-6{background:linear-gradient(180deg,#D4B58C,#C8A06B)}
   .sw-7{background:#fff;border:1px dashed var(--line-strong)!important}
 
-  /* ACTION LOG */
   .alog{padding:6px 22px 18px;font-size:12.5px}
   .alog-it{display:grid;grid-template-columns:60px 1fr;gap:14px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start}
   .alog-it:last-child{border-bottom:0}
   .alog-it .t{font-family:var(--f-mono);font-size:11px;color:var(--ink-6);padding-top:1px}
   .alog-it .b{color:var(--ink-10);line-height:1.45}
   .alog-it .b b{font-weight:600;color:var(--ink-12)}
-  .alog-it .b .acc{color:var(--accent)}
+  .alog-it .b .acc{color:var(--accent);cursor:pointer}
+  .alog-it .b .acc:hover{text-decoration:underline}
   .alog-it .b .ok{color:var(--success)}
 
-  /* small util */
-  .row-spread{display:flex;justify-content:space-between;align-items:center}
-  .muted{color:var(--ink-6)}
+  /* ============ OMBOR / STOCK ============ */
+  .stock-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .stock-tbl th{position:sticky;top:0;background:var(--bg);text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .stock-tbl th:first-child{padding-left:22px}.stock-tbl th:last-child{padding-right:22px}
+  .stock-tbl td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .stock-tbl td:first-child{padding-left:22px}.stock-tbl td:last-child{padding-right:22px}
+  .stock-tbl tr:hover{background:var(--sunk)}
+  .stock-tbl .mat{display:flex;align-items:center;gap:11px}
+  .stock-tbl .mat .sw{width:32px;height:32px;border-radius:5px;border:1px solid var(--line);flex:none}
+  .stock-tbl .mat .nm{font-weight:500;color:var(--ink-12)}
+  .stock-tbl .mat .nm small{display:block;color:var(--ink-6);font-size:11px;font-family:var(--f-mono);font-weight:400}
+  .stock-tbl .br{color:var(--ink-8);font-size:12px}
+  .stock-tbl .q{text-align:right;font-family:var(--f-mono);font-weight:600;font-size:13px}
+  .stock-tbl .q.low{color:var(--warn)}
+  .stock-tbl .q small{display:block;font-size:10.5px;color:var(--ink-6);font-weight:400;text-transform:uppercase;letter-spacing:.04em}
+  .stock-tbl .stp{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .stock-tbl .stp.ok{background:var(--success-tint);color:var(--success)}
+  .stock-tbl .stp.lo{background:var(--warn-tint);color:var(--warn)}
 
-  /* tiny donut */
-  .donut{width:80px;height:80px;display:block}
+  /* ============ PAYROLL VIEW ============ */
+  .pay-grid{display:grid;gap:20px;grid-template-columns:1fr}
+  @media (min-width:1100px){.pay-grid{grid-template-columns:1.4fr .8fr;gap:24px}}
+  .pay-hero{background:var(--deep);color:#F0EAE0;border-radius:14px;padding:28px 32px;display:grid;gap:24px}
+  @media (min-width:780px){.pay-hero{grid-template-columns:1fr auto}}
+  .pay-hero h2{font-family:var(--f-display);font-size:28px;font-weight:600;margin:0 0 4px;letter-spacing:-.02em;color:#fff}
+  .pay-hero .when{color:#B0A698;font-size:13.5px;font-family:var(--f-mono)}
+  .pay-hero .big{font-family:var(--f-display);font-size:54px;font-weight:600;letter-spacing:-.025em;line-height:1;color:#fff;margin:14px 0 4px}
+  .pay-hero .big small{font-size:14px;color:#B0A698;font-family:var(--f-ui);font-weight:500;letter-spacing:0;margin-left:6px}
+  .pay-hero .meta{color:#D6CDBE;font-size:13px}
+  .pay-hero .right{display:flex;flex-direction:column;gap:8px;justify-content:flex-end;align-items:flex-end}
+  .pay-hero .right .lbl{font-size:10.5px;text-transform:uppercase;color:#B0A698;letter-spacing:.12em;font-weight:600}
+  .pay-hero .right .v{font-family:var(--f-display);font-size:22px;font-weight:600;color:#fff;line-height:1}
+
+  .pay-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .pay-tbl th{text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);padding:11px 12px;border-bottom:1px solid var(--line)}
+  .pay-tbl th:first-child{padding-left:22px}.pay-tbl th:last-child{padding-right:22px;text-align:right}
+  .pay-tbl td{padding:12px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .pay-tbl td:first-child{padding-left:22px}.pay-tbl td:last-child{padding-right:22px;text-align:right}
+  .pay-tbl tr:last-child td{border-bottom:0}
+  .pay-tbl tr:hover{background:var(--sunk);cursor:pointer}
+  .pay-tbl .w{display:flex;align-items:center;gap:10px}
+  .pay-tbl .w .av{width:30px;height:30px;border-radius:50%;color:#fff;font:700 12px/30px var(--f-ui);text-align:center;flex:none}
+  .pay-tbl .w .nm{font-weight:500;color:var(--ink-12);line-height:1.2}
+  .pay-tbl .w .nm small{display:block;font-size:11px;color:var(--ink-6);font-family:var(--f-mono);font-weight:400}
+  .pay-tbl .rl{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:4px;letter-spacing:.02em;background:var(--sunk);color:var(--ink-8)}
+  .pay-tbl .rl.cut{background:var(--accent-tint);color:var(--accent-h)}
+  .pay-tbl .rl.eb{background:var(--accent-soft);color:var(--accent-h)}
+  .pay-tbl .rl.dr{background:var(--olive-tint);color:var(--olive)}
+  .pay-tbl .rl.op{background:var(--info-tint);color:var(--info)}
+  .pay-tbl .amt{font-family:var(--f-mono);font-weight:600;color:var(--ink-12)}
+
+  /* ============ BRANCHES VIEW ============ */
+  .br-grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .br-card{background:var(--elev);border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px;transition:all .15s;cursor:pointer}
+  .br-card:hover{border-color:var(--ink-12);transform:translateY(-2px)}
+  .br-card .bh{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+  .br-card .bh .mp{font-family:var(--f-display);font-size:32px;font-weight:600;color:var(--accent);line-height:1}
+  .br-card h3{font-family:var(--f-display);font-size:22px;font-weight:600;margin:0;letter-spacing:-.01em;line-height:1.2}
+  .br-card .addr{font-size:12.5px;color:var(--ink-6);font-family:var(--f-mono)}
+  .br-card .stat{font-size:11.5px;padding:3px 9px;border-radius:999px;background:var(--success-tint);color:var(--success);font-weight:600}
+  .br-card .stat.cl{background:var(--warn-tint);color:var(--warn)}
+  .br-card .br-kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .br-card .br-kpi .it{}
+  .br-card .br-kpi .l{font-size:10.5px;color:var(--ink-6);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:3px}
+  .br-card .br-kpi .v{font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1}
+  .br-card .br-kpi .v small{font-size:12px;color:var(--ink-6);font-weight:500;font-family:var(--f-ui)}
+
+  /* ============ PLACEHOLDER VIEW ============ */
+  .ph-soon{padding:60px 24px;text-align:center;background:var(--elev);border:1px solid var(--line);border-radius:14px}
+  .ph-soon .ic{font-family:var(--f-display);font-size:64px;color:var(--ink-4);line-height:1;margin-bottom:14px}
+  .ph-soon h2{font-family:var(--f-display);font-size:28px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px}
+  .ph-soon p{color:var(--ink-8);font-size:15px;margin:0 auto 22px;max-width:480px;line-height:1.5}
+  .ph-soon ul{list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:8px;text-align:left;max-width:380px;margin-inline:auto;font-size:13px;color:var(--ink-10)}
+  .ph-soon li{padding:9px 14px;background:var(--sunk);border:1px solid var(--line);border-radius:7px;display:flex;align-items:center;gap:10px}
+  .ph-soon li::before{content:"○";color:var(--accent);font-family:var(--f-display);font-size:14px;flex:none}
+
+  /* MODAL */
+  .scrim{position:fixed;inset:0;background:rgba(26,22,20,.45);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.98);background:var(--elev);border-radius:14px;width:min(100% - 32px, 600px);max-height:90vh;z-index:80;overflow:hidden;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:all .2s;box-shadow:0 30px 80px -20px rgba(26,22,20,.40)}
+  .modal.on{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+  .modal-h{padding:20px 24px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .modal-h h3{font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .modal-h .x{width:34px;height:34px;border-radius:7px;background:none;border:0;color:var(--ink-6);font-size:18px;cursor:pointer}
+  .modal-h .x:hover{background:var(--sunk);color:var(--ink-12)}
+  .modal-b{padding:20px 24px;overflow-y:auto;flex:1}
+  .modal-f{padding:16px 24px;border-top:1px solid var(--line);background:var(--sunk);display:flex;gap:8px;justify-content:flex-end}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-6)}
+  .field input,.field textarea,.field select{
+    border:1px solid var(--line);border-radius:7px;padding:9px 12px;background:var(--elev);
+    font:500 13.5px/1.4 var(--f-ui);color:var(--ink-12);outline:0;
+  }
+  .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--ink-12)}
+  .field-row{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:560px){.field-row{grid-template-columns:1fr 1fr}}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:12px 20px 12px 14px;border-radius:8px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:0 12px 28px -10px rgba(26,22,20,.40);z-index:100;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .ic{width:22px;height:22px;border-radius:50%;background:var(--success);color:#fff;display:grid;place-items:center;font:700 12px var(--f-ui);flex:none}
+  .toast .ic.warn{background:var(--warn)}
 </style>
 </head>
 <body>
@@ -308,10 +360,10 @@
 
   <!-- SIDEBAR -->
   <aside class="sb">
-    <div class="sb-brand">
+    <button type="button" class="sb-brand" onclick="location.href='index.html'">
       <span class="mk">M</span>
       <span class="nm">Mebel Pro<small>boshqaruv</small></span>
-    </div>
+    </button>
 
     <div class="sb-tenant">
       <span class="av">FH</span>
@@ -321,31 +373,31 @@
       </div>
     </div>
 
-    <nav class="sb-nav">
+    <nav class="sb-nav" id="sb-nav">
       <div class="sb-grp">
         <div class="lbl">Boshqaruv</div>
-        <a class="sb-it on" href="#"><span class="ic">◐</span> Asosiy</a>
+        <button class="sb-it on" data-view="home"><span class="ic">◐</span> Asosiy</button>
         <a class="sb-it" href="04-workshop-staff.html"><span class="ic">▣</span> Buyurtmalar <span class="ct">47</span></a>
-        <a class="sb-it" href="#"><span class="ic">⌥</span> Ishlab chiqarish <span class="ct">34</span></a>
-        <a class="sb-it" href="#"><span class="ic">◇</span> Mijozlar</a>
+        <button class="sb-it" data-view="production"><span class="ic">⌥</span> Ishlab chiqarish <span class="ct">34</span></button>
+        <button class="sb-it" data-view="clients"><span class="ic">◇</span> Mijozlar</button>
       </div>
       <div class="sb-grp">
         <div class="lbl">Resurslar</div>
-        <a class="sb-it" href="#"><span class="ic">⊟</span> Ombor <span class="ct" style="color:var(--warn-tint);background:rgba(163,100,23,.25)">7</span></a>
-        <a class="sb-it" href="#"><span class="ic">⊞</span> Material katalogi</a>
-        <a class="sb-it" href="#"><span class="ic">◫</span> Filiallar <span class="ct">3</span></a>
+        <button class="sb-it" data-view="stock"><span class="ic">⊟</span> Ombor <span class="ct" style="color:#F4E4CB;background:rgba(163,100,23,.25)">7</span></button>
+        <button class="sb-it" data-view="catalog"><span class="ic">⊞</span> Material katalogi</button>
+        <button class="sb-it" data-view="branches"><span class="ic">◫</span> Filiallar <span class="ct">3</span></button>
       </div>
       <div class="sb-grp">
         <div class="lbl">Moliya</div>
-        <a class="sb-it" href="#"><span class="ic">∑</span> Hisobotlar</a>
-        <a class="sb-it" href="#"><span class="ic">⚖</span> Maoshlar <span class="ct">17</span></a>
-        <a class="sb-it" href="#"><span class="ic">↕</span> Xarajatlar</a>
+        <button class="sb-it" data-view="reports"><span class="ic">∑</span> Hisobotlar</button>
+        <button class="sb-it" data-view="payroll"><span class="ic">⚖</span> Maoshlar <span class="ct">17</span></button>
+        <button class="sb-it" data-view="expenses"><span class="ic">↕</span> Xarajatlar</button>
       </div>
       <div class="sb-grp">
         <div class="lbl">Tizim</div>
-        <a class="sb-it" href="#"><span class="ic">◆</span> Xodimlar <span class="ct">23</span></a>
-        <a class="sb-it" href="#"><span class="ic">⌖</span> Ruxsatlar</a>
-        <a class="sb-it" href="#"><span class="ic">⚙</span> Sozlamalar</a>
+        <button class="sb-it" data-view="staff"><span class="ic">◆</span> Xodimlar <span class="ct">23</span></button>
+        <button class="sb-it" data-view="grants"><span class="ic">⌖</span> Ruxsatlar</button>
+        <button class="sb-it" data-view="settings"><span class="ic">⚙</span> Sozlamalar</button>
       </div>
     </nav>
 
@@ -357,11 +409,6 @@
           <div class="rl">Egasi · barcha ruxsatlar</div>
         </div>
       </div>
-      <div class="sb-tools">
-        <button>?</button>
-        <button>↺ ↘</button>
-        <button>O'Z ▾</button>
-      </div>
     </div>
   </aside>
 
@@ -370,85 +417,65 @@
 
     <!-- TOP BAR -->
     <div class="tb">
-      <div class="br-picker">
+      <div class="br-picker" id="br-picker" onclick="toggleBranch(event)">
         <span class="ic"></span>
-        <div><div class="nm">Hamma filiallar</div><div class="sub">3 filial · 23 xodim</div></div>
+        <div><div class="nm" id="br-name">Hamma filiallar</div><div class="sub">3 filial · 23 xodim</div></div>
+        <div class="br-pop" id="br-pop" hidden></div>
       </div>
       <div class="tb-search">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
-        <input placeholder="Buyurtma, mijoz, xodim yoki material qidirish…" />
+        <input id="search" placeholder="Buyurtma, mijoz, xodim yoki material qidirish…" />
         <span class="kbd">⌘ K</span>
       </div>
       <div class="tb-actions">
-        <button class="ib" aria-label="Yordam">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
-        </button>
-        <button class="ib" aria-label="Bildirishnomalar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-          <span class="dot"></span>
-        </button>
-        <a class="btn btn-primary" href="04-workshop-staff.html">+ Yangi buyurtma</a>
+        <button class="ib" onclick="toast('Yordam — F1','info')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg></button>
+        <button class="ib" onclick="toast('3 ta bildirishnoma · MP-0091, MP-0087, kam zaxira')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="dot"></span></button>
+        <button class="btn btn-primary" type="button" onclick="openNewOrder()">+ Yangi buyurtma</button>
       </div>
     </div>
 
-    <!-- PAGE -->
-    <div class="page">
-
+    <!-- VIEW: HOME (DASHBOARD) -->
+    <section data-view="home" class="page">
       <div class="page-head">
         <div>
           <h1>Asosiy</h1>
-          <div class="date">Payshanba, <b>14-may 2026</b> · 13:42 (UTC+5)</div>
+          <div class="date">Juma, <b>15-may 2026</b> · 09:42 (UTC+5)</div>
         </div>
         <div class="tools">
-          <button class="btn btn-ghost btn-sm">↻ Yangilash</button>
-          <button class="btn btn-outline btn-sm">Hisobotni eksport qilish</button>
-          <button class="btn btn-outline btn-sm">Sozlash</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="refreshHome()">↻ Yangilash</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Hisobot CSV yuklanmoqda...','info')">CSV eksport</button>
         </div>
       </div>
 
-      <!-- KPIs -->
       <div class="kpis">
-        <div class="kpi">
+        <div class="kpi" onclick="setView('reports')">
           <div class="lbl">Bugungi savdo</div>
           <div class="v num">12.8M <small>so'm</small></div>
-          <div class="d"><span class="up"><b>↑ 18.2%</b> kechagiga</span><span class="muted">21 buyurtma</span></div>
-          <div class="spark">
-            <i style="height:30%"></i><i style="height:42%"></i><i style="height:36%"></i><i style="height:50%"></i>
-            <i style="height:58%"></i><i style="height:46%"></i><i style="height:70%;background:var(--accent)"></i>
-          </div>
+          <div class="d"><span class="up"><b>↑ 18.2%</b> kechagiga</span><span style="color:var(--ink-6)">21 buyurtma</span></div>
+          <div class="spark"><i style="height:30%"></i><i style="height:42%"></i><i style="height:36%"></i><i style="height:50%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:70%;background:var(--accent)"></i></div>
         </div>
-        <div class="kpi">
+        <div class="kpi" onclick="location.href='04-workshop-staff.html'">
           <div class="lbl">Ishlab chiqarishda</div>
           <div class="v num">34</div>
-          <div class="d"><span class="up"><b>↑ 4</b> oxirgi 24 soatda</span><span class="muted">11 kesilmoqda</span></div>
-          <div class="spark">
-            <i style="height:60%"></i><i style="height:55%"></i><i style="height:62%"></i><i style="height:50%"></i>
-            <i style="height:68%"></i><i style="height:70%"></i><i style="height:78%;background:var(--accent)"></i>
-          </div>
+          <div class="d"><span class="up"><b>↑ 4</b> oxirgi 24 soatda</span><span style="color:var(--ink-6)">11 kesilmoqda</span></div>
+          <div class="spark"><i style="height:60%"></i><i style="height:55%"></i><i style="height:62%"></i><i style="height:50%"></i><i style="height:68%"></i><i style="height:70%"></i><i style="height:78%;background:var(--accent)"></i></div>
         </div>
-        <div class="kpi warn">
+        <div class="kpi warn" onclick="setView('stock')">
           <div class="lbl">Pastdagi zaxiralar</div>
           <div class="v num" style="color:var(--warn)">7</div>
-          <div class="d"><span class="warn"><b>3 ta</b> keskin tugamoqda</span><a href="#" style="color:var(--accent);text-decoration:none;font-weight:600">ko'rish →</a></div>
+          <div class="d"><span class="warn"><b>3 ta</b> keskin tugamoqda</span><a onclick="event.stopPropagation();setView('stock')">ombor →</a></div>
         </div>
-        <div class="kpi">
+        <div class="kpi" onclick="setView('payroll')">
           <div class="lbl">Bu oy maosh</div>
           <div class="v num">6.2M <small>so'm</small></div>
-          <div class="d"><span class="muted"><b style="color:var(--ink-12)">31-mayda</b> · 17 kun qoldi</span><span style="color:var(--accent);font-weight:600">loyiha</span></div>
-          <div class="spark">
-            <i style="height:40%"></i><i style="height:48%"></i><i style="height:55%"></i><i style="height:58%"></i>
-            <i style="height:62%"></i><i style="height:68%"></i><i style="height:72%"></i>
-          </div>
+          <div class="d"><span style="color:var(--ink-6)"><b style="color:var(--ink-12)">31-mayda</b> · 16 kun qoldi</span><span style="color:var(--accent);font-weight:600">loyiha</span></div>
+          <div class="spark"><i style="height:40%"></i><i style="height:48%"></i><i style="height:55%"></i><i style="height:58%"></i><i style="height:62%"></i><i style="height:68%"></i><i style="height:72%"></i></div>
         </div>
       </div>
 
-      <!-- MAIN GRID -->
       <div class="grid">
-
-        <!-- LEFT COLUMN -->
         <div style="display:flex;flex-direction:column;gap:18px">
 
-          <!-- REVENUE CHART -->
           <div class="card">
             <div class="card-h">
               <div>
@@ -456,155 +483,87 @@
                 <div class="sub">Bugun · <b style="color:var(--ink-12)">12.8M so'm</b> · jami <span class="num">148.2M</span></div>
               </div>
               <div class="ts">
-                <button>7 K</button><button class="on">14 K</button><button>30 K</button>
+                <button onclick="toast('7 kunlik koʻrinish','info')">7 K</button>
+                <button class="on">14 K</button>
+                <button onclick="toast('30 kunlik koʻrinish','info')">30 K</button>
               </div>
             </div>
             <div class="card-b">
-              <svg class="rev-chart" viewBox="0 0 640 200" preserveAspectRatio="none" aria-label="Savdo diagrammasi">
+              <svg class="rev-chart" viewBox="0 0 640 200" preserveAspectRatio="none">
                 <g class="grid">
-                  <line x1="0" y1="40" x2="640" y2="40"/>
-                  <line x1="0" y1="80" x2="640" y2="80"/>
-                  <line x1="0" y1="120" x2="640" y2="120"/>
-                  <line x1="0" y1="160" x2="640" y2="160"/>
+                  <line x1="0" y1="40" x2="640" y2="40"/><line x1="0" y1="80" x2="640" y2="80"/>
+                  <line x1="0" y1="120" x2="640" y2="120"/><line x1="0" y1="160" x2="640" y2="160"/>
                 </g>
-                <g class="bars">
-                  <!-- 14 bars, last 2 highlighted -->
-                  <rect x="8"   y="135" width="32" height="60"  rx="2"/>
-                  <rect x="48"  y="110" width="32" height="85"  rx="2"/>
-                  <rect x="88"  y="124" width="32" height="71"  rx="2"/>
-                  <rect x="128" y="84"  width="32" height="111" rx="2"/>
-                  <rect x="168" y="98"  width="32" height="97"  rx="2"/>
-                  <rect x="208" y="64"  width="32" height="131" rx="2" class="md"/>
-                  <rect x="248" y="118" width="32" height="77"  rx="2"/>
-                  <rect x="288" y="90"  width="32" height="105" rx="2"/>
-                  <rect x="328" y="70"  width="32" height="125" rx="2" class="md"/>
-                  <rect x="368" y="48"  width="32" height="147" rx="2"/>
-                  <rect x="408" y="78"  width="32" height="117" rx="2"/>
-                  <rect x="448" y="28"  width="32" height="167" rx="2" class="hi"/>
-                  <rect x="488" y="56"  width="32" height="139" rx="2"/>
-                  <rect x="528" y="12"  width="32" height="183" rx="2" class="hi"/>
-                </g>
+                <g class="bars" id="rev-bars"></g>
                 <g class="axis">
                   <line x1="0" y1="195" x2="640" y2="195"/>
-                  <text x="24" y="210">1-may</text>
-                  <text x="304" y="210">7-may</text>
-                  <text x="544" y="210">14-may</text>
+                  <text x="24" y="210">2-may</text><text x="304" y="210">8-may</text><text x="544" y="210">15-may</text>
                 </g>
               </svg>
-              <div class="row-spread" style="margin-top:10px;font-size:12px;color:var(--ink-8);font-family:var(--f-mono)">
-                <span><span style="display:inline-block;width:9px;height:9px;background:var(--accent);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Bugun 14-may</span>
+              <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--ink-8);font-family:var(--f-mono)">
+                <span><span style="display:inline-block;width:9px;height:9px;background:var(--accent);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Bugun 15-may</span>
                 <span><span style="display:inline-block;width:9px;height:9px;background:var(--ink-10);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Eng yuqori kun</span>
                 <span><span style="display:inline-block;width:9px;height:9px;background:var(--ink-2);border-radius:2px;margin-right:5px;vertical-align:middle"></span>Boshqa kunlar</span>
               </div>
             </div>
           </div>
 
-          <!-- PRODUCTION HEALTH -->
           <div class="card">
             <div class="card-h">
               <h2>Ishlab chiqarish · filiallar bo'yicha</h2>
-              <a href="#" class="sub" style="text-decoration:none;color:var(--accent);font-weight:600">batafsil →</a>
+              <button class="more" type="button" onclick="setView('branches')">filiallar →</button>
             </div>
             <div class="card-b">
               <div class="prod">
-                <div class="prod-cell">
+                <div class="prod-cell" onclick="setBranchAndGo('yunusobod','Yunusobod')">
                   <div class="br">Yunusobod (asosiy)</div>
                   <div class="tot num">17 <small>buyurtma</small></div>
                   <div class="mix"><i class="c" style="width:35%"></i><i class="e" style="width:18%"></i><i class="r" style="width:30%"></i></div>
                   <div class="leg"><span class="c">6 kesim</span><span class="e">3 krom</span><span class="r">5 tayyor</span></div>
                 </div>
-                <div class="prod-cell">
+                <div class="prod-cell" onclick="setBranchAndGo('chilonzor','Chilonzor')">
                   <div class="br">Chilonzor</div>
                   <div class="tot num">12</div>
                   <div class="mix"><i class="c" style="width:42%"></i><i class="e" style="width:25%"></i><i class="r" style="width:17%"></i></div>
                   <div class="leg"><span class="c">5 kesim</span><span class="e">3 krom</span><span class="r">2 tayyor</span></div>
                 </div>
-                <div class="prod-cell">
+                <div class="prod-cell" onclick="setBranchAndGo('yangiyol','Yangiyo\\'l')">
                   <div class="br">Yangiyo'l</div>
                   <div class="tot num">5</div>
                   <div class="mix"><i class="c" style="width:60%"></i><i class="r" style="width:20%"></i></div>
-                  <div class="leg"><span class="c">3 kesim</span><span class="r">1 tayyor</span><span class="muted" style="color:var(--ink-6)">0 krom</span></div>
+                  <div class="leg"><span class="c">3 kesim</span><span class="r">1 tayyor</span><span style="color:var(--ink-6)">0 krom</span></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- RECENT ORDERS -->
           <div class="card">
             <div class="card-h">
               <div>
                 <h2>So'nggi buyurtmalar</h2>
                 <div class="sub">Oxirgi 24 soat · 21 ta</div>
               </div>
-              <a href="04-workshop-staff.html" class="sub" style="text-decoration:none;color:var(--accent);font-weight:600">taxtani ochish →</a>
+              <a href="04-workshop-staff.html" class="more">taxtani ochish →</a>
             </div>
             <div class="card-b" style="padding-top:0">
               <table class="ord-tbl">
-                <thead><tr>
-                  <th>Buyurtma</th><th>Mijoz</th><th>Filial</th><th>Holat</th><th style="text-align:right">Summa</th>
-                </tr></thead>
-                <tbody>
-                  <tr>
-                    <td class="id">MP-0091 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">11:20</small></td>
-                    <td class="nm">Aziz Karimov<small>+998 90 234-56-78</small></td>
-                    <td class="br">Yunusobod</td>
-                    <td><span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span></td>
-                    <td class="amt">4 465 000</td>
-                  </tr>
-                  <tr>
-                    <td class="id">MP-0090 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">10:48</small></td>
-                    <td class="nm">Dilshod Tursunov<small>+998 91 345-22-10</small></td>
-                    <td class="br">Yunusobod</td>
-                    <td><span class="pill p-rdy"><span class="pd"></span>Tayyor</span></td>
-                    <td class="amt">1 850 000</td>
-                  </tr>
-                  <tr>
-                    <td class="id">MP-0089 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">10:22</small></td>
-                    <td class="nm">Madina Yo'ldosheva<small>+998 99 700-12-43</small></td>
-                    <td class="br">Chilonzor</td>
-                    <td><span class="pill p-del"><span class="pd"></span>Yetkazib b…</span></td>
-                    <td class="amt">5 440 000</td>
-                  </tr>
-                  <tr>
-                    <td class="id">MP-0088 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">09:51</small></td>
-                    <td class="nm">Sherzod Ahmedov<small>+998 93 822-04-09</small></td>
-                    <td class="br">Yunusobod</td>
-                    <td><span class="pill p-pay"><span class="pd"></span>To'lov kut…</span></td>
-                    <td class="amt">2 180 000</td>
-                  </tr>
-                  <tr>
-                    <td class="id">MP-0087 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">09:32</small></td>
-                    <td class="nm">"Marvarid" do'koni<small>+998 71 200-44-21</small></td>
-                    <td class="br">Yangiyo'l</td>
-                    <td><span class="pill p-eb"><span class="pd"></span>Krom yopisht.</span></td>
-                    <td class="amt">8 920 000</td>
-                  </tr>
-                  <tr>
-                    <td class="id">MP-0086 <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">09:14</small></td>
-                    <td class="nm">Akmal Norqo'ziyev<small>+998 90 100-30-30</small></td>
-                    <td class="br">Yunusobod</td>
-                    <td><span class="pill p-conf"><span class="pd"></span>Tasdiqlangan</span></td>
-                    <td class="amt">3 240 000</td>
-                  </tr>
-                </tbody>
+                <thead><tr><th>Buyurtma</th><th>Mijoz</th><th>Filial</th><th>Holat</th><th style="text-align:right">Summa</th></tr></thead>
+                <tbody id="home-orders"></tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- RIGHT COLUMN -->
         <div style="display:flex;flex-direction:column;gap:18px">
 
-          <!-- PAYROLL -->
           <div class="card">
             <div class="payroll">
               <div class="hd">
                 <h2>May oyi maoshi</h2>
-                <span class="stat">LOYIHA · DRAFT</span>
+                <span class="stat">LOYIHA</span>
               </div>
               <div class="big num">6 240 000<span style="font-size:14px;font-weight:500;color:var(--ink-6);font-family:var(--f-ui);margin-left:6px;letter-spacing:0">so'm</span></div>
-              <div class="when"><b>31-may 2026</b> · 17 kun qoldi · 17 ta xodim</div>
-
+              <div class="when"><b>31-may 2026</b> · 16 kun qoldi · 17 ta xodim</div>
               <div class="bd">
                 <div class="row"><span>Oylik (3 xodim)</span><span class="num">3 800 000</span></div>
                 <div class="row"><span>List bo'yicha (kesuvchilar · 4)</span><span class="num">1 380 000</span></div>
@@ -612,87 +571,510 @@
                 <div class="row"><span>Yetkazma (haydovchilar · 3)</span><span class="num">580 000</span></div>
                 <div class="row"><span>Komissiya (operatorlar · 2)</span><span class="num">20 000</span></div>
               </div>
-
               <div class="act">
-                <a class="btn btn-primary btn-sm" href="#" style="flex:1;justify-content:center">Ko'rib chiqish →</a>
-                <a class="btn btn-outline btn-sm" href="#">PDF</a>
+                <button class="btn btn-acc btn-sm" type="button" onclick="setView('payroll')" style="flex:1">Ko'rib chiqish →</button>
+                <button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda...','info')">PDF</button>
               </div>
             </div>
           </div>
 
-          <!-- LOW STOCK -->
           <div class="card">
             <div class="card-h">
               <h2>Tugayotgan zaxira</h2>
-              <a href="#" class="sub" style="text-decoration:none;color:var(--accent);font-weight:600">ombor →</a>
+              <button class="more" type="button" onclick="setView('stock')">ombor →</button>
             </div>
-            <div class="lst">
-              <div class="lst-it">
-                <span class="sw sw-2"></span>
-                <div class="nm">LDSP Kastamonu 0011 PR<small>Oq baxmal · Yunusobod</small></div>
-                <div class="q">12 list<small>min 30</small></div>
-              </div>
-              <div class="lst-it">
-                <span class="sw sw-6"></span>
-                <div class="nm">Fanera berioz 8mm<small>Sveza · Chilonzor</small></div>
-                <div class="q">9 list<small>min 25</small></div>
-              </div>
-              <div class="lst-it">
-                <span class="sw sw-4"></span>
-                <div class="nm">Krom PVC 2mm qora matt<small>Rehau · Yunusobod</small></div>
-                <div class="q">12 m<small>min 80 m</small></div>
-              </div>
-              <div class="lst-it">
-                <span class="sw sw-7"></span>
-                <div class="nm">Krom PVC 0.8mm oq<small>Rehau · Yangiyo'l</small></div>
-                <div class="q">18 m<small>min 50 m</small></div>
-              </div>
-              <div class="lst-it">
-                <span class="sw sw-3"></span>
-                <div class="nm">MDF 16mm qum<small>Kronospan · Chilonzor</small></div>
-                <div class="q">22 list<small>min 40</small></div>
-              </div>
-            </div>
+            <div class="lst" id="low-stock"></div>
           </div>
 
-          <!-- ACTION LOG -->
           <div class="card">
             <div class="card-h">
               <h2>So'nggi harakatlar</h2>
-              <a href="#" class="sub" style="text-decoration:none;color:var(--accent);font-weight:600">log →</a>
+              <button class="more" type="button" onclick="toast('Action log — keyingi versiya','info')">log →</button>
             </div>
-            <div class="alog">
-              <div class="alog-it">
-                <span class="t">13:38</span>
-                <div class="b"><b>Bahodir ako</b> <span class="acc">MP-0091</span> ni kesishni boshladi · Yunusobod, kesuvchi</div>
-              </div>
-              <div class="alog-it">
-                <span class="t">13:24</span>
-                <div class="b"><b>Aziza op.</b> <span class="acc">MP-0091</span> ni tasdiqlash uchun navbatga qo'shdi</div>
-              </div>
-              <div class="alog-it">
-                <span class="t">12:55</span>
-                <div class="b"><b>Sherzod ako</b> <span class="acc">MP-0072</span> ni yetkazma uchun olib chiqdi <span class="ok">✓</span></div>
-              </div>
-              <div class="alog-it">
-                <span class="t">11:42</span>
-                <div class="b"><b>Olim ako</b> <span class="acc">MP-0087</span> uchun krom yopishtirishni tugatdi (14.2 m)</div>
-              </div>
-              <div class="alog-it">
-                <span class="t">10:30</span>
-                <div class="b"><b>Hasan ako</b> MDF 16 mm narxini <span style="font-family:var(--f-mono)">285k → 295k</span> ga oshirdi</div>
-              </div>
-              <div class="alog-it">
-                <span class="t">09:15</span>
-                <div class="b">Tizim <b>LDSP Kastamonu 0011</b> uchun ogohlantirish chiqardi · Yunusobod, 12 list qoldi</div>
-              </div>
-            </div>
+            <div class="alog" id="action-log"></div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- VIEW: STOCK -->
+    <section data-view="stock" class="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1>Ombor</h1>
+          <div class="date">Filiallardagi materiallar va zaxiralar</div>
+        </div>
+        <div class="tools">
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Transfer rejimi — keyingi versiya','info')">Filiallar orasida o'tkazish</button>
+          <button class="btn btn-acc btn-sm" type="button" onclick="toast('Stock-in yozuvi tayyorlandi','info')">+ Material kelishi</button>
+        </div>
+      </div>
+
+      <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+        <div class="kpi"><div class="lbl">Hammasi · materiallar</div><div class="v num">142</div><div class="d"><span style="color:var(--ink-6)">3 filial · 47 turdagi</span></div></div>
+        <div class="kpi warn"><div class="lbl">Past zaxira</div><div class="v num" style="color:var(--warn)">7</div><div class="d"><span class="warn">3 ta keskin</span></div></div>
+        <div class="kpi"><div class="lbl">Band qilingan</div><div class="v num">28</div><div class="d"><span style="color:var(--ink-6)">faol buyurtmalarga</span></div></div>
+        <div class="kpi"><div class="lbl">Bu oy ulgurji</div><div class="v num">84M <small>so'm</small></div><div class="d"><span class="up"><b>↑ 12%</b> aprelga</span></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <h2>Materiallar · barcha filiallar</h2>
+          <div style="display:flex;gap:6px">
+            <span style="font-size:12px;color:var(--ink-6);padding:6px 0;font-family:var(--f-mono)">Saralash:</span>
+            <button class="btn btn-outline btn-sm" type="button" onclick="toast('Past zaxiraga saralandi','info')">Past zaxira ↑</button>
+          </div>
+        </div>
+        <table class="stock-tbl">
+          <thead><tr>
+            <th>Material</th><th>Filial</th><th style="text-align:right">Qolgan</th>
+            <th style="text-align:right">Band</th><th style="text-align:right">Mavjud</th>
+            <th>Holat</th><th></th>
+          </tr></thead>
+          <tbody id="stock-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW: PAYROLL -->
+    <section data-view="payroll" class="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1>Maoshlar</h1>
+          <div class="date">Tarif siyosati va maosh varaqalari</div>
+        </div>
+        <div class="tools">
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Tarif siyosati — egasi tomonidan','info')">Tariflar (egasi)</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Aprel varaqasi · 5.8M so\\'m','info')">Aprel 2026</button>
+          <button class="btn btn-acc btn-sm" type="button" onclick="toast('Mart varaqasi — to\\'liq tasdiqlangan','info')">+ Yangi varaqa</button>
+        </div>
+      </div>
+
+      <div class="pay-hero">
+        <div>
+          <h2>May 2026 maosh varaqasi</h2>
+          <div class="when">1–31 may · loyiha holatida · oxirgi yangilanish 15-may 09:42</div>
+          <div class="big">6 240 000<small>so'm</small></div>
+          <div class="meta">17 ta xodim · 4 kesuvchi · 2 kromchi · 3 haydovchi · 8 boshqa</div>
+        </div>
+        <div class="right">
+          <div class="lbl">To'lov muddati</div>
+          <div class="v">31-may · 16 kun qoldi</div>
+          <div style="margin-top:14px;display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF yuklanmoqda...','info')" style="background:transparent;color:#fff;border-color:#3F362F">PDF</button>
+            <button class="btn btn-acc btn-sm" type="button" onclick="confirmFinalize()">Yakunlash</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px">
+        <div class="card-h">
+          <h2>Xodimlar bo'yicha</h2>
+          <span class="sub">Saralash: summa bo'yicha</span>
+        </div>
+        <table class="pay-tbl">
+          <thead><tr><th>Xodim</th><th>Roli</th><th>Filial</th><th style="text-align:right">Tafsilot</th><th>Summa</th></tr></thead>
+          <tbody id="payroll-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW: BRANCHES -->
+    <section data-view="branches" class="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1>Filiallar</h1>
+          <div class="date">3 ta filial · barchasi faol</div>
+        </div>
+        <div class="tools">
+          <button class="btn btn-acc btn-sm" type="button" onclick="toast('Yangi filial — egasi tomonidan ochiladi','info')">+ Yangi filial</button>
+        </div>
+      </div>
+      <div class="br-grid" id="branches-grid"></div>
+    </section>
+
+    <!-- VIEW: STAFF -->
+    <section data-view="staff" class="page" hidden>
+      <div class="page-head">
+        <div>
+          <h1>Xodimlar</h1>
+          <div class="date">23 ta xodim · 4 ta rol</div>
+        </div>
+        <div class="tools">
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Ruxsatlar · keyingi sahifa','info')">Ruxsatlar</button>
+          <button class="btn btn-acc btn-sm" type="button" onclick="toast('Yangi xodim qo\\'shish formasi (login + parol)','info')">+ Yangi xodim</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="pay-tbl">
+          <thead><tr><th>Xodim</th><th>Roli</th><th>Filial</th><th>Tarif</th><th>Holat</th></tr></thead>
+          <tbody id="staff-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Placeholder views -->
+    <section data-view="production" class="page" hidden></section>
+    <section data-view="clients" class="page" hidden></section>
+    <section data-view="catalog" class="page" hidden></section>
+    <section data-view="reports" class="page" hidden></section>
+    <section data-view="expenses" class="page" hidden></section>
+    <section data-view="grants" class="page" hidden></section>
+    <section data-view="settings" class="page" hidden></section>
   </main>
 </div>
 
+<!-- MODAL: NEW ORDER -->
+<div class="scrim" id="scrim" onclick="closeModal()"></div>
+<div class="modal" id="modal-new">
+  <div class="modal-h">
+    <h3>Yangi buyurtma</h3>
+    <button class="x" type="button" onclick="closeModal()">✕</button>
+  </div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Mijoz nomi</label><input id="no-client" placeholder="Familiya Ism" /></div>
+      <div class="field"><label>Telefon</label><input id="no-phone" placeholder="+998 90 XXX XX XX" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Filial</label><select id="no-branch"><option value="yunusobod">Yunusobod</option><option value="chilonzor">Chilonzor</option><option value="yangiyol">Yangiyo'l</option></select></div>
+      <div class="field"><label>Yetkazma vaqti</label><input value="17-may, 14:00" /></div>
+    </div>
+    <div class="field"><label>Eslatma</label><textarea rows="2" placeholder="Mijoz tafsilotlari…"></textarea></div>
+    <p style="font-size:12px;color:var(--ink-6);margin:0;line-height:1.45">Materiallar — keyingi sahifada katalogdan tanlanadi. Bu yerda — mijoz ma'lumotlari va asosiy parametrlar.</p>
+  </div>
+  <div class="modal-f">
+    <button class="btn btn-outline" type="button" onclick="closeModal()">Bekor qilish</button>
+    <button class="btn btn-acc" type="button" onclick="submitNewOrder()">Davom etish →</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span class="ic">✓</span><span id="toast-msg"></span></div>
+
+<script>
+const state = { view:'home', branchOpen:false, branchId:'all' };
+
+const branches = [
+  {id:'all',name:'Hamma filiallar',sub:'3 filial · 23 xodim',active:true},
+  {id:'yunusobod',name:'Yunusobod',sub:'Asosiy · 14 xodim'},
+  {id:'chilonzor',name:'Chilonzor',sub:'9 xodim'},
+  {id:'yangiyol',name:'Yangiyo\'l',sub:'6 xodim'},
+];
+
+const stockItems = [
+  {mat:'LDSP Kastamonu 0011 PR · Oq baxmal',sub:'2750×1830×18 mm',sw:'sw-2',br:'Yunusobod',onHand:12,res:0,min:30,unit:'list'},
+  {mat:'Fanera berioz 8mm · Sveza',sub:'2440×1220×8 mm',sw:'sw-6',br:'Chilonzor',onHand:9,res:2,min:25,unit:'list'},
+  {mat:'Krom PVC 2mm qora matt · Rehau',sub:'42 mm kenglikda',sw:'sw-4',br:'Yunusobod',onHand:12,res:0,min:80,unit:'metr'},
+  {mat:'Krom PVC 0.8mm oq · Rehau',sub:'22 mm kenglikda',sw:'sw-7',br:'Yangiyo\'l',onHand:18,res:0,min:50,unit:'metr'},
+  {mat:'MDF 16mm · Kronospan',sub:'2800×2070×16 mm',sw:'sw-3',br:'Chilonzor',onHand:22,res:8,min:40,unit:'list'},
+  {mat:'LDSP H1334 ST9 · Egger',sub:'2750×1830×18 mm',sw:'sw-1',br:'Yunusobod',onHand:142,res:18,min:60,unit:'list'},
+  {mat:'LDSP K001 PW · Kronospan',sub:'Belarus dub',sw:'sw-2',br:'Yunusobod',onHand:96,res:12,min:50,unit:'list'},
+  {mat:'LDSP 8198 · Kastamonu',sub:'Ladzio yong\'oq',sw:'sw-5',br:'Chilonzor',onHand:61,res:6,min:40,unit:'list'},
+  {mat:'MDF 19mm · Egger',sub:'oq glyans',sw:'sw-2',br:'Yunusobod',onHand:54,res:4,min:30,unit:'list'},
+  {mat:'Krom PVC 0.8mm qora · Rehau',sub:'22 mm kenglikda',sw:'sw-4',br:'Yunusobod',onHand:340,res:24,min:120,unit:'metr'},
+  {mat:'Mebel pelteli · Boyard',sub:'35 mm · 4-yarim ochilish',sw:'sw-7',br:'Yunusobod',onHand:480,res:24,min:150,unit:'dona'},
+];
+
+const payrollEntries = [
+  {nm:'Bahodir ako',rl:'Kesuvchi',ph:'+998 90 234-55-12',br:'Yunusobod',det:'128 list × 4 800',sum:614400,c:'#A6471F',i:'B'},
+  {nm:'Umid ako',rl:'Kesuvchi',ph:'+998 91 322-19-87',br:'Chilonzor',det:'94 list × 4 800',sum:451200,c:'#566F2A',i:'U'},
+  {nm:'Olim ako',rl:'Kromchi',ph:'+998 99 044-12-33',br:'Yunusobod',det:'87 m × 3 200',sum:278400,c:'#8C3814',i:'O'},
+  {nm:'Sherzod ako',rl:'Haydovchi',ph:'+998 90 322-15-44',br:'Yunusobod',det:'42 yetkazma × 9 000',sum:378000,c:'#2A4D6B',i:'S'},
+  {nm:'Davron ako',rl:'Haydovchi',ph:'+998 99 211-78-22',br:'Chilonzor',det:'31 yetkazma × 9 000',sum:279000,c:'#566F2A',i:'D'},
+  {nm:'Aziza op.',rl:'Operator',ph:'+998 90 100-44-22',br:'Yunusobod',det:'Oylik · 100%',sum:1800000,c:'#A36417',i:'A'},
+  {nm:'Madiyor ako',rl:'Kesuvchi',ph:'+998 93 222-04-19',br:'Yangiyo\'l',det:'76 list × 4 800',sum:364800,c:'#2A4D6B',i:'M'},
+  {nm:'Anvar ako',rl:'Kromchi',ph:'+998 99 234-11-08',br:'Chilonzor',det:'54 m × 3 200',sum:172800,c:'#5C4F44',i:'A'},
+  {nm:'Jasur ako',rl:'Haydovchi',ph:'+998 90 433-22-19',br:'Yangiyo\'l',det:'18 yetkazma × 9 000',sum:162000,c:'#3F362F',i:'J'},
+  {nm:'Komiljon op.',rl:'Operator',ph:'+998 91 322-09-78',br:'Chilonzor',det:'Oylik · 100%',sum:1600000,c:'#5C4F44',i:'K'},
+  {nm:'Diyora op.',rl:'Buxgalter',ph:'+998 99 244-19-32',br:'Yunusobod',det:'Oylik · 100%',sum:1800000,c:'#A6471F',i:'D'},
+];
+
+const rev14 = [60,85,71,111,97,131,77,105,125,147,117,167,139,183];
+
+const fmt = n => (n||0).toLocaleString('uz-UZ').replace(/,/g,' ');
+const fmtSum = n => `${fmt(n)} so'm`;
+
+/* ====================== VIEW SWITCH ====================== */
+function setView(v){
+  state.view = v;
+  document.querySelectorAll('[data-view]').forEach(el=>{
+    if(el.tagName==='SECTION') el.hidden = el.dataset.view!==v;
+  });
+  document.querySelectorAll('#sb-nav .sb-it[data-view]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.view===v);
+  });
+  // render placeholders on demand
+  if(v==='production') renderPlaceholder('production','Ishlab chiqarish','Filiallardagi joriy ish stollari — kesuvchi va kromchining real holati, navbatdagi vazifalar.','Aksincha kesuvchi tabletida ko\'rinadi (Kesuvchi ish stoli).',['Kesuvchi ish stoli','Kromchi ish stoli','Haydovchi ish stoli','Navbat boshqaruvi']);
+  if(v==='clients') renderPlaceholder('clients','Mijozlar','Telegram orqali ro\'yxatdan o\'tgan mijozlar, ularning buyurtmalari va aloqa tarixi.','',['Mijozlar ro\'yxati','Mijoz tarixi','Bloklash imkoniyati','Mijozga eslatma yuborish']);
+  if(v==='catalog') renderPlaceholder('catalog','Material katalogi','Filiallar uchun katalogdan tanlash va narxlarni belgilash.','Markaziy katalog — platforma tomonidan boshqariladi.',['Katalogdan tanlash','Filial bo\'yicha narxlash','Min/max zaxira chegarasi','Eski narxlar tarixi']);
+  if(v==='reports') renderPlaceholder('reports','Hisobotlar','Savdo, foyda, xarajat, maosh — tafsilotli hisobotlar.','',['Savdo hisoboti','Foyda-zarar','Xarajatlar tafsiloti','Maosh tahlili','Filiallar bo\'yicha solishtirish','CSV / Excel eksport']);
+  if(v==='expenses') renderPlaceholder('expenses','Xarajatlar','Ijara, kommunal, mahsulot xaridi va boshqa xarajatlarni qayd qilish.','',['Xarajat qayd qilish','Kategoriyalar bo\'yicha','Chek skanini saqlash','Hisobotlarga qo\'shilish']);
+  if(v==='grants') renderPlaceholder('grants','Ruxsatlar','Xodimlarga filial bo\'yicha ruxsatlar berish. Faqat egasi.','Hozir 8 ta ruxsat turi mavjud — masalan, buyurtmalar boshqaruvi yoki ishlab chiqarish.',['Ruxsat ko\'rsatkichlari','Filial bo\'yicha cheklash','Eski ruxsatlarni saqlash','Egasi qaytaradigan amallar']);
+  if(v==='settings') renderPlaceholder('settings','Sozlamalar','Seh sozlamalari, to\'lov kanallari, yetkazma zonalari, hujjat namunalari.','',['To\'lov kanallari (Payme, Click, Uzum)','Yetkazma zonalari va narxi','Oldindan to\'lov foizi','Hujjat va chek namunalari','Til va valyuta']);
+  if(v==='home'){renderRevBars();renderHomeOrders();renderLowStock();renderActionLog()}
+  if(v==='stock') renderStock();
+  if(v==='payroll') renderPayroll();
+  if(v==='branches') renderBranches();
+  if(v==='staff') renderStaff();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderPlaceholder(view,title,desc,sub,items){
+  const sec = document.querySelector(`section[data-view="${view}"]`);
+  if(sec.dataset.done) return;
+  sec.dataset.done='1';
+  sec.innerHTML = `
+    <div class="page-head"><div><h1>${title}</h1><div class="date">${sub||'Keyingi versiyada — ishlab chiqilmoqda'}</div></div></div>
+    <div class="ph-soon">
+      <div class="ic">${title==='Ishlab chiqarish'?'⌥':title==='Mijozlar'?'◇':title==='Material katalogi'?'⊞':title==='Hisobotlar'?'∑':title==='Xarajatlar'?'↕':title==='Ruxsatlar'?'⌖':title==='Sozlamalar'?'⚙':'◐'}</div>
+      <h2>${title}</h2>
+      <p>${desc}</p>
+      ${items.length ? `<ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul>` : ''}
+    </div>
+  `;
+}
+
+document.getElementById('sb-nav').addEventListener('click', e=>{
+  const b = e.target.closest('.sb-it[data-view]'); if(!b) return;
+  setView(b.dataset.view);
+});
+
+/* ====================== BRANCH PICKER ====================== */
+function toggleBranch(e){
+  if(e) e.stopPropagation();
+  state.branchOpen = !state.branchOpen;
+  const pop = document.getElementById('br-pop');
+  pop.hidden = !state.branchOpen;
+  if(state.branchOpen){
+    pop.innerHTML = branches.map(b=>`
+      <div class="it ${b.id===state.branchId?'on':''}" onclick="setBranch('${b.id}','${b.name.replace(/'/g,"\\'")}')">
+        <span class="pin"></span>
+        <div class="nm">${b.name}<small>${b.sub}</small></div>
+        <span class="ck">✓</span>
+      </div>
+    `).join('');
+  }
+}
+function setBranch(id, name){
+  state.branchId = id;
+  document.getElementById('br-name').textContent = name;
+  toggleBranch();
+  toast(`Filial: ${name}`,'info');
+}
+function setBranchAndGo(id, name){
+  setBranch(id, name);
+  setView('stock');
+}
+document.addEventListener('click', e=>{
+  if(state.branchOpen && !e.target.closest('#br-picker')) toggleBranch();
+});
+
+/* ====================== MODAL ====================== */
+function openNewOrder(){
+  document.getElementById('modal-new').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>document.getElementById('no-client').focus(),60);
+}
+function closeModal(){
+  document.querySelectorAll('.modal').forEach(m=>m.classList.remove('on'));
+  document.getElementById('scrim').classList.remove('on');
+  document.body.style.overflow='';
+}
+function submitNewOrder(){
+  const c = document.getElementById('no-client').value.trim();
+  if(!c){ toast("Mijoz nomi kerak",'warn'); document.getElementById('no-client').focus(); return; }
+  closeModal();
+  toast(`"${c}" uchun yangi buyurtma yaratilmoqda — taxtada ko'rishingiz mumkin`,'ok');
+  setTimeout(()=>{
+    if(confirm("Buyurtmalar taxtasiga o'tishni xohlaysizmi?")) location.href='04-workshop-staff.html';
+  }, 800);
+}
+
+/* ====================== HOME RENDERS ====================== */
+function renderRevBars(){
+  const bars = document.getElementById('rev-bars');
+  if(!bars) return;
+  bars.innerHTML = rev14.map((v,i)=>{
+    const x = 8 + i*40;
+    const h = v * 1.0;
+    const y = 195 - h;
+    const cls = i===13?'hi':i===11?'hi':(i===5||i===8)?'md':'';
+    return `<rect x="${x}" y="${y}" width="32" height="${h}" rx="2" class="${cls}" onclick="toast('${i+2}-may · ${v*100} 000 so\\'m','info')"/>`;
+  }).join('');
+}
+
+const homeOrders = [
+  {id:'MP-0091',t:'11:20',c:'Aziz Karimov',ph:'+998 90 234-56-78',br:'Yunusobod',s:'cutting',amt:4465000},
+  {id:'MP-0090',t:'10:48',c:'Dilshod Tursunov',ph:'+998 91 345-22-10',br:'Yunusobod',s:'ready',amt:1850000},
+  {id:'MP-0089',t:'10:22',c:'Madina Yo\'ldosheva',ph:'+998 99 700-12-43',br:'Chilonzor',s:'delivery',amt:5440000},
+  {id:'MP-0088',t:'09:51',c:'Sherzod Ahmedov',ph:'+998 93 822-04-09',br:'Yunusobod',s:'pending_payment',amt:2180000},
+  {id:'MP-0087',t:'09:32',c:'"Marvarid" do\'koni',ph:'+998 71 200-44-21',br:'Yangiyo\'l',s:'edge_banding',amt:8920000},
+  {id:'MP-0086',t:'09:14',c:'Akmal Norqo\'ziyev',ph:'+998 90 100-30-30',br:'Yunusobod',s:'confirmed',amt:3240000},
+];
+const STATE_LABELS = {new:'Yangi',pending_payment:'To\'lov kut…',confirmed:'Tasdiqlangan',cutting:'Kesilmoqda',edge_banding:'Krom yopisht.',ready:'Tayyor',delivery:'Yetkazib b…',completed:'Tugallandi'};
+const STATE_PILL = {new:'p-new',pending_payment:'p-pay',confirmed:'p-conf',cutting:'p-cut',edge_banding:'p-eb',ready:'p-rdy',delivery:'p-del',completed:'p-dn'};
+function renderHomeOrders(){
+  const tb = document.getElementById('home-orders');
+  if(!tb) return;
+  tb.innerHTML = homeOrders.map(o=>`
+    <tr onclick="location.href='04-workshop-staff.html'">
+      <td class="id">${o.id} <small style="display:block;color:var(--ink-6);font-size:10.5px;font-weight:400">${o.t}</small></td>
+      <td class="nm">${o.c}<small>${o.ph}</small></td>
+      <td class="br">${o.br}</td>
+      <td><span class="pill ${STATE_PILL[o.s]}"><span class="pd"></span>${STATE_LABELS[o.s]}</span></td>
+      <td class="amt">${fmt(o.amt)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderLowStock(){
+  const list = document.getElementById('low-stock');
+  if(!list) return;
+  const low = stockItems.filter(s => (s.onHand - s.res) <= s.min/2).slice(0,5);
+  list.innerHTML = low.map(s=>`
+    <div class="lst-it" onclick="setView('stock')">
+      <span class="sw ${s.sw}"></span>
+      <div class="nm">${s.mat}<small>${s.sub} · ${s.br}</small></div>
+      <div class="q">${s.onHand} ${s.unit}<small>min ${s.min}</small></div>
+    </div>
+  `).join('');
+}
+
+const actionLog = [
+  {t:'09:38',b:'<b>Bahodir ako</b> <span class="acc">MP-0091</span> ni kesishni boshladi · Yunusobod, kesuvchi'},
+  {t:'09:24',b:'<b>Aziza op.</b> <span class="acc">MP-0091</span> ni tasdiqlash uchun navbatga qo\'shdi'},
+  {t:'08:55',b:'<b>Sherzod ako</b> <span class="acc">MP-0072</span> ni yetkazma uchun olib chiqdi <span class="ok">✓</span>'},
+  {t:'08:42',b:'<b>Olim ako</b> <span class="acc">MP-0087</span> uchun krom yopishtirishni tugatdi (14.2 m)'},
+  {t:'14-may 17:30',b:'<b>Hasan ako</b> MDF 16 mm narxini <span style="font-family:var(--f-mono)">285k → 295k</span> ga oshirdi'},
+  {t:'14-may 16:15',b:'Tizim <b>LDSP Kastamonu 0011</b> uchun ogohlantirish chiqardi · Yunusobod, 12 list qoldi'},
+];
+function renderActionLog(){
+  const list = document.getElementById('action-log');
+  if(!list) return;
+  list.innerHTML = actionLog.map(a=>`<div class="alog-it"><span class="t">${a.t}</span><div class="b">${a.b}</div></div>`).join('');
+}
+function refreshHome(){
+  renderRevBars();renderHomeOrders();renderLowStock();renderActionLog();
+  toast('Sahifa yangilandi · 09:42','info');
+}
+
+/* ====================== STOCK ====================== */
+function renderStock(){
+  const tb = document.getElementById('stock-rows');
+  if(!tb) return;
+  tb.innerHTML = stockItems.map((s,i)=>{
+    const avail = s.onHand - s.res;
+    const low = avail <= s.min;
+    return `<tr onclick="toast('${s.mat} · Yunusobod · so\\'nggi keldi 12-mayda','info')">
+      <td><div class="mat"><span class="sw ${s.sw}"></span><div class="nm">${s.mat}<small>${s.sub}</small></div></div></td>
+      <td class="br">${s.br}</td>
+      <td class="q ${low?'low':''}">${s.onHand} ${s.unit}</td>
+      <td class="q" style="color:var(--ink-8)">${s.res}</td>
+      <td class="q ${low?'low':''}">${avail}<small>min ${s.min}</small></td>
+      <td><span class="stp ${low?'lo':'ok'}">${low?'Kam':'Yetarli'}</span></td>
+      <td style="text-align:right">
+        <button class="btn btn-outline btn-sm" type="button" onclick="event.stopPropagation();toast('${s.mat} — kelishi qayd qilindi','ok')">+ Kelish</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ====================== PAYROLL ====================== */
+function renderPayroll(){
+  const tb = document.getElementById('payroll-rows');
+  if(!tb) return;
+  const sorted = [...payrollEntries].sort((a,b)=>b.sum-a.sum);
+  tb.innerHTML = sorted.map(p=>`
+    <tr onclick="toast('${p.nm} · ${p.det} · ${fmtSum(p.sum)}','info')">
+      <td><div class="w"><span class="av" style="background:${p.c}">${p.i}</span><div class="nm">${p.nm}<small>${p.ph}</small></div></div></td>
+      <td><span class="rl ${p.rl==='Kesuvchi'?'cut':p.rl==='Kromchi'?'eb':p.rl==='Haydovchi'?'dr':'op'}">${p.rl}</span></td>
+      <td style="color:var(--ink-8);font-size:12px">${p.br}</td>
+      <td style="text-align:right;color:var(--ink-8);font-family:var(--f-mono);font-size:11.5px">${p.det}</td>
+      <td class="amt">${fmtSum(p.sum)}</td>
+    </tr>
+  `).join('');
+}
+function confirmFinalize(){
+  if(confirm("Maosh varaqasini yakunlashni xohlaysizmi? Yakunlangach raqamlar bloklanadi (faqat egasi qaytara oladi).")){
+    toast('Maosh varaqasi yakunlandi · xodimlarga to\'lash mumkin','ok');
+  }
+}
+
+/* ====================== BRANCHES ====================== */
+function renderBranches(){
+  const g = document.getElementById('branches-grid');
+  if(!g) return;
+  const brs = [
+    {nm:'Yunusobod',addr:'Buyuk Ipak Yo\'li 142',phone:'+998 71 233-44-22',mp:'01',rev:'68M',ord:17,staff:14},
+    {nm:'Chilonzor',addr:'Chilonzor 9-mavze 32',phone:'+998 71 244-11-08',mp:'02',rev:'42M',ord:12,staff:9},
+    {nm:'Yangiyo\'l',addr:'Mustaqillik 5',phone:'+998 71 211-04-77',mp:'03',rev:'18M',ord:5,staff:6},
+  ];
+  g.innerHTML = brs.map(b=>`
+    <div class="br-card" onclick="setBranchAndGo('${b.nm.toLowerCase().replace(/'/g,'')}','${b.nm}')">
+      <div class="bh">
+        <div>
+          <h3>${b.nm}</h3>
+          <div class="addr">${b.addr} · ${b.phone}</div>
+        </div>
+        <span class="mp">${b.mp}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="stat">Faol · Du-Sh 09:00–19:00</span>
+      </div>
+      <div class="br-kpi">
+        <div class="it"><div class="l">Bu oy savdo</div><div class="v">${b.rev}<small> so'm</small></div></div>
+        <div class="it"><div class="l">Faol buyurtma</div><div class="v">${b.ord}</div></div>
+        <div class="it"><div class="l">Xodimlar</div><div class="v">${b.staff}</div></div>
+        <div class="it"><div class="l">Ulushi</div><div class="v">${b.mp==='01'?'52':b.mp==='02'?'32':'16'}<small>%</small></div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ====================== STAFF ====================== */
+function renderStaff(){
+  const tb = document.getElementById('staff-rows');
+  if(!tb) return;
+  const staff = [
+    ...payrollEntries.map(p=>({...p,st:'Faol'})),
+    {nm:'Lola op.',rl:'Operator',br:'Yunusobod',det:'Oylik · 100%',c:'#A6471F',i:'L',st:'Bloklangan'}
+  ];
+  tb.innerHTML = staff.map(p=>`
+    <tr onclick="toast('${p.nm} — xodim profili','info')">
+      <td><div class="w"><span class="av" style="background:${p.c}">${p.i}</span><div class="nm">${p.nm}<small>${p.ph||''}</small></div></div></td>
+      <td><span class="rl ${p.rl==='Kesuvchi'?'cut':p.rl==='Kromchi'?'eb':p.rl==='Haydovchi'?'dr':'op'}">${p.rl}</span></td>
+      <td style="color:var(--ink-8);font-size:12px">${p.br}</td>
+      <td style="color:var(--ink-8);font-family:var(--f-mono);font-size:11.5px">${p.det}</td>
+      <td><span class="pill ${p.st==='Faol'?'p-rdy':'p-dn'}"><span class="pd"></span>${p.st}</span></td>
+    </tr>
+  `).join('');
+}
+
+/* ====================== TOAST ====================== */
+let toastTimer;
+function toast(msg, kind='ok'){
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  const ic = t.querySelector('.ic');
+  m.textContent = msg;
+  ic.className = 'ic ' + (kind==='warn'?'warn':'');
+  ic.textContent = kind==='warn'?'!':'✓';
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'), 2600);
+}
+
+/* ====================== KEYBOARD ====================== */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ closeModal(); if(state.branchOpen) toggleBranch(); }
+  if((e.metaKey||e.ctrlKey) && e.key==='k'){ e.preventDefault(); document.getElementById('search').focus(); }
+  if((e.metaKey||e.ctrlKey) && e.key==='n'){ e.preventDefault(); openNewOrder(); }
+});
+
+/* ====================== INIT ====================== */
+setView('home');
+</script>
 </body>
 </html>
