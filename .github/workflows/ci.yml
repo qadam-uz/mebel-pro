@@ -60,9 +60,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
-      - name: Install Python (from .python-version)
-        run: uv python install
-
+      # `uv sync --frozen` resolves Python from backend/.python-version (3.12)
+      # and pyproject.toml's requires-python, downloading it on demand.
       - name: Sync dependencies
         run: uv sync --frozen
 
@@ -91,8 +90,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm (from packageManager)
+      # No root package.json in this monorepo — point the action at web/'s
+      # so it can read `packageManager: pnpm@10.x` from there.
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
 
       - uses: actions/setup-node@v4
         with:
@@ -133,8 +136,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm (from packageManager)
+      # No root package.json — point the action at e2e/'s.
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          package_json_file: e2e/package.json
 
       - uses: actions/setup-node@v4
         with:

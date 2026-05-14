@@ -653,7 +653,7 @@ function renderKanban(){
   const totalActive = orders.filter(o=>o.state!=='completed' && o.state!=='cancelled').length;
   document.getElementById('sb-orders-ct').textContent = totalActive;
   const ts = new Date(); const hh = String(ts.getHours()).padStart(2,'0'); const mm = String(ts.getMinutes()).padStart(2,'0');
-  document.getElementById('ph-sub').innerHTML = `14-may, ${hh}:${mm} · <b>${totalActive} ta faol</b> · ${state.searchQ?`"<b>${state.searchQ}</b>" bo'yicha topildi`:`${cols.find(c=>c.s==='completed').items.length} ta bugun`}`;
+  document.getElementById('ph-sub').innerHTML = `15-may, ${hh}:${mm} · <b>${totalActive} ta faol</b> · ${state.searchQ?`"<b>${state.searchQ}</b>" bo'yicha topildi`:`${cols.find(c=>c.s==='completed').items.length} ta bugun`}`;
 
   grid.innerHTML = cols.map(({s,items}) => {
     const sum = items.reduce((x,o)=>x+(o.amount||0),0);
@@ -756,23 +756,35 @@ function renderDetail(){
 
 function buildStamps(o){
   const stIdx = STATES.indexOf(o.state);
+  const curWorker = o.assigned ? wFind(o.assigned) : null;
   const items = [
-    { s:'new', lbl:'Yangi · mijozdan kelgan', sub:`${o.due||''}`, w:'14-may'  },
-    { s:'pending_payment', lbl:'To\'lov kutmoqda', sub:'Payme / Click / Naqd', w:'—' },
-    { s:'confirmed', lbl:'Tasdiqlandi', sub:'Aziza op. tomonidan tekshirildi', w:o.state==='confirmed'?'jonli':'10:18' },
-    { s:'cutting', lbl:'Kesilmoqda', sub:o.assigned&&o.state==='cutting'?`<b>${wFind(o.assigned)?.n||''}</b>${o.progress?` · ${o.progress.done}/${o.progress.total} ${o.progress.label}`:''}`:'kutmoqda', w:o.state==='cutting'?'jonli':'—' },
-    { s:'edge_banding', lbl:o.hasEB?'Krom yopishtirilmoqda':'(o\'tib ketadi · krom yo\'q)', sub:o.assigned&&o.state==='edge_banding'?`<b>${wFind(o.assigned)?.n||''}</b>${o.progress?` · ${o.progress.done}/${o.progress.total} ${o.progress.label}`:''}`:'kutmoqda', w:o.state==='edge_banding'?'jonli':'—' },
-    { s:'ready', lbl:'Tayyor', sub:'qadoqlash · yetkazma uchun', w:'—' },
-    { s:'delivery', lbl:o.pickup?'Sehdan olib ketadi':'Yetkazma', sub:o.assigned&&o.state==='delivery'?`<b>${wFind(o.assigned)?.n||''}</b>`:'haydovchi tanlanmagan', w:o.state==='delivery'?'jonli':'—' }
+    { s:'new',             lbl:'Yangi · mijozdan kelgan', past:'qabul qilindi', now:'mijoz qoldirgan', future:'—' },
+    { s:'pending_payment', lbl:'To\'lov kutmoqda',         past:'to\'landi · Payme', now:'Payme / Click / Naqd', future:'—' },
+    { s:'confirmed',       lbl:'Tasdiqlandi',              past:'tasdiqlandi · Aziza op.', now:'Aziza op. tasdiqlamoqda', future:'kutmoqda' },
+    { s:'cutting',         lbl:'Kesilmoqda',               past:'tugatildi', now:curWorker?`<b>${curWorker.n}</b>${o.progress?` · ${o.progress.done}/${o.progress.total} ${o.progress.label}`:''}`:'kesuvchi tanlanmagan', future:'kutmoqda' },
+    { s:'edge_banding',    lbl:o.hasEB?'Krom yopishtirilmoqda':'(o\'tib ketadi · krom yo\'q)', past:'tugatildi', now:curWorker?`<b>${curWorker.n}</b>${o.progress?` · ${o.progress.done}/${o.progress.total} ${o.progress.label}`:''}`:'krom yopishtiruvchi tanlanmagan', future:'kutmoqda' },
+    { s:'ready',           lbl:'Tayyor',                   past:'tayyor edi', now:'qadoqlash · yetkazma uchun', future:'—' },
+    { s:'delivery',        lbl:o.pickup?'Sehdan olib ketadi':'Yetkazma', past:'yetkazib berildi', now:curWorker?`<b>${curWorker.n}</b> · yo'lda`:'haydovchi tanlanmagan', future:'—' }
   ];
   return items.map((s,i)=>{
     if(!o.hasEB && s.s==='edge_banding'){
       return `<div class="st"><span class="ic" style="background:var(--ink-2);border-color:var(--ink-2)"></span><div class="nm" style="color:var(--ink-6)"><span style="font-style:italic">${s.lbl}</span></div><div class="w">—</div></div>`;
     }
     const cls = i<stIdx?'done':i===stIdx?'now':'';
-    return `<div class="st ${cls}"><span class="ic"></span><div class="nm">${s.lbl}<small>${s.sub}</small></div><div class="w">${s.w}</div></div>`;
+    const sub = i<stIdx ? s.past : i===stIdx ? s.now : s.future;
+    const when = i<stIdx?'✓':i===stIdx?'jonli':'—';
+    return `<div class="st ${cls}"><span class="ic"></span><div class="nm">${s.lbl}<small>${sub}</small></div><div class="w">${when}</div></div>`;
   }).join('');
 }
+
+function roleOfWorker(workerId){
+  if(!workerId) return '';
+  if(workers.cutter.find(w=>w.id===workerId)) return 'cutter';
+  if(workers.edger.find(w=>w.id===workerId)) return 'edger';
+  if(workers.driver.find(w=>w.id===workerId)) return 'driver';
+  return '';
+}
+function roleLabel(role){ return role==='cutter'?'Kesuvchi':role==='edger'?'Krom yopishtiruvchi':role==='driver'?'Haydovchi':''; }
 
 function buildActions(o, need, ass){
   const transitions = {
@@ -788,19 +800,23 @@ function buildActions(o, need, ass){
   };
   const t = transitions[o.state] || {};
 
+  const currentRole = roleOfWorker(o.assigned);
+  const needsNewWorker = t.need && currentRole !== t.need;
+
   let html = '';
-  if(ass){
+  if(ass && !needsNewWorker){
     html += `<div class="ass-card">
       <span class="av" style="background:${ass.c}">${ass.i}</span>
-      <div class="nm">${ass.n}<small>${o.assigned.startsWith('w-b')||o.assigned.startsWith('w-u')||o.assigned.startsWith('w-m')?'Kesuvchi':o.assigned.startsWith('w-o')||o.assigned.startsWith('w-a')?'Krom yopishtiruvchi':'Haydovchi'}</small></div>
+      <div class="nm">${ass.n}<small>${roleLabel(currentRole)}</small></div>
       ${o.state!=='completed' && o.state!=='cancelled' ? `<button class="ch" type="button" onclick="unassign('${o.id}')">o'zgartirish</button>` : ''}
     </div>`;
   }
 
-  if(t.need && !o.assigned){
+  if(t.need && needsNewWorker){
     const grp = workers[t.need];
-    const lbl = t.need==='cutter'?'Kesuvchi':t.need==='edger'?'Krom yopishtiruvchi':'Haydovchi';
-    html += `<div class="assign-row">
+    const lbl = roleLabel(t.need);
+    const prevNote = ass ? `<div style="font-size:11px;color:var(--ink-6);padding:6px 0 2px">${ass.n} (${roleLabel(currentRole)}) avvalgi bosqichni tugatdi — endi ${lbl.toLowerCase()} kerak.</div>` : '';
+    html += prevNote + `<div class="assign-row">
       <span class="lbl">${lbl}:</span>
       <select id="assign-${t.need}">
         <option value="">— tanlang —</option>

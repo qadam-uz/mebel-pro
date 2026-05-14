@@ -82,28 +82,29 @@
   }
   a.card .role::after{content:"→";transition:transform .15s}
   a.card:hover .role::after{transform:translateX(3px)}
-  .card-feat{
+  a.card.card-feat{
     background:var(--deep);color:#F0EAE0;border-color:var(--deep);
-    grid-column:span 1;
+    grid-column:span 1;position:relative;overflow:hidden;
+    padding:30px 30px 26px;min-height:200px;
   }
-  @media (min-width:1280px){.card-feat{grid-column:1/-1;flex-direction:row;align-items:stretch;min-height:200px}}
-  .card-feat .body{flex:1;padding:6px 0}
-  .card-feat .n{color:#D6CDBE}
-  .card-feat .t{color:#fff;font-size:30px}
-  .card-feat .d{color:#D6CDBE;max-width:480px}
-  .card-feat .role{color:#E8A37D}
-  .card-feat .vis{
-    flex:0 0 280px;display:none;background:
-      linear-gradient(135deg,transparent 49.5%,#3F362F 49.5%,#3F362F 50.5%,transparent 50.5%) center/16px 16px,
-      var(--ink-10);
-    border-left:1px solid #3F362F;border-radius:0 9px 9px 0;margin:-22px -22px -20px 22px;
-    position:relative;overflow:hidden;
+  @media (min-width:1280px){a.card.card-feat{grid-column:1/-1;padding:38px 40px 32px}}
+  a.card.card-feat:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 18px 36px -16px rgba(166,71,31,.32)}
+  a.card.card-feat .n{color:#E8A37D}
+  a.card.card-feat .t{color:#fff;font-size:32px;max-width:560px;position:relative;z-index:1;margin-bottom:10px}
+  a.card.card-feat .d{color:#D6CDBE;max-width:520px;position:relative;z-index:1;font-size:15px}
+  a.card.card-feat .role{color:#E8A37D;position:relative;z-index:1;margin-top:18px}
+  a.card.card-feat::after{
+    content:"01";position:absolute;bottom:-30px;right:28px;
+    font-family:var(--f-display);font-size:240px;font-weight:600;
+    color:rgba(232,163,125,.08);letter-spacing:-.04em;line-height:.8;
+    pointer-events:none;
   }
-  @media (min-width:1280px){.card-feat .vis{display:block}}
-  .card-feat .vis::after{
-    content:"01";position:absolute;bottom:14px;right:18px;
-    font-family:var(--f-display);font-size:88px;font-weight:600;color:rgba(255,255,255,.08);
-    letter-spacing:-.03em;line-height:.8;
+  @media (min-width:1280px){
+    a.card.card-feat::before{
+      content:"";position:absolute;top:0;right:0;width:36%;height:100%;
+      background:linear-gradient(135deg,transparent 49.5%,#3F362F 49.5%,#3F362F 50.5%,transparent 50.5%) center/18px 18px;
+      border-left:1px solid #3F362F;opacity:.5;pointer-events:none;
+    }
   }
   .legend{
     margin-top:32px;background:var(--sunk);border:1px solid var(--line);border-radius:10px;
@@ -119,7 +120,7 @@
   <div class="brand">
     <span class="mark">M</span>
     <span class="name">Mebel Pro</span>
-    <span class="ctx">prototip · v2 model · 14-may 2026</span>
+    <span class="ctx">prototip · v2.1.0 · 15-may 2026</span>
   </div>
 
   <h1>Furnitura sehini boshqarish — <em>besh ekran</em>.</h1>
@@ -132,13 +133,10 @@
 
   <div class="grid">
     <a class="card card-feat" href="01-landing.html">
-      <div class="body">
-        <div class="n">01 · LANDING</div>
-        <div class="t">Marketing sahifasi</div>
-        <div class="d">Platforma bilan tanishish, narxlar, mijozlar, demo so'rovi. Yangi sehlar shu yerdan keladi.</div>
-        <span class="role">ochiq · mehmonlar</span>
-      </div>
-      <div class="vis"></div>
+      <div class="n">01 · LANDING</div>
+      <div class="t">Marketing sahifasi</div>
+      <div class="d">Platforma bilan tanishish, narxlar, mijozlar, demo so'rovi. Yangi sehlar shu yerdan keladi.</div>
+      <span class="role">ochiq · mehmonlar</span>
     </a>
 
     <a class="card" href="02-client.html">

@@ -12,12 +12,12 @@
     --bg:#FAF7F2; --elev:#fff; --sunk:#F2EEE6; --deep:#1A1614; --deep-2:#2A2421; --deep-3:#3F362F;
     --ink-12:#1A1614; --ink-10:#3F362F; --ink-8:#5C4F44; --ink-6:#847569; --ink-4:#B0A698; --ink-2:#D6CDBE;
     --line:#E5DDD0; --line-strong:#D6CDBE;
-    --accent:#A6471F; --accent-h:#8C3814; --accent-tint:#F4E5DC; --accent-soft:#F8EDE4;
+    --accent:#A6471F; --accent-h:#8C3814; --accent-tint:#F4E5DC;
     --success:#2E5E4E; --success-tint:#DDE9E3;
     --warn:#A36417; --warn-tint:#F4E4CB;
     --info:#2A4D6B; --info-tint:#D8E2EB;
     --danger:#8C2E1C; --danger-tint:#F2D6CE;
-    --plat:#2A4D6B;
+    --plat:#2A4D6B; --plat-h:#19354F;
     --f-display:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
     --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --f-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
@@ -26,29 +26,26 @@
   html,body{margin:0;padding:0;background:var(--bg)}
   body{font-family:var(--f-ui);color:var(--ink-12);-webkit-font-smoothing:antialiased;line-height:1.5;font-size:14px}
   ::selection{background:var(--plat);color:#fff}
+  [hidden]{display:none!important}
   .num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
-  button{font-family:inherit}
+  button{font-family:inherit;cursor:pointer}
+  a{color:inherit}
+  input,select,textarea{font-family:inherit}
 
   /* APP SHELL */
   .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
   @media (min-width:1600px){.app{grid-template-columns:268px 1fr}}
 
-  /* SIDEBAR — platform variant (slightly different accent) */
+  /* SIDEBAR — platform variant (navy) */
   aside.sb{background:var(--deep);color:#D6CDBE;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;padding:18px 14px 14px}
-  .sb-brand{display:flex;align-items:center;gap:11px;padding:4px 6px 18px;margin-bottom:8px;border-bottom:1px solid var(--deep-3)}
-  .sb-brand .mk{width:30px;height:30px;background:var(--plat);color:#fff;display:grid;place-items:center;border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:16px;position:relative;transform:rotate(-3deg)}
+  .sb-brand{display:flex;align-items:center;gap:11px;padding:4px 6px 18px;margin-bottom:8px;border-bottom:1px solid var(--deep-3);background:none;border-top:0;border-left:0;border-right:0;width:100%;cursor:pointer;text-align:left;color:inherit}
+  .sb-brand .mk{width:30px;height:30px;background:var(--plat);color:#fff;display:grid;place-items:center;border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:16px;position:relative;transform:rotate(-3deg);flex:none}
   .sb-brand .mk::after{content:"";position:absolute;width:6px;height:6px;background:var(--accent);border-radius:50%;right:-2px;bottom:-2px}
   .sb-brand .nm{font-family:var(--f-display);font-size:17px;font-weight:600;color:#fff;letter-spacing:-.01em}
   .sb-brand .nm small{display:block;font-family:var(--f-ui);font-size:10.5px;color:#7B96B0;font-weight:500;letter-spacing:.04em;text-transform:uppercase}
 
-  .sb-env{
-    background:var(--deep-2);border:1px solid var(--deep-3);border-radius:7px;padding:10px 12px;margin:6px 4px 18px;
-    display:flex;align-items:center;gap:10px;cursor:pointer;
-  }
-  .sb-env .av{
-    width:28px;height:28px;border-radius:5px;background:linear-gradient(135deg,var(--plat),#19354F);
-    color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center;flex:none;
-  }
+  .sb-env{background:var(--deep-2);border:1px solid var(--deep-3);border-radius:7px;padding:10px 12px;margin:6px 4px 18px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .sb-env .av{width:28px;height:28px;border-radius:5px;background:linear-gradient(135deg,var(--plat),#19354F);color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center;flex:none}
   .sb-env .info{min-width:0;flex:1}
   .sb-env .nm{font-size:13px;font-weight:600;color:#fff;line-height:1.2}
   .sb-env .role{font-size:11px;color:#7B96B0;font-family:var(--f-mono)}
@@ -57,10 +54,10 @@
   .sb-nav{flex:1;display:flex;flex-direction:column;gap:2px}
   .sb-grp{margin-top:14px}.sb-grp:first-child{margin-top:0}
   .sb-grp .lbl{font-size:10.5px;font-weight:700;color:var(--ink-6);letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;margin-bottom:4px}
-  .sb-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:#D6CDBE;text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:background .12s,color .12s}
+  .sb-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:#D6CDBE;text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:background .12s,color .12s;background:none;border:0;width:100%;text-align:left}
   .sb-it:hover{background:var(--deep-2);color:#fff}
   .sb-it.on{background:var(--plat);color:#fff;font-weight:600}
-  .sb-it .ic{flex:none;color:var(--ink-4);font-size:15px;width:18px;display:grid;place-items:center}
+  .sb-it .ic{flex:none;color:var(--ink-4);font-size:15px;width:18px;display:grid;place-items:center;font-family:var(--f-display)}
   .sb-it.on .ic{color:#fff}
   .sb-it .ct{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);padding:1px 6px;background:var(--deep-2);border-radius:3px}
   .sb-it.on .ct{background:rgba(0,0,0,.20);color:#F0EAE0}
@@ -75,10 +72,7 @@
   main{display:flex;flex-direction:column;min-width:0}
   .tb{height:64px;padding:0 28px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:20}
   @media (min-width:1600px){.tb{padding:0 40px}}
-  .tb-env-chip{
-    display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;background:var(--info-tint);
-    border:1px solid #C2D2E1;color:var(--plat);font-size:12.5px;font-weight:600;border-radius:7px;letter-spacing:.02em;
-  }
+  .tb-env-chip{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;background:var(--info-tint);border:1px solid #C2D2E1;color:var(--plat);font-size:12.5px;font-weight:600;border-radius:7px;letter-spacing:.02em}
   .tb-env-chip .ic{width:7px;height:7px;border-radius:50%;background:var(--plat);box-shadow:0 0 0 3px #C2D2E1}
   .tb-env-chip .v{font-family:var(--f-mono);font-size:11.5px;font-weight:500;color:var(--ink-6);margin-left:6px}
 
@@ -91,13 +85,21 @@
   .ib{width:36px;height:36px;display:grid;place-items:center;background:transparent;border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--ink-10);position:relative}
   .ib:hover{background:var(--sunk);border-color:var(--line)}
   .ib .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
-  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:6px;padding:8px 13px;font:600 13px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:6px;padding:8px 13px;font:600 13px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s;background:none}
   .btn-primary{background:var(--plat);color:#fff;border-color:var(--plat)}
-  .btn-primary:hover{background:#19354F;border-color:#19354F}
+  .btn-primary:hover{background:var(--plat-h);border-color:var(--plat-h)}
   .btn-outline{background:var(--elev);color:var(--ink-12);border-color:var(--line-strong)}
   .btn-outline:hover{border-color:var(--ink-12)}
-  .btn-ghost{background:transparent;color:var(--ink-10)}
+  .btn-ghost{background:transparent;color:var(--ink-10);border:0}
+  .btn-ghost:hover{background:var(--sunk)}
   .btn-sm{padding:6px 10px;font-size:12px}
+  .btn-lg{padding:12px 18px;font-size:14px}
+  .btn-block{width:100%}
+  .btn-danger{color:var(--danger);border-color:var(--danger-tint);background:transparent}
+  .btn-danger:hover{background:var(--danger-tint)}
+  .btn-danger-solid{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .btn-success{background:var(--success);color:#fff;border-color:var(--success)}
 
   /* PAGE */
   .page{padding:28px;flex:1}
@@ -111,20 +113,19 @@
   /* KPI */
   .kpis{display:grid;gap:14px;margin-bottom:24px;grid-template-columns:repeat(2,1fr)}
   @media (min-width:980px){.kpis{grid-template-columns:repeat(4,1fr)}}
-  .kpi{background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:18px 20px 14px;position:relative;overflow:hidden}
+  .kpi{background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:18px 20px 14px;position:relative;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .12s}
+  .kpi:hover{transform:translateY(-2px);border-color:var(--ink-10)}
   .kpi .lbl{font-size:11.5px;color:var(--ink-6);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
   .kpi .v{font-family:var(--f-display);font-size:clamp(28px,2.8vw,38px);font-weight:600;letter-spacing:-.02em;line-height:1}
   .kpi .v small{font-size:.45em;color:var(--ink-6);font-weight:500;font-family:var(--f-ui);letter-spacing:0;margin-left:4px}
-  .kpi .d{margin-top:10px;font-size:12px;color:var(--ink-8);display:flex;justify-content:space-between;align-items:center}
-  .kpi .d .up{color:var(--success)}.kpi .d .dn{color:var(--danger)}
+  .kpi .d{margin-top:10px;font-size:12px;color:var(--ink-8);display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .kpi .d .up{color:var(--success)} .kpi .d .dn{color:var(--danger)}
   .kpi .spark{position:absolute;bottom:0;right:14px;display:flex;gap:2px;height:24px;align-items:flex-end;opacity:.7}
   .kpi .spark i{display:block;width:4px;background:var(--ink-2);border-radius:1px 1px 0 0}
   .kpi .spark i.hi{background:var(--plat)}
 
-  /* MAIN GRID */
   .grid{display:grid;gap:18px;grid-template-columns:1fr}
-  @media (min-width:1100px){.grid{grid-template-columns:1.55fr .75fr}}
-  @media (min-width:1600px){.grid{grid-template-columns:1.7fr .75fr;gap:24px}}
+  @media (min-width:1500px){.grid{grid-template-columns:1.7fr .75fr;gap:24px}}
 
   .card{background:var(--elev);border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .card-h{display:flex;align-items:baseline;justify-content:space-between;padding:18px 22px 12px;gap:14px}
@@ -136,27 +137,18 @@
   .filter::after{content:"⌄";color:var(--ink-6);font-size:10px}
   .filter.on{background:var(--info-tint);color:var(--plat);border-color:var(--plat)}
 
-  /* WORKSHOPS TABLE */
+  /* TABLE */
   .ws-tbl{width:100%;border-collapse:collapse;font-size:13px;display:block;overflow-x:auto}
   @media (min-width:980px){.ws-tbl{display:table}}
-  .ws-tbl th{
-    position:sticky;top:0;background:var(--bg);
-    text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;
-    color:var(--ink-6);padding:10px 12px 10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
-  }
-  .ws-tbl th:first-child{padding-left:22px}
-  .ws-tbl th:last-child{padding-right:22px}
+  .ws-tbl th{position:sticky;top:0;background:var(--bg);text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);padding:10px 12px 10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .ws-tbl th:first-child{padding-left:22px} .ws-tbl th:last-child{padding-right:22px}
   .ws-tbl td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
-  .ws-tbl td:first-child{padding-left:22px}
-  .ws-tbl td:last-child{padding-right:22px}
-  .ws-tbl tr:hover{background:var(--sunk)}
+  .ws-tbl td:first-child{padding-left:22px} .ws-tbl td:last-child{padding-right:22px}
+  .ws-tbl tr:hover{background:var(--sunk);cursor:pointer}
   .ws-tbl tr:last-child td{border-bottom:0}
 
   .ws-id{display:flex;align-items:center;gap:11px;min-width:0}
-  .ws-id .av{
-    width:34px;height:34px;border-radius:6px;color:#fff;display:grid;place-items:center;
-    font:700 13px/1 var(--f-display);flex:none;letter-spacing:-.01em;
-  }
+  .ws-id .av{width:34px;height:34px;border-radius:6px;color:#fff;display:grid;place-items:center;font:700 13px/1 var(--f-display);flex:none;letter-spacing:-.01em}
   .ws-id .nm{min-width:0;display:flex;flex-direction:column;gap:1px}
   .ws-id .nm b{font-weight:600;color:var(--ink-12);font-size:13.5px;letter-spacing:-.005em;line-height:1.2}
   .ws-id .nm small{font-size:11px;color:var(--ink-6);font-family:var(--f-mono)}
@@ -190,7 +182,9 @@
   .av-8{background:linear-gradient(135deg,#5C4F44,#3F362F)}
 
   /* RIGHT COLUMN */
-  .right{display:flex;flex-direction:column;gap:18px}
+  .right{display:grid;gap:18px;grid-template-columns:1fr}
+  @media (min-width:760px) and (max-width:1499px){.right{grid-template-columns:repeat(3,1fr)}}
+  @media (min-width:1500px){.right{grid-template-columns:1fr}}
   .health{padding:6px 22px 18px}
   .h-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
   .h-row:last-child{border-bottom:0}
@@ -203,15 +197,10 @@
   .h-row .v small{display:block;font-size:10.5px;color:var(--ink-6);font-weight:400}
   .h-row .v.ok{color:var(--success)}
 
-  /* event feed */
   .feed{padding:6px 22px 18px;font-size:12.5px}
   .ev{display:grid;grid-template-columns:34px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);align-items:flex-start}
   .ev:last-child{border-bottom:0}
-  .ev .ic{
-    width:30px;height:30px;border-radius:6px;display:grid;place-items:center;
-    background:var(--info-tint);color:var(--plat);font-family:var(--f-display);font-weight:600;
-    font-size:14px;flex:none;
-  }
+  .ev .ic{width:30px;height:30px;border-radius:6px;display:grid;place-items:center;background:var(--info-tint);color:var(--plat);font-family:var(--f-display);font-weight:600;font-size:14px;flex:none}
   .ev .ic.ok{background:var(--success-tint);color:var(--success)}
   .ev .ic.warn{background:var(--warn-tint);color:var(--warn)}
   .ev .ic.bl{background:var(--danger-tint);color:var(--danger)}
@@ -219,7 +208,6 @@
   .ev .b b{color:var(--ink-12);font-weight:600}
   .ev .b .t{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);margin-top:2px}
 
-  /* tiers card */
   .tiers{padding:18px 22px}
   .tier-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;font-size:13px;border-bottom:1px solid var(--line)}
   .tier-row:last-child{border-bottom:0}
@@ -229,6 +217,86 @@
   .tier-row .v{font-family:var(--f-mono);font-weight:600;color:var(--ink-12);font-size:13px;text-align:right}
   .tier-row .v small{display:block;color:var(--ink-6);font-size:10.5px;font-weight:400}
 
+  /* DRAWER */
+  .scrim{position:fixed;inset:0;background:rgba(26,22,20,.45);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .drawer{
+    position:fixed;top:0;right:0;width:min(100%,560px);height:100vh;background:var(--elev);
+    border-left:1px solid var(--line);z-index:70;display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .25s ease;
+  }
+  .drawer.on{transform:translateX(0)}
+  .dh{padding:22px 24px 16px;border-bottom:1px solid var(--line)}
+  .dh-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .dh .id{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-6);letter-spacing:.04em;margin-bottom:6px}
+  .dh h2{font-family:var(--f-display);font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.15}
+  .dh .ow{margin-top:6px;color:var(--ink-8);font-size:13px}
+  .dh .ow b{color:var(--ink-12);font-weight:500}
+  .dh-pills{display:flex;gap:6px;flex-wrap:wrap}
+  .db{flex:1;overflow-y:auto;padding:18px 24px}
+  .db::-webkit-scrollbar{width:6px}
+  .db::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .db h4{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-6);font-weight:700;margin:22px 0 10px}
+  .db h4:first-child{margin-top:0}
+  .stats-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}
+  .stats-mini .s{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:11px 12px}
+  .stats-mini .l{font-size:10.5px;color:var(--ink-6);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+  .stats-mini .v{font-family:var(--f-display);font-size:20px;font-weight:600;line-height:1;letter-spacing:-.01em}
+  .stats-mini .v small{font-size:11px;color:var(--ink-6);font-weight:500;font-family:var(--f-ui)}
+  .meta-rows{display:flex;flex-direction:column;font-size:13px}
+  .meta-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);gap:14px}
+  .meta-row:last-child{border-bottom:0}
+  .meta-row .l{color:var(--ink-6)}
+  .meta-row .v{color:var(--ink-12);font-weight:500;text-align:right;max-width:60%}
+  .meta-row .v code{font-family:var(--f-mono);font-size:12px;background:var(--sunk);padding:1px 6px;border-radius:3px}
+  .df{padding:16px 24px;border-top:1px solid var(--line);background:var(--sunk);display:flex;gap:8px;flex-wrap:wrap}
+  .df .btn{flex:1;justify-content:center}
+  .df .btn.full{flex:1 1 100%}
+
+  /* MODAL */
+  .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.98);background:var(--elev);border-radius:14px;width:min(100% - 32px, 640px);max-height:90vh;z-index:80;overflow:hidden;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:all .2s;box-shadow:0 30px 80px -20px rgba(26,22,20,.40)}
+  .modal.on{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+  .modal-h{padding:20px 24px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .modal-h h3{font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .modal-h .x{width:34px;height:34px;border-radius:7px;background:none;border:0;color:var(--ink-6);font-size:18px;cursor:pointer}
+  .modal-h .x:hover{background:var(--sunk);color:var(--ink-12)}
+  .modal-b{padding:20px 24px;overflow-y:auto;flex:1}
+  .modal-f{padding:16px 24px;border-top:1px solid var(--line);background:var(--sunk);display:flex;gap:8px;justify-content:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-6)}
+  .field input,.field textarea,.field select{border:1px solid var(--line);border-radius:7px;padding:9px 12px;background:var(--elev);font:500 13.5px/1.4 var(--f-ui);color:var(--ink-12);outline:0}
+  .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--plat)}
+  .field-row{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:560px){.field-row{grid-template-columns:1fr 1fr}}
+  .field .hint{font-size:11px;color:var(--ink-6);margin-top:3px;font-family:var(--f-mono)}
+
+  /* PLACEHOLDER */
+  .ph-soon{padding:60px 24px;text-align:center;background:var(--elev);border:1px solid var(--line);border-radius:14px}
+  .ph-soon .ic{font-family:var(--f-display);font-size:64px;color:var(--ink-4);line-height:1;margin-bottom:14px}
+  .ph-soon h2{font-family:var(--f-display);font-size:28px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px}
+  .ph-soon p{color:var(--ink-8);font-size:15px;margin:0 auto 22px;max-width:480px;line-height:1.5}
+  .ph-soon ul{list-style:none;padding:0;margin:24px 0 0;display:flex;flex-direction:column;gap:8px;text-align:left;max-width:380px;margin-inline:auto;font-size:13px;color:var(--ink-10)}
+  .ph-soon li{padding:9px 14px;background:var(--sunk);border:1px solid var(--line);border-radius:7px;display:flex;align-items:center;gap:10px}
+  .ph-soon li::before{content:"○";color:var(--plat);font-family:var(--f-display);font-size:14px;flex:none}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--deep);color:#fff;padding:12px 20px 12px 14px;border-radius:8px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:10px;box-shadow:0 12px 28px -10px rgba(26,22,20,.40);z-index:100;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .ic{width:22px;height:22px;border-radius:50%;background:var(--success);color:#fff;display:grid;place-items:center;font:700 12px var(--f-ui);flex:none}
+  .toast .ic.warn{background:var(--warn)}
+  .toast .ic.danger{background:var(--danger)}
+
+  /* simple users table */
+  .users-tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .users-tbl th{text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);padding:10px 12px;border-bottom:1px solid var(--line)}
+  .users-tbl th:first-child{padding-left:22px}.users-tbl th:last-child{padding-right:22px}
+  .users-tbl td{padding:13px 12px;border-bottom:1px solid var(--line)}
+  .users-tbl td:first-child{padding-left:22px}.users-tbl td:last-child{padding-right:22px}
+  .users-tbl tr:hover{background:var(--sunk)}
+  .users-tbl .u{display:flex;align-items:center;gap:10px}
+  .users-tbl .u .av{width:30px;height:30px;border-radius:50%;background:var(--plat);color:#fff;font:700 12px/30px var(--f-ui);text-align:center}
+  .users-tbl .u .nm{font-weight:500}
+  .users-tbl .u .nm small{display:block;color:var(--ink-6);font-size:11px;font-family:var(--f-mono);font-weight:400}
 </style>
 </head>
 <body>
@@ -237,10 +305,10 @@
 
   <!-- SIDEBAR -->
   <aside class="sb">
-    <div class="sb-brand">
+    <button type="button" class="sb-brand" onclick="location.href='index.html'">
       <span class="mk">M</span>
       <span class="nm">Mebel Pro<small>platforma</small></span>
-    </div>
+    </button>
 
     <div class="sb-env">
       <span class="av">P</span>
@@ -250,25 +318,25 @@
       </div>
     </div>
 
-    <nav class="sb-nav">
+    <nav class="sb-nav" id="sb-nav">
       <div class="sb-grp">
         <div class="lbl">Asosiy</div>
-        <a class="sb-it" href="#"><span class="ic">◐</span> Asosiy</a>
-        <a class="sb-it on" href="#"><span class="ic">▣</span> Sehlar <span class="ct">47</span></a>
-        <a class="sb-it" href="#"><span class="ic">◆</span> Mijozlar <span class="ct">1.2k</span></a>
-        <a class="sb-it" href="#"><span class="ic">⌖</span> Platforma userlari <span class="ct">4</span></a>
+        <button class="sb-it" data-view="dashboard"><span class="ic">◐</span> Asosiy</button>
+        <button class="sb-it on" data-view="workshops"><span class="ic">▣</span> Sehlar <span class="ct">47</span></button>
+        <button class="sb-it" data-view="clients"><span class="ic">◇</span> Mijozlar <span class="ct">1.2k</span></button>
+        <button class="sb-it" data-view="users"><span class="ic">⌖</span> Platforma userlari <span class="ct">4</span></button>
       </div>
       <div class="sb-grp">
         <div class="lbl">Operatsiyalar</div>
-        <a class="sb-it" href="#"><span class="ic">⊟</span> Tizim sog'lig'i</a>
-        <a class="sb-it" href="#"><span class="ic">≡</span> Action log</a>
-        <a class="sb-it" href="#"><span class="ic">↥</span> Relizlar <span class="ct">v2.1</span></a>
+        <button class="sb-it" data-view="health"><span class="ic">⊟</span> Tizim sog'lig'i</button>
+        <button class="sb-it" data-view="actions"><span class="ic">≡</span> Action log</button>
+        <button class="sb-it" data-view="releases"><span class="ic">↥</span> Relizlar <span class="ct">v2.1</span></button>
       </div>
       <div class="sb-grp">
         <div class="lbl">Boshqaruv</div>
-        <a class="sb-it" href="#"><span class="ic">∑</span> Hisobotlar</a>
-        <a class="sb-it" href="#"><span class="ic">$</span> Tariflar</a>
-        <a class="sb-it" href="#"><span class="ic">⚙</span> Sozlamalar</a>
+        <button class="sb-it" data-view="reports"><span class="ic">∑</span> Hisobotlar</button>
+        <button class="sb-it" data-view="tariffs"><span class="ic">$</span> Tariflar</button>
+        <button class="sb-it" data-view="settings"><span class="ic">⚙</span> Sozlamalar</button>
       </div>
     </nav>
 
@@ -277,7 +345,7 @@
         <span class="av">N</span>
         <div class="info">
           <div class="nm">Nuriddin O.</div>
-          <div class="rl">Platform operatori · root</div>
+          <div class="rl">Platform · root</div>
         </div>
       </div>
     </div>
@@ -288,331 +356,572 @@
 
     <!-- TOP BAR -->
     <div class="tb">
-      <div class="tb-env-chip">
-        <span class="ic"></span>PROD <span class="v">v2.1.0 · 14-may 09:42 da deploy bo'lgan</span>
-      </div>
+      <div class="tb-env-chip"><span class="ic"></span>PROD <span class="v">v2.1.0 · 15-may 09:42 da deploy bo'lgan</span></div>
       <div class="tb-search">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
-        <input placeholder="Seh, foydalanuvchi, mijoz yoki buyurtma ID…" />
+        <input id="search" placeholder="Seh, foydalanuvchi, mijoz yoki buyurtma ID…" oninput="onSearch(this.value)" />
         <span class="kbd">⌘ K</span>
       </div>
       <div class="tb-actions">
-        <button class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79"/></svg></button>
-        <button class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="dot"></span></button>
-        <a class="btn btn-primary" href="#">+ Yangi seh provisioning</a>
+        <button class="ib" onclick="toast('Tunchasi mavzu — keyingi versiya','info')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79"/></svg></button>
+        <button class="ib" onclick="toast('5 ta yangi bildirishnoma')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="dot"></span></button>
+        <button class="btn btn-primary" type="button" onclick="openNewWorkshop()">+ Yangi seh provisioning</button>
       </div>
     </div>
 
-    <!-- PAGE -->
-    <div class="page">
-
+    <!-- VIEW: WORKSHOPS (MAIN) -->
+    <section data-view="workshops" class="page">
       <div class="ph">
         <div>
           <h1>Sehlar</h1>
-          <div class="sub">47 ta faol · <b>3 ta</b> oxirgi 30 kunda qo'shildi · <b>2 ta</b> bloklangan</div>
+          <div class="sub" id="ws-sub">47 ta faol · <b>3 ta</b> oxirgi 30 kunda qo'shildi · <b>2 ta</b> bloklangan</div>
         </div>
         <div class="tools">
-          <button class="btn btn-ghost btn-sm">↻</button>
-          <button class="btn btn-outline btn-sm">CSV eksport</button>
-          <button class="btn btn-outline btn-sm">Toplu xat yuborish</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="refreshData()">↻</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda...','info')">CSV eksport</button>
         </div>
       </div>
 
-      <!-- KPIS -->
       <div class="kpis">
-        <div class="kpi">
+        <div class="kpi" onclick="setView('workshops');toast('Faol sehlar ro\\'yxati','info')">
           <div class="lbl">Faol sehlar</div>
           <div class="v num">47</div>
           <div class="d"><span class="up"><b>↑ 3</b> oxirgi 30 kunda</span><span style="color:var(--ink-6)">2 bloklangan</span></div>
-          <div class="spark">
-            <i style="height:50%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:62%"></i>
-            <i style="height:66%"></i><i style="height:72%"></i><i style="height:80%;background:var(--plat)" class="hi"></i>
-          </div>
+          <div class="spark"><i style="height:50%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:62%"></i><i style="height:66%"></i><i style="height:72%"></i><i style="height:80%" class="hi"></i></div>
         </div>
-        <div class="kpi">
+        <div class="kpi" onclick="toast('Buyurtmalar tahlili — keyingi versiya','info')">
           <div class="lbl">Bu oydagi buyurtmalar</div>
           <div class="v num">8 240</div>
           <div class="d"><span class="up"><b>↑ 12.4%</b> aprelga</span><span style="color:var(--ink-6)">848 bugun</span></div>
-          <div class="spark">
-            <i style="height:48%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:50%"></i>
-            <i style="height:62%"></i><i style="height:72%"></i><i style="height:84%" class="hi"></i>
-          </div>
+          <div class="spark"><i style="height:48%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:50%"></i><i style="height:62%"></i><i style="height:72%"></i><i style="height:84%" class="hi"></i></div>
         </div>
-        <div class="kpi">
+        <div class="kpi" onclick="setView('clients')">
           <div class="lbl">MAU mijozlar</div>
           <div class="v num">1 240</div>
           <div class="d"><span class="up"><b>↑ 168</b> aprel</span><span style="color:var(--ink-6)">Telegram OAuth</span></div>
-          <div class="spark">
-            <i style="height:36%"></i><i style="height:44%"></i><i style="height:52%"></i><i style="height:60%"></i>
-            <i style="height:68%"></i><i style="height:74%"></i><i style="height:82%" class="hi"></i>
-          </div>
+          <div class="spark"><i style="height:36%"></i><i style="height:44%"></i><i style="height:52%"></i><i style="height:60%"></i><i style="height:68%"></i><i style="height:74%"></i><i style="height:82%" class="hi"></i></div>
         </div>
-        <div class="kpi">
+        <div class="kpi" onclick="setView('health')">
           <div class="lbl">30 kunlik uptime</div>
           <div class="v num">99.92<small>%</small></div>
           <div class="d"><span class="up">SLA <b>99.5%</b> bajarildi</span><span style="color:var(--ink-6)">8m to'xtash</span></div>
-          <div class="spark">
-            <i style="height:88%"></i><i style="height:92%"></i><i style="height:90%"></i><i style="height:64%"></i>
-            <i style="height:94%"></i><i style="height:96%"></i><i style="height:98%" class="hi"></i>
-          </div>
+          <div class="spark"><i style="height:88%"></i><i style="height:92%"></i><i style="height:90%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:96%"></i><i style="height:98%" class="hi"></i></div>
         </div>
       </div>
 
-      <!-- GRID -->
       <div class="grid">
 
-        <!-- WORKSHOPS TABLE -->
         <div class="card">
           <div class="card-h">
             <div>
               <h2>Barcha sehlar</h2>
-              <div class="sub">12 / 47 ko'rsatilmoqda · saralash: oxirgi faol</div>
+              <div class="sub" id="ws-count">12 / 47 ko'rsatilmoqda · saralash: oxirgi faol</div>
             </div>
             <div class="tools">
-              <span class="filter on">Status · faol <span style="background:var(--plat);color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">3</span></span>
-              <span class="filter">Tarif · hammasi</span>
-              <span class="filter">Hudud · hammasi</span>
+              <span class="filter" data-status="all" onclick="setStatusFilter('all')">Status · hammasi</span>
+              <span class="filter on" data-status="active" onclick="setStatusFilter('active')">Faol <span style="background:var(--plat);color:#fff;border-radius:3px;padding:1px 5px;font-size:10px" id="cnt-active">9</span></span>
+              <span class="filter" data-status="trial" onclick="setStatusFilter('trial')">Sinov <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6)" id="cnt-trial">2</span></span>
+              <span class="filter" data-status="blocked" onclick="setStatusFilter('blocked')">Bloklangan <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6)" id="cnt-blocked">1</span></span>
             </div>
           </div>
 
           <table class="ws-tbl">
             <thead><tr>
-              <th>Seh</th>
-              <th>Egasi</th>
-              <th style="text-align:center">Filial · Xodim</th>
-              <th>Tarif</th>
-              <th style="text-align:right">Bu oy savdosi</th>
-              <th>Oxirgi faollik</th>
-              <th>Status</th>
-              <th></th>
+              <th>Seh</th><th>Egasi</th><th style="text-align:center">Filial · Xodim</th>
+              <th>Tarif</th><th style="text-align:right">Bu oy savdosi</th><th>Oxirgi faollik</th><th>Status</th><th></th>
             </tr></thead>
-            <tbody>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-1">FH</span><div class="nm"><b>Furniture House</b><small>ws_01HJX2 · Toshkent</small></div></div></td>
-                <td class="ow">Hasan Ergashev<small>+998 90 100-44-22</small></td>
-                <td class="mt"><b>3</b> · 23</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">148.2M<small>so'm</small></td>
-                <td class="ls">14-may, 13:42</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-4">MS</span><div class="nm"><b>Mebel Star</b><small>ws_01HJX1 · Toshkent</small></div></div></td>
-                <td class="ow">Olim Tursunov<small>+998 91 233-12-44</small></td>
-                <td class="mt"><b>2</b> · 18</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">96.4M<small>so'm</small></td>
-                <td class="ls">14-may, 13:38</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-7">MV</span><div class="nm"><b>"Marvarid" Mebel</b><small>ws_01HJW8 · Toshkent · Samarqand</small></div></div></td>
-                <td class="ow">Sherzod Yusupov<small>+998 71 244-32-12</small></td>
-                <td class="mt"><b>4</b> · 31</td>
-                <td><span class="pl pl-pr">Pro</span></td>
-                <td class="rev">240.6M<small>so'm</small></td>
-                <td class="ls">14-may, 13:35</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-5">BX</span><div class="nm"><b>Buxoro Mebel House</b><small>ws_01HJW6 · Buxoro</small></div></div></td>
-                <td class="ow">Saidjon Toshev<small>+998 65 224-11-88</small></td>
-                <td class="mt"><b>3</b> · 24</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">110.1M<small>so'm</small></td>
-                <td class="ls">14-may, 13:21</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-2">AM</span><div class="nm"><b>Akva Mebel</b><small>ws_01HJW2 · Toshkent</small></div></div></td>
-                <td class="ow">Akmal Zayniddinov<small>+998 90 322-44-19</small></td>
-                <td class="mt"><b>2</b> · 16</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">82.4M<small>so'm</small></td>
-                <td class="ls">14-may, 12:55</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-6">SW</span><div class="nm"><b>Sergeli Wood</b><small>ws_01HJV9 · Toshkent</small></div></div></td>
-                <td class="ow">Bekzod Karimov<small>+998 90 211-44-55</small></td>
-                <td class="mt"><b>2</b> · 14</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">71.8M<small>so'm</small></td>
-                <td class="ls">14-may, 11:42</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-3">OM</span><div class="nm"><b>Olmazor Mebel</b><small>ws_01HJV4 · Toshkent</small></div></div></td>
-                <td class="ow">Dilnoza Akramova<small>+998 99 144-32-19</small></td>
-                <td class="mt"><b>1</b> · 8</td>
-                <td><span class="pl pl-bs">Boshlang'ich</span></td>
-                <td class="rev">38.2M<small>so'm</small></td>
-                <td class="ls">14-may, 11:14</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-8">AD</span><div class="nm"><b>Adolat Mebel</b><small>ws_01HJV0 · Andijon</small></div></div></td>
-                <td class="ow">Adolatxon Komiljonova<small>+998 74 244-33-22</small></td>
-                <td class="mt"><b>1</b> · 6</td>
-                <td><span class="pl pl-bs">Boshlang'ich</span></td>
-                <td class="rev">24.6M<small>so'm</small></td>
-                <td class="ls">14-may, 10:48</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-1">YF</span><div class="nm"><b>Yangiyo'l Furniture</b><small>ws_01HJU5 · Toshkent vil.</small></div></div></td>
-                <td class="ow">Karim Yo'ldoshev<small>+998 90 877-65-43</small></td>
-                <td class="mt"><b>1</b> · 5</td>
-                <td><span class="pl pl-bs">Boshlang'ich</span></td>
-                <td class="rev">18.0M<small>so'm</small></td>
-                <td class="ls">13-may, 19:02</td>
-                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-4">AW</span><div class="nm"><b>Andijon Wood Lab</b><small>ws_01HJU0 · Andijon</small></div></div></td>
-                <td class="ow">Komiljon Tursunov<small>+998 74 211-44-12</small></td>
-                <td class="mt"><b>1</b> · 9</td>
-                <td><span class="pl pl-st">Standart</span></td>
-                <td class="rev">44.2M<small>so'm</small></td>
-                <td class="ls">12-may, 16:22</td>
-                <td><span class="pill p-trial"><span class="pd"></span>Sinov · 11 kun qoldi</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-3">NM</span><div class="nm"><b>Namangan Mebel</b><small>ws_01HJT8 · Namangan</small></div></div></td>
-                <td class="ow">Behzod Saidov<small>+998 69 244-12-77</small></td>
-                <td class="mt"><b>1</b> · 4</td>
-                <td><span class="pl pl-bs">Boshlang'ich</span></td>
-                <td class="rev" style="color:var(--ink-6)">—<small>endi qo'shildi</small></td>
-                <td class="ls">14-may, 09:18</td>
-                <td><span class="pill p-trial"><span class="pd"></span>Sinov · 14 kun qoldi</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-              <tr>
-                <td><div class="ws-id"><span class="av av-5">KM</span><div class="nm"><b>"Klassik Mebel"</b><small>ws_01HJS2 · Toshkent</small></div></div></td>
-                <td class="ow">Rustam Mahmudov<small>+998 90 322-19-87</small></td>
-                <td class="mt"><b>2</b> · 11</td>
-                <td><span class="pl pl-bs">Boshlang'ich</span></td>
-                <td class="rev" style="color:var(--ink-4)">5.4M<small>so'm</small></td>
-                <td class="ls">8-may, 14:18</td>
-                <td><span class="pill p-bl"><span class="pd"></span>Bloklangan · to'lov</span></td>
-                <td><div class="row-act"><button class="ib">⋯</button></div></td>
-              </tr>
-
-            </tbody>
+            <tbody id="ws-rows"></tbody>
           </table>
         </div>
 
-        <!-- RIGHT COLUMN -->
         <div class="right">
-
-          <!-- TARIF distribution -->
           <div class="card">
             <div class="card-h"><h2>Tarif taqsimoti</h2><span class="sub">47 ta seh</span></div>
             <div class="tiers">
-              <div class="tier-row">
-                <div class="nm">Boshlang'ich<span class="bar"><i style="width:51%"></i></span></div>
-                <div class="v">24<small>51%</small></div>
-              </div>
-              <div class="tier-row">
-                <div class="nm">Standart<span class="bar"><i style="width:38%"></i></span></div>
-                <div class="v">18<small>38%</small></div>
-              </div>
-              <div class="tier-row">
-                <div class="nm">Professional<span class="bar"><i style="width:10%"></i></span></div>
-                <div class="v">5<small>11%</small></div>
-              </div>
+              <div class="tier-row"><div class="nm">Boshlang'ich<span class="bar"><i style="width:51%"></i></span></div><div class="v">24<small>51%</small></div></div>
+              <div class="tier-row"><div class="nm">Standart<span class="bar"><i style="width:38%"></i></span></div><div class="v">18<small>38%</small></div></div>
+              <div class="tier-row"><div class="nm">Professional<span class="bar"><i style="width:11%"></i></span></div><div class="v">5<small>11%</small></div></div>
             </div>
           </div>
 
-          <!-- TIZIM SOG'LIG'I -->
           <div class="card">
             <div class="card-h"><h2>Tizim sog'lig'i</h2><span class="sub" style="color:var(--success);font-weight:600">✓ NORMAL</span></div>
             <div class="health">
-              <div class="h-row">
-                <div class="nm">API javob vaqti<small>so'nggi 60 daq</small></div>
-                <div class="sp"><i style="height:35%"></i><i style="height:40%"></i><i style="height:30%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:45%"></i><i style="height:32%"></i><i style="height:50%"></i><i style="height:46%"></i><i style="height:40%"></i><i style="height:36%"></i></div>
-                <div class="v ok">42<small>p95 · ms</small></div>
-              </div>
-              <div class="h-row">
-                <div class="nm">DB ulanishlari<small>pgbouncer · 50 dan</small></div>
-                <div class="sp"><i style="height:60%"></i><i style="height:62%"></i><i style="height:64%"></i><i style="height:70%"></i><i style="height:72%"></i><i style="height:80%"></i><i style="height:74%"></i><i style="height:78%"></i><i style="height:82%"></i><i style="height:80%"></i><i style="height:76%"></i><i style="height:78%"></i></div>
-                <div class="v">38<small>76%</small></div>
-              </div>
-              <div class="h-row">
-                <div class="nm">Background job<small>orders / notifications</small></div>
-                <div class="sp"><i style="height:30%"></i><i style="height:42%"></i><i style="height:50%"></i><i style="height:48%"></i><i style="height:55%" class="w"></i><i style="height:45%"></i><i style="height:38%"></i><i style="height:40%"></i><i style="height:42%"></i><i style="height:36%"></i><i style="height:32%"></i><i style="height:28%"></i></div>
-                <div class="v ok">0<small>tilab turgan</small></div>
-              </div>
-              <div class="h-row">
-                <div class="nm">5xx xato darajasi<small>so'nggi 60 daq</small></div>
-                <div class="sp"><i style="height:20%"></i><i style="height:15%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:22%"></i><i style="height:16%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:12%"></i><i style="height:16%"></i></div>
-                <div class="v ok">0.04<small>%</small></div>
-              </div>
-              <div class="h-row">
-                <div class="nm">MinIO disk<small>460 GB dan</small></div>
-                <div class="sp"><i style="height:55%"></i><i style="height:56%"></i><i style="height:58%"></i><i style="height:60%"></i><i style="height:61%"></i><i style="height:62%"></i><i style="height:63%"></i><i style="height:64%"></i><i style="height:65%"></i><i style="height:66%"></i><i style="height:67%"></i><i style="height:68%"></i></div>
-                <div class="v">312 G<small>68%</small></div>
-              </div>
+              <div class="h-row"><div class="nm">API javob vaqti<small>so'nggi 60 daq</small></div><div class="sp"><i style="height:35%"></i><i style="height:40%"></i><i style="height:30%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:45%"></i><i style="height:32%"></i><i style="height:50%"></i><i style="height:46%"></i><i style="height:40%"></i><i style="height:36%"></i></div><div class="v ok">42<small>p95 · ms</small></div></div>
+              <div class="h-row"><div class="nm">DB ulanishlari<small>pgbouncer · 50 dan</small></div><div class="sp"><i style="height:60%"></i><i style="height:62%"></i><i style="height:64%"></i><i style="height:70%"></i><i style="height:72%"></i><i style="height:80%"></i><i style="height:74%"></i><i style="height:78%"></i><i style="height:82%"></i><i style="height:80%"></i><i style="height:76%"></i><i style="height:78%"></i></div><div class="v">38<small>76%</small></div></div>
+              <div class="h-row"><div class="nm">5xx xato darajasi<small>so'nggi 60 daq</small></div><div class="sp"><i style="height:20%"></i><i style="height:15%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:22%"></i><i style="height:16%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:12%"></i><i style="height:16%"></i></div><div class="v ok">0.04<small>%</small></div></div>
+              <div class="h-row"><div class="nm">MinIO disk<small>460 GB dan</small></div><div class="sp"><i style="height:55%"></i><i style="height:56%"></i><i style="height:58%"></i><i style="height:60%"></i><i style="height:61%"></i><i style="height:62%"></i><i style="height:63%"></i><i style="height:64%"></i><i style="height:65%"></i><i style="height:66%"></i><i style="height:67%"></i><i style="height:68%"></i></div><div class="v">312 G<small>68%</small></div></div>
             </div>
           </div>
 
-          <!-- RECENT EVENTS -->
           <div class="card">
-            <div class="card-h"><h2>So'nggi voqealar</h2><a class="sub" style="text-decoration:none;color:var(--plat);font-weight:600" href="#">log →</a></div>
+            <div class="card-h"><h2>So'nggi voqealar</h2><button class="btn btn-ghost btn-sm" type="button" onclick="setView('actions')">log →</button></div>
             <div class="feed">
-              <div class="ev">
-                <span class="ic ok">+</span>
-                <div class="b">Yangi seh provisioning bo'ldi · <b>Namangan Mebel</b><span class="t">Behzod Saidov · sinov 14 kun · 09:18</span></div>
-              </div>
-              <div class="ev">
-                <span class="ic">↥</span>
-                <div class="b"><b>Sergeli Wood</b> Boshlang'ichdan Standartga o'tdi<span class="t">avto-yangilanish · 11:24</span></div>
-              </div>
-              <div class="ev">
-                <span class="ic warn">!</span>
-                <div class="b"><b>"Klassik Mebel"</b> to'lovi muvaffaqiyatsiz · oborot kechiktirildi<span class="t">3-marotaba urinish · 14-may 08:00</span></div>
-              </div>
-              <div class="ev">
-                <span class="ic ok">✓</span>
-                <div class="b">v2.1.0 deploy yakunlandi · barcha 47 seh<span class="t">Nuriddin O. tomonidan · 09:42</span></div>
-              </div>
-              <div class="ev">
-                <span class="ic bl">⊘</span>
-                <div class="b"><b>"Klassik Mebel"</b> avtomatik bloklangan · 30 kundan ortiq to'lovsiz<span class="t">8-may, 14:00</span></div>
-              </div>
-              <div class="ev">
-                <span class="ic">⌖</span>
-                <div class="b">Aziza Yusupova platformaga qo'shildi · <b>operator</b> roli<span class="t">Nuriddin O. · 13-may 16:30</span></div>
-              </div>
+              <div class="ev"><span class="ic ok">+</span><div class="b">Yangi seh provisioning bo'ldi · <b>Namangan Mebel</b><span class="t">Behzod Saidov · sinov 14 kun · 09:18</span></div></div>
+              <div class="ev"><span class="ic">↥</span><div class="b"><b>Sergeli Wood</b> Boshlang'ichdan Standartga o'tdi<span class="t">avto-yangilanish · 11:24</span></div></div>
+              <div class="ev"><span class="ic warn">!</span><div class="b"><b>"Klassik Mebel"</b> to'lovi muvaffaqiyatsiz<span class="t">3-marotaba urinish · 08:00</span></div></div>
+              <div class="ev"><span class="ic ok">✓</span><div class="b">v2.1.0 deploy yakunlandi · barcha 47 seh<span class="t">Nuriddin O. tomonidan · 09:42</span></div></div>
+              <div class="ev"><span class="ic bl">⊘</span><div class="b"><b>"Klassik Mebel"</b> avtomatik bloklangan<span class="t">30 kundan ortiq to'lovsiz · 8-may</span></div></div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- VIEW: PLATFORM USERS -->
+    <section data-view="users" class="page" hidden>
+      <div class="ph">
+        <div><h1>Platforma foydalanuvchilari</h1><div class="sub">4 ta platforma operatori · barcha sehlarga ko'rinadi</div></div>
+        <div class="tools"><button class="btn btn-primary btn-sm" type="button" onclick="toast('Yangi platforma operatori — login va parol generatsiya qilinadi','info')">+ Yangi operator</button></div>
+      </div>
+      <div class="card">
+        <table class="users-tbl">
+          <thead><tr><th>Foydalanuvchi</th><th>Login</th><th>Holat</th><th>So'nggi kirish</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><div class="u"><span class="av">N</span><div class="nm">Nuriddin Obidjonov<small>+998 90 100-30-30</small></div></div></td><td><code style="font-family:var(--f-mono);font-size:12px">nuriddin@mebel</code></td><td><span class="pill p-act"><span class="pd"></span>Faol · root</span></td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:12px">15-may 09:42</td><td style="text-align:right"><button class="ib" onclick="toast('Hozirgi foydalanuvchi','info')">⋯</button></td></tr>
+            <tr><td><div class="u"><span class="av" style="background:#A6471F">A</span><div class="nm">Aziza Yusupova<small>+998 90 234-44-12</small></div></div></td><td><code style="font-family:var(--f-mono);font-size:12px">aziza@mebel</code></td><td><span class="pill p-act"><span class="pd"></span>Faol · operator</span></td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:12px">14-may 18:22</td><td style="text-align:right"><button class="ib" onclick="toast('Aziza · 12 ta seh bilan ishlagan','info')">⋯</button></td></tr>
+            <tr><td><div class="u"><span class="av" style="background:#566F2A">D</span><div class="nm">Diyora Karimova<small>+998 99 211-33-78</small></div></div></td><td><code style="font-family:var(--f-mono);font-size:12px">diyora@mebel</code></td><td><span class="pill p-act"><span class="pd"></span>Faol · qo'llab-quvvatlash</span></td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:12px">14-may 14:55</td><td style="text-align:right"><button class="ib" onclick="toast('Diyora · 8 ta mijoz so\\'rovi yopdi','info')">⋯</button></td></tr>
+            <tr><td><div class="u"><span class="av" style="background:#A36417">S</span><div class="nm">Sardor Ahmedov<small>+998 90 322-19-45</small></div></div></td><td><code style="font-family:var(--f-mono);font-size:12px">sardor@mebel</code></td><td><span class="pill p-trial"><span class="pd"></span>Yangi · parol o'zgartirish kerak</span></td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:12px">12-may da yaratildi</td><td style="text-align:right"><button class="ib" onclick="toast('Parol qaytadan jo\\'natilsinmi?','info')">⋯</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VIEW: HEALTH -->
+    <section data-view="health" class="page" hidden>
+      <div class="ph">
+        <div><h1>Tizim sog'lig'i</h1><div class="sub">PROD · v2.1.0 · 15-may 09:42</div></div>
+        <div class="tools">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Yangilandi · 5 soniya oldin','info')">↻ Yangilash</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Prometheus dashboard — ext','info')">Grafana</button>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="lbl">Bugun foydalanuvchilar</div><div class="v num">3 480</div><div class="d"><span class="up"><b>↑ 12%</b></span><span style="color:var(--ink-6)">peak 11:00</span></div></div>
+        <div class="kpi"><div class="lbl">Faol so'rovlar / daq</div><div class="v num">2 142</div><div class="d"><span style="color:var(--ink-6)">o'rtacha · so'nggi 60 daq</span></div></div>
+        <div class="kpi"><div class="lbl">DB CPU</div><div class="v num">34<small>%</small></div><div class="d"><span style="color:var(--success)"><b>SOG'LOM</b></span></div></div>
+        <div class="kpi"><div class="lbl">Background queue</div><div class="v num">0</div><div class="d"><span style="color:var(--success)">tilab turgan vazifa yo'q</span></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><h2>Servislar holati</h2><span class="sub" style="color:var(--success);font-weight:600">Hammasi NORMAL</span></div>
+        <div style="padding:0 22px 18px">
+          <table class="users-tbl">
+            <thead><tr><th>Servis</th><th>Versiya</th><th>Status</th><th>Uptime</th><th>Last incident</th></tr></thead>
+            <tbody>
+              <tr><td><b>backend</b><br><small style="color:var(--ink-6);font-family:var(--f-mono)">FastAPI · :8000</small></td><td><code style="font-family:var(--f-mono);font-size:11.5px">v2.1.0</code></td><td><span class="pill p-act"><span class="pd"></span>SOG'LOM</span></td><td class="num" style="font-family:var(--f-mono);font-size:12.5px">99.92%</td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px">9-may · 12m</td></tr>
+              <tr><td><b>postgres</b><br><small style="color:var(--ink-6);font-family:var(--f-mono)">15.4 · 50 conn pool</small></td><td><code style="font-family:var(--f-mono);font-size:11.5px">15.4</code></td><td><span class="pill p-act"><span class="pd"></span>SOG'LOM</span></td><td class="num" style="font-family:var(--f-mono);font-size:12.5px">99.99%</td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px">—</td></tr>
+              <tr><td><b>minio</b><br><small style="color:var(--ink-6);font-family:var(--f-mono)">312 / 460 GB</small></td><td><code style="font-family:var(--f-mono);font-size:11.5px">RELEASE.2026-04</code></td><td><span class="pill p-act"><span class="pd"></span>SOG'LOM</span></td><td class="num" style="font-family:var(--f-mono);font-size:12.5px">100%</td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px">—</td></tr>
+              <tr><td><b>caddy</b><br><small style="color:var(--ink-6);font-family:var(--f-mono)">edge · TLS</small></td><td><code style="font-family:var(--f-mono);font-size:11.5px">2.8.0</code></td><td><span class="pill p-act"><span class="pd"></span>SOG'LOM</span></td><td class="num" style="font-family:var(--f-mono);font-size:12.5px">100%</td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px">—</td></tr>
+              <tr><td><b>notifications</b><br><small style="color:var(--ink-6);font-family:var(--f-mono)">background worker</small></td><td><code style="font-family:var(--f-mono);font-size:11.5px">v2.1.0</code></td><td><span class="pill p-trial"><span class="pd"></span>OGOHL.</span></td><td class="num" style="font-family:var(--f-mono);font-size:12.5px">98.4%</td><td style="color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px">11-may · 2 soat</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: ACTIONS LOG -->
+    <section data-view="actions" class="page" hidden>
+      <div class="ph">
+        <div><h1>Action log</h1><div class="sub">Platforma bo'yicha barcha amallar · saralash: oxirgi birinchi</div></div>
+        <div class="tools">
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Filter — keyingi versiya','info')">Filter</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="toast('Eksport boshlandi...','info')">CSV</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="feed" id="big-feed"></div>
+      </div>
+    </section>
+
+    <!-- VIEW: RELEASES -->
+    <section data-view="releases" class="page" hidden>
+      <div class="ph">
+        <div><h1>Relizlar</h1><div class="sub">So'nggi 30 kun · 4 ta reliz</div></div>
+        <div class="tools"><button class="btn btn-primary btn-sm" type="button" onclick="toast('Reliz tayyorlanmoqda — staging dan boshlash...','info')">+ Yangi reliz</button></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card" style="border-left:4px solid var(--success)">
+          <div style="padding:20px 24px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-family:var(--f-mono);font-size:18px;font-weight:700;color:var(--ink-12)">v2.1.0</span><span class="pill p-act"><span class="pd"></span>PROD</span></div>
+                <p style="margin:0 0 8px;font-size:14px;color:var(--ink-10)">Order state machine v2 — krom yopishtirish alohida holat sifatida</p>
+                <div style="font-size:12px;color:var(--ink-6);font-family:var(--f-mono)">15-may 09:42 · 12 daqiqada deploy · Nuriddin O.</div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Changelog: 47 ta o\\'zgartirish · 12 ta xato tuzatish','info')">CHANGELOG</button><button class="btn btn-outline btn-sm btn-danger" type="button" onclick="toast('Rollback xavfli — egasi tasdiqlasi shart','warn')">Rollback</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="padding:20px 24px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-family:var(--f-mono);font-size:18px;font-weight:700;color:var(--ink-12)">v2.0.4</span><span class="pill p-dn"><span class="pd"></span>OLDIN</span></div>
+                <p style="margin:0 0 8px;font-size:14px;color:var(--ink-10)">Telegram OAuth — har bir login da profil yangilanishi</p>
+                <div style="font-size:12px;color:var(--ink-6);font-family:var(--f-mono)">8-may 14:20 · 8 daqiqada · Nuriddin O.</div>
+              </div>
+              <div><button class="btn btn-outline btn-sm" type="button" onclick="toast('v2.0.4 changelog','info')">CHANGELOG</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="padding:20px 24px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="font-family:var(--f-mono);font-size:18px;font-weight:700;color:var(--ink-12)">v2.0.3</span><span class="pill p-dn"><span class="pd"></span>OLDIN</span></div>
+                <p style="margin:0 0 8px;font-size:14px;color:var(--ink-10)">Finance modul — kompensatsiya siyosati va maosh varaqasi</p>
+                <div style="font-size:12px;color:var(--ink-6);font-family:var(--f-mono)">2-may 11:00 · 22 daqiqada · Sardor A.</div>
+              </div>
+              <div><button class="btn btn-outline btn-sm" type="button" onclick="toast('v2.0.3 changelog','info')">CHANGELOG</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: TARIFFS -->
+    <section data-view="tariffs" class="page" hidden>
+      <div class="ph">
+        <div><h1>Tariflar</h1><div class="sub">Sehlar uchun tarif siyosati</div></div>
+        <div class="tools"><button class="btn btn-primary btn-sm" type="button" onclick="toast('Yangi tarif — keyingi versiya','info')">+ Yangi tarif</button></div>
+      </div>
+      <div style="display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+        <div class="card" style="padding:24px"><div style="font-family:var(--f-display);font-size:22px;font-weight:600;margin-bottom:6px">Boshlang'ich</div><div style="font-family:var(--f-display);font-size:32px;font-weight:600;letter-spacing:-.02em;line-height:1">1 200 000<small style="font-size:13px;color:var(--ink-6);font-weight:500;font-family:var(--f-ui)"> so'm/oy</small></div><div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-8);line-height:1.6"><div>· 1 filial, 5 xodim</div><div>· Mijoz ilovasi</div><div>· Asosiy material katalogi</div><div>· 24 ta sehda foydalanilmoqda</div></div><div style="margin-top:14px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Tahrirlash — keyingi versiya','info')">Tahrirlash</button><button class="btn btn-outline btn-sm" type="button" onclick="toast('24 ta seh foydalanmoqda','info')">Sehlar →</button></div></div>
+        <div class="card" style="padding:24px;border-color:var(--plat);border-width:2px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-family:var(--f-display);font-size:22px;font-weight:600">Standart</div><span class="pill p-act"><span class="pd"></span>Mashhur</span></div><div style="font-family:var(--f-display);font-size:32px;font-weight:600;letter-spacing:-.02em;line-height:1">2 800 000<small style="font-size:13px;color:var(--ink-6);font-weight:500;font-family:var(--f-ui)"> so'm/oy</small></div><div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-8);line-height:1.6"><div>· Cheksiz filial, 30 xodim</div><div>· Kesish optimizatsiyasi</div><div>· Moliya va maosh moduli</div><div>· <b>18 ta sehda</b></div></div><div style="margin-top:14px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Tahrirlash','info')">Tahrirlash</button><button class="btn btn-outline btn-sm" type="button" onclick="toast('18 ta seh','info')">Sehlar →</button></div></div>
+        <div class="card" style="padding:24px"><div style="font-family:var(--f-display);font-size:22px;font-weight:600;margin-bottom:6px">Professional</div><div style="font-family:var(--f-display);font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1;color:var(--ink-8)">Aloqaga chiqing</div><div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-8);line-height:1.6"><div>· Cheksiz hammasi</div><div>· 1C, Payme integratsiya</div><div>· SLA 99.9%</div><div>· <b>5 ta sehda</b></div></div><div style="margin-top:14px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Tahrirlash','info')">Tahrirlash</button><button class="btn btn-outline btn-sm" type="button" onclick="toast('5 ta seh','info')">Sehlar →</button></div></div>
+      </div>
+    </section>
+
+    <!-- Placeholder views -->
+    <section data-view="dashboard" class="page" hidden></section>
+    <section data-view="clients" class="page" hidden></section>
+    <section data-view="reports" class="page" hidden></section>
+    <section data-view="settings" class="page" hidden></section>
   </main>
 </div>
 
+<!-- DRAWER: WORKSHOP DETAIL -->
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+<aside class="drawer" id="drawer" aria-label="Seh detali">
+  <div id="drawer-content"></div>
+</aside>
+
+<!-- MODAL: NEW WORKSHOP -->
+<div class="modal" id="modal-new">
+  <div class="modal-h"><h3>Yangi seh provisioning</h3><button class="x" type="button" onclick="closeAll()">✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Seh nomi</label><input id="nw-name" placeholder="Furniture House" /></div>
+      <div class="field"><label>Telefon (xizmat)</label><input id="nw-phone" placeholder="+998 71 200-30-40" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Shahar</label><select id="nw-city"><option>Toshkent</option><option>Samarqand</option><option>Buxoro</option><option>Andijon</option><option>Farg'ona</option><option>Namangan</option><option>Nukus</option><option>Qarshi</option></select></div>
+      <div class="field"><label>Tarif</label><select id="nw-tier"><option value="bs">Boshlang'ich</option><option value="st" selected>Standart</option><option value="pr">Professional</option></select></div>
+    </div>
+    <h4 style="margin:18px 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6)">Egasi (owner) hisobi</h4>
+    <div class="field-row">
+      <div class="field"><label>To'liq F.I.Sh.</label><input id="nw-owner" placeholder="Familiya Ism" /></div>
+      <div class="field"><label>Telefon</label><input id="nw-owner-phone" placeholder="+998 90 XXX XX XX" /></div>
+    </div>
+    <div class="field"><label>Login</label><input id="nw-login" placeholder="hasan" /><div class="hint">Sehga kirish uchun ishlatiladi. Parol avtomatik generatsiya qilinadi va telefonga SMS yuboriladi.</div></div>
+    <div class="field"><label>Sinov muddati</label><select id="nw-trial"><option value="14">14 kun · bepul (standart)</option><option value="30">30 kun · bepul (kengaytirilgan)</option><option value="0">Sinovsiz · darhol to'lov</option></select></div>
+  </div>
+  <div class="modal-f">
+    <button class="btn btn-outline" type="button" onclick="closeAll()">Bekor qilish</button>
+    <button class="btn btn-primary" type="button" onclick="submitNewWorkshop()">Sehni yaratish →</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span class="ic">✓</span><span id="toast-msg"></span></div>
+
+<script>
+const workshops = [
+  {id:'ws_01HJX2', av:'av-1', avLbl:'FH', name:'Furniture House', city:'Toshkent', owner:'Hasan Ergashev', phone:'+998 90 100-44-22', login:'hasan', branches:3, staff:23, tier:'st', mau:42, rev:148200000, last:'15-may 13:42', status:'active', joined:'2024-08-15'},
+  {id:'ws_01HJX1', av:'av-4', avLbl:'MS', name:'Mebel Star', city:'Toshkent', owner:'Olim Tursunov', phone:'+998 91 233-12-44', login:'olim', branches:2, staff:18, tier:'st', mau:32, rev:96400000, last:'15-may 13:38', status:'active', joined:'2024-09-22'},
+  {id:'ws_01HJW8', av:'av-7', avLbl:'MV', name:'"Marvarid" Mebel', city:'Toshkent · Samarqand', owner:'Sherzod Yusupov', phone:'+998 71 244-32-12', login:'sherzod', branches:4, staff:31, tier:'pr', mau:58, rev:240600000, last:'15-may 13:35', status:'active', joined:'2024-03-10'},
+  {id:'ws_01HJW6', av:'av-5', avLbl:'BX', name:'Buxoro Mebel House', city:'Buxoro', owner:'Saidjon Toshev', phone:'+998 65 224-11-88', login:'saidjon', branches:3, staff:24, tier:'st', mau:38, rev:110100000, last:'15-may 13:21', status:'active', joined:'2025-01-18'},
+  {id:'ws_01HJW2', av:'av-2', avLbl:'AM', name:'Akva Mebel', city:'Toshkent', owner:'Akmal Zayniddinov', phone:'+998 90 322-44-19', login:'akmal', branches:2, staff:16, tier:'st', mau:24, rev:82400000, last:'15-may 12:55', status:'active', joined:'2024-11-04'},
+  {id:'ws_01HJV9', av:'av-6', avLbl:'SW', name:'Sergeli Wood', city:'Toshkent', owner:'Bekzod Karimov', phone:'+998 90 211-44-55', login:'bekzod', branches:2, staff:14, tier:'st', mau:18, rev:71800000, last:'15-may 11:42', status:'active', joined:'2025-02-12'},
+  {id:'ws_01HJV4', av:'av-3', avLbl:'OM', name:'Olmazor Mebel', city:'Toshkent', owner:'Dilnoza Akramova', phone:'+998 99 144-32-19', login:'dilnoza', branches:1, staff:8, tier:'bs', mau:12, rev:38200000, last:'15-may 11:14', status:'active', joined:'2025-03-08'},
+  {id:'ws_01HJV0', av:'av-8', avLbl:'AD', name:'Adolat Mebel', city:'Andijon', owner:'Adolatxon Komiljonova', phone:'+998 74 244-33-22', login:'adolat', branches:1, staff:6, tier:'bs', mau:9, rev:24600000, last:'15-may 10:48', status:'active', joined:'2025-03-22'},
+  {id:'ws_01HJU5', av:'av-1', avLbl:'YF', name:'Yangiyo\'l Furniture', city:'Toshkent vil.', owner:'Karim Yo\'ldoshev', phone:'+998 90 877-65-43', login:'karim', branches:1, staff:5, tier:'bs', mau:6, rev:18000000, last:'14-may 19:02', status:'active', joined:'2025-04-02'},
+  {id:'ws_01HJU0', av:'av-4', avLbl:'AW', name:'Andijon Wood Lab', city:'Andijon', owner:'Komiljon Tursunov', phone:'+998 74 211-44-12', login:'komiljon', branches:1, staff:9, tier:'st', mau:14, rev:44200000, last:'12-may 16:22', status:'trial', trialDays:11, joined:'2026-05-01'},
+  {id:'ws_01HJT8', av:'av-3', avLbl:'NM', name:'Namangan Mebel', city:'Namangan', owner:'Behzod Saidov', phone:'+998 69 244-12-77', login:'behzod', branches:1, staff:4, tier:'bs', mau:0, rev:0, last:'15-may 09:18', status:'trial', trialDays:14, joined:'2026-05-15'},
+  {id:'ws_01HJS2', av:'av-5', avLbl:'KM', name:'"Klassik Mebel"', city:'Toshkent', owner:'Rustam Mahmudov', phone:'+998 90 322-19-87', login:'rustam', branches:2, staff:11, tier:'bs', mau:8, rev:5400000, last:'8-may 14:18', status:'blocked', blockedReason:'30 kundan ortiq to\'lovsiz', joined:'2024-12-20'},
+];
+
+const state = { view:'workshops', statusFilter:'active', searchQ:'', selectedWs:null, drawerOpen:false };
+
+const fmt = n => (n||0).toLocaleString('uz-UZ').replace(/,/g,' ');
+const fmtSum = n => `${fmt(n)} so'm`;
+const TIER_LABEL = {bs:'Boshlang\'ich',st:'Standart',pr:'Pro'};
+const TIER_PL = {bs:'pl-bs',st:'pl-st',pr:'pl-pr'};
+const STATUS_LBL = {active:'Faol',trial:'Sinov',blocked:'Bloklangan'};
+const STATUS_PL = {active:'p-act',trial:'p-trial',blocked:'p-bl'};
+
+/* ====================== VIEW SWITCH ====================== */
+function setView(v){
+  state.view = v;
+  document.querySelectorAll('section[data-view]').forEach(s=>s.hidden=s.dataset.view!==v);
+  document.querySelectorAll('#sb-nav .sb-it').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  if(v==='workshops') renderWorkshops();
+  if(v==='actions') renderBigFeed();
+  if(v==='dashboard') renderPlaceholder('dashboard','Asosiy','Platforma bo\'yicha umumiy ko\'rinish — KPI lar, alertlar, kechiktirilgan operatsiyalar.','',['Real-time KPI','Sehlardagi voqealar','Tizim alertlari','Buyurtmalar to\'lqini']);
+  if(v==='clients') renderPlaceholder('clients','Mijozlar','Platforma bo\'yicha barcha mijozlar. Telegram OAuth orqali kirgan.','1 240 ta faol mijoz · 47 sehga ulangan',['Mijozlar ro\'yxati va profilllari','Buyurtmalar tarixi','Telegram ma\'lumotlari','Bloklash · seh shikoyat orqali']);
+  if(v==='reports') renderPlaceholder('reports','Platforma hisobotlari','Sehlar daromadi, MAU, kanal hisoboti, eksport.','',['Sehlar bo\'yicha solishtirish','MAU dinamikasi','Tarif konversiyasi','Telegram bot statistikasi','Hudud bo\'yicha']);
+  if(v==='settings') renderPlaceholder('settings','Tizim sozlamalari','Platforma global sozlamalari — telegram bot, SMS, valyuta, qonun.','',['Telegram bot tokeni','SMS gateway sozlamalari','To\'lov gatewaylar','Email shablonlari','Qonun tartibida hujjatlar']);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function renderPlaceholder(view,title,desc,sub,items){
+  const sec = document.querySelector(`section[data-view="${view}"]`);
+  if(sec.dataset.done) return;
+  sec.dataset.done='1';
+  sec.innerHTML = `
+    <div class="ph"><div><h1>${title}</h1><div class="sub">${sub||'Keyingi versiyada — ishlab chiqilmoqda'}</div></div></div>
+    <div class="ph-soon">
+      <div class="ic">${title==='Asosiy'?'◐':title==='Mijozlar'?'◇':title==='Platforma hisobotlari'?'∑':'⚙'}</div>
+      <h2>${title}</h2>
+      <p>${desc}</p>
+      ${items.length ? `<ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul>` : ''}
+    </div>
+  `;
+}
+document.getElementById('sb-nav').addEventListener('click', e=>{
+  const b = e.target.closest('.sb-it[data-view]'); if(!b) return;
+  setView(b.dataset.view);
+});
+
+/* ====================== WORKSHOPS ====================== */
+function filtered(){
+  const q = state.searchQ.toLowerCase().trim();
+  return workshops.filter(w=>{
+    if(state.statusFilter!=='all' && w.status!==state.statusFilter) return false;
+    if(q){
+      const hay = (w.name+' '+w.owner+' '+w.city+' '+w.id+' '+w.login+' '+w.phone).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function renderWorkshops(){
+  const list = filtered();
+  const counts = {active:0,trial:0,blocked:0};
+  workshops.forEach(w => counts[w.status]++);
+  document.getElementById('cnt-active').textContent = counts.active;
+  document.getElementById('cnt-trial').textContent = counts.trial;
+  document.getElementById('cnt-blocked').textContent = counts.blocked;
+  document.getElementById('ws-count').innerHTML = `${list.length} / ${workshops.length} ko'rsatilmoqda · saralash: oxirgi faol`;
+  document.getElementById('ws-sub').innerHTML = `${counts.active} ta faol · <b>${counts.trial} ta</b> sinov · <b>${counts.blocked} ta</b> bloklangan`;
+
+  document.querySelectorAll('.filter[data-status]').forEach(f => f.classList.toggle('on', f.dataset.status===state.statusFilter));
+
+  const tb = document.getElementById('ws-rows');
+  if(list.length===0){
+    tb.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:48px 24px;color:var(--ink-6)">— filter bilan mos keladigan sehlar topilmadi —<br/><button class="btn btn-outline btn-sm" type="button" onclick="setStatusFilter('all')" style="margin-top:14px">Filtrlarni tozalash</button></td></tr>`;
+    return;
+  }
+  tb.innerHTML = list.map(w=>{
+    const trialLbl = w.status==='trial' ? ` · ${w.trialDays}k` : '';
+    return `<tr onclick="openWorkshop('${w.id}')">
+      <td><div class="ws-id"><span class="av ${w.av}">${w.avLbl}</span><div class="nm"><b>${w.name}</b><small>${w.id} · ${w.city}</small></div></div></td>
+      <td class="ow">${w.owner}<small>${w.phone}</small></td>
+      <td class="mt"><b>${w.branches}</b> · ${w.staff}</td>
+      <td><span class="pl ${TIER_PL[w.tier]}">${TIER_LABEL[w.tier]}</span></td>
+      <td class="rev">${w.rev>0?fmt(w.rev/1e6).replace(',','.')+'M':'—'}<small>${w.rev>0?'so\'m':'endi qo\'shildi'}</small></td>
+      <td class="ls">${w.last}</td>
+      <td><span class="pill ${STATUS_PL[w.status]}" title="${STATUS_LBL[w.status]}${w.status==='trial'?' · '+w.trialDays+' kun qoldi':''}${w.status==='blocked'&&w.blockedReason?' · '+w.blockedReason:''}"><span class="pd"></span>${STATUS_LBL[w.status]}${trialLbl}</span></td>
+      <td><div class="row-act"><button class="ib" onclick="event.stopPropagation();openWorkshop('${w.id}')">⋯</button></div></td>
+    </tr>`;
+  }).join('');
+}
+function setStatusFilter(s){ state.statusFilter = s; renderWorkshops(); }
+function onSearch(v){ state.searchQ = v; renderWorkshops(); }
+function refreshData(){ toast('Yangilandi · 15-may 09:42','info'); renderWorkshops(); }
+
+/* ====================== DRAWER ====================== */
+function openWorkshop(id){
+  const w = workshops.find(x=>x.id===id);
+  if(!w) return;
+  state.selectedWs = id;
+  const dc = document.getElementById('drawer-content');
+  dc.innerHTML = `
+    <div class="dh">
+      <div class="dh-top">
+        <div>
+          <div class="id">${w.id}</div>
+          <h2>${w.name}</h2>
+          <div class="ow">Egasi: <b>${w.owner}</b> · <code style="font-family:var(--f-mono);font-size:12px;background:var(--sunk);padding:1px 6px;border-radius:3px">${w.login}@${w.id.slice(-6)}</code></div>
+        </div>
+        <button class="ib" type="button" onclick="closeAll()" aria-label="Yopish">✕</button>
+      </div>
+      <div class="dh-pills">
+        <span class="pill ${STATUS_PL[w.status]}"><span class="pd"></span>${STATUS_LBL[w.status]}${w.status==='trial'?` · ${w.trialDays} kun`:''}</span>
+        <span class="pl ${TIER_PL[w.tier]}">${TIER_LABEL[w.tier]} tarif</span>
+        <span style="font-size:12px;color:var(--ink-6);align-self:center">${w.city}</span>
+      </div>
+    </div>
+    <div class="db">
+      <h4>Hozirgi ko'rsatkichlar · bu oy</h4>
+      <div class="stats-mini">
+        <div class="s"><div class="l">Savdo</div><div class="v">${w.rev>0?fmt(w.rev/1e6).replace(',','.')+'M':'—'}<small> so'm</small></div></div>
+        <div class="s"><div class="l">MAU</div><div class="v">${w.mau}</div></div>
+        <div class="s"><div class="l">Xodimlar</div><div class="v">${w.staff}</div></div>
+      </div>
+
+      <h4>Kontakt</h4>
+      <div class="meta-rows">
+        <div class="meta-row"><span class="l">Telefon</span><span class="v">${w.phone}</span></div>
+        <div class="meta-row"><span class="l">Egasi</span><span class="v">${w.owner}</span></div>
+        <div class="meta-row"><span class="l">Login</span><span class="v"><code>${w.login}</code></span></div>
+        <div class="meta-row"><span class="l">Hudud</span><span class="v">${w.city}</span></div>
+      </div>
+
+      <h4>Tarif va to'lov</h4>
+      <div class="meta-rows">
+        <div class="meta-row"><span class="l">Joriy tarif</span><span class="v">${TIER_LABEL[w.tier]} · ${w.tier==='bs'?'1.2M':w.tier==='st'?'2.8M':'shartnoma'} so'm/oy</span></div>
+        <div class="meta-row"><span class="l">Filial soni</span><span class="v">${w.branches}</span></div>
+        <div class="meta-row"><span class="l">Qo'shilgan sana</span><span class="v">${w.joined}</span></div>
+        ${w.status==='trial'?`<div class="meta-row"><span class="l">Sinov</span><span class="v" style="color:var(--warn);font-weight:600">${w.trialDays} kun qoldi</span></div>`:''}
+        ${w.status==='blocked'?`<div class="meta-row"><span class="l">Bloklangan sababi</span><span class="v" style="color:var(--danger)">${w.blockedReason}</span></div>`:''}
+      </div>
+
+      <h4>Tizim aktivligi</h4>
+      <div class="meta-rows">
+        <div class="meta-row"><span class="l">Oxirgi kirish</span><span class="v">${w.last}</span></div>
+        <div class="meta-row"><span class="l">DB hajmi (taxmin)</span><span class="v"><code>${Math.round(w.rev/1e7) + 12} MB</code></span></div>
+        <div class="meta-row"><span class="l">Fayl xotirasi (MinIO)</span><span class="v"><code>${Math.round(w.staff*0.8*10)/10} GB</code></span></div>
+      </div>
+    </div>
+    <div class="df">
+      <button class="btn btn-outline btn-sm" type="button" onclick="toast('${w.owner} sifatida kirish — auditda qayd qilinadi','info')">Egasi sifatida kirish</button>
+      <button class="btn btn-outline btn-sm" type="button" onclick="toast('Tarifni o\\'zgartirish — keyingi versiya','info')">Tarifni o'zgartirish</button>
+      ${w.status==='blocked'
+        ? `<button class="btn btn-success full" type="button" onclick="unblockWorkshop('${w.id}')">Blokdan chiqarish ↑</button>`
+        : `<button class="btn btn-outline btn-sm btn-danger full" type="button" onclick="blockWorkshop('${w.id}')">Sehni bloklash</button>`
+      }
+    </div>
+  `;
+  document.getElementById('drawer').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+  document.body.style.overflow='hidden';
+  state.drawerOpen=true;
+}
+function closeAll(){
+  document.getElementById('drawer').classList.remove('on');
+  document.querySelectorAll('.modal').forEach(m=>m.classList.remove('on'));
+  document.getElementById('scrim').classList.remove('on');
+  document.body.style.overflow='';
+  state.drawerOpen=false;
+}
+
+function blockWorkshop(id){
+  const w = workshops.find(x=>x.id===id);
+  if(!w) return;
+  const reason = prompt(`"${w.name}" ni bloklash sababi:`, 'To\'lov muddati o\'tdi');
+  if(reason===null) return;
+  w.status = 'blocked';
+  w.blockedReason = reason;
+  toast(`${w.name} bloklandi · ${reason}`,'warn');
+  closeAll();
+  renderWorkshops();
+}
+function unblockWorkshop(id){
+  const w = workshops.find(x=>x.id===id);
+  if(!w) return;
+  if(!confirm(`"${w.name}" ni blokdan chiqarishni xohlaysizmi?`)) return;
+  w.status = 'active';
+  delete w.blockedReason;
+  toast(`${w.name} blokdan chiqarildi`,'ok');
+  closeAll();
+  renderWorkshops();
+}
+
+/* ====================== NEW WORKSHOP ====================== */
+function openNewWorkshop(){
+  ['nw-name','nw-phone','nw-owner','nw-owner-phone','nw-login'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('modal-new').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>document.getElementById('nw-name').focus(),60);
+}
+function submitNewWorkshop(){
+  const name = document.getElementById('nw-name').value.trim();
+  const phone = document.getElementById('nw-phone').value.trim();
+  const owner = document.getElementById('nw-owner').value.trim();
+  const ownerPhone = document.getElementById('nw-owner-phone').value.trim();
+  const login = document.getElementById('nw-login').value.trim();
+  const city = document.getElementById('nw-city').value;
+  const tier = document.getElementById('nw-tier').value;
+  const trial = parseInt(document.getElementById('nw-trial').value)||0;
+
+  if(!name){ toast('Seh nomi kerak','warn'); document.getElementById('nw-name').focus(); return; }
+  if(!owner){ toast('Egasi F.I.Sh. kerak','warn'); document.getElementById('nw-owner').focus(); return; }
+  if(!ownerPhone){ toast('Egasi telefoni kerak','warn'); document.getElementById('nw-owner-phone').focus(); return; }
+  if(!login){ toast('Login kerak','warn'); document.getElementById('nw-login').focus(); return; }
+
+  const initials = name.split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
+  const wsId = 'ws_' + Math.random().toString(36).slice(2,8).toUpperCase();
+  const newWs = {
+    id:wsId, av:'av-3', avLbl:initials.slice(0,2)||'XX',
+    name, city, owner, phone:ownerPhone, login,
+    branches:1, staff:1, tier, mau:0, rev:0,
+    last:'hozir', status: trial>0?'trial':'active',
+    trialDays: trial,
+    joined:'2026-05-15'
+  };
+  workshops.unshift(newWs);
+  closeAll();
+  toast(`"${name}" yaratildi · login va parol SMS yuborildi`,'ok');
+  renderWorkshops();
+  setTimeout(()=>openWorkshop(wsId), 400);
+}
+
+/* ====================== BIG ACTION LOG ====================== */
+const bigLog = [
+  {i:'ok',t:'15-may 09:18',b:'Yangi seh provisioning · <b>Namangan Mebel</b><span class="t">Nuriddin O. · sinov 14 kun</span>'},
+  {i:'',t:'15-may 09:42',b:'v2.1.0 deploy yakunlandi · 47 sehga<span class="t">Nuriddin O. · 12 daqiqada</span>'},
+  {i:'',t:'15-may 11:24',b:'<b>Sergeli Wood</b> Boshlang\'ichdan Standartga o\'tdi<span class="t">avto-yangilanish · to\'lov muvaffaqiyatli</span>'},
+  {i:'warn',t:'15-may 08:00',b:'<b>"Klassik Mebel"</b> to\'lovi muvaffaqiyatsiz · 3-marotaba<span class="t">avto-blok 30 kun ichida</span>'},
+  {i:'',t:'14-may 18:22',b:'<b>Aziza op.</b> platformaga kirdi<span class="t">192.168.1.x · Chrome / macOS</span>'},
+  {i:'',t:'14-may 16:45',b:'<b>Furniture House</b> da yangi xodim yaratildi<span class="t">Hasan ako · Madiyor ako (kesuvchi)</span>'},
+  {i:'',t:'13-may 22:00',b:'Backup yakunlandi · 312 GB<span class="t">avtomatik · har kuni 22:00</span>'},
+  {i:'bl',t:'8-may 14:00',b:'<b>"Klassik Mebel"</b> avtomatik bloklandi<span class="t">30 kundan ortiq to\'lovsiz · qoidaga muvofiq</span>'},
+  {i:'',t:'8-may 14:20',b:'v2.0.4 deploy · Telegram OAuth yangilanishi<span class="t">Nuriddin O. · 8 daqiqada</span>'},
+  {i:'',t:'7-may 11:14',b:'<b>Andijon Wood Lab</b> sinov boshlandi<span class="t">Komiljon T. · 14 kun</span>'},
+  {i:'',t:'2-may 11:00',b:'v2.0.3 deploy · Finance modul<span class="t">Sardor A. · 22 daqiqada</span>'},
+];
+function renderBigFeed(){
+  const f = document.getElementById('big-feed');
+  if(!f) return;
+  f.innerHTML = bigLog.map(e=>`<div class="ev"><span class="ic ${e.i}">${e.i==='ok'?'+':e.i==='warn'?'!':e.i==='bl'?'⊘':'•'}</span><div class="b">${e.b}</div></div>`).join('');
+}
+
+/* ====================== TOAST ====================== */
+let toastTimer;
+function toast(msg, kind='ok'){
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  const ic = t.querySelector('.ic');
+  m.textContent = msg;
+  ic.className = 'ic ' + (kind==='warn'?'warn':kind==='danger'?'danger':'');
+  ic.textContent = kind==='warn'?'!':kind==='danger'?'×':'✓';
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'),2800);
+}
+
+/* ====================== KEYBOARD ====================== */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeAll();
+  if((e.metaKey||e.ctrlKey) && e.key==='k'){ e.preventDefault(); document.getElementById('search').focus(); }
+  if((e.metaKey||e.ctrlKey) && e.key==='n'){ e.preventDefault(); openNewWorkshop(); }
+});
+
+/* ====================== INIT ====================== */
+renderWorkshops();
+</script>
 </body>
 </html>

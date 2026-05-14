@@ -48,7 +48,6 @@ dist/
 .coverage.*
 htmlcov/
 .tox/
-.python-version
 *.sqlite3
 *.db
 
