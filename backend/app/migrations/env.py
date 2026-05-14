@@ -15,7 +15,14 @@ from app.core.config import settings
 from app.models import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_uri)
+# Alembic's config is backed by ConfigParser, which treats `%` as an
+# interpolation token. URL-encoded passwords (e.g. a `%21` for `!`) trip it.
+# Double every `%` so ConfigParser stores the URL literally; SQLAlchemy then
+# reads it back unchanged.
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.sqlalchemy_database_uri.replace("%", "%%"),
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
