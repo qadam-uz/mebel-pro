@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mebel Pro — furnitura sehini boshqarish tizimi</title>
+<meta name="description" content="Buyurtma, kesim, maosh — bir joyda. Furnitura sehlari uchun zamonaviy boshqaruv tizimi." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700;8..60,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FAF7F2; --elev:#fff; --sunk:#F2EEE6; --deep:#1A1614; --deep-2:#3F362F;
+    --ink-12:#1A1614; --ink-10:#3F362F; --ink-8:#5C4F44; --ink-6:#847569; --ink-4:#B0A698; --ink-2:#D6CDBE;
+    --line:#E5DDD0; --line-strong:#D6CDBE;
+    --accent:#A6471F; --accent-h:#8C3814; --accent-tint:#F4E5DC;
+    --success:#2E5E4E; --success-tint:#DDE9E3;
+    --warn:#A36417; --warn-tint:#F4E4CB;
+    --danger:#8C2E1C;
+    --f-display:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
+    --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --f-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--f-ui);background:var(--bg);color:var(--ink-12);-webkit-font-smoothing:antialiased;line-height:1.55}
+  ::selection{background:var(--accent);color:#fff}
+  .num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
+  .container{width:min(100% - 40px, 1200px); margin-inline:auto}
+  @media (min-width:1600px){.container{width:min(100% - 80px, 1280px)}}
+
+  /* NAV */
+  .nav{
+    position:sticky;top:0;z-index:50;background:rgba(250,247,242,.86);
+    backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid transparent;
+    transition:border-color .2s,background .2s;
+  }
+  .nav.scrolled{border-bottom-color:var(--line);background:rgba(250,247,242,.96)}
+  .nav-row{display:flex;align-items:center;gap:36px;padding:18px 0}
+  .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:inherit}
+  .brand .mk{
+    width:34px;height:34px;background:var(--deep);color:#fff;display:grid;place-items:center;
+    border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:18px;
+    position:relative;transform:rotate(-3deg);
+  }
+  .brand .mk::after{content:"";position:absolute;width:7px;height:7px;background:var(--accent);border-radius:50%;right:-3px;bottom:-3px}
+  .brand .nm{font-family:var(--f-display);font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .nav-links{display:none;gap:28px;margin-left:14px}
+  .nav-links a{color:var(--ink-10);text-decoration:none;font-size:14.5px;font-weight:500}
+  .nav-links a:hover{color:var(--accent)}
+  @media (min-width:900px){.nav-links{display:flex}}
+  .nav-cta{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;border-radius:6px;
+    padding:10px 16px;font:600 14px/1 var(--f-ui);text-decoration:none;cursor:pointer;
+    border:1px solid transparent;transition:all .15s;
+  }
+  .btn-primary{background:var(--deep);color:#fff;border-color:var(--deep)}
+  .btn-primary:hover{background:var(--accent);border-color:var(--accent)}
+  .btn-outline{background:transparent;color:var(--ink-12);border-color:var(--ink-12)}
+  .btn-outline:hover{background:var(--ink-12);color:#fff}
+  .btn-ghost{background:transparent;color:var(--ink-10);border-color:transparent;padding:8px 12px}
+  .btn-ghost:hover{color:var(--accent)}
+  .btn-lg{padding:14px 22px;font-size:15px;border-radius:8px}
+  .btn .ar{display:inline-block;transition:transform .15s}
+  .btn:hover .ar{transform:translateX(2px)}
+
+  /* HERO */
+  .hero{padding:68px 0 56px;position:relative;overflow:hidden}
+  @media (min-width:1280px){.hero{padding:104px 0 80px}}
+  .hero-grid{display:grid;gap:48px}
+  @media (min-width:1024px){.hero-grid{grid-template-columns:1.05fr 1fr;gap:64px;align-items:center}}
+  @media (min-width:1440px){.hero-grid{gap:96px}}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;
+    background:var(--sunk);border:1px solid var(--line);border-radius:999px;
+    font-size:12.5px;color:var(--ink-8);font-weight:500;margin-bottom:24px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px var(--success-tint)}
+  h1.hero-h{
+    font-family:var(--f-display);font-weight:600;
+    font-size:clamp(46px, 6vw, 84px);line-height:1.02;letter-spacing:-.025em;
+    margin:0 0 22px;
+  }
+  h1.hero-h em{font-style:italic;color:var(--accent);font-weight:600}
+  .hero-sub{
+    font-size:clamp(17px,1.4vw,20px);color:var(--ink-8);max-width:540px;
+    margin:0 0 32px;line-height:1.55;
+  }
+  .hero-sub b{color:var(--ink-12);font-weight:600}
+  .hero-ctas{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:34px}
+  .hero-trust{display:flex;align-items:center;gap:14px;color:var(--ink-6);font-size:13px}
+  .avs{display:flex}
+  .avs span{
+    width:30px;height:30px;border-radius:50%;border:2px solid var(--bg);
+    margin-left:-9px;background:var(--ink-4);font:600 12px/26px var(--f-ui);
+    color:#fff;text-align:center;
+  }
+  .avs span:nth-child(1){background:#A6471F;margin-left:0}
+  .avs span:nth-child(2){background:#2E5E4E}
+  .avs span:nth-child(3){background:#3F362F}
+  .avs span:nth-child(4){background:#A36417}
+
+  /* hero visual = dashboard preview */
+  .hero-vis{
+    position:relative;border-radius:14px;background:var(--elev);
+    border:1px solid var(--line);box-shadow:0 30px 70px -30px rgba(26,22,20,.20), 0 6px 18px -8px rgba(26,22,20,.08);
+    overflow:hidden;
+  }
+  .hero-vis::before{
+    content:"";position:absolute;inset:-1px;background:
+      linear-gradient(135deg,transparent 45%,rgba(166,71,31,.06) 100%);
+    pointer-events:none;
+  }
+  .hv-bar{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--sunk)}
+  .hv-bar .d{width:9px;height:9px;border-radius:50%;background:var(--ink-2)}
+  .hv-bar .u{margin-left:auto;background:var(--elev);border:1px solid var(--line);border-radius:5px;padding:3px 9px;font:500 11px/1.4 var(--f-mono);color:var(--ink-8)}
+  .hv-body{display:grid;grid-template-columns:160px 1fr;min-height:380px}
+  .hv-side{background:var(--deep);padding:14px 12px;color:#D6CDBE;font-size:12px}
+  .hv-side .grp{margin-bottom:18px}
+  .hv-side .lbl{color:var(--ink-4);font-size:10px;text-transform:uppercase;letter-spacing:.12em;font-weight:600;margin-bottom:6px}
+  .hv-side .it{padding:6px 8px;border-radius:4px;color:#E5DDD0;margin-bottom:1px}
+  .hv-side .it.on{background:rgba(166,71,31,.18);color:#fff;font-weight:500}
+  .hv-main{padding:18px 22px;background:var(--bg)}
+  .hv-h{font-family:var(--f-display);font-size:20px;font-weight:600;margin:0 0 14px;letter-spacing:-.01em}
+  .hv-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+  .hv-kpi{background:var(--elev);border:1px solid var(--line);border-radius:7px;padding:10px 12px}
+  .hv-kpi .k{font-size:10.5px;color:var(--ink-6);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+  .hv-kpi .v{font-family:var(--f-display);font-size:24px;font-weight:600;line-height:1;letter-spacing:-.01em}
+  .hv-kpi .d{font-size:11px;margin-top:4px}
+  .hv-kpi .d.up{color:var(--success)}
+  .hv-kpi .d.dn{color:var(--danger)}
+  .hv-chart{background:var(--elev);border:1px solid var(--line);border-radius:7px;padding:12px;margin-bottom:12px}
+  .hv-chart .ch-h{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-6);margin-bottom:8px}
+  .hv-chart .ch-h b{color:var(--ink-12);font-weight:600;font-size:12.5px}
+  .bars{display:flex;gap:4px;height:48px;align-items:flex-end}
+  .bars i{display:block;flex:1;background:var(--ink-2);border-radius:1px 1px 0 0}
+  .bars i.hi{background:var(--accent)}
+  .bars i.md{background:#3F362F}
+  .hv-list{background:var(--elev);border:1px solid var(--line);border-radius:7px;font-size:11.5px}
+  .hv-list .row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);align-items:center}
+  .hv-list .row:last-child{border-bottom:0}
+  .hv-list .id{font-family:var(--f-mono);color:var(--ink-6);font-size:10.5px}
+  .hv-list .nm{font-weight:500}
+  .hv-list .pill{font-size:10px;padding:2px 7px;border-radius:999px;font-weight:600;letter-spacing:.02em}
+  .pill.cut{background:var(--accent-tint);color:var(--accent-h)}
+  .pill.rdy{background:var(--success-tint);color:var(--success)}
+  .pill.pay{background:var(--warn-tint);color:var(--warn)}
+  .pill.del{background:#D8E2EB;color:#2A4D6B}
+
+  /* floating quote card */
+  .qcard{
+    position:absolute;left:-28px;bottom:-28px;background:var(--deep);color:#F0EAE0;
+    padding:16px 18px;border-radius:10px;font-size:13px;max-width:280px;
+    box-shadow:0 20px 40px -20px rgba(26,22,20,.40);
+    display:none;
+  }
+  @media (min-width:1280px){.qcard{display:block}}
+  .qcard .qt{font-family:var(--f-display);font-style:italic;font-size:15px;line-height:1.4;margin-bottom:10px;color:#fff}
+  .qcard .qa{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#D6CDBE}
+  .qcard .av{width:24px;height:24px;border-radius:50%;background:var(--accent);font:700 11px/24px var(--f-ui);color:#fff;text-align:center}
+
+  /* TRUST STRIP */
+  .trust{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:26px 0;background:var(--sunk)}
+  .trust-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px}
+  .trust .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-6);font-weight:600}
+  .cities{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--ink-8);font-size:14px;font-family:var(--f-display);font-style:italic}
+  .cities span{position:relative}
+  .cities span:not(:last-child)::after{content:"·";color:var(--ink-4);margin-left:18px}
+
+  /* STATS */
+  .stats{padding:64px 0}
+  .stats-grid{
+    display:grid;gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;
+    grid-template-columns:repeat(2,1fr);
+  }
+  @media (min-width:900px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+  .stat{background:var(--bg);padding:28px 28px}
+  .stat .n{font-family:var(--f-display);font-size:clamp(40px,4.5vw,64px);font-weight:600;letter-spacing:-.025em;line-height:1;margin-bottom:8px}
+  .stat .n sub{font-size:.45em;color:var(--ink-6);font-weight:500;margin-left:4px;letter-spacing:0;vertical-align:baseline}
+  .stat .l{color:var(--ink-8);font-size:14px;line-height:1.4;max-width:200px}
+
+  /* FEATURES */
+  .features{padding:64px 0 24px}
+  .feat-head{margin-bottom:48px;max-width:680px}
+  .feat-head .e{
+    font-size:12.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);
+    font-weight:700;margin-bottom:14px;
+  }
+  .feat-head h2{
+    font-family:var(--f-display);font-size:clamp(34px,3.5vw,48px);font-weight:600;
+    line-height:1.08;letter-spacing:-.02em;margin:0 0 14px;
+  }
+  .feat-head p{color:var(--ink-8);font-size:17px;margin:0}
+  .feat-grid{display:grid;gap:18px;grid-template-columns:1fr}
+  @media (min-width:900px){.feat-grid{grid-template-columns:repeat(3,1fr)}}
+  .feat{
+    background:var(--elev);border:1px solid var(--line);border-radius:10px;
+    padding:30px 26px 28px;display:flex;flex-direction:column;
+    transition:border-color .15s,transform .15s;
+    min-height:340px;
+  }
+  .feat:hover{border-color:var(--ink-10);transform:translateY(-2px)}
+  .feat .ic{
+    width:42px;height:42px;display:grid;place-items:center;
+    background:var(--accent-tint);color:var(--accent-h);
+    border-radius:8px;margin-bottom:22px;font-family:var(--f-display);font-size:22px;font-weight:600;
+  }
+  .feat:nth-child(2) .ic{background:var(--success-tint);color:var(--success)}
+  .feat:nth-child(3) .ic{background:var(--warn-tint);color:var(--warn)}
+  .feat h3{
+    font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;
+    margin:0 0 10px;
+  }
+  .feat p{color:var(--ink-8);font-size:14.5px;line-height:1.6;margin:0 0 18px;flex:1}
+  .feat ul{margin:0;padding:0;list-style:none;font-size:13.5px;color:var(--ink-10);border-top:1px solid var(--line);padding-top:14px}
+  .feat li{padding:5px 0;display:flex;align-items:flex-start;gap:9px}
+  .feat li::before{content:"";display:inline-block;width:14px;height:1px;background:var(--accent);margin-top:11px;flex:none}
+
+  /* SHOWCASE */
+  .showcase{padding:64px 0;background:var(--deep);color:#F0EAE0;margin-top:48px}
+  .sc-grid{display:grid;gap:48px}
+  @media (min-width:1024px){.sc-grid{grid-template-columns:.85fr 1.15fr;align-items:center;gap:72px}}
+  .sc-grid .e{font-size:12.5px;text-transform:uppercase;letter-spacing:.16em;color:#E8A37D;font-weight:700;margin-bottom:14px}
+  .sc-grid h2{font-family:var(--f-display);font-size:clamp(32px,3vw,44px);font-weight:600;line-height:1.1;letter-spacing:-.02em;margin:0 0 18px;color:#fff}
+  .sc-grid p{color:#D6CDBE;font-size:16px;line-height:1.6;margin:0 0 14px}
+  .sc-grid p b{color:#fff;font-weight:600}
+  .sc-states{
+    margin-top:22px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
+    font-family:var(--f-mono);font-size:12px;color:#E5DDD0;
+  }
+  .sc-states .s{
+    display:flex;align-items:center;gap:8px;padding:7px 10px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:5px;
+  }
+  .sc-states .s::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .sc-states .s:nth-child(5)::before,.sc-states .s:nth-child(7)::before{background:var(--success)}
+  .sc-states .s:nth-child(2)::before{background:var(--warn)}
+  /* state machine vis */
+  .sm{position:relative;padding:20px;background:#0F0C0B;border:1px solid #3F362F;border-radius:14px;font-size:13px;overflow-x:auto}
+  .sm-chain{display:flex;align-items:center;gap:0;flex-wrap:nowrap;min-width:600px}
+  .sm-node{
+    flex:1;padding:14px 12px 14px;background:#1A1614;border:1px solid #3F362F;border-radius:6px;
+    text-align:center;color:#E5DDD0;font-size:12.5px;font-weight:500;position:relative;min-width:80px;
+  }
+  .sm-node.now{background:var(--accent);border-color:var(--accent);color:#fff}
+  .sm-node.done{color:var(--ink-4);border-color:#3F362F}
+  .sm-arr{flex:none;width:18px;color:#5C4F44;text-align:center;font-family:var(--f-mono)}
+  .sm-stamps{margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-family:var(--f-mono);font-size:10.5px;color:#B0A698}
+  .sm-stamps i{padding:8px 10px;background:#1A1614;border:1px solid #3F362F;border-radius:5px;font-style:normal}
+  .sm-stamps i b{color:#F0EAE0;font-weight:500;display:block;font-size:11.5px;margin-bottom:2px}
+  .sm-stamps i.live{border-color:var(--accent);background:rgba(166,71,31,.10)}
+  .sm-stamps i.live b{color:#fff}
+
+  /* PRICING */
+  .pricing{padding:80px 0 64px}
+  .ph-h{text-align:center;max-width:560px;margin:0 auto 44px}
+  .ph-h .e{font-size:12.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);font-weight:700;margin-bottom:14px}
+  .ph-h h2{font-family:var(--f-display);font-size:clamp(32px,3vw,44px);font-weight:600;line-height:1.1;letter-spacing:-.02em;margin:0 0 12px}
+  .ph-h p{color:var(--ink-8);font-size:16px;margin:0}
+  .price-grid{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:900px){.price-grid{grid-template-columns:repeat(3,1fr)}}
+  .price{
+    background:var(--elev);border:1px solid var(--line);border-radius:12px;padding:30px 26px;
+    display:flex;flex-direction:column;position:relative;
+  }
+  .price.feat{background:var(--deep);color:#F0EAE0;border-color:var(--deep)}
+  .price.feat::before{
+    content:"Eng mashhur";position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+    background:var(--accent);color:#fff;font-size:11px;padding:4px 12px;border-radius:999px;
+    font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  }
+  .price .nm{font-family:var(--f-display);font-size:20px;font-weight:600;margin-bottom:6px;letter-spacing:-.01em}
+  .price .ds{font-size:13.5px;color:var(--ink-8);margin-bottom:22px;min-height:38px}
+  .price.feat .ds{color:#D6CDBE}
+  .price .pr{font-family:var(--f-display);font-size:36px;font-weight:600;letter-spacing:-.02em;line-height:1}
+  .price .pr small{font-size:13px;font-weight:500;color:var(--ink-6);font-family:var(--f-ui);letter-spacing:0}
+  .price.feat .pr small{color:#B0A698}
+  .price .pr .num{font-family:var(--f-display)}
+  .price .pp{margin-top:24px;padding-top:20px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-10);flex:1}
+  .price.feat .pp{border-color:#3F362F;color:#D6CDBE}
+  .price .pp li{padding:6px 0;display:flex;gap:9px;align-items:flex-start}
+  .price .pp li::before{content:"+";color:var(--accent);font-family:var(--f-display);font-weight:600;flex:none;margin-top:-1px}
+  .price.feat .pp li::before{color:#E8A37D}
+  .price .pp li.no{color:var(--ink-4)}
+  .price .pp li.no::before{content:"−";color:var(--ink-4)}
+  .price .cta{margin-top:24px}
+
+  /* FAQ */
+  .faq{padding:64px 0}
+  .faq-grid{display:grid;gap:48px}
+  @media (min-width:900px){.faq-grid{grid-template-columns:.6fr 1fr;gap:80px}}
+  .faq h2{font-family:var(--f-display);font-size:clamp(32px,3vw,44px);font-weight:600;line-height:1.1;letter-spacing:-.02em;margin:0 0 16px}
+  .faq .sub{color:var(--ink-8);font-size:15px;margin-bottom:20px}
+  .faq-list{display:flex;flex-direction:column;border-top:1px solid var(--ink-12)}
+  details{border-bottom:1px solid var(--line);padding:18px 0}
+  details summary{
+    list-style:none;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+    font:600 16.5px/1.4 var(--f-ui);color:var(--ink-12);
+  }
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{
+    content:"+";font-family:var(--f-display);font-size:24px;font-weight:600;
+    color:var(--accent);line-height:1;transition:transform .2s;flex:none;
+  }
+  details[open] summary::after{content:"−"}
+  details .a{padding-top:10px;color:var(--ink-8);font-size:15px;line-height:1.6;max-width:680px}
+
+  /* CTA */
+  .cta-block{
+    background:linear-gradient(180deg,var(--bg) 0%,var(--bg) 50%,var(--accent) 50%,var(--accent) 100%);
+    padding:0 0 0;
+  }
+  .cta-inner{
+    background:var(--accent);color:#fff;padding:54px 36px;border-radius:16px;
+    display:grid;gap:18px;text-align:center;
+    background-image:radial-gradient(circle at 88% 18%,rgba(255,255,255,.10) 0%,transparent 24%);
+  }
+  @media (min-width:900px){.cta-inner{grid-template-columns:1fr auto;text-align:left;align-items:center;gap:36px;padding:54px 48px}}
+  .cta-inner h2{font-family:var(--f-display);font-size:clamp(28px,2.6vw,40px);font-weight:600;line-height:1.1;letter-spacing:-.02em;margin:0 0 8px;color:#fff}
+  .cta-inner p{margin:0;font-size:15.5px;color:rgba(255,255,255,.85);max-width:560px}
+  .cta-inner .btn-primary{background:#fff;color:var(--accent);border-color:#fff}
+  .cta-inner .btn-primary:hover{background:var(--deep);color:#fff;border-color:var(--deep)}
+
+  /* FOOTER */
+  .ft{background:var(--deep);color:#D6CDBE;padding:56px 0 28px;margin-top:80px;font-size:14px}
+  .ft-grid{display:grid;gap:36px;grid-template-columns:1fr;padding-bottom:36px;border-bottom:1px solid #3F362F}
+  @media (min-width:900px){.ft-grid{grid-template-columns:1.4fr 1fr 1fr 1fr}}
+  .ft .brand .nm{color:#fff}
+  .ft p.ds{margin:18px 0 14px;color:#B0A698;max-width:320px;font-size:13.5px;line-height:1.55}
+  .ft .col h4{font-family:var(--f-display);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:#E5DDD0;margin:0 0 14px}
+  .ft .col ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+  .ft .col a{color:#B0A698;text-decoration:none}
+  .ft .col a:hover{color:#fff}
+  .ft .bottom{display:flex;justify-content:space-between;align-items:center;padding-top:22px;flex-wrap:wrap;gap:14px;color:#847569;font-size:12.5px}
+  .ft .bottom .langs span{padding:4px 10px;border:1px solid #3F362F;border-radius:4px;margin-right:6px;font-family:var(--f-mono);font-size:11px}
+  .ft .bottom .langs span.on{background:#3F362F;color:#fff}
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="container nav-row">
+    <a class="brand" href="index.html">
+      <span class="mk">M</span>
+      <span class="nm">Mebel Pro</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">Imkoniyatlar</a>
+      <a href="#showcase">Buyurtmalar oqimi</a>
+      <a href="#pricing">Narxlar</a>
+      <a href="#faq">Savol-javob</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="02-client.html">Mijoz ilovasi</a>
+      <a class="btn btn-primary" href="#cta">Demo so'rash <span class="ar">→</span></a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow"><span class="dot"></span> v2 model · 14-may, 2026 da ishga tushdi</div>
+        <h1 class="hero-h">Buyurtma. Kesim. Maosh. <em>Bir joyda.</em></h1>
+        <p class="hero-sub">
+          Furnitura sehi uchun zamonaviy boshqaruv tizimi. <b>Telefon yo'q. Daftar yo'q. WhatsApp guruhlari yo'q.</b> Mijoz Telegramdan buyurtma qoldiradi, kesuvchi tabletdan oladi, oy oxirida maosh tayyor.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary btn-lg" href="#cta">Sehimni qo'shish <span class="ar">→</span></a>
+          <a class="btn btn-outline btn-lg" href="03-workshop-admin.html">Boshqaruvni ko'rish</a>
+        </div>
+        <div class="hero-trust">
+          <div class="avs"><span>F</span><span>S</span><span>U</span><span>A</span></div>
+          <div><b style="color:var(--ink-12)">47 ta seh</b> bugun shu yerda ishlamoqda — Toshkentdan Nukusgacha</div>
+        </div>
+      </div>
+
+      <div class="hero-vis" aria-hidden="true">
+        <div class="hv-bar">
+          <span class="d"></span><span class="d"></span><span class="d"></span>
+          <span class="u">mebel.uz/admin/asosiy</span>
+        </div>
+        <div class="hv-body">
+          <aside class="hv-side">
+            <div class="grp">
+              <div class="lbl">Boshqaruv</div>
+              <div class="it on">Asosiy</div>
+              <div class="it">Buyurtmalar</div>
+              <div class="it">Ishlab chiqarish</div>
+            </div>
+            <div class="grp">
+              <div class="lbl">Resurslar</div>
+              <div class="it">Ombor</div>
+              <div class="it">Material katalogi</div>
+              <div class="it">Filiallar</div>
+            </div>
+            <div class="grp">
+              <div class="lbl">Moliya</div>
+              <div class="it">Maoshlar</div>
+              <div class="it">Hisobotlar</div>
+            </div>
+          </aside>
+          <main class="hv-main">
+            <h3 class="hv-h">Asosiy · Furniture House</h3>
+            <div class="hv-kpis">
+              <div class="hv-kpi"><div class="k">Bugungi savdo</div><div class="v num">12.8M</div><div class="d up">↑ 18% kechagiga</div></div>
+              <div class="hv-kpi"><div class="k">Ishlab chiqarishda</div><div class="v num">34</div><div class="d up">↑ 4</div></div>
+              <div class="hv-kpi"><div class="k">Maosh to'lov</div><div class="v num">6.2M</div><div class="d">31-mayda</div></div>
+            </div>
+            <div class="hv-chart">
+              <div class="ch-h"><span>Savdo · oxirgi 14 kun</span><b>148.2M so'm</b></div>
+              <div class="bars">
+                <i style="height:32%"></i><i style="height:48%"></i><i style="height:38%"></i><i style="height:62%"></i>
+                <i style="height:54%"></i><i style="height:76%" class="md"></i><i style="height:42%"></i><i style="height:58%"></i>
+                <i style="height:70%" class="md"></i><i style="height:84%"></i><i style="height:64%"></i><i style="height:90%" class="hi"></i>
+                <i style="height:72%"></i><i style="height:98%" class="hi"></i>
+              </div>
+            </div>
+            <div class="hv-list">
+              <div class="row">
+                <span class="id">MP·0891</span>
+                <span class="nm">Aziz Karimov</span>
+                <span class="pill cut">Kesilmoqda</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">3.2M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0890</span>
+                <span class="nm">Dilshod Tursunov</span>
+                <span class="pill rdy">Tayyor</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">1.8M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0889</span>
+                <span class="nm">Madina Yo'ldosheva</span>
+                <span class="pill del">Yetkazib b…</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">5.4M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0888</span>
+                <span class="nm">Sherzod Ahmedov</span>
+                <span class="pill pay">To'lov kut…</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">2.1M</span>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <div class="qcard">
+          <div class="qt">"Daftarda hisob yuritardik. Endi telefonda ko'raman — kim ishlayapti, kim turibdi."</div>
+          <div class="qa"><span class="av">H</span> Hasan ako · Furniture House, 3 filial</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="container trust-row">
+    <div class="lbl">O'zbekistondagi 8 shahar bo'ylab</div>
+    <div class="cities">
+      <span>Toshkent</span><span>Samarqand</span><span>Buxoro</span><span>Andijon</span>
+      <span>Farg'ona</span><span>Namangan</span><span>Nukus</span><span>Qarshi</span>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat"><div class="n num">47</div><div class="l">Platformadagi faol sehlar</div></div>
+      <div class="stat"><div class="n num">8 240</div><div class="l">Bu oydagi buyurtmalar</div></div>
+      <div class="stat"><div class="n num">1.2k</div><div class="l">Kesuvchi, krom yopishtiruvchi, haydovchilar</div></div>
+      <div class="stat"><div class="n num">99.8<sub>%</sub></div><div class="l">Tizim ishlashlik · oxirgi 90 kun</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <div class="feat-head">
+      <div class="e">Nima qiladi</div>
+      <h2>Sehni boshqarish — uchta kun emas, uch daqiqa.</h2>
+      <p>Buyurtma kelishi bilan tizim ishga tushadi. Sotuvchi telefon ko'tarmaydi. Kesuvchi vazifani tabletidan oladi. Egasi natijani bir ekrandan ko'radi.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="ic">01</div>
+        <h3>Buyurtmaning o'zi yuradi.</h3>
+        <p>Mijoz Telegram orqali buyurtma qoldiradi. Sehga avtomatik tushadi. Holatlar o'z-o'zidan o'tadi: tasdiqlandi → kesilmoqda → tayyor → yetkazib berildi. Birorta SMS qo'lda yuborilmaydi.</p>
+        <ul>
+          <li>Telegram OAuth — alohida ilova kerak emas</li>
+          <li>8 ta holat, oltita kim-nima qildi tamg'asi</li>
+          <li>Bekor qilish va qaytarish qoidalari ichida</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic">02</div>
+        <h3>Kesuvchining haq-haqiqati.</h3>
+        <p>Har bir kesilgan list, har bir krom yopishtirilgan metr, har bir yetkazib berilgan buyurtma — alohida hisoblanadi. Oy oxirida maosh varaqasi tayyor, egasi tasdiqlaydi.</p>
+        <ul>
+          <li>List, kesim, metr, yetkazma bo'yicha tariflar</li>
+          <li>Tarif tarixi saqlanadi — eski hisob buzilmaydi</li>
+          <li>Maosh egasidan boshqa hech kim o'zgartira olmaydi</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic">03</div>
+        <h3>Bitta seh, ko'p filial.</h3>
+        <p>Toshkentdagi filial Yangiyo'ldagi zaxirani ko'radi. Egasi to'rt filialni bir ekrandan boshqaradi. Pastdagi material — darhol ogohlantirish; bo'sh kesuvchi — darhol ko'rinadi.</p>
+        <ul>
+          <li>Filiallar orasida material o'tkazish</li>
+          <li>Filial bo'yicha narx siyosati — alohida</li>
+          <li>Filial vaqtincha yopilgan — mijoz darhol ko'radi</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="showcase" id="showcase">
+  <div class="container">
+    <div class="sc-grid">
+      <div>
+        <div class="e">Buyurtmalar oqimi</div>
+        <h2>Sakkizta holat. Oltita tamg'a. Nol qog'oz.</h2>
+        <p>Buyurtma kirgan paytidan to yetkazib berilgungacha — har bir qadam <b>kim qildi, qachon qildi, qancha bajardi</b> deb yoziladi. Ish haqi shundan hisoblanadi, hisobotlar shundan tug'iladi.</p>
+        <p>Kesilmoqda holatida saw uchun listlar yo'qoladi. Tayyor holatida emas — bu jismonan to'g'ri. Operator hech narsa qo'lda kiritmaydi.</p>
+        <div class="sc-states">
+          <div class="s">yangi</div>
+          <div class="s">to'lov kutmoqda</div>
+          <div class="s">tasdiqlandi</div>
+          <div class="s">kesilmoqda</div>
+          <div class="s">tayyor</div>
+          <div class="s">krom yopishtirish</div>
+          <div class="s">yetkazib berilmoqda</div>
+          <div class="s">tugallandi</div>
+        </div>
+      </div>
+      <div class="sm" aria-hidden="true">
+        <div class="sm-chain">
+          <div class="sm-node done">yangi</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node done">to'lov</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node done">tasdiq.</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node now">kesilmoqda</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node">krom</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node">tayyor</div>
+          <span class="sm-arr">→</span>
+          <div class="sm-node">yetkazma</div>
+        </div>
+        <div class="sm-stamps">
+          <i><b>Tasdiqlangan</b>14-may, 09:14 · Aziza op.</i>
+          <i class="live"><b>Kesilmoqda</b>14-may, 11:20 · Bahodir ako</i>
+          <i><b>Krom</b>kutmoqda · 2 metr · Olim ako</i>
+          <i><b>Listlar</b>14 / 14 ishlatildi</i>
+          <i><b>Kesim soni</b>178 ta</i>
+          <i><b>Yetkazma</b>15-may, 10:00 · Sherzod ako</i>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="ph-h">
+      <div class="e">Narxlar</div>
+      <h2>Kichik sehga arzon. Katta sehga arzon.</h2>
+      <p>Bir filial uchun bitta narx, cheksiz filial uchun boshqasi. Maxsus kelishuv kerakmi — bizga yozing.</p>
+    </div>
+    <div class="price-grid">
+      <div class="price">
+        <div class="nm">Boshlang'ich</div>
+        <div class="ds">Bir filialli kichik seh uchun.</div>
+        <div class="pr"><span class="num">1 200 000</span> <small>so'm / oy</small></div>
+        <ul class="pp">
+          <li>1 filial, 5 ta xodim</li>
+          <li>Mijoz ilovasi (Telegram OAuth)</li>
+          <li>Buyurtmalar va asosiy material katalogi</li>
+          <li>Pochta orqali yordam</li>
+          <li class="no">Kesish optimizatsiyasi</li>
+          <li class="no">Moliya va maosh moduli</li>
+        </ul>
+        <a class="btn btn-outline cta" href="#cta">Tanlash</a>
+      </div>
+      <div class="price feat">
+        <div class="nm">Standart</div>
+        <div class="ds">Ko'p filialli sehlar uchun — 80% mijozlar shuni tanlaydi.</div>
+        <div class="pr"><span class="num">2 800 000</span> <small>so'm / oy</small></div>
+        <ul class="pp">
+          <li>Cheksiz filial, 30 ta xodim</li>
+          <li>Mijoz ilovasi · markaziy katalog</li>
+          <li>Kesish optimizatsiyasi (kerf, qoldiq)</li>
+          <li>Moliya, maosh, hisobotlar</li>
+          <li>Telefon orqali yordam · 09:00–21:00</li>
+          <li>Filiallar orasida o'tkazma</li>
+        </ul>
+        <a class="btn btn-primary cta" href="#cta" style="background:#fff;color:var(--accent);border-color:#fff">Demo so'rash <span class="ar">→</span></a>
+      </div>
+      <div class="price">
+        <div class="nm">Professional</div>
+        <div class="ds">Tarmoq kompaniyalari uchun.</div>
+        <div class="pr">Aloqaga <small>chiqing</small></div>
+        <ul class="pp">
+          <li>Hammasi standartdan</li>
+          <li>Cheksiz xodim</li>
+          <li>Maxsus integratsiyalar (1C, Payme)</li>
+          <li>Shaxsiy hisob-menejer</li>
+          <li>SLA 99.9%</li>
+          <li>Maxsus xavfsizlik talablari</li>
+        </ul>
+        <a class="btn btn-outline cta" href="#cta">Aloqaga chiqish</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="faq-grid">
+      <div>
+        <h2>Tez-tez beriladigan savollar.</h2>
+        <p class="sub">Boshqa savol bormi? <a href="mailto:salom@mebel.uz" style="color:var(--accent);font-weight:600">salom@mebel.uz</a> ga yozing — bir kun ichida javob qaytaramiz.</p>
+      </div>
+      <div class="faq-list">
+        <details open>
+          <summary>Ma'lumotlarim qayerda saqlanadi?</summary>
+          <div class="a">Serverlar O'zbekiston hududida joylashgan (Toshkent, Datacentre.uz). Buyurtma, mijoz va moliyaviy ma'lumotlar O'zbekiston qonunchiligiga muvofiq saqlanadi.</div>
+        </details>
+        <details>
+          <summary>Mijoz alohida ilova yuklab olishi kerakmi?</summary>
+          <div class="a">Yo'q. Mijoz Telegram orqali kiradi — alohida ilova kerak emas. <code style="font-family:var(--f-mono);font-size:13px;color:var(--accent)">mebel.uz/sehingiz</code> sahifasiga kiradi va Telegram tugmasini bosadi.</div>
+        </details>
+        <details>
+          <summary>Kesuvchi nima bilan ishlaydi — telefon yoki tablet?</summary>
+          <div class="a">Tablet tavsiya qilamiz (10″ va undan katta). Kesuvchi tabletidan o'z navbatini ko'radi — ulkan tugmalar, "Ish boshlash" va "Tugatish". Kichik telefonda ham ishlaydi, lekin barmoq qiyin tegadi.</div>
+        </details>
+        <details>
+          <summary>Eski 1C kassir dasturim bilan integratsiya bormi?</summary>
+          <div class="a">v1 da to'liq integratsiya yo'q. Lekin har bir buyurtma, maosh va xarajatni CSV (Excel) yoki JSON ko'rinishida eksport qila olasiz. Professional tarifda 1C va Payme bilan to'liq integratsiya bor.</div>
+        </details>
+        <details>
+          <summary>Krom yopishtirish bo'lmasa, holat o'tib ketadimi?</summary>
+          <div class="a">Ha. Agar buyurtmada birorta krom yopishtirish kerak bo'lgan qism bo'lmasa, "Krom yopishtirilmoqda" holati avtomatik o'tkazib yuboriladi — buyurtma to'g'ridan-to'g'ri "Tayyor"ga o'tadi.</div>
+        </details>
+        <details>
+          <summary>Kesuvchining maoshi qanday hisoblanadi?</summary>
+          <div class="a">Egasi har bir kesuvchi uchun tarif tanlaydi: oylik, list bo'yicha, kesim bo'yicha yoki aralash. Tizim har bir tugatilgan kesim uchun avtomatik kreditlaydi. Oy oxirida maosh varaqasi tayyor — egasi tekshiradi, tasdiqlaydi.</div>
+        </details>
+        <details>
+          <summary>Filialni yopib qo'ysam, mijoz buyurtma bera oladimi?</summary>
+          <div class="a">Yo'q. "Vaqtincha yopiq" qilinsa, mijoz uni ko'radi (sabab bilan) lekin buyurtma bera olmaydi. "Faol emas" qilinsa, umuman ko'rinmaydi. Eski buyurtmalar tugatilguncha davom etadi.</div>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-block" id="cta">
+  <div class="container">
+    <div class="cta-inner">
+      <div>
+        <h2>Sehingizni 14 kun ichida bepul sinab ko'ring.</h2>
+        <p>Kreditkarta talab qilinmaydi. Bir filial, beshta xodim, cheksiz buyurtma — bir oyga bepul.</p>
+      </div>
+      <div>
+        <a class="btn btn-primary btn-lg" href="#">Sehimni qo'shish <span class="ar">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="ft">
+  <div class="container">
+    <div class="ft-grid">
+      <div>
+        <a class="brand" href="index.html">
+          <span class="mk">M</span><span class="nm">Mebel Pro</span>
+        </a>
+        <p class="ds">Furnitura sehlari uchun zamonaviy boshqaruv tizimi. Toshkentda, O'zbekiston uchun.</p>
+        <div style="font-family:var(--f-mono);font-size:12px;color:#847569">
+          <div>Toshkent, Yashnobod tumani, Tinchlik ko'chasi 14a</div>
+          <div style="margin-top:4px">+998 71 200 30 40 · salom@mebel.uz</div>
+        </div>
+      </div>
+      <div class="col">
+        <h4>Mahsulot</h4>
+        <ul>
+          <li><a href="#features">Imkoniyatlar</a></li>
+          <li><a href="#pricing">Narxlar</a></li>
+          <li><a href="03-workshop-admin.html">Boshqaruv ko'rinishi</a></li>
+          <li><a href="02-client.html">Mijoz ilovasi</a></li>
+          <li><a href="#">Yangiliklar</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Yordam</h4>
+        <ul>
+          <li><a href="#faq">Savol-javob</a></li>
+          <li><a href="#">Hujjatlar</a></li>
+          <li><a href="#">Video qo'llanma</a></li>
+          <li><a href="#">Yordam markazi</a></li>
+          <li><a href="#">Telegram kanal</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Kompaniya</h4>
+        <ul>
+          <li><a href="#">Biz haqimizda</a></li>
+          <li><a href="#">Bo'sh ish joylari</a></li>
+          <li><a href="#">Maxfiylik</a></li>
+          <li><a href="#">Ommaviy oferta</a></li>
+          <li><a href="#">Aloqa</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="bottom">
+      <div>© 2026 Mebel Pro · Toshkent</div>
+      <div class="langs">
+        <span class="on">O'Z</span><span>РУ</span><span>EN</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const nav=document.getElementById('nav');
+  const onScroll=()=>nav.classList.toggle('scrolled',window.scrollY>8);
+  document.addEventListener('scroll',onScroll,{passive:true});onScroll();
+</script>
+</body>
+</html>

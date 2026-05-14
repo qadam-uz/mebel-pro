@@ -59,14 +59,14 @@ Ports in dev: web `http://localhost:5173`, API `http://localhost:8000` (and via 
    - `verify-web` — pnpm `lint:check`, `format:check`, `typecheck`, `test`, `build`
    - `verify-e2e` — pnpm `typecheck` (the full Playwright suite needs a running stack; we run it locally before pushing and revisit CI when a staging URL exists).
 2. **Docker-build smoke** — builds the backend + web images so we know they still compile. No registry push.
-3. **Deploy** — only on push to `main`, only after every other job is green. SSHes to the VPS and runs `DEPLOY_REF=<sha> bash /srv/mebel-pro/deploy/scripts/deploy.sh`. No registry, no rsync — the server does its own `git pull` + `docker compose up --build`.
+3. **Deploy** — only on push to `main`, only after every other job is green. SSHes to the VPS and runs `DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh`. No registry, no rsync — the server does its own `git pull` + `docker compose up --build`.
 
 GitHub config (Settings → Secrets and variables → Actions):
 
 - `secrets.DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` — required (the key is a passphrase-less PEM private key for a user that's in the `docker` group; default `mebel`).
 - `secrets.DEPLOY_SSH_PORT` — optional (default `22`).
 
-The repository must be cloned at `/srv/mebel-pro` on the VPS — see the bootstrap below.
+The repository must be cloned at `/opt/mebel-pro` on the VPS — see the bootstrap below.
 
 ## First-time setup on the VPS
 
@@ -75,12 +75,12 @@ The VPS is already provisioned for other projects: Docker Engine + Compose v2 ar
 ```bash
 # As a user in the `docker` group (used by CI too — the SSH key in
 # secrets.DEPLOY_SSH_KEY belongs to this user):
-sudo mkdir -p /srv/mebel-pro && sudo chown "$USER" /srv/mebel-pro
-git clone https://github.com/qadam-uz/mebel-pro.git /srv/mebel-pro
+sudo mkdir -p /opt/mebel-pro && sudo chown "$USER" /opt/mebel-pro
+git clone https://github.com/qadam-uz/mebel-pro.git /opt/mebel-pro
 
-cp /srv/mebel-pro/deploy/.env.example /srv/mebel-pro/deploy/.env
-$EDITOR /srv/mebel-pro/deploy/.env
-chmod 600 /srv/mebel-pro/deploy/.env
+cp /opt/mebel-pro/deploy/.env.example /opt/mebel-pro/deploy/.env
+$EDITOR /opt/mebel-pro/deploy/.env
+chmod 600 /opt/mebel-pro/deploy/.env
 #   Set: POSTGRES_USER/PASSWORD/DB    — credentials of a DB on the shared Postgres
 #                                        (provision the DB + user once via psql
 #                                        on the infra-net postgres container)
@@ -93,7 +93,7 @@ chmod 600 /srv/mebel-pro/deploy/.env
 #        BASE_DOMAIN=mebel-pro.uz · ACME_EMAIL=ops@…
 
 # First deploy:
-bash /srv/mebel-pro/deploy/scripts/deploy.sh
+bash /opt/mebel-pro/deploy/scripts/deploy.sh
 ```
 
 Pre-reqs that `deploy.sh` will refuse to run without: `deploy/.env` exists on the server, the `infra-net` Docker network exists. Also implicit: the host is reachable on 80 + 443 and DNS for the apex AND `app.*` / `workshop.*` / `admin.*` points at this box (so Caddy can obtain certificates).

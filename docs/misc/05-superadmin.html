@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sehlar — Platforma · Mebel Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FAF7F2; --elev:#fff; --sunk:#F2EEE6; --deep:#1A1614; --deep-2:#2A2421; --deep-3:#3F362F;
+    --ink-12:#1A1614; --ink-10:#3F362F; --ink-8:#5C4F44; --ink-6:#847569; --ink-4:#B0A698; --ink-2:#D6CDBE;
+    --line:#E5DDD0; --line-strong:#D6CDBE;
+    --accent:#A6471F; --accent-h:#8C3814; --accent-tint:#F4E5DC; --accent-soft:#F8EDE4;
+    --success:#2E5E4E; --success-tint:#DDE9E3;
+    --warn:#A36417; --warn-tint:#F4E4CB;
+    --info:#2A4D6B; --info-tint:#D8E2EB;
+    --danger:#8C2E1C; --danger-tint:#F2D6CE;
+    --plat:#2A4D6B;
+    --f-display:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
+    --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --f-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg)}
+  body{font-family:var(--f-ui);color:var(--ink-12);-webkit-font-smoothing:antialiased;line-height:1.5;font-size:14px}
+  ::selection{background:var(--plat);color:#fff}
+  .num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
+  button{font-family:inherit}
+
+  /* APP SHELL */
+  .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+  @media (min-width:1600px){.app{grid-template-columns:268px 1fr}}
+
+  /* SIDEBAR — platform variant (slightly different accent) */
+  aside.sb{background:var(--deep);color:#D6CDBE;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;padding:18px 14px 14px}
+  .sb-brand{display:flex;align-items:center;gap:11px;padding:4px 6px 18px;margin-bottom:8px;border-bottom:1px solid var(--deep-3)}
+  .sb-brand .mk{width:30px;height:30px;background:var(--plat);color:#fff;display:grid;place-items:center;border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:16px;position:relative;transform:rotate(-3deg)}
+  .sb-brand .mk::after{content:"";position:absolute;width:6px;height:6px;background:var(--accent);border-radius:50%;right:-2px;bottom:-2px}
+  .sb-brand .nm{font-family:var(--f-display);font-size:17px;font-weight:600;color:#fff;letter-spacing:-.01em}
+  .sb-brand .nm small{display:block;font-family:var(--f-ui);font-size:10.5px;color:#7B96B0;font-weight:500;letter-spacing:.04em;text-transform:uppercase}
+
+  .sb-env{
+    background:var(--deep-2);border:1px solid var(--deep-3);border-radius:7px;padding:10px 12px;margin:6px 4px 18px;
+    display:flex;align-items:center;gap:10px;cursor:pointer;
+  }
+  .sb-env .av{
+    width:28px;height:28px;border-radius:5px;background:linear-gradient(135deg,var(--plat),#19354F);
+    color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center;flex:none;
+  }
+  .sb-env .info{min-width:0;flex:1}
+  .sb-env .nm{font-size:13px;font-weight:600;color:#fff;line-height:1.2}
+  .sb-env .role{font-size:11px;color:#7B96B0;font-family:var(--f-mono)}
+  .sb-env::after{content:"⌄";color:var(--ink-6);font-size:10px}
+
+  .sb-nav{flex:1;display:flex;flex-direction:column;gap:2px}
+  .sb-grp{margin-top:14px}.sb-grp:first-child{margin-top:0}
+  .sb-grp .lbl{font-size:10.5px;font-weight:700;color:var(--ink-6);letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;margin-bottom:4px}
+  .sb-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:#D6CDBE;text-decoration:none;font-size:13.5px;font-weight:500;cursor:pointer;transition:background .12s,color .12s}
+  .sb-it:hover{background:var(--deep-2);color:#fff}
+  .sb-it.on{background:var(--plat);color:#fff;font-weight:600}
+  .sb-it .ic{flex:none;color:var(--ink-4);font-size:15px;width:18px;display:grid;place-items:center}
+  .sb-it.on .ic{color:#fff}
+  .sb-it .ct{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);padding:1px 6px;background:var(--deep-2);border-radius:3px}
+  .sb-it.on .ct{background:rgba(0,0,0,.20);color:#F0EAE0}
+
+  .sb-foot{padding-top:14px;border-top:1px solid var(--deep-3);margin-top:14px;display:flex;flex-direction:column;gap:8px}
+  .sb-user{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--deep-2);border-radius:7px;cursor:pointer}
+  .sb-user .av{width:30px;height:30px;border-radius:50%;background:var(--plat);color:#fff;font:700 13px/1 var(--f-ui);display:grid;place-items:center}
+  .sb-user .nm{font-size:13px;font-weight:600;color:#fff;line-height:1.2}
+  .sb-user .rl{font-size:11px;color:#7B96B0;font-family:var(--f-mono)}
+
+  /* MAIN */
+  main{display:flex;flex-direction:column;min-width:0}
+  .tb{height:64px;padding:0 28px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:20}
+  @media (min-width:1600px){.tb{padding:0 40px}}
+  .tb-env-chip{
+    display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;background:var(--info-tint);
+    border:1px solid #C2D2E1;color:var(--plat);font-size:12.5px;font-weight:600;border-radius:7px;letter-spacing:.02em;
+  }
+  .tb-env-chip .ic{width:7px;height:7px;border-radius:50%;background:var(--plat);box-shadow:0 0 0 3px #C2D2E1}
+  .tb-env-chip .v{font-family:var(--f-mono);font-size:11.5px;font-weight:500;color:var(--ink-6);margin-left:6px}
+
+  .tb-search{flex:1;max-width:460px;display:flex;align-items:center;gap:8px;background:var(--elev);border:1px solid var(--line);border-radius:7px;padding:7px 12px;color:var(--ink-6)}
+  .tb-search input{border:0;outline:0;background:transparent;width:100%;font:500 13.5px/1 var(--f-ui);color:var(--ink-12)}
+  .tb-search input::placeholder{color:var(--ink-6)}
+  .tb-search .kbd{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);background:var(--sunk);border:1px solid var(--line);border-radius:3px;padding:1px 5px}
+
+  .tb-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .ib{width:36px;height:36px;display:grid;place-items:center;background:transparent;border:1px solid transparent;border-radius:7px;cursor:pointer;color:var(--ink-10);position:relative}
+  .ib:hover{background:var(--sunk);border-color:var(--line)}
+  .ib .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:6px;padding:8px 13px;font:600 13px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s}
+  .btn-primary{background:var(--plat);color:#fff;border-color:var(--plat)}
+  .btn-primary:hover{background:#19354F;border-color:#19354F}
+  .btn-outline{background:var(--elev);color:var(--ink-12);border-color:var(--line-strong)}
+  .btn-outline:hover{border-color:var(--ink-12)}
+  .btn-ghost{background:transparent;color:var(--ink-10)}
+  .btn-sm{padding:6px 10px;font-size:12px}
+
+  /* PAGE */
+  .page{padding:28px;flex:1}
+  @media (min-width:1600px){.page{padding:36px 40px}}
+  .ph{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:14px}
+  .ph h1{font-family:var(--f-display);font-size:34px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.1}
+  .ph .sub{color:var(--ink-6);font-size:13px;font-family:var(--f-mono);margin-top:4px}
+  .ph .sub b{color:var(--ink-12);font-family:var(--f-ui);font-weight:500}
+  .ph .tools{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* KPI */
+  .kpis{display:grid;gap:14px;margin-bottom:24px;grid-template-columns:repeat(2,1fr)}
+  @media (min-width:980px){.kpis{grid-template-columns:repeat(4,1fr)}}
+  .kpi{background:var(--elev);border:1px solid var(--line);border-radius:10px;padding:18px 20px 14px;position:relative;overflow:hidden}
+  .kpi .lbl{font-size:11.5px;color:var(--ink-6);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
+  .kpi .v{font-family:var(--f-display);font-size:clamp(28px,2.8vw,38px);font-weight:600;letter-spacing:-.02em;line-height:1}
+  .kpi .v small{font-size:.45em;color:var(--ink-6);font-weight:500;font-family:var(--f-ui);letter-spacing:0;margin-left:4px}
+  .kpi .d{margin-top:10px;font-size:12px;color:var(--ink-8);display:flex;justify-content:space-between;align-items:center}
+  .kpi .d .up{color:var(--success)}.kpi .d .dn{color:var(--danger)}
+  .kpi .spark{position:absolute;bottom:0;right:14px;display:flex;gap:2px;height:24px;align-items:flex-end;opacity:.7}
+  .kpi .spark i{display:block;width:4px;background:var(--ink-2);border-radius:1px 1px 0 0}
+  .kpi .spark i.hi{background:var(--plat)}
+
+  /* MAIN GRID */
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
+  @media (min-width:1100px){.grid{grid-template-columns:1.55fr .75fr}}
+  @media (min-width:1600px){.grid{grid-template-columns:1.7fr .75fr;gap:24px}}
+
+  .card{background:var(--elev);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .card-h{display:flex;align-items:baseline;justify-content:space-between;padding:18px 22px 12px;gap:14px}
+  .card-h h2{font-family:var(--f-display);font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .card-h .sub{font-size:12.5px;color:var(--ink-6)}
+  .card-h .tools{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .filter{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--ink-10);font-weight:500;cursor:pointer}
+  .filter:hover{border-color:var(--ink-12)}
+  .filter::after{content:"⌄";color:var(--ink-6);font-size:10px}
+  .filter.on{background:var(--info-tint);color:var(--plat);border-color:var(--plat)}
+
+  /* WORKSHOPS TABLE */
+  .ws-tbl{width:100%;border-collapse:collapse;font-size:13px;display:block;overflow-x:auto}
+  @media (min-width:980px){.ws-tbl{display:table}}
+  .ws-tbl th{
+    position:sticky;top:0;background:var(--bg);
+    text-align:left;font:600 10.5px/1.3 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;
+    color:var(--ink-6);padding:10px 12px 10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  .ws-tbl th:first-child{padding-left:22px}
+  .ws-tbl th:last-child{padding-right:22px}
+  .ws-tbl td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .ws-tbl td:first-child{padding-left:22px}
+  .ws-tbl td:last-child{padding-right:22px}
+  .ws-tbl tr:hover{background:var(--sunk)}
+  .ws-tbl tr:last-child td{border-bottom:0}
+
+  .ws-id{display:flex;align-items:center;gap:11px;min-width:0}
+  .ws-id .av{
+    width:34px;height:34px;border-radius:6px;color:#fff;display:grid;place-items:center;
+    font:700 13px/1 var(--f-display);flex:none;letter-spacing:-.01em;
+  }
+  .ws-id .nm{min-width:0;display:flex;flex-direction:column;gap:1px}
+  .ws-id .nm b{font-weight:600;color:var(--ink-12);font-size:13.5px;letter-spacing:-.005em;line-height:1.2}
+  .ws-id .nm small{font-size:11px;color:var(--ink-6);font-family:var(--f-mono)}
+  .ws-tbl .ow{color:var(--ink-10);font-size:13px}
+  .ws-tbl .ow small{display:block;color:var(--ink-6);font-size:11px;font-family:var(--f-mono);font-weight:400}
+  .ws-tbl .mt{color:var(--ink-8);font-family:var(--f-mono);font-size:12px;text-align:center}
+  .ws-tbl .mt b{color:var(--ink-12);font-weight:600;font-size:13px}
+  .ws-tbl .pl{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:4px;letter-spacing:.02em}
+  .pl-st{background:var(--info-tint);color:var(--plat)}
+  .pl-bs{background:var(--sunk);color:var(--ink-8)}
+  .pl-pr{background:#26201D;color:#F0EAE0}
+  .ws-tbl .rev{text-align:right;font-family:var(--f-mono);font-weight:600;color:var(--ink-12);white-space:nowrap}
+  .ws-tbl .rev small{display:block;color:var(--ink-6);font-size:10.5px;font-weight:400}
+  .ws-tbl .ls{color:var(--ink-6);font-family:var(--f-mono);font-size:11.5px;white-space:nowrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+  .pill .pd{width:5px;height:5px;border-radius:50%}
+  .p-act{background:var(--success-tint);color:var(--success)} .p-act .pd{background:var(--success)}
+  .p-trial{background:var(--warn-tint);color:var(--warn)} .p-trial .pd{background:var(--warn)}
+  .p-bl{background:var(--danger-tint);color:var(--danger)} .p-bl .pd{background:var(--danger)}
+  .row-act{display:flex;gap:3px;justify-content:flex-end}
+  .row-act .ib{width:26px;height:26px;border-radius:5px;color:var(--ink-6)}
+  .row-act .ib:hover{color:var(--plat)}
+
+  .av-1{background:linear-gradient(135deg,#A6471F,#8C3814)}
+  .av-2{background:linear-gradient(135deg,#2E5E4E,#1F3F35)}
+  .av-3{background:linear-gradient(135deg,#A36417,#7C4810)}
+  .av-4{background:linear-gradient(135deg,#2A4D6B,#19354F)}
+  .av-5{background:linear-gradient(135deg,#3F362F,#1A1614)}
+  .av-6{background:linear-gradient(135deg,#566F2A,#3F5219)}
+  .av-7{background:linear-gradient(135deg,#8C2E1C,#671F12)}
+  .av-8{background:linear-gradient(135deg,#5C4F44,#3F362F)}
+
+  /* RIGHT COLUMN */
+  .right{display:flex;flex-direction:column;gap:18px}
+  .health{padding:6px 22px 18px}
+  .h-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+  .h-row:last-child{border-bottom:0}
+  .h-row .nm{font-size:13px;font-weight:500;color:var(--ink-12)}
+  .h-row .nm small{display:block;font-size:11px;color:var(--ink-6);font-family:var(--f-mono);font-weight:400}
+  .h-row .sp{display:flex;align-items:flex-end;gap:1.5px;height:18px;width:64px}
+  .h-row .sp i{display:block;width:3px;background:var(--success);border-radius:1px 1px 0 0}
+  .h-row .sp i.w{background:var(--warn)}
+  .h-row .v{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-12);font-weight:600;text-align:right;min-width:72px}
+  .h-row .v small{display:block;font-size:10.5px;color:var(--ink-6);font-weight:400}
+  .h-row .v.ok{color:var(--success)}
+
+  /* event feed */
+  .feed{padding:6px 22px 18px;font-size:12.5px}
+  .ev{display:grid;grid-template-columns:34px 1fr;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+  .ev:last-child{border-bottom:0}
+  .ev .ic{
+    width:30px;height:30px;border-radius:6px;display:grid;place-items:center;
+    background:var(--info-tint);color:var(--plat);font-family:var(--f-display);font-weight:600;
+    font-size:14px;flex:none;
+  }
+  .ev .ic.ok{background:var(--success-tint);color:var(--success)}
+  .ev .ic.warn{background:var(--warn-tint);color:var(--warn)}
+  .ev .ic.bl{background:var(--danger-tint);color:var(--danger)}
+  .ev .b{line-height:1.45;color:var(--ink-10)}
+  .ev .b b{color:var(--ink-12);font-weight:600}
+  .ev .b .t{display:block;font-family:var(--f-mono);font-size:10.5px;color:var(--ink-6);margin-top:2px}
+
+  /* tiers card */
+  .tiers{padding:18px 22px}
+  .tier-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;font-size:13px;border-bottom:1px solid var(--line)}
+  .tier-row:last-child{border-bottom:0}
+  .tier-row .nm{color:var(--ink-12);font-weight:500}
+  .tier-row .nm .bar{display:block;height:4px;width:160px;background:var(--sunk);border-radius:2px;margin-top:5px;overflow:hidden}
+  .tier-row .nm .bar i{display:block;height:100%;background:var(--plat)}
+  .tier-row .v{font-family:var(--f-mono);font-weight:600;color:var(--ink-12);font-size:13px;text-align:right}
+  .tier-row .v small{display:block;color:var(--ink-6);font-size:10.5px;font-weight:400}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sb">
+    <div class="sb-brand">
+      <span class="mk">M</span>
+      <span class="nm">Mebel Pro<small>platforma</small></span>
+    </div>
+
+    <div class="sb-env">
+      <span class="av">P</span>
+      <div class="info">
+        <div class="nm">Platforma — prod</div>
+        <div class="role">v2.1.0 · uz · 47 seh</div>
+      </div>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="sb-grp">
+        <div class="lbl">Asosiy</div>
+        <a class="sb-it" href="#"><span class="ic">◐</span> Asosiy</a>
+        <a class="sb-it on" href="#"><span class="ic">▣</span> Sehlar <span class="ct">47</span></a>
+        <a class="sb-it" href="#"><span class="ic">◆</span> Mijozlar <span class="ct">1.2k</span></a>
+        <a class="sb-it" href="#"><span class="ic">⌖</span> Platforma userlari <span class="ct">4</span></a>
+      </div>
+      <div class="sb-grp">
+        <div class="lbl">Operatsiyalar</div>
+        <a class="sb-it" href="#"><span class="ic">⊟</span> Tizim sog'lig'i</a>
+        <a class="sb-it" href="#"><span class="ic">≡</span> Action log</a>
+        <a class="sb-it" href="#"><span class="ic">↥</span> Relizlar <span class="ct">v2.1</span></a>
+      </div>
+      <div class="sb-grp">
+        <div class="lbl">Boshqaruv</div>
+        <a class="sb-it" href="#"><span class="ic">∑</span> Hisobotlar</a>
+        <a class="sb-it" href="#"><span class="ic">$</span> Tariflar</a>
+        <a class="sb-it" href="#"><span class="ic">⚙</span> Sozlamalar</a>
+      </div>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="sb-user">
+        <span class="av">N</span>
+        <div class="info">
+          <div class="nm">Nuriddin O.</div>
+          <div class="rl">Platform operatori · root</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- TOP BAR -->
+    <div class="tb">
+      <div class="tb-env-chip">
+        <span class="ic"></span>PROD <span class="v">v2.1.0 · 14-may 09:42 da deploy bo'lgan</span>
+      </div>
+      <div class="tb-search">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+        <input placeholder="Seh, foydalanuvchi, mijoz yoki buyurtma ID…" />
+        <span class="kbd">⌘ K</span>
+      </div>
+      <div class="tb-actions">
+        <button class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79"/></svg></button>
+        <button class="ib"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="dot"></span></button>
+        <a class="btn btn-primary" href="#">+ Yangi seh provisioning</a>
+      </div>
+    </div>
+
+    <!-- PAGE -->
+    <div class="page">
+
+      <div class="ph">
+        <div>
+          <h1>Sehlar</h1>
+          <div class="sub">47 ta faol · <b>3 ta</b> oxirgi 30 kunda qo'shildi · <b>2 ta</b> bloklangan</div>
+        </div>
+        <div class="tools">
+          <button class="btn btn-ghost btn-sm">↻</button>
+          <button class="btn btn-outline btn-sm">CSV eksport</button>
+          <button class="btn btn-outline btn-sm">Toplu xat yuborish</button>
+        </div>
+      </div>
+
+      <!-- KPIS -->
+      <div class="kpis">
+        <div class="kpi">
+          <div class="lbl">Faol sehlar</div>
+          <div class="v num">47</div>
+          <div class="d"><span class="up"><b>↑ 3</b> oxirgi 30 kunda</span><span style="color:var(--ink-6)">2 bloklangan</span></div>
+          <div class="spark">
+            <i style="height:50%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:62%"></i>
+            <i style="height:66%"></i><i style="height:72%"></i><i style="height:80%;background:var(--plat)" class="hi"></i>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">Bu oydagi buyurtmalar</div>
+          <div class="v num">8 240</div>
+          <div class="d"><span class="up"><b>↑ 12.4%</b> aprelga</span><span style="color:var(--ink-6)">848 bugun</span></div>
+          <div class="spark">
+            <i style="height:48%"></i><i style="height:54%"></i><i style="height:58%"></i><i style="height:50%"></i>
+            <i style="height:62%"></i><i style="height:72%"></i><i style="height:84%" class="hi"></i>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">MAU mijozlar</div>
+          <div class="v num">1 240</div>
+          <div class="d"><span class="up"><b>↑ 168</b> aprel</span><span style="color:var(--ink-6)">Telegram OAuth</span></div>
+          <div class="spark">
+            <i style="height:36%"></i><i style="height:44%"></i><i style="height:52%"></i><i style="height:60%"></i>
+            <i style="height:68%"></i><i style="height:74%"></i><i style="height:82%" class="hi"></i>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="lbl">30 kunlik uptime</div>
+          <div class="v num">99.92<small>%</small></div>
+          <div class="d"><span class="up">SLA <b>99.5%</b> bajarildi</span><span style="color:var(--ink-6)">8m to'xtash</span></div>
+          <div class="spark">
+            <i style="height:88%"></i><i style="height:92%"></i><i style="height:90%"></i><i style="height:64%"></i>
+            <i style="height:94%"></i><i style="height:96%"></i><i style="height:98%" class="hi"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID -->
+      <div class="grid">
+
+        <!-- WORKSHOPS TABLE -->
+        <div class="card">
+          <div class="card-h">
+            <div>
+              <h2>Barcha sehlar</h2>
+              <div class="sub">12 / 47 ko'rsatilmoqda · saralash: oxirgi faol</div>
+            </div>
+            <div class="tools">
+              <span class="filter on">Status · faol <span style="background:var(--plat);color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">3</span></span>
+              <span class="filter">Tarif · hammasi</span>
+              <span class="filter">Hudud · hammasi</span>
+            </div>
+          </div>
+
+          <table class="ws-tbl">
+            <thead><tr>
+              <th>Seh</th>
+              <th>Egasi</th>
+              <th style="text-align:center">Filial · Xodim</th>
+              <th>Tarif</th>
+              <th style="text-align:right">Bu oy savdosi</th>
+              <th>Oxirgi faollik</th>
+              <th>Status</th>
+              <th></th>
+            </tr></thead>
+            <tbody>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-1">FH</span><div class="nm"><b>Furniture House</b><small>ws_01HJX2 · Toshkent</small></div></div></td>
+                <td class="ow">Hasan Ergashev<small>+998 90 100-44-22</small></td>
+                <td class="mt"><b>3</b> · 23</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">148.2M<small>so'm</small></td>
+                <td class="ls">14-may, 13:42</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-4">MS</span><div class="nm"><b>Mebel Star</b><small>ws_01HJX1 · Toshkent</small></div></div></td>
+                <td class="ow">Olim Tursunov<small>+998 91 233-12-44</small></td>
+                <td class="mt"><b>2</b> · 18</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">96.4M<small>so'm</small></td>
+                <td class="ls">14-may, 13:38</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-7">MV</span><div class="nm"><b>"Marvarid" Mebel</b><small>ws_01HJW8 · Toshkent · Samarqand</small></div></div></td>
+                <td class="ow">Sherzod Yusupov<small>+998 71 244-32-12</small></td>
+                <td class="mt"><b>4</b> · 31</td>
+                <td><span class="pl pl-pr">Pro</span></td>
+                <td class="rev">240.6M<small>so'm</small></td>
+                <td class="ls">14-may, 13:35</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-5">BX</span><div class="nm"><b>Buxoro Mebel House</b><small>ws_01HJW6 · Buxoro</small></div></div></td>
+                <td class="ow">Saidjon Toshev<small>+998 65 224-11-88</small></td>
+                <td class="mt"><b>3</b> · 24</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">110.1M<small>so'm</small></td>
+                <td class="ls">14-may, 13:21</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-2">AM</span><div class="nm"><b>Akva Mebel</b><small>ws_01HJW2 · Toshkent</small></div></div></td>
+                <td class="ow">Akmal Zayniddinov<small>+998 90 322-44-19</small></td>
+                <td class="mt"><b>2</b> · 16</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">82.4M<small>so'm</small></td>
+                <td class="ls">14-may, 12:55</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-6">SW</span><div class="nm"><b>Sergeli Wood</b><small>ws_01HJV9 · Toshkent</small></div></div></td>
+                <td class="ow">Bekzod Karimov<small>+998 90 211-44-55</small></td>
+                <td class="mt"><b>2</b> · 14</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">71.8M<small>so'm</small></td>
+                <td class="ls">14-may, 11:42</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-3">OM</span><div class="nm"><b>Olmazor Mebel</b><small>ws_01HJV4 · Toshkent</small></div></div></td>
+                <td class="ow">Dilnoza Akramova<small>+998 99 144-32-19</small></td>
+                <td class="mt"><b>1</b> · 8</td>
+                <td><span class="pl pl-bs">Boshlang'ich</span></td>
+                <td class="rev">38.2M<small>so'm</small></td>
+                <td class="ls">14-may, 11:14</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-8">AD</span><div class="nm"><b>Adolat Mebel</b><small>ws_01HJV0 · Andijon</small></div></div></td>
+                <td class="ow">Adolatxon Komiljonova<small>+998 74 244-33-22</small></td>
+                <td class="mt"><b>1</b> · 6</td>
+                <td><span class="pl pl-bs">Boshlang'ich</span></td>
+                <td class="rev">24.6M<small>so'm</small></td>
+                <td class="ls">14-may, 10:48</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-1">YF</span><div class="nm"><b>Yangiyo'l Furniture</b><small>ws_01HJU5 · Toshkent vil.</small></div></div></td>
+                <td class="ow">Karim Yo'ldoshev<small>+998 90 877-65-43</small></td>
+                <td class="mt"><b>1</b> · 5</td>
+                <td><span class="pl pl-bs">Boshlang'ich</span></td>
+                <td class="rev">18.0M<small>so'm</small></td>
+                <td class="ls">13-may, 19:02</td>
+                <td><span class="pill p-act"><span class="pd"></span>Faol</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-4">AW</span><div class="nm"><b>Andijon Wood Lab</b><small>ws_01HJU0 · Andijon</small></div></div></td>
+                <td class="ow">Komiljon Tursunov<small>+998 74 211-44-12</small></td>
+                <td class="mt"><b>1</b> · 9</td>
+                <td><span class="pl pl-st">Standart</span></td>
+                <td class="rev">44.2M<small>so'm</small></td>
+                <td class="ls">12-may, 16:22</td>
+                <td><span class="pill p-trial"><span class="pd"></span>Sinov · 11 kun qoldi</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-3">NM</span><div class="nm"><b>Namangan Mebel</b><small>ws_01HJT8 · Namangan</small></div></div></td>
+                <td class="ow">Behzod Saidov<small>+998 69 244-12-77</small></td>
+                <td class="mt"><b>1</b> · 4</td>
+                <td><span class="pl pl-bs">Boshlang'ich</span></td>
+                <td class="rev" style="color:var(--ink-6)">—<small>endi qo'shildi</small></td>
+                <td class="ls">14-may, 09:18</td>
+                <td><span class="pill p-trial"><span class="pd"></span>Sinov · 14 kun qoldi</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+              <tr>
+                <td><div class="ws-id"><span class="av av-5">KM</span><div class="nm"><b>"Klassik Mebel"</b><small>ws_01HJS2 · Toshkent</small></div></div></td>
+                <td class="ow">Rustam Mahmudov<small>+998 90 322-19-87</small></td>
+                <td class="mt"><b>2</b> · 11</td>
+                <td><span class="pl pl-bs">Boshlang'ich</span></td>
+                <td class="rev" style="color:var(--ink-4)">5.4M<small>so'm</small></td>
+                <td class="ls">8-may, 14:18</td>
+                <td><span class="pill p-bl"><span class="pd"></span>Bloklangan · to'lov</span></td>
+                <td><div class="row-act"><button class="ib">⋯</button></div></td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="right">
+
+          <!-- TARIF distribution -->
+          <div class="card">
+            <div class="card-h"><h2>Tarif taqsimoti</h2><span class="sub">47 ta seh</span></div>
+            <div class="tiers">
+              <div class="tier-row">
+                <div class="nm">Boshlang'ich<span class="bar"><i style="width:51%"></i></span></div>
+                <div class="v">24<small>51%</small></div>
+              </div>
+              <div class="tier-row">
+                <div class="nm">Standart<span class="bar"><i style="width:38%"></i></span></div>
+                <div class="v">18<small>38%</small></div>
+              </div>
+              <div class="tier-row">
+                <div class="nm">Professional<span class="bar"><i style="width:10%"></i></span></div>
+                <div class="v">5<small>11%</small></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TIZIM SOG'LIG'I -->
+          <div class="card">
+            <div class="card-h"><h2>Tizim sog'lig'i</h2><span class="sub" style="color:var(--success);font-weight:600">✓ NORMAL</span></div>
+            <div class="health">
+              <div class="h-row">
+                <div class="nm">API javob vaqti<small>so'nggi 60 daq</small></div>
+                <div class="sp"><i style="height:35%"></i><i style="height:40%"></i><i style="height:30%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:45%"></i><i style="height:32%"></i><i style="height:50%"></i><i style="height:46%"></i><i style="height:40%"></i><i style="height:36%"></i></div>
+                <div class="v ok">42<small>p95 · ms</small></div>
+              </div>
+              <div class="h-row">
+                <div class="nm">DB ulanishlari<small>pgbouncer · 50 dan</small></div>
+                <div class="sp"><i style="height:60%"></i><i style="height:62%"></i><i style="height:64%"></i><i style="height:70%"></i><i style="height:72%"></i><i style="height:80%"></i><i style="height:74%"></i><i style="height:78%"></i><i style="height:82%"></i><i style="height:80%"></i><i style="height:76%"></i><i style="height:78%"></i></div>
+                <div class="v">38<small>76%</small></div>
+              </div>
+              <div class="h-row">
+                <div class="nm">Background job<small>orders / notifications</small></div>
+                <div class="sp"><i style="height:30%"></i><i style="height:42%"></i><i style="height:50%"></i><i style="height:48%"></i><i style="height:55%" class="w"></i><i style="height:45%"></i><i style="height:38%"></i><i style="height:40%"></i><i style="height:42%"></i><i style="height:36%"></i><i style="height:32%"></i><i style="height:28%"></i></div>
+                <div class="v ok">0<small>tilab turgan</small></div>
+              </div>
+              <div class="h-row">
+                <div class="nm">5xx xato darajasi<small>so'nggi 60 daq</small></div>
+                <div class="sp"><i style="height:20%"></i><i style="height:15%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:22%"></i><i style="height:16%"></i><i style="height:12%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:12%"></i><i style="height:16%"></i></div>
+                <div class="v ok">0.04<small>%</small></div>
+              </div>
+              <div class="h-row">
+                <div class="nm">MinIO disk<small>460 GB dan</small></div>
+                <div class="sp"><i style="height:55%"></i><i style="height:56%"></i><i style="height:58%"></i><i style="height:60%"></i><i style="height:61%"></i><i style="height:62%"></i><i style="height:63%"></i><i style="height:64%"></i><i style="height:65%"></i><i style="height:66%"></i><i style="height:67%"></i><i style="height:68%"></i></div>
+                <div class="v">312 G<small>68%</small></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RECENT EVENTS -->
+          <div class="card">
+            <div class="card-h"><h2>So'nggi voqealar</h2><a class="sub" style="text-decoration:none;color:var(--plat);font-weight:600" href="#">log →</a></div>
+            <div class="feed">
+              <div class="ev">
+                <span class="ic ok">+</span>
+                <div class="b">Yangi seh provisioning bo'ldi · <b>Namangan Mebel</b><span class="t">Behzod Saidov · sinov 14 kun · 09:18</span></div>
+              </div>
+              <div class="ev">
+                <span class="ic">↥</span>
+                <div class="b"><b>Sergeli Wood</b> Boshlang'ichdan Standartga o'tdi<span class="t">avto-yangilanish · 11:24</span></div>
+              </div>
+              <div class="ev">
+                <span class="ic warn">!</span>
+                <div class="b"><b>"Klassik Mebel"</b> to'lovi muvaffaqiyatsiz · oborot kechiktirildi<span class="t">3-marotaba urinish · 14-may 08:00</span></div>
+              </div>
+              <div class="ev">
+                <span class="ic ok">✓</span>
+                <div class="b">v2.1.0 deploy yakunlandi · barcha 47 seh<span class="t">Nuriddin O. tomonidan · 09:42</span></div>
+              </div>
+              <div class="ev">
+                <span class="ic bl">⊘</span>
+                <div class="b"><b>"Klassik Mebel"</b> avtomatik bloklangan · 30 kundan ortiq to'lovsiz<span class="t">8-may, 14:00</span></div>
+              </div>
+              <div class="ev">
+                <span class="ic">⌖</span>
+                <div class="b">Aziza Yusupova platformaga qo'shildi · <b>operator</b> roli<span class="t">Nuriddin O. · 13-may 16:30</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

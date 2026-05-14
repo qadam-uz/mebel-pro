@@ -5,7 +5,7 @@
 # `deploy` job) but also runnable manually as the deploy user:
 #
 #   ssh mebel@<server>
-#   cd /srv/mebel-pro
+#   cd /opt/mebel-pro
 #   bash deploy/scripts/deploy.sh
 #
 # Idempotent. Uses the standalone prod compose (no overlay): the backend
@@ -13,14 +13,14 @@
 # `postgres` and `minio` services running on the VPS.
 #
 # Required (on the server):
-#   - The repo is cloned at $APP_DIR (default /srv/mebel-pro).
+#   - The repo is cloned at $APP_DIR (default /opt/mebel-pro).
 #   - $APP_DIR/deploy/.env exists, with prod values filled in.
 #   - The `infra-net` Docker network exists (`docker network create infra-net`).
 #   - The deploy user is in the `docker` group.
 
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/srv/mebel-pro}"
+APP_DIR="${APP_DIR:-/opt/mebel-pro}"
 cd "$APP_DIR"
 
 # Bind to a known git ref so a force-push race doesn't deploy something the

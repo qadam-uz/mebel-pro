@@ -214,4 +214,4 @@ jobs:
           #   - prunes dangling images
           # Pin to the exact commit CI verified.
           script: |
-            DEPLOY_REF=${{ github.sha }} bash /srv/mebel-pro/deploy/scripts/deploy.sh
+            DEPLOY_REF=${{ github.sha }} bash /opt/mebel-pro/deploy/scripts/deploy.sh

@@ -1,0 +1,1280 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mening sahifam — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FAF7F2; --elev:#fff; --sunk:#F2EEE6; --deep:#1A1614; --deep-2:#2A2421; --deep-3:#3F362F;
+    --ink-12:#1A1614; --ink-10:#3F362F; --ink-8:#5C4F44; --ink-6:#847569; --ink-4:#B0A698; --ink-2:#D6CDBE;
+    --line:#E5DDD0; --line-strong:#D6CDBE;
+    --accent:#A6471F; --accent-h:#8C3814; --accent-tint:#F4E5DC;
+    --success:#2E5E4E; --success-tint:#DDE9E3;
+    --warn:#A36417; --warn-tint:#F4E4CB;
+    --info:#2A4D6B; --info-tint:#D8E2EB;
+    --olive:#566F2A; --olive-tint:#DCE5C5;
+    --danger:#8C2E1C; --danger-tint:#F2D6CE;
+    --f-display:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
+    --f-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --f-mono:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--f-ui);background:var(--bg);color:var(--ink-12);-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100vh}
+  ::selection{background:var(--accent);color:#fff}
+  [hidden]{display:none!important}
+  .num{font-variant-numeric:tabular-nums;font-family:var(--f-mono)}
+  button{font-family:inherit;cursor:pointer}
+  a{color:inherit}
+  .container{width:min(100% - 32px, 1280px);margin-inline:auto}
+  @media (min-width:1600px){.container{width:min(100% - 80px, 1360px)}}
+
+  /* ===== HEADER ===== */
+  .hdr{position:sticky;top:0;z-index:30;background:var(--elev);border-bottom:1px solid var(--line)}
+  .hdr-row{display:flex;align-items:center;gap:18px;padding:14px 0}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;background:none;border:0;padding:0}
+  .mk{
+    width:32px;height:32px;background:var(--deep);color:#fff;display:grid;place-items:center;
+    border-radius:3px;font-family:var(--f-display);font-weight:700;font-size:17px;position:relative;transform:rotate(-3deg);
+  }
+  .mk::after{content:"";position:absolute;width:6px;height:6px;background:var(--accent);border-radius:50%;right:-2px;bottom:-2px}
+  .brand .nm{font-family:var(--f-display);font-size:19px;font-weight:600;letter-spacing:-.01em}
+
+  .crumb{
+    margin-left:6px;padding-left:14px;border-left:1px solid var(--line);
+    display:none;align-items:center;gap:10px;color:var(--ink-8);font-size:13.5px;position:relative;
+  }
+  @media (min-width:780px){.crumb{display:flex}}
+  .crumb .sh{font-weight:600;color:var(--ink-12)}
+  .br-btn{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:var(--sunk);
+    border:1px solid var(--line);border-radius:6px;font:500 13px/1.2 var(--f-ui);color:var(--ink-10);cursor:pointer;
+  }
+  .br-btn::after{content:"▾";font-size:9px;color:var(--ink-6)}
+  .br-btn:hover{border-color:var(--ink-12)}
+  .br-pop{
+    position:absolute;top:36px;left:14px;background:var(--elev);border:1px solid var(--line-strong);
+    border-radius:10px;box-shadow:0 20px 40px -16px rgba(26,22,20,.20);
+    min-width:280px;z-index:50;padding:6px;
+  }
+  .br-pop .it{
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px;padding:9px 11px;border-radius:6px;cursor:pointer;align-items:center;
+  }
+  .br-pop .it:hover{background:var(--sunk)}
+  .br-pop .it.on{background:var(--accent-tint);color:var(--accent-h)}
+  .br-pop .it .pin{width:8px;height:8px;border-radius:50%;background:var(--success)}
+  .br-pop .it .pin.cl{background:var(--warn)}
+  .br-pop .it .nm{font-size:13.5px;font-weight:600;line-height:1.25;color:var(--ink-12)}
+  .br-pop .it .nm small{display:block;color:var(--ink-6);font-size:11.5px;font-weight:400;font-family:var(--f-mono)}
+  .br-pop .it.on .nm{color:var(--accent-h)}
+  .br-pop .it .ck{color:var(--accent);font-size:14px;font-weight:700;display:none}
+  .br-pop .it.on .ck{display:inline}
+
+  .search{
+    margin-left:auto;flex:0 0 auto;display:none;align-items:center;gap:8px;
+    background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 12px;
+    min-width:320px;color:var(--ink-6);font-size:13.5px;
+  }
+  @media (min-width:1024px){.search{display:flex}}
+  .search input{border:0;background:transparent;outline:0;width:100%;font:500 14px/1 var(--f-ui);color:var(--ink-12)}
+  .search input::placeholder{color:var(--ink-6)}
+  .search .kbd{font-family:var(--f-mono);font-size:11px;color:var(--ink-6);background:var(--elev);border:1px solid var(--line);border-radius:3px;padding:2px 6px}
+
+  .hdr-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+  @media (min-width:1024px){.hdr-actions{margin-left:0}}
+  .icon-btn{
+    width:38px;height:38px;display:grid;place-items:center;background:transparent;
+    border:1px solid transparent;border-radius:8px;cursor:pointer;color:var(--ink-10);position:relative;
+  }
+  .icon-btn:hover{background:var(--sunk);border-color:var(--line)}
+  .icon-btn .badge{
+    position:absolute;top:2px;right:2px;background:var(--accent);color:#fff;
+    font:700 10px/14px var(--f-ui);border-radius:999px;padding:0 5px;min-width:18px;height:18px;text-align:center;
+    border:2px solid var(--elev);
+  }
+  .icon-btn .badge[data-count="0"]{display:none}
+  .user{
+    display:flex;align-items:center;gap:9px;padding:4px 12px 4px 4px;border:1px solid var(--line);
+    border-radius:999px;cursor:pointer;background:none;
+  }
+  .user:hover{border-color:var(--ink-12)}
+  .user .av{
+    width:30px;height:30px;border-radius:50%;background:var(--accent);
+    font:700 12.5px/30px var(--f-ui);color:#fff;text-align:center;flex:none;
+  }
+  .user .nm{font-size:13.5px;font-weight:500;color:var(--ink-12);text-align:left}
+  .user .nm .tg{display:block;font-size:11px;color:var(--ink-6);font-family:var(--f-mono)}
+  @media (max-width:680px){.user .nm{display:none}}
+
+  /* ===== HERO STRIP ===== */
+  .hello{padding:32px 0 12px}
+  .hello h1{font-family:var(--f-display);font-size:clamp(28px,3vw,40px);font-weight:600;letter-spacing:-.02em;margin:0 0 6px;line-height:1.1}
+  .hello h1 em{font-style:italic;color:var(--accent);font-weight:600}
+  .hello p{margin:0;color:var(--ink-8);font-size:15px}
+  .hello p b{color:var(--ink-12);font-weight:600}
+
+  /* ===== MAIN ===== */
+  .main{padding:28px 0 64px}
+  .grid{display:grid;gap:24px;grid-template-columns:1fr}
+  @media (min-width:1080px){.grid{grid-template-columns:1.35fr 1fr;gap:24px}}
+  @media (min-width:1440px){.grid{grid-template-columns:1.4fr .85fr;gap:32px}}
+
+  .col-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--ink-12);gap:14px;flex-wrap:wrap}
+  .col-h h2{font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .col-h .more{font-size:13px;color:var(--ink-8);text-decoration:none;font-weight:500;background:none;border:0;cursor:pointer}
+  .col-h .more:hover{color:var(--accent)}
+  .col-h .more .a{color:var(--accent)}
+
+  /* ===== ORDER CARDS ===== */
+  .ord{background:var(--elev);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden;transition:border-color .15s;cursor:pointer}
+  .ord:hover{border-color:var(--line-strong)}
+  .ord.active{border-color:var(--ink-12)}
+  .ord-top{display:grid;grid-template-columns:auto 1fr auto;gap:14px;padding:16px 18px;align-items:center}
+  .ord .stch{width:6px;height:46px;border-radius:3px;background:var(--accent)}
+  .ord.rdy .stch{background:var(--success)}
+  .ord.del .stch{background:var(--olive)}
+  .ord.dn .stch{background:var(--ink-4)}
+  .ord.pay .stch{background:var(--warn)}
+  .ord.conf .stch{background:var(--info)}
+  .ord .who{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .ord .id{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-6);letter-spacing:.04em}
+  .ord .ti{font-family:var(--f-display);font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+  .ord .meta{display:flex;flex-wrap:wrap;gap:8px;color:var(--ink-8);font-size:13px;margin-top:2px}
+  .ord .meta b{color:var(--ink-12);font-weight:500}
+  .ord .right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:600;letter-spacing:.02em}
+  .pill .pd{width:6px;height:6px;border-radius:50%}
+  .p-cut{background:var(--accent-tint);color:var(--accent-h)} .p-cut .pd{background:var(--accent)}
+  .p-rdy{background:var(--success-tint);color:var(--success)} .p-rdy .pd{background:var(--success)}
+  .p-del{background:var(--olive-tint);color:var(--olive)} .p-del .pd{background:var(--olive)}
+  .p-dn{background:var(--sunk);color:var(--ink-6)} .p-dn .pd{background:var(--ink-4)}
+  .p-pay{background:var(--warn-tint);color:var(--warn)} .p-pay .pd{background:var(--warn)}
+  .p-conf{background:var(--info-tint);color:var(--info)} .p-conf .pd{background:var(--info)}
+  .p-new{background:#E8E2D5;color:var(--ink-10)} .p-new .pd{background:var(--ink-8)}
+  .ord .total{font-family:var(--f-mono);font-size:14px;font-weight:600;color:var(--ink-12)}
+
+  /* ===== TIMELINE ===== */
+  .tl{position:relative;padding-left:18px;margin:0;list-style:none}
+  .tl::before{content:"";position:absolute;left:5px;top:8px;bottom:8px;width:1px;background:var(--line-strong)}
+  .tl .step{position:relative;padding:6px 0 6px 6px;font-size:13px;color:var(--ink-8)}
+  .tl .step::before{
+    content:"";position:absolute;left:-18px;top:11px;width:11px;height:11px;border-radius:50%;
+    background:var(--bg);border:2px solid var(--ink-4);
+  }
+  .tl .step.done::before{background:var(--success);border-color:var(--success)}
+  .tl .step.now::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-tint)}
+  .tl .step.now{color:var(--ink-12)}
+  .tl .step .when{font-family:var(--f-mono);font-size:11px;color:var(--ink-6);margin-right:8px}
+  .tl .step .who{color:var(--ink-10);font-weight:500}
+
+  /* ===== DETAIL PANEL ===== */
+  .dp{background:var(--elev);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:sticky;top:84px}
+  @media (max-width:1079px){.dp{position:static;margin-top:24px}}
+  .dp-head{padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+  .dp-head .id{font-family:var(--f-mono);font-size:12px;color:var(--ink-6);letter-spacing:.04em;margin-bottom:6px}
+  .dp-head h3{font-family:var(--f-display);font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px;line-height:1.2}
+  .dp-head .stat-row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-8);flex-wrap:wrap}
+  .dp-tl{padding:14px 22px;border-bottom:1px solid var(--line);background:var(--sunk)}
+  .dp-items{padding:14px 22px;border-bottom:1px solid var(--line)}
+  .dp-items h4{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-6);font-weight:600;margin:0 0 10px}
+  .it{display:grid;grid-template-columns:42px 1fr auto;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);align-items:center;font-size:13.5px}
+  .it:last-child{border-bottom:0}
+  .it .th{
+    width:42px;height:42px;border-radius:5px;background:var(--sunk);border:1px solid var(--line);
+  }
+  .it .ng{display:flex;flex-direction:column;min-width:0}
+  .it .n{font-weight:500;color:var(--ink-12);font-size:13.5px;line-height:1.3}
+  .it .g{color:var(--ink-6);font-size:11.5px;font-family:var(--f-mono)}
+  .it .pr{text-align:right;font-family:var(--f-mono);font-size:13px;color:var(--ink-10);white-space:nowrap}
+  .it .pr b{color:var(--ink-12);font-weight:600;display:block;font-size:13px}
+  .dp-totals{padding:14px 22px;font-size:13.5px}
+  .dp-totals .r{display:flex;justify-content:space-between;padding:5px 0;color:var(--ink-8);gap:14px}
+  .dp-totals .r .num{color:var(--ink-12);font-weight:500}
+  .dp-totals .grand{padding-top:10px;margin-top:5px;border-top:1px solid var(--ink-12);font-size:16px;color:var(--ink-12);font-weight:600}
+  .dp-totals .grand .num{font-family:var(--f-display);font-size:22px;font-weight:600}
+  .dp-foot{padding:14px 22px 18px;display:flex;gap:8px;flex-wrap:wrap}
+  .dp-empty{padding:48px 22px;text-align:center;color:var(--ink-6);font-size:14px}
+  .dp-empty .ic{font-family:var(--f-display);font-size:38px;color:var(--ink-4);display:block;margin-bottom:8px}
+
+  /* ===== BUTTONS ===== */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:6px;padding:9px 14px;font:600 13.5px/1 var(--f-ui);text-decoration:none;cursor:pointer;border:1px solid transparent;transition:all .15s;background:none}
+  .btn-primary{background:var(--deep);color:#fff;border-color:var(--deep)}
+  .btn-primary:hover{background:var(--accent);border-color:var(--accent)}
+  .btn-outline{background:transparent;color:var(--ink-12);border-color:var(--line-strong)}
+  .btn-outline:hover{border-color:var(--ink-12)}
+  .btn-acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-acc:hover{background:var(--accent-h);border-color:var(--accent-h)}
+  .btn-ghost{background:transparent;color:var(--ink-10);border:0}
+  .btn-ghost:hover{color:var(--accent)}
+  .btn-lg{padding:13px 22px;font-size:15px;border-radius:8px}
+  .btn-sm{padding:7px 11px;font-size:12.5px;border-radius:5px}
+  .btn-block{width:100%}
+  .btn-danger{color:var(--danger);border-color:var(--danger-tint)}
+  .btn-danger:hover{background:var(--danger-tint)}
+
+  /* ===== VIEW: CATALOG ===== */
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:24px}
+  .page-head h1{font-family:var(--f-display);font-size:clamp(28px,3vw,38px);font-weight:600;letter-spacing:-.02em;margin:0 0 5px;line-height:1.1}
+  .page-head .sub{color:var(--ink-8);font-size:14px;margin:0}
+  .page-head .back{font-size:13px;color:var(--ink-8);text-decoration:none;font-weight:500;background:none;border:0;padding:0;cursor:pointer;margin-bottom:8px;display:inline-flex;align-items:center;gap:6px}
+  .page-head .back:hover{color:var(--accent)}
+
+  .cat-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+  .cat-search{
+    flex:1;min-width:200px;max-width:380px;display:flex;align-items:center;gap:8px;
+    background:var(--elev);border:1px solid var(--line);border-radius:8px;padding:9px 12px;
+  }
+  .cat-search input{border:0;outline:0;background:transparent;width:100%;font:500 13.5px/1 var(--f-ui)}
+  .cat-search input::placeholder{color:var(--ink-6)}
+  .cat-search svg{color:var(--ink-6);flex:none}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{
+    padding:7px 13px;background:var(--elev);border:1px solid var(--line);border-radius:999px;
+    font:500 12.5px/1 var(--f-ui);color:var(--ink-10);cursor:pointer;
+  }
+  .chip:hover{border-color:var(--ink-12)}
+  .chip.on{background:var(--ink-12);color:#fff;border-color:var(--ink-12)}
+
+  .mat-grid{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+  @media (min-width:640px){.mat-grid{grid-template-columns:repeat(3,1fr)}}
+  @media (min-width:980px){.mat-grid{grid-template-columns:repeat(4,1fr)}}
+  @media (min-width:1440px){.mat-grid{grid-template-columns:repeat(4,1fr)}}
+  @media (min-width:1700px){.mat-grid{grid-template-columns:repeat(5,1fr)}}
+  .mat{
+    background:var(--elev);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    display:flex;flex-direction:column;transition:transform .15s,border-color .15s;
+  }
+  .mat:hover{transform:translateY(-2px);border-color:var(--ink-10)}
+  .mat.in-cart{border-color:var(--accent)}
+  .mat .sw{
+    aspect-ratio:4/3;display:block;position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+  }
+  .mat .sw .stk{
+    position:absolute;top:8px;left:8px;background:rgba(255,255,255,.94);backdrop-filter:blur(6px);
+    font:600 10.5px/1 var(--f-mono);padding:4px 7px;border-radius:4px;color:var(--ink-10);
+  }
+  .mat .sw .stk.low{background:var(--warn-tint);color:var(--warn)}
+  .mat .b{padding:12px 14px 14px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .mat .brand{font-size:10.5px;color:var(--ink-6);letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+  .mat .nm{font-weight:500;font-size:14px;color:var(--ink-12);line-height:1.3;min-height:36px;letter-spacing:-.005em}
+  .mat .meta{font-size:11.5px;color:var(--ink-6);font-family:var(--f-mono)}
+  .mat .br-foot{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .mat .pr{font-family:var(--f-display);font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .mat .pr small{font-size:11px;color:var(--ink-6);font-weight:500;font-family:var(--f-ui);letter-spacing:0}
+  .mat .add{
+    width:34px;height:34px;display:grid;place-items:center;background:var(--sunk);
+    color:var(--ink-12);border:1px solid var(--line);border-radius:6px;
+    font-family:var(--f-display);font-size:18px;font-weight:600;cursor:pointer;line-height:1;transition:all .12s;
+  }
+  .mat .add:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .mat .qty-wrap{display:flex;align-items:center;gap:4px;border:1px solid var(--accent);border-radius:6px;padding:2px}
+  .mat .qty-wrap button{
+    width:26px;height:26px;background:transparent;border:0;color:var(--accent-h);font-size:14px;font-weight:700;cursor:pointer;border-radius:4px;
+  }
+  .mat .qty-wrap button:hover{background:var(--accent-tint)}
+  .mat .qty-wrap .v{font:600 13px var(--f-mono);min-width:18px;text-align:center;color:var(--ink-12)}
+
+  /* swatches */
+  .sw-1{background:linear-gradient(110deg,#C8A06B 0%,#B58446 36%,#A66E2F 70%,#8E5419 100%)}
+  .sw-2{background:linear-gradient(135deg,#E8D5B7 0%,#D4B58C 100%)}
+  .sw-3{background:linear-gradient(125deg,#6E4929 0%,#4E331C 50%,#3A2412 100%)}
+  .sw-4{background:#F1EAE0}
+  .sw-5{background:linear-gradient(180deg,#D4B58C 0%,#C8A06B 100%)}
+  .sw-6{background:linear-gradient(125deg,#A1855E 0%,#8B6B3F 100%)}
+  .sw-7{background:#fff;border:1px dashed var(--ink-2)}
+  .sw-8{background:#2A2825}
+  .sw-9{background:linear-gradient(135deg,#5B4438,#2F2017)}
+  .sw-10{background:linear-gradient(150deg,#E5DBC3,#C9B68C)}
+
+  /* ===== CART DRAWER ===== */
+  .scrim{position:fixed;inset:0;background:rgba(26,22,20,.45);z-index:60;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.on{opacity:1;pointer-events:auto}
+  .cart{
+    position:fixed;top:0;right:0;width:min(100%,420px);height:100vh;background:var(--elev);
+    border-left:1px solid var(--line);z-index:70;display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .25s ease;
+  }
+  .cart.on{transform:translateX(0)}
+  .cart-h{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .cart-h h3{font-family:var(--f-display);font-size:22px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .cart-h .ct{font-family:var(--f-mono);font-size:12px;color:var(--ink-6);margin-left:8px;font-weight:500}
+  .cart-b{flex:1;overflow-y:auto;padding:8px 0}
+  .cart-it{display:grid;grid-template-columns:44px 1fr auto;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line);align-items:center}
+  .cart-it .th{width:44px;height:44px;border-radius:5px;border:1px solid var(--line)}
+  .cart-it .ng{min-width:0}
+  .cart-it .n{font-weight:500;font-size:13.5px;line-height:1.3}
+  .cart-it .g{font-size:11px;color:var(--ink-6);font-family:var(--f-mono);margin-top:2px}
+  .cart-it .qty{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
+  .cart-it .qty button{width:26px;height:26px;background:none;border:0;color:var(--ink-10);font:700 14px var(--f-ui);cursor:pointer}
+  .cart-it .qty button:hover{color:var(--accent)}
+  .cart-it .qty .v{min-width:24px;text-align:center;font:600 12.5px var(--f-mono)}
+  .cart-it .pr{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-12);font-weight:600;text-align:right;white-space:nowrap}
+  .cart-it .rm{background:none;border:0;color:var(--ink-4);font:400 18px var(--f-ui);cursor:pointer;padding:0 0 0 8px}
+  .cart-it .rm:hover{color:var(--danger)}
+  .cart-empty{padding:48px 22px;text-align:center;color:var(--ink-6);font-size:14px}
+  .cart-empty .ic{display:block;font-size:48px;color:var(--ink-4);margin-bottom:10px;font-family:var(--f-display)}
+  .cart-f{padding:16px 22px 22px;border-top:1px solid var(--line);background:var(--sunk)}
+  .cart-f .r{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--ink-8)}
+  .cart-f .r .num{color:var(--ink-12);font-weight:500}
+  .cart-f .gr{padding-top:8px;margin-top:6px;border-top:1px solid var(--line-strong);font-size:15px;color:var(--ink-12);font-weight:600}
+  .cart-f .gr .num{font-family:var(--f-display);font-size:22px;font-weight:600}
+  .cart-f .act{margin-top:14px;display:flex;gap:8px}
+  .cart-f .act .btn{flex:1}
+
+  /* ===== CHECKOUT VIEW ===== */
+  .ck-grid{display:grid;gap:24px;grid-template-columns:1fr}
+  @media (min-width:1024px){.ck-grid{grid-template-columns:1.4fr .85fr;gap:32px}}
+
+  .ck-section{background:var(--elev);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:14px}
+  .ck-section h3{font-family:var(--f-display);font-size:18px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
+  .ck-section .sub{color:var(--ink-6);font-size:12.5px;margin-bottom:14px;margin-top:-8px}
+
+  .opt-row{display:grid;gap:8px;grid-template-columns:1fr}
+  @media (min-width:560px){.opt-row{grid-template-columns:1fr 1fr}}
+  .opt{
+    display:flex;align-items:flex-start;gap:11px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;cursor:pointer;
+    transition:border-color .12s,background .12s;
+  }
+  .opt:hover{border-color:var(--line-strong)}
+  .opt.on{border-color:var(--ink-12);background:var(--sunk)}
+  .opt .rd{
+    width:18px;height:18px;border-radius:50%;border:2px solid var(--ink-4);flex:none;margin-top:1px;position:relative;
+  }
+  .opt.on .rd{border-color:var(--accent)}
+  .opt.on .rd::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
+  .opt .info{min-width:0;flex:1}
+  .opt .nm{font-weight:600;font-size:14px;color:var(--ink-12);line-height:1.3}
+  .opt .ds{font-size:12.5px;color:var(--ink-8);margin-top:3px;line-height:1.4}
+  .opt .pr{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-10);font-weight:600;margin-top:5px}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .field label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-6)}
+  .field input,.field textarea,.field select{
+    border:1px solid var(--line);border-radius:7px;padding:10px 12px;background:var(--elev);
+    font:500 14px/1.4 var(--f-ui);color:var(--ink-12);outline:0;
+  }
+  .field input:focus,.field textarea:focus{border-color:var(--ink-12)}
+  .field-row{display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:560px){.field-row{grid-template-columns:1fr 1fr}}
+
+  /* sticky checkout summary */
+  .ck-sum{position:sticky;top:84px;background:var(--elev);border:1px solid var(--line);border-radius:12px;padding:20px 22px;font-size:13px}
+  .ck-sum h3{font-family:var(--f-display);font-size:18px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
+  .ck-sum .row{display:flex;justify-content:space-between;padding:5px 0;color:var(--ink-8)}
+  .ck-sum .row .num{color:var(--ink-12);font-weight:500}
+  .ck-sum .total{padding-top:10px;margin-top:6px;border-top:1px solid var(--ink-12);font-size:15px;color:var(--ink-12);font-weight:600}
+  .ck-sum .total .num{font-family:var(--f-display);font-size:24px;font-weight:600}
+  .ck-sum .items-mini{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink-8)}
+  .ck-sum .items-mini .ln{display:flex;justify-content:space-between;padding:3px 0}
+  .ck-sum .items-mini b{color:var(--ink-12);font-weight:500;font-family:var(--f-mono);font-size:12px}
+  .ck-sum .btn{margin-top:14px}
+
+  /* ===== CONFIRMATION ===== */
+  .ok-wrap{max-width:520px;margin:60px auto;text-align:center;padding:40px 24px}
+  .ok-mark{
+    width:88px;height:88px;margin:0 auto 22px;border-radius:50%;background:var(--success);color:#fff;
+    display:grid;place-items:center;font-family:var(--f-display);font-size:48px;
+    box-shadow:0 0 0 12px var(--success-tint);
+  }
+  .ok-wrap h1{font-family:var(--f-display);font-size:36px;font-weight:600;letter-spacing:-.02em;margin:0 0 10px}
+  .ok-wrap .id{font-family:var(--f-mono);font-size:14px;color:var(--ink-6);letter-spacing:.06em;margin-bottom:18px}
+  .ok-wrap p{color:var(--ink-8);font-size:15px;margin:0 auto 24px;max-width:420px;line-height:1.5}
+  .ok-wrap p b{color:var(--ink-12)}
+  .ok-wrap .ck-card{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin:28px 0;font-size:13px;text-align:left}
+  .ok-wrap .ck-card .r{display:flex;justify-content:space-between;padding:6px 0;color:var(--ink-8)}
+  .ok-wrap .ck-card .r b{color:var(--ink-12);font-weight:500}
+  .ok-wrap .acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+
+  /* ===== TOAST ===== */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--deep);color:#fff;padding:12px 20px 12px 14px;border-radius:8px;
+    font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:10px;
+    box-shadow:0 12px 28px -10px rgba(26,22,20,.40);z-index:100;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  }
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .ic{
+    width:22px;height:22px;border-radius:50%;background:var(--success);color:#fff;
+    display:grid;place-items:center;font:700 12px var(--f-ui);flex:none;
+  }
+  .toast .ic.warn{background:var(--warn)}
+
+  /* help */
+  .help{margin-top:48px;background:var(--deep);color:#F0EAE0;border-radius:14px;padding:28px 32px;display:grid;gap:18px;align-items:center}
+  @media (min-width:780px){.help{grid-template-columns:1fr auto;gap:36px;padding:32px 40px}}
+  .help h3{font-family:var(--f-display);font-size:22px;font-weight:600;margin:0 0 6px;color:#fff}
+  .help p{margin:0;color:#D6CDBE;font-size:14px;max-width:520px;line-height:1.55}
+  .help .phone{font-family:var(--f-mono);font-size:18px;font-weight:600;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="container hdr-row">
+    <button class="brand" type="button" onclick="setView('home')"><span class="mk">M</span><span class="nm">Mebel Pro</span></button>
+    <div class="crumb">
+      <span class="sh" id="shop-name">Furniture House</span>
+      <button class="br-btn" type="button" id="br-btn" onclick="toggleBranch()"><span id="br-label">Toshkent — Yunusobod</span></button>
+      <div class="br-pop" id="br-pop" hidden></div>
+    </div>
+
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+      <input id="hdr-search" placeholder="Material yoki buyurtma raqami…" oninput="onHdrSearch(this.value)" />
+      <span class="kbd">⌘ K</span>
+    </div>
+
+    <div class="hdr-actions">
+      <button class="icon-btn" aria-label="Bildirishnomalar" type="button" onclick="toast('3 ta yangi bildirishnoma','info')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        <span class="badge" data-count="3">3</span>
+      </button>
+      <button class="icon-btn" aria-label="Savatcha" type="button" onclick="openCart()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>
+        <span class="badge" id="cart-badge" data-count="0">0</span>
+      </button>
+      <button class="user" type="button">
+        <span class="av">A</span>
+        <span class="nm">Akmal N.<span class="tg">@akmal_n</span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============================== VIEWS ============================== -->
+
+<!-- VIEW: HOME -->
+<section data-view="home">
+  <div class="hello">
+    <div class="container">
+      <h1>Salom, <em>Akmal aka</em>.</h1>
+      <p id="hello-sub"><b>2 ta</b> buyurtmangiz hozir ishlamoqda. Eng yaqin yetkazma — <b>ertaga 14:00</b> ga.</p>
+    </div>
+  </div>
+
+  <main class="main">
+    <div class="container grid">
+      <section>
+        <div class="col-h">
+          <h2>Mening buyurtmalarim</h2>
+          <button class="more" type="button" onclick="setView('catalog')"><span class="a">+ Yangi buyurtma</span></button>
+        </div>
+        <div id="orders-list"></div>
+      </section>
+
+      <aside>
+        <div class="col-h">
+          <h2>Joriy buyurtma</h2>
+          <span class="more" style="font-family:var(--f-mono);color:var(--ink-6)" id="dp-live">JONLI</span>
+        </div>
+        <div class="dp" id="detail-panel"></div>
+      </aside>
+    </div>
+
+    <section class="container" style="margin-top:48px">
+      <div class="col-h">
+        <h2>Mashhur materiallar · bu hafta</h2>
+        <button class="more" type="button" onclick="setView('catalog')">Butun katalog <span class="a">→</span></button>
+      </div>
+      <div class="mat-grid" id="popular-grid"></div>
+    </section>
+
+    <section class="container">
+      <div class="help">
+        <div>
+          <h3>Yordam kerakmi? Bir telefonda yechiladi.</h3>
+          <p>Yetkazma muddati, yo'lda buyurtmani to'xtatish, krom rangini almashtirish — telefon orqali tezroq. 09:00 — 21:00.</p>
+        </div>
+        <div>
+          <div class="phone">+998 71 200 30 40</div>
+          <div style="font-size:12px;color:#847569;margin-top:4px;font-family:var(--f-mono)">Du-Sh · 09:00 — 21:00</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</section>
+
+<!-- VIEW: CATALOG -->
+<section data-view="catalog" hidden>
+  <main class="main">
+    <div class="container">
+      <button class="back" type="button" onclick="setView('home')">← Bosh sahifa</button>
+      <div class="page-head">
+        <div>
+          <h1>Material katalogi</h1>
+          <p class="sub" id="cat-sub">Furniture House — Yunusobod filialida mavjud. Yetkazma yoki olib ketish — keyingi qadamda.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" type="button" onclick="setView('home')">Buyurtmalarim</button>
+          <button class="btn btn-primary" type="button" onclick="openCart()">Savatcha · <span id="cat-cart-ct">0</span></button>
+        </div>
+      </div>
+
+      <div class="cat-tools">
+        <div class="cat-search">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+          <input id="cat-search" placeholder="Brend, nomi yoki o'lchami…" oninput="onSearch(this.value)" />
+        </div>
+        <div class="chips" id="cat-chips">
+          <button class="chip on" type="button" data-cat="all">Hammasi</button>
+          <button class="chip" type="button" data-cat="ldsp">LDSP</button>
+          <button class="chip" type="button" data-cat="mdf">MDF</button>
+          <button class="chip" type="button" data-cat="fanera">Fanera</button>
+          <button class="chip" type="button" data-cat="krom">Krom</button>
+          <button class="chip" type="button" data-cat="aksessuar">Aksessuar</button>
+        </div>
+      </div>
+
+      <div class="mat-grid" id="catalog-grid"></div>
+      <div id="cat-empty" style="display:none;padding:60px 0;text-align:center;color:var(--ink-6)">
+        <div style="font-family:var(--f-display);font-size:36px;color:var(--ink-4);margin-bottom:8px">∅</div>
+        <p>Bu so'rov bo'yicha material topilmadi.</p>
+        <button class="btn btn-outline btn-sm" type="button" onclick="resetFilters()" style="margin-top:6px">Filtrlarni tozalash</button>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- VIEW: CHECKOUT -->
+<section data-view="checkout" hidden>
+  <main class="main">
+    <div class="container">
+      <button class="back" type="button" onclick="openCart()">← Savatcha</button>
+      <div class="page-head">
+        <div>
+          <h1>Buyurtma berish</h1>
+          <p class="sub">Yetkazma, to'lov, tasdiqlash. Daqiqa bas.</p>
+        </div>
+      </div>
+
+      <div class="ck-grid">
+        <div>
+
+          <div class="ck-section">
+            <h3>1 · Yetkazma usuli</h3>
+            <div class="opt-row" id="opt-deliver">
+              <div class="opt on" data-delivery="delivery">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Yetkazib berish</div>
+                  <div class="ds">Sehdan manzilingizgacha. Toshkent ichida 30–60 daq.</div>
+                  <div class="pr">35 000 so'm dan</div>
+                </div>
+              </div>
+              <div class="opt" data-delivery="pickup">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Sehdan olib ketish</div>
+                  <div class="ds">Tayyor bo'lganda SMS keladi. Yunusobod filialdan olib ketasiz.</div>
+                  <div class="pr">Bepul</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ck-section" id="ck-addr">
+            <h3>2 · Manzil</h3>
+            <div class="field-row">
+              <div class="field">
+                <label>Shahar / tuman</label>
+                <input value="Toshkent · Yunusobod tumani" />
+              </div>
+              <div class="field">
+                <label>Ko'cha va uy raqami</label>
+                <input value="Buyuk Ipak Yo'li ko'chasi 142, 3-podyezd" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Telefon</label>
+                <input value="+998 90 100 30 30" />
+              </div>
+              <div class="field">
+                <label>Yetkazma vaqti</label>
+                <select>
+                  <option>Tezroq — 1-2 kun</option>
+                  <option>15-may, 09:00–13:00</option>
+                  <option selected>16-may, 14:00–18:00</option>
+                  <option>17-may, 09:00–13:00</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Qo'shimcha izoh (ixtiyoriy)</label>
+              <textarea placeholder="Domofon, qavat, kirish yo'li haqida…" rows="2"></textarea>
+            </div>
+          </div>
+
+          <div class="ck-section">
+            <h3>3 · To'lov usuli</h3>
+            <p class="sub">Hozir 50% oldindan, qolgan 50% — yetkazma vaqtida (yoki olib ketishda).</p>
+            <div class="opt-row" id="opt-pay" style="grid-template-columns:1fr 1fr">
+              <div class="opt on" data-pay="payme">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Payme</div>
+                  <div class="ds">Karta orqali — onlayn, 5 soniyada.</div>
+                </div>
+              </div>
+              <div class="opt" data-pay="click">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Click</div>
+                  <div class="ds">Karta orqali — onlayn.</div>
+                </div>
+              </div>
+              <div class="opt" data-pay="uzum">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Uzum</div>
+                  <div class="ds">Karta yoki balans orqali.</div>
+                </div>
+              </div>
+              <div class="opt" data-pay="cash">
+                <span class="rd"></span>
+                <div class="info">
+                  <div class="nm">Naqd · yetkazma paytida</div>
+                  <div class="ds">Hayodvchiga to'laysiz. 100% summa.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside>
+          <div class="ck-sum">
+            <h3>Buyurtma xulosasi</h3>
+            <div class="items-mini" id="ck-items"></div>
+            <div class="row"><span>Materiallar</span><span class="num" id="ck-subtotal">0</span></div>
+            <div class="row" id="ck-delivery-row"><span>Yetkazma</span><span class="num" id="ck-delivery">0</span></div>
+            <div class="row total"><span>Jami</span><span class="num" id="ck-total">0 so'm</span></div>
+            <div class="row" style="font-size:12px;color:var(--ink-6);margin-top:8px">
+              <span>Oldindan to'lov · 50%</span><span class="num" id="ck-advance">0 so'm</span>
+            </div>
+            <button class="btn btn-acc btn-block btn-lg" type="button" onclick="placeOrder()">Tasdiqlash va to'lash →</button>
+            <p style="font-size:11.5px;color:var(--ink-6);margin:10px 0 0;line-height:1.45;text-align:center">
+              Tasdiqlash bilan <a href="#" style="color:var(--accent);text-decoration:none">ommaviy oferta</a> shartlariga rozilik bildirasiz.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- VIEW: CONFIRMATION -->
+<section data-view="confirmation" hidden>
+  <div class="container">
+    <div class="ok-wrap">
+      <div class="ok-mark">✓</div>
+      <h1>Buyurtmangiz qabul qilindi</h1>
+      <div class="id" id="ok-id">MP-2026-05-XXXX</div>
+      <p>Seh xodimlari tasdiqlashga kirishadi. Holat <b>Telegram</b> orqali yangilab turadi. Buyurtmani <b>"Mening buyurtmalarim"</b> bo'limidan kuzatishingiz mumkin.</p>
+
+      <div class="ck-card">
+        <div class="r"><span>Yetkazma</span><span><b id="ok-delivery">Toshkent · Yunusobod, Buyuk Ipak Yo'li 142</b></span></div>
+        <div class="r"><span>Vaqt</span><span><b id="ok-when">16-may, 14:00 — 18:00</b></span></div>
+        <div class="r"><span>To'lov · oldindan 50%</span><span><b id="ok-method">Payme</b></span></div>
+        <div class="r"><span>Yetkazma vaqtida</span><span><b id="ok-rest">0 so'm</b></span></div>
+      </div>
+
+      <div class="acts">
+        <button class="btn btn-acc btn-lg" type="button" onclick="setView('home');selectFirstActive()">Buyurtmamni kuzatish</button>
+        <button class="btn btn-outline btn-lg" type="button" onclick="setView('catalog')">Yana material tanlash</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VIEW: ORDER DETAIL -->
+<section data-view="order-detail" hidden>
+  <main class="main">
+    <div class="container" id="od-wrap"></div>
+  </main>
+</section>
+
+<!-- ============================== CART DRAWER ============================== -->
+<div class="scrim" id="scrim" onclick="closeCart()"></div>
+<aside class="cart" id="cart" aria-label="Savatcha">
+  <div class="cart-h">
+    <div><h3>Savatcha <span class="ct" id="cart-h-ct">0 ta</span></h3></div>
+    <button class="icon-btn" type="button" onclick="closeCart()" aria-label="Yopish">✕</button>
+  </div>
+  <div class="cart-b" id="cart-body"></div>
+  <div class="cart-f" id="cart-foot" hidden>
+    <div class="r"><span>Materiallar</span><span class="num" id="c-subtotal">0</span></div>
+    <div class="r"><span>Yetkazma · taxminan</span><span class="num">35 000 so'm</span></div>
+    <div class="r gr"><span>Taxminiy jami</span><span class="num" id="c-total">0</span></div>
+    <div class="act">
+      <button class="btn btn-outline" type="button" onclick="closeCart()">Davom etish</button>
+      <button class="btn btn-acc" type="button" onclick="closeCart();setView('checkout');renderCheckout()">Buyurtma berish →</button>
+    </div>
+  </div>
+</aside>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span class="ic">✓</span><span id="toast-msg"></span></div>
+
+<script>
+/* ====================== STATE ====================== */
+const branches = [
+  { id:'yunusobod', city:'Toshkent', name:'Yunusobod', addr:'Buyuk Ipak Yo\'li 142', state:'active' },
+  { id:'chilonzor', city:'Toshkent', name:'Chilonzor',  addr:'Chilonzor 9-mavze 32', state:'active' },
+  { id:'yangiyol',  city:'Toshkent vil.', name:'Yangiyo\'l', addr:'Mustaqillik 5', state:'closed' },
+];
+
+const materials = [
+  { id:'m01', cat:'ldsp', brand:'Egger', name:'LDSP H1334 ST9 · Dub Sonoma', size:'2750 × 1830 × 18 mm', price:410000, unit:'list', stock:142, sw:'sw-1' },
+  { id:'m02', cat:'ldsp', brand:'Kronospan', name:'LDSP K001 PW · Belarus dub', size:'2750 × 1830 × 16 mm', price:380000, unit:'list', stock:96, sw:'sw-2' },
+  { id:'m03', cat:'ldsp', brand:'Kastamonu', name:'LDSP 8198 · Ladzio yong\'oq', size:'2750 × 1830 × 18 mm', price:425000, unit:'list', stock:61, sw:'sw-3' },
+  { id:'m04', cat:'ldsp', brand:'Kastamonu', name:'LDSP 0011 PR · Oq baxmal', size:'2750 × 1830 × 18 mm', price:320000, unit:'list', stock:12, sw:'sw-4' },
+  { id:'m05', cat:'mdf', brand:'Kronospan', name:'MDF 16 mm · qum rangda', size:'2800 × 2070 × 16 mm', price:295000, unit:'list', stock:84, sw:'sw-5' },
+  { id:'m06', cat:'fanera', brand:'Sveza', name:'Fanera berioz · 8 mm', size:'2440 × 1220 × 8 mm', price:240000, unit:'list', stock:42, sw:'sw-6' },
+  { id:'m07', cat:'krom', brand:'Rehau', name:'Krom PVC 0.8 mm · oq', size:'22 mm kenglikda', price:8000, unit:'metr', stock:280, sw:'sw-7' },
+  { id:'m08', cat:'krom', brand:'Rehau', name:'Krom PVC 2 mm · qora matt', size:'42 mm kenglikda', price:18000, unit:'metr', stock:160, sw:'sw-8' },
+  { id:'m09', cat:'mdf', brand:'Egger', name:'MDF 19 mm · oq glyans', size:'2800 × 2070 × 19 mm', price:340000, unit:'list', stock:54, sw:'sw-4' },
+  { id:'m10', cat:'ldsp', brand:'Egger', name:'LDSP H3309 · Mocca yong\'oq', size:'2750 × 1830 × 18 mm', price:445000, unit:'list', stock:38, sw:'sw-9' },
+  { id:'m11', cat:'fanera', brand:'Sveza', name:'Fanera oq qayin · 12 mm', size:'2440 × 1220 × 12 mm', price:295000, unit:'list', stock:28, sw:'sw-10' },
+  { id:'m12', cat:'krom', brand:'Rehau', name:'Krom PVC 0.8 mm · qora', size:'22 mm kenglikda', price:8500, unit:'metr', stock:340, sw:'sw-8' },
+  { id:'m13', cat:'aksessuar', brand:'Boyard', name:'Mebel pelteli · 35 mm', size:'4-yarim ochilish', price:32000, unit:'dona', stock:480, sw:'sw-7' },
+  { id:'m14', cat:'aksessuar', brand:'Hettich', name:'Ruchka 128 mm · matt qora', size:'temir', price:18000, unit:'dona', stock:240, sw:'sw-8' },
+  { id:'m15', cat:'aksessuar', brand:'Blum', name:'Tantem yopish · 500 mm', size:'soft-close', price:185000, unit:'juft', stock:62, sw:'sw-2' },
+  { id:'m16', cat:'mdf', brand:'Kronospan', name:'MDF 8 mm · texnik', size:'2800 × 2070 × 8 mm', price:185000, unit:'list', stock:96, sw:'sw-5' },
+];
+
+const seededOrders = [
+  {
+    id:'MP-2026-05-0091', state:'cutting', client:'Akmal Norqo\'ziyev',
+    title:'Kuhna mebel — 4 shkaf · stol',
+    branchId:'yunusobod',
+    items:[
+      {matId:'m01', qty:4}, {matId:'m03', qty:6}, {matId:'m07', qty:12}, {matId:'m08', qty:8}
+    ],
+    delivery: 35000,
+    advance: 2232500,
+    dueAt:'16-may, 14:00',
+    when:'14-may, 09:42',
+    address:'Yunusobod, Buyuk Ipak Yo\'li 142',
+    worker:{ name:'Bahodir ako', role:'Kesuvchi' },
+    progress: { done: 8, total: 14 }
+  },
+  {
+    id:'MP-2026-05-0072', state:'delivery', client:'Akmal Norqo\'ziyev',
+    title:'MDF — 7 list · krom',
+    branchId:'yunusobod',
+    items:[ {matId:'m05', qty:7}, {matId:'m07', qty:8} ],
+    delivery: 35000, advance: 925000, dueAt:'bugun, 14:30', when:'13-may',
+    address:'Yunusobod, Toraqo\'rg\'on 7',
+    worker:{ name:'Sherzod ako', role:'Haydovchi' }
+  },
+  {
+    id:'MP-2026-04-0856', state:'completed', client:'Akmal Norqo\'ziyev',
+    title:'Fanera · LDSP · oshxona',
+    branchId:'chilonzor',
+    items:[ {matId:'m06', qty:2}, {matId:'m02', qty:2} ],
+    delivery: 35000, advance: 0, dueAt:'12-apr, 16:30', when:'10-apr',
+    address:'Chilonzor 8-mavze, 14',
+    worker:{ name:'Davron ako', role:'Haydovchi' }
+  },
+  {
+    id:'MP-2026-04-0792', state:'pending_payment', client:'Akmal Norqo\'ziyev',
+    title:'Stol oyog\'i — 1 list',
+    branchId:'yunusobod',
+    items:[ {matId:'m05', qty:1} ],
+    delivery: 35000, advance: 0, dueAt:'15:42 da bekor bo\'ladi', when:'13-may',
+    address:'Yunusobod, Buyuk Ipak Yo\'li 142'
+  }
+];
+
+const state = {
+  view:'home',
+  cart:[], // {matId, qty}
+  cartOpen:false,
+  branchOpen:false,
+  branchId:'yunusobod',
+  selectedOrderId:'MP-2026-05-0091',
+  catFilter:'all',
+  catSearch:'',
+  orders:[...seededOrders],
+  payMethod:'payme',
+  delivery:'delivery',
+};
+
+/* ====================== HELPERS ====================== */
+const fmt = n => (n||0).toLocaleString('uz-UZ').replace(/,/g,' ');
+const fmtSum = n => `${fmt(n)} so'm`;
+const getMat = id => materials.find(m=>m.id===id);
+const cartTotal = () => state.cart.reduce((s,c)=>s+(getMat(c.matId)?.price||0)*c.qty,0);
+const cartCount = () => state.cart.reduce((s,c)=>s+c.qty,0);
+const orderTotal = o => (o.items||[]).reduce((s,it)=>s+(getMat(it.matId)?.price||0)*it.qty,0) + (o.delivery||0);
+
+const STATE_LABELS = {
+  new:'Yangi', pending_payment:'To\'lov kutmoqda', confirmed:'Tasdiqlangan',
+  cutting:'Kesilmoqda', edge_banding:'Krom yopishtirilmoqda', ready:'Tayyor',
+  delivery:'Yetkazib berilmoqda', completed:'Tugallandi', cancelled:'Bekor qilindi'
+};
+const STATE_PILL = {
+  new:'p-new', pending_payment:'p-pay', confirmed:'p-conf',
+  cutting:'p-cut', edge_banding:'p-cut', ready:'p-rdy',
+  delivery:'p-del', completed:'p-dn', cancelled:'p-dn'
+};
+const STATE_STCH = {
+  new:'', pending_payment:'pay', confirmed:'conf',
+  cutting:'', edge_banding:'', ready:'rdy', delivery:'del', completed:'dn', cancelled:'dn'
+};
+
+/* ====================== VIEW SWITCH ====================== */
+function setView(v){
+  state.view = v;
+  document.querySelectorAll('[data-view]').forEach(el=>{
+    const match = el.dataset.view===v;
+    el.hidden = !match;
+  });
+  // close any open drawers
+  if(v!=='catalog') {/* keep cart possibly open if user wants */}
+  window.scrollTo({top:0, behavior:'smooth'});
+  if(v==='home') renderHome();
+  if(v==='catalog') renderCatalog();
+  if(v==='checkout') renderCheckout();
+  if(v==='order-detail') renderOrderDetail(state.selectedOrderId);
+}
+
+/* ====================== BRANCH PICKER ====================== */
+function renderBranchPop(){
+  const pop = document.getElementById('br-pop');
+  pop.innerHTML = branches.map(b=>`
+    <div class="it ${b.id===state.branchId?'on':''}" onclick="setBranch('${b.id}')">
+      <span class="pin ${b.state==='closed'?'cl':''}"></span>
+      <div class="nm">${b.city} — ${b.name}<small>${b.addr} · ${b.state==='closed'?'vaqtincha yopiq':'faol'}</small></div>
+      <span class="ck">✓</span>
+    </div>
+  `).join('');
+}
+function toggleBranch(){
+  state.branchOpen = !state.branchOpen;
+  document.getElementById('br-pop').hidden = !state.branchOpen;
+  if(state.branchOpen) renderBranchPop();
+}
+function setBranch(id){
+  state.branchId = id;
+  const b = branches.find(x=>x.id===id);
+  document.getElementById('br-label').textContent = `${b.city} — ${b.name}`;
+  document.getElementById('cat-sub').textContent = `Furniture House — ${b.name} filialida mavjud. Yetkazma yoki olib ketish — keyingi qadamda.`;
+  toggleBranch();
+  toast(`Filial o'zgartirildi: ${b.name}`,'info');
+  if(state.view==='catalog') renderCatalog();
+}
+document.addEventListener('click', e => {
+  if(state.branchOpen && !e.target.closest('.crumb')) toggleBranch();
+});
+
+/* ====================== ORDERS LIST (HOME) ====================== */
+function renderOrdersList(){
+  const list = document.getElementById('orders-list');
+  list.innerHTML = state.orders.map(o => `
+    <article class="ord ${o.id===state.selectedOrderId?'active':''} ${STATE_STCH[o.state]||''}" onclick="selectOrder('${o.id}')">
+      <div class="ord-top">
+        <span class="stch"></span>
+        <div class="who">
+          <span class="id">${o.id}</span>
+          <span class="ti">${o.title}</span>
+          <span class="meta">${o.state==='cutting' ? `${o.when} · <b>${o.worker?.name||''}</b> kesmoqda · yetkazma <b>${o.dueAt}</b>` :
+                                o.state==='delivery' ? `haydovchi <b>${o.worker?.name||''}</b> · taxminan ${o.dueAt}` :
+                                o.state==='completed' ? `<b>${o.dueAt}</b> da yetkazib berildi · <b>${o.worker?.name||''}</b>` :
+                                o.state==='pending_payment' ? `<span style="color:var(--warn)"><b>${o.dueAt}</b></span>` :
+                                `${o.when}`}</span>
+        </div>
+        <div class="right">
+          <span class="pill ${STATE_PILL[o.state]}"><span class="pd"></span> ${STATE_LABELS[o.state]}</span>
+          <span class="total num">${fmtSum(orderTotal(o))}</span>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+function selectOrder(id){
+  state.selectedOrderId = id;
+  renderOrdersList();
+  renderDetailPanel();
+}
+function selectFirstActive(){
+  const ord = state.orders.find(o => ['cutting','edge_banding','ready','confirmed','delivery','pending_payment'].includes(o.state));
+  if(ord) selectOrder(ord.id);
+}
+
+/* ====================== DETAIL PANEL ====================== */
+function renderDetailPanel(){
+  const o = state.orders.find(x=>x.id===state.selectedOrderId);
+  const dp = document.getElementById('detail-panel');
+  if(!o){
+    dp.innerHTML = `<div class="dp-empty"><span class="ic">∅</span>Buyurtma tanlanmagan</div>`;
+    return;
+  }
+  const branch = branches.find(b=>b.id===o.branchId);
+  const itemsHTML = (o.items||[]).map(it=>{
+    const m = getMat(it.matId);
+    return `<div class="it">
+      <span class="th ${m.sw}"></span>
+      <div class="ng"><span class="n">${m.name}</span><span class="g">${it.qty} × ${fmt(m.price)}</span></div>
+      <div class="pr"><b>${fmt(m.price*it.qty)}</b></div>
+    </div>`;
+  }).join('');
+
+  const subtotal = orderTotal(o) - (o.delivery||0);
+  const total = orderTotal(o);
+  const rest = total - (o.advance||0);
+
+  const tl = buildTimeline(o);
+
+  dp.innerHTML = `
+    <div class="dp-head">
+      <div class="id">${o.id} · Furniture House · ${branch?.name||''}</div>
+      <h3>${o.title}</h3>
+      <div class="stat-row">
+        <span class="pill ${STATE_PILL[o.state]}"><span class="pd"></span> ${STATE_LABELS[o.state]}${o.progress?` · ${Math.round(o.progress.done/o.progress.total*100)}%`:''}</span>
+        ${o.dueAt?`<span style="color:var(--ink-6)">·</span><span>${o.state==='delivery'||o.state==='completed'?'yetkazildi':o.state==='pending_payment'?'muddati':'yetkazma'} <b style="color:var(--ink-12)">${o.dueAt}</b></span>`:''}
+      </div>
+    </div>
+    <div class="dp-tl"><ol class="tl">${tl}</ol></div>
+    <div class="dp-items"><h4>Buyurtma tarkibi · ${o.items?.length||0} ta</h4>${itemsHTML}</div>
+    <div class="dp-totals">
+      <div class="r"><span>Materiallar</span><span class="num">${fmtSum(subtotal)}</span></div>
+      <div class="r"><span>Yetkazma · ${o.address||''}</span><span class="num">${fmtSum(o.delivery||0)}</span></div>
+      ${o.advance ? `<div class="r"><span>Oldindan to'langan</span><span class="num" style="color:var(--success)">− ${fmtSum(o.advance)}</span></div>`:''}
+      <div class="r grand"><span>${o.state==='completed'?'Jami to\'langan':o.advance?'Yetkazma vaqtida':'Jami'}</span><span class="num">${fmtSum(o.advance?rest:total)}</span></div>
+    </div>
+    <div class="dp-foot">
+      ${detailActions(o)}
+    </div>
+  `;
+}
+
+function buildTimeline(o){
+  // Simulated stamps depending on state
+  const all = [
+    { k:'new', t:o.when||'—', txt:'Yangi · siz yaratdingiz' },
+    { k:'pay', t:o.state==='pending_payment'?'kutilmoqda':'10:15', txt:`To'lov · <b>Payme</b>`+(o.advance?` · 50%`:'') },
+    { k:'conf', t:o.state==='pending_payment'?'—':'10:18', txt:`Tasdiqlandi · Aziza op.` },
+    { k:'cut', t:o.state==='cutting'?(o.progress?`${Math.round(o.progress.done/o.progress.total*100)}%`:'jonli'):o.state==='pending_payment'||o.state==='confirmed'?'—':'tugatildi', txt:`Kesilmoqda${o.worker&&o.state==='cutting'?` · <b>${o.worker.name}</b>`:''}` },
+    { k:'eb', t:'—', txt:'Krom yopishtirilmoqda' },
+    { k:'rdy', t:'—', txt:'Tayyor' },
+    { k:'del', t:o.state==='delivery'?'jonli':o.state==='completed'?o.dueAt:'—', txt:`Yetkazib berildi${o.state==='delivery'&&o.worker?` · ${o.worker.name}`:''}` }
+  ];
+  const order = ['new','pay','conf','cut','eb','rdy','del'];
+  const stateIdx = {new:0,pending_payment:1,confirmed:2,cutting:3,edge_banding:4,ready:5,delivery:6,completed:7}[o.state] ?? 0;
+  return all.map((s,i)=>{
+    const cls = i<stateIdx?'done':i===stateIdx?'now':'';
+    return `<li class="step ${cls}"><span class="when">${s.t}</span>${s.txt}</li>`;
+  }).join('');
+}
+
+function detailActions(o){
+  if(o.state==='cutting'||o.state==='edge_banding'||o.state==='ready'){
+    return `<button class="btn btn-acc" type="button" onclick="toast('Yetkazma vaqti uchun seh xodimiga so\\'rov yuborildi')">Yetkazma vaqtini o'zgartirish</button>
+            <button class="btn btn-outline" type="button" onclick="toast('PDF tayyorlandi · yuklanmoqda')">Hujjatlar (.pdf)</button>
+            <button class="btn btn-outline btn-danger" type="button" onclick="cancelOrder('${o.id}')">Bekor qilish</button>`;
+  }
+  if(o.state==='delivery'){
+    return `<button class="btn btn-acc btn-block" type="button" onclick="toast('Haydovchi joriy joyini ko\\'rsatmoqda')">Yetkazmani kuzatish</button>
+            <button class="btn btn-outline" type="button" onclick="toast('Haydovchi telefoni: +998 90 322-15-44')">Aloqaga chiqish</button>`;
+  }
+  if(o.state==='completed'){
+    return `<button class="btn btn-acc" type="button" onclick="reorder('${o.id}')">Yana shu buyurtma</button>
+            <button class="btn btn-outline" type="button" onclick="toast('Baholash uchun rahmat · ★★★★★')">Baholash</button>`;
+  }
+  if(o.state==='pending_payment'){
+    return `<button class="btn btn-acc btn-block" type="button" onclick="markPaid('${o.id}')">To'lash · ${fmtSum(orderTotal(o)/2)}</button>
+            <button class="btn btn-outline btn-danger" type="button" onclick="cancelOrder('${o.id}')">Buyurtmani bekor qilish</button>`;
+  }
+  return '';
+}
+
+function cancelOrder(id){
+  if(!confirm("Buyurtmani bekor qilishni xohlaysizmi? Bu amal ortga qaytmaydi.")) return;
+  const o = state.orders.find(x=>x.id===id);
+  if(o){
+    o.state='cancelled';
+    toast('Buyurtma bekor qilindi','warn');
+    renderHome();
+  }
+}
+function markPaid(id){
+  const o = state.orders.find(x=>x.id===id);
+  if(o){
+    o.state='confirmed';
+    o.advance = orderTotal(o)/2;
+    toast(`To'lov qabul qilindi · ${fmtSum(o.advance)}`);
+    renderHome();
+  }
+}
+function reorder(id){
+  const o = state.orders.find(x=>x.id===id);
+  if(!o) return;
+  state.cart = (o.items||[]).map(it=>({matId:it.matId, qty:it.qty}));
+  renderCart();
+  updateBadge();
+  openCart();
+  toast(`${o.items.length} ta material savatga qo'shildi`);
+}
+
+/* ====================== HOME RENDER ====================== */
+function renderHome(){
+  renderOrdersList();
+  renderDetailPanel();
+  renderPopular();
+  const active = state.orders.filter(o => ['cutting','edge_banding','ready','confirmed','delivery'].includes(o.state)).length;
+  document.getElementById('hello-sub').innerHTML =
+    active>0 ? `<b>${active} ta</b> buyurtmangiz hozir ishlamoqda. Eng yaqin yetkazma — <b>ertaga 14:00</b> ga.` :
+               `Hozircha faol buyurtma yo'q. <a href="#" onclick="event.preventDefault();setView('catalog')" style="color:var(--accent);font-weight:600;text-decoration:none">Yangi buyurtma berish →</a>`;
+}
+
+function renderPopular(){
+  const grid = document.getElementById('popular-grid');
+  const top = materials.slice(0,8);
+  grid.innerHTML = top.map(m => matCard(m)).join('');
+}
+
+/* ====================== CATALOG ====================== */
+function renderCatalog(){
+  const q = state.catSearch.toLowerCase().trim();
+  const cat = state.catFilter;
+  let list = materials.filter(m=>{
+    if(cat!=='all' && m.cat!==cat) return false;
+    if(q && !(m.name.toLowerCase().includes(q) || m.brand.toLowerCase().includes(q) || m.size.toLowerCase().includes(q))) return false;
+    return true;
+  });
+  const grid = document.getElementById('catalog-grid');
+  const empty = document.getElementById('cat-empty');
+  if(list.length===0){grid.innerHTML='';empty.style.display='block';return}
+  empty.style.display='none';
+  grid.innerHTML = list.map(m => matCard(m)).join('');
+  document.getElementById('cat-cart-ct').textContent = cartCount();
+}
+function onSearch(v){state.catSearch=v;renderCatalog()}
+function onHdrSearch(v){state.catSearch=v; if(state.view!=='catalog'){setView('catalog');document.getElementById('cat-search').value=v}}
+function setCatFilter(cat){
+  state.catFilter=cat;
+  document.querySelectorAll('#cat-chips .chip').forEach(c=>c.classList.toggle('on',c.dataset.cat===cat));
+  renderCatalog();
+}
+function resetFilters(){state.catFilter='all';state.catSearch='';document.getElementById('cat-search').value='';setCatFilter('all')}
+document.getElementById('cat-chips').addEventListener('click', e=>{
+  const b = e.target.closest('.chip'); if(!b) return; setCatFilter(b.dataset.cat);
+});
+
+function matCard(m){
+  const inCart = state.cart.find(c=>c.matId===m.id);
+  const lowStock = m.stock < 30;
+  const stockLbl = m.unit==='metr' ? `${m.stock} m` : m.unit==='dona'||m.unit==='juft' ? `${m.stock} dona` : `${m.stock} list`;
+  return `
+  <article class="mat ${inCart?'in-cart':''}">
+    <div class="sw ${m.sw}"><span class="stk ${lowStock?'low':''}">${stockLbl}${lowStock?' · kam':''}</span></div>
+    <div class="b">
+      <span class="brand">${m.brand}</span>
+      <span class="nm">${m.name}</span>
+      <span class="meta">${m.size}</span>
+      <div class="br-foot">
+        <span class="pr"><span class="num">${fmt(m.price)}</span> <small>so'm / ${m.unit}</small></span>
+        ${inCart ?
+          `<div class="qty-wrap">
+            <button type="button" onclick="changeQty('${m.id}',-1)">−</button>
+            <span class="v">${inCart.qty}</span>
+            <button type="button" onclick="changeQty('${m.id}',1)">+</button>
+          </div>` :
+          `<button class="add" type="button" onclick="addToCart('${m.id}')" aria-label="Savatga qo'shish">+</button>`
+        }
+      </div>
+    </div>
+  </article>`;
+}
+
+/* ====================== CART ====================== */
+function addToCart(matId){
+  const ex = state.cart.find(c=>c.matId===matId);
+  if(ex) ex.qty++; else state.cart.push({matId, qty:1});
+  updateBadge();
+  renderCatalog();
+  renderCart();
+  const m = getMat(matId);
+  toast(`Savatga qo'shildi · ${m.name}`);
+}
+function changeQty(matId, delta){
+  const ex = state.cart.find(c=>c.matId===matId);
+  if(!ex) return;
+  ex.qty += delta;
+  if(ex.qty<=0) state.cart = state.cart.filter(c=>c.matId!==matId);
+  updateBadge();
+  renderCatalog();
+  renderCart();
+}
+function removeFromCart(matId){
+  state.cart = state.cart.filter(c=>c.matId!==matId);
+  updateBadge();
+  renderCatalog();
+  renderCart();
+}
+function updateBadge(){
+  const ct = cartCount();
+  const badge = document.getElementById('cart-badge');
+  badge.textContent = ct;
+  badge.setAttribute('data-count', ct);
+  const ccc = document.getElementById('cat-cart-ct');
+  if(ccc) ccc.textContent = ct;
+  document.getElementById('cart-h-ct').textContent = `${ct} ta`;
+}
+function openCart(){
+  state.cartOpen=true;
+  document.getElementById('cart').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+  document.body.style.overflow='hidden';
+  renderCart();
+}
+function closeCart(){
+  state.cartOpen=false;
+  document.getElementById('cart').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+  document.body.style.overflow='';
+}
+function renderCart(){
+  const body = document.getElementById('cart-body');
+  const foot = document.getElementById('cart-foot');
+  if(state.cart.length===0){
+    body.innerHTML = `<div class="cart-empty">
+      <span class="ic">∅</span>
+      Savatcha bo'sh. Materiallarni ko'rib chiqing.
+      <div style="margin-top:14px"><button class="btn btn-acc" type="button" onclick="closeCart();setView('catalog')">Katalog →</button></div>
+    </div>`;
+    foot.hidden = true;
+    return;
+  }
+  foot.hidden = false;
+  body.innerHTML = state.cart.map(c=>{
+    const m = getMat(c.matId); if(!m) return '';
+    return `<div class="cart-it">
+      <span class="th ${m.sw}"></span>
+      <div class="ng">
+        <div class="n">${m.name}</div>
+        <div class="g">${fmt(m.price)} so'm / ${m.unit}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+        <div class="qty">
+          <button type="button" onclick="changeQty('${m.id}',-1)" aria-label="Kamaytirish">−</button>
+          <span class="v">${c.qty}</span>
+          <button type="button" onclick="changeQty('${m.id}',1)" aria-label="Oshirish">+</button>
+        </div>
+        <div class="pr">${fmt(m.price*c.qty)} so'm</div>
+      </div>
+      <button class="rm" type="button" onclick="removeFromCart('${m.id}')" aria-label="O'chirish">×</button>
+    </div>`;
+  }).join('');
+  document.getElementById('c-subtotal').textContent = fmtSum(cartTotal());
+  document.getElementById('c-total').textContent = fmtSum(cartTotal() + 35000);
+}
+
+/* ====================== CHECKOUT ====================== */
+function renderCheckout(){
+  // sync option selections
+  document.querySelectorAll('#opt-deliver .opt').forEach(o=>o.classList.toggle('on', o.dataset.delivery===state.delivery));
+  document.querySelectorAll('#opt-pay .opt').forEach(o=>o.classList.toggle('on', o.dataset.pay===state.payMethod));
+  document.getElementById('ck-addr').style.display = state.delivery==='pickup' ? 'none' : '';
+  document.getElementById('ck-delivery-row').style.display = state.delivery==='pickup' ? 'none' : '';
+
+  // items summary
+  const items = document.getElementById('ck-items');
+  items.innerHTML = state.cart.length===0 ?
+    '<div style="color:var(--ink-6);text-align:center;padding:12px 0">Savatcha bo\'sh</div>' :
+    state.cart.map(c=>{
+      const m = getMat(c.matId);
+      return `<div class="ln"><span>${m.name.length>34?m.name.slice(0,32)+'…':m.name} <b>×${c.qty}</b></span><span>${fmt(m.price*c.qty)}</span></div>`;
+    }).join('');
+
+  const sub = cartTotal();
+  const dl = state.delivery==='delivery' ? 35000 : 0;
+  const tot = sub+dl;
+  document.getElementById('ck-subtotal').textContent = fmtSum(sub);
+  document.getElementById('ck-delivery').textContent = state.delivery==='delivery'?fmtSum(dl):'Bepul';
+  document.getElementById('ck-total').textContent = fmtSum(tot);
+  document.getElementById('ck-advance').textContent = fmtSum(Math.round(tot/2));
+}
+document.getElementById('opt-deliver').addEventListener('click', e=>{
+  const o = e.target.closest('.opt'); if(!o) return;
+  state.delivery = o.dataset.delivery; renderCheckout();
+});
+document.getElementById('opt-pay').addEventListener('click', e=>{
+  const o = e.target.closest('.opt'); if(!o) return;
+  state.payMethod = o.dataset.pay; renderCheckout();
+});
+
+function placeOrder(){
+  if(state.cart.length===0){ toast("Savatcha bo'sh — material qo'shing",'warn'); return }
+  const newId = `MP-2026-05-${String(100 + state.orders.length).padStart(4,'0')}`;
+  const total = cartTotal() + (state.delivery==='delivery'?35000:0);
+  const advance = state.payMethod==='cash' ? 0 : Math.round(total/2);
+
+  const o = {
+    id:newId, state:'pending_payment', client:'Akmal Norqo\'ziyev',
+    title: state.cart.length===1 ? getMat(state.cart[0].matId).name : `${state.cart.length} ta material · yangi buyurtma`,
+    branchId: state.branchId,
+    items: state.cart.map(c=>({matId:c.matId,qty:c.qty})),
+    delivery: state.delivery==='delivery'?35000:0,
+    advance: 0,
+    dueAt:'16-may, 14:00 — 18:00',
+    when:'hozir',
+    address: state.delivery==='delivery' ? 'Yunusobod, Buyuk Ipak Yo\'li 142' : `Sehdan olib ketish · ${branches.find(b=>b.id===state.branchId).name}`
+  };
+  if(state.payMethod!=='cash'){
+    o.state = 'confirmed';
+    o.advance = advance;
+  }
+  state.orders.unshift(o);
+  state.cart = [];
+  updateBadge();
+  state.selectedOrderId = o.id;
+  // fill confirmation
+  document.getElementById('ok-id').textContent = newId;
+  document.getElementById('ok-delivery').textContent = o.address;
+  document.getElementById('ok-when').textContent = o.dueAt;
+  document.getElementById('ok-method').textContent = ({payme:'Payme',click:'Click',uzum:'Uzum',cash:'Naqd · yetkazma paytida'})[state.payMethod];
+  document.getElementById('ok-rest').textContent = fmtSum(total - advance);
+  setView('confirmation');
+}
+
+/* ====================== TOAST ====================== */
+let toastTimer;
+function toast(msg, kind='ok'){
+  const t = document.getElementById('toast');
+  const m = document.getElementById('toast-msg');
+  const ic = t.querySelector('.ic');
+  m.textContent = msg;
+  ic.className = 'ic ' + (kind==='warn'?'warn':'');
+  ic.textContent = kind==='warn' ? '!' : '✓';
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'), 2600);
+}
+
+/* ====================== KEYBOARD ====================== */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    if(state.cartOpen) closeCart();
+    if(state.branchOpen) toggleBranch();
+  }
+  if((e.metaKey||e.ctrlKey) && e.key==='k'){
+    e.preventDefault();
+    const search = document.getElementById('hdr-search') || document.getElementById('cat-search');
+    if(search){ if(state.view!=='catalog') setView('catalog'); setTimeout(()=>document.getElementById('cat-search')?.focus(),50); }
+  }
+});
+
+/* ====================== INIT ====================== */
+renderHome();
+updateBadge();
+</script>
+</body>
+</html>
