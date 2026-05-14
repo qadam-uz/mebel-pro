@@ -200,6 +200,66 @@ def build_nav() -> list[NavItem]:
     return walk(root)
 
 
+# --- search index (consumed by the ⌘K modal in docs.js) ----------------------
+
+_CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_LIST_MARK_RE = re.compile(r"^\s*[#>*\-+]+\s*", re.MULTILINE)
+_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+_EMPHASIS_RE = re.compile(r"[*_~]+")
+_WS_RE = re.compile(r"\s+")
+
+
+def _strip_md_for_search(body: str) -> str:
+    """Crude Markdown → plain text so client-side search can scan & snippet."""
+    body = _CODE_FENCE_RE.sub(" ", body)
+    body = _INLINE_CODE_RE.sub(r"\1", body)
+    body = _LINK_RE.sub(r"\1", body)
+    body = _HTML_TAG_RE.sub(" ", body)
+    body = _LIST_MARK_RE.sub("", body)
+    body = _EMPHASIS_RE.sub("", body)
+    return _WS_RE.sub(" ", body).strip()
+
+
+def _extract_headings(body: str) -> list[str]:
+    return [m.group(1).strip() for m in _HEADING_RE.finditer(body)]
+
+
+def build_search_index() -> list[dict[str, object]]:
+    """Walk ``docs/`` and return a flat list of pages for the client-side search."""
+    root = _docs_root()
+    if not root.is_dir():
+        return []
+    out: list[dict[str, object]] = []
+    for path in sorted(root.rglob("*.md")):
+        rel_parts = path.relative_to(root).parts
+        if any(part.startswith((".", "_")) for part in rel_parts):
+            continue
+        name = path.name.lower()
+        if name == "readme.md":
+            continue
+        is_root_index = name == "index.md" and path.parent == root
+        if name == "index.md" and not is_root_index:
+            continue
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = _split_frontmatter(raw)
+        rel = path.relative_to(root).as_posix()
+        out.append(
+            {
+                "title": meta.title or _humanize(path.stem),
+                "url": "/docs" if is_root_index else "/docs/" + rel[: -len(".md")],
+                "headings": _extract_headings(body),
+                "text": _strip_md_for_search(body),
+            }
+        )
+    return out
+
+
 def _nav_contains(item: NavItem, cur_rel: str) -> bool:
     return bool(item.rel) and (cur_rel == item.rel or cur_rel.startswith(item.rel + "/"))
 
@@ -465,8 +525,12 @@ def _page(
   <label class="burger" for="nav-toggle" aria-label="Toggle navigation">&#9776;</label>
   {_BRAND_HTML}
   <div class="search">
-    <input id="docs-search" type="search" placeholder="Filter pages&#8230;" autocomplete="off"
-           spellcheck="false" aria-label="Filter the navigation">
+    <button type="button" class="search-trigger" id="docs-search-trigger"
+            aria-haspopup="dialog" aria-controls="docs-search-modal"
+            aria-label="Search documentation">
+      <span class="t">Search docs&#8230;</span>
+      <kbd class="search-kbd" id="docs-search-kbd">&#8984;K</kbd>
+    </button>
   </div>
   <a class="api-link" href="/api-docs">API&nbsp;reference&nbsp;&#8599;</a>
 </header>
@@ -481,6 +545,22 @@ def _page(
     </div>
   </main>
   {aside}
+</div>
+<div class="search-modal" id="docs-search-modal" hidden role="dialog"
+     aria-modal="true" aria-label="Search documentation">
+  <div class="search-modal-backdrop" data-dismiss="1"></div>
+  <div class="search-modal-panel">
+    <input type="search" class="search-modal-input" id="docs-search-input"
+           placeholder="Search the docs&#8230;" autocomplete="off" spellcheck="false"
+           aria-label="Search query">
+    <div class="search-modal-results" id="docs-search-results"
+         role="listbox" aria-label="Search results"></div>
+    <div class="search-modal-foot">
+      <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd>&nbsp;navigate</span>
+      <span><kbd>&crarr;</kbd>&nbsp;open</span>
+      <span><kbd>esc</kbd>&nbsp;close</span>
+    </div>
+  </div>
 </div>
 <script>{_scripts()}</script>
 {mermaid_html}
@@ -523,6 +603,12 @@ def _render_folder(path: Path) -> HTMLResponse:
     listing = "".join(entries) or "<li>Empty.</li>"
     body = f'<h1>{escape(title)}</h1><ul class="dir-index">{listing}</ul>'
     return HTMLResponse(_page(title=title, content=body, cur_rel=rel))
+
+
+@router.get("/docs/_search.json", include_in_schema=False)
+async def docs_search_index() -> list[dict[str, object]]:
+    """Index consumed by the ⌘K search modal in ``docs_assets/docs.js``."""
+    return build_search_index()
 
 
 @router.get("/docs", response_class=HTMLResponse, include_in_schema=False)

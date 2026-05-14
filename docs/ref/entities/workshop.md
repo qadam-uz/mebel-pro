@@ -10,7 +10,7 @@ order: 20
 
 The tenant — and what each tenant publishes per branch: branches and workers. The catalog
 (materials, the branch's selection from them, and branch pricing) lives in
-[`catalog.md`](catalog.md). Rules: [`access.md`](../../access.md) (tenancy + branch status),
+[`catalog.md`](catalog.md). Rules: [`access-patterns.md`](../../access-patterns.md) (tenancy + branch status),
 [`orders.md`](../features/orders.md) (pricing).
 
 ## Workshop

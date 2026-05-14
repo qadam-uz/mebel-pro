@@ -8,7 +8,7 @@ order: 10
 
 # Identity
 
-The auth subjects and the session record. Rules are in [`access.md`](../../access.md);
+The auth subjects and the session record. Rules are in [`access-patterns.md`](../../access-patterns.md);
 this page is the data shape.
 
 ## Platform user

@@ -128,5 +128,4 @@ labelled cells; errors are announced and the offending row gets focus. Component
 ## Next
 
 [`orders.md`](orders.md) — how a confirmed result is consumed, when it's invalidated, which cutting
-metrics drive which price component. The cutting wishlist (alternatives, async, manual edits,
-per-branch kerf, multiple sheet sizes, `preferred` grain) is parked in [`open-questions.md`](../../open-questions.md) Q7.
+metrics drive which price component.

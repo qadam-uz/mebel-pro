@@ -1,19 +1,29 @@
 # Edge reverse proxy for the production stack — the only container published to
-# the host. Terminates HTTP/HTTPS and routes to the internal services. Mounted
-# into the `edge` service by compose.prod.yaml.
+# the host. Terminates HTTP/HTTPS and routes by subdomain to the internal
+# services. Mounted into the `edge` service by compose.prod.yaml.
 #
-# SITE_ADDRESS (from deploy/.env):
-#   • a domain, e.g. "mebel.example.com"  → Caddy obtains and auto-renews a
-#     Let's Encrypt certificate (this container must be reachable on 80 and 443)
-#   • "localhost"                          → HTTPS using Caddy's internal CA
-#   • ":80"                                → plain HTTP, no certificates (default)
+# BASE_DOMAIN (from deploy/.env) — the apex, e.g. "mebel-pro.uz". Caddy serves
+# four sites derived from it:
+#   • {$BASE_DOMAIN}           → static SEO landing
+#   • app.{$BASE_DOMAIN}       → client SPA       (+ /api/* → backend)
+#   • workshop.{$BASE_DOMAIN}  → workshop SPA     (+ /api/* → backend)
+#   • admin.{$BASE_DOMAIN}     → superadmin SPA   (+ /api/* → backend,
+#                                                  + /docs, /api-docs,
+#                                                    /api-redoc → backend,
+#                                                    HTTP Basic-gated server-side)
+#
+# Auto-HTTPS: the box must be reachable from the internet on 80 and 443 and DNS
+# for the apex and the three subdomains must point at it; Caddy obtains and
+# renews a Let's Encrypt certificate per host.
+#
+# Local stack testing: set BASE_DOMAIN=lvh.me (resolves *.lvh.me → 127.0.0.1)
+# and accept Caddy's internal-CA cert; or add the four hosts to /etc/hosts.
 # ACME_EMAIL (optional) is registered with the ACME CA for expiry notices.
-
 {
 	email {$ACME_EMAIL:}
 }
 
-{$SITE_ADDRESS::80} {
+(common) {
 	encode zstd gzip
 	log
 
@@ -21,12 +31,40 @@
 	request_body {
 		max_size 25MB
 	}
+}
 
-	# FastAPI: the JSON API, the live docs site, and the OpenAPI UIs.
+# Apex: landing only.
+{$BASE_DOMAIN} {
+	import common
+	reverse_proxy web:80
+}
+
+# Client SPA + same-origin API.
+app.{$BASE_DOMAIN} {
+	import common
+
+	@api path /api/*
+	reverse_proxy @api backend:8000
+
+	reverse_proxy web:80
+}
+
+# Workshop SPA + same-origin API.
+workshop.{$BASE_DOMAIN} {
+	import common
+
+	@api path /api/*
+	reverse_proxy @api backend:8000
+
+	reverse_proxy web:80
+}
+
+# Superadmin SPA + same-origin API + the live docs site + OpenAPI UIs.
+admin.{$BASE_DOMAIN} {
+	import common
+
 	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
 	reverse_proxy @backend backend:8000
 
-	# Everything else → the built SPA (the web container's own nginx does the
-	# HTML5-history fallback).
 	reverse_proxy web:80
 }

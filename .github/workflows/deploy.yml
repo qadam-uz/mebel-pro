@@ -21,8 +21,9 @@
 #                                   (default /srv/mebel-pro)
 #
 # One-time server prerequisites: Docker Engine + the Compose v2 plugin; ports
-# 80 and 443 open; `deploy/.env` created from `deploy/.env.example` at
-# <DEPLOY_PATH>/deploy/.env (set SITE_ADDRESS, POSTGRES_PASSWORD, …). See
+# 80 and 443 open; DNS for the apex AND `app.*` / `workshop.*` / `admin.*`
+# pointed at this box; `deploy/.env` created from `deploy/.env.example` at
+# <DEPLOY_PATH>/deploy/.env (set BASE_DOMAIN, POSTGRES_PASSWORD, …). See
 # deploy/CLAUDE.md.
 
 name: Deploy to production

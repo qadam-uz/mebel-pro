@@ -14,9 +14,9 @@ prod compose stack there (see [CI deploy](#ci-deploy) below).
 | ------------------------ | ---- |
 | `compose.yaml`           | Base: `postgres` (17-alpine, named volume), `minio` (S3-compatible object store, named volume, healthcheck) + `createbuckets` (one-shot `mc` that creates the bucket then exits), `backend` (builds `../backend`, migrates on start, healthcheck, talks to `postgres` + `minio`), `web` (builds `../web` → nginx serving the built SPA). |
 | `compose.override.yaml`  | **Dev**, auto-loaded by plain `docker compose`. Publishes ports (5432, 9000/9001 MinIO API+console, 8000, 5173); backend source-mounted with `fastapi dev` autoreload (image venv kept via `backend-venv` volume); the repo's `../docs` is bind-mounted at `/docs` so the backend's live docs site (`:8000/docs`) reflects edits; `web` switched (`build: !reset null`) to a `node:22-slim` Vite dev server with HMR. |
-| `compose.prod.yaml`      | **Prod** overlay. Adds a `caddy` **edge** (`Caddyfile`) — the only published service (80/443; auto-HTTPS when `SITE_ADDRESS` is a domain): `/api`, `/docs`, `/api-docs`, `/api-redoc` → `backend`, everything else → `web`. Bind-mounts `../docs` into `backend` so the live docs site works in prod too. Internal services (`postgres`, `minio`, `backend`, `web`) use `expose`, not `ports` — MinIO's console isn't published in prod. |
+| `compose.prod.yaml`      | **Prod** overlay. Adds a `caddy` **edge** (`Caddyfile`) — the only published service (80/443; auto-HTTPS per host). Routes by subdomain derived from `BASE_DOMAIN`: apex → landing; `app.*` → client SPA; `workshop.*` → workshop SPA; `admin.*` → superadmin SPA + `/docs`, `/api-docs`, `/api-redoc`. `/api/*` on every SPA subdomain → `backend`. Bind-mounts `../docs` into `backend` so the live docs site works in prod too. Internal services (`postgres`, `minio`, `backend`, `web`) use `expose`, not `ports` — MinIO's console isn't published in prod. |
 | `Caddyfile`              | Edge reverse-proxy config (mounted into the prod `edge` service). |
-| `.env.example`           | Copy to `.env`. Postgres creds, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` (also the backend's S3 access key/secret) + `S3_BUCKET`, `ENV`/`DEBUG`, `BACKEND_CORS_ORIGINS`, `DOCS_AUTH_USERNAME`/`DOCS_AUTH_PASSWORD` (HTTP Basic for `/docs` + `/api-docs`), `VITE_API_BASE_URL`, `SITE_ADDRESS`, `ACME_EMAIL`. |
+| `.env.example`           | Copy to `.env`. Postgres creds, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` (also the backend's S3 access key/secret) + `S3_BUCKET`, `ENV`/`DEBUG`, `BACKEND_CORS_ORIGINS`, `DOCS_AUTH_USERNAME`/`DOCS_AUTH_PASSWORD` (HTTP Basic for `/docs` + `/api-docs`), `VITE_API_BASE_URL`, `BASE_DOMAIN`, `ACME_EMAIL`. |
 
 > The `web` *container* still has its own minimal nginx config (`../web/nginx.conf`, SPA history fallback) — it's purely a static file server behind the edge and never touches TLS. `deploy/Caddyfile` is the **edge** in front of everything; it's the one that terminates HTTPS and auto-renews the certificate.
 
@@ -68,9 +68,10 @@ mkdir -p /srv/mebel-pro/deploy
 cp /path/to/.env.example /srv/mebel-pro/deploy/.env                   # then edit it:
 #   ENV=prod  DEBUG=false  POSTGRES_PASSWORD=…  MINIO_ROOT_PASSWORD=…  BACKEND_CORS_ORIGINS=…
 #   DOCS_AUTH_USERNAME=…  DOCS_AUTH_PASSWORD=…   (guards /docs and /api-docs)
-#   SITE_ADDRESS=mebel.example.com   ACME_EMAIL=ops@example.com
+#   BASE_DOMAIN=mebel-pro.uz   ACME_EMAIL=ops@example.com
 # Requirements: Docker Engine + Compose v2 plugin installed; ports 80 and 443
-# open; DNS for SITE_ADDRESS pointed at this box (so Caddy can get a cert).
+# open; DNS for the apex AND app.*/workshop.*/admin.* pointed at this box (so
+# Caddy can obtain certificates for all four hosts).
 ```
 
 `deploy/.env` is **not** synced by the workflow (it's in the rsync excludes) — it lives only on the server. The first prod `up` provisions a Let's Encrypt certificate; it's stored in the `caddy-data` volume and renewed automatically, so don't delete that volume.

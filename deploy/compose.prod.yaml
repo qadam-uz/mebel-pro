@@ -4,10 +4,12 @@
 #   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
 #
 # Adds a Caddy edge: terminates HTTP/HTTPS — auto-provisioning and renewing a
-# Let's Encrypt certificate when SITE_ADDRESS is a real domain — serves nothing
-# itself, and reverse-proxies /api, /docs and the OpenAPI UIs to the backend,
-# everything else to the web SPA. Internal services aren't published; only the
-# edge is. See ./Caddyfile.
+# Let's Encrypt certificate per host derived from BASE_DOMAIN (apex, app.*,
+# workshop.*, admin.*) — serves nothing itself, and reverse-proxies by
+# subdomain: apex → landing; app.*/workshop.*/admin.* → the web SPA;
+# `/api/*` on every SPA subdomain (and `/docs`, `/api-docs`, `/api-redoc` on
+# `admin.*`) → the backend. Internal services aren't published; only the edge
+# is. See ./Caddyfile.
 
 services:
   postgres:
@@ -45,8 +47,10 @@ services:
       - web
       - backend
     environment:
-      # A domain → automatic HTTPS via Let's Encrypt. ":80" → plain HTTP only.
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      # The apex; Caddy serves apex + app.* + workshop.* + admin.* derived
+      # from it. Each gets a Let's Encrypt cert automatically (DNS must point
+      # here and ports 80/443 must be reachable).
+      BASE_DOMAIN: ${BASE_DOMAIN:?BASE_DOMAIN must be set in deploy/.env}
       ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
       - "80:80"        # HTTP — also the ACME HTTP-01 challenge / HTTPS redirect

@@ -33,7 +33,14 @@ def docs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 async def test_docs_and_openapi_require_basic_auth(client: AsyncClient, docs_dir: Path) -> None:
-    guarded = ("/docs", "/docs/spec/vision", "/docs/assets/diagram.txt", "/api-docs", "/api-redoc")
+    guarded = (
+        "/docs",
+        "/docs/spec/vision",
+        "/docs/assets/diagram.txt",
+        "/docs/_search.json",
+        "/api-docs",
+        "/api-redoc",
+    )
     for url in guarded:
         r = await client.get(url)
         assert r.status_code == 401, url
@@ -99,6 +106,26 @@ async def test_non_markdown_files_served_raw(client: AsyncClient, docs_dir: Path
     resp = await client.get("/docs/assets/diagram.txt", auth=AUTH)
     assert resp.status_code == 200
     assert resp.text == "hello-asset"
+
+
+async def test_search_index_lists_pages(client: AsyncClient, docs_dir: Path) -> None:
+    # The /docs JSON index feeds the ⌘K search modal — one entry per renderable page.
+    resp = await client.get("/docs/_search.json", auth=AUTH)
+    assert resp.status_code == 200
+    data = resp.json()
+    by_title = {d["title"]: d for d in data}
+    # No frontmatter title on index.md → humanized stem ("Index"); the others
+    # use their explicit frontmatter title.
+    assert {"Index", "Product Vision", "Scope"} <= set(by_title)
+    vision = by_title["Product Vision"]
+    # URL is the extension-less docs path the modal navigates to.
+    assert vision["url"] == "/docs/spec/vision"
+    # Headings are pulled out for ranking; body text is markdown-stripped.
+    assert "Why" in vision["headings"] and "How" in vision["headings"]
+    assert "Reasons" in vision["text"]
+    assert "title:" not in vision["text"]  # frontmatter stripped
+    # The root index.md keeps its canonical /docs URL.
+    assert by_title["Index"]["url"] == "/docs"
 
 
 async def test_missing_doc_redirects_to_docs_home(client: AsyncClient, docs_dir: Path) -> None:

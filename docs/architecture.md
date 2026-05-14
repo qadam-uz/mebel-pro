@@ -2,8 +2,8 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-13
-order: 50
+updated: 2026-05-14
+order: 70
 ---
 
 # Architecture
@@ -47,16 +47,17 @@ flowchart TD
     App -.->|OAuth| TG
 ```
 
-Caddy (config in `deploy/Caddyfile`) routes:
+Caddy (config in `deploy/Caddyfile`) routes by **subdomain** under a single apex
+(`BASE_DOMAIN`, e.g. `mebel-pro.uz`):
 
-| Path                                 | Target                             |
-| ------------------------------------ | ---------------------------------- |
-| `/`                                  | static SEO landing (1 HTML)        |
-| `/app/client`                        | client SPA                         |
-| `/app/workshop`                      | workshop SPA                       |
-| `/app/admin`                         | superadmin SPA                     |
-| `/api`                               | FastAPI backend                    |
-| `/docs` · `/api-docs` · `/api-redoc` | FastAPI backend (HTTP Basic-gated) |
+| Host                    | Target                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `mebel-pro.uz`          | static SEO landing (1 HTML)                                                                               |
+| `app.mebel-pro.uz`      | client SPA (+ `/api/*` → backend)                                                                         |
+| `workshop.mebel-pro.uz` | workshop SPA (+ `/api/*` → backend)                                                                       |
+| `admin.mebel-pro.uz`    | superadmin SPA (+ `/api/*` → backend, + `/docs` · `/api-docs` · `/api-redoc` → backend, HTTP Basic-gated) |
+
+Each SPA stays same-origin with its API (no CORS).
 
 - **One FastAPI process** — Python 3.12, async end-to-end (asyncio + asyncpg + SQLAlchemy 2.0,
   Alembic, pydantic-settings). Also renders `docs/` as a live site.
@@ -92,6 +93,39 @@ Two rules every module respects.
   `deleted_at` / `is_deleted` flag; the active state is the status enum. History (orders, audit,
   status events, cutting results) is kept forever; deletion would orphan it.
 
+## Quality requirements
+
+The non-feature requirements the shape above has to satisfy. Where a feature/entity doc owns the
+specifics, this section just states the requirement.
+
+### Audit & traceability
+
+- Every mutating use case writes an append-only `action_log` row; every order status transition
+  writes an append-only `status_change_log` row.
+- Every API response carries `X-Trace-ID`; errors include `trace_id` in the body.
+
+### Performance budgets
+
+- API reads: p95 < 500 ms under expected load.
+- Cutting optimisation: 5 s hard timeout, synchronous; > 100 parts rejected; ≤ 30 parts target
+  < 1 s.
+- PDF generation: synchronous, in-process; seconds, not minutes.
+
+### Observability
+
+- Structured logging (structlog) with the trace id on every line.
+- `GET /api/v1/healthz` (liveness) and `GET /api/v1/readyz` (DB check) — both unauthenticated.
+- Application errors recorded by the `platform` error monitor (code, count, last occurrence) —
+  surfaced in the superadmin app.
+
+### Internationalization
+
+v1 ships Uzbek only. Strings are namespaced so adding `ru` / `en` is mechanical. Money, dates,
+phones (`+998XXXXXXXXX`), and dimensions (millimetres) have fixed display conventions.
+
 ## Next
 
-[`nfr.md`](nfr.md) — the non-functional checklist this shape has to satisfy.
+Into the detail:
+
+- [`ref/features/`](ref/features/) — feature specs.
+- [`ref/entities/`](ref/entities/) — entities by bounded context.

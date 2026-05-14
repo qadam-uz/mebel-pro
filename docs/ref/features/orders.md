@@ -11,7 +11,7 @@ order: 30
 The single home for the order lifecycle, pricing, payments, refunds, the warehouse contract, and
 the per-screen UX — **placement** (client), **fulfilment** (workshop staff), **modification**
 (both, by status), and **cancellation & refunds** (both, manual in v1). Who-may-do-what is in
-[`access.md`](../../access.md); the cross-cutting invariants this relies on (integer tiyin,
+[`access-patterns.md`](../../access-patterns.md); the cross-cutting invariants this relies on (integer tiyin,
 snapshots, append-only history, optimistic lock, atomic stock) are in
 [`architecture.md`](../../architecture.md) → *Data model invariants*.
 
@@ -213,8 +213,7 @@ material is consumed — no release. An `own`-source order never touches stock.
   jobs.
 
 ¹ Pay-later approval is owner-discretion in practice but covered by `manage_orders` in v1, with
-the mandatory reason as the control — see [`open-questions.md`](../../open-questions.md) Q12.
-Assigned cutters/drivers must belong to the order's branch.
+the mandatory reason as the control. Assigned cutters/drivers must belong to the order's branch.
 
 ## Endpoints
 

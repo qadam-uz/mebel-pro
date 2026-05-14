@@ -29,4 +29,4 @@ per bounded context.
 
 ## Next
 
-[`architecture.md`](architecture.md) — the operating envelope and the technical shape built against it.
+[`access-patterns.md`](access-patterns.md) — who can do what to those nouns: principals, the access model, and tenancy.

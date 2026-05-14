@@ -94,7 +94,7 @@ web/
 
 ## Backend contract
 
-The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. In prod, the **Caddy edge** (`deploy/Caddyfile`) routes `/api` (and `/docs`, `/api-docs`, `/api-redoc`) to the backend container and everything else to the `web` container (which is a plain nginx static server, `web/nginx.conf`, doing the HTML5-history fallback).
+The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. In prod, the **Caddy edge** (`deploy/Caddyfile`) routes by **subdomain** under one apex `BASE_DOMAIN`: apex → landing; `app.*` → client SPA; `workshop.*` → workshop SPA; `admin.*` → superadmin SPA (+ `/docs`, `/api-docs`, `/api-redoc`). `/api/*` on every SPA subdomain → backend (same-origin, no CORS). The `web` container is a plain nginx static server (`web/nginx.conf`) doing the HTML5-history fallback.
 
 ## Design system
 
