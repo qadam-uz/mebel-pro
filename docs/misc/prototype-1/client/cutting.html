@@ -24,7 +24,7 @@
   .editor-hd .def-edge select { padding: 5px 8px; border: 1px solid var(--line); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-mono); color: var(--ink-12); }
 
   .parts-grid { display: grid; gap: 10px; padding: 14px 16px; }
-  .part-row { display: grid; grid-template-columns: 28px minmax(170px,1.7fr) 70px 70px 60px 110px 90px 36px; gap: 8px; align-items: center; padding: 8px 10px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; transition: border-color .12s; }
+  .part-row { display: grid; grid-template-columns: 28px minmax(170px,1.7fr) 70px 70px 60px 110px 36px; gap: 8px; align-items: center; padding: 8px 10px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; transition: border-color .12s; }
   .part-row:hover { border-color: var(--ink-10); }
   .part-row .rownum { font: 600 12px var(--f-mono); color: var(--ink-6); text-align: center; }
   .part-row .matwrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -41,8 +41,8 @@
   .part-row .edges-btn { padding: 6px 8px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 600 11px var(--f-mono); cursor: pointer; color: var(--ink-12); display: flex; gap: 4px; justify-content: center; }
   .part-row .edges-btn .e { padding: 1px 4px; border-radius: 3px; background: var(--elev); border: 1px solid var(--line); min-width: 22px; }
   .part-row .edges-btn .e.has { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .part-row .grain-tg { padding: 6px 8px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 600 11px var(--f-mono); cursor: pointer; color: var(--ink-8); text-align: center; }
-  .part-row .grain-tg.on { background: var(--ink-12); color: #fff; border-color: var(--ink-12); }
+  .part-row .grain-ic { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-8); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; }
+  .part-row .grain-ic .arr { font: 700 11px var(--f-mono); color: var(--ink-12); }
   .part-row .row-menu { background: transparent; border: 0; padding: 6px 10px; cursor: pointer; color: var(--ink-6); font-size: 18px; line-height: 1; border-radius: 4px; }
   .part-row .row-menu:hover { background: var(--sunk); color: var(--ink-12); }
 
@@ -51,8 +51,6 @@
     .part-row .matwrap { grid-column: 2; }
     .part-row .rownum { grid-row: 1; grid-column: 1; }
     .part-row .row-menu { grid-row: 1; grid-column: 3; }
-    .part-row .dims { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-    .part-row .edges-grain { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .part-row > input.num { grid-column: span 1; }
   }
 
@@ -277,7 +275,7 @@ let draft = SEED_DRAFT
 
 // Empty draft → start with one blank row
 if (!draft.partList.length) {
-  draft.partList = [{ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, grain: 'any', edges: { t: null, b: null, l: null, r: null } }];
+  draft.partList = [{ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges: { t: null, b: null, l: null, r: null } }];
   draft.algorithms = [];
 }
 
@@ -292,7 +290,8 @@ let activeSheet = 1;
    ============================================================ */
 function partRowHtml(p, idx) {
   const mat = p.matId ? SEED.lookup.matById(p.matId) : null;
-  const matLabel = mat ? `${mat.name.split('·')[0].trim()} <small style="color:var(--ink-6);font:400 10.5px var(--f-mono)">${mat.thickness}mm</small>` : '<span class="placeholder">Material tanlang...</span>';
+  const grainBadge = mat && mat.grain ? '<span class="grain-ic" title="Tola: yo&#39;nalishi bor — kesimda hisobga olinadi"><span class="arr">↑</span>tola</span>' : '';
+  const matLabel = mat ? `${mat.name.split('·')[0].trim()} <small style="color:var(--ink-6);font:400 10.5px var(--f-mono)">${mat.thickness}mm</small> ${grainBadge}` : '<span class="placeholder">Material tanlang...</span>';
   const sw = mat ? `<span class="sw mat-sw" data-sw="${mat.sw}"></span>` : '<span class="sw" style="background:var(--sunk);border:1px dashed var(--line)"></span>';
   const srcLabel = p.source === 'own' ? "O'zim olib kelaman" : 'Sehdan';
   const srcCls = p.source === 'own' ? 'own' : '';
@@ -315,9 +314,6 @@ function partRowHtml(p, idx) {
       <input class="num" type="number" placeholder="Soni" min="1" data-ref="${p.ref}" data-field="qty" value="${p.qty ?? 1}" oninput="onPartInput(event)" />
       <button class="edges-btn" type="button" data-action="edit-edges" data-ref="${p.ref}" title="Krom yopishtirish">
         ${ec(edges.t)}${ec(edges.b)}${ec(edges.l)}${ec(edges.r)}
-      </button>
-      <button class="grain-tg ${p.grain === 'required' ? 'on' : ''}" type="button" data-action="toggle-grain" data-ref="${p.ref}" title="Tola yo'nalishi">
-        ${p.grain === 'required' ? 'Tola: kerak' : 'Tola: erkin'}
       </button>
       <div class="menu-wrap">
         <button class="row-menu" type="button" data-menu-toggle aria-label="Yana">⋯</button>
@@ -389,7 +385,7 @@ function renderAll() {
 function addPart() {
   const defEdge = document.getElementById('def-edge').value;
   const edges = defEdge === 'none' ? { t: null, b: null, l: null, r: null } : { t: +defEdge, b: +defEdge, l: +defEdge, r: +defEdge };
-  draft.partList.push({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, grain: 'any', edges });
+  draft.partList.push({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges });
   markStale();
   renderAll();
 }
@@ -431,7 +427,6 @@ document.getElementById('parts').addEventListener('click', ev => {
   if (action === 'pick-mat') openMatPicker(ref);
   else if (action === 'toggle-src') toggleSource(ref);
   else if (action === 'edit-edges') openEdgesPopover(ref);
-  else if (action === 'toggle-grain') toggleGrain(ref);
   else if (action === 'duplicate') duplicatePart(ref);
   else if (action === 'delete') deletePart(ref);
 });
@@ -442,14 +437,6 @@ function toggleSource(ref) {
   p.source = p.source === 'shop' ? 'own' : 'shop';
   markStale();
   renderAll();
-}
-
-function toggleGrain(ref) {
-  const p = draft.partList.find(x => x.ref === ref);
-  if (!p) return;
-  p.grain = p.grain === 'required' ? 'any' : 'required';
-  markStale();
-  renderParts();
 }
 
 /* ============================================================
@@ -715,10 +702,11 @@ function renderSheetSvg(algo) {
   // shelf-pack into the usable area
   const placements = [];
   let cx = usable.x, cy = usable.y, rowH = 0;
+  const matGrain = !!mat.grain;
   for (const { p, q, idx } of sheetPlacements) {
     let pl = p.l, pw = p.w;
-    if (p.grain !== 'required' && pl > usable.w - (cx - usable.x)) {
-      // try rotating
+    if (!matGrain && pl > usable.w - (cx - usable.x)) {
+      // material has no grain → free to rotate
       pl = p.w; pw = p.l;
     }
     if (cx + pl > usable.x + usable.w) {

@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-05-15
+updated: 2026-05-16
 order: 50
 ---
 
@@ -107,7 +107,6 @@ prices used. Items mirror the parts the client entered into the cutting wizard f
 | `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material/cutting bounds |
 | `quantity` | int | ≥ 1 |
-| `grain_direction` | enum | `any` / `required` |
 | `edge_top_mm` / `edge_bottom_mm` / `edge_left_mm` / `edge_right_mm` | numeric? | edge-banding thickness per side, or null |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
 | `unit_material_price_tiyin` | bigint | snapshot; 0 when `material_source = own`; ≥ 0 |
@@ -117,7 +116,8 @@ prices used. Items mirror the parts the client entered into the cutting wizard f
 On order modification, items are replaced (and the order re-priced); the old items aren't kept
 (the old cutting result is, with its `parts_snapshot`). Invariants: snapshot fields never
 updated to reflect later catalog changes; `part_ref` corresponds to a part in the order's
-cutting result; a `grain = required` part can't be rotated by the cutter.
+cutting result; grain is a property of the item's material (read from `material_snapshot`);
+parts on a grained material aren't rotated at cutting time.
 
 ## Order payment
 

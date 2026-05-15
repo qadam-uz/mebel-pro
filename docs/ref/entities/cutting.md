@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-05-15
+updated: 2026-05-16
 order: 40
 ---
 
@@ -23,7 +23,7 @@ drafts open at once.
 |---|---|---|
 | `id` | UUID | PK |
 | `client_id` | UUID | the client who owns it |
-| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id`, `material_source` (`shop` / `own`), `length_mm`, `width_mm`, `quantity`, `grain_direction`, and per-side `edge_*_mm` (top / bottom / left / right; each `0.4` / `2.0` / null) |
+| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id`, `material_source` (`shop` / `own`), `length_mm`, `width_mm`, `quantity`, and per-side `edge_*_mm` (top / bottom / left / right; each `0.4` / `2.0` / null). Grain is derived from the material (not stored on the part). |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |
 
@@ -104,5 +104,5 @@ was rotated), and whether it was rotated 90°.
 
 Invariants: every input part-instance (each `part_ref` × each quantity index) in the source
 parts list appears exactly once across the result's placements; the placement sits on a
-sheet whose `material_id` matches the part's material; a `grain = required` part is never
+sheet whose `material_id` matches the part's material; a part on a grained material is never
 `rotated`; placements don't overlap and stay within `sheet − 2× edge_trim`; immutable.

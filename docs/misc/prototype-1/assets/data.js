@@ -71,9 +71,9 @@ window.SEED = (() => {
       id: 'cr-0091', status: 'confirmed', orderId: 'MP-2026-05-0091',
       branchId: 'yunusobod', when: '14-may, 09:24',
       partList: [
-        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, grain: 'required', edges: { t: 2.0, b: 2.0, l: null, r: null } },
-        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, grain: 'any',      edges: { t: 2.0, b: 2.0, l: null, r: null } },
-        { ref: 'p03', matId: 'm01', source: 'shop', l:  600, w: 350, qty: 8, grain: 'any',      edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p03', matId: 'm01', source: 'shop', l:  600, w: 350, qty: 8, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
       ],
       algorithms: [
         { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 8.2, cutLen: 124.6, edgeLen: { 0.4: 18.2, 2.0: 12.8 }, sheetsByMat: { m01: 6 } }
@@ -88,10 +88,10 @@ window.SEED = (() => {
       id: 'cr-0085', status: 'draft', orderId: null,
       branchId: null, when: '15-may, 08:12',
       partList: [
-        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, grain: 'required', edges: { t: 2.0, b: 2.0, l: null, r: null } },
-        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, grain: 'any',      edges: { t: 2.0, b: 2.0, l: null, r: null } },
-        { ref: 'p03', matId: 'm05', source: 'own',  l:  600, w: 400, qty: 2, grain: 'any',      edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
-        { ref: 'p04', matId: 'm05', source: 'shop', l:  800, w: 300, qty: 1, grain: 'any',      edges: { t: null, b: null, l: null, r: null } }
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p03', matId: 'm05', source: 'own',  l:  600, w: 400, qty: 2, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
+        { ref: 'p04', matId: 'm05', source: 'shop', l:  800, w: 300, qty: 1, edges: { t: null, b: null, l: null, r: null } }
       ],
       algorithms: [
         { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct:  9.8, cutLen: 64.4, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, sheetsByMat: { m01: 2, m05: 1 } },
@@ -105,8 +105,8 @@ window.SEED = (() => {
     {
       id: 'cr-0086', status: 'draft', orderId: null, branchId: null, when: '14-may, 19:42',
       partList: [
-        { ref: 'p01', matId: 'm05', source: 'shop', l: 1200, w: 600, qty: 1, grain: 'any', edges: { t: null, b: null, l: null, r: null } },
-        { ref: 'p02', matId: 'm05', source: 'shop', l:  800, w: 400, qty: 4, grain: 'any', edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 1200, w: 600, qty: 1, edges: { t: null, b: null, l: null, r: null } },
+        { ref: 'p02', matId: 'm05', source: 'shop', l:  800, w: 400, qty: 4, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
       ],
       algorithms: [
         { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 14.6, cutLen: 18.2, edgeLen: { 0.4: 4.8 }, sheetsByMat: { m05: 1 } }
@@ -118,7 +118,7 @@ window.SEED = (() => {
       id: 'cr-0072', status: 'confirmed', orderId: 'MP-2026-05-0072',
       branchId: 'yunusobod', when: '13-may, 14:32',
       partList: [
-        { ref: 'p01', matId: 'm05', source: 'shop', l: 1400, w: 600, qty: 2, grain: 'any', edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 1400, w: 600, qty: 2, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
       ],
       algorithms: [
         { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 6.1, cutLen: 88.4, edgeLen: { 0.4: 12.0 }, sheetsByMat: { m05: 7 } }

@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-15
+updated: 2026-05-16
 order: 80
 ---
 
@@ -33,8 +33,9 @@ drafts).
 A draft owns:
 
 - **Parts.** Each part picks its own material from the platform catalog, its own source
-  (`shop` / `own`), dimensions (length × width × quantity), grain (`any` / `required`), and
-  per-side edge banding (top, bottom, left, right — each `0.4` / `2.0` mm or none).
+  (`shop` / `own`), dimensions (length × width × quantity), and per-side edge banding (top,
+  bottom, left, right — each `0.4` / `2.0` mm or none). Grain is **not** a per-part choice —
+  it's a property of the chosen material (see below).
 - **Algorithm results.** Re-running the optimiser produces one result per available
   algorithm in a single call (all run in parallel against the same input). All N results are
   kept on the draft until the next run replaces them. The client picks one as the **chosen**
@@ -90,9 +91,12 @@ stateDiagram-v2
   cut topology.
 - **Guillotine cuts only.** A cut runs edge-to-edge; the algorithm recursively splits the
   sheet into smaller rectangles. Non-guillotine, L-shaped, and CNC paths are out of scope.
-- **Grain.** Two modes per part. `any` — the algorithm may rotate 90°. `required` — the
-  part's length must run along the sheet's grain (its long side); no rotation. A `required`
-  part that can't fit in its forced orientation fails the run with `impossible_grain`.
+- **Grain — a property of the material, not the part.** Each catalog material declares
+  whether it has a visible grain direction. For a **grained material**, every part on it has
+  its length aligned with the sheet's grain (the long side); the algorithm may not rotate
+  the part 90°. For a **non-grained material**, the algorithm is free to rotate parts. If a
+  part on a grained material can't fit in its forced orientation, the run fails with
+  `impossible_grain`. The user is never asked to set grain on a part.
 - **One catalog material → one standard sheet size.** Custom sheet sizes are future.
 - **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = sheet − 2× edge
   trim).
@@ -160,8 +164,10 @@ The parts table:
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
 | **Edges** | compact `T·B·L·R` chip strip showing each side's banding (`–` / `0.4` / `2.0`); tap → popover |
-| **Grain** | toggle `any` / `required` |
 | **⋯** | duplicate row · delete row |
+
+The grain indicator (a small arrow / icon) appears **on the material chip itself** when the
+chosen material has grain — a passive cue, not a control.
 
 **Edges popover** — quick presets `None` · `All 0.4` · `All 2.0` snap all four sides; below
 that, four per-side dropdowns (Top / Bottom / Left / Right) for the rare per-side case; an
