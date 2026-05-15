@@ -9,55 +9,137 @@
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
 <style>
-  .mat-grid { display: grid; gap: 12px; grid-template-columns: repeat(2,1fr); margin-top: 14px; }
-  @media (min-width: 640px) { .mat-grid { grid-template-columns: repeat(3,1fr); } }
-  @media (min-width: 980px) { .mat-grid { grid-template-columns: repeat(4,1fr); } }
-  .mat-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .15s, border-color .15s; display: flex; flex-direction: column; }
-  .mat-card:hover { transform: translateY(-2px); border-color: var(--ink-10); }
-  .mat-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-tint); }
-  .mat-card .sw-area { aspect-ratio: 4/3; }
-  .mat-card .body { padding: 12px 14px 14px; flex: 1; display: flex; flex-direction: column; }
-  .mat-card .type { font: 600 10.5px var(--f-mono); color: var(--ink-6); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
-  .mat-card .nm { font: 500 13.5px/1.3 var(--f-ui); color: var(--ink-12); min-height: 36px; }
-  .mat-card .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 4px; }
-  .mat-card .pr { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font: 600 16px var(--f-display); color: var(--ink-12); }
-  .mat-card .pr small { font: 500 11px var(--f-ui); color: var(--ink-6); letter-spacing: 0; }
+  .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg-btn { padding: 7px 14px; background: transparent; border: 0; border-radius: 6px; color: var(--ink-8); font: 500 13px var(--f-ui); cursor: pointer; }
+  .seg-btn.on { background: var(--elev); color: var(--ink-12); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .seg-btn[disabled] { opacity: .55; cursor: not-allowed; }
+  .seg-btn .soon { display: inline-block; margin-left: 6px; padding: 2px 6px; font: 600 9.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-6); background: var(--line); border-radius: 999px; }
 
-  .parts-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  .parts-tbl th { text-align: left; padding: 8px 10px; font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-6); border-bottom: 1px solid var(--line); }
-  .parts-tbl td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  .parts-tbl td input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 13px/1 var(--f-mono); background: var(--elev); outline: 0; }
-  .parts-tbl td input:focus { border-color: var(--ink-12); }
-  .parts-tbl td select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 12.5px var(--f-ui); background: var(--elev); outline: 0; }
-  .parts-tbl td.actions { width: 70px; text-align: right; white-space: nowrap; }
-  .parts-tbl td.actions button { background: none; border: 0; color: var(--ink-6); cursor: pointer; font-size: 16px; padding: 4px 6px; }
-  .parts-tbl td.actions button:hover { color: var(--danger); }
-  .parts-tbl td.no { font: 600 12px var(--f-mono); color: var(--ink-6); width: 26px; }
+  /* parts editor */
+  .editor { margin-top: 18px; }
+  .editor-hd { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); gap: 14px; flex-wrap: wrap; }
+  .editor-hd h2 { font: 600 16px var(--f-display); color: var(--ink-12); margin: 0; letter-spacing: -.01em; }
+  .editor-hd .meta { font: 500 12px var(--f-ui); color: var(--ink-6); }
+  .editor-hd .def-edge { display: inline-flex; align-items: center; gap: 8px; font: 500 12px var(--f-ui); color: var(--ink-8); }
+  .editor-hd .def-edge select { padding: 5px 8px; border: 1px solid var(--line); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-mono); color: var(--ink-12); }
 
-  .summary-pane { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: sticky; top: 84px; }
-  .summary-pane h4 { font: 600 12px var(--f-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-6); margin: 0 0 10px; }
-  .summary-pane .r { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: var(--ink-8); }
-  .summary-pane .r b { color: var(--ink-12); font-family: var(--f-mono); font-weight: 600; }
-  .summary-pane .note { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-6); line-height: 1.5; }
+  .parts-grid { display: grid; gap: 10px; padding: 14px 16px; }
+  .part-row { display: grid; grid-template-columns: 28px minmax(170px,1.7fr) 70px 70px 60px 110px 90px 36px; gap: 8px; align-items: center; padding: 8px 10px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; transition: border-color .12s; }
+  .part-row:hover { border-color: var(--ink-10); }
+  .part-row .rownum { font: 600 12px var(--f-mono); color: var(--ink-6); text-align: center; }
+  .part-row .matwrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .part-row .mat-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); background: var(--sunk); border-radius: 6px; cursor: pointer; font: 500 12.5px var(--f-ui); color: var(--ink-12); text-align: left; }
+  .part-row .mat-btn:hover { border-color: var(--ink-10); }
+  .part-row .mat-btn .sw { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .part-row .mat-btn .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .part-row .mat-btn .placeholder { color: var(--ink-6); }
+  .part-row .src-chip { padding: 3px 8px; font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-8); cursor: pointer; white-space: nowrap; }
+  .part-row .src-chip.own { background: rgba(166,71,31,.08); border-color: rgba(166,71,31,.3); color: var(--accent); }
+  .part-row input.num { padding: 7px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 13px var(--f-mono); background: var(--elev); color: var(--ink-12); width: 100%; box-sizing: border-box; }
+  .part-row input.num:focus { outline: 0; border-color: var(--ink-12); }
+  .part-row input.num.bad { border-color: var(--danger); background: rgba(180,38,38,.05); }
+  .part-row .edges-btn { padding: 6px 8px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 600 11px var(--f-mono); cursor: pointer; color: var(--ink-12); display: flex; gap: 4px; justify-content: center; }
+  .part-row .edges-btn .e { padding: 1px 4px; border-radius: 3px; background: var(--elev); border: 1px solid var(--line); min-width: 22px; }
+  .part-row .edges-btn .e.has { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .part-row .grain-tg { padding: 6px 8px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 600 11px var(--f-mono); cursor: pointer; color: var(--ink-8); text-align: center; }
+  .part-row .grain-tg.on { background: var(--ink-12); color: #fff; border-color: var(--ink-12); }
+  .part-row .row-menu { background: transparent; border: 0; padding: 6px 10px; cursor: pointer; color: var(--ink-6); font-size: 18px; line-height: 1; border-radius: 4px; }
+  .part-row .row-menu:hover { background: var(--sunk); color: var(--ink-12); }
 
-  .two-col-pane { display: grid; gap: 18px; grid-template-columns: 1fr; }
-  @media (min-width: 1024px) { .two-col-pane { grid-template-columns: 1.5fr .8fr; } }
+  @media (max-width: 760px) {
+    .part-row { grid-template-columns: 28px 1fr 32px; grid-auto-rows: auto; padding: 12px; gap: 10px; }
+    .part-row .matwrap { grid-column: 2; }
+    .part-row .rownum { grid-row: 1; grid-column: 1; }
+    .part-row .row-menu { grid-row: 1; grid-column: 3; }
+    .part-row .dims { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .part-row .edges-grain { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .part-row > input.num { grid-column: span 1; }
+  }
 
-  .result-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
-  @media (min-width: 1024px) { .result-grid { grid-template-columns: 1.4fr .8fr; } }
-  .metric-strip { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-bottom: 18px; }
-  @media (min-width: 720px) { .metric-strip { grid-template-columns: repeat(4, 1fr); } }
-  .metric { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
-  .metric .lbl { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin-bottom: 6px; }
-  .metric .v { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; line-height: 1; }
-  .metric .v small { font: 500 11px var(--f-ui); color: var(--ink-6); letter-spacing: 0; }
-  .metric .v.warn { color: var(--warn); }
-  .legend { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
-  .legend h4 { font: 600 13px var(--f-ui); margin: 0 0 8px; }
-  .legend ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-  .legend li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
-  .legend li:last-child { border-bottom: 0; }
-  .legend li b { font-family: var(--f-mono); }
+  /* Material picker modal */
+  .mat-list { max-height: 60vh; overflow-y: auto; padding: 4px 0; }
+  .mat-search { width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); font: 500 13px var(--f-ui); color: var(--ink-12); margin-bottom: 10px; }
+  .mat-search:focus { outline: 0; border-color: var(--ink-12); }
+  .mat-opt { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 6px; cursor: pointer; }
+  .mat-opt:hover { background: var(--sunk); }
+  .mat-opt .sw { width: 36px; height: 36px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .mat-opt .lab .nm { font: 500 13px var(--f-ui); color: var(--ink-12); }
+  .mat-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .mat-opt .by-n { font: 500 11px var(--f-ui); color: var(--ink-6); padding: 2px 8px; background: var(--sunk); border-radius: 999px; }
+
+  /* Edges popover (modal-ish) */
+  .edges-pop .presets { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .edges-pop .presets button { padding: 7px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: 500 12px var(--f-ui); color: var(--ink-12); }
+  .edges-pop .presets button:hover { background: var(--elev); border-color: var(--ink-10); }
+  .edges-pop .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .edges-pop .sides label { font: 500 12px var(--f-ui); color: var(--ink-8); }
+  .edges-pop .sides select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); background: var(--elev); border-radius: 6px; font: 500 13px var(--f-mono); color: var(--ink-12); margin-top: 4px; }
+  .edges-pop .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); margin-top: 14px; }
+
+  /* branches indicator */
+  .br-strip { margin-top: 14px; padding: 12px 16px; background: var(--sunk); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; font: 500 13px var(--f-ui); color: var(--ink-10); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .br-strip.warn { border-left-color: #b87024; background: rgba(184,112,36,.06); color: var(--ink-12); }
+  .br-strip .ic { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 4px; background: var(--elev); color: var(--accent); font: 700 13px var(--f-mono); }
+  .br-strip b { color: var(--ink-12); font-weight: 600; }
+  .br-strip .br-names { color: var(--ink-12); font-weight: 600; }
+
+  .run { margin-top: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* Result panel */
+  .result { margin-top: 28px; padding-top: 22px; border-top: 1px dashed var(--line); }
+  .hide { display: none !important; }
+  .result-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .result-hd h2 { font: 600 22px var(--f-display); color: var(--ink-12); margin: 0; letter-spacing: -.015em; }
+  .result-hd .stale { padding: 4px 10px; font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: #b87024; background: rgba(184,112,36,.1); border-radius: 999px; }
+
+  .metrics-strip { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; margin-bottom: 16px; }
+  @media (min-width: 700px) { .metrics-strip { grid-template-columns: repeat(4,1fr); } }
+  .metric { padding: 14px 16px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; }
+  .metric .lab { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin-bottom: 4px; }
+  .metric .v { font: 600 22px var(--f-display); color: var(--ink-12); letter-spacing: -.015em; }
+  .metric .sub { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .metric.ok .v { color: #2d6045; }
+  .metric.warn .v { color: #b87024; }
+
+  /* Algorithm comparison */
+  .algos { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 18px; }
+  .algos-hd { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; font: 500 13px var(--f-ui); color: var(--ink-10); }
+  .algos-hd .expand { background: transparent; border: 0; cursor: pointer; padding: 4px 8px; color: var(--ink-8); font: 500 12px var(--f-ui); }
+  .algos-hd .expand:hover { color: var(--ink-12); }
+  .algos-list { display: none; }
+  .algos.open .algos-list { display: block; }
+  .algos-list table { width: 100%; border-collapse: collapse; }
+  .algos-list th, .algos-list td { text-align: left; padding: 10px 16px; font: 500 12.5px var(--f-mono); border-top: 1px solid var(--line); color: var(--ink-10); }
+  .algos-list th { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); background: var(--sunk); }
+  .algos-list tr.chosen td { background: rgba(166,71,31,.05); color: var(--ink-12); }
+  .algos-list .use { padding: 4px 10px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 500 11px var(--f-ui); cursor: pointer; color: var(--ink-12); }
+  .algos-list .use:hover { background: var(--elev); border-color: var(--ink-10); }
+  .algos-list .badge { padding: 2px 8px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #fff; border-radius: 999px; }
+
+  /* Visualizer */
+  .viz { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+  .viz-tabs { display: flex; gap: 4px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
+  .viz-tabs button { padding: 6px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; font: 500 12px var(--f-ui); color: var(--ink-8); cursor: pointer; white-space: nowrap; }
+  .viz-tabs button.on { background: var(--ink-12); color: #fff; border-color: var(--ink-12); }
+  .viz-tabs button .ct { margin-left: 6px; padding: 1px 6px; background: rgba(0,0,0,.1); border-radius: 999px; font-size: 10px; }
+  .viz-tabs button.on .ct { background: rgba(255,255,255,.2); }
+
+  .sheet-tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sheet-tabs button { padding: 4px 10px; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; font: 500 11.5px var(--f-mono); color: var(--ink-8); cursor: pointer; }
+  .sheet-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .sheet-svg-wrap { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .sheet-svg-wrap { grid-template-columns: minmax(0,1fr) 220px; } }
+  .sheet-svg-wrap svg { width: 100%; max-height: 460px; background: var(--sunk); border-radius: 6px; border: 1px solid var(--line); }
+  .sheet-legend h4 { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin: 0 0 10px; }
+  .sheet-legend ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .sheet-legend li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--sunk); border-radius: 4px; font: 500 11.5px var(--f-mono); color: var(--ink-10); }
+  .sheet-legend li .sw { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+  .sheet-info { display: flex; gap: 12px; flex-wrap: wrap; font: 500 11.5px var(--f-mono); color: var(--ink-6); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .sheet-info b { color: var(--ink-12); font-weight: 600; }
+
+  .result-actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+  .stale-msg { padding: 12px 16px; background: rgba(184,112,36,.07); border: 1px solid rgba(184,112,36,.25); border-radius: 6px; font: 500 13px var(--f-ui); color: #855218; margin-bottom: 14px; }
 </style>
 </head>
 <body>
@@ -67,378 +149,643 @@
 <script>renderClientHeader('cutting-drafts.html');</script>
 
 <main class="container" style="padding: 24px 0 64px">
-  <button class="back" type="button" onclick="history.length > 1 ? history.back() : location.href='branches.html'">← Filiallar</button>
-
-  <div class="page-head" style="margin-top: 8px">
+  <div class="page-head" style="margin-bottom: 12px">
     <div>
-      <h1>Yangi kesim chizmasi</h1>
-      <p class="sub" id="branch-line">Furniture House — Yunusobod filiali</p>
+      <h1>Kesim chizmasi</h1>
+      <p class="sub">Materiallarni va qismlarni belgilang · optimallashtirib chizmani ko'ring.</p>
     </div>
   </div>
 
-  <div class="stepper" id="stepper">
-    <div class="st on" data-step="1"><span class="n">1</span> Material</div>
-    <div class="st" data-step="2"><span class="n">2</span> Qismlar</div>
-    <div class="st" data-step="3"><span class="n">3</span> Natija</div>
+  <div class="seg" role="tablist" aria-label="Kiritish usuli">
+    <button class="seg-btn on" type="button">Qo'lda kiritish</button>
+    <button class="seg-btn" type="button" disabled onclick="toast(&quot;Fayldan yuklash v2 da qo'shiladi&quot;)">Fayldan yuklash <span class="soon">tez orada</span></button>
   </div>
 
-  <!-- STEP 1: MATERIAL -->
-  <section data-pane="1">
-    <div class="card">
-      <div class="card-h">
-        <h2>Material manbai</h2>
-      </div>
-      <div class="card-b">
-        <div class="opt-row">
-          <div class="opt on" data-source="shop" onclick="pickSource('shop')">
-            <span class="rd"></span>
-            <div class="info">
-              <div class="nm">Sehdan olish</div>
-              <div class="ds">Material ham, kesim ham seh tomonidan. Hisob narxda ko'rinadi.</div>
-            </div>
-          </div>
-          <div class="opt" data-source="own" onclick="pickSource('own')">
-            <span class="rd"></span>
-            <div class="info">
-              <div class="nm">O'zim olib kelaman</div>
-              <div class="ds">Faqat kesim xizmati to'lanadi. Material turi tanlanishi shart (narx hisobiga).</div>
-            </div>
-          </div>
-        </div>
-      </div>
+  <section class="card editor">
+    <div class="editor-hd">
+      <h2>Qismlar <span class="meta" id="parts-count">0</span></h2>
+      <label class="def-edge">
+        <span>Standart krom (yangi qismlar uchun)</span>
+        <select id="def-edge">
+          <option value="none">Yo'q</option>
+          <option value="0.4">0.4 mm hammasiga</option>
+          <option value="2.0">2.0 mm hammasiga</option>
+        </select>
+      </label>
     </div>
-
-    <div class="card" style="margin-top: 14px">
-      <div class="card-h">
-        <h2>Material tanlash</h2>
-        <input class="search-input" placeholder="Material qidirish..." oninput="filterMats(this.value)" style="max-width: 280px; margin-left: auto" />
-      </div>
-      <div class="card-b">
-        <div class="filters" style="margin-bottom: 8px">
-          <div class="chips" id="type-chips">
-            <button class="chip on" data-type="all" onclick="setType('all')">Hammasi</button>
-            <button class="chip" data-type="dsp" onclick="setType('dsp')">LDSP</button>
-            <button class="chip" data-type="mdf" onclick="setType('mdf')">MDF</button>
-            <button class="chip" data-type="plywood" onclick="setType('plywood')">Fanera</button>
-          </div>
-        </div>
-        <div class="mat-grid" id="mat-grid"></div>
-        <div id="mat-empty" class="empty" style="display: none; margin-top: 14px"><div class="ic">∅</div><h3>Mos material yo'q</h3><p>Boshqa filialdan urinib ko'ring.</p></div>
-      </div>
-    </div>
-
-    <div class="flex-end" style="margin-top: 18px; gap: 8px">
-      <button class="btn btn-outline" type="button" onclick="location.href='branches.html'">Bekor qilish</button>
-      <button class="btn btn-acc btn-lg" type="button" id="next-1" onclick="gotoStep(2)" disabled>Keyingi · Qismlar →</button>
+    <div class="parts-grid" id="parts"></div>
+    <div style="padding: 10px 16px 16px">
+      <button class="btn btn-outline" type="button" onclick="addPart()">+ Yangi qism</button>
     </div>
   </section>
 
-  <!-- STEP 2: PARTS -->
-  <section data-pane="2" hidden>
-    <div class="two-col-pane">
-      <div>
-        <div class="card">
-          <div class="card-h">
-            <div>
-              <h2>Qismlar ro'yxati</h2>
-              <div class="sub">Har bir qism — uzunlik × kenglik × soni va krom turi.</div>
-            </div>
-            <button class="btn btn-outline btn-sm" type="button" onclick="addPart()">+ Qism qo'shish</button>
-          </div>
-          <div class="card-b">
-            <table class="parts-tbl">
-              <thead>
-                <tr><th style="width: 30px">№</th><th>Uzunlik (mm)</th><th>Kenglik (mm)</th><th style="width: 70px">Soni</th><th style="width: 100px">Tola yo'nalishi</th><th>Krom (T/B/L/R)</th><th></th></tr>
-              </thead>
-              <tbody id="parts-body"></tbody>
-            </table>
-            <details style="margin-top: 14px">
-              <summary style="font: 500 13px var(--f-ui); color: var(--accent); cursor: pointer">↥ Ko'p qator kiritish (LxWxQty matnda)</summary>
-              <textarea id="bulk-paste" placeholder="600x400x4&#10;800x500x2&#10;200x150x8" style="margin-top: 8px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; font: 500 13px/1.5 var(--f-mono); min-height: 100px; resize: vertical"></textarea>
-              <button class="btn btn-outline btn-sm" type="button" onclick="bulkPaste()" style="margin-top: 8px">Qator(lar)ni qo'shish</button>
-            </details>
-          </div>
-        </div>
+  <div id="br-strip"></div>
+
+  <div class="run">
+    <button class="btn btn-acc" id="optimize-btn" type="button" onclick="runOptimizer()">▶ Optimallashtirish</button>
+    <span class="sub" id="opt-hint">Qismlarni kiriting va optimallashtirib chizmani ko'ring.</span>
+  </div>
+
+  <section class="result hide" id="result">
+    <div class="result-hd">
+      <h2>Optimallashtirilgan natija</h2>
+      <span class="stale hide" id="stale-pill">Qismlar o'zgargan — qayta ishga tushiring</span>
+    </div>
+
+    <div class="metrics-strip" id="metrics"></div>
+
+    <div class="algos" id="algos">
+      <div class="algos-hd">
+        <span>Algoritm: <b id="cur-algo">—</b> · <span id="cur-algo-meta">—</span></span>
+        <button class="expand" type="button" onclick="document.getElementById('algos').classList.toggle('open')">Boshqa algoritmlar ▾</button>
       </div>
-
-      <aside>
-        <div class="summary-pane">
-          <h4>Joriy holat</h4>
-          <div class="r"><span>Material</span><b id="sum-mat">—</b></div>
-          <div class="r"><span>List o'lchami</span><b id="sum-sheet">—</b></div>
-          <div class="r"><span>Qismlar soni</span><b id="sum-parts">0</b></div>
-          <div class="r"><span>Umumiy yuza</span><b id="sum-area">0 m²</b></div>
-          <div class="note">
-            <b style="color: var(--ink-12)">Hisobga olinadi:</b> kerf 4 mm · chetdan 10 mm · grain bo'yicha rotatsiya cheklovi.
-          </div>
-        </div>
-      </aside>
-    </div>
-
-    <div class="flex-end" style="margin-top: 18px; gap: 8px">
-      <button class="btn btn-outline" type="button" onclick="gotoStep(1)">← Material</button>
-      <button class="btn btn-acc btn-lg" type="button" onclick="runOptimization()">Optimizatsiyani ishga tushirish →</button>
-    </div>
-  </section>
-
-  <!-- STEP 3: RESULT -->
-  <section data-pane="3" hidden>
-    <div class="metric-strip">
-      <div class="metric"><div class="lbl">Algoritm</div><div class="v" style="font-size:14px;line-height:1.2">FFD-guillotine v1</div></div>
-      <div class="metric"><div class="lbl">Qoldiq</div><div class="v" id="m-waste"><span>8.2</span><small> %</small></div></div>
-      <div class="metric"><div class="lbl">Listlar</div><div class="v" id="m-sheets">6</div></div>
-      <div class="metric"><div class="lbl">Kesim uzunligi</div><div class="v" id="m-cut" style="font-size:20px">124.6<small> m</small></div></div>
-    </div>
-
-    <div class="result-grid">
-      <div>
-        <div class="sheet">
-          <div class="head">
-            <h4>Kesim chizmasi</h4>
-            <div class="meta">2750 × 1830 mm · 18 mm DSP</div>
-          </div>
-          <div class="sheet-tabs">
-            <button class="st-tab on" onclick="pickSheet(1, this)">List 1</button>
-            <button class="st-tab" onclick="pickSheet(2, this)">List 2</button>
-            <button class="st-tab" onclick="pickSheet(3, this)">List 3</button>
-            <button class="st-tab" onclick="pickSheet(4, this)">List 4</button>
-            <button class="st-tab" onclick="pickSheet(5, this)">List 5</button>
-            <button class="st-tab" onclick="pickSheet(6, this)">List 6</button>
-          </div>
-          <svg viewBox="0 0 550 366" id="sheet-svg">
-            <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
-            <rect x="2" y="2" width="546" height="362" fill="none" stroke="#A6471F" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
-            <g id="placements"></g>
-          </svg>
-        </div>
+      <div class="algos-list">
+        <table>
+          <thead><tr><th>Algoritm</th><th>Wastage</th><th>Listlar</th><th>Kesim uzunligi</th><th></th></tr></thead>
+          <tbody id="algos-tbody"></tbody>
+        </table>
       </div>
-
-      <aside>
-        <div class="legend">
-          <h4>Joylanish · 1-list</h4>
-          <ul id="placement-list">
-            <li><span>P1 · 600 × 400 mm</span><b>4 ta</b></li>
-            <li><span>P2 · 800 × 500 mm</span><b>2 ta</b></li>
-            <li><span>P3 · 200 × 150 mm</span><b>8 ta</b></li>
-          </ul>
-        </div>
-
-        <div class="card" style="margin-top: 14px">
-          <div class="card-h"><h2 style="font-size: 16px">Krom uzunligi</h2></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="row-item"><div><div class="nm">0.4 mm krom</div></div><div class="meta">18.2 m</div></div>
-            <div class="row-item"><div><div class="nm">2.0 mm krom</div></div><div class="meta">12.8 m</div></div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 14px">
-          <div class="card-b" style="padding: 14px 18px">
-            <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlandi · yuklanmoqda...','ok')">⬇ Chizmaning PDF nusxasini olish</button>
-          </div>
-        </div>
-      </aside>
     </div>
 
-    <div class="flex-end" style="margin-top: 22px; gap: 8px">
-      <button class="btn btn-outline" type="button" onclick="gotoStep(2)">← Qismlarni o'zgartirish</button>
-      <button class="btn btn-outline" type="button" onclick="saveDraftOnly()">Loyihalarga saqlash</button>
-      <button class="btn btn-acc btn-lg" type="button" onclick="location.href='order-new.html?cutting=cr-0091'">Shu chizma bilan buyurtma berish →</button>
+    <div class="viz">
+      <div class="viz-tabs" id="mat-tabs"></div>
+      <div class="sheet-tabs" id="sheet-tabs"></div>
+      <div class="sheet-svg-wrap">
+        <div id="sheet-svg"></div>
+        <div class="sheet-legend" id="sheet-legend"></div>
+      </div>
+      <div class="sheet-info" id="sheet-info"></div>
     </div>
 
-    <p style="font-size: 11.5px; color: var(--ink-6); margin-top: 14px; text-align: center">
-      Loyihalar 7 kun saqlanadi · keyin avtomatik o'chiriladi
-    </p>
+    <div class="result-actions">
+      <a class="btn btn-acc" id="place-order-btn" href="#">Bu chizma bilan buyurtma berish →</a>
+      <button class="btn btn-outline" type="button" onclick="toast('PDF tayyorlanmoqda… (demo)')">PDF yuklab olish</button>
+      <button class="btn btn-ghost" type="button" onclick="document.getElementById('parts').scrollIntoView({behavior:'smooth'})">Qismlarni tahrirlash ↑</button>
+    </div>
   </section>
 </main>
 
-<script>
-const state = {
-  step: 1,
-  source: 'shop',
-  type: 'all',
-  search: '',
-  matId: null,
-  parts: [
-    { len: 600, wid: 400, qty: 4, grain: 'any', edge: '0.4' },
-    { len: 800, wid: 500, qty: 2, grain: 'required', edge: '2.0' },
-    { len: 200, wid: 150, qty: 8, grain: 'any', edge: 'none' }
-  ]
-};
+<!-- Material picker modal -->
+<div id="scrim" class="scrim"></div>
+<div class="modal" id="m-mat">
+  <div class="modal-h"><h3>Material tanlang</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <input class="mat-search" id="mat-search" placeholder="Material nomi yoki qalinlik..." oninput="renderMatList()" />
+    <div class="mat-list" id="mat-list"></div>
+  </div>
+</div>
 
-const branchId = new URLSearchParams(location.search).get('branch') || sessionStorage.getItem('mp.branch') || 'yunusobod';
-
-function getMaterials() {
-  return SEED.branchMaterials
-    .filter(bm => bm.branchId === branchId && bm.status === 'active')
-    .map(bm => ({ ...SEED.lookup.matById(bm.matId), priceTiyin: bm.priceTiyin, branchAvailable: bm.onHand - bm.reserved }));
-}
-
-function renderMatGrid() {
-  const grid = document.getElementById('mat-grid');
-  const mats = getMaterials().filter(m => {
-    if (state.type !== 'all' && m.type !== state.type) return false;
-    if (state.search && !m.name.toLowerCase().includes(state.search.toLowerCase())) return false;
-    return true;
-  });
-  if (mats.length === 0) {
-    grid.innerHTML = '';
-    document.getElementById('mat-empty').style.display = '';
-    return;
-  }
-  document.getElementById('mat-empty').style.display = 'none';
-  grid.innerHTML = mats.map(m => `
-    <div class="mat-card ${m.id === state.matId ? 'on' : ''}" onclick="pickMat('${m.id}')">
-      <div class="sw-area ${m.sw}"></div>
-      <div class="body">
-        <div class="type">${m.type.toUpperCase()} · ${m.thickness} mm</div>
-        <div class="nm">${m.name}</div>
-        <div class="meta">${m.sheetLen} × ${m.sheetWid} mm${m.grain ? ' · tola yo\'nalishi bor' : ''}</div>
-        ${state.source === 'shop' ? `<div class="pr">${fmtTiyin(m.priceTiyin)}<small> / list</small></div>` : ''}
-      </div>
+<!-- Edges popover modal -->
+<div class="modal" id="m-edges">
+  <div class="modal-h"><h3>Krom yopishtirish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b edges-pop">
+    <div class="presets">
+      <button type="button" onclick="presetEdges(null)">Hech qaysi</button>
+      <button type="button" onclick="presetEdges(0.4)">Hammasiga 0.4 mm</button>
+      <button type="button" onclick="presetEdges(2.0)">Hammasiga 2.0 mm</button>
     </div>
-  `).join('');
+    <div class="sides">
+      <label>Yuqori<select id="e-t"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
+      <label>Pastki<select id="e-b"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
+      <label>Chap<select id="e-l"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
+      <label>O'ng<select id="e-r"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
+    </div>
+    <label class="ck"><input type="checkbox" id="e-all" /> Barcha qismlarga shu sozlash qo'llanilsin</label>
+  </div>
+  <div class="modal-f">
+    <button class="btn btn-outline" data-close-modal>Bekor qilish</button>
+    <button class="btn btn-acc" type="button" onclick="applyEdges()">Qo'llash</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   State — the cutting draft we're editing.
+   Bootstrapped from ?id=cr-0085 (or any draft from SEED.cuttings).
+   New parts get a per-row UUID-ish ref.
+   ============================================================ */
+const params = new URLSearchParams(location.search);
+const initialDraftId = params.get('id') || 'cr-0085';
+
+const SEED_DRAFT = initialDraftId === 'new'
+  ? null
+  : SEED.cuttings.find(c => c.id === initialDraftId);
+
+let draft = SEED_DRAFT
+  ? JSON.parse(JSON.stringify(SEED_DRAFT))  // editable copy of the looked-up cutting
+  : { id: 'cr-new', status: 'draft', partList: [], algorithms: [], when: 'hozir' };
+
+// Empty draft → start with one blank row
+if (!draft.partList.length) {
+  draft.partList = [{ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, grain: 'any', edges: { t: null, b: null, l: null, r: null } }];
+  draft.algorithms = [];
 }
 
-function pickSource(s) {
-  state.source = s;
-  document.querySelectorAll('[data-source]').forEach(el => el.classList.toggle('on', el.dataset.source === s));
-  renderMatGrid();
-}
-function setType(t) {
-  state.type = t;
-  document.querySelectorAll('[data-type]').forEach(el => el.classList.toggle('on', el.dataset.type === t));
-  renderMatGrid();
-}
-function filterMats(q) {
-  state.search = q;
-  renderMatGrid();
-}
-function pickMat(id) {
-  state.matId = id;
-  renderMatGrid();
-  document.getElementById('next-1').disabled = false;
-  const m = SEED.lookup.matById(id);
-  document.getElementById('sum-mat').textContent = `${m.name}`;
-  document.getElementById('sum-sheet').textContent = `${m.sheetLen} × ${m.sheetWid} mm`;
+let resultStale = false;   // when the user edits a row after a run, the result is marked stale
+let pickingPartRef = null; // when the material modal is open, which part it's for
+let editingEdgesRef = null;
+let activeMatTab = null;
+let activeSheet = 1;
+
+/* ============================================================
+   Render: parts list
+   ============================================================ */
+function partRowHtml(p, idx) {
+  const mat = p.matId ? SEED.lookup.matById(p.matId) : null;
+  const matLabel = mat ? `${mat.name.split('·')[0].trim()} <small style="color:var(--ink-6);font:400 10.5px var(--f-mono)">${mat.thickness}mm</small>` : '<span class="placeholder">Material tanlang...</span>';
+  const sw = mat ? `<span class="sw mat-sw" data-sw="${mat.sw}"></span>` : '<span class="sw" style="background:var(--sunk);border:1px dashed var(--line)"></span>';
+  const srcLabel = p.source === 'own' ? "O'zim olib kelaman" : 'Sehdan';
+  const srcCls = p.source === 'own' ? 'own' : '';
+
+  const edges = p.edges || { t: null, b: null, l: null, r: null };
+  const ec = (v) => v ? `<span class="e has">${v}</span>` : '<span class="e">–</span>';
+
+  return `
+    <div class="part-row" data-ref="${p.ref}">
+      <div class="rownum">#${idx + 1}</div>
+      <div class="matwrap">
+        <button class="mat-btn" type="button" data-action="pick-mat" data-ref="${p.ref}">
+          ${sw}
+          <span class="lab">${matLabel}</span>
+        </button>
+        <button class="src-chip ${srcCls}" type="button" data-action="toggle-src" data-ref="${p.ref}" title="Material manbasi">${srcLabel}</button>
+      </div>
+      <input class="num" type="number" placeholder="Uzun." min="50" data-ref="${p.ref}" data-field="l" value="${p.l ?? ''}" oninput="onPartInput(event)" />
+      <input class="num" type="number" placeholder="En" min="50" data-ref="${p.ref}" data-field="w" value="${p.w ?? ''}" oninput="onPartInput(event)" />
+      <input class="num" type="number" placeholder="Soni" min="1" data-ref="${p.ref}" data-field="qty" value="${p.qty ?? 1}" oninput="onPartInput(event)" />
+      <button class="edges-btn" type="button" data-action="edit-edges" data-ref="${p.ref}" title="Krom yopishtirish">
+        ${ec(edges.t)}${ec(edges.b)}${ec(edges.l)}${ec(edges.r)}
+      </button>
+      <button class="grain-tg ${p.grain === 'required' ? 'on' : ''}" type="button" data-action="toggle-grain" data-ref="${p.ref}" title="Tola yo'nalishi">
+        ${p.grain === 'required' ? 'Tola: kerak' : 'Tola: erkin'}
+      </button>
+      <div class="menu-wrap">
+        <button class="row-menu" type="button" data-menu-toggle aria-label="Yana">⋯</button>
+        <div class="menu">
+          <button class="mi" type="button" data-action="duplicate" data-ref="${p.ref}">Dublikat</button>
+          <button class="mi danger" type="button" data-action="delete" data-ref="${p.ref}">O'chirish</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderParts() {
-  const body = document.getElementById('parts-body');
-  body.innerHTML = state.parts.map((p, i) => `
-    <tr>
-      <td class="no">${i + 1}</td>
-      <td><input type="number" value="${p.len}" onchange="setPart(${i},'len',this.value)"/></td>
-      <td><input type="number" value="${p.wid}" onchange="setPart(${i},'wid',this.value)"/></td>
-      <td><input type="number" value="${p.qty}" min="1" onchange="setPart(${i},'qty',this.value)"/></td>
-      <td>
-        <select onchange="setPart(${i},'grain',this.value)">
-          <option value="any" ${p.grain === 'any' ? 'selected' : ''}>Erkin</option>
-          <option value="required" ${p.grain === 'required' ? 'selected' : ''}>Talab qilingan</option>
-        </select>
-      </td>
-      <td>
-        <select onchange="setPart(${i},'edge',this.value)">
-          <option value="none" ${p.edge === 'none' ? 'selected' : ''}>Krom yo'q</option>
-          <option value="0.4" ${p.edge === '0.4' ? 'selected' : ''}>0.4 mm — barcha tomonlar</option>
-          <option value="2.0" ${p.edge === '2.0' ? 'selected' : ''}>2.0 mm — barcha tomonlar</option>
-        </select>
-      </td>
-      <td class="actions">
-        <button type="button" onclick="dupPart(${i})" title="Nusxa">⎘</button>
-        <button type="button" onclick="rmPart(${i})" title="O'chirish">✕</button>
-      </td>
-    </tr>
-  `).join('');
-  document.getElementById('sum-parts').textContent = state.parts.reduce((s, p) => s + p.qty, 0);
-  const totalArea = state.parts.reduce((s, p) => s + (p.len * p.wid * p.qty), 0) / 1e6;
-  document.getElementById('sum-area').textContent = `${totalArea.toFixed(2)} m²`;
+  const wrap = document.getElementById('parts');
+  wrap.innerHTML = draft.partList.map(partRowHtml).join('');
+  document.getElementById('parts-count').textContent = draft.partList.length + ' ta';
+
+  // colour the material swatches
+  wrap.querySelectorAll('.mat-sw').forEach(el => {
+    el.style.background = swatchColor(el.dataset.sw);
+  });
 }
-function setPart(i, k, v) { state.parts[i][k] = k === 'grain' || k === 'edge' ? v : Number(v); renderParts(); }
-function addPart() { state.parts.push({ len: 600, wid: 400, qty: 1, grain: 'any', edge: '0.4' }); renderParts(); }
-function dupPart(i) { state.parts.splice(i + 1, 0, { ...state.parts[i] }); renderParts(); }
-function rmPart(i) {
-  if (state.parts.length === 1) { toast('Eng kamida 1 ta qism kerak', 'warn'); return; }
-  state.parts.splice(i, 1); renderParts();
+
+function swatchColor(swId) {
+  // simple swatch palette mirrored from the catalog seed
+  const map = { 'sw-1':'#a37a4a','sw-2':'#876040','sw-3':'#7a5b3e','sw-4':'#f1ebe1','sw-5':'#c9b89a','sw-6':'#d4b487','sw-9':'#564a3d','sw-10':'#e4d5b8' };
+  return map[swId] || '#bbb';
 }
-function bulkPaste() {
-  const txt = document.getElementById('bulk-paste').value.trim();
-  if (!txt) return;
-  const lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
-  let added = 0;
-  lines.forEach(l => {
-    const m = l.match(/^(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)$/i);
-    if (m) {
-      state.parts.push({ len: +m[1], wid: +m[2], qty: +m[3], grain: 'any', edge: '0.4' });
-      added++;
+
+function renderBranchStrip() {
+  const strip = document.getElementById('br-strip');
+  const shopParts = draft.partList.filter(p => p.source === 'shop' && p.matId);
+  if (shopParts.length === 0) {
+    strip.innerHTML = `<div class="br-strip"><span class="ic">✓</span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan seh qabul qiladi.</span></div>`;
+    return;
+  }
+  const fulfilling = SEED.lookup.fulfillingBranches(draft.partList);
+  if (fulfilling.length === 0) {
+    // find which materials nobody carries
+    const missing = new Set();
+    SEED.branches.filter(b => b.status === 'active').forEach(b => {
+      SEED.lookup.missingMaterialsAt(b.id, draft.partList).forEach(m => missing.add(m));
+    });
+    const missingNames = [...missing].map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim()).filter(Boolean);
+    strip.innerHTML = `
+      <div class="br-strip warn">
+        <span class="ic">!</span>
+        <span>Hech bir faol seh <b>${missingNames.join(' · ')}</b> materialini tashimaydi. Shu qism(lar)ni <em>O'zim olib kelaman</em>ga aylantiring yoki boshqa material tanlang.</span>
+      </div>`;
+    return;
+  }
+  const names = fulfilling.slice(0, 3).map(b => `${b.name}`).join(' · ');
+  const more = fulfilling.length > 3 ? ` +${fulfilling.length - 3} ta` : '';
+  strip.innerHTML = `
+    <div class="br-strip">
+      <span class="ic">${fulfilling.length}</span>
+      <span><b>${fulfilling.length} ta seh</b> shu materiallarni tashiy oladi · <span class="br-names">${names}</span>${more}</span>
+      <span style="margin-left:auto;font:500 12px var(--f-ui);color:var(--ink-6)">Seh keyingi qadamda tanlanadi</span>
+    </div>`;
+}
+
+function renderAll() {
+  renderParts();
+  renderBranchStrip();
+}
+
+/* ============================================================
+   Edit operations
+   ============================================================ */
+function addPart() {
+  const defEdge = document.getElementById('def-edge').value;
+  const edges = defEdge === 'none' ? { t: null, b: null, l: null, r: null } : { t: +defEdge, b: +defEdge, l: +defEdge, r: +defEdge };
+  draft.partList.push({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, grain: 'any', edges });
+  markStale();
+  renderAll();
+}
+
+function deletePart(ref) {
+  if (draft.partList.length <= 1) { toast('Kamida 1 ta qism kerak'); return; }
+  draft.partList = draft.partList.filter(p => p.ref !== ref);
+  markStale();
+  renderAll();
+}
+
+function duplicatePart(ref) {
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  const copy = JSON.parse(JSON.stringify(p));
+  copy.ref = 'p' + Math.random().toString(36).slice(2,8);
+  const idx = draft.partList.indexOf(p);
+  draft.partList.splice(idx + 1, 0, copy);
+  markStale();
+  renderAll();
+}
+
+function onPartInput(ev) {
+  const ref = ev.target.dataset.ref;
+  const field = ev.target.dataset.field;
+  const part = draft.partList.find(p => p.ref === ref);
+  if (!part) return;
+  const v = ev.target.value;
+  part[field] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+  markStale();
+}
+
+// Click delegation on parts container
+document.getElementById('parts').addEventListener('click', ev => {
+  const t = ev.target.closest('[data-action]');
+  if (!t) return;
+  const ref = t.dataset.ref;
+  const action = t.dataset.action;
+  if (action === 'pick-mat') openMatPicker(ref);
+  else if (action === 'toggle-src') toggleSource(ref);
+  else if (action === 'edit-edges') openEdgesPopover(ref);
+  else if (action === 'toggle-grain') toggleGrain(ref);
+  else if (action === 'duplicate') duplicatePart(ref);
+  else if (action === 'delete') deletePart(ref);
+});
+
+function toggleSource(ref) {
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  p.source = p.source === 'shop' ? 'own' : 'shop';
+  markStale();
+  renderAll();
+}
+
+function toggleGrain(ref) {
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  p.grain = p.grain === 'required' ? 'any' : 'required';
+  markStale();
+  renderParts();
+}
+
+/* ============================================================
+   Material picker modal
+   ============================================================ */
+function openMatPicker(ref) {
+  pickingPartRef = ref;
+  document.getElementById('mat-search').value = '';
+  renderMatList();
+  openModal('m-mat');
+}
+
+function renderMatList() {
+  const q = document.getElementById('mat-search').value.trim().toLowerCase();
+  const list = SEED.materials.filter(m => m.status === 'active').filter(m => !q || (m.name + m.thickness + m.color + (m.decor||'')).toLowerCase().includes(q));
+  const wrap = document.getElementById('mat-list');
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="empty"><p>Mos material topilmadi</p></div>';
+    return;
+  }
+  wrap.innerHTML = list.map(m => {
+    const carriedBy = SEED.branchMaterials.filter(bm => bm.matId === m.id && bm.status === 'active').length;
+    return `
+      <div class="mat-opt" data-mat="${m.id}">
+        <span class="sw" style="background:${swatchColor(m.sw)}"></span>
+        <div class="lab">
+          <div class="nm">${m.name}</div>
+          <div class="meta">${m.thickness}mm · ${m.sheetLen}×${m.sheetWid}${m.grain ? ' · tola bor' : ''}</div>
+        </div>
+        <span class="by-n">${carriedBy} sehda</span>
+      </div>`;
+  }).join('');
+  wrap.querySelectorAll('.mat-opt').forEach(el => {
+    el.addEventListener('click', () => {
+      const p = draft.partList.find(x => x.ref === pickingPartRef);
+      if (p) {
+        p.matId = el.dataset.mat;
+        markStale();
+        renderAll();
+      }
+      closeModal('m-mat');
+    });
+  });
+}
+
+/* ============================================================
+   Edges popover
+   ============================================================ */
+function openEdgesPopover(ref) {
+  editingEdgesRef = ref;
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  document.getElementById('e-t').value = p.edges.t ?? '';
+  document.getElementById('e-b').value = p.edges.b ?? '';
+  document.getElementById('e-l').value = p.edges.l ?? '';
+  document.getElementById('e-r').value = p.edges.r ?? '';
+  document.getElementById('e-all').checked = false;
+  openModal('m-edges');
+}
+
+function presetEdges(v) {
+  const s = v ? String(v) : '';
+  document.getElementById('e-t').value = s;
+  document.getElementById('e-b').value = s;
+  document.getElementById('e-l').value = s;
+  document.getElementById('e-r').value = s;
+}
+
+function applyEdges() {
+  const edges = {
+    t: document.getElementById('e-t').value ? +document.getElementById('e-t').value : null,
+    b: document.getElementById('e-b').value ? +document.getElementById('e-b').value : null,
+    l: document.getElementById('e-l').value ? +document.getElementById('e-l').value : null,
+    r: document.getElementById('e-r').value ? +document.getElementById('e-r').value : null,
+  };
+  const all = document.getElementById('e-all').checked;
+  if (all) {
+    draft.partList.forEach(p => p.edges = { ...edges });
+  } else {
+    const p = draft.partList.find(x => x.ref === editingEdgesRef);
+    if (p) p.edges = edges;
+  }
+  closeModal('m-edges');
+  markStale();
+  renderAll();
+}
+
+/* ============================================================
+   Optimise + Result render
+   ============================================================ */
+function markStale() {
+  if (!draft.algorithms || !draft.algorithms.length) return;
+  resultStale = true;
+  document.getElementById('stale-pill').classList.remove('hide');
+}
+
+function runOptimizer() {
+  const validParts = draft.partList.filter(p => p.matId && p.l > 50 && p.w > 50 && p.qty > 0);
+  if (validParts.length === 0) {
+    toast("Hech bo'lmasa bitta to'liq qism kiriting");
+    return;
+  }
+  if (validParts.length < draft.partList.length) {
+    toast(`${draft.partList.length - validParts.length} ta qism to'ldirilmagan — ular optimizatsiyaga kirmaydi`);
+  }
+  // simulate running
+  const btn = document.getElementById('optimize-btn');
+  btn.disabled = true; btn.textContent = '⏳ Hisoblanmoqda...';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = '▶ Qayta ishga tushirish';
+    // if the draft already has algorithms (the seed), use them; otherwise synthesize
+    if (!draft.algorithms || !draft.algorithms.length) {
+      draft.algorithms = synthAlgorithms(validParts);
+    }
+    resultStale = false;
+    document.getElementById('stale-pill').classList.add('hide');
+    document.getElementById('result').classList.remove('hide');
+    document.getElementById('opt-hint').textContent = 'Algoritm ishladi · pastdagi natijani ko\'ring.';
+    renderResult();
+    document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 500);
+}
+
+function synthAlgorithms(parts) {
+  // very rough demo: compute sheetsByMat from total area
+  const sheetsByMat = {};
+  for (const p of parts) {
+    const mat = SEED.lookup.matById(p.matId);
+    if (!mat) continue;
+    const area = (p.l * p.w * p.qty);
+    const sheetArea = (mat.sheetLen - 20) * (mat.sheetWid - 20);
+    sheetsByMat[p.matId] = (sheetsByMat[p.matId] || 0) + Math.max(1, Math.ceil(area / sheetArea * 1.15));
+  }
+  const totalSheets = Object.values(sheetsByMat).reduce((a,b)=>a+b,0);
+  const cutLen = Math.round(parts.reduce((s,p) => s + (p.l + p.w) * 2 * p.qty / 1000, 0) * 10) / 10;
+  const edgeLen = { 0.4: 0, 2.0: 0 };
+  for (const p of parts) {
+    const factor = (p.edges.t ? p.l : 0) + (p.edges.b ? p.l : 0) + (p.edges.l ? p.w : 0) + (p.edges.r ? p.w : 0);
+    for (const side of ['t','b','l','r']) {
+      if (p.edges[side]) {
+        const len = (side === 't' || side === 'b' ? p.l : p.w) * p.qty / 1000;
+        edgeLen[p.edges[side]] = (edgeLen[p.edges[side]] || 0) + len;
+      }
+    }
+  }
+  for (const k in edgeLen) edgeLen[k] = Math.round(edgeLen[k] * 10) / 10;
+  return [
+    { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct:  9.8, cutLen, edgeLen, sheetsByMat: {...sheetsByMat} },
+    { name: 'best-fit-2d',    ver: '1.0', chosen: false, wastePct: 11.2, cutLen: cutLen * 0.94, edgeLen, sheetsByMat: {...sheetsByMat} },
+    { name: 'shelf-pack',     ver: '1.0', chosen: false, wastePct: 18.4, cutLen: cutLen * 0.86, edgeLen, sheetsByMat: Object.fromEntries(Object.entries(sheetsByMat).map(([k,v]) => [k, v + 1])) }
+  ];
+}
+
+function renderResult() {
+  const algo = draft.algorithms.find(a => a.chosen) || draft.algorithms[0];
+  if (!algo) return;
+
+  // headline metrics
+  const totalSheets = Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0);
+  const sheetsPerMat = Object.entries(algo.sheetsByMat).map(([m,n]) => {
+    const mat = SEED.lookup.matById(m);
+    return `${mat?.name.split('·')[0].trim() || m}: ${n}`;
+  }).join(' · ');
+  const edgeBits = Object.entries(algo.edgeLen).filter(([,v])=>v>0).map(([k,v])=>`${k}: ${v} m`).join(' · ') || '—';
+  const partsTotal = draft.partList.reduce((a,p) => a + (p.qty || 0), 0);
+  const placed = partsTotal; // demo: assume all fit
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric ${algo.wastePct <= 10 ? 'ok' : algo.wastePct >= 18 ? 'warn' : ''}">
+      <div class="lab">Behuda chiqim</div>
+      <div class="v">${algo.wastePct}%</div>
+      <div class="sub">o'rtacha materiallar bo'yicha</div>
+    </div>
+    <div class="metric">
+      <div class="lab">Listlar</div>
+      <div class="v">${totalSheets}</div>
+      <div class="sub">${sheetsPerMat}</div>
+    </div>
+    <div class="metric">
+      <div class="lab">Krom uzunligi</div>
+      <div class="v">${(Object.values(algo.edgeLen).reduce((a,b)=>a+b,0)).toFixed(1)} m</div>
+      <div class="sub">${edgeBits}</div>
+    </div>
+    <div class="metric ok">
+      <div class="lab">Qismlar</div>
+      <div class="v">${placed} / ${partsTotal} ✓</div>
+      <div class="sub">${algo.cutLen} m kesim</div>
+    </div>`;
+
+  // current algo summary
+  document.getElementById('cur-algo').textContent = algo.name;
+  document.getElementById('cur-algo-meta').textContent = `wastage ${algo.wastePct}% · ${totalSheets} list · ${algo.cutLen}m kesim`;
+
+  // algorithm comparison table
+  document.getElementById('algos-tbody').innerHTML = draft.algorithms.map(a => {
+    const ts = Object.values(a.sheetsByMat).reduce((x,y)=>x+y,0);
+    return `<tr class="${a.chosen ? 'chosen' : ''}" data-algo="${a.name}">
+      <td>${a.name} ${a.chosen ? '<span class="badge">tanlandi</span>' : ''}</td>
+      <td>${a.wastePct}%</td>
+      <td>${ts}</td>
+      <td>${a.cutLen.toFixed ? a.cutLen.toFixed(1) : a.cutLen} m</td>
+      <td>${a.chosen ? '' : `<button class="use" type="button" data-pick="${a.name}">Tanlash</button>`}</td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('#algos-tbody [data-pick]').forEach(b => {
+    b.addEventListener('click', () => {
+      draft.algorithms.forEach(a => a.chosen = false);
+      const sel = draft.algorithms.find(a => a.name === b.dataset.pick);
+      if (sel) sel.chosen = true;
+      activeMatTab = null; activeSheet = 1;
+      renderResult();
+      toast(`Algoritm: ${b.dataset.pick}`);
+    });
+  });
+
+  // material tabs
+  const materials = Object.keys(algo.sheetsByMat);
+  if (!activeMatTab || !materials.includes(activeMatTab)) activeMatTab = materials[0];
+  document.getElementById('mat-tabs').innerHTML = materials.map(m => {
+    const mat = SEED.lookup.matById(m);
+    const nm = mat ? mat.name.split('·')[0].trim() : m;
+    return `<button class="${m === activeMatTab ? 'on' : ''}" type="button" data-mat="${m}">${nm}<span class="ct">${algo.sheetsByMat[m]} list</span></button>`;
+  }).join('');
+  document.querySelectorAll('#mat-tabs button').forEach(b => {
+    b.addEventListener('click', () => { activeMatTab = b.dataset.mat; activeSheet = 1; renderResult(); });
+  });
+
+  // sheet tabs
+  const sheetCount = algo.sheetsByMat[activeMatTab];
+  document.getElementById('sheet-tabs').innerHTML = Array.from({ length: sheetCount }, (_, i) => i + 1)
+    .map(n => `<button class="${n === activeSheet ? 'on' : ''}" type="button" data-sheet="${n}">List ${n}</button>`).join('');
+  document.querySelectorAll('#sheet-tabs button').forEach(b => {
+    b.addEventListener('click', () => { activeSheet = +b.dataset.sheet; renderResult(); });
+  });
+
+  // SVG + legend
+  renderSheetSvg(algo);
+
+  // place order link
+  document.getElementById('place-order-btn').href = `order-new.html?cutting=${encodeURIComponent(draft.id)}`;
+}
+
+function renderSheetSvg(algo) {
+  const mat = SEED.lookup.matById(activeMatTab);
+  if (!mat) return;
+  // build a deterministic-ish layout for the parts of this material on this sheet
+  const matParts = draft.partList.filter(p => p.matId === activeMatTab && p.l && p.w && p.qty);
+  const sheetsForMat = algo.sheetsByMat[activeMatTab] || 1;
+  // distribute parts across sheets simplistically (round robin)
+  const sheetPlacements = []; // for activeSheet
+  let totalUnits = 0;
+  matParts.forEach((p, idx) => {
+    for (let q = 1; q <= p.qty; q++) {
+      const sheetIdx = (totalUnits % sheetsForMat) + 1;
+      if (sheetIdx === activeSheet) sheetPlacements.push({ p, q, idx });
+      totalUnits++;
     }
   });
-  document.getElementById('bulk-paste').value = '';
-  renderParts();
-  toast(`${added} ta qism qo'shildi`);
-}
 
-function gotoStep(n) {
-  state.step = n;
-  document.querySelectorAll('[data-pane]').forEach(el => el.hidden = el.dataset.pane != n);
-  document.querySelectorAll('.stepper .st').forEach(s => {
-    const i = +s.dataset.step;
-    s.classList.toggle('on', i === n);
-    s.classList.toggle('done', i < n);
+  const W = mat.sheetLen, H = mat.sheetWid;
+  const trim = 10;
+  const usable = { x: trim, y: trim, w: W - 2*trim, h: H - 2*trim };
+  // shelf-pack into the usable area
+  const placements = [];
+  let cx = usable.x, cy = usable.y, rowH = 0;
+  for (const { p, q, idx } of sheetPlacements) {
+    let pl = p.l, pw = p.w;
+    if (p.grain !== 'required' && pl > usable.w - (cx - usable.x)) {
+      // try rotating
+      pl = p.w; pw = p.l;
+    }
+    if (cx + pl > usable.x + usable.w) {
+      cx = usable.x; cy += rowH + 4; rowH = 0;
+    }
+    if (cy + pw > usable.y + usable.h) break; // no more room (demo only)
+    placements.push({ x: cx, y: cy, w: pl, h: pw, p, q, idx });
+    cx += pl + 4; rowH = Math.max(rowH, pw);
+  }
+
+  const palette = ['#A6471F','#7e6f53','#2d6045','#664a2d','#b87024','#4a5b3f','#856a48','#5a4438'];
+  const partColor = (idx) => palette[idx % palette.length];
+
+  const svgW = 800, svgH = Math.round(svgW * H / W);
+  const sc = svgW / W;
+  let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="xMidYMid meet">`;
+  // sheet outline
+  svg += `<rect x="0" y="0" width="${svgW}" height="${svgH}" fill="#fff8ee" stroke="#caa97a" stroke-width="2"/>`;
+  // usable area dashed
+  svg += `<rect x="${trim*sc}" y="${trim*sc}" width="${(W-2*trim)*sc}" height="${(H-2*trim)*sc}" fill="none" stroke="#caa97a" stroke-width="1" stroke-dasharray="4 4"/>`;
+  // placements
+  placements.forEach((pl, i) => {
+    const x = pl.x * sc, y = pl.y * sc, w = pl.w * sc, h = pl.h * sc;
+    const c = partColor(pl.idx);
+    svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}" fill-opacity="0.78" stroke="#221d18" stroke-width="0.8"/>`;
+    if (w > 80 && h > 30) {
+      svg += `<text x="${x + w/2}" y="${y + h/2}" fill="#fff" font-family="JetBrains Mono" font-size="11" text-anchor="middle" dominant-baseline="middle">#${pl.idx + 1}·${pl.p.l}×${pl.p.w}</text>`;
+    }
   });
-  if (n === 2) renderParts();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  svg += `</svg>`;
+  document.getElementById('sheet-svg').innerHTML = svg;
+
+  // legend
+  const legendItems = matParts.map((p, idx) => {
+    const c = partColor(idx);
+    return `<li><span class="sw" style="background:${c}"></span>#${idx + 1} · ${p.l}×${p.w} · ${p.qty} dona${p.source === 'own' ? ' · o\'zim' : ''}</li>`;
+  }).join('');
+  document.getElementById('sheet-legend').innerHTML = `<h4>${mat.name.split('·')[0].trim()} · List ${activeSheet}</h4><ul>${legendItems}</ul>`;
+
+  document.getElementById('sheet-info').innerHTML = `
+    <span>List o'lchami: <b>${W} × ${H} mm</b></span>
+    <span>Kerf: <b>4 mm</b></span>
+    <span>Chet o'rni: <b>10 mm</b></span>`;
 }
 
-function runOptimization() {
-  if (state.parts.length === 0) { toast('Qismlar bo\'sh', 'warn'); return; }
-  const totalParts = state.parts.reduce((s, p) => s + p.qty, 0);
-  if (totalParts > 100) { toast('Qismlar soni 100 dan oshmasligi kerak', 'warn'); return; }
-  toast('Optimizatsiya ishga tushdi...');
-  setTimeout(() => {
-    toast('Tayyor · 6 list, 8.2% qoldiq');
-    gotoStep(3);
-    renderSheetSvg();
-  }, 1100);
+/* Read-only banner when this is a bound (confirmed) result */
+if (draft.status === 'confirmed' && draft.orderId) {
+  const banner = document.createElement('div');
+  banner.className = 'banner ok';
+  banner.style.cssText = 'margin: 12px 0; padding: 12px 16px; background: rgba(45,96,69,.06); border: 1px solid rgba(45,96,69,.18); border-radius: 6px; font: 500 13.5px var(--f-ui); color: #2d6045; display: flex; align-items: center; gap: 12px;';
+  banner.innerHTML = `<span style="font:700 14px var(--f-mono)">✓</span><span>Bu chizma buyurtmaga biriktirilgan · <a href="order-detail.html?id=${draft.orderId}" style="color:#2d6045;text-decoration:underline;font-weight:600">${draft.orderId}</a></span>`;
+  document.querySelector('main .page-head').after(banner);
+  // disable editing
+  document.querySelector('.seg').style.opacity = '0.5';
+  document.querySelector('.seg').style.pointerEvents = 'none';
+  document.querySelector('.editor').style.pointerEvents = 'none';
+  document.querySelector('.editor').style.opacity = '0.7';
+  document.getElementById('optimize-btn').style.display = 'none';
 }
 
-function renderSheetSvg() {
-  // Simple placement viz
-  const p = document.getElementById('placements');
-  const cols = [
-    { x: 6,   y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
-    { x: 160, y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
-    { x: 314, y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
-    { x: 6,   y: 110, w: 200, h: 124, lbl: 'P2', color: '#2E5E4E' },
-    { x: 210, y: 110, w: 200, h: 124, lbl: 'P2', color: '#2E5E4E' },
-    { x: 6,   y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
-    { x: 60,  y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
-    { x: 114, y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
-    { x: 168, y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' }
-  ];
-  p.innerHTML = cols.map(c => `
-    <g>
-      <rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="${c.color}" fill-opacity="0.18" stroke="${c.color}" stroke-width="1.5"/>
-      <text x="${c.x + c.w/2}" y="${c.y + c.h/2 + 4}" font-family="JetBrains Mono" font-size="11" fill="${c.color}" font-weight="700" text-anchor="middle">${c.lbl}</text>
-    </g>
-  `).join('');
+/* boot */
+renderAll();
+if (draft.algorithms && draft.algorithms.length) {
+  document.getElementById('result').classList.remove('hide');
+  document.getElementById('opt-hint').textContent = 'Algoritm ishladi · pastdagi natijani ko\'ring.';
+  renderResult();
 }
-function pickSheet(n, btn) {
-  document.querySelectorAll('.st-tab').forEach(t => t.classList.remove('on'));
-  btn.classList.add('on');
-  toast(`${n}-list ko'rsatilmoqda`);
-  renderSheetSvg();
-}
-
-function saveDraftOnly() {
-  toast('Loyiha sifatida saqlandi');
-  setTimeout(() => location.href = 'cutting-drafts.html', 600);
-}
-
-// init
-pickMat('m01');
-renderMatGrid();
-const b = SEED.lookup.branchById(branchId);
-if (b) document.getElementById('branch-line').textContent = `Furniture House — ${b.city} ${b.name}`;
 </script>
 </body>
 </html>

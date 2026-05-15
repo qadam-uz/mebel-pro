@@ -1,15 +1,16 @@
-/* Client app shell — header markup injected at the top of every client page. */
+/* Client app shell — header markup injected at the top of every client page.
+   Home is the drafts page (also where "New cutting" lives). */
 window.renderClientHeader = (active = '') => {
   const html = `
   <header class="hdr">
     <div class="container hdr-row">
-      <a class="brand" href="branches.html" aria-label="Bosh sahifa">
+      <a class="brand" href="cutting-drafts.html" aria-label="Bosh sahifa">
         <span class="mk">M</span><span class="nm">Mebel Pro</span>
       </a>
       <nav class="hdr-nav" aria-label="Asosiy navigatsiya">
-        <a data-href="branches.html" href="branches.html">Sehlar</a>
-        <a data-href="cutting-drafts.html" href="cutting-drafts.html">Kesim chizmalari</a>
+        <a data-href="cutting-drafts.html" href="cutting-drafts.html">Kesimlar</a>
         <a data-href="orders.html" href="orders.html">Buyurtmalar</a>
+        <a data-href="branches.html" href="branches.html">Sehlar</a>
       </nav>
       <div class="hdr-actions">
         <button class="ib" type="button" onclick="location.href='notifications.html'" aria-label="Bildirishnomalar">

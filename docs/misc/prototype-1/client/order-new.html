@@ -3,40 +3,82 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Yangi buyurtma — Mebel Pro · Mijoz</title>
+<title>Buyurtma berish — Mebel Pro · Mijoz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
 <style>
-  .order-grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
-  @media (min-width: 1024px) { .order-grid { grid-template-columns: 1.4fr .85fr; gap: 32px; } }
-  .ck-section { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-bottom: 14px; }
-  .ck-section h3 { font-family: var(--f-display); font-size: 18px; font-weight: 600; margin: 0 0 12px; letter-spacing: -.01em; }
-  .ck-section .sub { color: var(--ink-6); font-size: 12.5px; margin-bottom: 12px; margin-top: -8px; }
-  .sum-pane { position: sticky; top: 90px; background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-size: 13px; }
-  .sum-pane h3 { font-family: var(--f-display); font-size: 18px; font-weight: 600; margin: 0 0 12px; letter-spacing: -.01em; }
-  .sum-pane .r { display: flex; justify-content: space-between; padding: 5px 0; color: var(--ink-8); }
-  .sum-pane .r .num { color: var(--ink-12); font-weight: 500; }
-  .sum-pane .total { padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--ink-12); font-size: 15px; color: var(--ink-12); font-weight: 600; }
-  .sum-pane .total .num { font-family: var(--f-display); font-size: 24px; font-weight: 600; }
-  .sum-pane .items-mini { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-8); }
-  .sum-pane .items-mini .ln { display: flex; justify-content: space-between; padding: 3px 0; }
-  .sum-pane .items-mini b { color: var(--ink-12); font-weight: 500; font-family: var(--f-mono); font-size: 11.5px; }
-  .ck-card { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; margin-bottom: 12px; }
-  .ck-card .r { display: flex; justify-content: space-between; padding: 4px 0; color: var(--ink-8); }
-  .ck-card .r b { color: var(--ink-12); font-weight: 500; }
-  .pay-opts { display: grid; gap: 8px; grid-template-columns: 1fr; }
-  .pay-opt { display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--elev); transition: border-color .12s, background .12s; }
-  .pay-opt.on { border-color: var(--ink-12); background: var(--sunk); }
-  .pay-opt.disabled { opacity: .5; cursor: not-allowed; }
-  .pay-opt .rd { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink-4); flex: none; margin-top: 1px; position: relative; }
-  .pay-opt.on .rd { border-color: var(--accent); }
-  .pay-opt.on .rd::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
-  .pay-opt .info { flex: 1; }
-  .pay-opt .nm { font-weight: 600; font-size: 14px; color: var(--ink-12); }
-  .pay-opt .ds { font-size: 12.5px; color: var(--ink-8); margin-top: 3px; }
-  .pay-opt .coming { display: inline-block; background: var(--info-tint); color: var(--info); padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+  .layout { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 22px; }
+  @media (min-width: 1000px) { .layout { grid-template-columns: 1fr 320px; } }
+
+  .summary { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; align-self: start; position: sticky; top: 24px; }
+  .summary h3 { font: 600 14px var(--f-ui); color: var(--ink-6); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 12px; }
+  .summary .sm-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; font: 500 13px var(--f-ui); color: var(--ink-10); }
+  .summary .sm-row .v { font: 500 13px var(--f-mono); color: var(--ink-12); }
+  .summary .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 0; margin-top: 10px; border-top: 1px solid var(--line); font: 600 14px var(--f-ui); color: var(--ink-12); }
+  .summary .total-row .v { font: 600 19px var(--f-mono); color: var(--accent); }
+  .summary .sm-section { padding: 12px 0; border-top: 1px dashed var(--line); }
+  .summary .sm-section h4 { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin: 0 0 8px; }
+
+  /* branch cards */
+  .br-list { display: grid; gap: 12px; }
+  .br-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .br-card:hover { border-color: var(--ink-10); transform: translateY(-1px); }
+  .br-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(166,71,31,.12); }
+  .br-card.disabled { opacity: .55; pointer-events: none; }
+  .br-card .br-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .br-card .br-nm { font: 600 17px var(--f-display); color: var(--ink-12); }
+  .br-card .br-meta { font: 400 12.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .br-card .br-total { font: 600 22px var(--f-mono); color: var(--accent); letter-spacing: -.01em; }
+  .br-card .br-total small { font: 500 11px var(--f-ui); color: var(--ink-6); margin-left: 4px; letter-spacing: 0; }
+  .br-card .price-lines { display: grid; gap: 4px; padding: 12px 14px; background: var(--sunk); border-radius: 6px; font: 500 12px var(--f-mono); color: var(--ink-10); margin-top: 8px; }
+  .br-card .price-lines .ln { display: flex; justify-content: space-between; }
+  .br-card .price-lines .ln .v { color: var(--ink-12); }
+
+  /* sections in checkout */
+  .checkout-sec { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin-bottom: 14px; }
+  .checkout-sec h3 { font: 600 15px var(--f-display); color: var(--ink-12); margin: 0 0 14px; letter-spacing: -.01em; }
+  .checkout-sec .grid-2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 600px) { .checkout-sec .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg-btn { padding: 9px 16px; background: transparent; border: 0; border-radius: 6px; color: var(--ink-8); font: 500 13px var(--f-ui); cursor: pointer; }
+  .seg-btn.on { background: var(--ink-12); color: #fff; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font: 500 12px var(--f-ui); color: var(--ink-8); margin-bottom: 5px; }
+  .field input, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); background: var(--elev); border-radius: 6px; font: 500 13.5px var(--f-ui); color: var(--ink-12); box-sizing: border-box; }
+  .field input:focus, .field textarea:focus { outline: 0; border-color: var(--ink-12); }
+  .field .helper { font: 500 11.5px var(--f-mono); color: var(--ink-6); margin-top: 4px; }
+  .field .helper a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+  .share-note { display: flex; gap: 10px; padding: 12px 14px; background: rgba(45,96,69,.06); border: 1px solid rgba(45,96,69,.18); border-radius: 6px; font: 500 12.5px/1.4 var(--f-ui); color: #2d6045; margin-bottom: 14px; }
+  .share-note .ic { font: 700 13px var(--f-mono); }
+
+  .opt-row { display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+  .opt-row.on { border-color: var(--accent); background: rgba(166,71,31,.06); }
+  .opt-row.disabled { opacity: .5; cursor: not-allowed; }
+  .opt-row .rd { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink-8); flex-shrink: 0; position: relative; }
+  .opt-row.on .rd { border-color: var(--accent); }
+  .opt-row.on .rd::after { content: ''; position: absolute; inset: 2px; border-radius: 50%; background: var(--accent); }
+  .opt-row .lab { flex: 1; }
+  .opt-row .lab .nm { font: 500 13.5px var(--f-ui); color: var(--ink-12); }
+  .opt-row .lab .sub { font: 400 12px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .opt-row .v { font: 600 14px var(--f-mono); color: var(--ink-12); }
+  .opt-row .soon { font: 600 9.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; background: var(--line); border-radius: 999px; color: var(--ink-6); }
+
+  .checkout-actions { display: flex; gap: 10px; justify-content: space-between; align-items: center; padding: 18px 0; flex-wrap: wrap; }
+
+  .review-list { display: grid; gap: 12px; padding: 14px 16px; background: var(--sunk); border-radius: 6px; font: 500 13px var(--f-ui); color: var(--ink-10); }
+  .review-list .ln { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .review-list .ln b { color: var(--ink-12); font-weight: 600; }
+  .review-list .ln .edit { color: var(--accent); text-decoration: underline; cursor: pointer; font: 500 11.5px var(--f-ui); }
+
+  .breakdown { padding: 12px 16px; background: var(--sunk); border-radius: 6px; font: 500 12.5px var(--f-mono); color: var(--ink-10); margin-top: 12px; }
+  .breakdown .ln { display: flex; justify-content: space-between; padding: 4px 0; }
+  .breakdown .ln .v { color: var(--ink-12); }
+  .breakdown .tot { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 6px; font: 600 14px var(--f-mono); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -46,211 +88,324 @@
 <script>renderClientHeader('cutting-drafts.html');</script>
 
 <main class="container" style="padding: 24px 0 64px">
-  <button class="back" type="button" onclick="history.back()">← Kesim natijasi</button>
-
-  <div class="page-head">
+  <div class="page-head" style="margin-bottom: 6px">
     <div>
-      <h1>Buyurtma berish</h1>
-      <p class="sub" id="header-sub">Furniture House — Yunusobod · 6 list LDSP</p>
+      <h1 id="step-title">Sehni tanlang</h1>
+      <p class="sub" id="step-sub">Materiallaringizni tashiyotgan faol sehlardan birini tanlang. Narx shu sehga muvofiq belgilanadi.</p>
+    </div>
+    <div class="tools">
+      <a class="btn btn-ghost" id="back-link" href="#">← Chizmaga qaytish</a>
     </div>
   </div>
 
-  <div class="stepper">
-    <div class="st on" data-step="1"><span class="n">1</span> Qismlar</div>
-    <div class="st" data-step="2"><span class="n">2</span> Yetkazma</div>
-    <div class="st" data-step="3"><span class="n">3</span> To'lov</div>
-  </div>
-
-  <div class="order-grid">
+  <div class="layout">
     <div>
-
-      <!-- STEP 1: Confirm parts -->
-      <section data-pane="1">
-        <div class="ck-section">
-          <h3>1 · Qismlarni tekshirish</h3>
-          <p class="sub">Bu chizmadagi 14 ta qism. O'zgartirmoqchimisiz? <a href="cutting.html" style="color:var(--accent);font-weight:600">← Kesim chizmasiga qaytish</a></p>
-          <div class="row-item"><div><div class="nm">P1 · 600 × 400 mm</div><small style="color:var(--ink-6)">0.4 mm krom · barcha tomonlar</small></div><div class="meta">4 ta</div></div>
-          <div class="row-item"><div><div class="nm">P2 · 800 × 500 mm</div><small style="color:var(--ink-6)">2.0 mm krom · barcha tomonlar</small></div><div class="meta">2 ta</div></div>
-          <div class="row-item"><div><div class="nm">P3 · 200 × 150 mm</div><small style="color:var(--ink-6)">krom yo'q</small></div><div class="meta">8 ta</div></div>
-          <button class="btn btn-outline btn-block" type="button" onclick="toast('Kesim chizmasining PDF nusxasi yuklanmoqda')" style="margin-top: 14px">⬇ Kesim chizmasini ko'rish (PDF)</button>
-        </div>
-        <div class="flex-end">
-          <button class="btn btn-acc btn-lg" type="button" onclick="step(2)">Keyingi · Yetkazma →</button>
-        </div>
+      <!-- Step 1: Branch pick -->
+      <section id="step-branch">
+        <div id="branch-list" class="br-list"></div>
       </section>
 
-      <!-- STEP 2: Delivery -->
-      <section data-pane="2" hidden>
-        <div class="ck-section">
-          <h3>2 · Yetkazma turi</h3>
-          <div class="opt-row">
-            <div class="opt on" data-deliv="pickup" onclick="pickDeliv('pickup')">
-              <span class="rd"></span>
-              <div class="info">
-                <div class="nm">Sehdan olib ketish</div>
-                <div class="ds">Tayyor bo'lganda bildirishnoma keladi. Bepul.</div>
-                <div class="pr">Bepul</div>
-              </div>
-            </div>
-            <div class="opt" data-deliv="delivery" onclick="pickDeliv('delivery')">
-              <span class="rd"></span>
-              <div class="info">
-                <div class="nm">Yetkazib berish</div>
-                <div class="ds">Sehdan manzilingizgacha. Toshkent ichida · 30–60 daq.</div>
-                <div class="pr" id="delivery-fee-preview">— so'm</div>
-              </div>
-            </div>
+      <!-- Step 2: Checkout -->
+      <section id="step-checkout" style="display:none">
+        <div class="checkout-sec" id="sec-handover">
+          <h3>Olib ketish va yetkazma</h3>
+          <div class="seg" id="handover-seg" role="tablist">
+            <button class="seg-btn on" type="button" data-handover="pickup">Sehdan olib ketaman</button>
+            <button class="seg-btn" type="button" data-handover="delivery">Yetkazib berish</button>
           </div>
+          <div id="handover-detail" style="margin-top: 14px"></div>
         </div>
 
-        <div class="ck-section" id="pickup-info">
-          <h3>Olib ketish manzili</h3>
-          <div class="ck-card">
-            <div class="r"><span>Filial</span><b>Yunusobod</b></div>
-            <div class="r"><span>Manzil</span><b>Buyuk Ipak Yo'li 142</b></div>
-            <div class="r"><span>Ish vaqti</span><b>Du-Sh 09:00 — 19:00</b></div>
-            <div class="r"><span>Telefon</span><b>+998 71 200 30 41</b></div>
+        <div class="checkout-sec" id="sec-contact">
+          <h3>Aloqa ma'lumotlari</h3>
+          <div class="share-note">
+            <span class="ic">i</span>
+            <span>Bu ma'lumotlar tanlangan sehga uzatiladi — buyurtmangiz haqida sizga aloqalanish uchun.</span>
           </div>
-        </div>
-
-        <div class="ck-section" id="address-section" hidden>
-          <h3>Yetkazma manzili</h3>
-          <div class="field-row">
-            <div class="field"><label>Shahar / tuman</label><input value="Toshkent · Yunusobod tumani" /></div>
-            <div class="field"><label>Ko'cha va uy raqami</label><input value="Buyuk Ipak Yo'li 142, 3-podyezd" /></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><label>Kenglik (lat)</label><input value="41.3275" type="number" step="0.0001" oninput="probeZone()" /></div>
-            <div class="field"><label>Uzunlik (lng)</label><input value="69.2817" type="number" step="0.0001" oninput="probeZone()" /></div>
-          </div>
-          <div class="field">
-            <label>Qo'shimcha izoh (ixtiyoriy)</label>
-            <textarea placeholder="Domofon, qavat, kirish yo'li haqida..." rows="2"></textarea>
-          </div>
-          <div id="zone-result" class="banner success" style="margin-top: 8px"><div class="ic">✓</div><div class="grow">Yetkazma zonasi · <b>Yunusobod ichi</b> · 35 000 so'm.</div></div>
-        </div>
-
-        <div class="flex-end" style="gap: 8px">
-          <button class="btn btn-outline" type="button" onclick="step(1)">← Qismlar</button>
-          <button class="btn btn-acc btn-lg" type="button" onclick="step(3)">Keyingi · To'lov →</button>
-        </div>
-      </section>
-
-      <!-- STEP 3: Payment -->
-      <section data-pane="3" hidden>
-        <div class="ck-section">
-          <h3>3 · To'lov</h3>
-          <p class="sub">v1 da to'lov sehda — kassa/bank o'tkazma. Tasdiqlash uchun sehga keling yoki haydovchiga to'lang.</p>
-          <div class="pay-opts">
-            <div class="pay-opt on" data-pay="full" onclick="pickPay('full')">
-              <span class="rd"></span>
-              <div class="info">
-                <div class="nm">To'liq to'lov</div>
-                <div class="ds">100% · seh xodimi qabul qiladi va buyurtma tasdiqlanadi.</div>
-              </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Ism</label>
+              <input id="ct-name" value="Akmal Norqo'ziyev" />
+              <div class="helper"><a onclick="resetField('ct-name', &quot;Akmal Norqo'ziyev&quot;)">Profil bo'yicha qayta tiklash</a></div>
             </div>
-            <div class="pay-opt" data-pay="advance" onclick="pickPay('advance')">
-              <span class="rd"></span>
-              <div class="info">
-                <div class="nm">Bo'laklab to'lov · 50% oldindan</div>
-                <div class="ds">Hozir <b id="advance-amount">—</b> · qolgan summa olib ketish/yetkazma paytida.</div>
-              </div>
-            </div>
-            <div class="pay-opt disabled" data-pay="bnpl">
-              <span class="rd"></span>
-              <div class="info">
-                <div class="nm">BNPL · Bo'laklab to'lov<span class="coming">tez orada</span></div>
-                <div class="ds">3 yoki 6 oyga bo'laklab to'lash — keyingi versiyalarda.</div>
-              </div>
+            <div class="field">
+              <label>Telefon</label>
+              <input id="ct-phone" value="+998 90 100 30 60" />
+              <div class="helper"><a onclick="resetField('ct-phone', '+998 90 100 30 60')">Profil bo'yicha qayta tiklash</a></div>
             </div>
           </div>
         </div>
 
-        <div class="ck-section">
-          <h3>Eslatma</h3>
-          <p style="font-size: 13px; color: var(--ink-8); line-height: 1.5; margin: 0">
-            Buyurtma berildi deganda <b>yangi</b> holatga o'tadi. Seh xodimi to'lovni qabul qilganda <b>tasdiqlangan</b> holatga o'tadi va ish boshlanadi. Telegramda har bir o'zgarish ko'rinadi.
-          </p>
+        <div class="checkout-sec" id="sec-payment">
+          <h3>To'lov rejasi</h3>
+          <div id="pay-options"></div>
         </div>
 
-        <div class="flex-end" style="gap: 8px">
-          <button class="btn btn-outline" type="button" onclick="step(2)">← Yetkazma</button>
-          <button class="btn btn-acc btn-lg" type="button" onclick="placeOrder()">Buyurtmani joylash →</button>
+        <div class="checkout-sec" id="sec-review">
+          <h3>Tasdiqlash</h3>
+          <div class="review-list" id="review"></div>
+          <div class="breakdown" id="breakdown"></div>
+        </div>
+
+        <div class="checkout-actions">
+          <button class="btn btn-outline" type="button" onclick="gotoBranch()">← Sehni o'zgartirish</button>
+          <button class="btn btn-acc" type="button" onclick="placeOrder()" style="font-size: 14.5px; padding: 12px 24px">Buyurtmani berish ✓</button>
         </div>
       </section>
     </div>
 
-    <aside>
-      <div class="sum-pane">
-        <h3>Buyurtma xulosasi</h3>
-        <div class="items-mini">
-          <div class="ln"><span>14 ta qism</span><b>LDSP 18 mm</b></div>
-          <div class="ln"><span>Listlar</span><b>6 ta</b></div>
-          <div class="ln"><span>Krom</span><b>31 m</b></div>
-        </div>
-        <div class="r"><span>Kesim xizmati</span><span class="num">600 000</span></div>
-        <div class="r"><span>Material (6 list)</span><span class="num">2 460 000</span></div>
-        <div class="r"><span>Krom (31 m)</span><span class="num">82 000</span></div>
-        <div class="r" id="row-delivery"><span>Yetkazma · zona</span><span class="num" id="sum-delivery">0</span></div>
-        <div class="r total"><span>Jami</span><span class="num">3 177 000 so'm</span></div>
-        <div class="r" id="row-advance" style="margin-top: 8px; font-size: 12px; color: var(--ink-6)" hidden>
-          <span>50% oldindan</span><span class="num">1 588 500 so'm</span>
-        </div>
-      </div>
+    <!-- Sticky summary -->
+    <aside class="summary" id="sum-aside">
+      <h3>Chizma haqida</h3>
+      <div id="sum-cutting"></div>
     </aside>
   </div>
 </main>
 
 <script>
 const params = new URLSearchParams(location.search);
-const cuttingId = params.get('cutting') || 'cr-0091';
-let curStep = 1, delivery = 'pickup', pay = 'full';
+const cuttingId = params.get('cutting') || 'cr-0085';
+const cutting = SEED.lookup.cuttingById(cuttingId);
 
-function step(n) {
-  curStep = n;
-  document.querySelectorAll('[data-pane]').forEach(el => el.hidden = el.dataset.pane != n);
-  document.querySelectorAll('.stepper .st').forEach(s => {
-    const i = +s.dataset.step;
-    s.classList.toggle('on', i === n);
-    s.classList.toggle('done', i < n);
+if (!cutting) {
+  document.querySelector('main').innerHTML = `<div class="empty"><div class="ic">!</div><h3>Chizma topilmadi</h3><p>Qaytib chizma ro&#39;yxatiga o&#39;ting.</p><a class="btn btn-acc" href="cutting-drafts.html">Chizmalar</a></div>`;
+}
+
+let state = {
+  step: 'branch',  // 'branch' | 'checkout'
+  branchId: null,
+  handover: 'pickup',
+  address: { street: '', city: '', lat: '', lng: '', note: '' },
+  inZone: true,
+  paymentPlan: 'full', // 'full' | 'advance'
+};
+
+document.getElementById('back-link').href = `cutting.html?id=${cuttingId}`;
+
+/* ============ Branch step ============ */
+function renderBranchStep() {
+  document.getElementById('step-title').textContent = 'Sehni tanlang';
+  document.getElementById('step-sub').textContent = 'Materiallaringizni tashiyotgan faol sehlardan birini tanlang. Narx shu sehga muvofiq belgilanadi.';
+  document.getElementById('step-branch').style.display = '';
+  document.getElementById('step-checkout').style.display = 'none';
+
+  const fulfilling = SEED.lookup.fulfillingBranches(cutting.partList);
+  const wrap = document.getElementById('branch-list');
+  if (fulfilling.length === 0) {
+    const missing = new Set();
+    SEED.branches.filter(b => b.status === 'active').forEach(b => {
+      SEED.lookup.missingMaterialsAt(b.id, cutting.partList).forEach(m => missing.add(m));
+    });
+    const missingNames = [...missing].map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim()).filter(Boolean).join(' · ');
+    wrap.innerHTML = `<div class="empty">
+      <div class="ic">!</div>
+      <h3>Hech bir seh bu kombinatsiyaga mos kelmaydi</h3>
+      <p>Bu materiallarni hech qaysi faol seh tashimaydi: <b>${missingNames}</b>. Chizmaga qaytib ushbu qismlarni <i>O&#39;zim olib kelaman</i>ga aylantiring yoki boshqa material tanlang.</p>
+      <a class="btn btn-outline" href="cutting.html?id=${cuttingId}">← Chizmaga qaytish</a>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML = fulfilling.map(b => {
+    const pr = SEED.lookup.pricingAt(b.id, cutting);
+    if (!pr) return '';
+    return `
+      <article class="br-card" data-br="${b.id}">
+        <div class="br-hd">
+          <div>
+            <div class="br-nm">${b.city} · ${b.name}</div>
+            <div class="br-meta">${b.addr} · ${b.hours}</div>
+          </div>
+          <div class="br-total">${fmtTiyin(pr.subtotal)}<small>· yetkazma yo'q</small></div>
+        </div>
+        <div class="price-lines">
+          <div class="ln"><span>Kesim xizmati (${pr.totalSheets} list × ${fmtTiyin(SEED.branchPricing[b.id].perSheetTiyin)})</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+          <div class="ln"><span>Materiallar (sehdan)</span><span class="v">${fmtTiyin(pr.materials)}</span></div>
+          ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>` : ''}
+          <div class="ln" style="border-top:1px solid var(--line);padding-top:6px;margin-top:6px"><span><b>Jami (yetkazmasiz)</b></span><span class="v"><b>${fmtTiyin(pr.subtotal)}</b></span></div>
+        </div>
+      </article>`;
+  }).join('');
+  wrap.querySelectorAll('.br-card').forEach(c => c.addEventListener('click', () => {
+    state.branchId = c.dataset.br;
+    state.handover = 'pickup';
+    state.paymentPlan = 'full';
+    gotoCheckout();
+  }));
+  // also show non-active for transparency (greyed)
+  const inactive = SEED.branches.filter(b => b.status !== 'active');
+  inactive.forEach(b => {
+    wrap.insertAdjacentHTML('beforeend', `
+      <article class="br-card disabled">
+        <div class="br-hd">
+          <div>
+            <div class="br-nm">${b.city} · ${b.name}</div>
+            <div class="br-meta">${b.addr} · ${b.closedReason || 'yopiq'}</div>
+          </div>
+          <div class="br-total" style="color:var(--ink-6)">—</div>
+        </div>
+      </article>`);
   });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function pickDeliv(d) {
-  delivery = d;
-  document.querySelectorAll('[data-deliv]').forEach(el => el.classList.toggle('on', el.dataset.deliv === d));
-  document.getElementById('pickup-info').hidden = d !== 'pickup';
-  document.getElementById('address-section').hidden = d !== 'delivery';
-  document.getElementById('sum-delivery').textContent = d === 'pickup' ? '0' : '35 000';
-  if (d === 'delivery') document.getElementById('delivery-fee-preview').textContent = '35 000 so\'m';
+/* ============ Checkout step ============ */
+function gotoBranch() { state.step = 'branch'; renderBranchStep(); renderSummary(); }
+function gotoCheckout() { state.step = 'checkout'; renderCheckout(); renderSummary(); }
+
+function renderCheckout() {
+  const br = SEED.lookup.branchById(state.branchId);
+  document.getElementById('step-title').textContent = 'Tasdiqlash';
+  document.getElementById('step-sub').textContent = `${br.city} · ${br.name} sehiga buyurtma — pastdagi tafsilotlarni tekshiring va tasdiqlang.`;
+  document.getElementById('step-branch').style.display = 'none';
+  document.getElementById('step-checkout').style.display = '';
+  renderHandover();
+  renderPayment();
+  renderReview();
 }
 
-function probeZone() {
-  // Static demo — would call backend resolveZone(branch, lat, lng).
-  document.getElementById('zone-result').className = 'banner success';
-  document.getElementById('zone-result').innerHTML = '<div class="ic">✓</div><div class="grow">Yetkazma zonasi · <b>Yunusobod ichi</b> · 35 000 so\'m.</div>';
+function renderHandover() {
+  const br = SEED.lookup.branchById(state.branchId);
+  document.querySelectorAll('#handover-seg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.handover === state.handover);
+    b.onclick = () => { state.handover = b.dataset.handover; renderHandover(); renderReview(); renderSummary(); };
+  });
+  const wrap = document.getElementById('handover-detail');
+  if (state.handover === 'pickup') {
+    wrap.innerHTML = `
+      <div style="padding:12px 14px;background:var(--sunk);border-radius:6px;font:500 13px var(--f-ui);color:var(--ink-10)">
+        <div style="margin-bottom:6px"><b>${br.city} · ${br.name}</b></div>
+        <div style="font:500 12.5px var(--f-mono);color:var(--ink-8)">${br.addr}</div>
+        <div style="font:500 12px var(--f-mono);color:var(--ink-6);margin-top:4px">Ish vaqti: ${br.hours} · Tel: ${br.phone}</div>
+      </div>`;
+  } else {
+    const fee = SEED.branchPricing[state.branchId].deliveryFeeTiyin;
+    wrap.innerHTML = `
+      <div class="grid-2">
+        <div class="field"><label>Ko'cha / uy</label><input id="ad-street" placeholder="Mustaqillik 5, kvartira 12" /></div>
+        <div class="field"><label>Tuman / shahar</label><input id="ad-city" placeholder="Yunusobod, Toshkent" /></div>
+        <div class="field"><label>Lat (manzil koordinatasi)</label><input id="ad-lat" placeholder="41.32" /></div>
+        <div class="field"><label>Lng</label><input id="ad-lng" placeholder="69.27" /></div>
+      </div>
+      <div class="field"><label>Eslatma (esik raqami, qavat...)</label><textarea id="ad-note" rows="2"></textarea></div>
+      <div style="padding:10px 14px;background:rgba(45,96,69,.06);border:1px solid rgba(45,96,69,.18);border-radius:6px;font:500 13px var(--f-ui);color:#2d6045">
+        Yetkazma narxi (mahalliy zona): <b>${fmtTiyin(fee)}</b>
+      </div>`;
+  }
 }
 
-function pickPay(p) {
-  if (p === 'bnpl') { toast('BNPL keyingi versiyalarda', 'warn'); return; }
-  pay = p;
-  document.querySelectorAll('[data-pay]').forEach(el => el.classList.toggle('on', el.dataset.pay === p));
-  document.getElementById('row-advance').hidden = p !== 'advance';
+function renderPayment() {
+  const pr = SEED.lookup.pricingAt(state.branchId, cutting);
+  const deliveryFee = state.handover === 'delivery' ? SEED.branchPricing[state.branchId].deliveryFeeTiyin : 0;
+  const total = pr.subtotal + deliveryFee;
+  const advance = Math.round(total * pr.advancePercent / 100);
+  const balance = total - advance;
+  document.getElementById('pay-options').innerHTML = `
+    <div class="opt-row ${state.paymentPlan === 'full' ? 'on' : ''}" data-plan="full">
+      <div class="rd"></div>
+      <div class="lab">
+        <div class="nm">To'liq to'lov</div>
+        <div class="sub">Buyurtma topshirish vaqtida</div>
+      </div>
+      <div class="v">${fmtTiyin(total)}</div>
+    </div>
+    <div class="opt-row ${state.paymentPlan === 'advance' ? 'on' : ''}" data-plan="advance">
+      <div class="rd"></div>
+      <div class="lab">
+        <div class="nm">Avans + qoldiq</div>
+        <div class="sub">Avans (${pr.advancePercent}%) ${fmtTiyin(advance)} · qoldiq ${fmtTiyin(balance)} topshirishdan oldin</div>
+      </div>
+      <div class="v">${fmtTiyin(advance)} <small style="font:500 11px var(--f-ui);color:var(--ink-6)">avans</small></div>
+    </div>
+    <div class="opt-row disabled" data-plan="bnpl">
+      <div class="rd"></div>
+      <div class="lab">
+        <div class="nm">Bo'lib to'lash <span class="soon">tez orada</span></div>
+        <div class="sub">Banklar bilan integratsiya v2 da qo'shiladi</div>
+      </div>
+      <div class="v">—</div>
+    </div>`;
+  document.querySelectorAll('#pay-options .opt-row').forEach(r => {
+    if (r.classList.contains('disabled')) return;
+    r.onclick = () => { state.paymentPlan = r.dataset.plan; renderPayment(); renderReview(); renderSummary(); };
+  });
 }
+
+function renderReview() {
+  const br = SEED.lookup.branchById(state.branchId);
+  const pr = SEED.lookup.pricingAt(state.branchId, cutting);
+  const deliveryFee = state.handover === 'delivery' ? SEED.branchPricing[state.branchId].deliveryFeeTiyin : 0;
+  const total = pr.subtotal + deliveryFee;
+  const wrap = document.getElementById('review');
+  const handoverText = state.handover === 'pickup' ? `Sehdan olib ketish · ${br.addr}` : `Yetkazib berish (zona ichida)`;
+  const planText = state.paymentPlan === 'full' ? `To'liq to'lov · ${fmtTiyin(total)}` : `Avans + qoldiq · avans ${fmtTiyin(Math.round(total * pr.advancePercent / 100))}`;
+  wrap.innerHTML = `
+    <div class="ln"><div>Seh</div><div><b>${br.city} · ${br.name}</b> <span class="edit" onclick="gotoBranch()">o'zgartirish</span></div></div>
+    <div class="ln"><div>Olib ketish</div><div><b>${handoverText}</b></div></div>
+    <div class="ln"><div>Aloqa</div><div><b>${document.getElementById('ct-name').value} · ${document.getElementById('ct-phone').value}</b></div></div>
+    <div class="ln"><div>To'lov rejasi</div><div><b>${planText}</b></div></div>
+  `;
+  const matLines = pr.matLines.map(ml => {
+    const mat = SEED.lookup.matById(ml.matId);
+    return `<div class="ln"><span>· ${mat?.name.split('·')[0].trim() || ml.matId} (${ml.sheets} list × ${fmtTiyin(ml.unit)})</span><span class="v">${fmtTiyin(ml.total)}</span></div>`;
+  }).join('');
+  const edgeLines = pr.edgeLines.filter(e => e.total > 0).map(e => `<div class="ln"><span>· Krom ${e.thick}mm × ${e.len_m.toFixed(1)} m</span><span class="v">${fmtTiyin(e.total)}</span></div>`).join('');
+  document.getElementById('breakdown').innerHTML = `
+    <div class="ln"><span>Kesim xizmati (${pr.totalSheets} list)</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+    ${pr.materials > 0 ? `<div class="ln"><span>Materiallar</span><span class="v">${fmtTiyin(pr.materials)}</span></div>${matLines}` : ''}
+    ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>${edgeLines}` : ''}
+    ${deliveryFee > 0 ? `<div class="ln"><span>Yetkazma</span><span class="v">${fmtTiyin(deliveryFee)}</span></div>` : ''}
+    <div class="ln tot"><span>Jami</span><span class="v">${fmtTiyin(total)}</span></div>
+  `;
+}
+
+/* ============ Summary aside ============ */
+function renderSummary() {
+  const algo = SEED.lookup.chosenAlgo(cutting);
+  const totalSheets = algo ? Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0) : 0;
+  const totalQty = cutting.partList.reduce((a,p)=>a+(p.qty||0),0);
+  const matIds = [...new Set(cutting.partList.map(p => p.matId).filter(Boolean))];
+  const matLabel = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean).join(' · ');
+
+  let html = `
+    <div class="sm-row"><span>Chizma</span><span class="v">${cutting.id}</span></div>
+    <div class="sm-row"><span>Qismlar</span><span class="v">${totalQty}</span></div>
+    <div class="sm-row"><span>Listlar</span><span class="v">${totalSheets}</span></div>
+    <div class="sm-row"><span>Materiallar</span><span class="v" style="font:500 11.5px var(--f-mono);text-align:right;max-width:160px">${matLabel}</span></div>
+    ${algo ? `<div class="sm-row"><span>Behuda chiqim</span><span class="v">${algo.wastePct}%</span></div>` : ''}
+  `;
+  if (state.branchId) {
+    const br = SEED.lookup.branchById(state.branchId);
+    const pr = SEED.lookup.pricingAt(state.branchId, cutting);
+    const deliveryFee = state.handover === 'delivery' ? SEED.branchPricing[state.branchId].deliveryFeeTiyin : 0;
+    const total = pr.subtotal + deliveryFee;
+    html += `
+      <div class="sm-section">
+        <h4>${br.city} · ${br.name}</h4>
+        <div class="sm-row"><span>Kesim xizmati</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+        <div class="sm-row"><span>Materiallar</span><span class="v">${fmtTiyin(pr.materials)}</span></div>
+        <div class="sm-row"><span>Krom</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>
+        ${deliveryFee > 0 ? `<div class="sm-row"><span>Yetkazma</span><span class="v">${fmtTiyin(deliveryFee)}</span></div>` : ''}
+        <div class="total-row"><span>Jami</span><span class="v">${fmtTiyin(total)}</span></div>
+      </div>`;
+  } else {
+    html += `<div class="sm-section" style="font:500 12px var(--f-ui);color:var(--ink-6)">Sehni tanlang — narx ko'rsatiladi</div>`;
+  }
+  document.getElementById('sum-cutting').innerHTML = html;
+}
+
+function resetField(id, val) { document.getElementById(id).value = val; toast('Profil bo\'yicha qayta tiklandi'); }
 
 function placeOrder() {
-  confirmAction({
-    title: 'Buyurtmani joylash',
-    msg: 'Bu chizma uchun buyurtma joylanadi. To\'lov sehda qabul qilingach buyurtma tasdiqlanadi.',
-    okText: 'Tasdiqlash'
-  }, () => {
-    toast('Buyurtma joylandi · MP-2026-05-0092');
-    setTimeout(() => location.href = 'order-detail.html?id=MP-2026-05-0091&new=1', 800);
-  });
+  if (!state.branchId) { toast('Avval sehni tanlang'); return; }
+  const newOrderId = 'MP-2026-05-0099';
+  toast('Buyurtma berildi — seh to\'lovni qayd etishini kuting');
+  setTimeout(() => location.href = `order-detail.html?id=${newOrderId}`, 800);
 }
 
-document.getElementById('advance-amount').textContent = '1 588 500 so\'m';
+/* boot */
+if (cutting) {
+  renderBranchStep();
+  renderSummary();
+}
 </script>
 </body>
 </html>

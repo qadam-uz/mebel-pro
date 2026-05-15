@@ -62,12 +62,82 @@ window.SEED = (() => {
     { id: 'c04', tg: '@sherzod_a', name: 'Sherzod Ahmedov', phone: '+998 90 100 30 63', initials: 'SA', status: 'active', ordersCount: 3 },
   ];
 
-  // ----- Cutting drafts/results -----
+  // ----- Cutting drafts and results -----
+  // Each cutting has a parts list (per-part material + source), and one or more
+  // algorithm results (one is `chosen`). The chosen algorithm's numbers are
+  // mirrored onto the cutting itself as flat fields for legacy callers.
   const cuttings = [
-    { id: 'cr-0091', status: 'confirmed', branchId: 'yunusobod', matId: 'm01', source: 'shop', parts: 14, sheets: 6, wastePct: 8.2, cutLen: 124.6, edgeLen: { 0.4: 18.2, 2.0: 12.8 }, algoVer: 'ffd-guillotine-v1', when: '14-may, 09:24', orderId: 'MP-2026-05-0091' },
-    { id: 'cr-0085', status: 'draft', branchId: 'yunusobod', matId: 'm05', source: 'shop', parts: 6, sheets: 2, wastePct: 12.4, cutLen: 38.2, edgeLen: { 0.4: 6.4 }, algoVer: 'ffd-guillotine-v1', when: '15-may, 08:12', orderId: null },
-    { id: 'cr-0072', status: 'confirmed', branchId: 'yunusobod', matId: 'm05', source: 'shop', parts: 8, sheets: 7, wastePct: 6.1, cutLen: 88.4, edgeLen: { 0.4: 12.0 }, algoVer: 'ffd-guillotine-v1', when: '13-may, 14:32', orderId: 'MP-2026-05-0072' }
+    {
+      id: 'cr-0091', status: 'confirmed', orderId: 'MP-2026-05-0091',
+      branchId: 'yunusobod', when: '14-may, 09:24',
+      partList: [
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, grain: 'required', edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, grain: 'any',      edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p03', matId: 'm01', source: 'shop', l:  600, w: 350, qty: 8, grain: 'any',      edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 8.2, cutLen: 124.6, edgeLen: { 0.4: 18.2, 2.0: 12.8 }, sheetsByMat: { m01: 6 } }
+      ],
+      // mirrored from the chosen algorithm
+      parts: 14, sheets: 6, wastePct: 8.2, cutLen: 124.6, edgeLen: { 0.4: 18.2, 2.0: 12.8 }, algoVer: 'ffd-guillotine-v1',
+      // legacy single-material fields some pages still read
+      matId: 'm01', source: 'shop'
+    },
+    // A live multi-material draft for the demo — DSP shelves + MDF backs + an own-material part
+    {
+      id: 'cr-0085', status: 'draft', orderId: null,
+      branchId: null, when: '15-may, 08:12',
+      partList: [
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, grain: 'required', edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, grain: 'any',      edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p03', matId: 'm05', source: 'own',  l:  600, w: 400, qty: 2, grain: 'any',      edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
+        { ref: 'p04', matId: 'm05', source: 'shop', l:  800, w: 300, qty: 1, grain: 'any',      edges: { t: null, b: null, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct:  9.8, cutLen: 64.4, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, sheetsByMat: { m01: 2, m05: 1 } },
+        { name: 'best-fit-2d',    ver: '1.0', chosen: false, wastePct: 11.2, cutLen: 58.2, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, sheetsByMat: { m01: 2, m05: 1 } },
+        { name: 'shelf-pack',     ver: '1.0', chosen: false, wastePct: 18.4, cutLen: 52.8, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, sheetsByMat: { m01: 3, m05: 1 } }
+      ],
+      parts: 9, sheets: 3, wastePct: 9.8, cutLen: 64.4, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm01', source: 'shop'
+    },
+    // A simpler single-material draft
+    {
+      id: 'cr-0086', status: 'draft', orderId: null, branchId: null, when: '14-may, 19:42',
+      partList: [
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 1200, w: 600, qty: 1, grain: 'any', edges: { t: null, b: null, l: null, r: null } },
+        { ref: 'p02', matId: 'm05', source: 'shop', l:  800, w: 400, qty: 4, grain: 'any', edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 14.6, cutLen: 18.2, edgeLen: { 0.4: 4.8 }, sheetsByMat: { m05: 1 } }
+      ],
+      parts: 5, sheets: 1, wastePct: 14.6, cutLen: 18.2, edgeLen: { 0.4: 4.8 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm05', source: 'shop'
+    },
+    {
+      id: 'cr-0072', status: 'confirmed', orderId: 'MP-2026-05-0072',
+      branchId: 'yunusobod', when: '13-may, 14:32',
+      partList: [
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 1400, w: 600, qty: 2, grain: 'any', edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 6.1, cutLen: 88.4, edgeLen: { 0.4: 12.0 }, sheetsByMat: { m05: 7 } }
+      ],
+      parts: 8, sheets: 7, wastePct: 6.1, cutLen: 88.4, edgeLen: { 0.4: 12.0 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm05', source: 'shop'
+    }
   ];
+
+  // ----- Per-branch pricing knobs the order step reads -----
+  // perSheetTiyin = cutting-service rate (per sheet, integer tiyin)
+  // edgeRateTiyin = edge-banding rate (per metre, by thickness in mm)
+  // advancePercent = advance %% for the "advance + balance" plan
+  // deliveryFeeTiyin = fixed per-zone fee (single zone in the demo)
+  const branchPricing = {
+    yunusobod: { perSheetTiyin: 10000000, edgeRateTiyin: { 0.4: 200000, 2.0: 450000 }, advancePercent: 50, deliveryFeeTiyin: 3500000 },
+    chilonzor: { perSheetTiyin:  9500000, edgeRateTiyin: { 0.4: 200000, 2.0: 420000 }, advancePercent: 50, deliveryFeeTiyin: 4000000 },
+    yangiyol:  { perSheetTiyin:  9000000, edgeRateTiyin: { 0.4: 180000, 2.0: 400000 }, advancePercent: 50, deliveryFeeTiyin: 5500000 }
+  };
 
   // ----- Orders -----
   const orders = [
@@ -253,10 +323,86 @@ window.SEED = (() => {
     cuttingById: id => cuttings.find(c => c.id === id),
     branchMatFor: (branchId, matId) => branchMaterials.find(bm => bm.branchId === branchId && bm.matId === matId),
     workshopById: id => workshops.find(w => w.id === id),
+    chosenAlgo: cutting => cutting.algorithms?.find(a => a.chosen) || cutting.algorithms?.[0] || null,
+
+    // materials this branch currently carries (active per-branch material rows)
+    materialsAtBranch: branchId =>
+      branchMaterials.filter(bm => bm.branchId === branchId && bm.status === 'active').map(bm => bm.matId),
+
+    // true when every shop-source material the parts list needs is carried by the branch
+    canBranchFulfil: (branchId, partList) => {
+      const carried = new Set(
+        branchMaterials.filter(bm => bm.branchId === branchId && bm.status === 'active').map(bm => bm.matId)
+      );
+      const needed = new Set(partList.filter(p => p.source === 'shop').map(p => p.matId));
+      for (const m of needed) if (!carried.has(m)) return false;
+      return true;
+    },
+
+    // active branches that can fulfil this parts list
+    fulfillingBranches: partList =>
+      branches.filter(b => b.status === 'active' && lookup.canBranchFulfil(b.id, partList)),
+
+    // names of shop-source materials in the parts list NOT carried by `branchId`
+    missingMaterialsAt: (branchId, partList) => {
+      const carried = new Set(
+        branchMaterials.filter(bm => bm.branchId === branchId && bm.status === 'active').map(bm => bm.matId)
+      );
+      const missing = new Set();
+      for (const p of partList) if (p.source === 'shop' && !carried.has(p.matId)) missing.add(p.matId);
+      return [...missing];
+    },
+
+    // sheets in the chosen algorithm result that aren't fully covered by shop parts (i.e. own-source share)
+    // returns a price breakdown at the branch: cuttingFee, materials, edgeFee, subtotal
+    pricingAt: (branchId, cutting) => {
+      const pricing = branchPricing[branchId];
+      const algo = lookup.chosenAlgo(cutting);
+      if (!pricing || !algo) return null;
+      const totalSheets = Object.values(algo.sheetsByMat).reduce((a, b) => a + b, 0);
+      const cuttingFee = pricing.perSheetTiyin * totalSheets;
+
+      // materials: per matId in the algorithm result, the shop-source share of its sheets × per-sheet price at this branch
+      let materials = 0;
+      const matLines = [];
+      for (const matId of Object.keys(algo.sheetsByMat)) {
+        const matParts = cutting.partList.filter(p => p.matId === matId);
+        const shopQty = matParts.filter(p => p.source === 'shop').reduce((a, p) => a + p.qty, 0);
+        const totalQty = matParts.reduce((a, p) => a + p.qty, 0);
+        const shopRatio = totalQty > 0 ? shopQty / totalQty : 0;
+        const bm = branchMaterials.find(m => m.branchId === branchId && m.matId === matId);
+        if (!bm) continue;
+        const sheets = algo.sheetsByMat[matId];
+        const shopSheets = Math.ceil(sheets * shopRatio); // round up; demo only
+        const cost = shopSheets * bm.priceTiyin;
+        materials += cost;
+        if (shopSheets > 0) matLines.push({ matId, sheets: shopSheets, unit: bm.priceTiyin, total: cost });
+      }
+
+      // edge banding: Σ (metres × rate per thickness)
+      let edgeFee = 0;
+      const edgeLines = [];
+      for (const thick of Object.keys(algo.edgeLen)) {
+        const len_m = algo.edgeLen[thick];
+        const rate = pricing.edgeRateTiyin[thick] || 0;
+        const cost = Math.round(len_m * rate);
+        edgeFee += cost;
+        edgeLines.push({ thick, len_m, rate, total: cost });
+      }
+
+      return {
+        cuttingFee, materials, edgeFee,
+        subtotal: cuttingFee + materials + edgeFee,
+        advancePercent: pricing.advancePercent,
+        deliveryFeeTiyin: pricing.deliveryFeeTiyin,
+        totalSheets,
+        matLines, edgeLines
+      };
+    }
   };
 
   return {
-    branches, materials, branchMaterials, users, clients, cuttings, orders,
+    branches, materials, branchMaterials, branchPricing, users, clients, cuttings, orders,
     expenses, payrollRuns, permissions, workshops, platformUsers, jobs, errors,
     auditLog, notifications,
     STATE_LABELS, STATE_PILL,

@@ -3,11 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Loyihalar — Mebel Pro · Mijoz</title>
+<title>Kesimlar — Mebel Pro · Mijoz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .hero { padding: 40px 0 28px; }
+  .hero h1 { font: 600 32px var(--f-display); color: var(--ink-12); margin: 0 0 10px; letter-spacing: -.02em; }
+  .hero p { font: 400 15.5px/1.55 var(--f-ui); color: var(--ink-8); margin: 0; max-width: 56ch; }
+  .hero .cta { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .drafts-hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0 12px; border-bottom: 1px solid var(--line); margin: 12px 0 18px; }
+  .drafts-hd h2 { font: 600 18px var(--f-display); margin: 0; color: var(--ink-12); }
+  .drafts-hd .ct { font: 500 13px var(--f-mono); color: var(--ink-6); }
+
+  .draft-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .draft-card:hover { border-color: var(--ink-10); transform: translateY(-1px); }
+  .draft-card .nm { font: 500 14.5px var(--f-ui); color: var(--ink-12); margin-bottom: 4px; }
+  .draft-card .meta { font: 400 12px var(--f-mono); color: var(--ink-6); }
+  .draft-card .stats { display: flex; gap: 14px; flex-wrap: wrap; font: 500 12px var(--f-ui); color: var(--ink-10); margin-top: 6px; }
+  .draft-card .stats b { font: 600 13px var(--f-mono); color: var(--ink-12); }
+  .draft-card .right { display: flex; align-items: center; gap: 8px; }
+  .draft-card .open { padding: 7px 14px; border: 1px solid var(--ink-12); background: var(--ink-12); color: #fff; border-radius: 6px; font: 500 12.5px var(--f-ui); }
+</style>
 </head>
 <body>
 <script src="../assets/app.js"></script>
@@ -15,65 +34,64 @@
 <script src="../assets/client-shell.js"></script>
 <script>renderClientHeader('cutting-drafts.html');</script>
 
-<main class="container" style="padding: 24px 0 64px">
-  <div class="page-head">
-    <div>
-      <h1>Kesim chizmalari</h1>
-      <p class="sub">Saqlangan loyihalar 7 kun saqlanadi va keyin avtomatik o'chiriladi.</p>
+<main class="container">
+  <section class="hero">
+    <h1>O'lchamga kesilgan paneller — bir sahifada</h1>
+    <p>Qismlarni ro'yxat qilib, materialni tanlang. Sistema chizmani optimallashtiradi, sehlar narxlarini ko'rsatadi, va siz buyurtmani uyingizdan beraqaolasiz.</p>
+    <div class="cta">
+      <a class="btn btn-acc" href="cutting.html?id=new" style="font-size:14px;padding:11px 20px">+ Yangi kesim chizmasi</a>
+      <a class="btn btn-outline" href="orders.html">Mening buyurtmalarim</a>
     </div>
-    <div class="tools">
-      <a class="btn btn-acc" href="branches.html">+ Yangi kesim chizmasi</a>
-    </div>
+  </section>
+
+  <div class="drafts-hd">
+    <h2>Saqlangan chizmalar</h2>
+    <span class="ct" id="drafts-ct">0 ta</span>
   </div>
 
-  <div class="card">
-    <table class="tbl">
-      <thead>
-        <tr>
-          <th>ID</th><th>Material</th><th>Filial</th><th class="right">Qism</th><th class="right">List</th><th class="right">Qoldiq</th><th>Holat</th><th>Yaratildi</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="drafts-body"></tbody>
-    </table>
-  </div>
+  <div id="drafts"></div>
 </main>
 
 <script>
-function render() {
-  const tbody = document.getElementById('drafts-body');
-  if (SEED.cuttings.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="ic">∅</div><h3>Hozir loyihalar yo'q</h3><p>Yangi chizma yarating va shu yerda saqlanadi.</p><a class="btn btn-acc" href="branches.html">+ Boshlash</a></div></td></tr>`;
+function renderDrafts() {
+  const drafts = SEED.cuttings.filter(c => c.status === 'draft');
+  document.getElementById('drafts-ct').textContent = drafts.length + ' ta';
+  const wrap = document.getElementById('drafts');
+  if (drafts.length === 0) {
+    wrap.innerHTML = `<div class="empty">
+      <div class="ic">∅</div>
+      <h3>Saqlangan chizma yo&#39;q</h3>
+      <p>Yangi kesim chizmasidan boshlang.</p>
+      <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi kesim chizmasi</a>
+    </div>`;
     return;
   }
-  tbody.innerHTML = SEED.cuttings.map(c => {
-    const mat = SEED.lookup.matById(c.matId);
-    const br = SEED.lookup.branchById(c.branchId);
-    const statusPill = c.status === 'confirmed' ? 'p-rdy' : c.status === 'invalidated' ? 'p-dn' : 'p-new';
-    const statusLabel = c.status === 'confirmed' ? 'Buyurtma berildi' : c.status === 'invalidated' ? 'O\'tkazilgan' : 'Loyiha';
+  wrap.innerHTML = drafts.map(c => {
+    const matIds = [...new Set(c.partList.map(p => p.matId).filter(Boolean))];
+    const matLabels = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean);
+    const matLabel = matLabels.slice(0, 2).join(' + ') + (matLabels.length > 2 ? ` +${matLabels.length - 2}` : '');
+    const algo = SEED.lookup.chosenAlgo(c);
+    const sheets = algo ? Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0) : 0;
+    const totalQty = c.partList.reduce((a,p) => a + (p.qty || 0), 0);
     return `
-      <tr class="clickable" onclick="location.href='cutting-result.html?id=${c.id}'">
-        <td class="id">${c.id}</td>
-        <td class="nm">${mat?.name || '—'}<small>${mat?.thickness || ''} mm · ${c.source === 'shop' ? 'sehdan' : 'o\'zim olib kelaman'}</small></td>
-        <td>${br?.city || ''} · ${br?.name || ''}</td>
-        <td class="right num">${c.parts}</td>
-        <td class="right num">${c.sheets}</td>
-        <td class="right num" style="color: ${c.wastePct > 15 ? 'var(--warn)' : 'var(--ink-12)'}">${c.wastePct}%</td>
-        <td><span class="pill ${statusPill}"><span class="pd"></span>${statusLabel}</span></td>
-        <td class="num" style="font-size:11.5px;color:var(--ink-6)">${c.when}</td>
-        <td onclick="event.stopPropagation()">
-          <div class="menu-wrap">
-            <button class="menu-btn" type="button" data-menu-toggle>⋯</button>
-            <div class="menu">
-              <a class="mi" href="cutting-result.html?id=${c.id}">Ko'rish</a>
-              ${c.status === 'draft' ? `<a class="mi" href="order-new.html?cutting=${c.id}">Buyurtma berish →</a>` : ''}
-              ${c.status === 'draft' ? `<button class="mi danger" onclick="confirmAction({title:'O\'chirish',msg:'Bu loyiha qaytarib bo\'lmaydi — davom etasizmi?',okText:'O\'chirish',danger:true},()=>{toast('Loyiha o\'chirildi'); setTimeout(render,400)})">O'chirish</button>` : ''}
-            </div>
+      <article class="draft-card" onclick="location.href='cutting.html?id=${c.id}'">
+        <div>
+          <div class="nm">${c.id} · ${matLabel || 'Material tanlanmagan'}</div>
+          <div class="stats">
+            <span><b>${totalQty}</b> qism</span>
+            <span><b>${sheets || '—'}</b> list</span>
+            ${algo ? `<span><b>${algo.wastePct}%</b> behuda chiqim</span>` : ''}
+            <span style="color:var(--ink-6)">${c.when} · tahrirlangan</span>
           </div>
-        </td>
-      </tr>`;
+        </div>
+        <div class="right">
+          <span class="open">Ochish →</span>
+        </div>
+      </article>
+    `;
   }).join('');
 }
-render();
+renderDrafts();
 </script>
 </body>
 </html>
