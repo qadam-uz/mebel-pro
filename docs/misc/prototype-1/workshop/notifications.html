@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bildirishnomalar — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .note { display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; }
+  .note:hover { border-color: var(--ink-12); }
+  .note.unread { background: var(--accent-soft); }
+  .note .ic { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; color: #fff; font: 700 14px var(--f-display); }
+  .note .ic.order { background: var(--accent); }
+  .note .ic.inventory { background: var(--warn); }
+  .note .ic.finance { background: var(--success); }
+  .note .t { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-6); }
+</style>
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Bildirishnomalar</h1>
+        <p class="sub">Buyurtma, ombor, moliya va tizim ogohlantirishlari.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline" type="button" onclick="markAll()">Hammasini o'qildi deb belgilash</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="chips">
+        <button class="chip on" data-f="all" onclick="setF('all')">Hammasi</button>
+        <button class="chip" data-f="unread" onclick="setF('unread')">O'qilmagan</button>
+        <button class="chip" data-f="order" onclick="setF('order')">Buyurtmalar</button>
+        <button class="chip" data-f="inventory" onclick="setF('inventory')">Ombor</button>
+        <button class="chip" data-f="finance" onclick="setF('finance')">Moliya</button>
+      </div>
+    </div>
+
+    <div id="list" style="max-width: 800px"></div>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+let filter = 'all';
+function setF(f) { filter = f; document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === f)); render(); }
+function markAll() { SEED.notifications.forEach(n => n.read = true); toast('Hammasi o\'qildi'); render(); }
+
+function render() {
+  const list = SEED.notifications.filter(n => {
+    if (filter === 'unread' && n.read) return false;
+    if (['order','inventory','finance'].includes(filter) && n.kind !== filter) return false;
+    return true;
+  });
+  const wrap = document.getElementById('list');
+  if (list.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Bildirishnomalar yo'q</h3></div>`;
+    return;
+  }
+  wrap.innerHTML = list.map(n => `
+    <article class="note ${n.read ? '' : 'unread'}" onclick="location.href='${n.link}'">
+      <div class="ic ${n.kind}">${n.kind[0].toUpperCase()}</div>
+      <div>
+        <div style="font:600 14px var(--f-ui);color:var(--ink-12)">${n.title}</div>
+        <div style="font-size:12.5px;color:var(--ink-8);margin-top:2px">${n.body}</div>
+      </div>
+      <div class="t">${n.t}</div>
+    </article>
+  `).join('');
+}
+render();
+</script>
+</body>
+</html>

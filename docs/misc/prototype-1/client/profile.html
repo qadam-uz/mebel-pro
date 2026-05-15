@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Profil — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <button class="back" type="button" onclick="history.back()">← Orqaga</button>
+
+  <div class="page-head">
+    <div>
+      <h1>Profil</h1>
+      <p class="sub">Sizning Telegram ma'lumotlaringiz va sessiyalar.</p>
+    </div>
+    <div class="tools">
+      <button class="btn btn-outline" type="button" onclick="confirmAction({title:'Chiqib ketish',msg:'Mijoz kabinetidan chiqasiz.',okText:'Chiqish',danger:true},()=>{toast('Chiqildi');setTimeout(()=>location.href='login.html',500)})">Chiqib ketish</button>
+    </div>
+  </div>
+
+  <div style="display: grid; gap: 18px; max-width: 720px">
+
+    <div class="card">
+      <div class="card-h"><h2>Telegramdan sinxronlangan</h2></div>
+      <div class="card-b">
+        <div class="row-item"><div><div class="nm">Ism</div><small style="color:var(--ink-6)">Telegramdagi ismdan</small></div><div class="meta" style="font-weight:500;color:var(--ink-12)">Akmal Norqo'ziyev</div></div>
+        <div class="row-item"><div><div class="nm">Telegram</div><small style="color:var(--ink-6)">o'zgartirib bo'lmaydi</small></div><div class="meta">@akmal_n</div></div>
+        <div class="row-item"><div><div class="nm">Telefon</div><small style="color:var(--ink-6)">Telegramdan ulashilgan</small></div><div class="meta">+998 90 100 30 60</div></div>
+        <div class="row-item" style="border-bottom: 0"><div><div class="nm">Buyurtmalar soni</div></div><div class="meta">4 ta</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <h2>Faol sessiyalar</h2>
+        <button class="btn btn-danger btn-sm" type="button" onclick="confirmAction({title:'Hammasi chiqsin',msg:'Barcha qurilmalardan chiqasiz, joriy sessiyadan tashqari.',okText:'Hammasini chiqarish',danger:true},()=>toast('Boshqa sessiyalar yopildi'))">Hammasini chiqarish</button>
+      </div>
+      <div class="card-b">
+        <div class="row-item">
+          <div>
+            <div class="nm">iPhone · Safari <span class="pill p-ok" style="margin-left:6px"><span class="pd"></span>Joriy</span></div>
+            <small style="color:var(--ink-6)">Toshkent · 15-may, 09:00</small>
+          </div>
+          <div class="meta" style="color: var(--ink-6); font-weight: 400">—</div>
+        </div>
+        <div class="row-item">
+          <div>
+            <div class="nm">Mac · Chrome</div>
+            <small style="color:var(--ink-6)">Toshkent · 13-may, 18:42</small>
+          </div>
+          <div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="this.closest('.row-item').remove();toast('Sessiya yopildi')">Yopish</button></div>
+        </div>
+        <div class="row-item" style="border-bottom: 0">
+          <div>
+            <div class="nm">Android · Telegram in-app</div>
+            <small style="color:var(--ink-6)">Toshkent · 10-may, 11:18</small>
+          </div>
+          <div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="this.closest('.row-item').remove();toast('Sessiya yopildi')">Yopish</button></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Yangi buyurtma — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .order-grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 1024px) { .order-grid { grid-template-columns: 1.4fr .85fr; gap: 32px; } }
+  .ck-section { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-bottom: 14px; }
+  .ck-section h3 { font-family: var(--f-display); font-size: 18px; font-weight: 600; margin: 0 0 12px; letter-spacing: -.01em; }
+  .ck-section .sub { color: var(--ink-6); font-size: 12.5px; margin-bottom: 12px; margin-top: -8px; }
+  .sum-pane { position: sticky; top: 90px; background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 20px; font-size: 13px; }
+  .sum-pane h3 { font-family: var(--f-display); font-size: 18px; font-weight: 600; margin: 0 0 12px; letter-spacing: -.01em; }
+  .sum-pane .r { display: flex; justify-content: space-between; padding: 5px 0; color: var(--ink-8); }
+  .sum-pane .r .num { color: var(--ink-12); font-weight: 500; }
+  .sum-pane .total { padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--ink-12); font-size: 15px; color: var(--ink-12); font-weight: 600; }
+  .sum-pane .total .num { font-family: var(--f-display); font-size: 24px; font-weight: 600; }
+  .sum-pane .items-mini { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-8); }
+  .sum-pane .items-mini .ln { display: flex; justify-content: space-between; padding: 3px 0; }
+  .sum-pane .items-mini b { color: var(--ink-12); font-weight: 500; font-family: var(--f-mono); font-size: 11.5px; }
+  .ck-card { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12.5px; margin-bottom: 12px; }
+  .ck-card .r { display: flex; justify-content: space-between; padding: 4px 0; color: var(--ink-8); }
+  .ck-card .r b { color: var(--ink-12); font-weight: 500; }
+  .pay-opts { display: grid; gap: 8px; grid-template-columns: 1fr; }
+  .pay-opt { display: flex; align-items: flex-start; gap: 11px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--elev); transition: border-color .12s, background .12s; }
+  .pay-opt.on { border-color: var(--ink-12); background: var(--sunk); }
+  .pay-opt.disabled { opacity: .5; cursor: not-allowed; }
+  .pay-opt .rd { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink-4); flex: none; margin-top: 1px; position: relative; }
+  .pay-opt.on .rd { border-color: var(--accent); }
+  .pay-opt.on .rd::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+  .pay-opt .info { flex: 1; }
+  .pay-opt .nm { font-weight: 600; font-size: 14px; color: var(--ink-12); }
+  .pay-opt .ds { font-size: 12.5px; color: var(--ink-8); margin-top: 3px; }
+  .pay-opt .coming { display: inline-block; background: var(--info-tint); color: var(--info); padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('cutting-drafts.html');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <button class="back" type="button" onclick="history.back()">← Kesim natijasi</button>
+
+  <div class="page-head">
+    <div>
+      <h1>Buyurtma berish</h1>
+      <p class="sub" id="header-sub">Furniture House — Yunusobod · 6 list LDSP</p>
+    </div>
+  </div>
+
+  <div class="stepper">
+    <div class="st on" data-step="1"><span class="n">1</span> Qismlar</div>
+    <div class="st" data-step="2"><span class="n">2</span> Yetkazma</div>
+    <div class="st" data-step="3"><span class="n">3</span> To'lov</div>
+  </div>
+
+  <div class="order-grid">
+    <div>
+
+      <!-- STEP 1: Confirm parts -->
+      <section data-pane="1">
+        <div class="ck-section">
+          <h3>1 · Qismlarni tekshirish</h3>
+          <p class="sub">Bu chizmadagi 14 ta qism. O'zgartirmoqchimisiz? <a href="cutting.html" style="color:var(--accent);font-weight:600">← Kesim chizmasiga qaytish</a></p>
+          <div class="row-item"><div><div class="nm">P1 · 600 × 400 mm</div><small style="color:var(--ink-6)">0.4 mm krom · barcha tomonlar</small></div><div class="meta">4 ta</div></div>
+          <div class="row-item"><div><div class="nm">P2 · 800 × 500 mm</div><small style="color:var(--ink-6)">2.0 mm krom · barcha tomonlar</small></div><div class="meta">2 ta</div></div>
+          <div class="row-item"><div><div class="nm">P3 · 200 × 150 mm</div><small style="color:var(--ink-6)">krom yo'q</small></div><div class="meta">8 ta</div></div>
+          <button class="btn btn-outline btn-block" type="button" onclick="toast('Kesim chizmasining PDF nusxasi yuklanmoqda')" style="margin-top: 14px">⬇ Kesim chizmasini ko'rish (PDF)</button>
+        </div>
+        <div class="flex-end">
+          <button class="btn btn-acc btn-lg" type="button" onclick="step(2)">Keyingi · Yetkazma →</button>
+        </div>
+      </section>
+
+      <!-- STEP 2: Delivery -->
+      <section data-pane="2" hidden>
+        <div class="ck-section">
+          <h3>2 · Yetkazma turi</h3>
+          <div class="opt-row">
+            <div class="opt on" data-deliv="pickup" onclick="pickDeliv('pickup')">
+              <span class="rd"></span>
+              <div class="info">
+                <div class="nm">Sehdan olib ketish</div>
+                <div class="ds">Tayyor bo'lganda bildirishnoma keladi. Bepul.</div>
+                <div class="pr">Bepul</div>
+              </div>
+            </div>
+            <div class="opt" data-deliv="delivery" onclick="pickDeliv('delivery')">
+              <span class="rd"></span>
+              <div class="info">
+                <div class="nm">Yetkazib berish</div>
+                <div class="ds">Sehdan manzilingizgacha. Toshkent ichida · 30–60 daq.</div>
+                <div class="pr" id="delivery-fee-preview">— so'm</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ck-section" id="pickup-info">
+          <h3>Olib ketish manzili</h3>
+          <div class="ck-card">
+            <div class="r"><span>Filial</span><b>Yunusobod</b></div>
+            <div class="r"><span>Manzil</span><b>Buyuk Ipak Yo'li 142</b></div>
+            <div class="r"><span>Ish vaqti</span><b>Du-Sh 09:00 — 19:00</b></div>
+            <div class="r"><span>Telefon</span><b>+998 71 200 30 41</b></div>
+          </div>
+        </div>
+
+        <div class="ck-section" id="address-section" hidden>
+          <h3>Yetkazma manzili</h3>
+          <div class="field-row">
+            <div class="field"><label>Shahar / tuman</label><input value="Toshkent · Yunusobod tumani" /></div>
+            <div class="field"><label>Ko'cha va uy raqami</label><input value="Buyuk Ipak Yo'li 142, 3-podyezd" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Kenglik (lat)</label><input value="41.3275" type="number" step="0.0001" oninput="probeZone()" /></div>
+            <div class="field"><label>Uzunlik (lng)</label><input value="69.2817" type="number" step="0.0001" oninput="probeZone()" /></div>
+          </div>
+          <div class="field">
+            <label>Qo'shimcha izoh (ixtiyoriy)</label>
+            <textarea placeholder="Domofon, qavat, kirish yo'li haqida..." rows="2"></textarea>
+          </div>
+          <div id="zone-result" class="banner success" style="margin-top: 8px"><div class="ic">✓</div><div class="grow">Yetkazma zonasi · <b>Yunusobod ichi</b> · 35 000 so'm.</div></div>
+        </div>
+
+        <div class="flex-end" style="gap: 8px">
+          <button class="btn btn-outline" type="button" onclick="step(1)">← Qismlar</button>
+          <button class="btn btn-acc btn-lg" type="button" onclick="step(3)">Keyingi · To'lov →</button>
+        </div>
+      </section>
+
+      <!-- STEP 3: Payment -->
+      <section data-pane="3" hidden>
+        <div class="ck-section">
+          <h3>3 · To'lov</h3>
+          <p class="sub">v1 da to'lov sehda — kassa/bank o'tkazma. Tasdiqlash uchun sehga keling yoki haydovchiga to'lang.</p>
+          <div class="pay-opts">
+            <div class="pay-opt on" data-pay="full" onclick="pickPay('full')">
+              <span class="rd"></span>
+              <div class="info">
+                <div class="nm">To'liq to'lov</div>
+                <div class="ds">100% · seh xodimi qabul qiladi va buyurtma tasdiqlanadi.</div>
+              </div>
+            </div>
+            <div class="pay-opt" data-pay="advance" onclick="pickPay('advance')">
+              <span class="rd"></span>
+              <div class="info">
+                <div class="nm">Bo'laklab to'lov · 50% oldindan</div>
+                <div class="ds">Hozir <b id="advance-amount">—</b> · qolgan summa olib ketish/yetkazma paytida.</div>
+              </div>
+            </div>
+            <div class="pay-opt disabled" data-pay="bnpl">
+              <span class="rd"></span>
+              <div class="info">
+                <div class="nm">BNPL · Bo'laklab to'lov<span class="coming">tez orada</span></div>
+                <div class="ds">3 yoki 6 oyga bo'laklab to'lash — keyingi versiyalarda.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ck-section">
+          <h3>Eslatma</h3>
+          <p style="font-size: 13px; color: var(--ink-8); line-height: 1.5; margin: 0">
+            Buyurtma berildi deganda <b>yangi</b> holatga o'tadi. Seh xodimi to'lovni qabul qilganda <b>tasdiqlangan</b> holatga o'tadi va ish boshlanadi. Telegramda har bir o'zgarish ko'rinadi.
+          </p>
+        </div>
+
+        <div class="flex-end" style="gap: 8px">
+          <button class="btn btn-outline" type="button" onclick="step(2)">← Yetkazma</button>
+          <button class="btn btn-acc btn-lg" type="button" onclick="placeOrder()">Buyurtmani joylash →</button>
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <div class="sum-pane">
+        <h3>Buyurtma xulosasi</h3>
+        <div class="items-mini">
+          <div class="ln"><span>14 ta qism</span><b>LDSP 18 mm</b></div>
+          <div class="ln"><span>Listlar</span><b>6 ta</b></div>
+          <div class="ln"><span>Krom</span><b>31 m</b></div>
+        </div>
+        <div class="r"><span>Kesim xizmati</span><span class="num">600 000</span></div>
+        <div class="r"><span>Material (6 list)</span><span class="num">2 460 000</span></div>
+        <div class="r"><span>Krom (31 m)</span><span class="num">82 000</span></div>
+        <div class="r" id="row-delivery"><span>Yetkazma · zona</span><span class="num" id="sum-delivery">0</span></div>
+        <div class="r total"><span>Jami</span><span class="num">3 177 000 so'm</span></div>
+        <div class="r" id="row-advance" style="margin-top: 8px; font-size: 12px; color: var(--ink-6)" hidden>
+          <span>50% oldindan</span><span class="num">1 588 500 so'm</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+const params = new URLSearchParams(location.search);
+const cuttingId = params.get('cutting') || 'cr-0091';
+let curStep = 1, delivery = 'pickup', pay = 'full';
+
+function step(n) {
+  curStep = n;
+  document.querySelectorAll('[data-pane]').forEach(el => el.hidden = el.dataset.pane != n);
+  document.querySelectorAll('.stepper .st').forEach(s => {
+    const i = +s.dataset.step;
+    s.classList.toggle('on', i === n);
+    s.classList.toggle('done', i < n);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function pickDeliv(d) {
+  delivery = d;
+  document.querySelectorAll('[data-deliv]').forEach(el => el.classList.toggle('on', el.dataset.deliv === d));
+  document.getElementById('pickup-info').hidden = d !== 'pickup';
+  document.getElementById('address-section').hidden = d !== 'delivery';
+  document.getElementById('sum-delivery').textContent = d === 'pickup' ? '0' : '35 000';
+  if (d === 'delivery') document.getElementById('delivery-fee-preview').textContent = '35 000 so\'m';
+}
+
+function probeZone() {
+  // Static demo — would call backend resolveZone(branch, lat, lng).
+  document.getElementById('zone-result').className = 'banner success';
+  document.getElementById('zone-result').innerHTML = '<div class="ic">✓</div><div class="grow">Yetkazma zonasi · <b>Yunusobod ichi</b> · 35 000 so\'m.</div>';
+}
+
+function pickPay(p) {
+  if (p === 'bnpl') { toast('BNPL keyingi versiyalarda', 'warn'); return; }
+  pay = p;
+  document.querySelectorAll('[data-pay]').forEach(el => el.classList.toggle('on', el.dataset.pay === p));
+  document.getElementById('row-advance').hidden = p !== 'advance';
+}
+
+function placeOrder() {
+  confirmAction({
+    title: 'Buyurtmani joylash',
+    msg: 'Bu chizma uchun buyurtma joylanadi. To\'lov sehda qabul qilingach buyurtma tasdiqlanadi.',
+    okText: 'Tasdiqlash'
+  }, () => {
+    toast('Buyurtma joylandi · MP-2026-05-0092');
+    setTimeout(() => location.href = 'order-detail.html?id=MP-2026-05-0091&new=1', 800);
+  });
+}
+
+document.getElementById('advance-amount').textContent = '1 588 500 so\'m';
+</script>
+</body>
+</html>

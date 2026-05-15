@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Xodimlar — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Xodimlar</h1>
+        <p class="sub">Seh xodimlari · ruxsatlar · kompensatsiya. Faqat egasi yangi xodim qo'shadi.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi xodim</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="input"><input id="search" placeholder="Ism yoki login..." oninput="render()" /></div>
+      <select id="br-filter" onchange="render()">
+        <option value="all">Barcha filiallar</option>
+        <option value="yunusobod">Yunusobod</option>
+        <option value="chilonzor">Chilonzor</option>
+        <option value="yangiyol">Yangiyo'l</option>
+      </select>
+      <div class="chips">
+        <button class="chip on" data-st="all" onclick="setStatus('all')">Hammasi</button>
+        <button class="chip" data-st="active" onclick="setStatus('active')">Faol</button>
+        <button class="chip" data-st="blocked" onclick="setStatus('blocked')">Bloklangan</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Xodim</th><th>Login</th><th>Asosiy filial</th><th>Kompensatsiya</th><th>Ruxsatlar</th><th>Oxirgi kirish</th><th>Holat</th><th></th></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal wide" id="m-new">
+  <div class="modal-h"><h3>Yangi xodim</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>F.I.O</label><input placeholder="Asror Karimov" /></div>
+      <div class="field"><label>Telefon</label><input placeholder="+998 ..." /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Login</label><input placeholder="asror" /></div>
+      <div class="field"><label>Asosiy filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+    </div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va yaratishdan keyin 1 marta ko'rsatiladi.</div></div>
+
+    <h4 style="font:600 12px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:18px 0 10px">Boshlang'ich ruxsatlar (ixtiyoriy)</h4>
+    <p class="muted" style="font-size:12.5px;margin:0 0 12px">Yaratishdan keyin "ruxsatlar" tabidan ham o'zgartirish mumkin.</p>
+    <table class="matrix">
+      <thead><tr><th class="permission">Ruxsat</th><th>Yunusobod</th><th>Chilonzor</th><th>Yangiyo'l</th></tr></thead>
+      <tbody>
+        <tr><td class="permission">Buyurtmalarni boshqarish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
+        <tr><td class="permission">Kesish / krom</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
+        <tr><td class="permission">Yetkazib berish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
+        <tr><td class="permission">Omborni boshqarish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
+        <tr><td class="permission">Asosiy ko'rish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Xodim yaratildi · vaqtinchalik parol: TempPass2026!')">Yaratish</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+let statusF = 'all';
+function setStatus(s) { statusF = s; document.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === s)); render(); }
+
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const br = document.getElementById('br-filter').value;
+  const rows = SEED.users.filter(u => {
+    if (statusF !== 'all' && u.status !== statusF) return false;
+    if (br !== 'all' && u.homeBranchId !== br) return false;
+    if (q && !u.name.toLowerCase().includes(q) && !u.login.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('body').innerHTML = rows.map(u => {
+    const grantCount = u.isOwner ? '<span style="color:var(--accent);font-weight:600">egasi · barcha</span>' :
+      Object.values(u.grants || {}).reduce((s, branches) => s + branches.length, 0) + ' ta grant';
+    return `<tr class="clickable" onclick="location.href='user-detail.html?id=${u.id}'">
+      <td><div style="display:flex;gap:11px;align-items:center"><div style="width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font:700 12px/30px var(--f-ui);text-align:center;flex:none">${u.initials}</div><div><div class="nm">${u.name}${u.isOwner ? ' <span class="pill p-cut" style="font-size:9.5px;margin-left:4px">Egasi</span>' : ''}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${u.phone}</small></div></div></td>
+      <td class="num">${u.login}</td>
+      <td>${SEED.lookup.branchById(u.homeBranchId)?.name || '—'}</td>
+      <td><small style="color:var(--ink-8);font-size:12px">${u.comp ? u.comp.type + ' · ' + u.comp.rate : '<span style="color:var(--ink-6)">tariflanmagan</span>'}</small></td>
+      <td><small style="color:var(--ink-8);font-size:12px">${grantCount}</small></td>
+      <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${u.lastLogin}</span></td>
+      <td>${u.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="menu-wrap">
+          <button class="menu-btn" data-menu-toggle>⋯</button>
+          <div class="menu">
+            <a class="mi" href="user-detail.html?id=${u.id}">Tahrir</a>
+            <button class="mi" onclick="confirmAction({title:'Parolni qaytarish',msg:'Yangi vaqtinchalik parol yaratiladi.',okText:'Qaytarish'},()=>toast('Yangi parol: TempPass2026Reset!'))">Parol qaytarish</button>
+            <div class="sep"></div>
+            ${u.status === 'active' && !u.isOwner ? `<button class="mi danger" onclick="confirmAction({title:'Xodimni bloklash',msg:'Sessiyalari yopiladi, kirishni cheklaydi.',okText:'Bloklash',danger:true},()=>toast('Bloklandi'))">Bloklash</button>` :
+              u.isOwner ? `<button class="mi" disabled style="opacity:.4;cursor:not-allowed">Egasi bloklanmaydi</button>` :
+              `<button class="mi" onclick="toast('Faollashtirildi')">Faollashtirish</button>`}
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+render();
+</script>
+</body>
+</html>

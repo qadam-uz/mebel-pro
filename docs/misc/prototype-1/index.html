@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mebel Pro — prototype-1 · launcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/app.css" />
+<style>
+  body { background: var(--bg); padding: 32px 18px; }
+  .launcher { max-width: 1080px; margin: 0 auto; }
+  .launcher h1 { font-family: var(--f-display); font-size: clamp(34px, 4.5vw, 56px); font-weight: 600; letter-spacing: -.025em; margin: 0 0 8px; }
+  .launcher .lead { color: var(--ink-8); font-size: 16px; max-width: 720px; margin-bottom: 38px; line-height: 1.55; }
+  .role-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .role-grid { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1100px) { .role-grid { grid-template-columns: repeat(4, 1fr); } }
+  .role-tile { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 24px 22px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: all .15s; }
+  .role-tile:hover { border-color: var(--ink-12); transform: translateY(-2px); }
+  .role-tile .e { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+  .role-tile h3 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 4px; }
+  .role-tile p { color: var(--ink-8); font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; flex: 1; }
+  .role-tile .go { display: inline-flex; align-items: center; gap: 6px; font: 600 13px var(--f-ui); color: var(--accent); }
+
+  .index-section { margin-top: 56px; }
+  .index-section h2 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--ink-12); }
+  .page-list { display: grid; gap: 8px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .page-list { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1100px) { .page-list { grid-template-columns: repeat(3, 1fr); } }
+  .page-list a { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 7px; font: 500 13.5px var(--f-ui); text-decoration: none; color: var(--ink-12); transition: border-color .12s, background .12s; }
+  .page-list a:hover { background: var(--sunk); border-color: var(--ink-12); color: var(--accent); }
+  .page-list a small { font: 400 11px var(--f-mono); color: var(--ink-6); margin-left: auto; }
+</style>
+</head>
+<body>
+
+<div class="launcher">
+  <a class="brand" href="landing/landing.html" style="display:inline-flex;align-items:center;gap:11px;text-decoration:none;color:inherit;margin-bottom:32px">
+    <span class="mk">M</span>
+    <span style="font-family:var(--f-display);font-size:21px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">prototype-1</small></span>
+  </a>
+
+  <h1>Klikladigan prototype</h1>
+  <p class="lead">v1 reliz uchun barcha rollar va sahifalar — statik ma'lumotlar bilan. Har bir tugma ishlaydi, lekin haqiqiy backend ulanmagan. Quyidagi to'rt yo'naltirishdan boshlang.</p>
+
+  <div class="role-grid">
+    <a class="role-tile" href="landing/landing.html">
+      <div class="e">Sahifa</div>
+      <h3>Landing</h3>
+      <p>SEO sahifa · marketingni va rollar kiritish nuqtalari.</p>
+      <span class="go">Ochish <span>→</span></span>
+    </a>
+    <a class="role-tile" href="client/login.html">
+      <div class="e">Mijoz</div>
+      <h3>Mijoz kabineti</h3>
+      <p>Filial tanlash · kesim chizmasi · buyurtma · jonli kuzatish.</p>
+      <span class="go">Ochish <span>→</span></span>
+    </a>
+    <a class="role-tile" href="workshop/login.html">
+      <div class="e">Seh</div>
+      <h3>Seh boshqaruvi</h3>
+      <p>Buyurtmalar taxtasi · kesim/krom/yetkazma · ombor · maosh · audit.</p>
+      <span class="go">Ochish <span>→</span></span>
+    </a>
+    <a class="role-tile" href="admin/login.html">
+      <div class="e">Operator</div>
+      <h3>Superadmin</h3>
+      <p>Sehlarni boshqarish · katalog · ish jadvali · xatolik monitori.</p>
+      <span class="go">Ochish <span>→</span></span>
+    </a>
+  </div>
+
+  <div class="index-section">
+    <h2>Mijoz sahifalari</h2>
+    <div class="page-list">
+      <a href="client/login.html">Telegram orqali kirish<small>login.html</small></a>
+      <a href="client/branches.html">Sehlar va filiallar<small>branches.html</small></a>
+      <a href="client/cutting.html">Yangi kesim chizmasi<small>cutting.html</small></a>
+      <a href="client/cutting-drafts.html">Saqlangan loyihalar<small>cutting-drafts.html</small></a>
+      <a href="client/cutting-result.html?id=cr-0091">Kesim natijasi<small>cutting-result.html</small></a>
+      <a href="client/order-new.html?cutting=cr-0091">Yangi buyurtma<small>order-new.html</small></a>
+      <a href="client/orders.html">Mening buyurtmalarim<small>orders.html</small></a>
+      <a href="client/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
+      <a href="client/order-modify.html?id=MP-2026-05-0086">Buyurtmani o'zgartirish<small>order-modify.html</small></a>
+      <a href="client/notifications.html">Bildirishnomalar<small>notifications.html</small></a>
+      <a href="client/profile.html">Profil va sessiyalar<small>profile.html</small></a>
+    </div>
+  </div>
+
+  <div class="index-section">
+    <h2>Seh boshqaruvi sahifalari</h2>
+    <div class="page-list">
+      <a href="workshop/login.html">Kirish<small>login.html</small></a>
+      <a href="workshop/dashboard.html">Asosiy<small>dashboard.html</small></a>
+      <a href="workshop/orders.html">Buyurtmalar (board/table)<small>orders.html</small></a>
+      <a href="workshop/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
+      <a href="workshop/cutting-queue.html">Kesim navbati<small>cutting-queue.html</small></a>
+      <a href="workshop/banding-queue.html">Krom navbati<small>banding-queue.html</small></a>
+      <a href="workshop/delivery-queue.html">Yetkazma navbati<small>delivery-queue.html</small></a>
+      <a href="workshop/refunds.html">Refundlar<small>refunds.html</small></a>
+      <a href="workshop/inventory.html">Ombor<small>inventory.html</small></a>
+      <a href="workshop/catalog.html">Material katalogi<small>catalog.html</small></a>
+      <a href="workshop/transfers.html">Filiallar orasi<small>transfers.html</small></a>
+      <a href="workshop/branches.html">Filiallar<small>branches.html</small></a>
+      <a href="workshop/branch-detail.html?id=yunusobod">Filial tafsiloti<small>branch-detail.html</small></a>
+      <a href="workshop/users.html">Xodimlar<small>users.html</small></a>
+      <a href="workshop/user-detail.html?id=u03">Xodim tafsiloti<small>user-detail.html</small></a>
+      <a href="workshop/finance.html">Moliya hisobotlari<small>finance.html</small></a>
+      <a href="workshop/expenses.html">Xarajatlar<small>expenses.html</small></a>
+      <a href="workshop/payroll.html">Maoshlar<small>payroll.html</small></a>
+      <a href="workshop/payroll-detail.html?id=pr-2026-05">Maosh davri<small>payroll-detail.html</small></a>
+      <a href="workshop/settings.html">Sozlamalar<small>settings.html</small></a>
+      <a href="workshop/audit.html">Audit log<small>audit.html</small></a>
+      <a href="workshop/notifications.html">Bildirishnomalar<small>notifications.html</small></a>
+      <a href="workshop/profile.html">Profil<small>profile.html</small></a>
+    </div>
+  </div>
+
+  <div class="index-section">
+    <h2>Superadmin sahifalari</h2>
+    <div class="page-list">
+      <a href="admin/login.html">Kirish<small>login.html</small></a>
+      <a href="admin/dashboard.html">Asosiy<small>dashboard.html</small></a>
+      <a href="admin/workshops.html">Sehlar<small>workshops.html</small></a>
+      <a href="admin/workshop-detail.html?id=ws-01">Seh tafsiloti<small>workshop-detail.html</small></a>
+      <a href="admin/materials.html">Material katalogi<small>materials.html</small></a>
+      <a href="admin/platform-users.html">Operatorlar<small>platform-users.html</small></a>
+      <a href="admin/orders.html">Cross-workshop buyurtmalar<small>orders.html</small></a>
+      <a href="admin/jobs.html">Background ish<small>jobs.html</small></a>
+      <a href="admin/errors.html">Xatolik monitor<small>errors.html</small></a>
+      <a href="admin/audit.html">Audit log<small>audit.html</small></a>
+      <a href="admin/notifications.html">Bildirishnomalar<small>notifications.html</small></a>
+      <a href="admin/profile.html">Profil<small>profile.html</small></a>
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

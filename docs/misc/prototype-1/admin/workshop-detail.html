@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Seh — Mebel Pro · Superadmin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <button class="back" type="button" onclick="location.href='workshops.html'">← Sehlar</button>
+    <div id="wrap"></div>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/admin-shell.js"></script>
+<script>
+renderAdminShell();
+
+const id = new URLSearchParams(location.search).get('id') || 'ws-01';
+const w = SEED.lookup.workshopById(id);
+const wrap = document.getElementById('wrap');
+
+if (!w) {
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Seh topilmadi</h3></div>`;
+} else {
+  wrap.innerHTML = `
+    <div class="page-head" style="margin-top: 8px">
+      <div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:54px;height:54px;border-radius:10px;background:linear-gradient(135deg,#A6471F,#8C3814);color:#fff;font:700 22px/1 var(--f-display);display:grid;place-items:center;flex:none">${w.mk}</div>
+          <div>
+            <h1>${w.name}</h1>
+            <p class="sub">${w.branches} filial · ${w.orders30d} buyurtma (30 kun) · ${w.createdOn} dan</p>
+            <div style="margin-top: 6px">${w.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : `<span class="pill p-bad"><span class="pd"></span>Bloklangan · ${w.blockedReason || ''}</span>`}</div>
+          </div>
+        </div>
+      </div>
+      <div class="tools">
+        ${w.status === 'active' ?
+          `<button class="btn btn-danger" type="button" onclick="confirmAction({title:'Sehni bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Buyurtmalar to\'xtaydi (mijozlarga ta\'sir qilmaydi).',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Sehni bloklash</button>` :
+          `<button class="btn btn-acc" type="button" onclick="toast('Faollashtirildi')">Faollashtirish</button>`}
+      </div>
+    </div>
+
+    <div class="tabs" data-tabs="ws">
+      <button class="tab on" data-target="t-profile" onclick="switchTab('ws','t-profile')">Profil</button>
+      <button class="tab" data-target="t-settings" onclick="switchTab('ws','t-settings')">Sozlamalar</button>
+      <button class="tab" data-target="t-branches" onclick="switchTab('ws','t-branches')">Filiallar</button>
+      <button class="tab" data-target="t-orders" onclick="switchTab('ws','t-orders')">Buyurtmalar</button>
+      <button class="tab" data-target="t-staff" onclick="switchTab('ws','t-staff')">Xodimlar</button>
+    </div>
+
+    <section id="t-profile" data-panel-group="ws">
+      <div class="card" style="max-width: 720px">
+        <div class="card-h"><h2>Seh profili</h2></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="row-item"><div><div class="nm">Seh nomi</div></div><div class="meta">${w.name}</div></div>
+          <div class="row-item"><div><div class="nm">Egasi</div></div><div class="meta">${w.ownerName}</div></div>
+          <div class="row-item"><div><div class="nm">Egasi telefoni</div></div><div class="meta">${w.ownerPhone}</div></div>
+          <div class="row-item"><div><div class="nm">Filiallar soni</div></div><div class="meta">${w.branches}</div></div>
+          <div class="row-item"><div><div class="nm">Yaratildi</div></div><div class="meta">${w.createdOn}</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-settings" data-panel-group="ws" hidden>
+      <div class="card" style="max-width: 720px">
+        <div class="card-h"><h2>Seh sozlamalari (read-only · operator)</h2></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="banner info"><div class="ic">i</div><div class="grow">Operator faqat ko'radi. Egasi sozlamalar tabidan o'zgartiradi.</div></div>
+          <div class="row-item"><div><div class="nm">Default oldindan to'lov</div></div><div class="meta">50%</div></div>
+          <div class="row-item"><div><div class="nm">Yetkazma yoqilgan</div></div><div class="meta">Ha · 3 zona</div></div>
+          <div class="row-item"><div><div class="nm">Payme · merchant</div></div><div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Merchant: ••••8472')">Ko'rsatish</button></div></div>
+          <div class="row-item"><div><div class="nm">Click · merchant</div></div><div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Merchant: ••••5128')">Ko'rsatish</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-branches" data-panel-group="ws" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Filiallar (read-only)</h2></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Nom</th><th>Manzil</th><th>Status</th></tr></thead>
+            <tbody>${SEED.branches.map(b => `<tr><td class="nm">${b.name}</td><td>${b.addr}</td><td>${b.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-warn"><span class="pd"></span>Vaqtincha yopiq</span>'}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-orders" data-panel-group="ws" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Bu sehning buyurtmalari (cross-workshop · read-only)</h2></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>ID</th><th>Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>
+            <tbody>${SEED.orders.slice(0, 6).map(o => { const cl = SEED.lookup.clientById(o.clientId); const br = SEED.lookup.branchById(o.branchId); return `<tr><td class="id">${o.id}</td><td>${br?.name}</td><td>${cl?.name}</td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`; }).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-staff" data-panel-group="ws" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Xodimlar (read-only)</h2></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Xodim</th><th>Rol</th><th>Holat</th></tr></thead>
+            <tbody>${SEED.users.map(u => `<tr><td class="nm">${u.name}<small>${u.login}</small></td><td>${u.isOwner ? 'Egasi' : 'Xodim'}</td><td>${u.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+</script>
+</body>
+</html>

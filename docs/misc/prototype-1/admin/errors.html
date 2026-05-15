@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Xatolik monitor — Mebel Pro · Superadmin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Xatolik monitor</h1>
+        <p class="sub">Application errorlar, kod bo'yicha guruhlanadi · spike bo'lganda operatorga ogohlantirish keladi.</p>
+      </div>
+    </div>
+
+    <div class="filters">
+      <select><option>Hamma modullar</option><option>orders</option><option>inventory</option><option>cutting</option><option>identity</option></select>
+      <select><option>Oxirgi 24 soat</option><option>Oxirgi 7 kun</option><option>Oxirgi 30 kun</option></select>
+      <div class="chips">
+        <button class="chip on">Hammasi</button>
+        <button class="chip">Yangi</button>
+        <button class="chip">Tasdiqlangan</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Kod</th><th>Modul</th><th class="right">24 soat</th><th class="right">7 kun</th><th>Oxirgi</th><th>Tavsif</th><th></th></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal wide" id="m-detail">
+  <div class="modal-h"><h3 id="d-title">Xatolik tafsiloti</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="banner danger"><div class="ic">!</div><div class="grow" id="d-msg"></div></div>
+    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:14px 0 8px">Stack</h4>
+    <pre style="background:var(--deep);color:#D6CDBE;padding:14px 16px;border-radius:8px;font:500 12px/1.5 var(--f-mono);overflow:auto;max-height:280px" id="d-stack"></pre>
+    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:14px 0 8px">Kontekst</h4>
+    <table class="tbl">
+      <tbody>
+        <tr><td class="muted" style="width:160px">Trace ID</td><td class="num">tr-872391·a4b2</td></tr>
+        <tr><td class="muted">Ta'sirlangan sehlar</td><td>Furniture House, Toshkent Mebel</td></tr>
+        <tr><td class="muted">Foydalanuvchi</td><td>•••• (mask qilingan)</td></tr>
+        <tr><td class="muted">Modul</td><td id="d-module"></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Yopish</button><button class="btn btn-acc" onclick="closeModal('m-detail');toast('Xatolik tasdiqlangan deb belgilandi')">Tasdiqlandi</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/admin-shell.js"></script>
+<script>
+renderAdminShell();
+
+const _errByCode = {};
+SEED.errors.forEach(e => _errByCode[e.code] = e);
+
+document.getElementById('body').innerHTML = SEED.errors.map(e => `
+  <tr class="clickable" data-code="${e.code}">
+    <td class="nm">${e.code}</td>
+    <td><small style="color:var(--ink-8);font-size:12px">${e.module}</small></td>
+    <td class="amt ${e.count24h > 10 ? 'warn-text' : ''}">${e.count24h}</td>
+    <td class="amt">${e.count7d}</td>
+    <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${e.last}</span></td>
+    <td><small style="color:var(--ink-8);font-size:12px">${e.msg}</small></td>
+    <td onclick="event.stopPropagation()">
+      <div class="menu-wrap">
+        <button class="menu-btn" data-menu-toggle>⋯</button>
+        <div class="menu">
+          <button class="mi" data-action="detail" data-code="${e.code}">Tafsilotlar</button>
+          <button class="mi" data-action="resolve" data-code="${e.code}">Tasdiqlash</button>
+        </div>
+      </div>
+    </td>
+  </tr>
+`).join('');
+
+document.getElementById('body').addEventListener('click', ev => {
+  const action = ev.target.dataset.action;
+  const code = ev.target.dataset.code || ev.target.closest('tr')?.dataset.code;
+  if (!code) return;
+  if (action === 'resolve') {
+    confirmAction({ title: 'Tasdiqlanganga o\'tkazish', msg: 'Bu xatolik kodi monitor ro\'yxatidan olib tashlanadi.', okText: 'Tasdiqlash' }, () => toast('Tasdiqlandi'));
+  } else {
+    showErr(code);
+  }
+});
+
+function showErr(code) {
+  const e = _errByCode[code];
+  if (!e) return;
+  const mod = e.module, msg = e.msg;
+  document.getElementById('d-title').textContent = code;
+  document.getElementById('d-msg').textContent = msg;
+  document.getElementById('d-module').textContent = mod;
+  document.getElementById('d-stack').textContent = `Traceback (most recent call last):
+  File "/app/services/${mod}/use_cases.py", line 142, in handle
+    result = await session.execute(stmt)
+  File "/app/db.py", line 88, in execute
+    raise BusinessError("${code}", ...)
+${mod}.errors.${code}: ${msg}`;
+  openModal('m-detail');
+}
+</script>
+</body>
+</html>

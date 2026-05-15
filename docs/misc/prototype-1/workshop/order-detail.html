@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buyurtma — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .od-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 1100px) { .od-grid { grid-template-columns: 1.4fr .8fr; } }
+  .od-head { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; margin-bottom: 18px; }
+  .od-head h1 { font-family: var(--f-display); font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin: 4px 0 6px; }
+  .od-head .id { font-family: var(--f-mono); font-size: 12px; color: var(--ink-6); letter-spacing: .04em; }
+  .od-head .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .totals { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-size: 13px; }
+  .totals .r { display: flex; justify-content: space-between; padding: 4px 0; color: var(--ink-8); }
+  .totals .r .num { color: var(--ink-12); font-weight: 500; }
+  .totals .grand { padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--ink-12); font-size: 15px; font-weight: 600; }
+  .totals .grand .num { font-family: var(--f-display); font-size: 22px; }
+</style>
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <button class="back" type="button" onclick="history.back()">← Buyurtmalar</button>
+    <div id="od-wrap"></div>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const id = new URLSearchParams(location.search).get('id') || 'MP-2026-05-0091';
+const o = SEED.lookup.orderById(id);
+const wrap = document.getElementById('od-wrap');
+
+if (!o) {
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
+} else {
+  const br = SEED.lookup.branchById(o.branchId);
+  const cl = SEED.lookup.clientById(o.clientId);
+  const itemsRows = [
+    { lbl: 'Kesim xizmati', val: fmtTiyin(o.cuttingFeeTiyin) },
+    { lbl: 'Material', val: fmtTiyin(o.materialsTiyin) },
+    { lbl: 'Krom yopishtirish', val: fmtTiyin(o.edgeFeeTiyin) }
+  ];
+  if (o.deliveryType === 'delivery') itemsRows.push({ lbl: 'Yetkazma', val: fmtTiyin(o.deliveryFeeTiyin) });
+  if (o.discountTiyin) itemsRows.push({ lbl: 'Chegirma', val: '− ' + fmtTiyin(o.discountTiyin) });
+
+  wrap.innerHTML = `
+    <div class="od-head">
+      <div class="id">${o.id} · ${br?.name || ''} · ${o.placedAt}</div>
+      <h1>${o.title}</h1>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--ink-8)">
+        <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
+        <span>Mijoz: <b style="color:var(--ink-12)">${cl?.name || '—'}</b> · ${cl?.phone || ''} · ${cl?.tg || ''}</span>
+        ${o.refundPending ? '<span class="pill p-bad"><span class="pd"></span>Refund kutilmoqda</span>' : ''}
+      </div>
+      <div class="actions">${detailActions(o)}</div>
+    </div>
+
+    <div class="tabs" data-tabs="od">
+      <button class="tab on" data-target="t-overview" onclick="switchTab('od','t-overview')">Umumiy</button>
+      <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Kesim</button>
+      <button class="tab" data-target="t-payments" onclick="switchTab('od','t-payments')">To'lovlar</button>
+      ${o.refundPending ? `<button class="tab" data-target="t-refunds" onclick="switchTab('od','t-refunds')">Refundlar</button>` : ''}
+      <button class="tab" data-target="t-timeline" onclick="switchTab('od','t-timeline')">Tarix</button>
+      <button class="tab" data-target="t-notes" onclick="switchTab('od','t-notes')">Izoh</button>
+    </div>
+
+    <div class="od-grid">
+      <div>
+        <section id="t-overview" data-panel-group="od">
+          <div class="card">
+            <div class="card-h"><h2>Buyurtma tarkibi</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="row-item"><div><div class="nm">14 ta qism · LDSP 18 mm</div><small style="color:var(--ink-6)">6 list · 8.2% qoldiq</small></div><div class="meta">6 list</div></div>
+              <div class="row-item"><div><div class="nm">Krom 0.4 mm</div></div><div class="meta">18.2 m</div></div>
+              <div class="row-item"><div><div class="nm">Krom 2.0 mm</div></div><div class="meta">12.8 m</div></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 14px">
+            <div class="card-h"><h2>Yetkazma</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="row-item"><div><div class="nm">${o.deliveryType === 'delivery' ? 'Yetkazib berish' : 'Olib ketish'}</div><small style="color:var(--ink-6)">${o.address || (br?.addr || '')}</small></div><div class="meta">${fmtTiyin(o.deliveryFeeTiyin || 0)}</div></div>
+              <div class="row-item"><div><div class="nm">Belgilangan vaqt</div></div><div class="meta">${o.dueAt || '—'}</div></div>
+              ${o.driver ? `<div class="row-item"><div><div class="nm">Haydovchi</div></div><div class="meta">${SEED.lookup.userById(o.driver)?.name || ''}</div></div>` : ''}
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 14px">
+            <div class="card-h"><h2>Ishlab chiqarish</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="row-item">
+                <div><div class="nm">Kesuvchi</div><small style="color:var(--ink-6)">${o.cutStartedAt ? 'Boshlandi · ' + o.cutStartedAt : 'tayinlanmagan'}</small></div>
+                <div class="meta">${o.cutter ? SEED.lookup.userById(o.cutter)?.name : '<button class="btn btn-outline btn-sm" type="button" onclick="openModal(\'assign-cutter\')">Tayinlash</button>'}</div>
+              </div>
+              <div class="row-item">
+                <div><div class="nm">Krom yopishtiruvchi</div><small style="color:var(--ink-6)">${o.edgeStartedAt ? 'Boshlandi · ' + o.edgeStartedAt : 'avtomatik tanlanadi'}</small></div>
+                <div class="meta">${o.edger ? SEED.lookup.userById(o.edger)?.name : '—'}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="t-cutting" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h"><h2>Kesim chizmasi</h2></div>
+            <div class="card-b">
+              <div class="sheet" style="border:0;padding:0">
+                <svg viewBox="0 0 550 366">
+                  <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
+                  <rect x="2" y="2" width="546" height="362" fill="none" stroke="#A6471F" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
+                  <rect x="6" y="6" width="150" height="100" fill="#A6471F" fill-opacity=".18" stroke="#A6471F" stroke-width="1.5"/>
+                  <text x="81" y="60" font-family="JetBrains Mono" font-size="11" fill="#A6471F" font-weight="700" text-anchor="middle">P1</text>
+                  <rect x="160" y="6" width="150" height="100" fill="#A6471F" fill-opacity=".18" stroke="#A6471F" stroke-width="1.5"/>
+                  <text x="235" y="60" font-family="JetBrains Mono" font-size="11" fill="#A6471F" font-weight="700" text-anchor="middle">P1</text>
+                  <rect x="6" y="110" width="200" height="124" fill="#2E5E4E" fill-opacity=".18" stroke="#2E5E4E" stroke-width="1.5"/>
+                  <text x="106" y="174" font-family="JetBrains Mono" font-size="11" fill="#2E5E4E" font-weight="700" text-anchor="middle">P2</text>
+                </svg>
+              </div>
+              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px">⬇ Kesim chizmasi (PDF)</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="t-payments" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h">
+              <h2>To'lovlar</h2>
+              <button class="btn btn-acc btn-sm" type="button" onclick="openModal('record-payment')">+ To'lov yozish</button>
+            </div>
+            <div class="card-b" style="padding-top: 0">
+              ${o.paidTiyin > 0 ? `
+                <div class="row-item">
+                  <div>
+                    <div class="nm">${o.paymentType === 'advance' ? '50% oldindan' : 'To\'liq to\'lov'} · Naqd</div>
+                    <small style="color:var(--ink-6)">Aziza op. qabul qildi · ${o.placedAt}</small>
+                  </div>
+                  <div class="meta success-text">+ ${fmtTiyin(o.paidTiyin)}</div>
+                </div>
+              ` : `<p class="muted" style="font-size:13px;margin:14px 0">Hali to'lov qabul qilinmagan.</p>`}
+              ${o.paidTiyin < o.totalTiyin && o.state !== 'cancelled' ? `
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Qolgan summa</div>
+                  </div>
+                  <div class="meta warn-text">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </section>
+
+        ${o.refundPending ? `
+          <section id="t-refunds" data-panel-group="od" hidden>
+            <div class="card">
+              <div class="card-h"><h2>Refundlar</h2></div>
+              <div class="card-b" style="padding-top: 0">
+                <div class="banner warn"><div class="ic">!</div><div class="grow">Bu refund <b>8 kun</b> kutilmoqda — pul mijozga qaytarilishi kerak.</div></div>
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Pending refund · ${fmtTiyin(o.paidTiyin)}</div>
+                    <small style="color:var(--ink-6)">${o.cancelReason || ''}</small>
+                  </div>
+                  <div class="meta"><button class="btn btn-acc btn-sm" type="button" onclick="openModal('process-refund')">Refundni tasdiqlash</button></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ` : ''}
+
+        <section id="t-timeline" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h"><h2>Holat tarixi · audit</h2></div>
+            <div class="card-b" style="padding: 14px 22px 22px">
+              <ol class="tl">
+                <li class="step done"><span class="when">${o.placedAt}</span>Mijoz yaratdi · <span class="who">${cl?.name || ''}</span></li>
+                ${o.paidTiyin > 0 ? `<li class="step done"><span class="when">15:18</span>To'lov yozildi · <span class="who">Aziza op.</span> · ${fmtTiyin(o.paidTiyin)}</li>` : ''}
+                ${o.paidTiyin > 0 ? `<li class="step done"><span class="when">15:18</span>Tasdiqlandi · stock reserve</li>` : ''}
+                ${o.cutStartedAt ? `<li class="step ${o.state === 'cutting' ? 'now' : 'done'}"><span class="when">${o.cutStartedAt}</span>Kesim boshlandi · <span class="who">${SEED.lookup.userById(o.cutter)?.name}</span></li>` : ''}
+                ${o.cutCompletedAt ? `<li class="step done"><span class="when">${o.cutCompletedAt}</span>Kesim tugadi · 6 list ishlatildi</li>` : ''}
+                ${o.edgeStartedAt ? `<li class="step ${o.state === 'edge_banding' ? 'now' : 'done'}"><span class="when">${o.edgeStartedAt}</span>Krom boshlandi · <span class="who">${SEED.lookup.userById(o.edger)?.name}</span></li>` : ''}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <section id="t-notes" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h"><h2>Ichki izoh</h2></div>
+            <div class="card-b">
+              <div class="field">
+                <textarea rows="5" placeholder="Bu buyurtma haqida ichki izoh — faqat seh xodimlari ko'radi" id="note">Mijoz erta tugatilishini so'ragan — agar imkon bo'lsa, 16-may o'rniga 15-may kechqurun yetkazib berishga harakat qilish kerak.</textarea>
+              </div>
+              <button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')">Saqlash</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside>
+        <div class="totals">
+          ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
+          <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(o.totalTiyin)}</span></div>
+          ${o.paidTiyin ? `<div class="r"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(o.paidTiyin)}</span></div>` : ''}
+          ${o.paidTiyin < o.totalTiyin && o.state !== 'cancelled' ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qolgan</span><span class="num">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</span></div>` : ''}
+        </div>
+
+        <div class="card" style="margin-top: 14px">
+          <div class="card-h"><h2 style="font-size: 16px">Mijoz</h2></div>
+          <div class="card-b" style="padding-top: 0; font-size: 13px">
+            <div class="row-item"><div><div class="nm">${cl?.name || '—'}</div><small style="color:var(--ink-6)">${cl?.tg || ''}</small></div><div></div></div>
+            <div class="row-item"><div><div class="nm">Telefon</div></div><div class="meta">${cl?.phone || ''}</div></div>
+            <div class="row-item"><div><div class="nm">Buyurtmalar tarixi</div></div><div class="meta">${cl?.ordersCount || 0} ta</div></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
+function detailActions(o) {
+  const acts = [];
+  if (o.state === 'new') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="openModal('record-payment')">+ To'lov yozish</button>`);
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('pay-later')">⏱ Pay-later (egasi)</button>`);
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="toast('O\'zgartirish — yangi tabga')">✎ O'zgartirish</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">✕ Bekor qilish</button>`);
+  } else if (o.state === 'pending_payment') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="openModal('record-payment')">+ To'lov yozish</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
+  } else if (o.state === 'confirmed') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Kesim boshlash',msg:'Kesuvchi sifatida ushbu buyurtmani olasiz.'},()=>{toast('Kesim boshlandi');setTimeout(()=>location.reload(),700)})">▶ Kesim boshlash</button>`);
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('assign-cutter')">Kesuvchi tayinlash</button>`);
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
+  } else if (o.state === 'cutting') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Kesim tugadi',msg:'Kesim tugatildi deb belgilash · stock konsumatsiyasi avtomatik bo\'ladi.'},()=>{toast('Kesim tugadi');setTimeout(()=>location.reload(),700)})">✓ Kesim tugadi</button>`);
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="forceCancel()">Egasi · majburiy bekor qilish</button>`);
+  } else if (o.state === 'edge_banding') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Krom tugadi',msg:'Krom yopishtirish tugatildi deb belgilash.'},()=>{toast('Krom tugadi');setTimeout(()=>location.reload(),700)})">✓ Krom tugadi</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="forceCancel()">Egasi · bekor qilish</button>`);
+  } else if (o.state === 'ready') {
+    if (o.deliveryType === 'delivery') {
+      acts.push(`<button class="btn btn-acc btn-sm" ${o.balanceUnpaid ? 'disabled title="Balans to\'lov qilinmagan"' : ''} onclick="confirmAction({title:'Yetkazma boshlash',msg:'Haydovchi sifatida ushbu buyurtmani olasiz.'},()=>{toast('Yetkazma boshlandi');setTimeout(()=>location.reload(),700)})">▶ Yetkazma boshlash</button>`);
+      acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('assign-driver')">Haydovchi tayinlash</button>`);
+    } else {
+      acts.push(`<button class="btn btn-acc btn-sm" ${o.balanceUnpaid ? 'disabled title="Balans to\'lov qilinmagan"' : ''} onclick="confirmAction({title:'Olib ketildi',msg:'Mijoz buyurtmani olib ketdi deb belgilash.'},()=>{toast('Olib ketildi');setTimeout(()=>location.reload(),700)})">✓ Olib ketildi</button>`);
+    }
+    if (o.balanceUnpaid) acts.push(`<button class="btn btn-acc btn-sm" onclick="openModal('record-payment')">+ Balans to'lov</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="forceCancel()">Egasi · bekor qilish</button>`);
+  } else if (o.state === 'in_delivery') {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Yetkazildi',msg:'Buyurtma yetkazib berildi deb belgilash.'},()=>{toast('Yetkazildi');setTimeout(()=>location.reload(),700)})">✓ Yetkazildi</button>`);
+    acts.push(`<button class="btn btn-danger btn-sm" onclick="forceCancel()">Egasi · bekor qilish</button>`);
+  } else if (o.state === 'completed') {
+    acts.push(`<button class="btn btn-outline btn-sm" onclick="toast('PDF yuklanmoqda')">⬇ PDF</button>`);
+  } else if (o.state === 'cancelled' && o.refundPending) {
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="openModal('process-refund')">Refundni tasdiqlash</button>`);
+  }
+  return acts.join('');
+}
+
+function cancelOrder() {
+  confirmAction({ title: 'Buyurtmani bekor qilish', msg: 'Sabab kiriting. Buyurtmaning materiali yana erkin bo\'ladi.', reasonField: true, okText: 'Bekor qilish', danger: true },
+    () => { toast('Buyurtma bekor qilindi'); setTimeout(() => location.reload(), 700); });
+}
+function forceCancel() {
+  confirmAction({ title: 'Egasi · majburiy bekor qilish', msg: 'Bu shaxsiy egasiga ruxsat berilgan amal. Mijozga pul qaytariladi. Sabab kiriting (uzun).', reasonField: true, okText: 'Majburiy bekor qilish', danger: true },
+    () => { toast('Majburiy bekor qilindi'); setTimeout(() => location.reload(), 700); });
+}
+</script>
+
+<!-- MODALS -->
+<div id="scrim" class="scrim"></div>
+
+<div class="modal" id="record-payment">
+  <div class="modal-h"><h3>To'lov yozish</h3><button class="x" type="button" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Turi</label><select><option>To'liq</option><option>Oldindan</option><option>Balans</option></select></div>
+      <div class="field"><label>Usul</label><select><option>Naqd</option><option>Bank o'tkazma</option></select></div>
+    </div>
+    <div class="field"><label>Summa (so'm)</label><input type="text" value="3 177 000" /></div>
+    <div class="field"><label>Izoh (kassa raqami yoki bank reference)</label><input placeholder="Masalan: bank ref #872" /></div>
+    <div class="field"><label>Chek skani (ixtiyoriy)</label><input type="file" accept="image/*,.pdf" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('record-payment');toast('To\'lov yozildi');setTimeout(()=>location.reload(),600)">Tasdiqlash</button></div>
+</div>
+
+<div class="modal" id="discount">
+  <div class="modal-h"><h3>Chegirma qo'shish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Turi</label><select><option value="pct">% Foiz</option><option value="abs">Fiksimsiz summa</option></select></div>
+      <div class="field"><label>Qiymat</label><input type="number" value="10" /></div>
+    </div>
+    <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Sababsiz chegirma berilmaydi"></textarea></div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Yangi summa: <b>2 859 300 so'm</b> (eski: 3 177 000)</div></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('discount');toast('Chegirma qo\'shildi')">Tasdiqlash</button></div>
+</div>
+
+<div class="modal" id="assign-cutter">
+  <div class="modal-h"><h3>Kesuvchi tayinlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Tayinlangan kesuvchining navbati boshida ko'rinadi.</p>
+    <div class="field"><label>Kesuvchi</label><select><option>Bahodir Tursunov · 6 ta navbatda</option><option>Komron Saidov · Chilonzor</option></select></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-cutter');toast('Kesuvchi tayinlandi')">Tayinlash</button></div>
+</div>
+
+<div class="modal" id="assign-driver">
+  <div class="modal-h"><h3>Haydovchi tayinlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field"><label>Haydovchi</label><select><option>Sherzod Aliyev · 2 ta yetkazma</option></select></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-driver');toast('Haydovchi tayinlandi')">Tayinlash</button></div>
+</div>
+
+<div class="modal" id="pay-later">
+  <div class="modal-h"><h3>Pay-later · ishonchli mijoz</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="banner warn"><div class="ic">!</div><div class="grow">Bu egasi-only amal · auditda ko'rinadi. To'lovsiz buyurtma tasdiqlanadi.</div></div>
+    <div class="field"><label>Mijoz tasdiqi</label><input value="Akmal Norqo'ziyev · +998 90 100 30 60" readonly /></div>
+    <div class="field"><label>Sabab *</label><textarea rows="3" placeholder="Mijoz allaqachon tanish · keyingi haftada to'laydi"></textarea></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('pay-later');toast('Pay-later tasdiqlandi')">Tasdiqlash</button></div>
+</div>
+
+<div class="modal" id="process-refund">
+  <div class="modal-h"><h3>Refundni tasdiqlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Usul</label><select><option>Naqd</option><option>Bank o'tkazma</option><option>Payme manual</option><option>Click manual</option></select></div>
+      <div class="field"><label>Summa</label><input value="327 500" /></div>
+    </div>
+    <div class="field"><label>Izoh / Bank reference *</label><input placeholder="bank ref #..." /></div>
+    <div class="field"><label>Chek skani (ixtiyoriy)</label><input type="file" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('process-refund');toast('Refund tasdiqlandi')">Tasdiqlash</button></div>
+</div>
+</body>
+</html>

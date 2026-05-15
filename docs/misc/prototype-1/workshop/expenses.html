@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Xarajatlar — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Xarajatlar</h1>
+        <p class="sub">Seh xarajatlari · ijara, elektr, marketing, transport va boshqalar.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi xarajat</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <select>
+        <option>Bu oy</option>
+        <option>Oxirgi 30 kun</option>
+        <option>YTD</option>
+      </select>
+      <select>
+        <option>Hamma kategoriyalar</option>
+        <option>Ijara</option>
+        <option>Elektr</option>
+        <option>Marketing</option>
+        <option>Aksessuar</option>
+        <option>Transport</option>
+        <option>Texnika</option>
+        <option>Boshqalar</option>
+      </select>
+      <select>
+        <option>Hamma filiallar</option>
+        <option>Yunusobod</option>
+        <option>Chilonzor</option>
+      </select>
+      <div class="chips">
+        <button class="chip on">Faol</button>
+        <button class="chip">Bekor qilingan</button>
+        <button class="chip">Hammasi</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Sana</th><th>Kategoriya</th><th>Tavsif</th><th>Filial</th><th>Yetkazib beruvchi</th><th class="right">Summa</th><th>Holat</th><th></th></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal" id="m-new">
+  <div class="modal-h"><h3>Yangi xarajat</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Kategoriya</label><select><option>Ijara</option><option>Elektr · gaz · suv</option><option>Aksessuar / vint</option><option>Marketing</option><option>Transport</option><option>Texnika</option><option>Boshqalar</option></select></div>
+      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Seh-keng (HQ)</option></select></div>
+    </div>
+    <div class="field"><label>Tavsif</label><input placeholder="May oyi ijarasi" /></div>
+    <div class="field-row">
+      <div class="field"><label>Yetkazib beruvchi</label><input placeholder="Tinchlik Bldg" /></div>
+      <div class="field"><label>Summa (so'm)</label><input value="4 800 000" /></div>
+    </div>
+    <div class="field"><label>Sana</label><input type="date" value="2026-05-01" /></div>
+    <div class="field"><label>Chek/qabul (ixtiyoriy)</label><input type="file" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Xarajat yozildi')">Yozish</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const CAT = { rent: 'Ijara', utilities: 'Elektr', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', other: 'Boshqalar' };
+
+document.getElementById('body').innerHTML = SEED.expenses.map(e => {
+  const br = e.branchId ? SEED.lookup.branchById(e.branchId)?.name : '<span class="muted">seh-keng</span>';
+  return `<tr class="${e.status === 'voided' ? 'muted' : ''}">
+    <td class="num" style="font-size:11.5px;color:var(--ink-6)">${e.incurredOn}</td>
+    <td><span style="font-size:12px;font-weight:500">${CAT[e.category] || e.category}</span></td>
+    <td>${e.description}</td>
+    <td>${br}</td>
+    <td><small style="color:var(--ink-8);font-size:12px">${e.vendor || '—'}</small></td>
+    <td class="amt">${fmtTiyin(e.amountTiyin)}</td>
+    <td>${e.status === 'voided' ? '<span class="pill p-dn"><span class="pd"></span>Bekor qilingan</span>' : '<span class="pill p-ok"><span class="pd"></span>Yozilgan</span>'}</td>
+    <td>
+      <div class="menu-wrap">
+        <button class="menu-btn" data-menu-toggle>⋯</button>
+        <div class="menu">
+          <button class="mi" onclick="openModal('m-new')">Tahrirlash</button>
+          ${e.status !== 'voided' ? `<button class="mi danger" onclick="confirmAction({title:'Xarajatni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : ''}
+        </div>
+      </div>
+    </td>
+  </tr>`;
+}).join('');
+</script>
+</body>
+</html>

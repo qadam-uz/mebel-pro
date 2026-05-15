@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buyurtmalar — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Buyurtmalar</h1>
+        <p class="sub">Barcha filiallar bo'yicha buyurtmalar oqimi.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" id="mode-board" type="button" onclick="setMode('board')">▦ Taxta</button>
+        <button class="btn btn-outline btn-sm" id="mode-table" type="button" onclick="setMode('table')">≡ Jadval</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="chips">
+        <button class="chip on" data-state="all" onclick="setStateFilter('all')">Hammasi</button>
+        <button class="chip" data-state="active" onclick="setStateFilter('active')">Faol</button>
+        <button class="chip" data-state="new" onclick="setStateFilter('new')">Yangi</button>
+        <button class="chip" data-state="cutting" onclick="setStateFilter('cutting')">Kesilmoqda</button>
+        <button class="chip" data-state="ready" onclick="setStateFilter('ready')">Tayyor</button>
+        <button class="chip" data-state="completed" onclick="setStateFilter('completed')">Tugatilgan</button>
+      </div>
+      <div class="input">
+        <input id="search" placeholder="ID yoki mijoz nomi..." oninput="render()" />
+      </div>
+      <select id="branch-filter" onchange="render()">
+        <option value="all">Barcha filiallar</option>
+        <option value="yunusobod">Yunusobod</option>
+        <option value="chilonzor">Chilonzor</option>
+        <option value="yangiyol">Yangiyo'l</option>
+      </select>
+    </div>
+
+    <!-- BOARD -->
+    <section id="board-view">
+      <div class="board" id="board"></div>
+    </section>
+
+    <!-- TABLE -->
+    <section id="table-view" hidden>
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>ID</th><th>Mijoz</th><th>Filial</th><th>Holat</th><th>To'lov</th><th class="right">Summa</th><th>Vaqt</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+let mode = 'board', stateFilter = 'all';
+const COLS = ['new', 'pending_payment', 'confirmed', 'cutting', 'edge_banding', 'ready', 'in_delivery'];
+
+function setMode(m) { mode = m; document.getElementById('board-view').hidden = m !== 'board'; document.getElementById('table-view').hidden = m !== 'table'; document.getElementById('mode-board').classList.toggle('on', m === 'board'); document.getElementById('mode-table').classList.toggle('on', m === 'table'); render(); }
+function setStateFilter(s) { stateFilter = s; document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('on', b.dataset.state === s)); render(); }
+
+function getOrders() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const br = document.getElementById('branch-filter').value;
+  return SEED.orders.filter(o => {
+    if (br !== 'all' && o.branchId !== br) return false;
+    if (stateFilter !== 'all' && stateFilter !== 'active' && o.state !== stateFilter) return false;
+    if (stateFilter === 'active' && !COLS.includes(o.state)) return false;
+    if (q) {
+      const cl = SEED.lookup.clientById(o.clientId);
+      if (!o.id.toLowerCase().includes(q) && !cl?.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  const orders = getOrders();
+  if (mode === 'board') renderBoard(orders);
+  else renderTable(orders);
+}
+
+function renderBoard(orders) {
+  const board = document.getElementById('board');
+  board.innerHTML = COLS.map(c => {
+    const cards = orders.filter(o => o.state === c).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    return `<div class="board-col">
+      <h4>${SEED.STATE_LABELS[c]} <span class="ct">${cards.length}</span></h4>
+      ${cards.map(o => {
+        const cl = SEED.lookup.clientById(o.clientId);
+        return `
+        <article class="board-card" onclick="location.href='order-detail.html?id=${o.id}'">
+          <div class="top"><span class="id">${o.id}</span><span class="amt">${fmtTiyin(o.totalTiyin)}</span></div>
+          <div class="who">${cl?.name || ''}</div>
+          <div class="meta">
+            <span style="color:var(--ink-8)">${o.title}</span>
+          </div>
+          <div class="meta">
+            <span style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-6)">${o.deliveryType === 'delivery' ? '▶ Yetkazma' : '▶ Olib ketish'}</span>
+            ${o.paidTiyin >= o.totalTiyin ? '<span style="color:var(--success);font-weight:600">to\'liq</span>' : o.paidTiyin > 0 ? '<span style="color:var(--warn);font-weight:600">qisman</span>' : '<span style="color:var(--danger);font-weight:600">to\'lanmagan</span>'}
+            ${o.refundPending ? '<span class="pill p-bad" style="font-size:9.5px"><span class="pd"></span>refund</span>' : ''}
+          </div>
+        </article>`;
+      }).join('')}
+      ${cards.length === 0 ? `<div style="color:var(--ink-6);font-size:11.5px;padding:14px 6px;text-align:center">bo'sh</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderTable(orders) {
+  const tb = document.getElementById('tbody');
+  if (orders.length === 0) { tb.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="ic">∅</div><h3>Buyurtma yo'q</h3><p>Filterga mos buyurtma yo'q.</p></div></td></tr>`; return; }
+  tb.innerHTML = orders.map(o => {
+    const cl = SEED.lookup.clientById(o.clientId);
+    const br = SEED.lookup.branchById(o.branchId);
+    const payChip = o.paidTiyin >= o.totalTiyin ? '<span class="pill p-ok"><span class="pd"></span>to\'liq</span>' :
+                    o.paidTiyin > 0 ? '<span class="pill p-warn"><span class="pd"></span>qisman</span>' :
+                    '<span class="pill p-bad"><span class="pd"></span>to\'lanmagan</span>';
+    return `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'">
+      <td class="id">${o.id}</td>
+      <td class="nm">${cl?.name || '—'}<small>${o.title}</small></td>
+      <td>${br?.name || ''}</td>
+      <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td>
+      <td>${payChip}</td>
+      <td class="amt">${fmtTiyin(o.totalTiyin)}</td>
+      <td style="font-size:11.5px;color:var(--ink-6);font-family:var(--f-mono)">${o.placedAt}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="menu-wrap">
+          <button class="menu-btn" type="button" data-menu-toggle>⋯</button>
+          <div class="menu">
+            <a class="mi" href="order-detail.html?id=${o.id}">Ko'rish</a>
+            <button class="mi" onclick="toast('PDF tayyorlanmoqda')">PDF chiqarish</button>
+            <div class="sep"></div>
+            <button class="mi danger" onclick="confirmAction({title:'Bekor qilish',msg:'Buyurtma bekor qilinadi.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Buyurtma bekor qilindi'))">Bekor qilish</button>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.addEventListener('branchchange', () => {
+  const br = document.getElementById('br-name').textContent.toLowerCase().includes('hamma') ? 'all' :
+             document.getElementById('br-name').textContent.toLowerCase().includes('yunus') ? 'yunusobod' :
+             document.getElementById('br-name').textContent.toLowerCase().includes('chilon') ? 'chilonzor' : 'yangiyol';
+  document.getElementById('branch-filter').value = br;
+  render();
+});
+
+setMode('board');
+</script>
+</body>
+</html>

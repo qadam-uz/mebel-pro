@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ombor — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Ombor</h1>
+        <p class="sub">Filiallarda mavjud listlar va materiallar.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-adjust')">± Tuzatish</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="location.href='transfers.html'">⇄ Transfer</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-stockin')">+ Kirim yozish</button>
+      </div>
+    </div>
+
+    <div class="tabs" data-tabs="inv">
+      <button class="tab on" data-target="t-stock" onclick="switchTab('inv','t-stock')">Joriy ombor</button>
+      <button class="tab" data-target="t-tx" onclick="switchTab('inv','t-tx')">Tranzaksiyalar</button>
+    </div>
+
+    <section id="t-stock" data-panel-group="inv">
+      <div class="filters">
+        <div class="input"><input placeholder="Material qidirish..." /></div>
+        <select id="br-filter">
+          <option value="all">Barcha filiallar</option>
+          <option>Yunusobod</option>
+          <option>Chilonzor</option>
+          <option>Yangiyo'l</option>
+        </select>
+        <button class="chip ghost on">Faqat past zaxiralar</button>
+      </div>
+
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr><th>Material</th><th>Filial</th><th class="right">Mavjud</th><th class="right">Rezerv</th><th class="right">Erkin</th><th class="right">Min</th><th>Holat</th><th></th></tr>
+          </thead>
+          <tbody id="stock-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="t-tx" data-panel-group="inv" hidden>
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr><th>Vaqt</th><th>Turi</th><th>Material</th><th>Filial</th><th class="right">Miqdor</th><th>Holatdan keyin</th><th>Buyurtma</th><th>Kim qildi</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 09:18</td>
+              <td><span class="pill p-bad" style="font-size:10.5px"><span class="pd"></span>consume</span></td>
+              <td class="nm">LDSP H1334</td>
+              <td>Yunusobod</td>
+              <td class="amt" style="color:var(--danger)">−6</td>
+              <td class="num">136</td>
+              <td class="id">MP-2026-05-0090</td>
+              <td>Bahodir T.</td>
+            </tr>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 09:14</td>
+              <td><span class="pill p-ok" style="font-size:10.5px"><span class="pd"></span>stock_in</span></td>
+              <td class="nm">LDSP 8198</td>
+              <td>Yunusobod</td>
+              <td class="amt" style="color:var(--success)">+40</td>
+              <td class="num">61</td>
+              <td class="muted">—</td>
+              <td>Aziza R.</td>
+            </tr>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">14-may 11:20</td>
+              <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>reserve</span></td>
+              <td class="nm">LDSP H1334</td>
+              <td>Yunusobod</td>
+              <td class="amt" style="color:var(--info)">+8</td>
+              <td class="num">142</td>
+              <td class="id">MP-2026-05-0091</td>
+              <td>System</td>
+            </tr>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">14-may 09:00</td>
+              <td><span class="pill p-warn" style="font-size:10.5px"><span class="pd"></span>adjust</span></td>
+              <td class="nm">LDSP 0011</td>
+              <td>Yunusobod</td>
+              <td class="amt" style="color:var(--warn)">−3</td>
+              <td class="num">12</td>
+              <td class="muted">—</td>
+              <td>Hasan K.</td>
+            </tr>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">13-may 16:00</td>
+              <td><span class="pill p-del" style="font-size:10.5px"><span class="pd"></span>transfer_out</span></td>
+              <td class="nm">MDF 16 mm</td>
+              <td>Yunusobod</td>
+              <td class="amt" style="color:var(--danger)">−10</td>
+              <td class="num">84</td>
+              <td class="muted">tf-0042</td>
+              <td>Hasan K.</td>
+            </tr>
+            <tr>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">13-may 16:00</td>
+              <td><span class="pill p-del" style="font-size:10.5px"><span class="pd"></span>transfer_in</span></td>
+              <td class="nm">MDF 16 mm</td>
+              <td>Chilonzor</td>
+              <td class="amt" style="color:var(--success)">+10</td>
+              <td class="num">56</td>
+              <td class="muted">tf-0042</td>
+              <td>Hasan K.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal" id="m-stockin">
+  <div class="modal-h"><h3>Kirim yozish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+    <div class="field"><label>Material</label><select id="mat-select"></select></div>
+    <div class="field"><label>Miqdor</label><input type="number" value="20" min="1" /></div>
+    <div class="field"><label>Yetkazib beruvchi (ixtiyoriy)</label><input placeholder="Egger partiya 2026/05" /></div>
+    <div class="field"><label>Hujjat (ixtiyoriy)</label><input type="file" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-stockin');toast('Kirim yozildi')">Yozish</button></div>
+</div>
+
+<div class="modal" id="m-adjust">
+  <div class="modal-h"><h3>Stock tuzatish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="banner warn"><div class="ic">!</div><div class="grow">Tuzatish — rezervdan past tushira olmaysiz. Sabab kerak.</div></div>
+    <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option></select></div>
+    <div class="field"><label>Material</label><select></select></div>
+    <div class="field"><label>Imzo (signed delta · "+10" yoki "−3")</label><input value="-3" /></div>
+    <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Yorilgan partiya"></textarea></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-adjust');toast('Stock tuzatildi')">Tasdiqlash</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const tbody = document.getElementById('stock-body');
+tbody.innerHTML = SEED.branchMaterials.map(bm => {
+  const m = SEED.lookup.matById(bm.matId);
+  const br = SEED.lookup.branchById(bm.branchId);
+  const available = bm.onHand - bm.reserved;
+  const low = available <= bm.minStock;
+  return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · oxirgi 30 tranzaksiya')">
+    <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}</small></div></div></td>
+    <td>${br.name}</td>
+    <td class="amt">${bm.onHand}</td>
+    <td class="amt muted">${bm.reserved}</td>
+    <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${available}</td>
+    <td class="amt muted">${bm.minStock}</td>
+    <td>${low ? '<span class="pill p-warn"><span class="pd"></span>Past</span>' : '<span class="pill p-ok"><span class="pd"></span>OK</span>'}</td>
+    <td onclick="event.stopPropagation()">
+      <div class="menu-wrap">
+        <button class="menu-btn" data-menu-toggle>⋯</button>
+        <div class="menu">
+          <button class="mi" onclick="openModal('m-stockin')">Kirim yozish</button>
+          <button class="mi" onclick="openModal('m-adjust')">Tuzatish</button>
+          <div class="sep"></div>
+          <button class="mi" onclick="location.href='transfers.html'">Transfer</button>
+        </div>
+      </div>
+    </td>
+  </tr>`;
+}).join('');
+
+const matSel = document.getElementById('mat-select');
+matSel.innerHTML = SEED.materials.filter(m => m.status === 'active').map(m => `<option>${m.name}</option>`).join('');
+</script>
+</body>
+</html>

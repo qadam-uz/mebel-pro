@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Filial — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <button class="back" type="button" onclick="location.href='branches.html'">← Filiallar</button>
+    <div id="wrap"></div>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal" id="m-edit">
+  <div class="modal-h"><h3>Filialni tahrirlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field-row">
+      <div class="field"><label>Nom</label><input id="ed-name" /></div>
+      <div class="field"><label>Holat</label>
+        <select><option>Faol</option><option>Vaqtincha yopiq</option><option>Faol emas</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Manzil</label><input id="ed-addr" /></div>
+    <div class="field"><label>Telefon</label><input id="ed-phone" /></div>
+    <div class="field"><label>Ish vaqti</label>
+      <textarea rows="3">Du-Sh: 09:00-19:00
+Yak: 10:00-16:00</textarea>
+    </div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')">Saqlash</button></div>
+</div>
+
+<div class="modal" id="m-pricing">
+  <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi kesim va krom narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <div class="field">
+      <label>Kesim modeli</label>
+      <div class="opt-row">
+        <div class="opt on" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
+          <span class="rd"></span>
+          <div class="info"><div class="nm">List bo'yicha</div><div class="ds">Har bir ishlatilgan list uchun fiksimsiz narx.</div></div>
+        </div>
+        <div class="opt" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
+          <span class="rd"></span>
+          <div class="info"><div class="nm">Kesim soni bo'yicha</div><div class="ds">Har bir kesim uchun fiksimsiz narx.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="field"><label>Kesim narxi (so'm / list)</label><input value="100 000" /></div>
+    <div class="field"><label>Krom narxi · 0.4 mm (so'm / metr)</label><input value="2 500" /></div>
+    <div class="field"><label>Krom narxi · 2.0 mm (so'm / metr)</label><input value="3 000" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Narxlar saqlandi')">Saqlash</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const id = new URLSearchParams(location.search).get('id') || 'yunusobod';
+const b = SEED.lookup.branchById(id);
+const wrap = document.getElementById('wrap');
+
+if (!b) {
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Filial topilmadi</h3></div>`;
+} else {
+  document.getElementById('ed-name').value = b.name;
+  document.getElementById('ed-addr').value = b.addr;
+  document.getElementById('ed-phone').value = b.phone || '';
+
+  const bmats = SEED.branchMaterials.filter(bm => bm.branchId === id);
+  const ordersHere = SEED.orders.filter(o => o.branchId === id);
+  const staffHere = SEED.users.filter(u => u.homeBranchId === id || Object.values(u.grants || {}).some(branches => branches.includes(id)));
+
+  wrap.innerHTML = `
+    <div class="page-head" style="margin-top: 8px">
+      <div>
+        <h1>${b.city} — ${b.name}</h1>
+        <p class="sub">${b.addr} · ${b.phone || ''} · ${b.hours || ''}</p>
+        <div style="margin-top: 6px">
+          ${b.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' :
+            b.status === 'temporarily_closed' ? `<span class="pill p-warn"><span class="pd"></span>Vaqtincha yopiq · ${b.closedReason || ''}</span>` :
+            '<span class="pill p-dn"><span class="pd"></span>Faol emas</span>'}
+        </div>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-pricing')">% Narx sozlamalari</button>
+        <button class="btn btn-outline" type="button" onclick="openModal('m-edit')">✎ Tahrirlash</button>
+        <button class="btn btn-danger" type="button" onclick="confirmAction({title:'Filialni yopish',msg:'Filial vaqtincha yopiq bo\'ladi. Mijoz uni ko\'radi lekin buyurtma bera olmaydi.',reasonField:true,okText:'Yopish',danger:true},()=>toast('Filial yopildi'))">Vaqtincha yopish</button>
+      </div>
+    </div>
+
+    ${b.status === 'temporarily_closed' ? `<div class="banner warn"><div class="ic">!</div><div class="grow"><b>Vaqtincha yopiq</b> · ${b.closedReason || ''}</div></div>` : ''}
+
+    <div class="kpis" style="grid-template-columns: repeat(4, 1fr)">
+      <div class="kpi"><div class="lbl">Faol buyurtma</div><div class="v num">${ordersHere.filter(o => !['completed','cancelled'].includes(o.state)).length}</div></div>
+      <div class="kpi"><div class="lbl">Materiallar</div><div class="v num">${bmats.length}</div></div>
+      <div class="kpi warn"><div class="lbl">Past zaxira</div><div class="v num">${bmats.filter(bm => (bm.onHand - bm.reserved) <= bm.minStock).length}</div></div>
+      <div class="kpi"><div class="lbl">Xodim</div><div class="v num">${staffHere.length}</div></div>
+    </div>
+
+    <div class="tabs" data-tabs="br">
+      <button class="tab on" data-target="t-over" onclick="switchTab('br','t-over')">Umumiy</button>
+      <button class="tab" data-target="t-mats" onclick="switchTab('br','t-mats')">Materiallar (${bmats.length})</button>
+      <button class="tab" data-target="t-stock" onclick="switchTab('br','t-stock')">Ombor</button>
+      <button class="tab" data-target="t-pricing" onclick="switchTab('br','t-pricing')">Narx</button>
+      <button class="tab" data-target="t-staff" onclick="switchTab('br','t-staff')">Xodimlar (${staffHere.length})</button>
+      <button class="tab" data-target="t-orders" onclick="switchTab('br','t-orders')">Buyurtmalar (${ordersHere.length})</button>
+    </div>
+
+    <section id="t-over" data-panel-group="br">
+      <div class="card"><div class="card-h"><h2>Filial haqida</h2></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="row-item"><div><div class="nm">Manzil</div></div><div class="meta">${b.addr}</div></div>
+          <div class="row-item"><div><div class="nm">Telefon</div></div><div class="meta">${b.phone || '—'}</div></div>
+          <div class="row-item"><div><div class="nm">Ish vaqti</div></div><div class="meta">${b.hours || '—'}</div></div>
+          <div class="row-item"><div><div class="nm">Geo (lat, lng)</div></div><div class="meta">41.32, 69.28</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-mats" data-panel-group="br" hidden>
+      <div class="card"><div class="card-h"><h2>Filial materiallari</h2><a class="more" href="catalog.html">to'liq katalog →</a></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Material</th><th class="right">Narx / list</th><th class="right">Mavjud</th><th>Holat</th></tr></thead>
+            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td><div style="display:flex;gap:11px;align-items:center"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm</small></div></div></td><td class="amt">${fmtTiyin(bm.priceTiyin)}</td><td class="amt ${bm.onHand - bm.reserved <= bm.minStock ? 'warn-text' : ''}">${bm.onHand - bm.reserved}</td><td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Inactive'}</span></td></tr>`; }).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-stock" data-panel-group="br" hidden>
+      <div class="card"><div class="card-h"><h2>Joriy ombor</h2><a class="more" href="inventory.html">to'liq ko'rinish →</a></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Material</th><th class="right">Mavjud</th><th class="right">Rezerv</th><th class="right">Erkin</th><th class="right">Min</th></tr></thead>
+            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); const av = bm.onHand - bm.reserved; return `<tr><td class="nm">${m.name}</td><td class="amt">${bm.onHand}</td><td class="amt muted">${bm.reserved}</td><td class="amt ${av <= bm.minStock ? 'warn-text' : ''}">${av}</td><td class="amt muted">${bm.minStock}</td></tr>`; }).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-pricing" data-panel-group="br" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')">Tahrirlash</button></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="row-item"><div><div class="nm">Kesim modeli</div></div><div class="meta">List bo'yicha</div></div>
+          <div class="row-item"><div><div class="nm">Kesim narxi</div></div><div class="meta">100 000 so'm / list</div></div>
+          <div class="row-item"><div><div class="nm">Krom 0.4 mm</div></div><div class="meta">2 500 so'm / metr</div></div>
+          <div class="row-item"><div><div class="nm">Krom 2.0 mm</div></div><div class="meta">3 000 so'm / metr</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-staff" data-panel-group="br" hidden>
+      <div class="card"><div class="card-h"><h2>Bu filialdagi xodimlar</h2><a class="more" href="users.html">hammasi →</a></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Xodim</th><th>Rol</th><th>Kompensatsiya</th><th>Holat</th></tr></thead>
+            <tbody>${staffHere.map(u => `<tr class="clickable" onclick="location.href='user-detail.html?id=${u.id}'"><td class="nm">${u.name}<small>${u.login} · ${u.phone}</small></td><td>${u.isOwner ? 'Egasi' : Object.keys(u.grants || {}).join(', ')}</td><td><small style="color:var(--ink-8)">${u.comp ? u.comp.type + ' · ' + u.comp.rate : '—'}</small></td><td><span class="pill ${u.status === 'active' ? 'p-ok' : 'p-bad'}"><span class="pd"></span>${u.status === 'active' ? 'Faol' : 'Bloklangan'}</span></td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-orders" data-panel-group="br" hidden>
+      <div class="card"><div class="card-h"><h2>Bu filialdagi buyurtmalar</h2><a class="more" href="orders.html?branch=${id}">hammasi →</a></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>ID</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>
+            <tbody>${ordersHere.slice(0, 6).map(o => `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'"><td class="id">${o.id}</td><td class="nm">${SEED.lookup.clientById(o.clientId)?.name || ''}<small>${o.title}</small></td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kesim chizmasi — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .mat-grid { display: grid; gap: 12px; grid-template-columns: repeat(2,1fr); margin-top: 14px; }
+  @media (min-width: 640px) { .mat-grid { grid-template-columns: repeat(3,1fr); } }
+  @media (min-width: 980px) { .mat-grid { grid-template-columns: repeat(4,1fr); } }
+  .mat-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .15s, border-color .15s; display: flex; flex-direction: column; }
+  .mat-card:hover { transform: translateY(-2px); border-color: var(--ink-10); }
+  .mat-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-tint); }
+  .mat-card .sw-area { aspect-ratio: 4/3; }
+  .mat-card .body { padding: 12px 14px 14px; flex: 1; display: flex; flex-direction: column; }
+  .mat-card .type { font: 600 10.5px var(--f-mono); color: var(--ink-6); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+  .mat-card .nm { font: 500 13.5px/1.3 var(--f-ui); color: var(--ink-12); min-height: 36px; }
+  .mat-card .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 4px; }
+  .mat-card .pr { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); font: 600 16px var(--f-display); color: var(--ink-12); }
+  .mat-card .pr small { font: 500 11px var(--f-ui); color: var(--ink-6); letter-spacing: 0; }
+
+  .parts-tbl { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .parts-tbl th { text-align: left; padding: 8px 10px; font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-6); border-bottom: 1px solid var(--line); }
+  .parts-tbl td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .parts-tbl td input { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 13px/1 var(--f-mono); background: var(--elev); outline: 0; }
+  .parts-tbl td input:focus { border-color: var(--ink-12); }
+  .parts-tbl td select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 12.5px var(--f-ui); background: var(--elev); outline: 0; }
+  .parts-tbl td.actions { width: 70px; text-align: right; white-space: nowrap; }
+  .parts-tbl td.actions button { background: none; border: 0; color: var(--ink-6); cursor: pointer; font-size: 16px; padding: 4px 6px; }
+  .parts-tbl td.actions button:hover { color: var(--danger); }
+  .parts-tbl td.no { font: 600 12px var(--f-mono); color: var(--ink-6); width: 26px; }
+
+  .summary-pane { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 18px; position: sticky; top: 84px; }
+  .summary-pane h4 { font: 600 12px var(--f-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-6); margin: 0 0 10px; }
+  .summary-pane .r { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: var(--ink-8); }
+  .summary-pane .r b { color: var(--ink-12); font-family: var(--f-mono); font-weight: 600; }
+  .summary-pane .note { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-6); line-height: 1.5; }
+
+  .two-col-pane { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 1024px) { .two-col-pane { grid-template-columns: 1.5fr .8fr; } }
+
+  .result-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 1024px) { .result-grid { grid-template-columns: 1.4fr .8fr; } }
+  .metric-strip { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-bottom: 18px; }
+  @media (min-width: 720px) { .metric-strip { grid-template-columns: repeat(4, 1fr); } }
+  .metric { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .metric .lbl { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin-bottom: 6px; }
+  .metric .v { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; line-height: 1; }
+  .metric .v small { font: 500 11px var(--f-ui); color: var(--ink-6); letter-spacing: 0; }
+  .metric .v.warn { color: var(--warn); }
+  .legend { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .legend h4 { font: 600 13px var(--f-ui); margin: 0 0 8px; }
+  .legend ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .legend li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .legend li:last-child { border-bottom: 0; }
+  .legend li b { font-family: var(--f-mono); }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('cutting-drafts.html');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <button class="back" type="button" onclick="history.length > 1 ? history.back() : location.href='branches.html'">← Filiallar</button>
+
+  <div class="page-head" style="margin-top: 8px">
+    <div>
+      <h1>Yangi kesim chizmasi</h1>
+      <p class="sub" id="branch-line">Furniture House — Yunusobod filiali</p>
+    </div>
+  </div>
+
+  <div class="stepper" id="stepper">
+    <div class="st on" data-step="1"><span class="n">1</span> Material</div>
+    <div class="st" data-step="2"><span class="n">2</span> Qismlar</div>
+    <div class="st" data-step="3"><span class="n">3</span> Natija</div>
+  </div>
+
+  <!-- STEP 1: MATERIAL -->
+  <section data-pane="1">
+    <div class="card">
+      <div class="card-h">
+        <h2>Material manbai</h2>
+      </div>
+      <div class="card-b">
+        <div class="opt-row">
+          <div class="opt on" data-source="shop" onclick="pickSource('shop')">
+            <span class="rd"></span>
+            <div class="info">
+              <div class="nm">Sehdan olish</div>
+              <div class="ds">Material ham, kesim ham seh tomonidan. Hisob narxda ko'rinadi.</div>
+            </div>
+          </div>
+          <div class="opt" data-source="own" onclick="pickSource('own')">
+            <span class="rd"></span>
+            <div class="info">
+              <div class="nm">O'zim olib kelaman</div>
+              <div class="ds">Faqat kesim xizmati to'lanadi. Material turi tanlanishi shart (narx hisobiga).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 14px">
+      <div class="card-h">
+        <h2>Material tanlash</h2>
+        <input class="search-input" placeholder="Material qidirish..." oninput="filterMats(this.value)" style="max-width: 280px; margin-left: auto" />
+      </div>
+      <div class="card-b">
+        <div class="filters" style="margin-bottom: 8px">
+          <div class="chips" id="type-chips">
+            <button class="chip on" data-type="all" onclick="setType('all')">Hammasi</button>
+            <button class="chip" data-type="dsp" onclick="setType('dsp')">LDSP</button>
+            <button class="chip" data-type="mdf" onclick="setType('mdf')">MDF</button>
+            <button class="chip" data-type="plywood" onclick="setType('plywood')">Fanera</button>
+          </div>
+        </div>
+        <div class="mat-grid" id="mat-grid"></div>
+        <div id="mat-empty" class="empty" style="display: none; margin-top: 14px"><div class="ic">∅</div><h3>Mos material yo'q</h3><p>Boshqa filialdan urinib ko'ring.</p></div>
+      </div>
+    </div>
+
+    <div class="flex-end" style="margin-top: 18px; gap: 8px">
+      <button class="btn btn-outline" type="button" onclick="location.href='branches.html'">Bekor qilish</button>
+      <button class="btn btn-acc btn-lg" type="button" id="next-1" onclick="gotoStep(2)" disabled>Keyingi · Qismlar →</button>
+    </div>
+  </section>
+
+  <!-- STEP 2: PARTS -->
+  <section data-pane="2" hidden>
+    <div class="two-col-pane">
+      <div>
+        <div class="card">
+          <div class="card-h">
+            <div>
+              <h2>Qismlar ro'yxati</h2>
+              <div class="sub">Har bir qism — uzunlik × kenglik × soni va krom turi.</div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" onclick="addPart()">+ Qism qo'shish</button>
+          </div>
+          <div class="card-b">
+            <table class="parts-tbl">
+              <thead>
+                <tr><th style="width: 30px">№</th><th>Uzunlik (mm)</th><th>Kenglik (mm)</th><th style="width: 70px">Soni</th><th style="width: 100px">Tola yo'nalishi</th><th>Krom (T/B/L/R)</th><th></th></tr>
+              </thead>
+              <tbody id="parts-body"></tbody>
+            </table>
+            <details style="margin-top: 14px">
+              <summary style="font: 500 13px var(--f-ui); color: var(--accent); cursor: pointer">↥ Ko'p qator kiritish (LxWxQty matnda)</summary>
+              <textarea id="bulk-paste" placeholder="600x400x4&#10;800x500x2&#10;200x150x8" style="margin-top: 8px; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; font: 500 13px/1.5 var(--f-mono); min-height: 100px; resize: vertical"></textarea>
+              <button class="btn btn-outline btn-sm" type="button" onclick="bulkPaste()" style="margin-top: 8px">Qator(lar)ni qo'shish</button>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <aside>
+        <div class="summary-pane">
+          <h4>Joriy holat</h4>
+          <div class="r"><span>Material</span><b id="sum-mat">—</b></div>
+          <div class="r"><span>List o'lchami</span><b id="sum-sheet">—</b></div>
+          <div class="r"><span>Qismlar soni</span><b id="sum-parts">0</b></div>
+          <div class="r"><span>Umumiy yuza</span><b id="sum-area">0 m²</b></div>
+          <div class="note">
+            <b style="color: var(--ink-12)">Hisobga olinadi:</b> kerf 4 mm · chetdan 10 mm · grain bo'yicha rotatsiya cheklovi.
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="flex-end" style="margin-top: 18px; gap: 8px">
+      <button class="btn btn-outline" type="button" onclick="gotoStep(1)">← Material</button>
+      <button class="btn btn-acc btn-lg" type="button" onclick="runOptimization()">Optimizatsiyani ishga tushirish →</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: RESULT -->
+  <section data-pane="3" hidden>
+    <div class="metric-strip">
+      <div class="metric"><div class="lbl">Algoritm</div><div class="v" style="font-size:14px;line-height:1.2">FFD-guillotine v1</div></div>
+      <div class="metric"><div class="lbl">Qoldiq</div><div class="v" id="m-waste"><span>8.2</span><small> %</small></div></div>
+      <div class="metric"><div class="lbl">Listlar</div><div class="v" id="m-sheets">6</div></div>
+      <div class="metric"><div class="lbl">Kesim uzunligi</div><div class="v" id="m-cut" style="font-size:20px">124.6<small> m</small></div></div>
+    </div>
+
+    <div class="result-grid">
+      <div>
+        <div class="sheet">
+          <div class="head">
+            <h4>Kesim chizmasi</h4>
+            <div class="meta">2750 × 1830 mm · 18 mm DSP</div>
+          </div>
+          <div class="sheet-tabs">
+            <button class="st-tab on" onclick="pickSheet(1, this)">List 1</button>
+            <button class="st-tab" onclick="pickSheet(2, this)">List 2</button>
+            <button class="st-tab" onclick="pickSheet(3, this)">List 3</button>
+            <button class="st-tab" onclick="pickSheet(4, this)">List 4</button>
+            <button class="st-tab" onclick="pickSheet(5, this)">List 5</button>
+            <button class="st-tab" onclick="pickSheet(6, this)">List 6</button>
+          </div>
+          <svg viewBox="0 0 550 366" id="sheet-svg">
+            <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
+            <rect x="2" y="2" width="546" height="362" fill="none" stroke="#A6471F" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
+            <g id="placements"></g>
+          </svg>
+        </div>
+      </div>
+
+      <aside>
+        <div class="legend">
+          <h4>Joylanish · 1-list</h4>
+          <ul id="placement-list">
+            <li><span>P1 · 600 × 400 mm</span><b>4 ta</b></li>
+            <li><span>P2 · 800 × 500 mm</span><b>2 ta</b></li>
+            <li><span>P3 · 200 × 150 mm</span><b>8 ta</b></li>
+          </ul>
+        </div>
+
+        <div class="card" style="margin-top: 14px">
+          <div class="card-h"><h2 style="font-size: 16px">Krom uzunligi</h2></div>
+          <div class="card-b" style="padding-top: 0">
+            <div class="row-item"><div><div class="nm">0.4 mm krom</div></div><div class="meta">18.2 m</div></div>
+            <div class="row-item"><div><div class="nm">2.0 mm krom</div></div><div class="meta">12.8 m</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 14px">
+          <div class="card-b" style="padding: 14px 18px">
+            <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlandi · yuklanmoqda...','ok')">⬇ Chizmaning PDF nusxasini olish</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="flex-end" style="margin-top: 22px; gap: 8px">
+      <button class="btn btn-outline" type="button" onclick="gotoStep(2)">← Qismlarni o'zgartirish</button>
+      <button class="btn btn-outline" type="button" onclick="saveDraftOnly()">Loyihalarga saqlash</button>
+      <button class="btn btn-acc btn-lg" type="button" onclick="location.href='order-new.html?cutting=cr-0091'">Shu chizma bilan buyurtma berish →</button>
+    </div>
+
+    <p style="font-size: 11.5px; color: var(--ink-6); margin-top: 14px; text-align: center">
+      Loyihalar 7 kun saqlanadi · keyin avtomatik o'chiriladi
+    </p>
+  </section>
+</main>
+
+<script>
+const state = {
+  step: 1,
+  source: 'shop',
+  type: 'all',
+  search: '',
+  matId: null,
+  parts: [
+    { len: 600, wid: 400, qty: 4, grain: 'any', edge: '0.4' },
+    { len: 800, wid: 500, qty: 2, grain: 'required', edge: '2.0' },
+    { len: 200, wid: 150, qty: 8, grain: 'any', edge: 'none' }
+  ]
+};
+
+const branchId = new URLSearchParams(location.search).get('branch') || sessionStorage.getItem('mp.branch') || 'yunusobod';
+
+function getMaterials() {
+  return SEED.branchMaterials
+    .filter(bm => bm.branchId === branchId && bm.status === 'active')
+    .map(bm => ({ ...SEED.lookup.matById(bm.matId), priceTiyin: bm.priceTiyin, branchAvailable: bm.onHand - bm.reserved }));
+}
+
+function renderMatGrid() {
+  const grid = document.getElementById('mat-grid');
+  const mats = getMaterials().filter(m => {
+    if (state.type !== 'all' && m.type !== state.type) return false;
+    if (state.search && !m.name.toLowerCase().includes(state.search.toLowerCase())) return false;
+    return true;
+  });
+  if (mats.length === 0) {
+    grid.innerHTML = '';
+    document.getElementById('mat-empty').style.display = '';
+    return;
+  }
+  document.getElementById('mat-empty').style.display = 'none';
+  grid.innerHTML = mats.map(m => `
+    <div class="mat-card ${m.id === state.matId ? 'on' : ''}" onclick="pickMat('${m.id}')">
+      <div class="sw-area ${m.sw}"></div>
+      <div class="body">
+        <div class="type">${m.type.toUpperCase()} · ${m.thickness} mm</div>
+        <div class="nm">${m.name}</div>
+        <div class="meta">${m.sheetLen} × ${m.sheetWid} mm${m.grain ? ' · tola yo\'nalishi bor' : ''}</div>
+        ${state.source === 'shop' ? `<div class="pr">${fmtTiyin(m.priceTiyin)}<small> / list</small></div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function pickSource(s) {
+  state.source = s;
+  document.querySelectorAll('[data-source]').forEach(el => el.classList.toggle('on', el.dataset.source === s));
+  renderMatGrid();
+}
+function setType(t) {
+  state.type = t;
+  document.querySelectorAll('[data-type]').forEach(el => el.classList.toggle('on', el.dataset.type === t));
+  renderMatGrid();
+}
+function filterMats(q) {
+  state.search = q;
+  renderMatGrid();
+}
+function pickMat(id) {
+  state.matId = id;
+  renderMatGrid();
+  document.getElementById('next-1').disabled = false;
+  const m = SEED.lookup.matById(id);
+  document.getElementById('sum-mat').textContent = `${m.name}`;
+  document.getElementById('sum-sheet').textContent = `${m.sheetLen} × ${m.sheetWid} mm`;
+}
+
+function renderParts() {
+  const body = document.getElementById('parts-body');
+  body.innerHTML = state.parts.map((p, i) => `
+    <tr>
+      <td class="no">${i + 1}</td>
+      <td><input type="number" value="${p.len}" onchange="setPart(${i},'len',this.value)"/></td>
+      <td><input type="number" value="${p.wid}" onchange="setPart(${i},'wid',this.value)"/></td>
+      <td><input type="number" value="${p.qty}" min="1" onchange="setPart(${i},'qty',this.value)"/></td>
+      <td>
+        <select onchange="setPart(${i},'grain',this.value)">
+          <option value="any" ${p.grain === 'any' ? 'selected' : ''}>Erkin</option>
+          <option value="required" ${p.grain === 'required' ? 'selected' : ''}>Talab qilingan</option>
+        </select>
+      </td>
+      <td>
+        <select onchange="setPart(${i},'edge',this.value)">
+          <option value="none" ${p.edge === 'none' ? 'selected' : ''}>Krom yo'q</option>
+          <option value="0.4" ${p.edge === '0.4' ? 'selected' : ''}>0.4 mm — barcha tomonlar</option>
+          <option value="2.0" ${p.edge === '2.0' ? 'selected' : ''}>2.0 mm — barcha tomonlar</option>
+        </select>
+      </td>
+      <td class="actions">
+        <button type="button" onclick="dupPart(${i})" title="Nusxa">⎘</button>
+        <button type="button" onclick="rmPart(${i})" title="O'chirish">✕</button>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('sum-parts').textContent = state.parts.reduce((s, p) => s + p.qty, 0);
+  const totalArea = state.parts.reduce((s, p) => s + (p.len * p.wid * p.qty), 0) / 1e6;
+  document.getElementById('sum-area').textContent = `${totalArea.toFixed(2)} m²`;
+}
+function setPart(i, k, v) { state.parts[i][k] = k === 'grain' || k === 'edge' ? v : Number(v); renderParts(); }
+function addPart() { state.parts.push({ len: 600, wid: 400, qty: 1, grain: 'any', edge: '0.4' }); renderParts(); }
+function dupPart(i) { state.parts.splice(i + 1, 0, { ...state.parts[i] }); renderParts(); }
+function rmPart(i) {
+  if (state.parts.length === 1) { toast('Eng kamida 1 ta qism kerak', 'warn'); return; }
+  state.parts.splice(i, 1); renderParts();
+}
+function bulkPaste() {
+  const txt = document.getElementById('bulk-paste').value.trim();
+  if (!txt) return;
+  const lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
+  let added = 0;
+  lines.forEach(l => {
+    const m = l.match(/^(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)$/i);
+    if (m) {
+      state.parts.push({ len: +m[1], wid: +m[2], qty: +m[3], grain: 'any', edge: '0.4' });
+      added++;
+    }
+  });
+  document.getElementById('bulk-paste').value = '';
+  renderParts();
+  toast(`${added} ta qism qo'shildi`);
+}
+
+function gotoStep(n) {
+  state.step = n;
+  document.querySelectorAll('[data-pane]').forEach(el => el.hidden = el.dataset.pane != n);
+  document.querySelectorAll('.stepper .st').forEach(s => {
+    const i = +s.dataset.step;
+    s.classList.toggle('on', i === n);
+    s.classList.toggle('done', i < n);
+  });
+  if (n === 2) renderParts();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function runOptimization() {
+  if (state.parts.length === 0) { toast('Qismlar bo\'sh', 'warn'); return; }
+  const totalParts = state.parts.reduce((s, p) => s + p.qty, 0);
+  if (totalParts > 100) { toast('Qismlar soni 100 dan oshmasligi kerak', 'warn'); return; }
+  toast('Optimizatsiya ishga tushdi...');
+  setTimeout(() => {
+    toast('Tayyor · 6 list, 8.2% qoldiq');
+    gotoStep(3);
+    renderSheetSvg();
+  }, 1100);
+}
+
+function renderSheetSvg() {
+  // Simple placement viz
+  const p = document.getElementById('placements');
+  const cols = [
+    { x: 6,   y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
+    { x: 160, y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
+    { x: 314, y: 6,   w: 150, h: 100, lbl: 'P1', color: '#A6471F' },
+    { x: 6,   y: 110, w: 200, h: 124, lbl: 'P2', color: '#2E5E4E' },
+    { x: 210, y: 110, w: 200, h: 124, lbl: 'P2', color: '#2E5E4E' },
+    { x: 6,   y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
+    { x: 60,  y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
+    { x: 114, y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' },
+    { x: 168, y: 238, w: 50,  h: 38,  lbl: 'P3', color: '#A36417' }
+  ];
+  p.innerHTML = cols.map(c => `
+    <g>
+      <rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="${c.color}" fill-opacity="0.18" stroke="${c.color}" stroke-width="1.5"/>
+      <text x="${c.x + c.w/2}" y="${c.y + c.h/2 + 4}" font-family="JetBrains Mono" font-size="11" fill="${c.color}" font-weight="700" text-anchor="middle">${c.lbl}</text>
+    </g>
+  `).join('');
+}
+function pickSheet(n, btn) {
+  document.querySelectorAll('.st-tab').forEach(t => t.classList.remove('on'));
+  btn.classList.add('on');
+  toast(`${n}-list ko'rsatilmoqda`);
+  renderSheetSvg();
+}
+
+function saveDraftOnly() {
+  toast('Loyiha sifatida saqlandi');
+  setTimeout(() => location.href = 'cutting-drafts.html', 600);
+}
+
+// init
+pickMat('m01');
+renderMatGrid();
+const b = SEED.lookup.branchById(branchId);
+if (b) document.getElementById('branch-line').textContent = `Furniture House — ${b.city} ${b.name}`;
+</script>
+</body>
+</html>

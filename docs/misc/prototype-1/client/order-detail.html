@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buyurtma — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .od-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 1024px) { .od-grid { grid-template-columns: 1.4fr .85fr; gap: 24px; } }
+  .od-head { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; margin-bottom: 18px; }
+  .od-head .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .od-head h1 { font-family: var(--f-display); font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 6px; }
+  .od-head .id { font-family: var(--f-mono); font-size: 12px; color: var(--ink-6); letter-spacing: .04em; }
+  .od-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .totals { background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-size: 13px; }
+  .totals .r { display: flex; justify-content: space-between; padding: 4px 0; color: var(--ink-8); }
+  .totals .r .num { color: var(--ink-12); font-weight: 500; }
+  .totals .grand { padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--ink-12); font-size: 15px; font-weight: 600; }
+  .totals .grand .num { font-family: var(--f-display); font-size: 22px; }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('orders.html');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <button class="back" type="button" onclick="history.back()">← Buyurtmalar</button>
+
+  <div id="new-banner" class="banner success" style="display: none">
+    <div class="ic">✓</div>
+    <div class="grow">Buyurtmangiz qabul qilindi · sehda to'lov tasdiqlangach ish boshlanadi.</div>
+  </div>
+
+  <div id="od-wrap"></div>
+</main>
+
+<script>
+const id = new URLSearchParams(location.search).get('id') || 'MP-2026-05-0091';
+const isNew = new URLSearchParams(location.search).get('new') === '1';
+if (isNew) document.getElementById('new-banner').style.display = '';
+
+const o = SEED.lookup.orderById(id);
+const wrap = document.getElementById('od-wrap');
+if (!o) {
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
+} else {
+  const br = SEED.lookup.branchById(o.branchId);
+  const cl = SEED.lookup.clientById(o.clientId);
+  const tl = buildTimeline(o);
+
+  const itemsRows = [
+    { lbl: 'Kesim xizmati (6 list)', val: fmtTiyin(o.cuttingFeeTiyin) },
+    { lbl: 'Material', val: fmtTiyin(o.materialsTiyin) },
+    { lbl: 'Krom yopishtirish', val: fmtTiyin(o.edgeFeeTiyin) }
+  ];
+  if (o.deliveryType === 'delivery') itemsRows.push({ lbl: 'Yetkazma', val: fmtTiyin(o.deliveryFeeTiyin) });
+  if (o.discountTiyin) itemsRows.push({ lbl: 'Chegirma', val: '− ' + fmtTiyin(o.discountTiyin) });
+
+  wrap.innerHTML = `
+    <div class="od-head">
+      <div class="top">
+        <div>
+          <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
+          <h1>${o.title}</h1>
+          <div class="muted">${o.placedAt} · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olib ketish'}</div>
+        </div>
+        <div style="text-align: right">
+          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
+          <div class="num" style="margin-top: 6px; font-size: 18px; font-weight: 600">${fmtTiyin(o.totalTiyin)}</div>
+        </div>
+      </div>
+      <div class="actions">
+        ${detailActions(o)}
+      </div>
+    </div>
+
+    <div class="tabs" data-tabs="od">
+      <button class="tab on" data-target="t-overview" onclick="switchTab('od','t-overview')">Umumiy</button>
+      <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Kesim</button>
+      <button class="tab" data-target="t-payments" onclick="switchTab('od','t-payments')">To'lovlar</button>
+      ${o.refundPending ? `<button class="tab" data-target="t-refunds" onclick="switchTab('od','t-refunds')">Qaytarishlar</button>` : ''}
+      <button class="tab" data-target="t-timeline" onclick="switchTab('od','t-timeline')">Tarix</button>
+    </div>
+
+    <div class="od-grid">
+      <div>
+        <section id="t-overview" data-panel-group="od">
+          <div class="card">
+            <div class="card-h"><h2>Buyurtma tarkibi</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="row-item"><div><div class="nm">14 ta qism</div><small style="color:var(--ink-6)">LDSP 18 mm · 6 list</small></div><div class="meta">6 list</div></div>
+              <div class="row-item"><div><div class="nm">Krom 0.4 mm</div><small style="color:var(--ink-6)">barcha qismlar — yon tomonlar</small></div><div class="meta">18.2 m</div></div>
+              <div class="row-item"><div><div class="nm">Krom 2.0 mm</div><small style="color:var(--ink-6)">P2 qism · barcha tomonlar</small></div><div class="meta">12.8 m</div></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 14px">
+            <div class="card-h"><h2>Yetkazma</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="row-item">
+                <div>
+                  <div class="nm">${o.deliveryType === 'delivery' ? 'Yetkazib berish' : 'Olib ketish'}</div>
+                  <small style="color:var(--ink-6)">${o.address || (br?.addr || '')}</small>
+                </div>
+                <div class="meta">${fmtTiyin(o.deliveryFeeTiyin || 0)}</div>
+              </div>
+              ${o.dueAt ? `<div class="row-item"><div><div class="nm">Sana</div></div><div class="meta">${o.dueAt}</div></div>` : ''}
+            </div>
+          </div>
+        </section>
+
+        <section id="t-cutting" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h">
+              <h2>Kesim chizmasi</h2>
+              <a class="more" href="cutting-result.html?id=${o.cuttingId}">To'liq ko'rish →</a>
+            </div>
+            <div class="card-b" style="padding-top: 0">
+              <p class="muted" style="font-size:13px;margin:0 0 14px">Kesim algoritmi · FFD-guillotine v1 · 8.2% qoldiq</p>
+              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlanmoqda')">⬇ Kesim chizmasini PDF olish</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="t-payments" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h"><h2>To'lovlar</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              ${o.paidTiyin > 0 ? `
+                <div class="row-item">
+                  <div>
+                    <div class="nm">${o.paymentType === 'advance' ? '50% oldindan to&#39;lov' : 'To&#39;liq to&#39;lov'}</div>
+                    <small style="color:var(--ink-6)">Naqd · ${o.placedAt} · Aziza op. qabul qildi</small>
+                  </div>
+                  <div class="meta success-text">+ ${fmtTiyin(o.paidTiyin)}</div>
+                </div>
+              ` : `<p class="muted" style="font-size:13px;margin:14px 0 0">Hali to'lov yo'q. Sehda to'lash uchun keling yoki haydovchiga to'lang.</p>`}
+              ${o.paidTiyin < o.totalTiyin ? `
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Qolgan summa</div>
+                    <small style="color:var(--ink-6)">olib ketish/yetkazma paytida</small>
+                  </div>
+                  <div class="meta warn-text">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </section>
+
+        ${o.refundPending ? `
+          <section id="t-refunds" data-panel-group="od" hidden>
+            <div class="card">
+              <div class="card-h"><h2>Qaytarishlar</h2></div>
+              <div class="card-b" style="padding-top: 0">
+                <div class="banner warn"><div class="ic">!</div><div class="grow">Buyurtma bekor qilindi · sehdan pul qaytarishni kutmoqda. Mas'ul: <b>Hasan ako</b>.</div></div>
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Pul qaytarish · kutilmoqda</div>
+                    <small style="color:var(--ink-6)">8 kun · sehga murojaat qiling</small>
+                  </div>
+                  <div class="meta">${fmtTiyin(o.paidTiyin)}</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ` : ''}
+
+        <section id="t-timeline" data-panel-group="od" hidden>
+          <div class="card">
+            <div class="card-h"><h2>Holatlar tarixi</h2></div>
+            <div class="card-b" style="padding: 14px 22px 22px">
+              <ol class="tl">${tl}</ol>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside>
+        <div class="totals">
+          ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
+          <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(o.totalTiyin)}</span></div>
+          ${o.paidTiyin ? `<div class="r" style="margin-top:6px"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(o.paidTiyin)}</span></div>` : ''}
+          ${o.paidTiyin < o.totalTiyin && o.state !== 'cancelled' ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qolgan</span><span class="num">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</span></div>` : ''}
+        </div>
+
+        <div class="card" style="margin-top: 14px">
+          <div class="card-h"><h2 style="font-size: 16px">Sehga aloqa</h2></div>
+          <div class="card-b" style="padding-top: 0; font-size: 13px">
+            <div class="row-item"><div><div class="nm">Furniture House</div></div><div class="meta">${br?.phone || ''}</div></div>
+            <div class="row-item"><div><div class="nm">${br?.city} ${br?.name}</div><small style="color:var(--ink-6)">${br?.addr || ''}</small></div><div></div></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
+function detailActions(o) {
+  const actions = [];
+  if (['new','pending_payment'].includes(o.state)) {
+    actions.push(`<a class="btn btn-outline btn-sm" href="order-modify.html?id=${o.id}">✎ O'zgartirish</a>`);
+    actions.push(`<button class="btn btn-danger btn-sm" type="button" onclick="cancelOrder('${o.id}')">Bekor qilish</button>`);
+  } else if (['cutting','edge_banding','ready','in_delivery'].includes(o.state)) {
+    actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('Kuzatish — har bir o\'zgarish Telegramda')">Kuzatish</button>`);
+    actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda')">Hujjatlar (PDF)</button>`);
+  } else if (o.state === 'completed') {
+    actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda')">Hujjatlar (PDF)</button>`);
+  }
+  return actions.join('');
+}
+
+function clientFacingState(o) {
+  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
+  if (o.state === 'in_delivery') return 'Yetkazilmoqda';
+  return SEED.STATE_LABELS[o.state];
+}
+
+function buildTimeline(o) {
+  const steps = [
+    { label: 'Joylandi', state: 'new', when: o.placedAt },
+    { label: 'To\'lov tasdiqlandi', state: 'confirmed', when: o.paidTiyin > 0 ? '15:18' : '—' },
+    { label: 'Kesilmoqda', state: 'cutting', when: o.cutStartedAt || '—', who: o.cutter ? `Bahodir ako` : '' },
+    { label: 'Krom yopishtirilmoqda', state: 'edge_banding', when: o.edgeStartedAt || '—', who: o.edger ? 'Olim ako' : '' },
+    { label: 'Tayyor', state: 'ready', when: '—' },
+    { label: o.deliveryType === 'delivery' ? 'Yetkazilmoqda' : 'Olishga tayyor', state: o.deliveryType === 'delivery' ? 'in_delivery' : 'ready', when: o.driverStartedAt || '—' },
+    { label: 'Tugatildi', state: 'completed', when: o.deliveredAt || '—' }
+  ];
+  if (o.state === 'cancelled') {
+    return `<li class="step done"><span class="when">${o.placedAt}</span>Joylandi</li>
+            <li class="step bad"><span class="when">${o.cancelledAt || '—'}</span>Bekor qilindi · <span class="who">${o.cancelReason || ''}</span></li>`;
+  }
+  const order = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery','completed'];
+  const idx = order.indexOf(o.state);
+  return steps.map(s => {
+    const i = order.indexOf(s.state);
+    const cls = i < idx ? 'done' : i === idx ? 'now' : '';
+    return `<li class="step ${cls}"><span class="when">${s.when}</span>${s.label}${s.who ? ` · <span class="who">${s.who}</span>` : ''}</li>`;
+  }).join('');
+}
+
+function cancelOrder(id) {
+  confirmAction({
+    title: 'Buyurtmani bekor qilish',
+    msg: 'Buyurtma bekor qilinadi. Bu amal qaytarilmaydi. Agar to\'lov bo\'lgan bo\'lsa, pul qaytariladi.',
+    reasonField: true, reasonLabel: 'Sabab',
+    okText: 'Bekor qilish', danger: true
+  }, () => { toast('Buyurtma bekor qilindi'); setTimeout(() => location.href = 'orders.html', 700); });
+}
+</script>
+</body>
+</html>

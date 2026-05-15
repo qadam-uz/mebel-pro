@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mebel Pro — furnitura sehini boshqarish tizimi</title>
+<meta name="description" content="Buyurtma, kesim, maosh — bir joyda. Furnitura sehlari uchun zamonaviy boshqaruv tizimi." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700;8..60,800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  /* Landing-only styles */
+  .nav { position: sticky; top: 0; z-index: 50; background: rgba(250,247,242,.86); backdrop-filter: saturate(140%) blur(10px); border-bottom: 1px solid transparent; transition: border-color .2s, background .2s; }
+  .nav.scrolled { border-bottom-color: var(--line); background: rgba(250,247,242,.96); }
+  .nav-row { display: flex; align-items: center; gap: 36px; padding: 18px 0; }
+  .nav .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: inherit; }
+  .nav .brand .mk { width: 34px; height: 34px; font-size: 18px; }
+  .nav .brand .nm { font-family: var(--f-display); font-size: 21px; font-weight: 600; letter-spacing: -.01em; }
+  .nav-links { display: none; gap: 28px; margin-left: 14px; }
+  .nav-links a { color: var(--ink-10); text-decoration: none; font-size: 14.5px; font-weight: 500; }
+  .nav-links a:hover { color: var(--accent); }
+  @media (min-width: 900px) { .nav-links { display: flex; } }
+  .nav-cta { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  .hero { padding: 68px 0 56px; position: relative; overflow: hidden; }
+  @media (min-width: 1280px) { .hero { padding: 104px 0 80px; } }
+  .hero-grid { display: grid; gap: 48px; }
+  @media (min-width: 1024px) { .hero-grid { grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; } }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--ink-8); font-weight: 500; margin-bottom: 24px; }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--success-tint); }
+  h1.hero-h { font-family: var(--f-display); font-weight: 600; font-size: clamp(46px, 6vw, 84px); line-height: 1.02; letter-spacing: -.025em; margin: 0 0 22px; }
+  h1.hero-h em { font-style: italic; color: var(--accent); font-weight: 600; }
+  .hero-sub { font-size: clamp(17px,1.4vw,20px); color: var(--ink-8); max-width: 540px; margin: 0 0 32px; line-height: 1.55; }
+  .hero-sub b { color: var(--ink-12); font-weight: 600; }
+  .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
+  .hero-trust { display: flex; align-items: center; gap: 14px; color: var(--ink-6); font-size: 13px; }
+  .avs { display: flex; }
+  .avs span { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--bg); margin-left: -9px; background: var(--ink-4); font: 600 12px/26px var(--f-ui); color: #fff; text-align: center; }
+  .avs span:nth-child(1) { background: #A6471F; margin-left: 0; }
+  .avs span:nth-child(2) { background: #2E5E4E; }
+  .avs span:nth-child(3) { background: #3F362F; }
+  .avs span:nth-child(4) { background: #A36417; }
+
+  .hero-vis { position: relative; border-radius: 14px; background: var(--elev); border: 1px solid var(--line); box-shadow: 0 30px 70px -30px rgba(26,22,20,.20), 0 6px 18px -8px rgba(26,22,20,.08); overflow: hidden; }
+  .hv-bar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--line); background: var(--sunk); }
+  .hv-bar .d { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-2); }
+  .hv-bar .u { margin-left: auto; background: var(--elev); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; font: 500 11px/1.4 var(--f-mono); color: var(--ink-8); }
+  .hv-body { display: grid; grid-template-columns: 160px 1fr; min-height: 380px; }
+  .hv-side { background: var(--deep); padding: 14px 12px; color: #D6CDBE; font-size: 12px; }
+  .hv-side .grp { margin-bottom: 18px; }
+  .hv-side .lbl { color: var(--ink-4); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; font-weight: 600; margin-bottom: 6px; }
+  .hv-side .it { padding: 6px 8px; border-radius: 4px; color: #E5DDD0; margin-bottom: 1px; }
+  .hv-side .it.on { background: rgba(166,71,31,.18); color: #fff; font-weight: 500; }
+  .hv-main { padding: 18px 22px; background: var(--bg); }
+  .hv-h { font-family: var(--f-display); font-size: 20px; font-weight: 600; margin: 0 0 14px; letter-spacing: -.01em; }
+  .hv-kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+  .hv-kpi { background: var(--elev); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; }
+  .hv-kpi .k { font-size: 10.5px; color: var(--ink-6); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
+  .hv-kpi .v { font-family: var(--f-display); font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -.01em; }
+  .hv-kpi .d { font-size: 11px; margin-top: 4px; }
+  .hv-kpi .d.up { color: var(--success); }
+  .hv-list { background: var(--elev); border: 1px solid var(--line); border-radius: 7px; font-size: 11.5px; }
+  .hv-list .row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); align-items: center; }
+  .hv-list .row:last-child { border-bottom: 0; }
+  .hv-list .id { font-family: var(--f-mono); color: var(--ink-6); font-size: 10.5px; }
+  .hv-list .nm { font-weight: 500; }
+
+  .trust { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 26px 0; background: var(--sunk); }
+  .trust-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+  .trust .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-6); font-weight: 600; }
+  .cities { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-8); font-size: 14px; font-family: var(--f-display); font-style: italic; }
+
+  .stats { padding: 64px 0; }
+  .stats-grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; grid-template-columns: repeat(2,1fr); }
+  @media (min-width: 900px) { .stats-grid { grid-template-columns: repeat(4,1fr); } }
+  .stat { background: var(--bg); padding: 28px; }
+  .stat .n { font-family: var(--f-display); font-size: clamp(40px,4.5vw,64px); font-weight: 600; letter-spacing: -.025em; line-height: 1; margin-bottom: 8px; }
+  .stat .l { color: var(--ink-8); font-size: 14px; line-height: 1.4; max-width: 200px; }
+
+  .features { padding: 64px 0 24px; }
+  .feat-head { margin-bottom: 48px; max-width: 680px; }
+  .feat-head .e { font-size: 12.5px; text-transform: uppercase; letter-spacing: .16em; color: var(--accent); font-weight: 700; margin-bottom: 14px; }
+  .feat-head h2 { font-family: var(--f-display); font-size: clamp(34px,3.5vw,48px); font-weight: 600; line-height: 1.08; letter-spacing: -.02em; margin: 0 0 14px; }
+  .feat-head p { color: var(--ink-8); font-size: 17px; margin: 0; }
+  .feat-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .feat-grid { grid-template-columns: repeat(3,1fr); } }
+  .feat { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 30px 26px 28px; display: flex; flex-direction: column; transition: border-color .15s, transform .15s; }
+  .feat:hover { border-color: var(--ink-10); transform: translateY(-2px); }
+  .feat .ic { width: 42px; height: 42px; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-h); border-radius: 8px; margin-bottom: 22px; font-family: var(--f-display); font-size: 22px; font-weight: 600; }
+  .feat:nth-child(2) .ic { background: var(--success-tint); color: var(--success); }
+  .feat:nth-child(3) .ic { background: var(--warn-tint); color: var(--warn); }
+  .feat h3 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 10px; }
+  .feat p { color: var(--ink-8); font-size: 14.5px; line-height: 1.6; margin: 0 0 18px; flex: 1; }
+  .feat ul { margin: 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--ink-10); border-top: 1px solid var(--line); padding-top: 14px; }
+  .feat li { padding: 5px 0; display: flex; align-items: flex-start; gap: 9px; }
+  .feat li::before { content: ""; display: inline-block; width: 14px; height: 1px; background: var(--accent); margin-top: 11px; flex: none; }
+
+  .roles { padding: 56px 0; background: var(--deep); color: #F0EAE0; margin-top: 48px; border-radius: 18px; }
+  .roles-inner { padding: 0 36px; }
+  .roles h2 { font-family: var(--f-display); font-size: clamp(28px,2.6vw,40px); font-weight: 600; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 12px; color: #fff; }
+  .roles p.sub { color: #B0A698; font-size: 15.5px; max-width: 640px; margin: 0 0 28px; }
+  .roles-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .roles-grid { grid-template-columns: repeat(3,1fr); } }
+  .role-card { background: var(--deep-2); border: 1px solid var(--deep-3); border-radius: 12px; padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; transition: transform .12s, border-color .12s; }
+  .role-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .role-card .e { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: #E8A37D; font-weight: 700; }
+  .role-card h3 { font-family: var(--f-display); font-size: 22px; font-weight: 600; margin: 4px 0 4px; color: #fff; letter-spacing: -.01em; }
+  .role-card p { color: #B0A698; font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; flex: 1; }
+  .role-card .go { display: inline-flex; align-items: center; gap: 6px; font: 600 13px var(--f-ui); color: #E8A37D; }
+
+  .faq { padding: 64px 0; }
+  .faq-grid { display: grid; gap: 48px; }
+  @media (min-width: 900px) { .faq-grid { grid-template-columns: .6fr 1fr; gap: 80px; } }
+  .faq h2 { font-family: var(--f-display); font-size: clamp(32px,3vw,44px); font-weight: 600; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 16px; }
+  .faq .sub { color: var(--ink-8); font-size: 15px; margin-bottom: 20px; }
+  .faq-list { display: flex; flex-direction: column; border-top: 1px solid var(--ink-12); }
+  details { border-bottom: 1px solid var(--line); padding: 18px 0; }
+  details summary { list-style: none; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; font: 600 16.5px/1.4 var(--f-ui); color: var(--ink-12); }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; font-family: var(--f-display); font-size: 24px; font-weight: 600; color: var(--accent); line-height: 1; transition: transform .2s; flex: none; }
+  details[open] summary::after { content: "−"; }
+  details .a { padding-top: 10px; color: var(--ink-8); font-size: 15px; line-height: 1.6; max-width: 680px; }
+
+  .cta-block { padding: 30px 0 0; }
+  .cta-inner { background: var(--accent); color: #fff; padding: 54px 36px; border-radius: 16px; display: grid; gap: 18px; text-align: center; background-image: radial-gradient(circle at 88% 18%, rgba(255,255,255,.10) 0%, transparent 24%); }
+  @media (min-width: 900px) { .cta-inner { grid-template-columns: 1fr auto; text-align: left; align-items: center; gap: 36px; padding: 54px 48px; } }
+  .cta-inner h2 { font-family: var(--f-display); font-size: clamp(28px,2.6vw,40px); font-weight: 600; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 8px; color: #fff; }
+  .cta-inner p { margin: 0; font-size: 15.5px; color: rgba(255,255,255,.85); max-width: 560px; }
+  .cta-inner .btn-primary { background: #fff; color: var(--accent); border-color: #fff; }
+  .cta-inner .btn-primary:hover { background: var(--deep); color: #fff; border-color: var(--deep); }
+
+  .ft { background: var(--deep); color: #D6CDBE; padding: 56px 0 28px; margin-top: 64px; font-size: 14px; }
+  .ft-grid { display: grid; gap: 36px; grid-template-columns: 1fr; padding-bottom: 36px; border-bottom: 1px solid var(--deep-3); }
+  @media (min-width: 900px) { .ft-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; } }
+  .ft .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: inherit; }
+  .ft .brand .nm { color: #fff; font-family: var(--f-display); font-size: 21px; font-weight: 600; }
+  .ft p.ds { margin: 18px 0 14px; color: var(--ink-4); max-width: 320px; font-size: 13.5px; line-height: 1.55; }
+  .ft .col h4 { font-family: var(--f-display); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-2); margin: 0 0 14px; }
+  .ft .col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ft .col a { color: var(--ink-4); text-decoration: none; }
+  .ft .col a:hover { color: #fff; }
+  .ft .bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 22px; flex-wrap: wrap; gap: 14px; color: var(--ink-6); font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="container nav-row">
+    <a class="brand" href="landing.html">
+      <span class="mk">M</span>
+      <span class="nm">Mebel Pro</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">Imkoniyatlar</a>
+      <a href="#roles">Kim uchun</a>
+      <a href="#faq">Savol-javob</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost" href="../client/login.html">Mijoz kabinet</a>
+      <a class="btn btn-primary" href="#cta">Demo so'rash <span>→</span></a>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow"><span class="dot"></span> v1 reliz · 15-may, 2026</div>
+        <h1 class="hero-h">Buyurtma. Kesim. Maosh. <em>Bir joyda.</em></h1>
+        <p class="hero-sub">
+          Furnitura sehi uchun zamonaviy boshqaruv tizimi. <b>Telefon yo'q. Daftar yo'q. WhatsApp guruhlari yo'q.</b> Mijoz Telegramdan buyurtma qoldiradi, kesuvchi tabletdan oladi, oy oxirida maosh tayyor.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary btn-lg" href="#cta">Sehimni qo'shish <span>→</span></a>
+          <a class="btn btn-outline btn-lg" href="../workshop/login.html">Boshqaruvni ko'rish</a>
+        </div>
+        <div class="hero-trust">
+          <div class="avs"><span>F</span><span>S</span><span>U</span><span>A</span></div>
+          <div><b style="color:var(--ink-12)">5 ta seh</b> bugun shu yerda ishlamoqda</div>
+        </div>
+      </div>
+
+      <div class="hero-vis" aria-hidden="true">
+        <div class="hv-bar">
+          <span class="d"></span><span class="d"></span><span class="d"></span>
+          <span class="u">mebel-pro.uz/workshop</span>
+        </div>
+        <div class="hv-body">
+          <aside class="hv-side">
+            <div class="grp">
+              <div class="lbl">Boshqaruv</div>
+              <div class="it on">Asosiy</div>
+              <div class="it">Buyurtmalar</div>
+              <div class="it">Ishlab chiqarish</div>
+            </div>
+            <div class="grp">
+              <div class="lbl">Resurslar</div>
+              <div class="it">Ombor</div>
+              <div class="it">Filiallar</div>
+            </div>
+            <div class="grp">
+              <div class="lbl">Moliya</div>
+              <div class="it">Maoshlar</div>
+              <div class="it">Hisobotlar</div>
+            </div>
+          </aside>
+          <main class="hv-main">
+            <h3 class="hv-h">Asosiy · Furniture House</h3>
+            <div class="hv-kpis">
+              <div class="hv-kpi"><div class="k">Bugungi savdo</div><div class="v num">12.8M</div><div class="d up">↑ 18% kechagiga</div></div>
+              <div class="hv-kpi"><div class="k">Ishlab chiqarishda</div><div class="v num">34</div><div class="d up">↑ 4</div></div>
+              <div class="hv-kpi"><div class="k">Maosh to'lov</div><div class="v num">6.2M</div><div class="d">31-mayda</div></div>
+            </div>
+            <div class="hv-list">
+              <div class="row">
+                <span class="id">MP·0091</span>
+                <span class="nm">Akmal Norqo'ziyev</span>
+                <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">3.2M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0090</span>
+                <span class="nm">Dilshod Tursunov</span>
+                <span class="pill p-eb"><span class="pd"></span>Krom</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">1.9M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0089</span>
+                <span class="nm">Madina Yo'ldosheva</span>
+                <span class="pill p-rdy"><span class="pd"></span>Tayyor</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">1.0M</span>
+              </div>
+              <div class="row">
+                <span class="id">MP·0088</span>
+                <span class="nm">Sherzod Ahmedov</span>
+                <span class="pill p-del"><span class="pd"></span>Yetkazma</span>
+                <span class="num" style="color:var(--ink-6);font-size:11px">1.7M</span>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="trust">
+  <div class="container trust-row">
+    <div class="lbl">O'zbekistondagi 8 shahar bo'ylab</div>
+    <div class="cities">
+      <span>Toshkent</span> · <span>Samarqand</span> · <span>Buxoro</span> · <span>Andijon</span> · <span>Farg'ona</span> · <span>Namangan</span> · <span>Nukus</span> · <span>Qarshi</span>
+    </div>
+  </div>
+</section>
+
+<section class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat"><div class="n num">5</div><div class="l">Platformadagi faol sehlar</div></div>
+      <div class="stat"><div class="n num">290+</div><div class="l">Bu oydagi buyurtmalar</div></div>
+      <div class="stat"><div class="n num">42</div><div class="l">Kesuvchi, krom yopishtiruvchi, haydovchilar</div></div>
+      <div class="stat"><div class="n num">99.8%</div><div class="l">Tizim ishlashlik · oxirgi 90 kun</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <div class="feat-head">
+      <div class="e">Nima qiladi</div>
+      <h2>Sehni boshqarish — uchta kun emas, uch daqiqa.</h2>
+      <p>Buyurtma kelishi bilan tizim ishga tushadi. Sotuvchi telefon ko'tarmaydi. Kesuvchi vazifani tabletidan oladi. Egasi natijani bir ekrandan ko'radi.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="ic">01</div>
+        <h3>Buyurtmaning o'zi yuradi.</h3>
+        <p>Mijoz Telegram orqali kiradi, kesim chizmasini tuzadi, buyurtma qoldiradi. Sehga avtomatik tushadi. Holatlar o'z-o'zidan o'tadi: tasdiqlandi → kesilmoqda → tayyor → yetkazib berildi.</p>
+        <ul>
+          <li>Telegram OAuth — alohida ilova kerak emas</li>
+          <li>Sakkizta holat, oltita kim-nima qildi tamg'asi</li>
+          <li>Bekor qilish va qaytarish qoidalari ichida</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic">02</div>
+        <h3>Kesuvchining haq-haqiqati.</h3>
+        <p>Har bir kesilgan list, har bir krom yopishtirilgan metr, har bir yetkazib berilgan buyurtma — alohida hisoblanadi. Oy oxirida maosh varaqasi tayyor, egasi tasdiqlaydi.</p>
+        <ul>
+          <li>List, kesim, metr, yetkazma bo'yicha tariflar</li>
+          <li>Tarif tarixi saqlanadi — eski hisob buzilmaydi</li>
+          <li>Maosh egasidan boshqa hech kim o'zgartira olmaydi</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <div class="ic">03</div>
+        <h3>Bitta seh, ko'p filial.</h3>
+        <p>Toshkentdagi filial Yangiyo'ldagi zaxirani ko'radi. Egasi to'rt filialni bir ekrandan boshqaradi. Pastdagi material — darhol ogohlantirish; bo'sh kesuvchi — darhol ko'rinadi.</p>
+        <ul>
+          <li>Filiallar orasida material o'tkazish</li>
+          <li>Filial bo'yicha narx siyosati — alohida</li>
+          <li>Filial vaqtincha yopilgan — mijoz darhol ko'radi</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container" id="roles">
+  <div class="roles">
+    <div class="roles-inner">
+      <h2>Uch tomon — uch ilova, bitta tizim.</h2>
+      <p class="sub">Mijoz, seh xodimi va platforma operatori — har biri o'ziga kerakli oynalarni ko'radi. Hammasi bir ma'lumotlardan ishlaydi.</p>
+      <div class="roles-grid">
+        <a href="../client/login.html" class="role-card">
+          <div class="e">Mijoz</div>
+          <h3>Telegramdan buyurtma</h3>
+          <p>Filialni tanlash · kesim chizmasini tuzish · buyurtma qoldirish · jonli kuzatish.</p>
+          <span class="go">Mijoz kabinetini ochish <span>→</span></span>
+        </a>
+        <a href="../workshop/login.html" class="role-card">
+          <div class="e">Seh xodimi va egasi</div>
+          <h3>Boshqaruv paneli</h3>
+          <p>Buyurtmalar taxtasi · kesim navbati · ombor · maosh · filial sozlamalari.</p>
+          <span class="go">Boshqaruvni ochish <span>→</span></span>
+        </a>
+        <a href="../admin/login.html" class="role-card">
+          <div class="e">Platforma operatori</div>
+          <h3>Superadmin konsol</h3>
+          <p>Sehlarni qo'shish · bloklash · material katalogi · ish jadvali · xatolik monitori.</p>
+          <span class="go">Operator panelni ochish <span>→</span></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="faq-grid">
+      <div>
+        <h2>Tez-tez beriladigan savollar.</h2>
+        <p class="sub">Boshqa savol bormi? <a href="mailto:salom@mebel-pro.uz" style="color:var(--accent);font-weight:600">salom@mebel-pro.uz</a> ga yozing — bir kun ichida javob qaytaramiz.</p>
+      </div>
+      <div class="faq-list">
+        <details open>
+          <summary>Ma'lumotlarim qayerda saqlanadi?</summary>
+          <div class="a">Serverlar O'zbekiston hududida joylashgan. Buyurtma, mijoz va moliyaviy ma'lumotlar O'zbekiston qonunchiligiga muvofiq saqlanadi.</div>
+        </details>
+        <details>
+          <summary>Mijoz alohida ilova yuklab olishi kerakmi?</summary>
+          <div class="a">Yo'q. Mijoz Telegram orqali kiradi — alohida ilova kerak emas. Brauzerda sahifaga kiradi va Telegram tugmasini bosadi.</div>
+        </details>
+        <details>
+          <summary>Kesuvchi nima bilan ishlaydi — telefon yoki tablet?</summary>
+          <div class="a">Tablet tavsiya qilamiz (10″ va undan katta). Kesuvchi tabletidan o'z navbatini ko'radi — ulkan tugmalar, "Ish boshlash" va "Tugatish".</div>
+        </details>
+        <details>
+          <summary>Krom yopishtirish bo'lmasa, holat o'tib ketadimi?</summary>
+          <div class="a">Ha. Agar buyurtmada birorta krom yopishtirish kerak bo'lgan qism bo'lmasa, "Krom yopishtirilmoqda" holati avtomatik o'tkazib yuboriladi — buyurtma to'g'ridan-to'g'ri "Tayyor"ga o'tadi.</div>
+        </details>
+        <details>
+          <summary>Kesuvchining maoshi qanday hisoblanadi?</summary>
+          <div class="a">Egasi har bir xodim uchun tarif tanlaydi: oylik, list bo'yicha, kesim bo'yicha, metr yoki yetkazma bo'yicha (yoki aralash). Tizim har bir tugatilgan ishni avtomatik kreditlaydi. Oy oxirida maosh varaqasi tayyor.</div>
+        </details>
+        <details>
+          <summary>Filialni yopib qo'ysam, mijoz buyurtma bera oladimi?</summary>
+          <div class="a">Yo'q. "Vaqtincha yopiq" qilinsa, mijoz uni ko'radi (sabab bilan) lekin buyurtma bera olmaydi. "Faol emas" qilinsa, umuman ko'rinmaydi. Eski buyurtmalar tugatilguncha davom etadi.</div>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-block" id="cta">
+  <div class="container">
+    <div class="cta-inner">
+      <div>
+        <h2>Sehingizni 14 kun ichida bepul sinab ko'ring.</h2>
+        <p>Kreditkarta talab qilinmaydi. Bir filial, beshta xodim, cheksiz buyurtma — bir oyga bepul.</p>
+      </div>
+      <div>
+        <a class="btn btn-primary btn-lg" href="#" onclick="toast('Demo so\'rovi yuborildi — biz aloqaga chiqamiz')">Sehimni qo'shish <span>→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="ft">
+  <div class="container">
+    <div class="ft-grid">
+      <div>
+        <a class="brand" href="landing.html">
+          <span class="mk">M</span><span class="nm">Mebel Pro</span>
+        </a>
+        <p class="ds">Furnitura sehlari uchun zamonaviy boshqaruv tizimi. Toshkentda, O'zbekiston uchun.</p>
+        <div style="font-family:var(--f-mono);font-size:12px;color:var(--ink-6)">
+          <div>Toshkent, Yashnobod tumani, Tinchlik ko'chasi 14a</div>
+          <div style="margin-top:4px">+998 71 200 30 40 · salom@mebel-pro.uz</div>
+        </div>
+      </div>
+      <div class="col">
+        <h4>Ilovalar</h4>
+        <ul>
+          <li><a href="../client/login.html">Mijoz kabinet</a></li>
+          <li><a href="../workshop/login.html">Seh boshqaruvi</a></li>
+          <li><a href="../admin/login.html">Operator panel</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Yordam</h4>
+        <ul>
+          <li><a href="#faq">Savol-javob</a></li>
+          <li><a href="#">Hujjatlar</a></li>
+          <li><a href="#">Telegram kanal</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Kompaniya</h4>
+        <ul>
+          <li><a href="#">Biz haqimizda</a></li>
+          <li><a href="#">Maxfiylik</a></li>
+          <li><a href="#">Aloqa</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="bottom">
+      <div>© 2026 Mebel Pro · Toshkent</div>
+      <div style="font-family:var(--f-mono);font-size:11px">v1 prototype · 15-may, 2026</div>
+    </div>
+  </div>
+</footer>
+
+<script src="../assets/app.js"></script>
+<script>
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 8);
+  document.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>

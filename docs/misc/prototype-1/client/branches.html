@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sehlar — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .shop-card { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 22px; margin-bottom: 18px; transition: border-color .15s, transform .15s; }
+  .shop-card:hover { border-color: var(--ink-12); }
+  .shop-card .top { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .shop-card .av { width: 54px; height: 54px; border-radius: 10px; background: linear-gradient(135deg, #A6471F, #8C3814); color: #fff; font: 700 22px/1 var(--f-display); display: grid; place-items: center; flex: none; }
+  .shop-card h3 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 2px; }
+  .shop-card .meta { font-size: 13px; color: var(--ink-6); }
+  .branch-grid { display: grid; gap: 10px; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .branch-grid { grid-template-columns: 1fr 1fr; } }
+  .branch-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .branch-card:hover { border-color: var(--ink-12); transform: translateY(-1px); }
+  .branch-card.closed { opacity: .68; }
+  .branch-card.closed:hover { transform: none; }
+  .branch-card .ic { width: 42px; height: 42px; border-radius: 7px; background: var(--accent-tint); color: var(--accent-h); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; font-size: 16px; flex: none; }
+  .branch-card.closed .ic { background: var(--warn-tint); color: var(--warn); }
+  .branch-card .info { flex: 1; min-width: 0; }
+  .branch-card .nm { font: 600 14.5px/1.3 var(--f-ui); color: var(--ink-12); }
+  .branch-card .nm small { display: block; font: 400 12px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .search-input { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 14px; width: 100%; max-width: 380px; margin-bottom: 18px; outline: 0; }
+  .search-input:focus { border-color: var(--ink-12); }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('branches.html');</script>
+
+<div class="hero">
+  <div class="container">
+    <h1>Salom, <em>Akmal aka</em>.</h1>
+    <p>Kesim qiladigan sehni va filialni tanlang. Boshqa hech narsa kerak emas — keyingi qadamda chizma chizasiz.</p>
+  </div>
+</div>
+
+<main class="container" style="padding: 18px 0 64px">
+  <input class="search-input" placeholder="Seh yoki shahar nomi bo'yicha qidirish..." oninput="filterShops(this.value)" />
+
+  <div id="shops-list"></div>
+</main>
+
+<script>
+const shops = [
+  { id: 'fh', name: 'Furniture House', mk: 'FH', desc: '3 filial · Toshkent', branches: SEED.branches },
+  { id: 'tm', name: 'Toshkent Mebel', mk: 'TM', desc: '2 filial · Toshkent',
+    branches: [
+      { id: 'tm-yashnabad', city: 'Toshkent', name: 'Yashnobod', addr: 'Tinchlik 28', status: 'active' },
+      { id: 'tm-mirzo', city: 'Toshkent', name: 'Mirzo Ulug\'bek', addr: 'Beruni 14', status: 'active' }
+    ] },
+  { id: 'mm', name: 'Mebel Markazi', mk: 'MM', desc: '1 filial · Samarqand',
+    branches: [ { id: 'mm-1', city: 'Samarqand', name: 'Markaziy', addr: 'Universitet 7', status: 'active' } ] }
+];
+
+function render() {
+  const list = document.getElementById('shops-list');
+  list.innerHTML = shops.map(s => `
+    <article class="shop-card" data-shop="${s.id}" data-name="${s.name.toLowerCase()}">
+      <div class="top">
+        <div class="av">${s.mk}</div>
+        <div>
+          <h3>${s.name}</h3>
+          <div class="meta">${s.desc}</div>
+        </div>
+      </div>
+      <div class="branch-grid" data-shop="${s.id}">
+        ${s.branches.map(b => {
+          const closed = b.status === 'temporarily_closed';
+          return `
+          <div class="branch-card ${closed ? 'closed' : ''}" data-branch="${b.id}" data-name="${b.name.replace(/"/g, '&quot;')}" ${closed ? `data-closed-reason="${(b.closedReason || 'Filial vaqtincha yopiq').replace(/"/g, '&quot;')}"` : ''}>
+            <div class="ic">${b.name[0]}</div>
+            <div class="info">
+              <div class="nm">${b.city} — ${b.name}<small>${b.addr}</small></div>
+            </div>
+            ${closed
+              ? `<span class="pill p-warn"><span class="pd"></span>Vaqtincha yopiq</span>`
+              : `<span class="btn btn-acc btn-sm">Kesim boshlash →</span>`}
+          </div>`;
+        }).join('')}
+      </div>
+    </article>
+  `).join('');
+}
+
+function filterShops(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.shop-card').forEach(card => {
+    const match = !q || card.dataset.name.includes(q);
+    card.style.display = match ? '' : 'none';
+  });
+}
+
+function pickBranch(shopId, branchId, branchName) {
+  sessionStorage.setItem('mp.branch', branchId);
+  sessionStorage.setItem('mp.shop', shopId);
+  toast(`${branchName} filiali tanlandi`);
+  setTimeout(() => location.href = `cutting.html?branch=${branchId}`, 400);
+}
+
+document.addEventListener('click', e => {
+  const card = e.target.closest('.branch-card');
+  if (!card) return;
+  const reason = card.dataset.closedReason;
+  if (reason) { toast(reason, 'warn'); return; }
+  const shopId = card.parentNode.dataset.shop;
+  const branchId = card.dataset.branch;
+  const branchName = card.dataset.name;
+  pickBranch(shopId, branchId, branchName);
+});
+
+render();
+</script>
+</body>
+</html>

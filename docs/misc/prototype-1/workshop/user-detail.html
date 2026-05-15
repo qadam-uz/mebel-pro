@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Xodim — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <button class="back" type="button" onclick="location.href='users.html'">← Xodimlar</button>
+    <div id="wrap"></div>
+  </div>
+</main>
+
+<div id="scrim" class="scrim"></div>
+<div class="modal" id="m-comp">
+  <div class="modal-h"><h3>Kompensatsiya · egasi-only</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="banner info"><div class="ic">i</div><div class="grow">Tarif o'zgarishi audit logga yoziladi. Eski oylik hisoblar o'zgartirilmaydi.</div></div>
+    <div class="field">
+      <label>Tarif turi</label>
+      <select id="comp-type">
+        <option value="salary">Oylik</option>
+        <option value="per_sheet">List bo'yicha</option>
+        <option value="per_cut">Kesim soni bo'yicha</option>
+        <option value="per_metre_banding">Metr (krom) bo'yicha</option>
+        <option value="per_delivery">Yetkazma bo'yicha</option>
+        <option value="commission">Komissiya (%)</option>
+        <option value="mixed">Aralash</option>
+      </select>
+    </div>
+    <div class="field"><label>Stavka</label><input value="50 000 / list" /></div>
+    <div class="field"><label>Boshlanish sanasi</label><input type="date" value="2026-05-15" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-comp');toast('Tarif saqlandi')">Saqlash</button></div>
+</div>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const id = new URLSearchParams(location.search).get('id') || 'u03';
+const u = SEED.lookup.userById(id);
+const wrap = document.getElementById('wrap');
+
+if (!u) {
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Xodim topilmadi</h3></div>`;
+} else {
+  const branches = SEED.branches;
+  const permsRows = SEED.permissions.map(p => {
+    const cells = branches.map(b => {
+      const checked = u.isOwner || (u.grants?.[p.key]?.includes(b.id));
+      return `<td><input type="checkbox" ${checked ? 'checked' : ''} ${u.isOwner ? 'disabled' : ''} /></td>`;
+    }).join('');
+    return `<tr><td class="permission">${p.label}<br><small style="color:var(--ink-6);font-weight:400;font-size:10.5px;font-family:var(--f-mono)">${p.key}</small></td>${cells}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="page-head" style="margin-top: 8px">
+      <div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font:700 22px/1 var(--f-display);display:grid;place-items:center;flex:none">${u.initials}</div>
+          <div>
+            <h1>${u.name}${u.isOwner ? ' <span class="pill p-cut" style="font-size:11px;margin-left:8px">Egasi</span>' : ''}</h1>
+            <p class="sub">${u.login} · ${u.phone} · ${SEED.lookup.branchById(u.homeBranchId)?.name || ''}</p>
+          </div>
+        </div>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" type="button" onclick="confirmAction({title:'Parolni qaytarish',msg:'Yangi vaqtinchalik parol yaratiladi.',okText:'Qaytarish'},()=>toast('Yangi parol: TempPass2026!'))">Parol qaytarish</button>
+        ${!u.isOwner ? (u.status === 'active' ? `<button class="btn btn-danger btn-sm" type="button" onclick="confirmAction({title:'Xodimni bloklash',msg:'Sessiyalari yopiladi.',okText:'Bloklash',danger:true},()=>toast('Bloklandi'))">Bloklash</button>` : `<button class="btn btn-outline btn-sm" type="button" onclick="toast('Faollashtirildi')">Faollashtirish</button>`) : ''}
+      </div>
+    </div>
+
+    <div class="tabs" data-tabs="us">
+      <button class="tab on" data-target="t-prof" onclick="switchTab('us','t-prof')">Profil</button>
+      <button class="tab" data-target="t-perms" onclick="switchTab('us','t-perms')">Ruxsatlar</button>
+      <button class="tab" data-target="t-comp" onclick="switchTab('us','t-comp')">Kompensatsiya</button>
+      <button class="tab" data-target="t-sess" onclick="switchTab('us','t-sess')">Sessiyalar</button>
+      <button class="tab" data-target="t-audit" onclick="switchTab('us','t-audit')">Audit</button>
+    </div>
+
+    <section id="t-prof" data-panel-group="us">
+      <div class="card"><div class="card-h"><h2>Profil</h2></div>
+        <div class="card-b">
+          <div class="field-row">
+            <div class="field"><label>F.I.O</label><input value="${u.name}" /></div>
+            <div class="field"><label>Telefon</label><input value="${u.phone}" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Login</label><input value="${u.login}" /></div>
+            <div class="field"><label>Asosiy filial</label>
+              <select>${branches.map(b => `<option ${u.homeBranchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Saqlandi')">Saqlash</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-perms" data-panel-group="us" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Ruxsatlar matritsasi</h2>${!u.isOwner ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Ruxsatlar saqlandi — keyingi sorovdan kuchga kiradi')">Saqlash</button>` : ''}</div>
+        <div class="card-b">
+          ${u.isOwner ? `<div class="banner info"><div class="ic">i</div><div class="grow">Egasi avtomatik tarzda barcha filialda barcha ruxsatga ega.</div></div>` : ''}
+          <div style="overflow-x: auto">
+            <table class="matrix">
+              <thead><tr><th class="permission">Ruxsat</th>${branches.map(b => `<th>${b.name}</th>`).join('')}</tr></thead>
+              <tbody>${permsRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-comp" data-panel-group="us" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Joriy tarif</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-comp')">Tahrirlash · egasi-only</button></div>
+        <div class="card-b" style="padding-top: 0">
+          ${u.comp ? `
+            <div class="row-item"><div><div class="nm">Tarif turi</div></div><div class="meta">${u.comp.type}</div></div>
+            <div class="row-item"><div><div class="nm">Stavka</div></div><div class="meta">${u.comp.rate}</div></div>
+            <div class="row-item"><div><div class="nm">Boshlandi</div></div><div class="meta">01-yan 2026</div></div>
+          ` : `<p class="muted" style="font-size:14px;margin:14px 0 0">Tarif belgilanmagan. Egasi tarif qo'shishi kerak.</p>`}
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 14px">
+        <div class="card-h"><h2>Tarif tarixi</h2></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="row-item"><div><div class="nm">${u.comp?.type || '—'} · ${u.comp?.rate || ''}</div><small style="color:var(--ink-6)">01-yan 2026 — bugun (joriy)</small></div><div class="meta"><span class="pill p-ok"><span class="pd"></span>Joriy</span></div></div>
+          ${u.id === 'u03' ? `<div class="row-item"><div><div class="nm">per_sheet · 45 000 / list</div><small style="color:var(--ink-6)">01-aug 2025 — 31-dek 2025</small></div><div class="meta muted">Eski</div></div>` : ''}
+        </div>
+      </div>
+    </section>
+
+    <section id="t-sess" data-panel-group="us" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Faol sessiyalar</h2><button class="btn btn-danger btn-sm" type="button" onclick="confirmAction({title:'Hammasi yopilsin',msg:'Bu xodim hamma qurilmalardan chiqib ketadi.',okText:'Yopish',danger:true},()=>toast('Sessiyalar yopildi'))">Hammasi yopilsin</button></div>
+        <div class="card-b" style="padding-top: 0">
+          <div class="row-item"><div><div class="nm">Tablet · Chrome <span class="pill p-ok" style="font-size:9.5px;margin-left:4px"><span class="pd"></span>Joriy</span></div><small style="color:var(--ink-6)">Toshkent · ${u.lastLogin}</small></div><div class="meta muted">—</div></div>
+          <div class="row-item"><div><div class="nm">Mobil · Safari</div><small style="color:var(--ink-6)">Toshkent · 14-may, 17:50</small></div><div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="this.closest('.row-item').remove();toast('Sessiya yopildi')">Yopish</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="t-audit" data-panel-group="us" hidden>
+      <div class="card">
+        <div class="card-h"><h2>Audit · bu xodim qildigan amallar</h2></div>
+        <div class="card-b" style="padding: 0 22px 18px">
+          <table class="tbl">
+            <thead><tr><th>Vaqt</th><th>Amal</th><th>Obyekt</th></tr></thead>
+            <tbody>${SEED.auditLog.filter(a => a.actor === u.id).map(a => `<tr><td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td><td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td><td>${a.detail}</td></tr>`).join('') || '<tr><td colspan="3" class="muted" style="padding:18px;text-align:center">Hozircha amal yo\'q</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+</script>
+</body>
+</html>

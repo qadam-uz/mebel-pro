@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bildirishnomalar — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .note-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; transition: border-color .12s; }
+  .note-card:hover { border-color: var(--ink-12); }
+  .note-card.unread { background: var(--accent-soft); border-color: var(--accent-tint); }
+  .note-card .ic { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; font: 700 14px var(--f-display); color: #fff; }
+  .note-card .ic.order { background: var(--accent); }
+  .note-card .ic.payment { background: var(--success); }
+  .note-card .ic.delivery { background: var(--olive); }
+  .note-card .ic.cancel { background: var(--danger); }
+  .note-card .nm { font: 600 14px var(--f-ui); color: var(--ink-12); }
+  .note-card .body { font-size: 12.5px; color: var(--ink-8); margin-top: 2px; }
+  .note-card .t { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-6); white-space: nowrap; }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <button class="back" type="button" onclick="history.back()">← Orqaga</button>
+
+  <div class="page-head">
+    <div>
+      <h1>Bildirishnomalar</h1>
+      <p class="sub">Buyurtma o'zgarishlari va sehdan xabarlar.</p>
+    </div>
+    <div class="tools">
+      <button class="btn btn-outline" type="button" onclick="markAllRead()">Hammasini o'qildi deb belgilash</button>
+    </div>
+  </div>
+
+  <div class="filters" style="margin-bottom: 14px">
+    <div class="chips">
+      <button class="chip on" data-filter="all" onclick="setFilter('all')">Hammasi</button>
+      <button class="chip" data-filter="unread" onclick="setFilter('unread')">O'qilmagan</button>
+    </div>
+  </div>
+
+  <div id="notes" style="max-width: 760px"></div>
+</main>
+
+<script>
+const items = [
+  { id: 'n1', kind: 'order', read: false, t: '5 daqiqa', title: 'Kesim boshlandi · MP-2026-05-0091', body: '"Kuhna mebel — 4 shkaf · stol" buyurtmangiz kesilmoqda · Bahodir ako', link: 'order-detail.html?id=MP-2026-05-0091' },
+  { id: 'n2', kind: 'payment', read: false, t: 'bugun · 09:18', title: 'To\'lov tasdiqlandi', body: '50% oldindan · 1 588 500 so\'m · Aziza op. qabul qildi', link: 'order-detail.html?id=MP-2026-05-0091' },
+  { id: 'n3', kind: 'delivery', read: false, t: 'kecha · 14:30', title: 'Yetkazib berildi · MP-2026-05-0072', body: 'Sherzod ako · Yunusobod, Toraqo\'rg\'on 7', link: 'order-detail.html?id=MP-2026-05-0072' },
+  { id: 'n4', kind: 'order', read: true, t: '13-may · 18:42', title: 'Buyurtma tugatildi · MP-2026-05-0072', body: 'To\'liq summa to\'landi — rahmat!', link: 'order-detail.html?id=MP-2026-05-0072' },
+  { id: 'n5', kind: 'cancel', read: true, t: '09-apr · 14:00', title: 'Buyurtma bekor qilindi · MP-2026-04-0856', body: 'Sabab: mijoz boshqa filialni tanladi · pul qaytarish kutilmoqda', link: 'order-detail.html?id=MP-2026-04-0856' },
+];
+let filter = 'all';
+
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === f));
+  render();
+}
+
+function render() {
+  const list = items.filter(n => filter === 'all' || (filter === 'unread' && !n.read));
+  const wrap = document.getElementById('notes');
+  if (list.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Bildirishnomalar yo'q</h3><p>Yangi xabar kelganda shu yerda paydo bo'ladi.</p></div>`;
+    return;
+  }
+  wrap.innerHTML = list.map(n => `
+    <article class="note-card ${n.read ? '' : 'unread'}" onclick="openNote('${n.id}', '${n.link}')">
+      <div class="ic ${n.kind}">${n.kind[0].toUpperCase()}</div>
+      <div>
+        <div class="nm">${n.title}</div>
+        <div class="body">${n.body}</div>
+      </div>
+      <div class="t">${n.t}</div>
+    </article>
+  `).join('');
+}
+
+function openNote(id, link) {
+  const it = items.find(n => n.id === id);
+  if (it) it.read = true;
+  location.href = link;
+}
+
+function markAllRead() { items.forEach(n => n.read = true); toast('Hammasi o\'qildi deb belgilandi'); render(); }
+render();
+</script>
+</body>
+</html>

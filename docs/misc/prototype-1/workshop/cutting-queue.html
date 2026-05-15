@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Kesim navbati — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Kesim navbati</h1>
+        <p class="sub">Tasdiqlangan buyurtmalar · oldindan tayinlanganlari yuqorida.</p>
+      </div>
+    </div>
+
+    <div class="queue-grid">
+      <section class="queue-col">
+        <h2>Navbatda <span class="ct" id="queue-count">0</span></h2>
+        <div id="queue"></div>
+      </section>
+
+      <section class="queue-col">
+        <h2>Mening ishimda <span class="ct" id="active-count">0</span></h2>
+        <div id="active"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const queue = SEED.orders.filter(o => o.state === 'confirmed');
+const active = SEED.orders.filter(o => o.state === 'cutting');
+
+document.getElementById('queue-count').textContent = queue.length;
+document.getElementById('active-count').textContent = active.length;
+
+document.getElementById('queue').innerHTML = queue.length === 0
+  ? `<div class="empty"><div class="ic">∅</div><h3>Navbat bo'sh</h3><p>Hech narsa kutmaydi — yaxshi!</p></div>`
+  : queue.map(o => {
+    const cl = SEED.lookup.clientById(o.clientId);
+    return `<div class="q-card">
+      <div class="top">
+        <div>
+          <div class="id">${o.id}</div>
+          <h4>${o.title}</h4>
+          <div class="meta">${cl?.name || ''} · <b>14 ta qism · 6 list</b></div>
+        </div>
+        ${o.assignedCutter === 'u03' ? '<span class="assigned-tag">Sizga</span>' : ''}
+      </div>
+      <div class="act">
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesim boshlash',msg:'${o.id} buyurtmasini olasiz.'},()=>{toast('Kesim boshlandi · ${o.id}');setTimeout(()=>location.reload(),700)})">▶ Kesimni boshlash</button>
+        <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a>
+      </div>
+    </div>`;
+  }).join('');
+
+document.getElementById('active').innerHTML = active.length === 0
+  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Hozir ish bo'lmasa, navbatdan oling.</p></div>`
+  : active.map(o => {
+    const cl = SEED.lookup.clientById(o.clientId);
+    return `<div class="q-card">
+      <div class="top">
+        <div>
+          <div class="id">${o.id}</div>
+          <h4>${o.title}</h4>
+          <div class="meta">${cl?.name || ''} · <b>Boshlandi</b>: ${o.cutStartedAt || '—'}</div>
+        </div>
+        <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>
+      </div>
+      <div class="bar" style="margin-top:10px"><i style="width:58%"></i></div>
+      <div class="meta" style="margin-top:6px">8 / 14 qism kesildi · 3 / 6 list ishlatildi</div>
+      <div class="act">
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesim tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesim tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesim tugadi</button>
+        <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Chizmani ko'rish</a>
+      </div>
+    </div>`;
+  }).join('');
+</script>
+</body>
+</html>

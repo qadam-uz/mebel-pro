@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Audit log — Mebel Pro · Boshqaruv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+</head>
+<body>
+<main class="page-content">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>Audit log</h1>
+        <p class="sub">Sehda har bir muhim amal yoziladi — kim, qachon, nima qildi.</p>
+      </div>
+      <div class="tools">
+        <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
+      </div>
+    </div>
+
+    <div class="tabs" data-tabs="au">
+      <button class="tab on" data-target="t-actions" onclick="switchTab('au','t-actions')">Amallar</button>
+      <button class="tab" data-target="t-statuses" onclick="switchTab('au','t-statuses')">Buyurtma holatlari</button>
+    </div>
+
+    <div class="filters">
+      <select><option>Hamma modullar</option><option>orders</option><option>inventory</option><option>identity</option><option>finance</option></select>
+      <select><option>Hamma xodimlar</option><option>Hasan ako</option><option>Aziza op.</option><option>Bahodir T.</option></select>
+      <select><option>Oxirgi 24 soat</option><option>Oxirgi 7 kun</option><option>Bu oy</option></select>
+      <div class="input"><input placeholder="Obyekt ID..." /></div>
+    </div>
+
+    <section id="t-actions" data-panel-group="au">
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Vaqt</th><th>Modul</th><th>Amal</th><th>Xodim</th><th>Tafsilot</th></tr></thead>
+          <tbody>${(() => '')()}</tbody>
+        </table>
+        <div id="action-body" style="padding: 0 22px 18px"></div>
+      </div>
+    </section>
+
+    <section id="t-statuses" data-panel-group="au" hidden>
+      <div class="card">
+        <div class="card-b" style="padding: 16px 22px 22px">
+          <ol class="tl">
+            <li class="step done"><span class="when">15-may 09:42</span><b>MP-2026-05-0085</b> · → <b>new</b> (mijoz yaratdi · Madina Y.)</li>
+            <li class="step done"><span class="when">15-may 09:30</span><b>MP-2026-05-0090</b> · cutting → <b>edge_banding</b> (Bahodir T. · 6 list)</li>
+            <li class="step now"><span class="when">15-may 09:18</span><b>MP-2026-05-0091</b> · confirmed → <b>cutting</b> (Bahodir T.)</li>
+            <li class="step done"><span class="when">14-may 17:50</span><b>MP-2026-05-0089</b> · edge_banding → <b>ready</b> (Olim H. · 16.4 m)</li>
+            <li class="step done"><span class="when">14-may 11:20</span><b>MP-2026-05-0091</b> · new → <b>confirmed</b> (to'lov · Aziza R.)</li>
+            <li class="step done"><span class="when">14-may 09:42</span><b>MP-2026-05-0091</b> · → <b>new</b> (mijoz yaratdi · Akmal N.)</li>
+            <li class="step done"><span class="when">13-may 14:30</span><b>MP-2026-05-0072</b> · in_delivery → <b>completed</b> (Sherzod A.)</li>
+            <li class="step bad"><span class="when">09-apr 14:00</span><b>MP-2026-04-0856</b> · confirmed → <b>cancelled</b> (Akmal N. · mijoz boshqa filial)</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/workshop-shell.js"></script>
+<script>
+renderWorkshopShell();
+
+const tbody = document.querySelector('#t-actions table tbody');
+tbody.innerHTML = SEED.auditLog.map(a => {
+  const actor = SEED.lookup.userById(a.actor) || SEED.lookup.clientById(a.actor);
+  return `<tr>
+    <td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td>
+    <td><small style="color:var(--ink-8);font-size:12px">${a.module}</small></td>
+    <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td>
+    <td>${actor?.name || a.actor}</td>
+    <td><small style="color:var(--ink-10);font-size:12.5px">${a.detail}</small></td>
+  </tr>`;
+}).join('');
+</script>
+</body>
+</html>

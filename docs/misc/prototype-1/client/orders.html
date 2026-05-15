@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mening buyurtmalarim — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<style>
+  .ord-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .ord-card:hover { border-color: var(--ink-12); transform: translateY(-1px); }
+  .ord-card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+  .ord-card .id { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-6); letter-spacing: .04em; }
+  .ord-card h3 { font-family: var(--f-display); font-size: 18px; font-weight: 600; margin: 4px 0; letter-spacing: -.01em; }
+  .ord-card .meta { font-size: 13px; color: var(--ink-8); }
+  .ord-card .meta b { color: var(--ink-12); font-weight: 600; }
+  .ord-card .foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
+  .ord-card .total { font-family: var(--f-mono); font-size: 15px; font-weight: 600; }
+  .ord-card .total small { font: 500 11px var(--f-ui); color: var(--ink-6); }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('orders.html');</script>
+
+<main class="container" style="padding: 24px 0 64px">
+  <div class="page-head">
+    <div>
+      <h1>Mening buyurtmalarim</h1>
+      <p class="sub">Faol va tugatilgan buyurtmalaringiz.</p>
+    </div>
+    <div class="tools">
+      <a class="btn btn-acc" href="branches.html">+ Yangi buyurtma</a>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="chips">
+      <button class="chip on" data-filter="all" onclick="setFilter('all')">Hammasi</button>
+      <button class="chip" data-filter="active" onclick="setFilter('active')">Faol</button>
+      <button class="chip" data-filter="completed" onclick="setFilter('completed')">Tugatilgan</button>
+      <button class="chip" data-filter="cancelled" onclick="setFilter('cancelled')">Bekor qilingan</button>
+    </div>
+    <div class="input">
+      <input id="search" placeholder="Buyurtma raqami..." oninput="render()" />
+    </div>
+  </div>
+
+  <div id="orders"></div>
+</main>
+
+<script>
+const ACTIVE = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery'];
+let filter = 'all';
+const clientId = 'c01';
+
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === f));
+  render();
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const orders = SEED.orders.filter(o => o.clientId === clientId).filter(o => {
+    if (filter === 'active' && !ACTIVE.includes(o.state)) return false;
+    if (filter === 'completed' && o.state !== 'completed') return false;
+    if (filter === 'cancelled' && o.state !== 'cancelled') return false;
+    if (q && !o.id.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const wrap = document.getElementById('orders');
+  if (orders.length === 0) {
+    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma yo&#39;q</h3><p>${filter === 'all' ? 'Hali buyurtma bermagansiz — kesimdan boshlang.' : 'Bu filterga mos buyurtma yo&#39;q.'}</p><a class="btn btn-acc" href="branches.html">+ Yangi buyurtma</a></div>`;
+    return;
+  }
+  wrap.innerHTML = orders.map(o => {
+    const br = SEED.lookup.branchById(o.branchId);
+    const action = nextAction(o);
+    return `
+      <article class="ord-card" onclick="location.href='order-detail.html?id=${o.id}'">
+        <div class="top">
+          <div>
+            <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
+            <h3>${o.title}</h3>
+            <div class="meta">${o.placedAt}${o.dueAt ? ` · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olib ketish'} <b>${o.dueAt}</b>` : ''}</div>
+          </div>
+          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
+        </div>
+        <div class="foot">
+          <div class="total">${fmtTiyin(o.totalTiyin)}<small> · ${o.paidTiyin >= o.totalTiyin ? 'to&#39;liq to&#39;langan' : 'qisman'}</small></div>
+          <div>${action}</div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function nextAction(o) {
+  if (o.state === 'pending_payment') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Tolov · sehda qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
+  if (o.state === 'new') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();cancelOrder('${o.id}')">Bekor qilish</span>`;
+  if (['cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-outline btn-sm">Kuzatish</span>`;
+  if (o.state === 'ready') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · sehga keling')">Olishga tayyor</span>`;
+  if (o.state === 'in_delivery') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yolda · +998 90 322-15-44')">Haydovchi</span>`;
+  return '';
+}
+
+function cancelOrder(id) {
+  confirmAction({
+    title: 'Buyurtmani bekor qilish',
+    msg: 'Buyurtma bekor qilinadi. Bu amal qaytarilmaydi.',
+    reasonField: true, reasonLabel: 'Sabab',
+    okText: 'Bekor qilish', danger: true
+  }, () => { toast('Buyurtma bekor qilindi'); render(); });
+}
+
+render();
+</script>
+</body>
+</html>
