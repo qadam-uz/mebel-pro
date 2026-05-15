@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-15
 order: 50
 ---
 
@@ -16,8 +16,9 @@ Lifecycle rules, pricing, the state machine, and the warehouse contract are in
 
 A client's request for panels cut to size at a branch — the header that owns the items,
 payments, status history, cancellation, refunds, and the production stamps that feed
-payroll. Created only by a client, from a confirmed cutting draft. Carries a **snapshot** of
-its pricing and a reference to its confirmed cutting result.
+payroll. Created only by a client, from a cutting draft with a chosen algorithm result.
+Carries a **snapshot** of its pricing and a reference to its confirmed cutting result.
+Material source is **per item** — see [Order item](#order-item).
 
 **Identity & lifecycle**
 
@@ -28,7 +29,6 @@ its pricing and a reference to its confirmed cutting result.
 | `client_id` | UUID | the client who placed it |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
-| `material_source` | enum | `own` / `shop` |
 | `delivery_type` | enum | `pickup` / `delivery` |
 | `delivery_address` | json? | `{ street, city, lat, lng, note }`; required if `delivery` |
 | `delivery_zone_id` | UUID? | the resolved static zone; required if `delivery` |
@@ -78,17 +78,18 @@ changes never reach the order)
 | `delivered_at` | timestamp? | `in_delivery → completed` | |
 | `picked_up_at` | timestamp? | `ready → completed` (pickup) | |
 
-Invariants: created only by a client, only from a `draft` cutting result (which becomes
-`confirmed` and bound); all money fields are integer tiyin; `total_tiyin` follows the formula
-and can't go negative; pricing fields are a snapshot at creation / re-pricing (later catalog
-or pricing changes don't reach the order); status transitions follow the state machine only;
-concurrent transitions serialize by `version`; `cutter_user_id`, `edger_user_id`,
-`driver_user_id` reference workshop users whose `home_branch_id = order.branch_id` and who
-hold the matching `process_production` / `process_delivery` grant; production stamps are
-immutable once set (set in the same atomic transaction as the relevant transition); for
-`shop`, stock is reserved on `→ confirmed`, consumed on `cutting → next`, released on
-`confirmed → cancelled` or `cutting → cancelled`; a `completed` order is terminal; never
-deleted (goes `cancelled`).
+Invariants: created only by a client, from a cutting draft with a `chosen` result (which
+becomes `confirmed` and bound); all money fields are integer tiyin; `total_tiyin` follows
+the formula and can't go negative; pricing fields are a snapshot at creation / re-pricing
+(later catalog or pricing changes don't reach the order); status transitions follow the
+state machine only; concurrent transitions serialize by `version`; `cutter_user_id`,
+`edger_user_id`, `driver_user_id` reference workshop users whose `home_branch_id =
+order.branch_id` and who hold the matching `process_production` / `process_delivery` grant;
+production stamps are immutable once set (set in the same atomic transaction as the
+relevant transition); stock actions apply per `shop`-source item — reserved on
+`→ confirmed`, consumed on `cutting → next`, released on `confirmed → cancelled` or
+`cutting → cancelled`; an order with no `shop` items touches stock not at all; a
+`completed` order is terminal; never deleted (goes `cancelled`).
 
 ## Order item
 
@@ -101,14 +102,15 @@ prices used. Items mirror the parts the client entered into the cutting wizard f
 | `id` | UUID | PK |
 | `order_id` | UUID | required |
 | `material_id` | UUID | logical reference (the snapshot is authoritative for the order) |
+| `material_source` | enum | `shop` / `own` — per-item; an order can mix sources |
 | `material_snapshot` | json | `{ name, type, thickness_mm, color, decor_code, sheet_length_mm, sheet_width_mm, price_tiyin }` as of order creation |
-| `part_ref` | text | the part's id (matches the cutting result's `parts_snapshot` / placements) |
+| `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material/cutting bounds |
 | `quantity` | int | ≥ 1 |
 | `grain_direction` | enum | `any` / `required` |
 | `edge_top_mm` / `edge_bottom_mm` / `edge_left_mm` / `edge_right_mm` | numeric? | edge-banding thickness per side, or null |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
-| `unit_material_price_tiyin` | bigint | snapshot; 0 unless `shop`; ≥ 0 |
+| `unit_material_price_tiyin` | bigint | snapshot; 0 when `material_source = own`; ≥ 0 |
 | `edge_cost_tiyin` | bigint | snapshot for this line; ≥ 0 |
 | `line_total_tiyin` | bigint | `(unit_cutting + unit_material) × quantity + edge_cost`; ≥ 0 |
 

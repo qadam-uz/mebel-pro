@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-15
 order: 30
 ---
 
@@ -23,16 +23,20 @@ no in-app gateway: v1 *tracks* money, it doesn't *move* it.
 ## What an order is
 
 A **client's request for panels cut to size at a branch** — the header that owns the items,
-payments, status history, cancellation, and refunds. Created **only by a client**, **only
-from a confirmed cutting draft** (no order without one — the draft becomes `confirmed` and is
-bound on creation). It carries a snapshot of its pricing and a reference to its current
-cutting result.
+payments, status history, cancellation, and refunds. Created **only by a client**, from a
+cutting **draft** with a **chosen algorithm result** (no order without one — the draft
+becomes `confirmed` and is bound on creation; see [`cutting.md`](cutting.md)). It carries a
+snapshot of its pricing and a reference to its current cutting result.
 
-Two axes are set at creation:
+Set at creation:
 
-- **Material source** — `own` (the client brings the material; cutting service only, no
-  stock movement) or `shop` (the workshop supplies the material; stock is reserved /
-  consumed / released as the order moves).
+- **Branch** — the client picks one of the active branches that can fulfil the cutting's
+  material set; branches that don't carry every `shop`-source material in the cutting aren't
+  shown. The pick freezes pricing against that branch's rates.
+- **Material source — per item.** Each part has its own source: `shop` (the workshop
+  supplies the material; stock is reserved / consumed / released for that part as the order
+  moves) or `own` (the client brings the material; cutting service only for that part, no
+  stock movement). An order can mix sources; a fully-`own` order touches no stock.
 - **Delivery type** — `pickup` (free) or `delivery` (a **fixed fee** from a static zone
   resolved from `(branch, lat, lng)` — workshop-entered, no geocoder in v1; out-of-zone ⇒
   the client must switch to pickup or another branch).
@@ -123,7 +127,10 @@ what gets credited.
 
 ### Stock action map
 
-| Transition | Stock action (`shop` orders only) |
+Each action applies to **items with `source = shop`** only — `own` items don't touch stock at
+any transition. An order with no `shop` items skips the table entirely.
+
+| Transition | Stock action (per `shop` item) |
 |---|---|
 | `→ confirmed` | **reserve** |
 | `cutting → edge_banding` or `cutting → ready` | **consume** (cutting completed) |
@@ -158,7 +165,7 @@ only human input**, and it requires a reason.
 | Component | When | Source |
 |---|---|---|
 | Cutting service | always | the branch's cutting model — `per_sheet` (× sheets used) or `per_cut` (× cut count) — applied to the cutting result's metrics |
-| Materials | `shop` source only | Σ (the material's snapshot price per sheet × sheets attributable to it), from the cutting result |
+| Materials | items with `source = shop` | per material, Σ (the material's snapshot price per sheet × sheets attributable to that material's shop-source parts), from the cutting result |
 | Edge banding | parts with banding | Σ (edge length at thickness × the branch's edge-banding rate for that thickness), from the cutting result's `edge_length_by_thickness` |
 | Delivery fee | `delivery` only | the static zone fee resolved from `(branch, lat, lng)` |
 | Discount | when staff add one | percent or fixed sum; subtracted; **reason + the staff user id recorded** (audited); no enforced cap in v1 — the reason + audit + a "has discount" flag are the control |
@@ -259,31 +266,68 @@ touches stock. See [`catalog-inventory.md`](catalog-inventory.md) for the invent
 
 ## UX — client app
 
-- **Branch picker** (`/c/branches`, also the client home) — hero copy, search, grid of branch
-  cards (name, address, today's hours, status badge; `active` → "Start cutting" CTA;
-  `temporarily_closed` → reason + disabled CTA). Empty: "No active branch found."
-- **Cutting wizard** — see [`cutting.md`](cutting.md).
-- **Order create wizard** (`/c/orders/new?cutting=:id`) — pre-checks the draft is still
-  `draft` (else redirect to its detail with a toast); a 3-step stepper with a sticky summary
-  card (subtotals: cutting, material, edge banding, delivery, discount = 0; total in UZS):
-  1. **Confirm parts** — read-only parts list + the cutting summary + PDF link; "need to
-     change parts? go back to cutting" link.
-  2. **Delivery** — toggle "pick up at the branch" / "delivery"; pickup shows the branch
-     address + hours; delivery shows address fields (street, city, lat / lng numeric, note)
-     and, on change, probes the delivery fee against `(branch, lat, lng)` → shows the fee, or
-     "this address isn't in any delivery zone — choose pickup or another branch."
-  3. **Payment** — radio: "pay in full" (`full`) / "advance + balance" (`advance`, shows the
-     advance % from the workshop settings + the computed advance and balance); a `bnpl` chip
-     shown **disabled** with a "coming soon" pill. Confirm → places the order.
-  - On success → `/c/orders/:id` with a banner: "Order placed — it'll be confirmed once the
-    workshop records your payment" (and, for `advance`, the advance amount to pay).
-  - On `cutting_result_not_usable` (race) → toast + back to the cutting wizard;
-    `delivery_out_of_zone` / `branch_closed` / `workshop_blocked` → step 2 with an inline
-    error.
+The client app's home is the cutting wizard entry (**New cutting** + **My drafts** + **My
+orders**). The branch picker is no longer the home — branch is chosen later, at order
+placement, against a specific cutting.
+
+- **Cutting wizard** — see [`cutting.md`](cutting.md). Entry point and where the client
+  spends most of their time.
+- **Order create wizard** (`/c/orders/new/:draftId`) — opens from the cutting result's
+  **Place order with this cutting** button. Pre-checks the draft is still `draft` and has a
+  chosen algorithm result (else redirect to its detail with a toast). Two screens with a
+  sticky summary card on each (parts count, sheets per material, waste %, total once the
+  branch is picked):
+
+  1. **Branch pick.** A list of active branches that can fulfil the cutting's material set
+     (every `shop`-source material in the cutting is carried by the branch; a fully-`own`
+     cutting accepts any active branch with a saw). Each branch card shows: name, address,
+     today's hours, distance area chip, and a **price breakdown** computed at the branch's
+     rates — Cutting service, Materials (one line per material; only the shop-source share),
+     KROM by thickness, **subtotal** (no delivery yet). Tapping a card commits the branch and
+     advances to the checkout screen; price freezes against that branch on placement.
+
+     Empty / error:
+     - **No branch carries this material set** → an inline panel listing the offending
+       materials with a "Go back and flip these to *I'll bring it*" link.
+     - **Branch went `temporarily_closed` between cutting and order** → that card is greyed
+       with the reason.
+     - **Branch pricing incomplete** (no cutting model set, or missing edge-banding rate the
+       cutting uses) → the card is greyed with "This branch can't take orders right now"; the
+       owner's job to fix.
+
+  2. **Checkout** — a single scrollable page with four sections:
+
+     - **Handover** — toggle `Pick up at the branch` (free; shows branch address + hours) ↔
+       `Delivery`. Delivery reveals address fields (street, city, lat / lng numeric, note)
+       and, on change, probes the fixed-fee zone for `(branch, lat, lng)` → shows the fee,
+       or `delivery_out_of_zone` with "switch to pickup or pick another branch" (link back
+       to step 1).
+     - **Contact** — phone and name fields, prefilled from the client's Telegram profile and
+       editable inline. Above the fields, a non-dismissible notice:
+       *"This is shared with the workshop so they can call you about your order."*
+       Reset-to-profile link next to each field.
+     - **Payment plan** — radio: `Pay in full` (default; the order's total) ↔
+       `Advance + balance` (shows the advance % from the workshop's settings and the
+       computed advance / balance amounts). A `bnpl` chip displayed **disabled** with a
+       "Coming soon" pill (no v1 wiring).
+     - **Review** — the final breakdown (cutting, materials per material, KROM, delivery,
+       total) + the chosen handover + contact + payment plan. A primary **Place order**
+       button at the bottom; an Edit link beside each section returns to the relevant field.
+
+  On success → `/c/orders/:id` with a banner: *"Order placed — the workshop will confirm
+  once they record your payment"* (and, for `advance`, the advance amount to pay).
+
+  Error mapping:
+  - `cutting_result_not_usable` (race) → toast + back to the cutting workspace.
+  - `branch_closed` / `workshop_blocked` → step 1 with an inline error on the affected card.
+  - `delivery_out_of_zone` → checkout, Handover section, inline error.
+  - `branch_pricing_incomplete` → step 1, card greyed with explanation.
+
 - **My orders** (`/c/orders`) — filter chips (All / Active / Completed / Cancelled), search
   by order number, cards (order #, branch, date, status badge, total, primary action —
   "Pay info" if awaiting payment, "Track" otherwise), pagination. Empty: "No orders yet —
   start from a cutting."
+
 - **Order detail** (`/c/orders/:id`) — header (order number, branch, status badge, times,
   total) with status-appropriate actions ("Modify" / "Cancel" only in
   `new` / `pending_payment`; otherwise "Track" expands the timeline). **Client-facing status
@@ -293,12 +337,17 @@ touches stock. See [`catalog-inventory.md`](catalog-inventory.md) for the invent
   snapshots, pricing breakdown, delivery info, notes), Cutting (the SVG + PDF link; a note
   if the bound result is `invalidated`), Payments (the list), Refunds (only if any),
   Timeline.
+
 - **Modify wizard** (`/c/orders/:id/modify`) — reuses the order create wizard with the
-  order's current values pre-filled; if the client edits parts, step 1 routes back into the
-  cutting wizard (parts prefilled) → a new draft is produced; before submit, the
+  order's current values pre-filled; if the client edits parts, it routes back into the
+  cutting workspace (parts prefilled) → a new draft is produced; before submit, the
   modify-preview runs and a **confirmation modal** shows: "Price changed: was {X} → now {Y}.
-  {You'll need to pay {diff} / We'll refund {diff} / No change.} Continue?" Confirm → applies
-  the modify.
+  {You'll need to pay {diff} / We'll refund {diff} / No change.} Continue?" Confirm →
+  applies the modify.
+
+- **Branches page** (`/c/branches`) — kept as a passive directory: a list of active
+  branches with name, address, today's hours, materials carried. **Not** the start of the
+  flow; reachable from the footer / profile. No CTAs on individual branches.
 
 ## UX — workshop app
 

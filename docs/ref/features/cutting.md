@@ -2,144 +2,265 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-15
 order: 80
 ---
 
 # Cutting optimization
 
-The 2D guillotine cutting-stock solver: in, a list of parts; out, a sheet-layout scheme, a
-waste %, and the metrics the order needs for pricing. Cutting is its own module — no pricing,
-payment, or stock logic in it; it does geometry and exposes results. The order integration is
-in [`orders.md`](orders.md).
+The 2D guillotine cutting-stock solver: in, a list of parts where each part picks its own
+material; out, a per-material sheet-layout scheme, a weighted waste %, and the structural
+metrics the order needs for pricing. Cutting is its own module — no pricing, no payment, no
+stock logic — and exposes results to the order flow in [`orders.md`](orders.md).
 
-## Who does what
+## Problem
 
-- **Client** — the only caller of the optimization.
-- **Workshop staff** — view the confirmed result + PDF. The cutter sees it on their tablet
-  in the cutter workspace (`process_production` on the branch); the office sees it on the
-  order detail page. None can edit or re-run.
-- **System** — runs the algorithm within budget, snapshots the result, manages lifecycle,
-  cleans up stale drafts.
+Customers describe parts over the phone; the workshop optimises by hand or with a desktop
+tool. The customer can't see the layout, the waste, or the price until the shop tells them.
+And a real job — a wardrobe, a kitchen — uses several materials at once: DSP shelves, MDF
+backs, plywood drawer bottoms, plus a leftover sheet the customer brings from a previous job.
+A single-material flow rejects half the work; forcing one cutting per material rejects the
+other half (the user has to reconcile sheets and prices across runs).
 
-## Rules
+## Domain rules
 
-- **Guillotine cuts only.** A cut runs straight through a rectangle edge-to-edge; the
-  algorithm recursively splits the sheet into smaller rectangles. Non-guillotine, L-shaped,
-  and CNC-router paths are out of scope.
-- **Algorithm (v1).** First-Fit-Decreasing + recursive guillotine splitting, pure Python,
-  in-process. Parts are sorted by area descending; each goes in the smallest fitting free
-  rectangle; the leftover is split by a guillotine cut. **The algorithm version is stamped on
-  the result** — replacing the algorithm later doesn't touch past results.
-- **Non-deterministic results are allowed.** The same input may yield a slightly different
-  layout on re-run; each run is its own immutable cutting result.
-- **Single best result, optimised for waste %.** No alternatives in v1. Unhappy → change parts
-  → run again (a new draft).
-- **Grain.** Two modes: `any` (the algorithm may rotate the part 90°) and `required` (the
-  part's length must run parallel to the sheet's grain direction = its long side; no
-  rotation). A `required` part that can't fit in its forced orientation → `impossible_grain`.
-- **Sheet handling.** One material → one standard sheet size (from the platform catalog), for
-  both `own` and `shop` sources. `own` means the client brings the material, but the type /
-  thickness is still chosen from the catalog (for pricing and edge data); custom sheet sizes
-  are future.
-- **Global constants.** Kerf 4 mm; edge trim 10 mm per side (usable area = sheet − 2× edge
+### What's in a cutting
+
+A **cutting draft** is the working surface a client edits and re-optimises until they place an
+order. It's private to the client and persists indefinitely (no expiry; cap at 50 open
+drafts).
+
+A draft owns:
+
+- **Parts.** Each part picks its own material from the platform catalog, its own source
+  (`shop` / `own`), dimensions (length × width × quantity), grain (`any` / `required`), and
+  per-side edge banding (top, bottom, left, right — each `0.4` / `2.0` mm or none).
+- **Algorithm results.** Re-running the optimiser produces one result per available
+  algorithm in a single call (all run in parallel against the same input). All N results are
+  kept on the draft until the next run replaces them. The client picks one as the **chosen**
+  result; the chosen one is what binds to an order.
+
+Each algorithm result records: `algorithm_name`, `algorithm_version`, per-material sheets and
+their placements, weighted `waste_percentage`, `sheets_used_by_material`,
+`total_cut_length_mm`, `total_edge_length_mm`, `edge_length_by_thickness`.
+
+### Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : client opens "New cutting"
+    draft --> draft : edit parts · run optimiser · pick algorithm
+    draft --> confirmed : client places an order with the chosen result
+    confirmed --> invalidated : order modify re-runs the optimiser (a new result is bound; this one is kept for audit)
+    confirmed --> [*]
+    invalidated --> [*]
+```
+
+- `draft` is mutable. `confirmed` and `invalidated` are immutable and kept forever — they're
+  the historical record an order points at.
+- Re-running the optimiser on a `draft` replaces all algorithm results in-place. No
+  intermediate-run history (the *purpose* of a draft is iteration; keeping every run bloats
+  storage without earning any audit value before binding).
+- On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
+  the draft flips to `confirmed`. Other algorithm results from the same run are discarded at
+  this point.
+
+### Parts and materials
+
+- A part's material is a reference to the **platform catalog** (the shared list curated by
+  the platform operator). All catalog materials are pickable in the editor regardless of
+  branch availability; the branch indicator (below) flags where this composition can be
+  fulfilled.
+- A part's `source = shop` means the workshop supplies the sheets; `source = own` means the
+  client brings the material, and only the cutting service is purchased. Different parts can
+  have different sources — including parts of the same material (some from shop, some
+  brought).
+- An `own` part still picks a catalog material — the entry supplies sheet dimensions,
+  thickness, kerf-relevant data, and edge-banding compatibility. Non-catalog materials are
+  out of scope for v1.
+
+### The optimiser
+
+- **One run, multiple materials, multiple algorithms.** A run takes all parts, groups them by
+  material, and produces an independent layout per material (sheets aren't shared across
+  materials — different thicknesses, colours). Every available algorithm runs concurrently
+  against the same input; all results are returned.
+- **Winner = lowest weighted waste %.** Pre-selected as the chosen result; the client may
+  switch to a different algorithm's result if the trade favours fewer sheets or different
+  cut topology.
+- **Guillotine cuts only.** A cut runs edge-to-edge; the algorithm recursively splits the
+  sheet into smaller rectangles. Non-guillotine, L-shaped, and CNC paths are out of scope.
+- **Grain.** Two modes per part. `any` — the algorithm may rotate 90°. `required` — the
+  part's length must run along the sheet's grain (its long side); no rotation. A `required`
+  part that can't fit in its forced orientation fails the run with `impossible_grain`.
+- **One catalog material → one standard sheet size.** Custom sheet sizes are future.
+- **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = sheet − 2× edge
   trim).
-- **Edge-banding length is computed here.** For each part edge with a banding thickness set,
-  the edge length is the part's length (top / bottom) or width (left / right); totals are
-  grouped by thickness (`edge_length_by_thickness`). The order's pricing reads this.
-- **No stock check at cutting time.** Cutting says only "N sheets needed"; the real
-  availability check is `reserve` at order confirmation ([`orders.md`](orders.md) →
-  *Warehouse contract*).
-- **Limits.**
+- **Edge-banding length is computed here.** For each part edge with a banding thickness, the
+  edge length is the part's length (top/bottom) or width (left/right). Totals roll up by
+  thickness across all materials (`edge_length_by_thickness`). The order's pricing reads
+  this.
+- **No stock check at cutting time.** The optimiser says only "N sheets needed of material
+  X." Real availability is checked by `reserve` at order confirmation
+  (see [`orders.md`](orders.md)).
+- **No pricing computed here.** Pricing depends on the branch — branches set their own
+  cutting models, material prices, and edge-banding rates. The optimiser yields structural
+  metrics only; price first appears at the order step.
 
-  | Constraint | Value |
-  |---|---|
-  | Part minimum | 50 mm × 50 mm |
-  | Part maximum | sheet − 2× edge trim |
-  | Parts per optimization | ≤ 100 (more → rejected, not queued, in v1) |
-  | Sheets per result | ≤ 20 (bigger jobs must be split) |
-  | Open drafts per client | ≤ 50 (anti-abuse; cleanup prunes) |
-  | Hard timeout | 5 s → `optimization_timeout` |
+### Limits
 
-- **Lifecycle.** `draft` on optimization (not bound to an order; `order_id = NULL`) →
-  `confirmed` when an order is created from it (`order_id` set, `confirmed_at`) →
-  `invalidated` when the order is modified in a way that requires a fresh result (the new
-  result is bound; the old one is kept for audit). Confirmed and invalidated results are kept
-  forever; **drafts older than 7 days are deleted** (with their sheets and placements) by a
-  daily job — see [`platform.md`](platform.md).
-- **Access.** A client sees only their own drafts and confirmed results; workshop staff and
-  the owner see confirmed results for orders in their scope; the PDF download is gated the
-  same way. Every optimization run is audited.
+| Constraint | Value |
+|---|---|
+| Part minimum | 50 mm × 50 mm |
+| Part maximum | sheet − 2× edge trim (for the part's chosen material) |
+| Parts per optimisation | ≤ 100 (across all materials) |
+| Sheets per material per result | ≤ 20 (a single material above this must be split into separate orders) |
+| Open drafts per client | ≤ 50 (anti-abuse; client deletes to add more) |
+| Hard timeout per run | 5 s → `optimization_timeout` |
 
-## Operations
+### Access
 
-- **Optimise** (client) — submits a branch, a material, the material source (`shop` / `own`),
-  and a list of parts. The system validates against the limits above, runs the algorithm
-  within budget, and returns a `draft` result with `algorithm_version`, sheet size,
-  `waste_percentage`, `sheets_used`, `total_cut_length_mm`, `total_edge_length_mm`,
-  `edge_length_by_thickness`, and per-sheet layouts (placements with `part_ref`, position,
-  dimensions, rotation, plus per-sheet waste area).
-- **Fetch a result** — anyone whose scope covers it can read the result JSON or download the
-  generated cutting-map PDF.
-- **Manage drafts** (client) — list one's drafts from the last 7 days; delete a `draft` one
-  still owns.
-- **Confirm / invalidate** — internal operations called from the order flow when an order
-  binds a draft or modifies its parts.
+A client sees only their own drafts and confirmed results. Workshop staff and the owner see
+confirmed results bound to orders in their scope; the PDF download is gated the same way.
+Every optimisation run is audited.
 
-The PDF is rendered server-side, in-process, on demand — no async job.
+## User stories
+
+- As a client, I want all my parts in one cutting even when they need different materials, so
+  I don't run multiple cuttings and reconcile sheets / prices afterwards.
+- As a client, I want to mark some parts as "I'll bring this material myself," so I can use a
+  leftover I already have.
+- As a client, I want to compare algorithm results before committing, so I can pick "fewer
+  sheets" over "lowest waste" when I care more about cost than offcuts.
+- As a client, I want to see — while I'm still editing — which branches could fulfil this
+  list, so I'm not surprised at the order step.
+- As a client, I want the draft saved automatically, so I don't lose it if I close the
+  browser.
+- As a workshop user (cutter), I want the confirmed layout and PDF on my tablet at the saw,
+  so I can cut without translation.
 
 ## UX — the cutting wizard (client app)
 
-A 3-step stepper at `/c/cutting/new`, mobile-first:
+A single workspace at `/c/cutting/:id` (no stepper — one editing surface above, one results
+panel below). Entry is the client app's home **New cutting** button, which creates an empty
+draft and routes here. A secondary **My drafts** entry lists unbound drafts.
 
-1. **Material** — a branch-context chip (with "change" → branch picker); a material-source
-   toggle ("from the shop" / "my own material"); a searchable grid of the branch's `active`
-   materials (price shown only for `shop`); single-select. Empty: "this branch has no
-   materials yet — pick another."
-2. **Parts** — a two-pane layout (single column on mobile). Left: a parts editor (table of
-   rows — №, length mm, width mm, quantity, grain `any` / `required`, edge per side
-   `0.4` / `2.0` / none; add / remove / duplicate row; min 1 row; a hidden `part_ref` UUID per
-   row); a bulk-paste textarea accepting `LxWxQty` per line. Right: a live summary — parts
-   count, total area, the material's sheet size, a kerf / edge-trim note. Inline validation
-   against the bounds. A "Run optimization" CTA (disabled while running; respects the 5 s
-   timeout; on error highlights the offending part(s) and maps the error code).
-3. **Result** — a big interactive SVG of the sheet layouts with sheet tabs (Sheet 1, 2, …);
-   pan / zoom; hovering a placement highlights the originating part in a side legend
-   (№, dimensions, quantity index). A metric strip: waste %, sheets used, total cut length
-   (m), edge banding by thickness. Actions: **Download PDF** · **Edit parts** (→ step 2,
-   creating a new draft on the next run) · **Order with this cutting** (→ order create wizard,
-   in [`orders.md`](orders.md)). A subtle footer note: "drafts are kept 7 days."
+### Parts editor (top)
 
-Other surfaces:
+A mode switch at the top: **Manual entry** (default) · **Upload file** (`.bas` / `.xlsx`;
+disabled in v1 with a "Coming soon" pill).
 
-- **My drafts** (`/c/cutting/drafts`) — table / cards: branch, material, parts count,
-  waste %, sheets, created (relative), `draft` chip; row actions Open / Delete (confirm).
-  Empty: "No saved cuttings — start a new one."
-- **Draft / result view** (`/c/cutting/:id`) — the step-3 view, read-only, with an "Order with
-  this cutting" CTA (or a note if it's already `confirmed` / `invalidated`).
-- **Workshop app**: an order's **Cutting** tab embeds the SVG of the order's confirmed
-  result + a PDF link (and, if `invalidated`, shows it with a flag).
+The parts table:
 
-States: every step has loading / empty / error; the optimize call has a running state and a
-timeout / error path (no infinite spinner); the SVG remains scrollable / zoomable on a small
-phone. Accessibility: the SVG layout has a text-equivalent legend (the per-sheet placement
-list); hover-to-highlight has a keyboard / tap equivalent; the parts table is fully
-keyboard-editable with labelled cells; errors are announced and the offending row gets focus.
+| Column | Behaviour |
+| --- | --- |
+| **#** | row number |
+| **Material** | searchable dropdown of the platform catalog (by name / thickness / colour); shows the picked material's short label (e.g. `DSP 18mm Bel`) with an inline source chip: `From shop` ↔ `I'll bring it` |
+| **L mm** | numeric; validated against the part-min / part-max bounds of the chosen material |
+| **W mm** | same |
+| **Qty** | integer ≥ 1 |
+| **Edges** | compact `T·B·L·R` chip strip showing each side's banding (`–` / `0.4` / `2.0`); tap → popover |
+| **Grain** | toggle `any` / `required` |
+| **⋯** | duplicate row · delete row |
+
+**Edges popover** — quick presets `None` · `All 0.4` · `All 2.0` snap all four sides; below
+that, four per-side dropdowns (Top / Bottom / Left / Right) for the rare per-side case; an
+**Apply to all parts** checkbox at the bottom propagates to every existing row. A
+header-level **Default edge** picker on the table itself sets the starting edge for any new
+row added (doesn't retroactively touch existing rows).
+
+Per-row inline validation; a single roll-up message below the table when something blocks the
+optimiser.
+
+### Branches indicator (sticky, bottom of the editor)
+
+A thin strip that names which active branches can fulfil this composition:
+
+- **N branches available** → "3 branches carry these materials — Toshkent · Chilonzor ·
+  Yunusobod." Clickable to expand; informational only.
+- **Zero branches** → "No active branch carries `MDF 16mm Belyj` — flip that part to *I'll
+  bring it*, or pick another material." The optimiser can still run; the order step is what
+  enforces.
+- **All-`own` composition** → "Any active branch with a saw." No constraint until the order
+  step.
+
+### Run and the result panel
+
+A primary **Optimise** button below the editor. Disabled while running (5 s cap), then
+disabled until any row changes (so re-tapping doesn't re-run a stale layout).
+
+On success, the panel scrolls into view with three regions:
+
+1. **Headline metrics.**
+   - Weighted **waste %** (across all materials).
+   - **Sheets used** total and per-material breakdown.
+   - **KROM (edge banding)** total length plus breakdown by thickness (`0.4: 8.4 m · 2.0:
+     3.2 m`).
+   - **Cut length total** (m), informational.
+   - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
+   - The chosen **algorithm** name plus a **Compare algorithms** link → expander with one row
+     per algorithm (name, waste %, sheets, cut length) and a **Use this one** button per row
+     to swap the visualisation.
+
+2. **Sheet layout visualiser.**
+   - A material tab strip (`DSP 18mm Bel · 3 sheets` · `MDF 16mm · 1 sheet`). Within a
+     material, sheet tabs (`Sheet 1 / 2 / 3`).
+   - The active sheet renders as an interactive SVG (pan / zoom on mobile). Hovering a
+     placement highlights it in the side legend (part #, dimensions, quantity index, rotation
+     indicator).
+
+3. **Actions.**
+   - **Place order with this cutting** → routes into the order wizard
+     (see [`orders.md`](orders.md)).
+   - **Download PDF** — the print-ready cutting map for the saw operator (one page per
+     sheet, header with material + sheet index + waste, footer with the algorithm stamp).
+   - **Edit parts** scrolls back to the editor; any row change marks the result stale; the
+     next **Optimise** replaces it.
+
+Pricing is **not** shown on this screen — totals depend on the branch and surface at the
+order step.
+
+### My drafts (`/c/cutting/drafts`)
+
+A list of unbound drafts. Each row: a short label (`14 parts · 6 sheets`), the dominant
+material, last-edited time (relative), a Delete action. Empty: "No saved cuttings — start a
+new one." No expiry chip — drafts persist until the client deletes them or hits the cap.
+
+### Read-only view (`/c/cutting/:id` when `confirmed` / `invalidated`)
+
+Same workspace, editing disabled, with a banner naming the bound order. An **invalidated**
+result also says "a newer cutting result is bound to this order" with a link to it.
+
+### Workshop side
+
+An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link. If
+the result is `invalidated` (a modify produced a fresher one), the tab flags it and links to
+the current result.
 
 ## Edge cases
 
-- **`material_not_found`** — bad or foreign material id → 404.
-- **`part_too_large` / `part_too_small`** — outside the size bounds → 400; the wizard names
-  the offending part and the max size.
-- **`impossible_grain`** — a `required` part can't fit in its forced orientation → 400.
-- **`too_many_parts` / `too_many_sheets_needed`** — over the caps → 400; split the job.
-- **`optimization_timeout`** — no solution within 5 s → 504; retry or simplify.
-- **`branch_not_accessible`** — branch inactive or another workshop's → 403.
+- **`material_not_found`** — a part references a catalog id that's missing or removed → the
+  editor flags the row; the optimiser refuses to run.
+- **`part_too_large` / `part_too_small`** — outside the bounds for the chosen material → the
+  wizard names the offending part and the max size.
+- **`impossible_grain`** — a `required` part can't fit rotated-locked → the row is flagged.
+- **`too_many_parts` / `too_many_sheets_needed`** — over the caps → reject; split the job.
+- **`optimization_timeout`** — no result within 5 s → retry or simplify.
 - **`draft_limit_exceeded`** — > 50 open drafts → delete some first.
-- **Algorithm replaced later** — old results, PDFs, and the prices computed from them stay
-  exactly as they were (stamped algorithm version + immutable rows).
+- **All-`own` cutting** — no `shop` materials at all; the branches indicator shows "Any
+  active branch with a saw"; the order step still requires a branch pick.
+- **Catalog change while a draft sits** — if a material a part references is later removed
+  from the catalog, the draft is flagged on next open with that row highlighted; the client
+  picks a replacement before re-running.
+- **`cutting_result_not_usable`** — the order step finds the draft is already `confirmed` or
+  `invalidated` (concurrent placement, or back-navigation after placing) → redirect to its
+  detail.
+- **Algorithm replaced later** — old `confirmed` / `invalidated` results stay exactly as they
+  were, stamped with the old algorithm version; their PDFs are not regenerated.
 
 ## Next
 
-[`orders.md`](orders.md) — how a confirmed result is consumed, when it's invalidated, which
-cutting metrics drive which price component.
+- [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order, when it's
+  invalidated, which cutting metrics drive which price component.
+- [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog the wizard reads
+  from.

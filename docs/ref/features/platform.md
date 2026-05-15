@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-15
 order: 70
 ---
 
@@ -19,7 +19,6 @@ jobs:
 
 | Job | When | What |
 |---|---|---|
-| `expire-stale-draft-cuttings` | daily | delete `draft` cutting results > 7 days old (with their sheets / placements) |
 | `notify-pay-later-overdue` | daily | for each pay-later order past its handover deadline, notify the order's branch and the owner |
 | `notify-stale-refunds` | daily | for each `pending` refund > 7 days old, notify the owner; flag stale on the dashboard |
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
