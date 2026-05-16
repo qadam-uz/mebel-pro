@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-16
 order: 10
 ---
 
@@ -96,14 +96,15 @@ picks a branch per order. Uses the client app.
 |---|---|---|
 | `id` | UUID | PK |
 | `telegram_id` | bigint | unique; required |
-| `telegram_username` | text? | may be null |
 | `phone` | text | `+998XXXXXXXXX`; required (Telegram must share it) |
 | `first_name` / `last_name` / `photo_url` | text / text? / text? | from Telegram (last/photo optional) |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
-Telegram profile fields are **refreshed from the OAuth payload on every login** — Telegram is
-the source of truth. No password, no forced-change / lockout (auth integrity is the HMAC check).
+Telegram profile fields (`first_name`, `last_name`, `photo_url`) are **refreshed from the
+OAuth payload on every login** — Telegram is the source of truth. The Telegram **username is
+not stored**: it is user-mutable and we don't track its changes; address the customer by
+`first_name`. No password, no forced-change / lockout (auth integrity is the HMAC check).
 A client cannot exist without a verified Telegram identity and a shared phone number
 (`missing_phone_number` otherwise).
 

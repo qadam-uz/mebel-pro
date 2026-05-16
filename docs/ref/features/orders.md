@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-15
+updated: 2026-05-16
 order: 30
 ---
 
@@ -295,27 +295,28 @@ placement, against a specific cutting.
        cutting uses) → the card is greyed with "This branch can't take orders right now"; the
        owner's job to fix.
 
-  2. **Checkout** — a single scrollable page with four sections:
+  2. **Checkout** — a single scrollable page with three sections:
 
-     - **Handover** — toggle `Pick up at the branch` (free; shows branch address + hours) ↔
-       `Delivery`. Delivery reveals address fields (street, city, lat / lng numeric, note)
-       and, on change, probes the fixed-fee zone for `(branch, lat, lng)` → shows the fee,
-       or `delivery_out_of_zone` with "switch to pickup or pick another branch" (link back
-       to step 1).
+     - **Handover** — `Pick up at the branch` (free; shows branch address + hours).
+       **Delivery is not in v1** ([`scope.md`](../../scope.md)): the `Delivery` toggle is
+       shown **disabled** with a "Coming soon" pill, so every v1 order is pickup. The
+       delivery model below (address, fixed-fee zone, `in_delivery`, driver) is the
+       eventual shape, gated out of v1.
      - **Contact** — phone and name fields, prefilled from the client's Telegram profile and
        editable inline. Above the fields, a non-dismissible notice:
        *"This is shared with the workshop so they can call you about your order."*
        Reset-to-profile link next to each field.
-     - **Payment plan** — radio: `Pay in full` (default; the order's total) ↔
-       `Advance + balance` (shows the advance % from the workshop's settings and the
-       computed advance / balance amounts). A `bnpl` chip displayed **disabled** with a
-       "Coming soon" pill (no v1 wiring).
-     - **Review** — the final breakdown (cutting, materials per material, KROM, delivery,
-       total) + the chosen handover + contact + payment plan. A primary **Place order**
-       button at the bottom; an Edit link beside each section returns to the relevant field.
+     - **Review** — the final price breakdown (cutting, materials per material, KROM,
+       total) + the chosen handover + contact. A primary **Place order** button at the
+       bottom; an Edit link beside each section returns to the relevant field.
+
+  The client does **not** choose a payment plan. In v1, payment is managed by workshop
+  staff after placement — the order is placed unpaid; the workshop records the payment
+  (full / advance + balance / pay-later) and that recording is what confirms it. The plan
+  is a counter decision, not a checkout choice (see the fulfilment flow below).
 
   On success → `/c/orders/:id` with a banner: *"Order placed — the workshop will confirm
-  once they record your payment"* (and, for `advance`, the advance amount to pay).
+  once they record your payment."*
 
   Error mapping:
   - `cutting_result_not_usable` (race) → toast + back to the cutting workspace.

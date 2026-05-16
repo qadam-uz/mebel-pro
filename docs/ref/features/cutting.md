@@ -170,10 +170,9 @@ The grain indicator (a small arrow / icon) appears **on the material chip itself
 chosen material has grain — a passive cue, not a control.
 
 **Edges popover** — quick presets `None` · `All 0.4` · `All 2.0` snap all four sides; below
-that, four per-side dropdowns (Top / Bottom / Left / Right) for the rare per-side case; an
-**Apply to all parts** checkbox at the bottom propagates to every existing row. A
-header-level **Default edge** picker on the table itself sets the starting edge for any new
-row added (doesn't retroactively touch existing rows).
+that, a panel diagram whose four edges (top / bottom / left / right) are tap-to-cycle
+(`None → 0.4 → 2.0`) for the per-side case; an **Apply to all parts** checkbox at the bottom
+propagates to every existing row. New rows start with no banding.
 
 Per-row inline validation; a single roll-up message below the table when something blocks the
 optimiser.

@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-16
 order: 20
 ---
 
@@ -21,8 +21,7 @@ that's a considered substitution.
   per-branch permissions; clients self-register via social login. Tenant-isolated, revocable,
   brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
-  platform-curated material catalog and sets its own prices, workers, delivery zones, and
-  settings.
+  platform-curated material catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals, adjustments, and
   inter-branch transfers; reservations and consumptions driven automatically by orders;
   low-stock surfacing.
@@ -43,7 +42,8 @@ that's a considered substitution.
 
 - **Online payment gateways** and **BNPL** — v1 records payments and refunds manually.
 - **SMS, email, and bot notifications** — v1 is in-app only.
-- **Maps & distance-based delivery pricing** — v1 uses fixed-fee zones.
+- **Delivery fulfilment** — v1 is **pickup-only**. The delivery model (address capture,
+  fixed-fee zones, driver flow, distance-based pricing) is designed but gated out of v1.
 - **Delegating workshop-wide controls to non-owner staff** — owner-only in v1.
 - **Operator-created orders** — orders are always client-placed.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
