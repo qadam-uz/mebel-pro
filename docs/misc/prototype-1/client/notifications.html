@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 <style>
   .note-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; transition: border-color .12s; }
   .note-card:hover { border-color: var(--ink-12); }
@@ -34,7 +38,7 @@
   <div class="page-head">
     <div>
       <h1>Bildirishnomalar</h1>
-      <p class="sub">Buyurtma o'zgarishlari va sehdan xabarlar.</p>
+      <p class="sub">Buyurtma o'zgarishlari va ustaxonadan xabarlar.</p>
     </div>
     <div class="tools">
       <button class="btn btn-outline" type="button" onclick="markAllRead()">Hammasini o'qildi deb belgilash</button>
@@ -53,7 +57,7 @@
 
 <script>
 const items = [
-  { id: 'n1', kind: 'order', read: false, t: '5 daqiqa', title: 'Kesim boshlandi · MP-2026-05-0091', body: '"Kuhna mebel — 4 shkaf · stol" buyurtmangiz kesilmoqda · Bahodir ako', link: 'order-detail.html?id=MP-2026-05-0091' },
+  { id: 'n1', kind: 'order', read: false, t: '5 daqiqa', title: 'Chizma boshlandi · MP-2026-05-0091', body: '"Kuhna mebel — 4 shkaf · stol" buyurtmangiz kesilmoqda · Bahodir ako', link: 'order-detail.html?id=MP-2026-05-0091' },
   { id: 'n2', kind: 'payment', read: false, t: 'bugun · 09:18', title: 'To\'lov tasdiqlandi', body: '50% oldindan · 1 588 500 so\'m · Aziza op. qabul qildi', link: 'order-detail.html?id=MP-2026-05-0091' },
   { id: 'n3', kind: 'delivery', read: false, t: 'kecha · 14:30', title: 'Yetkazib berildi · MP-2026-05-0072', body: 'Sherzod ako · Yunusobod, Toraqo\'rg\'on 7', link: 'order-detail.html?id=MP-2026-05-0072' },
   { id: 'n4', kind: 'order', read: true, t: '13-may · 18:42', title: 'Buyurtma tugatildi · MP-2026-05-0072', body: 'To\'liq summa to\'landi — rahmat!', link: 'order-detail.html?id=MP-2026-05-0072' },

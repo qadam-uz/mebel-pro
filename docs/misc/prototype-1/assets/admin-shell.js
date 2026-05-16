@@ -10,14 +10,14 @@ window.renderAdminShell = () => {
       <span class="av" style="background:linear-gradient(135deg,#2A4D6B,#1F3A50)">PL</span>
       <div class="info">
         <div class="nm">Platforma</div>
-        <div class="role">5 ta seh · O'Z</div>
+        <div class="role">5 ta ustaxona · O'Z</div>
       </div>
     </div>
     <nav class="sb-nav">
       <div class="sb-grp">
         <div class="lbl">Platforma</div>
         <a class="sb-it" data-href="dashboard.html" href="dashboard.html"><span class="ic">◐</span> Asosiy</a>
-        <a class="sb-it" data-href="workshops.html" href="workshops.html"><span class="ic">▥</span> Sehlar <span class="ct">5</span></a>
+        <a class="sb-it" data-href="workshops.html" href="workshops.html"><span class="ic">▥</span> Ustaxonalar <span class="ct">5</span></a>
         <a class="sb-it" data-href="orders.html" href="orders.html"><span class="ic">▣</span> Buyurtmalar (cross)</a>
       </div>
       <div class="sb-grp">
@@ -51,7 +51,7 @@ window.renderAdminShell = () => {
     <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">☰ Menu</button>
     <div class="tb-search">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
-      <input id="tb-search" placeholder="Seh, mijoz, buyurtma yoki xatolik kodi..." />
+      <input id="tb-search" placeholder="Ustaxona, mijoz, buyurtma yoki xatolik kodi..." />
       <span class="kbd">⌘ K</span>
     </div>
     <div class="tb-actions">
@@ -59,7 +59,7 @@ window.renderAdminShell = () => {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         <span class="dot"></span>
       </button>
-      <a class="btn btn-acc" href="workshops.html">+ Yangi seh</a>
+      <a class="btn btn-acc" href="workshops.html">+ Yangi ustaxona</a>
     </div>
   </div>`;
 

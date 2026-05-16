@@ -56,10 +56,10 @@ window.SEED = (() => {
 
   // ----- Clients (platform-wide) -----
   const clients = [
-    { id: 'c01', tg: '@akmal_n', name: "Akmal Norqo'ziyev", phone: '+998 90 100 30 60', initials: 'AN', status: 'active', ordersCount: 4 },
-    { id: 'c02', tg: '@dilshod_t', name: 'Dilshod Tursunov', phone: '+998 90 100 30 61', initials: 'DT', status: 'active', ordersCount: 2 },
-    { id: 'c03', tg: '@madina_y', name: "Madina Yo'ldosheva", phone: '+998 90 100 30 62', initials: 'MY', status: 'active', ordersCount: 1 },
-    { id: 'c04', tg: '@sherzod_a', name: 'Sherzod Ahmedov', phone: '+998 90 100 30 63', initials: 'SA', status: 'active', ordersCount: 3 },
+    { id: 'c01', name: "Akmal Norqo'ziyev", phone: '+998 90 100 30 60', initials: 'AN', status: 'active', ordersCount: 4 },
+    { id: 'c02', name: 'Dilshod Tursunov', phone: '+998 90 100 30 61', initials: 'DT', status: 'active', ordersCount: 2 },
+    { id: 'c03', name: "Madina Yo'ldosheva", phone: '+998 90 100 30 62', initials: 'MY', status: 'active', ordersCount: 1 },
+    { id: 'c04', name: 'Sherzod Ahmedov', phone: '+998 90 100 30 63', initials: 'SA', status: 'active', ordersCount: 3 },
   ];
 
   // ----- Cutting drafts and results -----

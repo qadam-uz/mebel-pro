@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="assets/app.css" />
+<link rel="icon" href="assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 <style>
   body { background: var(--bg); padding: 32px 18px; }
   .launcher { max-width: 1080px; margin: 0 auto; }
@@ -54,19 +58,19 @@
     <a class="role-tile" href="client/login.html">
       <div class="e">Mijoz</div>
       <h3>Mijoz kabineti</h3>
-      <p>Filial tanlash · kesim chizmasi · buyurtma · jonli kuzatish.</p>
+      <p>Filial tanlash · chizma · buyurtma · jonli kuzatish.</p>
       <span class="go">Ochish <span>→</span></span>
     </a>
     <a class="role-tile" href="workshop/login.html">
-      <div class="e">Seh</div>
-      <h3>Seh boshqaruvi</h3>
-      <p>Buyurtmalar taxtasi · kesim/krom/yetkazma · ombor · maosh · audit.</p>
+      <div class="e">Ustaxona</div>
+      <h3>Ustaxona boshqaruvi</h3>
+      <p>Buyurtmalar taxtasi · chizma/krom/yetkazma · ombor · maosh · audit.</p>
       <span class="go">Ochish <span>→</span></span>
     </a>
     <a class="role-tile" href="admin/login.html">
       <div class="e">Operator</div>
       <h3>Superadmin</h3>
-      <p>Sehlarni boshqarish · katalog · ish jadvali · xatolik monitori.</p>
+      <p>Ustaxonalarni boshqarish · katalog · ish jadvali · xatolik monitori.</p>
       <span class="go">Ochish <span>→</span></span>
     </a>
   </div>
@@ -75,28 +79,29 @@
     <h2>Mijoz sahifalari</h2>
     <div class="page-list">
       <a href="client/login.html">Telegram orqali kirish<small>login.html</small></a>
-      <a href="client/cutting-drafts.html">Bosh sahifa · saqlangan chizmalar<small>cutting-drafts.html</small></a>
-      <a href="client/cutting.html?id=cr-0085">Kesim chizmasi (multi-material draft)<small>cutting.html?id=cr-0085</small></a>
+      <a href="client/home.html">Bosh sahifa · dashboard<small>home.html</small></a>
+      <a href="client/cutting-drafts.html">Saqlangan chizmalar<small>cutting-drafts.html</small></a>
+      <a href="client/cutting.html?id=cr-0085">Chizma (multi-material)<small>cutting.html?id=cr-0085</small></a>
       <a href="client/cutting.html?id=new">Bo'sh chizma · yangidan<small>cutting.html?id=new</small></a>
       <a href="client/cutting.html?id=cr-0091">Biriktirilgan chizma (read-only)<small>cutting.html?id=cr-0091</small></a>
       <a href="client/order-new.html?cutting=cr-0085">Buyurtma berish (multi-material)<small>order-new.html?cutting=cr-0085</small></a>
       <a href="client/orders.html">Mening buyurtmalarim<small>orders.html</small></a>
       <a href="client/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
       <a href="client/order-modify.html?id=MP-2026-05-0086">Buyurtmani o'zgartirish<small>order-modify.html</small></a>
-      <a href="client/branches.html">Sehlar (passiv ro'yxat)<small>branches.html</small></a>
+      <a href="client/branches.html">Ustaxonalar (passiv ro'yxat)<small>branches.html</small></a>
       <a href="client/notifications.html">Bildirishnomalar<small>notifications.html</small></a>
       <a href="client/profile.html">Profil va sessiyalar<small>profile.html</small></a>
     </div>
   </div>
 
   <div class="index-section">
-    <h2>Seh boshqaruvi sahifalari</h2>
+    <h2>Ustaxona boshqaruvi sahifalari</h2>
     <div class="page-list">
       <a href="workshop/login.html">Kirish<small>login.html</small></a>
       <a href="workshop/dashboard.html">Asosiy<small>dashboard.html</small></a>
       <a href="workshop/orders.html">Buyurtmalar (board/table)<small>orders.html</small></a>
       <a href="workshop/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
-      <a href="workshop/cutting-queue.html">Kesim navbati<small>cutting-queue.html</small></a>
+      <a href="workshop/cutting-queue.html">Chizma navbati<small>cutting-queue.html</small></a>
       <a href="workshop/banding-queue.html">Krom navbati<small>banding-queue.html</small></a>
       <a href="workshop/delivery-queue.html">Yetkazma navbati<small>delivery-queue.html</small></a>
       <a href="workshop/refunds.html">Refundlar<small>refunds.html</small></a>
@@ -123,8 +128,8 @@
     <div class="page-list">
       <a href="admin/login.html">Kirish<small>login.html</small></a>
       <a href="admin/dashboard.html">Asosiy<small>dashboard.html</small></a>
-      <a href="admin/workshops.html">Sehlar<small>workshops.html</small></a>
-      <a href="admin/workshop-detail.html?id=ws-01">Seh tafsiloti<small>workshop-detail.html</small></a>
+      <a href="admin/workshops.html">Ustaxonalar<small>workshops.html</small></a>
+      <a href="admin/workshop-detail.html?id=ws-01">Ustaxona tafsiloti<small>workshop-detail.html</small></a>
       <a href="admin/materials.html">Material katalogi<small>materials.html</small></a>
       <a href="admin/platform-users.html">Operatorlar<small>platform-users.html</small></a>
       <a href="admin/orders.html">Cross-workshop buyurtmalar<small>orders.html</small></a>

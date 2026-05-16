@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bosh sahifa — Mebel Pro · Mijoz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 30px; }
+  .kpi { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; text-decoration: none; transition: border-color .12s, transform .12s; }
+  .kpi:hover { border-color: var(--ink-10); transform: translateY(-1px); }
+  .kpi .v { font: 700 24px var(--f-mono); color: var(--ink-12); line-height: 1; }
+  .kpi .v small { font: 600 12px var(--f-ui); color: var(--ink-6); }
+  .kpi .l { font: 500 12px var(--f-ui); color: var(--ink-7); margin-top: 7px; }
+  .kpi.hot .v { color: var(--acc, #b4530a); }
+
+  .sec-hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0 12px; border-bottom: 1px solid var(--line); margin: 26px 0 16px; }
+  .sec-hd h2 { font: 600 18px var(--f-display); margin: 0; color: var(--ink-12); }
+  .sec-hd a { font: 500 13px var(--f-ui); color: var(--ink-8); text-decoration: none; }
+  .sec-hd a:hover { color: var(--ink-12); }
+
+  .ao { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .ao:hover { border-color: var(--ink-12); transform: translateY(-1px); }
+  .ao .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+  .ao .id { font: 500 11.5px var(--f-mono); color: var(--ink-6); letter-spacing: .04em; }
+  .ao h3 { font: 600 17px var(--f-display); margin: 4px 0 0; letter-spacing: -.01em; color: var(--ink-12); }
+  .ao .meta { font: 400 12.5px var(--f-ui); color: var(--ink-7); margin-top: 3px; }
+  .ao .meta b { color: var(--ink-12); font-weight: 600; }
+
+  .step { display: flex; align-items: center; gap: 0; margin: 16px 0 14px; }
+  .step .node { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .step .dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line); background: var(--elev); box-sizing: border-box; }
+  .step .node.done .dot { background: var(--ink-12); border-color: var(--ink-12); }
+  .step .node.cur .dot { border-color: var(--ink-12); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink-12) 14%, transparent); }
+  .step .node .cap { font: 500 10.5px var(--f-ui); color: var(--ink-6); white-space: nowrap; }
+  .step .node.done .cap, .step .node.cur .cap { color: var(--ink-12); font-weight: 600; }
+  .step .bar { flex: 1 1 auto; height: 2px; background: var(--line); margin: 0 6px; margin-bottom: 22px; }
+  .step .bar.done { background: var(--ink-12); }
+
+  .ao .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
+  .ao .total { font: 600 14.5px var(--f-mono); color: var(--ink-12); }
+  .ao .total small { font: 500 11px var(--f-ui); color: var(--ink-6); }
+
+  .dr { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 14px 16px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .dr:hover { border-color: var(--ink-10); transform: translateY(-1px); }
+  .dr .nm { font: 500 14px var(--f-ui); color: var(--ink-12); }
+  .dr .st { font: 400 12px var(--f-mono); color: var(--ink-6); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .dr .st b { color: var(--ink-12); font-weight: 600; }
+  .open-aff { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--f-ui); color: var(--accent); white-space: nowrap; }
+  .open-aff svg { width: 14px; height: 14px; transition: transform .12s; }
+  .dr:hover .open-aff svg { transform: translateX(2px); }
+
+  .new-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--ink-12); color: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .new-cta .t { font: 600 17px var(--f-display); }
+  .new-cta .s { font: 400 13px var(--f-ui); opacity: .8; margin-top: 3px; }
+  .new-cta .btn { background: #fff; color: var(--ink-12); border: 0; font-weight: 600; }
+
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .step .node .cap { display: none; }
+    .step .bar { margin-bottom: 0; }
+  }
+</style>
+</head>
+<body>
+<script src="../assets/app.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/client-shell.js"></script>
+<script>renderClientHeader('home.html');</script>
+
+<main class="container">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="new-cta">
+    <div>
+      <div class="t">Yangi kesim chizmasi</div>
+      <div class="s">Qism o'lchamlarini kiriting — tizim listlarga optimal joylashtiradi va ustaxona narxini hisoblaydi.</div>
+    </div>
+    <a class="btn" href="cutting.html?id=new">+ Yangi chizma</a>
+  </div>
+
+  <div class="sec-hd">
+    <h2>Faol buyurtmalar</h2>
+    <a href="orders.html">Barcha buyurtmalar →</a>
+  </div>
+  <div id="active"></div>
+
+  <div class="sec-hd">
+    <h2>So'nggi chizmalar</h2>
+    <a href="cutting-drafts.html">Barcha chizmalar →</a>
+  </div>
+  <div id="drafts"></div>
+</main>
+
+<script>
+const clientId = 'c01';
+const ACTIVE = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery'];
+
+const myOrders = SEED.orders.filter(o => o.clientId === clientId);
+const active = myOrders.filter(o => ACTIVE.includes(o.state));
+const drafts = SEED.cuttings.filter(c => c.status === 'draft');
+
+// ---- KPI strip ----
+const kReady = active.filter(o => o.state === 'ready').length;
+const kPay = active.filter(o => o.state === 'pending_payment').length;
+const kpis = [
+  { v: active.length, l: 'Faol buyurtma', href: 'orders.html', hot: false },
+  { v: kPay, l: "To'lov kutilmoqda", href: 'orders.html', hot: kPay > 0 },
+  { v: kReady, l: 'Olishga tayyor', href: 'orders.html', hot: kReady > 0 },
+  { v: drafts.length, l: 'Saqlangan chizma', href: 'cutting-drafts.html', hot: false },
+];
+document.getElementById('kpis').innerHTML = kpis.map(k => `
+  <a class="kpi ${k.hot ? 'hot' : ''}" href="${k.href}">
+    <div class="v">${k.v}<small> ta</small></div>
+    <div class="l">${k.l}</div>
+  </a>`).join('');
+
+// ---- Active orders with pipeline progress ----
+// state → progress index across: Qabul · Kesish · Krom · Yetkazish/Olish
+function stageIndex(state) {
+  if (['new','pending_payment','confirmed'].includes(state)) return 0;
+  if (state === 'cutting') return 1;
+  if (state === 'edge_banding') return 2;
+  if (['ready','in_delivery'].includes(state)) return 3;
+  return 4; // completed
+}
+
+function stepper(o) {
+  const cur = stageIndex(o.state);
+  const last = o.deliveryType === 'delivery' ? 'Yetkazish' : 'Olib ketish';
+  const labels = ['Qabul', 'Kesish', 'Krom', last];
+  let h = '<div class="step">';
+  labels.forEach((lb, i) => {
+    const cls = i < cur ? 'done' : (i === cur ? 'cur' : '');
+    h += `<div class="node ${cls}"><span class="dot"></span><span class="cap">${lb}</span></div>`;
+    if (i < labels.length - 1) h += `<span class="bar ${i < cur ? 'done' : ''}"></span>`;
+  });
+  h += '</div>';
+  return h;
+}
+
+function nextAction(o) {
+  if (o.state === 'pending_payment')
+    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('To&#39;lov · ustaxonada qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
+  if (o.state === 'new')
+    return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Buyurtma yangi holatda — o&#39;zgartirish mumkin')">Tafsilot</span>`;
+  if (o.state === 'ready')
+    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
+  if (o.state === 'in_delivery')
+    return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yo&#39;lda · +998 90 322-15-44')">Haydovchi</span>`;
+  if (['cutting','edge_banding'].includes(o.state))
+    return `<span class="btn btn-outline btn-sm">Kuzatish</span>`;
+  return '';
+}
+
+const aw = document.getElementById('active');
+if (active.length === 0) {
+  aw.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Faol buyurtma yo&#39;q</h3><p>Chizmadan boshlab birinchi buyurtmangizni bering.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+} else {
+  aw.innerHTML = active.map(o => {
+    const br = SEED.lookup.branchById(o.branchId);
+    return `
+      <article class="ao" onclick="location.href='order-detail.html?id=${o.id}'">
+        <div class="top">
+          <div>
+            <div class="id">${o.id} · ${br ? br.name : ''}</div>
+            <h3>${o.title}</h3>
+            <div class="meta">${o.placedAt}${o.dueAt ? ` · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olish'} <b>${o.dueAt}</b>` : ''}</div>
+          </div>
+          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
+        </div>
+        ${stepper(o)}
+        <div class="foot">
+          <div class="total">${fmtTiyin(o.totalTiyin)}<small> · ${o.paidTiyin >= o.totalTiyin ? "to'liq to'langan" : 'qisman to&#39;langan'}</small></div>
+          <div>${nextAction(o)}</div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+// ---- Recent drafts (up to 3) ----
+const dw = document.getElementById('drafts');
+if (drafts.length === 0) {
+  dw.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Saqlangan chizma yo&#39;q</h3><p>Yangi chizmadan boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+} else {
+  dw.innerHTML = drafts.slice(0, 3).map(c => {
+    const matIds = [...new Set(c.partList.map(p => p.matId).filter(Boolean))];
+    const matLabels = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean);
+    const matLabel = matLabels.slice(0, 2).join(' + ') + (matLabels.length > 2 ? ` +${matLabels.length - 2}` : '');
+    const algo = SEED.lookup.chosenAlgo(c);
+    const sheets = algo ? Object.values(algo.sheetsByMat).reduce((a, b) => a + b, 0) : 0;
+    const totalQty = c.partList.reduce((a, p) => a + (p.qty || 0), 0);
+    return `
+      <article class="dr" onclick="location.href='cutting.html?id=${c.id}'">
+        <div>
+          <div class="nm">${c.id} · ${matLabel || 'Material tanlanmagan'}</div>
+          <div class="st">
+            <span><b>${totalQty}</b> qism</span>
+            <span><b>${sheets || '—'}</b> list</span>
+            ${algo ? `<span><b>${algo.wastePct}%</b> chiqim</span>` : ''}
+            <span style="color:var(--ink-6)">${c.when}</span>
+          </div>
+        </div>
+        <span class="open-aff">Ochish<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </article>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

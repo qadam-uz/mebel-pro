@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 <style>
   .od-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
   @media (min-width: 1100px) { .od-grid { grid-template-columns: 1.4fr .8fr; } }
@@ -46,7 +50,7 @@ if (!o) {
   const br = SEED.lookup.branchById(o.branchId);
   const cl = SEED.lookup.clientById(o.clientId);
   const itemsRows = [
-    { lbl: 'Kesim xizmati', val: fmtTiyin(o.cuttingFeeTiyin) },
+    { lbl: 'Chizma xizmati', val: fmtTiyin(o.cuttingFeeTiyin) },
     { lbl: 'Material', val: fmtTiyin(o.materialsTiyin) },
     { lbl: 'Krom yopishtirish', val: fmtTiyin(o.edgeFeeTiyin) }
   ];
@@ -67,7 +71,7 @@ if (!o) {
 
     <div class="tabs" data-tabs="od">
       <button class="tab on" data-target="t-overview" onclick="switchTab('od','t-overview')">Umumiy</button>
-      <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Kesim</button>
+      <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Chizma</button>
       <button class="tab" data-target="t-payments" onclick="switchTab('od','t-payments')">To'lovlar</button>
       ${o.refundPending ? `<button class="tab" data-target="t-refunds" onclick="switchTab('od','t-refunds')">Refundlar</button>` : ''}
       <button class="tab" data-target="t-timeline" onclick="switchTab('od','t-timeline')">Tarix</button>
@@ -112,7 +116,7 @@ if (!o) {
 
         <section id="t-cutting" data-panel-group="od" hidden>
           <div class="card">
-            <div class="card-h"><h2>Kesim chizmasi</h2></div>
+            <div class="card-h"><h2>Chizma</h2></div>
             <div class="card-b">
               <div class="sheet" style="border:0;padding:0">
                 <svg viewBox="0 0 550 366">
@@ -126,7 +130,7 @@ if (!o) {
                   <text x="106" y="174" font-family="JetBrains Mono" font-size="11" fill="#2E5E4E" font-weight="700" text-anchor="middle">P2</text>
                 </svg>
               </div>
-              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px">⬇ Kesim chizmasi (PDF)</button>
+              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px">⬇ Chizma (PDF)</button>
             </div>
           </div>
         </section>
@@ -185,8 +189,8 @@ if (!o) {
                 <li class="step done"><span class="when">${o.placedAt}</span>Mijoz yaratdi · <span class="who">${cl?.name || ''}</span></li>
                 ${o.paidTiyin > 0 ? `<li class="step done"><span class="when">15:18</span>To'lov yozildi · <span class="who">Aziza op.</span> · ${fmtTiyin(o.paidTiyin)}</li>` : ''}
                 ${o.paidTiyin > 0 ? `<li class="step done"><span class="when">15:18</span>Tasdiqlandi · stock reserve</li>` : ''}
-                ${o.cutStartedAt ? `<li class="step ${o.state === 'cutting' ? 'now' : 'done'}"><span class="when">${o.cutStartedAt}</span>Kesim boshlandi · <span class="who">${SEED.lookup.userById(o.cutter)?.name}</span></li>` : ''}
-                ${o.cutCompletedAt ? `<li class="step done"><span class="when">${o.cutCompletedAt}</span>Kesim tugadi · 6 list ishlatildi</li>` : ''}
+                ${o.cutStartedAt ? `<li class="step ${o.state === 'cutting' ? 'now' : 'done'}"><span class="when">${o.cutStartedAt}</span>Chizma boshlandi · <span class="who">${SEED.lookup.userById(o.cutter)?.name}</span></li>` : ''}
+                ${o.cutCompletedAt ? `<li class="step done"><span class="when">${o.cutCompletedAt}</span>Chizma tugadi · 6 list ishlatildi</li>` : ''}
                 ${o.edgeStartedAt ? `<li class="step ${o.state === 'edge_banding' ? 'now' : 'done'}"><span class="when">${o.edgeStartedAt}</span>Krom boshlandi · <span class="who">${SEED.lookup.userById(o.edger)?.name}</span></li>` : ''}
               </ol>
             </div>
@@ -198,7 +202,7 @@ if (!o) {
             <div class="card-h"><h2>Ichki izoh</h2></div>
             <div class="card-b">
               <div class="field">
-                <textarea rows="5" placeholder="Bu buyurtma haqida ichki izoh — faqat seh xodimlari ko'radi" id="note">Mijoz erta tugatilishini so'ragan — agar imkon bo'lsa, 16-may o'rniga 15-may kechqurun yetkazib berishga harakat qilish kerak.</textarea>
+                <textarea rows="5" placeholder="Bu buyurtma haqida ichki izoh — faqat ustaxona xodimlari ko'radi" id="note">Mijoz erta tugatilishini so'ragan — agar imkon bo'lsa, 16-may o'rniga 15-may kechqurun yetkazib berishga harakat qilish kerak.</textarea>
               </div>
               <button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')">Saqlash</button>
             </div>
@@ -238,12 +242,12 @@ function detailActions(o) {
     acts.push(`<button class="btn btn-acc btn-sm" onclick="openModal('record-payment')">+ To'lov yozish</button>`);
     acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
   } else if (o.state === 'confirmed') {
-    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Kesim boshlash',msg:'Kesuvchi sifatida ushbu buyurtmani olasiz.'},()=>{toast('Kesim boshlandi');setTimeout(()=>location.reload(),700)})">▶ Kesim boshlash</button>`);
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Chizma boshlash',msg:'Kesuvchi sifatida ushbu buyurtmani olasiz.'},()=>{toast('Chizma boshlandi');setTimeout(()=>location.reload(),700)})">▶ Chizma boshlash</button>`);
     acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('assign-cutter')">Kesuvchi tayinlash</button>`);
     acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
     acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
   } else if (o.state === 'cutting') {
-    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Kesim tugadi',msg:'Kesim tugatildi deb belgilash · stock konsumatsiyasi avtomatik bo\'ladi.'},()=>{toast('Kesim tugadi');setTimeout(()=>location.reload(),700)})">✓ Kesim tugadi</button>`);
+    acts.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Chizma tugadi',msg:'Chizma tugatildi deb belgilash · stock konsumatsiyasi avtomatik bo\'ladi.'},()=>{toast('Chizma tugadi');setTimeout(()=>location.reload(),700)})">✓ Chizma tugadi</button>`);
     acts.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
     acts.push(`<button class="btn btn-danger btn-sm" onclick="forceCancel()">Egasi · majburiy bekor qilish</button>`);
   } else if (o.state === 'edge_banding') {

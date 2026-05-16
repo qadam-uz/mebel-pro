@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mebel Pro">
+  <title>Mebel Pro</title>
+  <defs>
+    <linearGradient id="mp-rust" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A6471F"/>
+      <stop offset="1" stop-color="#8C3814"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#mp-rust)">
+    <rect x="2" y="2" width="11.6" height="28" rx="2.2"/>
+    <rect x="16" y="2" width="14" height="12.6" rx="2.2"/>
+    <rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/>
+  </g>
+</svg>

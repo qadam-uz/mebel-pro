@@ -3,16 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Seh — Mebel Pro · Superadmin</title>
+<title>Ustaxona — Mebel Pro · Superadmin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
-    <button class="back" type="button" onclick="location.href='workshops.html'">← Sehlar</button>
+    <button class="back" type="button" onclick="location.href='workshops.html'">← Ustaxonalar</button>
     <div id="wrap"></div>
   </div>
 </main>
@@ -28,7 +32,7 @@ const w = SEED.lookup.workshopById(id);
 const wrap = document.getElementById('wrap');
 
 if (!w) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Seh topilmadi</h3></div>`;
+  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Ustaxona topilmadi</h3></div>`;
 } else {
   wrap.innerHTML = `
     <div class="page-head" style="margin-top: 8px">
@@ -44,7 +48,7 @@ if (!w) {
       </div>
       <div class="tools">
         ${w.status === 'active' ?
-          `<button class="btn btn-danger" type="button" onclick="confirmAction({title:'Sehni bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Buyurtmalar to\'xtaydi (mijozlarga ta\'sir qilmaydi).',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Sehni bloklash</button>` :
+          `<button class="btn btn-danger" type="button" onclick="confirmAction({title:'Ustaxonani bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Buyurtmalar to\'xtaydi (mijozlarga ta\'sir qilmaydi).',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Ustaxonani bloklash</button>` :
           `<button class="btn btn-acc" type="button" onclick="toast('Faollashtirildi')">Faollashtirish</button>`}
       </div>
     </div>
@@ -59,9 +63,9 @@ if (!w) {
 
     <section id="t-profile" data-panel-group="ws">
       <div class="card" style="max-width: 720px">
-        <div class="card-h"><h2>Seh profili</h2></div>
+        <div class="card-h"><h2>Ustaxona profili</h2></div>
         <div class="card-b" style="padding-top: 0">
-          <div class="row-item"><div><div class="nm">Seh nomi</div></div><div class="meta">${w.name}</div></div>
+          <div class="row-item"><div><div class="nm">Ustaxona nomi</div></div><div class="meta">${w.name}</div></div>
           <div class="row-item"><div><div class="nm">Egasi</div></div><div class="meta">${w.ownerName}</div></div>
           <div class="row-item"><div><div class="nm">Egasi telefoni</div></div><div class="meta">${w.ownerPhone}</div></div>
           <div class="row-item"><div><div class="nm">Filiallar soni</div></div><div class="meta">${w.branches}</div></div>
@@ -72,7 +76,7 @@ if (!w) {
 
     <section id="t-settings" data-panel-group="ws" hidden>
       <div class="card" style="max-width: 720px">
-        <div class="card-h"><h2>Seh sozlamalari (read-only · operator)</h2></div>
+        <div class="card-h"><h2>Ustaxona sozlamalari (read-only · operator)</h2></div>
         <div class="card-b" style="padding-top: 0">
           <div class="banner info"><div class="ic">i</div><div class="grow">Operator faqat ko'radi. Egasi sozlamalar tabidan o'zgartiradi.</div></div>
           <div class="row-item"><div><div class="nm">Default oldindan to'lov</div></div><div class="meta">50%</div></div>
@@ -97,7 +101,7 @@ if (!w) {
 
     <section id="t-orders" data-panel-group="ws" hidden>
       <div class="card">
-        <div class="card-h"><h2>Bu sehning buyurtmalari (cross-workshop · read-only)</h2></div>
+        <div class="card-h"><h2>Bu ustaxonaning buyurtmalari (cross-workshop · read-only)</h2></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>ID</th><th>Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>

@@ -18,7 +18,7 @@ window.renderWorkshopShell = (active = '') => {
         <div class="lbl">Boshqaruv</div>
         <a class="sb-it" data-href="dashboard.html" href="dashboard.html"><span class="ic">◐</span> Asosiy</a>
         <a class="sb-it" data-href="orders.html" href="orders.html"><span class="ic">▣</span> Buyurtmalar <span class="ct">7</span></a>
-        <a class="sb-it" data-href="cutting-queue.html" href="cutting-queue.html"><span class="ic">⌥</span> Kesim navbati <span class="ct">3</span></a>
+        <a class="sb-it" data-href="cutting-queue.html" href="cutting-queue.html"><span class="ic">⌥</span> Chizma navbati <span class="ct">3</span></a>
         <a class="sb-it" data-href="banding-queue.html" href="banding-queue.html"><span class="ic">▥</span> Krom navbati <span class="ct">1</span></a>
         <a class="sb-it" data-href="delivery-queue.html" href="delivery-queue.html"><span class="ic">→</span> Yetkazma navbati <span class="ct">2</span></a>
         <a class="sb-it" data-href="refunds.html" href="refunds.html"><span class="ic">↺</span> Qaytarishlar <span class="ct" style="color:#F4E4CB;background:rgba(163,100,23,.25)">1</span></a>

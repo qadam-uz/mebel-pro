@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 <style>
   .ord-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; cursor: pointer; transition: border-color .12s, transform .12s; }
   .ord-card:hover { border-color: var(--ink-12); transform: translateY(-1px); }
@@ -34,7 +38,7 @@
       <p class="sub">Faol va tugatilgan buyurtmalaringiz.</p>
     </div>
     <div class="tools">
-      <a class="btn btn-acc" href="branches.html">+ Yangi buyurtma</a>
+      <a class="btn btn-acc" href="cutting-drafts.html">+ Yangi buyurtma</a>
     </div>
   </div>
 
@@ -75,7 +79,7 @@ function render() {
   });
   const wrap = document.getElementById('orders');
   if (orders.length === 0) {
-    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma yo&#39;q</h3><p>${filter === 'all' ? 'Hali buyurtma bermagansiz — kesimdan boshlang.' : 'Bu filterga mos buyurtma yo&#39;q.'}</p><a class="btn btn-acc" href="branches.html">+ Yangi buyurtma</a></div>`;
+    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma yo&#39;q</h3><p>${filter === 'all' ? 'Hali buyurtma bermagansiz — chizmadan boshlang.' : 'Bu filterga mos buyurtma yo&#39;q.'}</p><a class="btn btn-acc" href="cutting-drafts.html">+ Yangi buyurtma</a></div>`;
     return;
   }
   wrap.innerHTML = orders.map(o => {
@@ -101,11 +105,11 @@ function render() {
 }
 
 function nextAction(o) {
-  if (o.state === 'pending_payment') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Tolov · sehda qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
+  if (o.state === 'pending_payment') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('To&#39;lov · ustaxonada qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
   if (o.state === 'new') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();cancelOrder('${o.id}')">Bekor qilish</span>`;
   if (['cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-outline btn-sm">Kuzatish</span>`;
-  if (o.state === 'ready') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · sehga keling')">Olishga tayyor</span>`;
-  if (o.state === 'in_delivery') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yolda · +998 90 322-15-44')">Haydovchi</span>`;
+  if (o.state === 'ready') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
+  if (o.state === 'in_delivery') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yo&#39;lda · +998 90 322-15-44')">Haydovchi</span>`;
   return '';
 }
 

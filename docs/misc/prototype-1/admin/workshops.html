@@ -3,27 +3,31 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sehlar — Mebel Pro · Superadmin</title>
+<title>Ustaxonalar — Mebel Pro · Superadmin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
     <div class="page-head">
       <div>
-        <h1>Sehlar</h1>
-        <p class="sub">Platformada ro'yxatdan o'tgan barcha sehlar.</p>
+        <h1>Ustaxonalar</h1>
+        <p class="sub">Platformada ro'yxatdan o'tgan barcha ustaxonalar.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi seh</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi ustaxona</button>
       </div>
     </div>
 
     <div class="filters">
-      <div class="input"><input placeholder="Seh nomi yoki egasi..." /></div>
+      <div class="input"><input placeholder="Ustaxona nomi yoki egasi..." /></div>
       <div class="chips">
         <button class="chip on">Hammasi</button>
         <button class="chip">Faol</button>
@@ -33,7 +37,7 @@
 
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>Seh</th><th>Egasi</th><th>Filial</th><th>Buyurtma · 30 kun</th><th>Yaratildi</th><th>Holat</th><th></th></tr></thead>
+        <thead><tr><th>Ustaxona</th><th>Egasi</th><th>Filial</th><th>Buyurtma · 30 kun</th><th>Yaratildi</th><th>Holat</th><th></th></tr></thead>
         <tbody id="body"></tbody>
       </table>
     </div>
@@ -42,11 +46,11 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal wide" id="m-new">
-  <div class="modal-h"><h3>Yangi seh + egasi · atomik yaratish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Yangi ustaxona + egasi · atomik yaratish</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:0 0 10px">Seh ma'lumotlari</h4>
+    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:0 0 10px">Ustaxona ma'lumotlari</h4>
     <div class="field-row">
-      <div class="field"><label>Seh nomi</label><input placeholder="Furniture House" /></div>
+      <div class="field"><label>Ustaxona nomi</label><input placeholder="Furniture House" /></div>
       <div class="field"><label>Telefon</label><input placeholder="+998 71 ..." /></div>
     </div>
     <div class="field"><label>Manzil</label><input placeholder="Toshkent, ..." /></div>
@@ -64,7 +68,7 @@
     </div>
     <div class="banner warn"><div class="ic">!</div><div class="grow">Parol bu yerda bir marta ko'rsatiladi · saqlab oling.</div></div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Seh va egasi yaratildi')">Yaratish</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Ustaxona va egasi yaratildi')">Yaratish</button></div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -86,7 +90,7 @@ document.getElementById('body').innerHTML = SEED.workshops.map(w => `
         <button class="menu-btn" data-menu-toggle>⋯</button>
         <div class="menu">
           <a class="mi" href="workshop-detail.html?id=${w.id}">Tafsilotlar</a>
-          ${w.status === 'active' ? `<button class="mi danger" onclick="confirmAction({title:'Sehni bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Mijozlar ta\'sirlanmaydi. Buyurtmalar to\'xtaydi.',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Bloklash</button>` : `<button class="mi" onclick="toast('Bloklash bekor qilindi')">Faollashtirish</button>`}
+          ${w.status === 'active' ? `<button class="mi danger" onclick="confirmAction({title:'Ustaxonani bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Mijozlar ta\'sirlanmaydi. Buyurtmalar to\'xtaydi.',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Bloklash</button>` : `<button class="mi" onclick="toast('Bloklash bekor qilindi')">Faollashtirish</button>`}
         </div>
       </div>
     </td>

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mebel Pro — brand usage</title>
+<link rel="icon" href="icon/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FAF7F2;--elev:#fff;--sunk:#F2EEE6;--deep:#1A1614;
+    --ink-12:#1A1614;--ink-10:#3F362F;--ink-8:#5C4F44;--ink-6:#847569;--line:#E5DDD0;
+    --accent:#A6471F;--accent-h:#8C3814;--accent-tint:#F4E5DC;
+    --forest:#2E5E4E;--olive:#566F2A;--danger:#8C2E1C;
+    --f-d:'Source Serif 4','Charter','Iowan Old Style',Georgia,serif;
+    --f-u:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --f-m:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink-12);font-family:var(--f-u);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased;padding:48px 32px 80px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-family:var(--f-d);font-weight:600;letter-spacing:-.02em;font-size:34px;line-height:1.1}
+  h2{font-family:var(--f-d);font-weight:600;letter-spacing:-.01em;font-size:20px;margin:54px 0 18px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .lead{color:var(--ink-8);font-size:15px;max-width:62ch;margin-top:10px}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(2,1fr)}
+  .panel{border:1px solid var(--line);border-radius:14px;padding:30px;display:flex;align-items:center;justify-content:center;min-height:130px;position:relative}
+  .panel .tag{position:absolute;top:10px;left:14px;font:600 10px/1 var(--f-m);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-6)}
+  .on-paper{background:var(--bg)}
+  .on-elev{background:var(--elev)}
+  .on-dark{background:var(--deep)}
+  .on-rust{background:var(--accent)}
+  /* lockups built live so the wordmark renders in true Source Serif 4 */
+  .lockup{display:inline-flex;align-items:center;gap:14px}
+  .lockup .wm{font-family:var(--f-d);font-weight:600;letter-spacing:-.01em;font-size:30px}
+  .stacked{flex-direction:column;gap:12px}
+  .stacked .wm{font-size:24px}
+  .sym{display:block;flex:none}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:6px}
+  .sw{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .sw .chip{height:64px}
+  .sw .meta{padding:9px 12px;font-size:12px}
+  .sw .meta b{display:block;font-weight:600}
+  .sw .meta code{font-family:var(--f-m);font-size:11px;color:var(--ink-6)}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{font:600 11px/1 var(--f-m);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-6)}
+  td code{font-family:var(--f-m);font-size:12px}
+  .sz{display:flex;align-items:flex-end;gap:34px;flex-wrap:wrap;padding:10px 0}
+  .sz figure{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .sz figcaption{font:600 11px/1 var(--f-m);color:var(--ink-6)}
+  .dd{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .dd .box{border:1px solid var(--line);border-radius:12px;padding:18px}
+  .dd h3{font-family:var(--f-u);font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
+  .dd .do h3{color:var(--forest)} .dd .dont h3{color:var(--danger)}
+  .dd li{list-style:none;padding:5px 0 5px 22px;position:relative;color:var(--ink-8);font-size:13px}
+  .dd .do li::before{content:"✓";position:absolute;left:0;color:var(--forest);font-weight:700}
+  .dd .dont li::before{content:"✕";position:absolute;left:0;color:var(--danger);font-weight:700}
+  .cs{display:inline-flex;align-items:center;justify-content:center;padding:30px;border:1px dashed var(--ink-6);border-radius:10px;background:var(--elev)}
+  pre{background:var(--deep);color:#E8DFD2;font-family:var(--f-m);font-size:12px;line-height:1.7;padding:18px 20px;border-radius:12px;overflow:auto;margin-top:6px}
+  pre .c{color:#9C8E7E}
+  .iconrow{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
+  .iconrow figure{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .iconrow img{border-radius:18%;display:block;image-rendering:auto}
+  .iconrow .px16{image-rendering:pixelated;border-radius:0}
+  .iconrow figcaption{font:600 11px/1 var(--f-m);color:var(--ink-6)}
+  .files{font-family:var(--f-m);font-size:12px;color:var(--ink-8);columns:2;gap:30px}
+  .files div{padding:2px 0;break-inside:avoid}
+  footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--line);color:var(--ink-6);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Mebel&nbsp;Pro — brand system</h1>
+  <p class="lead">The mark is three cut panels nested on a stock sheet — the product, drawn literally. The bottom-right part is set down at a slight angle: precision, but placed by a person. Built entirely from the shipping product tokens (<code style="font-family:var(--f-m)">app.css</code>); it drops into the existing shells with no re-theming.</p>
+
+  <h2>1 · Lockups</h2>
+  <div class="grid cards">
+    <div class="panel on-paper"><span class="tag">Horizontal · on paper</span>
+      <span class="lockup">
+        <svg class="sym" width="44" height="44" viewBox="0 0 32 32"><defs><linearGradient id="r1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A6471F"/><stop offset="1" stop-color="#8C3814"/></linearGradient></defs><g fill="url(#r1)"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+        <span class="wm" style="color:#1A1614">Mebel Pro</span>
+      </span>
+    </div>
+    <div class="panel on-dark"><span class="tag" style="color:#847569">Horizontal · on dark</span>
+      <span class="lockup">
+        <svg class="sym" width="44" height="44" viewBox="0 0 32 32"><g fill="#A6471F"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+        <span class="wm" style="color:#FAF7F2">Mebel Pro</span>
+      </span>
+    </div>
+    <div class="panel on-elev"><span class="tag">Stacked · mono black</span>
+      <span class="lockup stacked">
+        <svg class="sym" width="52" height="52" viewBox="0 0 32 32"><g fill="#1A1614"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+        <span class="wm" style="color:#1A1614">Mebel Pro</span>
+      </span>
+    </div>
+    <div class="panel on-dark"><span class="tag" style="color:#847569">Stacked · mono white</span>
+      <span class="lockup stacked">
+        <svg class="sym" width="52" height="52" viewBox="0 0 32 32"><g fill="#FAF7F2"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+        <span class="wm" style="color:#FAF7F2">Mebel Pro</span>
+      </span>
+    </div>
+  </div>
+  <div class="grid cards" style="margin-top:14px">
+    <div class="panel on-paper"><span class="tag">Symbol · on paper (gradient)</span>
+      <svg class="sym" width="68" height="68" viewBox="0 0 32 32"><defs><linearGradient id="r2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A6471F"/><stop offset="1" stop-color="#8C3814"/></linearGradient></defs><g fill="url(#r2)"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+    </div>
+    <div class="panel on-paper"><span class="tag">Wordmark only</span>
+      <span class="wm" style="font-family:var(--f-d);font-weight:600;letter-spacing:-.01em;font-size:34px;color:#1A1614">Mebel Pro</span>
+    </div>
+  </div>
+
+  <h2>2 · Palette — verbatim from <code style="font-family:var(--f-m);font-size:15px">app.css</code></h2>
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#FAF7F2;border-bottom:1px solid #E5DDD0"></div><div class="meta"><b>Paper / page</b><code>#FAF7F2</code></div></div>
+    <div class="sw"><div class="chip" style="background:#FFFFFF;border-bottom:1px solid #E5DDD0"></div><div class="meta"><b>Elevated</b><code>#FFFFFF</code></div></div>
+    <div class="sw"><div class="chip" style="background:#F2EEE6"></div><div class="meta"><b>Sunk</b><code>#F2EEE6</code></div></div>
+    <div class="sw"><div class="chip" style="background:#A6471F"></div><div class="meta"><b>Accent · rust (hero)</b><code>#A6471F</code></div></div>
+    <div class="sw"><div class="chip" style="background:#8C3814"></div><div class="meta"><b>Accent deep / hover</b><code>#8C3814</code></div></div>
+    <div class="sw"><div class="chip" style="background:#F4E5DC"></div><div class="meta"><b>Accent tint</b><code>#F4E5DC</code></div></div>
+    <div class="sw"><div class="chip" style="background:#1A1614"></div><div class="meta"><b>Ink 12 / dark ground</b><code>#1A1614</code></div></div>
+    <div class="sw"><div class="chip" style="background:#3F362F"></div><div class="meta"><b>Ink 10</b><code>#3F362F</code></div></div>
+    <div class="sw"><div class="chip" style="background:#5C4F44"></div><div class="meta"><b>Ink 8</b><code>#5C4F44</code></div></div>
+    <div class="sw"><div class="chip" style="background:#847569"></div><div class="meta"><b>Ink 6</b><code>#847569</code></div></div>
+    <div class="sw"><div class="chip" style="background:#E5DDD0"></div><div class="meta"><b>Hairline</b><code>#E5DDD0</code></div></div>
+    <div class="sw"><div class="chip" style="background:#2E5E4E"></div><div class="meta"><b>Forest (support)</b><code>#2E5E4E</code></div></div>
+    <div class="sw"><div class="chip" style="background:#566F2A"></div><div class="meta"><b>Olive (support)</b><code>#566F2A</code></div></div>
+    <div class="sw"><div class="chip" style="background:#8C2E1C"></div><div class="meta"><b>Danger (sparingly)</b><code>#8C2E1C</code></div></div>
+  </div>
+
+  <h2>3 · Typography — the brand voice</h2>
+  <table>
+    <tr><th>Role</th><th>Family</th><th>Spec</th></tr>
+    <tr><td><span style="font-family:var(--f-d);font-weight:600;font-size:20px">Mebel Pro</span></td><td><code>Source Serif 4</code></td><td>Display / wordmark · weight <b>600</b> · tracking <code>-0.01em</code></td></tr>
+    <tr><td><span style="font-family:var(--f-u);font-weight:600;font-size:16px">Workshop · order #4821</span></td><td><code>Inter</code></td><td>All UI text, navigation, labels · 400–700</td></tr>
+    <tr><td><span style="font-family:var(--f-m);font-size:15px">2440×1830 · 24 600 UZS</span></td><td><code>JetBrains Mono</code></td><td>IDs, dimensions, prices, counts · 500 / 700</td></tr>
+  </table>
+  <p class="lead">No fourth typeface. The wordmark is set in <b>Source Serif 4&nbsp;600</b> with <code style="font-family:var(--f-m)">-0.01em</code> tracking — never re-typeset it in Inter or any other face.</p>
+
+  <h2>4 · Clear space &amp; minimum sizes</h2>
+  <div class="sz">
+    <figure>
+      <div class="cs">
+        <span class="lockup">
+          <svg class="sym" width="40" height="40" viewBox="0 0 32 32"><g fill="#A6471F"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+          <span class="wm" style="color:#1A1614">Mebel Pro</span>
+        </span>
+      </div>
+      <figcaption>clear space = one panel-gap (≈¼ symbol height) on every side</figcaption>
+    </figure>
+    <figure>
+      <svg width="16" height="16" viewBox="0 0 32 32"><g fill="#A6471F"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+      <figcaption>symbol · 16px min</figcaption>
+    </figure>
+    <figure>
+      <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
+        <svg width="17" height="17" viewBox="0 0 32 32"><g fill="#A6471F"><rect x="2" y="2" width="11.6" height="28" rx="2.2"/><rect x="16" y="2" width="14" height="12.6" rx="2.2"/><rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/></g></svg>
+        <span style="font-family:var(--f-d);font-weight:600;letter-spacing:-.01em;font-size:13px;color:#1A1614">Mebel Pro</span>
+      </span>
+      <figcaption>horizontal lockup · 96px min width</figcaption>
+    </figure>
+  </div>
+
+  <h2>5 · App icon / favicon</h2>
+  <div class="iconrow">
+    <figure><img class="px16" src="exports/favicon-16.png" width="32" height="32" alt=""><figcaption>16 — 1:1</figcaption></figure>
+    <figure><img src="exports/favicon-32.png" width="40" height="40" alt=""><figcaption>32</figcaption></figure>
+    <figure><img src="exports/apple-touch-icon-180.png" width="60" height="60" alt=""><figcaption>apple-touch 180</figcaption></figure>
+    <figure><img src="exports/icon-512.png" width="72" height="72" alt=""><figcaption>icon 192 / 512</figcaption></figure>
+    <figure><img src="exports/maskable-512.png" width="72" height="72" alt=""><figcaption>maskable (safe-zone)</figcaption></figure>
+  </div>
+  <p class="lead">Solid rust ground, mark knocked out in paper, <b>flat</b> at every tile size (no gradient, no tilt-jitter). The maskable variant is full-bleed with the mark held inside the central 50% safe zone so platform circle/squircle masks never clip it.</p>
+
+  <h2>6 · The one permitted gradient</h2>
+  <p class="lead">A single vertical <code style="font-family:var(--f-m)">#A6471F → #8C3814</code> on the symbol's panel fills — <b>on-paper symbol &amp; horizontal/stacked on-paper lockups only</b>. Every other context is flat: on-dark, both mono variants, and <em>all</em> icon-tile sizes. Never introduce a second gradient, glow, or shadow on the mark.</p>
+
+  <h2>7 · Do &amp; don't</h2>
+  <div class="dd">
+    <div class="box do">
+      <h3>Do</h3>
+      <ul>
+        <li>Rust (or its gradient on paper) is the hero — forest / olive / danger stay support roles.</li>
+        <li>Keep the symbol's square silhouette; it <em>is</em> the stock sheet.</li>
+        <li>Use mono-white on photos or busy color; mono-black for single-color print.</li>
+        <li>Preserve the slight tilt of the bottom-right panel — it is the craft signal.</li>
+      </ul>
+    </div>
+    <div class="box dont">
+      <h3>Don't</h3>
+      <ul>
+        <li>Re-typeset the wordmark in Inter, or any non–Source-Serif-4 face.</li>
+        <li>Rotate, skew, or outline the whole lockup, or add shadows/glows.</li>
+        <li>Recolor the mark outside the four colorways, or tint the gradient.</li>
+        <li>Place the rust symbol on a low-contrast warm field, or below 16px.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>8 · Drop-in <code style="font-family:var(--f-m);font-size:15px">&lt;head&gt;</code></h2>
+  <pre><span class="c">&lt;!-- replaces the placeholder favicon; same-origin paths --&gt;</span>
+&lt;link rel="icon" href="/favicon.svg" type="image/svg+xml"&gt;
+&lt;link rel="icon" href="/favicon.ico" sizes="32x32"&gt;
+&lt;link rel="apple-touch-icon" href="/apple-touch-icon-180.png"&gt;
+&lt;link rel="manifest" href="/site.webmanifest"&gt;
+&lt;meta name="theme-color" content="#FAF7F2"&gt;
+
+<span class="c">site.webmanifest:</span>
+{ "name": "Mebel Pro", "short_name": "Mebel Pro", "theme_color": "#FAF7F2",
+  "background_color": "#FAF7F2", "display": "standalone",
+  "icons": [
+    { "src": "/icon-192.png",      "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png",      "sizes": "512x512", "type": "image/png" },
+    { "src": "/maskable-512.png",  "sizes": "512x512", "type": "image/png",
+      "purpose": "maskable" } ] }</pre>
+
+  <h2>9 · Files in this kit</h2>
+  <div class="files">
+    <div>svg/symbol-{paper,dark,black,white}.svg</div>
+    <div>svg/lockup-h-{paper,dark,black,white}.svg</div>
+    <div>svg/lockup-stacked-{paper,dark,black,white}.svg</div>
+    <div>svg/wordmark-{paper,dark,black,white}.svg</div>
+    <div>icon/icon-tile.svg · icon/favicon.svg · icon/maskable.svg</div>
+    <div>exports/favicon.ico · favicon-{16,32,48}.png</div>
+    <div>exports/apple-touch-icon-180.png</div>
+    <div>exports/icon-{192,512}.png · maskable-{192,512}.png</div>
+    <div>exports/symbol-{paper,dark,black,white}-512.png</div>
+    <div>build.sh — regenerates every file above</div>
+  </div>
+
+  <footer>Mebel Pro brand kit · all tokens sourced verbatim from <code style="font-family:var(--f-m)">docs/misc/prototype-1/assets/app.css</code> · regenerate with <code style="font-family:var(--f-m)">./build.sh</code></footer>
+</div>
+</body>
+</html>

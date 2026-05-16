@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 </head>
 <body>
 <main class="page-content">
@@ -40,9 +44,9 @@ Yak: 10:00-16:00</textarea>
 <div class="modal" id="m-pricing">
   <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi kesim va krom narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi chizma va krom narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
     <div class="field">
-      <label>Kesim modeli</label>
+      <label>Chizma modeli</label>
       <div class="opt-row">
         <div class="opt on" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
           <span class="rd"></span>
@@ -50,11 +54,11 @@ Yak: 10:00-16:00</textarea>
         </div>
         <div class="opt" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
           <span class="rd"></span>
-          <div class="info"><div class="nm">Kesim soni bo'yicha</div><div class="ds">Har bir kesim uchun fiksimsiz narx.</div></div>
+          <div class="info"><div class="nm">Chizma soni bo'yicha</div><div class="ds">Har bir chizma uchun fiksimsiz narx.</div></div>
         </div>
       </div>
     </div>
-    <div class="field"><label>Kesim narxi (so'm / list)</label><input value="100 000" /></div>
+    <div class="field"><label>Chizma narxi (so'm / list)</label><input value="100 000" /></div>
     <div class="field"><label>Krom narxi · 0.4 mm (so'm / metr)</label><input value="2 500" /></div>
     <div class="field"><label>Krom narxi · 2.0 mm (so'm / metr)</label><input value="3 000" /></div>
   </div>
@@ -155,8 +159,8 @@ if (!b) {
       <div class="card">
         <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')">Tahrirlash</button></div>
         <div class="card-b" style="padding-top: 0">
-          <div class="row-item"><div><div class="nm">Kesim modeli</div></div><div class="meta">List bo'yicha</div></div>
-          <div class="row-item"><div><div class="nm">Kesim narxi</div></div><div class="meta">100 000 so'm / list</div></div>
+          <div class="row-item"><div><div class="nm">Chizma modeli</div></div><div class="meta">List bo'yicha</div></div>
+          <div class="row-item"><div><div class="nm">Chizma narxi</div></div><div class="meta">100 000 so'm / list</div></div>
           <div class="row-item"><div><div class="nm">Krom 0.4 mm</div></div><div class="meta">2 500 so'm / metr</div></div>
           <div class="row-item"><div><div class="nm">Krom 2.0 mm</div></div><div class="meta">3 000 so'm / metr</div></div>
         </div>

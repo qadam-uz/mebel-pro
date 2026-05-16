@@ -3,18 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Kesim navbati — Mebel Pro · Boshqaruv</title>
+<title>Chizma navbati — Mebel Pro · Boshqaruv</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
     <div class="page-head">
       <div>
-        <h1>Kesim navbati</h1>
+        <h1>Chizma navbati</h1>
         <p class="sub">Tasdiqlangan buyurtmalar · oldindan tayinlanganlari yuqorida.</p>
       </div>
     </div>
@@ -59,7 +63,7 @@ document.getElementById('queue').innerHTML = queue.length === 0
         ${o.assignedCutter === 'u03' ? '<span class="assigned-tag">Sizga</span>' : ''}
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesim boshlash',msg:'${o.id} buyurtmasini olasiz.'},()=>{toast('Kesim boshlandi · ${o.id}');setTimeout(()=>location.reload(),700)})">▶ Kesimni boshlash</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Chizma boshlash',msg:'${o.id} buyurtmasini olasiz.'},()=>{toast('Chizma boshlandi · ${o.id}');setTimeout(()=>location.reload(),700)})">▶ Chizmani boshlash</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a>
       </div>
     </div>`;
@@ -81,7 +85,7 @@ document.getElementById('active').innerHTML = active.length === 0
       <div class="bar" style="margin-top:10px"><i style="width:58%"></i></div>
       <div class="meta" style="margin-top:6px">8 / 14 qism kesildi · 3 / 6 list ishlatildi</div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesim tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesim tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesim tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Chizma tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Chizma tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Chizma tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Chizmani ko'rish</a>
       </div>
     </div>`;

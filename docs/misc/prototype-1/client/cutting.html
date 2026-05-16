@@ -3,11 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Kesim chizmasi — Mebel Pro · Mijoz</title>
+<title>Chizma — Mebel Pro · Mijoz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="../assets/app.css" />
+<link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
+<meta name="theme-color" content="#FAF7F2" />
 <style>
   .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
   .seg-btn { padding: 7px 14px; background: transparent; border: 0; border-radius: 6px; color: var(--ink-8); font: 500 13px var(--f-ui); cursor: pointer; }
@@ -20,8 +24,6 @@
   .editor-hd { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); gap: 14px; flex-wrap: wrap; }
   .editor-hd h2 { font: 600 16px var(--f-display); color: var(--ink-12); margin: 0; letter-spacing: -.01em; }
   .editor-hd .meta { font: 500 12px var(--f-ui); color: var(--ink-6); }
-  .editor-hd .def-edge { display: inline-flex; align-items: center; gap: 8px; font: 500 12px var(--f-ui); color: var(--ink-8); }
-  .editor-hd .def-edge select { padding: 5px 8px; border: 1px solid var(--line); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-mono); color: var(--ink-12); }
 
   .parts-grid { display: grid; gap: 10px; padding: 14px 16px; }
   .part-row { display: grid; grid-template-columns: 28px minmax(170px,1.7fr) 70px 70px 60px 110px 36px; gap: 8px; align-items: center; padding: 8px 10px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; transition: border-color .12s; }
@@ -43,15 +45,18 @@
   .part-row .edges-btn .e.has { background: var(--accent); color: #fff; border-color: var(--accent); }
   .part-row .grain-ic { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-8); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; }
   .part-row .grain-ic .arr { font: 700 11px var(--f-mono); color: var(--ink-12); }
-  .part-row .row-menu { background: transparent; border: 0; padding: 6px 10px; cursor: pointer; color: var(--ink-6); font-size: 18px; line-height: 1; border-radius: 4px; }
-  .part-row .row-menu:hover { background: var(--sunk); color: var(--ink-12); }
-
   @media (max-width: 760px) {
-    .part-row { grid-template-columns: 28px 1fr 32px; grid-auto-rows: auto; padding: 12px; gap: 10px; }
-    .part-row .matwrap { grid-column: 2; }
-    .part-row .rownum { grid-row: 1; grid-column: 1; }
-    .part-row .row-menu { grid-row: 1; grid-column: 3; }
-    .part-row > input.num { grid-column: span 1; }
+    .part-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px; }
+    .part-row .rownum { order: 1; text-align: left; }
+    .part-row .matwrap { order: 2; flex: 1 1 55%; min-width: 0; }
+    .part-row .menu-wrap { order: 3; margin-left: auto; }
+    .part-row input.num { order: 4; flex: 1 1 72px; min-width: 64px; }
+    .part-row .edges-btn { order: 5; flex: 1 1 100%; justify-content: flex-start; gap: 6px; }
+    .part-row .edges-btn::before { content: "Krom:"; font: 600 11px var(--f-ui); color: var(--ink-6); margin-right: 4px; }
+  }
+  @media (max-width: 420px) {
+    .part-row .matwrap { flex-basis: 100%; }
+    .part-row input.num { flex-basis: 30%; }
   }
 
   /* Material picker modal */
@@ -69,10 +74,17 @@
   .edges-pop .presets { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .edges-pop .presets button { padding: 7px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: 500 12px var(--f-ui); color: var(--ink-12); }
   .edges-pop .presets button:hover { background: var(--elev); border-color: var(--ink-10); }
-  .edges-pop .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .edges-pop .sides label { font: 500 12px var(--f-ui); color: var(--ink-8); }
-  .edges-pop .sides select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); background: var(--elev); border-radius: 6px; font: 500 13px var(--f-mono); color: var(--ink-12); margin-top: 4px; }
-  .edges-pop .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); margin-top: 14px; }
+  .edge-diagram { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 4px; }
+  .edge-diagram .mid { display: flex; align-items: stretch; gap: 6px; }
+  .edge-diagram .panel { width: 168px; height: 104px; border-radius: 4px; background: repeating-linear-gradient(45deg, var(--sunk), var(--sunk) 7px, var(--elev) 7px, var(--elev) 14px); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font: 600 12px var(--f-ui); color: var(--ink-7); }
+  .edge-btn { background: var(--sunk); border: 1px dashed var(--line-strong); color: var(--ink-7); cursor: pointer; border-radius: 5px; font: 600 12px var(--f-mono); display: flex; align-items: center; justify-content: center; transition: all .12s; padding: 0; }
+  .edge-btn:hover { border-color: var(--ink-10); color: var(--ink-12); }
+  .edge-btn.set { background: var(--accent); border-style: solid; border-color: var(--accent); color: #fff; }
+  .edge-btn.h { width: 168px; height: 30px; }
+  .edge-btn.v { width: 56px; }
+  .edge-diagram .lbl { font: 500 10px var(--f-ui); text-transform: uppercase; letter-spacing: .05em; color: var(--ink-6); }
+  .edge-hint { text-align: center; font: 500 12px var(--f-ui); color: var(--ink-6); margin: 12px 0 2px; }
+  .edges-pop .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); margin-top: 14px; justify-content: center; }
 
   /* branches indicator */
   .br-strip { margin-top: 14px; padding: 12px 16px; background: var(--sunk); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; font: 500 13px var(--f-ui); color: var(--ink-10); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
@@ -149,27 +161,19 @@
 <main class="container" style="padding: 24px 0 64px">
   <div class="page-head" style="margin-bottom: 12px">
     <div>
-      <h1>Kesim chizmasi</h1>
-      <p class="sub">Materiallarni va qismlarni belgilang · optimallashtirib chizmani ko'ring.</p>
+      <h1>Chizma</h1>
+      <p class="sub">Material va qism o'lchamlarini kiriting — tizim listlarga optimal joylashtiradi.</p>
     </div>
   </div>
 
   <div class="seg" role="tablist" aria-label="Kiritish usuli">
     <button class="seg-btn on" type="button">Qo'lda kiritish</button>
-    <button class="seg-btn" type="button" disabled onclick="toast(&quot;Fayldan yuklash v2 da qo'shiladi&quot;)">Fayldan yuklash <span class="soon">tez orada</span></button>
+    <button class="seg-btn" type="button" disabled onclick="toast(&quot;Fayldan yuklash keyinroq qo'shiladi&quot;)">Fayldan yuklash <span class="soon">tez orada</span></button>
   </div>
 
   <section class="card editor">
     <div class="editor-hd">
       <h2>Qismlar <span class="meta" id="parts-count">0</span></h2>
-      <label class="def-edge">
-        <span>Standart krom (yangi qismlar uchun)</span>
-        <select id="def-edge">
-          <option value="none">Yo'q</option>
-          <option value="0.4">0.4 mm hammasiga</option>
-          <option value="2.0">2.0 mm hammasiga</option>
-        </select>
-      </label>
     </div>
     <div class="parts-grid" id="parts"></div>
     <div style="padding: 10px 16px 16px">
@@ -181,7 +185,7 @@
 
   <div class="run">
     <button class="btn btn-acc" id="optimize-btn" type="button" onclick="runOptimizer()">▶ Optimallashtirish</button>
-    <span class="sub" id="opt-hint">Qismlarni kiriting va optimallashtirib chizmani ko'ring.</span>
+    <span class="sub" id="opt-hint">Qismlarni kiriting, so'ng optimal joylashuvni hisoblang.</span>
   </div>
 
   <section class="result hide" id="result">
@@ -199,7 +203,7 @@
       </div>
       <div class="algos-list">
         <table>
-          <thead><tr><th>Algoritm</th><th>Wastage</th><th>Listlar</th><th>Kesim uzunligi</th><th></th></tr></thead>
+          <thead><tr><th>Algoritm</th><th>Chiqim</th><th>Listlar</th><th>Kesish uzunligi</th><th></th></tr></thead>
           <tbody id="algos-tbody"></tbody>
         </table>
       </div>
@@ -216,8 +220,8 @@
     </div>
 
     <div class="result-actions">
-      <a class="btn btn-acc" id="place-order-btn" href="#">Bu chizma bilan buyurtma berish →</a>
-      <button class="btn btn-outline" type="button" onclick="toast('PDF tayyorlanmoqda… (demo)')">PDF yuklab olish</button>
+      <a class="btn btn-acc" id="place-order-btn" href="#">Shu chizma bilan buyurtma berish →</a>
+      <button class="btn btn-outline" type="button" onclick="toast('PDF tayyorlanmoqda…')">PDF yuklab olish</button>
       <button class="btn btn-ghost" type="button" onclick="document.getElementById('parts').scrollIntoView({behavior:'smooth'})">Qismlarni tahrirlash ↑</button>
     </div>
   </section>
@@ -242,12 +246,18 @@
       <button type="button" onclick="presetEdges(0.4)">Hammasiga 0.4 mm</button>
       <button type="button" onclick="presetEdges(2.0)">Hammasiga 2.0 mm</button>
     </div>
-    <div class="sides">
-      <label>Yuqori<select id="e-t"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
-      <label>Pastki<select id="e-b"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
-      <label>Chap<select id="e-l"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
-      <label>O'ng<select id="e-r"><option value="">Yo'q</option><option value="0.4">0.4 mm</option><option value="2.0">2.0 mm</option></select></label>
+    <div class="edge-diagram">
+      <span class="lbl">Yuqori</span>
+      <button class="edge-btn h" type="button" data-side="t" onclick="cycleEdge('t')">Yo'q</button>
+      <div class="mid">
+        <button class="edge-btn v" type="button" data-side="l" onclick="cycleEdge('l')">Yo'q</button>
+        <div class="panel">Qism</div>
+        <button class="edge-btn v" type="button" data-side="r" onclick="cycleEdge('r')">Yo'q</button>
+      </div>
+      <button class="edge-btn h" type="button" data-side="b" onclick="cycleEdge('b')">Yo'q</button>
+      <span class="lbl">Pastki</span>
     </div>
+    <div class="edge-hint">Tomonni bosing: Yo'q → 0.4 mm → 2.0 mm</div>
     <label class="ck"><input type="checkbox" id="e-all" /> Barcha qismlarga shu sozlash qo'llanilsin</label>
   </div>
   <div class="modal-f">
@@ -290,10 +300,10 @@ let activeSheet = 1;
    ============================================================ */
 function partRowHtml(p, idx) {
   const mat = p.matId ? SEED.lookup.matById(p.matId) : null;
-  const grainBadge = mat && mat.grain ? '<span class="grain-ic" title="Tola: yo&#39;nalishi bor — kesimda hisobga olinadi"><span class="arr">↑</span>tola</span>' : '';
+  const grainBadge = mat && mat.grain ? '<span class="grain-ic" title="Tola: yo&#39;nalishi bor — chizmada hisobga olinadi"><span class="arr">↑</span>tola</span>' : '';
   const matLabel = mat ? `${mat.name.split('·')[0].trim()} <small style="color:var(--ink-6);font:400 10.5px var(--f-mono)">${mat.thickness}mm</small> ${grainBadge}` : '<span class="placeholder">Material tanlang...</span>';
   const sw = mat ? `<span class="sw mat-sw" data-sw="${mat.sw}"></span>` : '<span class="sw" style="background:var(--sunk);border:1px dashed var(--line)"></span>';
-  const srcLabel = p.source === 'own' ? "O'zim olib kelaman" : 'Sehdan';
+  const srcLabel = p.source === 'own' ? "O'zim olib kelaman" : 'Ustaxonadan';
   const srcCls = p.source === 'own' ? 'own' : '';
 
   const edges = p.edges || { t: null, b: null, l: null, r: null };
@@ -316,9 +326,9 @@ function partRowHtml(p, idx) {
         ${ec(edges.t)}${ec(edges.b)}${ec(edges.l)}${ec(edges.r)}
       </button>
       <div class="menu-wrap">
-        <button class="row-menu" type="button" data-menu-toggle aria-label="Yana">⋯</button>
+        <button class="menu-btn" type="button" data-menu-toggle aria-label="Yana">⋯</button>
         <div class="menu">
-          <button class="mi" type="button" data-action="duplicate" data-ref="${p.ref}">Dublikat</button>
+          <button class="mi" type="button" data-action="duplicate" data-ref="${p.ref}">Nusxalash</button>
           <button class="mi danger" type="button" data-action="delete" data-ref="${p.ref}">O'chirish</button>
         </div>
       </div>
@@ -346,7 +356,7 @@ function renderBranchStrip() {
   const strip = document.getElementById('br-strip');
   const shopParts = draft.partList.filter(p => p.source === 'shop' && p.matId);
   if (shopParts.length === 0) {
-    strip.innerHTML = `<div class="br-strip"><span class="ic">✓</span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan seh qabul qiladi.</span></div>`;
+    strip.innerHTML = `<div class="br-strip"><span class="ic">✓</span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan ustaxona qabul qiladi.</span></div>`;
     return;
   }
   const fulfilling = SEED.lookup.fulfillingBranches(draft.partList);
@@ -360,7 +370,7 @@ function renderBranchStrip() {
     strip.innerHTML = `
       <div class="br-strip warn">
         <span class="ic">!</span>
-        <span>Hech bir faol seh <b>${missingNames.join(' · ')}</b> materialini tashimaydi. Shu qism(lar)ni <em>O'zim olib kelaman</em>ga aylantiring yoki boshqa material tanlang.</span>
+        <span>Hech bir faol ustaxona <b>${missingNames.join(' · ')}</b> materialini tashimaydi. Shu qism(lar)ni <em>O'zim olib kelaman</em>ga aylantiring yoki boshqa material tanlang.</span>
       </div>`;
     return;
   }
@@ -369,8 +379,8 @@ function renderBranchStrip() {
   strip.innerHTML = `
     <div class="br-strip">
       <span class="ic">${fulfilling.length}</span>
-      <span><b>${fulfilling.length} ta seh</b> shu materiallarni tashiy oladi · <span class="br-names">${names}</span>${more}</span>
-      <span style="margin-left:auto;font:500 12px var(--f-ui);color:var(--ink-6)">Seh keyingi qadamda tanlanadi</span>
+      <span><b>${fulfilling.length} ta ustaxonada</b> bu materiallar mavjud · <span class="br-names">${names}</span>${more}</span>
+      <span style="margin-left:auto;font:500 12px var(--f-ui);color:var(--ink-6)">Ustaxona keyingi qadamda tanlanadi</span>
     </div>`;
 }
 
@@ -383,8 +393,7 @@ function renderAll() {
    Edit operations
    ============================================================ */
 function addPart() {
-  const defEdge = document.getElementById('def-edge').value;
-  const edges = defEdge === 'none' ? { t: null, b: null, l: null, r: null } : { t: +defEdge, b: +defEdge, l: +defEdge, r: +defEdge };
+  const edges = { t: null, b: null, l: null, r: null };
   draft.partList.push({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges });
   markStale();
   renderAll();
@@ -466,7 +475,7 @@ function renderMatList() {
           <div class="nm">${m.name}</div>
           <div class="meta">${m.thickness}mm · ${m.sheetLen}×${m.sheetWid}${m.grain ? ' · tola bor' : ''}</div>
         </div>
-        <span class="by-n">${carriedBy} sehda</span>
+        <span class="by-n">${carriedBy} ustaxonada</span>
       </div>`;
   }).join('');
   wrap.querySelectorAll('.mat-opt').forEach(el => {
@@ -485,33 +494,43 @@ function renderMatList() {
 /* ============================================================
    Edges popover
    ============================================================ */
+const EDGE_CYCLE = [null, 0.4, 2.0];
+let edgeState = { t: null, b: null, l: null, r: null };
+
+function renderEdgeDiagram() {
+  ['t','b','l','r'].forEach(side => {
+    const btn = document.querySelector(`#m-edges .edge-btn[data-side="${side}"]`);
+    if (!btn) return;
+    const v = edgeState[side];
+    btn.textContent = v ? v.toFixed(1) : "Yo'q";
+    btn.classList.toggle('set', !!v);
+  });
+}
+
+function cycleEdge(side) {
+  const i = EDGE_CYCLE.findIndex(x => x === edgeState[side]);
+  edgeState[side] = EDGE_CYCLE[(i + 1) % EDGE_CYCLE.length];
+  renderEdgeDiagram();
+}
+
 function openEdgesPopover(ref) {
   editingEdgesRef = ref;
   const p = draft.partList.find(x => x.ref === ref);
   if (!p) return;
-  document.getElementById('e-t').value = p.edges.t ?? '';
-  document.getElementById('e-b').value = p.edges.b ?? '';
-  document.getElementById('e-l').value = p.edges.l ?? '';
-  document.getElementById('e-r').value = p.edges.r ?? '';
+  edgeState = { t: p.edges.t ?? null, b: p.edges.b ?? null, l: p.edges.l ?? null, r: p.edges.r ?? null };
   document.getElementById('e-all').checked = false;
+  renderEdgeDiagram();
   openModal('m-edges');
 }
 
 function presetEdges(v) {
-  const s = v ? String(v) : '';
-  document.getElementById('e-t').value = s;
-  document.getElementById('e-b').value = s;
-  document.getElementById('e-l').value = s;
-  document.getElementById('e-r').value = s;
+  const val = v ? +v : null;
+  edgeState = { t: val, b: val, l: val, r: val };
+  renderEdgeDiagram();
 }
 
 function applyEdges() {
-  const edges = {
-    t: document.getElementById('e-t').value ? +document.getElementById('e-t').value : null,
-    b: document.getElementById('e-b').value ? +document.getElementById('e-b').value : null,
-    l: document.getElementById('e-l').value ? +document.getElementById('e-l').value : null,
-    r: document.getElementById('e-r').value ? +document.getElementById('e-r').value : null,
-  };
+  const edges = { t: edgeState.t, b: edgeState.b, l: edgeState.l, r: edgeState.r };
   const all = document.getElementById('e-all').checked;
   if (all) {
     draft.partList.forEach(p => p.edges = { ...edges });
@@ -554,7 +573,7 @@ function runOptimizer() {
     resultStale = false;
     document.getElementById('stale-pill').classList.add('hide');
     document.getElementById('result').classList.remove('hide');
-    document.getElementById('opt-hint').textContent = 'Algoritm ishladi · pastdagi natijani ko\'ring.';
+    document.getElementById('opt-hint').textContent = 'Optimallashtirish tayyor — natija quyida.';
     renderResult();
     document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 500);
@@ -606,9 +625,9 @@ function renderResult() {
 
   document.getElementById('metrics').innerHTML = `
     <div class="metric ${algo.wastePct <= 10 ? 'ok' : algo.wastePct >= 18 ? 'warn' : ''}">
-      <div class="lab">Behuda chiqim</div>
+      <div class="lab">Chiqim</div>
       <div class="v">${algo.wastePct}%</div>
-      <div class="sub">o'rtacha materiallar bo'yicha</div>
+      <div class="sub">materiallar bo'yicha o'rtacha</div>
     </div>
     <div class="metric">
       <div class="lab">Listlar</div>
@@ -623,12 +642,12 @@ function renderResult() {
     <div class="metric ok">
       <div class="lab">Qismlar</div>
       <div class="v">${placed} / ${partsTotal} ✓</div>
-      <div class="sub">${algo.cutLen} m kesim</div>
+      <div class="sub">${algo.cutLen} m kesish</div>
     </div>`;
 
   // current algo summary
   document.getElementById('cur-algo').textContent = algo.name;
-  document.getElementById('cur-algo-meta').textContent = `wastage ${algo.wastePct}% · ${totalSheets} list · ${algo.cutLen}m kesim`;
+  document.getElementById('cur-algo-meta').textContent = `chiqim ${algo.wastePct}% · ${totalSheets} list · ${algo.cutLen} m kesish`;
 
   // algorithm comparison table
   document.getElementById('algos-tbody').innerHTML = draft.algorithms.map(a => {
@@ -748,8 +767,8 @@ function renderSheetSvg(algo) {
 
   document.getElementById('sheet-info').innerHTML = `
     <span>List o'lchami: <b>${W} × ${H} mm</b></span>
-    <span>Kerf: <b>4 mm</b></span>
-    <span>Chet o'rni: <b>10 mm</b></span>`;
+    <span title="Arra tig'i har bir kesimda yo'qotadigan eni">Arra kengligi: <b>4 mm</b></span>
+    <span title="List chetidan qirqib tashlanadigan ishlatilmaydigan zona">Chekka qirqim: <b>10 mm</b></span>`;
 }
 
 /* Read-only banner when this is a bound (confirmed) result */
@@ -771,7 +790,7 @@ if (draft.status === 'confirmed' && draft.orderId) {
 renderAll();
 if (draft.algorithms && draft.algorithms.length) {
   document.getElementById('result').classList.remove('hide');
-  document.getElementById('opt-hint').textContent = 'Algoritm ishladi · pastdagi natijani ko\'ring.';
+  document.getElementById('opt-hint').textContent = 'Optimallashtirish tayyor — natija quyida.';
   renderResult();
 }
 </script>
