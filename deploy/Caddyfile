@@ -33,9 +33,18 @@
 	}
 }
 
-# Apex: landing only.
+# Apex: the static SEO landing only. The `web` image builds both the Vue
+# client SPA (dist/index.html) and the standalone landing
+# (dist/landing/index.html); nginx serves index.html at `/`, so the apex
+# rewrites the bare path to the landing. The landing's own static refs
+# (/favicon.*, /site.webmanifest, fingerprinted /assets/*) live at the web
+# root and pass through untouched.
 {$BASE_DOMAIN} {
 	import common
+
+	@root path /
+	rewrite @root /landing/index.html
+
 	reverse_proxy web:80
 }
 

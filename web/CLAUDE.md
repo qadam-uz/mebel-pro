@@ -11,7 +11,7 @@ The design [`docs/architecture.md`](../docs/architecture.md) → _Why three SPAs
 2. **three Vue SPAs** in this repo, each its own Vite entry, auth surface, and route set — **client** (Telegram-auth customers: cutting + ordering + tracking), **workshop** (login-auth workshop owner & staff, every screen gated by permission grants), **superadmin** (login-auth platform operators);
 3. shared UI primitives, the API client, design tokens, and i18n living once in the repo, consumed by all three.
 
-**Current state:** this repo is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. The split into three entries + extracting shared code + the static landing is pending build work; until then, treat the scaffold as the client app and don't add workshop/superadmin screens to it.
+**Current state:** the **static landing exists** — `web/landing/index.html`, its own Vite entry (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at the apex by the Caddy edge (`deploy/Caddyfile` rewrites `/` → `/landing/index.html`); it is _not_ part of the Vue tree. The Vue side is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. Pending build work: splitting the Vue side into three entries + extracting shared code; until then, treat the scaffold as the client app and don't add workshop/superadmin screens to it.
 
 ## Toolchain
 
