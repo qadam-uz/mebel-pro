@@ -79,6 +79,15 @@ if [ -z "$ok" ]; then
     exit 1
 fi
 
+# The Caddyfile is bind-mounted into the pinned `caddy` image, so a
+# `compose up -d` does NOT recreate the edge when only the file's contents
+# changed — Caddy would keep serving the stale in-memory config. Reload it
+# explicitly: graceful, zero-downtime, and leaves the cert cache untouched
+# (no Let's Encrypt re-provisioning).
+echo "==> Reloading Caddy edge (apply Caddyfile changes)"
+docker compose -f compose.prod.yaml exec -T edge \
+    caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+
 echo "==> Stack is healthy; pruning dangling images"
 docker image prune -f >/dev/null 2>&1 || true
 
