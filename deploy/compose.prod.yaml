@@ -99,7 +99,9 @@ services:
           cpus: "0.5"
 
   edge:
-    image: caddy:2.8-alpine
+    build:
+      context: .
+      dockerfile: edge.Dockerfile
     restart: unless-stopped
     depends_on:
       - web
@@ -115,7 +117,8 @@ services:
       - "443:443"      # HTTPS
       - "443:443/udp"  # HTTP/3 (QUIC)
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddyfile is baked into the image (see edge.Dockerfile) — not mounted,
+      # so config changes ship as a new image and recreate the edge.
       - caddy-data:/data       # certs + ACME state — must persist
       - caddy-config:/config
     logging:

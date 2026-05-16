@@ -1,0 +1,6 @@
+# Build context for edge.Dockerfile (context = this deploy/ dir). The image
+# only needs the Caddyfile; keep .env, compose files, and scripts out of the
+# context entirely. (Has no effect on the backend/web builds — their contexts
+# are ../backend and ../web, each with their own .dockerignore.)
+*
+!Caddyfile

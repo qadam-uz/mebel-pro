@@ -28,10 +28,21 @@ cd "$APP_DIR"
 # default to origin/main.
 DEPLOY_REF="${DEPLOY_REF:-origin/main}"
 
-echo "==> Fetching latest from origin"
-git fetch --all --prune
-echo "==> Resetting to $DEPLOY_REF"
-git reset --hard "$DEPLOY_REF"
+# The fetch+reset can rewrite THIS script. Bash reads a script as it runs,
+# so continuing past the reset could splice old and new lines — and a fix to
+# the deploy flow would only take effect one deploy late. Do the reset, then
+# re-exec the freshly-checked-out script exactly once (guarded so it can't
+# loop); the re-exec'd run skips this block and proceeds with the new code.
+if [ -z "${DEPLOY_REEXECED:-}" ]; then
+    echo "==> Fetching latest from origin"
+    git fetch --all --prune
+    echo "==> Resetting to $DEPLOY_REF"
+    git reset --hard "$DEPLOY_REF"
+
+    echo "==> Re-exec'ing the deployed deploy.sh"
+    export DEPLOY_REEXECED=1
+    exec bash "$0" "$@"
+fi
 
 cd "$APP_DIR/deploy"
 
@@ -78,15 +89,6 @@ if [ -z "$ok" ]; then
     docker compose -f compose.prod.yaml logs --tail=80 backend >&2
     exit 1
 fi
-
-# The Caddyfile is bind-mounted into the pinned `caddy` image, so a
-# `compose up -d` does NOT recreate the edge when only the file's contents
-# changed — Caddy would keep serving the stale in-memory config. Reload it
-# explicitly: graceful, zero-downtime, and leaves the cert cache untouched
-# (no Let's Encrypt re-provisioning).
-echo "==> Reloading Caddy edge (apply Caddyfile changes)"
-docker compose -f compose.prod.yaml exec -T edge \
-    caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 
 echo "==> Stack is healthy; pruning dangling images"
 docker image prune -f >/dev/null 2>&1 || true
