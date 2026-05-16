@@ -8,8 +8,8 @@ onMounted(health.fetchHealth)
 
 <template>
   <section class="space-y-4">
-    <h1 class="text-2xl font-semibold">Mebel Pro</h1>
-    <p class="text-gray-600">Frontend scaffold is up.</p>
+    <h1 class="font-serif text-3xl font-semibold tracking-[-0.02em]">Mebel Pro</h1>
+    <p class="text-ink-soft">Frontend scaffold is up.</p>
 
     <div class="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm">
       <p v-if="health.loading">Checking backend…</p>

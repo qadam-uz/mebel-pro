@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1f2937"/><text x="16" y="22" font-family="system-ui, sans-serif" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">M</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mebel Pro">
+  <title>Mebel Pro</title>
+  <rect width="32" height="32" rx="7" fill="#A6471F"/>
+  <g fill="#FAF7F2" transform="translate(4.571,4.571) scale(0.7143)">
+    <rect x="2" y="2" width="11.6" height="28" rx="2.2"/>
+    <rect x="16" y="2" width="14" height="12.6" rx="2.2"/>
+    <rect x="16.4" y="17.4" width="13" height="12" rx="2.2" transform="rotate(-3.5 22.9 23.4)"/>
+  </g>
+</svg>
