@@ -47,66 +47,62 @@ There is **no post-placement modification.** If anything is wrong, the order is 
 
 ## The state machine
 
-`new → confirmed → cutting → (edge_banding) → ready → completed`, plus `cancelled` from any
-pre-`completed` state. `edge_banding` is **skipped when no part of the order is banded**.
+One straight spine with a single gateway — *does any part need edge banding?* Read it top to
+bottom: the solid path is the happy flow and the dashed arrows are the operator **revert**
+(one step back, a mistake fix). **Cancellation is not drawn** — it would cross every box: any
+non-terminal status can go to `cancelled` (see the table below).
 
 ```mermaid
-stateDiagram-v2
-    [*] --> new : client places order
-    new --> confirmed : operator approves (verified)
-    new --> cancelled : client or operator cancels + reason
+flowchart TD
+    start([▶ client places order]) --> new[new<br/>placed · awaiting review]
+    new -->|operator approves| confirmed[confirmed<br/>verified · awaiting cutter]
+    confirmed -->|operator assigns a cutter| cutting[cutting<br/>cutter at the saw]
+    cutting -->|Cutting done| gate{any part<br/>edge-banded?}
+    gate -->|yes| edge_banding[edge_banding<br/>edger working]
+    gate -->|no| ready[ready<br/>awaiting collection]
+    edge_banding -->|Banding done| ready
+    ready -->|operator marks collected| done([● completed])
 
-    confirmed --> cutting : operator assigns a cutter
-    confirmed --> cancelled : operator cancels + reason
-
-    cutting --> edge_banding : Cutting done<br/>(+ decrement sheets · has banded parts)
-    cutting --> ready : Cutting done<br/>(+ decrement sheets · no banded parts)
-    cutting --> confirmed : operator revert + reason
-    cutting --> cancelled : operator cancels + reason
-
-    edge_banding --> ready : Banding done<br/>(+ decrement edges)
-    edge_banding --> cutting : operator revert + reason<br/>(re-increment sheets)
-    edge_banding --> cancelled : operator cancels + reason
-
-    ready --> completed : operator marks collected
-    ready --> edge_banding : operator revert + reason<br/>(re-increment edges)
-    ready --> cancelled : operator cancels + reason
-
-    completed --> [*]
-    cancelled --> [*]
+    cutting -. "revert" .-> confirmed
+    edge_banding -. "revert" .-> cutting
+    ready -. "revert" .-> edge_banding
 ```
 
 `completed` and `cancelled` are **terminal**. A post-collection problem (return, complaint)
 is out of v1 ([`scope.md`](../../scope.md)) — `completed` is final by design.
+`edge_banding` is skipped when no part is banded (the gateway's *no* branch).
+
+### Transitions
+
+Who triggers each step (by per-branch grant — there are no fixed roles), and its effects:
+
+| From → To | Trigger · who | Effect |
+|---|---|---|
+| — → `new` | client places the order from a chosen cutting result | price snapshot frozen |
+| `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) | — |
+| `new → cancelled` | **Cancel** · client (only while `new`) or `manage_orders` + reason | — |
+| `confirmed → cutting` | **Assign a cutter** · `manage_orders` — the assignment *is* the trigger; the edger is assigned now too if any part is banded | — |
+| `cutting → edge_banding` | **Cutting done** · `process_production`, or `manage_orders` on-behalf — *gateway: a part is banded* | stamp the cutter + snapshot; **decrement sheet stock** (`shop`) |
+| `cutting → ready` | **Cutting done** · same — *gateway: no part is banded* | stamp the cutter + snapshot; **decrement sheet stock** (`shop`) |
+| `edge_banding → ready` | **Banding done** · `process_production`, or `manage_orders` on-behalf | stamp the edger + snapshot; **decrement edge stock** (`shop`) |
+| `ready → completed` | **Mark collected** · `manage_orders` | stamp `picked_up_at` |
+| `* → cancelled` | **Cancel** · `manage_orders` + reason (any pre-`completed` status) | already-decremented material stays consumed |
+| revert: `cutting→confirmed`, `edge_banding→cutting`, `ready→edge_banding\|cutting` | **Revert** one step · `manage_orders` + reason | clears that step's stamps; **re-increments** the stock it decremented |
 
 ### Rules
 
-- **Verification is a human gate, not a payment gate.** A user with `manage_orders` reviews
-  the order, calls the client, and **approves** it (`new → confirmed`) or **cancels** it
-  with a mandatory free-text reason. Payment plays no part in any transition (see
-  *The money seam*).
-- **Assigning a cutter is the trigger into production.** From `confirmed`, a `manage_orders`
-  user assigns a cutter — that assignment *is* the `confirmed → cutting` transition. An edger
-  is assigned at the same time when the order has banded parts (it just sets the assignee;
-  the order reaches `edge_banding` only when cutting is done). Re-assignment of either is
-  allowed until that job is marked done.
 - **One button per job; no per-item work.** Workers don't manage line items. The cutter
   views the cutting plan read-only and marks **Cutting done** once; the edger marks
   **Banding done** once. A `manage_orders` user may complete a job **on behalf** (worker
   absent / system issue) — the dialog asks **"Who did this work?"**, defaulting to the
   assignee; the chosen user is who gets **credited** for the production reports
   ([`finance.md`](finance.md)).
-- **Operator revert (mistake correction).** A `manage_orders` user can step the order **one
-  state back** with a mandatory reason (`ready → edge_banding`/`cutting`,
-  `edge_banding → cutting`, `cutting → confirmed`). Revert reverses that step's production
-  stamps and **re-increments any stock that step decremented**. There is no revert out of
-  `completed` or `cancelled`.
+- **Re-assignment** of the cutter or edger is allowed until that job is marked done.
+- **Revert is mistake-correction only** — one step, never out of `completed` or `cancelled`.
 - **Every transition is an `order_status_event`** (actor, from → to, reason, metadata),
   append-only, mirrored to the audit log.
 - **Optimistic locking** on transitions (a `version` column): concurrent staff actions
   serialize; the loser is told to refresh and retry.
-- **Cancellation always carries a reason.** Operator-only on `confirmed`/`cutting`/
-  `edge_banding`/`ready`; the client may cancel only while still `new`.
 
 ### Production stamps
 
