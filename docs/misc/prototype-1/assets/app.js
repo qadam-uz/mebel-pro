@@ -51,6 +51,8 @@ document.addEventListener('click', e => {
 });
 
 // ---------- Dropdown menus ----------
+// Capture phase: runs before any ancestor's stopPropagation() (row/card nav
+// guards), so the action menu always opens even inside a clickable card/row.
 document.addEventListener('click', e => {
   // open/close
   const trigger = e.target.closest('[data-menu-toggle]');
@@ -69,7 +71,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.menu')) {
     document.querySelectorAll('.menu.on').forEach(m => m.classList.remove('on'));
   }
-});
+}, true);
 
 // ---------- Branch picker pop ----------
 window.toggleBranchPop = (e) => {

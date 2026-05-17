@@ -168,7 +168,7 @@ function renderBoard(orders) {
         const cl = SEED.lookup.clientById(o.clientId);
         const n = itemCount(o);
         return `
-        <article class="board-card" onclick="location.href='order-detail.html?id=${o.id}'">
+        <article class="board-card" onclick="if(!event.target.closest('.menu-wrap'))location.href='order-detail.html?id=${o.id}'">
           <div class="top"><span class="id">${o.id}</span><span class="amt">${fmtTiyin(o.totalTiyin)}</span></div>
           <div class="who">${cl?.name || ''}</div>
           <div class="meta"><span style="color:var(--ink-8)">${o.title}</span></div>
@@ -177,9 +177,9 @@ function renderBoard(orders) {
             <span style="font-size:10.5px;color:var(--ink-6)">${o.placedAt || ''}</span>
             ${workerChip(o)}
           </div>
-          <div class="meta" onclick="event.stopPropagation()" style="margin-top:6px">
+          <div class="meta" style="margin-top:6px">
             <div class="menu-wrap" style="margin-left:auto">
-              <button class="menu-btn btn-sm" type="button" data-menu-toggle>Holat ⋯</button>
+              <button class="btn btn-outline btn-sm" type="button" data-menu-toggle>Holat ⋯</button>
               <div class="menu">${cardActions(o)}</div>
             </div>
           </div>

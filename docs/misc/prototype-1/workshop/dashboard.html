@@ -181,9 +181,9 @@ document.getElementById('kpis').innerHTML = `
     <div class="v num">${fmtTiyin(expense)}</div>
     <div class="d"><span class="muted">yozilgan</span></div>
   </div>
-  <div class="kpi" style="background:var(--success-tint);border-color:var(--success-tint)" onclick="location.href='finance.html'">
-    <div class="lbl" style="color:var(--success)">Sof foyda</div>
-    <div class="v num success-text">${fmtTiyin(income - expense)}</div>
+  <div class="kpi" style="background:${income - expense >= 0 ? 'var(--success-tint)' : 'var(--danger-tint)'};border-color:${income - expense >= 0 ? 'var(--success-tint)' : 'var(--danger-tint)'}" onclick="location.href='finance.html'">
+    <div class="lbl" style="color:${income - expense >= 0 ? 'var(--success)' : 'var(--danger)'}">Sof foyda</div>
+    <div class="v num ${income - expense >= 0 ? 'success-text' : 'danger-text'}">${fmtTiyin(income - expense)}</div>
     <div class="d"><span class="muted">tushum − xarajat</span></div>
   </div>
   <div class="kpi warn" onclick="location.href='inventory.html'">

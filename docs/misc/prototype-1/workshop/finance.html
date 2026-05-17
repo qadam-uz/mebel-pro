@@ -53,9 +53,9 @@
         <div class="v num" id="kpi-salary">—</div>
         <div class="d"><span class="muted">'salary' kategoriyasi</span></div>
       </div>
-      <div class="kpi" style="background: var(--success-tint); border-color: var(--success-tint)">
-        <div class="lbl" style="color:var(--success)">Sof foyda</div>
-        <div class="v num success-text" id="kpi-net">—</div>
+      <div class="kpi" id="kpi-net-card">
+        <div class="lbl" id="kpi-net-lbl">Sof foyda</div>
+        <div class="v num" id="kpi-net">—</div>
         <div class="d"><span class="muted">tushum − xarajat</span></div>
       </div>
     </div>
@@ -119,7 +119,15 @@ const salary = recExpense.filter(e => e.category === 'salary').reduce((a, e) => 
 document.getElementById('kpi-income').innerHTML = fmtTiyin(income);
 document.getElementById('kpi-expense').innerHTML = fmtTiyin(expense);
 document.getElementById('kpi-salary').innerHTML = fmtTiyin(salary);
-document.getElementById('kpi-net').innerHTML = fmtTiyin(income - expense);
+const net = income - expense;
+const netGood = net >= 0;
+const netCard = document.getElementById('kpi-net-card');
+netCard.style.background = netGood ? 'var(--success-tint)' : 'var(--danger-tint)';
+netCard.style.borderColor = netGood ? 'var(--success-tint)' : 'var(--danger-tint)';
+document.getElementById('kpi-net-lbl').style.color = netGood ? 'var(--success)' : 'var(--danger)';
+const netEl = document.getElementById('kpi-net');
+netEl.className = 'v num ' + (netGood ? 'success-text' : 'danger-text');
+netEl.innerHTML = fmtTiyin(net);
 
 const METHOD = { cash: 'Naqd', bank_transfer: 'Bank', card: 'Karta', other: 'Boshqa' };
 document.getElementById('income-body').innerHTML = recIncome.map(i => `<tr>
@@ -139,7 +147,7 @@ document.getElementById('cat-body').innerHTML = Object.entries(byCat).sort((a,b)
 document.getElementById('branch-body').innerHTML = SEED.branches.map(b => {
   const inc = recIncome.filter(i => i.branchId === b.id).reduce((a, i) => a + i.amountTiyin, 0);
   const exp = recExpense.filter(e => e.branchId === b.id).reduce((a, e) => a + e.amountTiyin, 0);
-  return `<tr><td>${b.name}</td><td class="amt">${fmtTiyin(inc)}</td><td class="amt">${fmtTiyin(exp)}</td><td class="amt success-text">${fmtTiyin(inc - exp)}</td></tr>`;
+  return `<tr><td>${b.name}</td><td class="amt">${fmtTiyin(inc)}</td><td class="amt">${fmtTiyin(exp)}</td><td class="amt ${inc - exp >= 0 ? 'success-text' : 'danger-text'}">${fmtTiyin(inc - exp)}</td></tr>`;
 }).join('');
 
 document.getElementById('prod-body').innerHTML = SEED.workerProduction.map(w => {
