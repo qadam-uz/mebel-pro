@@ -38,7 +38,7 @@
 
   <div id="new-banner" class="banner success" style="display: none">
     <div class="ic">✓</div>
-    <div class="grow">Buyurtmangiz qabul qilindi · ustaxonada to'lov tasdiqlangach ish boshlanadi.</div>
+    <div class="grow">Buyurtma berildi — ustaxona ko'rib chiqib siz bilan bog'lanadi.</div>
   </div>
 
   <div id="od-wrap"></div>
@@ -57,14 +57,16 @@ if (!o) {
   const br = SEED.lookup.branchById(o.branchId);
   const cl = SEED.lookup.clientById(o.clientId);
   const tl = buildTimeline(o);
+  const banded = SEED.lookup.isBanded(SEED.lookup.cuttingById(o.cuttingId) || {});
+  const fin = SEED.lookup.orderFinance(o);
+  const showFinance = ['ready', 'completed'].includes(o.state);
 
   const itemsRows = [
-    { lbl: 'Chizma xizmati (6 list)', val: fmtTiyin(o.cuttingFeeTiyin) },
-    { lbl: 'Material', val: fmtTiyin(o.materialsTiyin) },
-    { lbl: 'Krom yopishtirish', val: fmtTiyin(o.edgeFeeTiyin) }
+    { lbl: 'Chizma xizmati', val: fmtTiyin(o.subtotalCuttingTiyin) },
+    { lbl: 'Material', val: fmtTiyin(o.subtotalMaterialsTiyin) }
   ];
-  if (o.deliveryType === 'delivery') itemsRows.push({ lbl: 'Yetkazma', val: fmtTiyin(o.deliveryFeeTiyin) });
-  if (o.discountTiyin) itemsRows.push({ lbl: 'Chegirma', val: '− ' + fmtTiyin(o.discountTiyin) });
+  if (o.subtotalEdgeBandingTiyin) itemsRows.push({ lbl: 'Krom yopishtirish', val: fmtTiyin(o.subtotalEdgeBandingTiyin) });
+  if (o.discountTiyin) itemsRows.push({ lbl: `Chegirma${o.discountReason ? ' · ' + o.discountReason : ''}`, val: '− ' + fmtTiyin(o.discountTiyin) });
 
   wrap.innerHTML = `
     <div class="od-head">
@@ -72,11 +74,11 @@ if (!o) {
         <div>
           <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
           <h1>${o.title}</h1>
-          <div class="muted">${o.placedAt} · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olib ketish'}</div>
+          <div class="muted">${o.placedAt} · ustaxonadan olib ketish</div>
         </div>
         <div style="text-align: right">
           <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
-          <div class="num" style="margin-top: 6px; font-size: 18px; font-weight: 600">${fmtTiyin(o.totalTiyin)}</div>
+          ${showFinance ? `<div class="num" style="margin-top: 6px; font-size: 18px; font-weight: 600">${fmtTiyin(o.totalTiyin)}</div>` : ''}
         </div>
       </div>
       <div class="actions">
@@ -84,11 +86,16 @@ if (!o) {
       </div>
     </div>
 
+    ${o.state === 'cancelled' ? `
+      <div class="banner warn" style="margin-bottom: 18px">
+        <div class="ic">!</div>
+        <div class="grow">Buyurtma bekor qilindi${o.cancelledAt ? ` · ${o.cancelledAt}` : ''}.${o.cancelReason ? ` Sabab: <b>${o.cancelReason}</b>` : ''}</div>
+      </div>
+    ` : ''}
+
     <div class="tabs" data-tabs="od">
       <button class="tab on" data-target="t-overview" onclick="switchTab('od','t-overview')">Umumiy</button>
       <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Chizma</button>
-      <button class="tab" data-target="t-payments" onclick="switchTab('od','t-payments')">To'lovlar</button>
-      ${o.refundPending ? `<button class="tab" data-target="t-refunds" onclick="switchTab('od','t-refunds')">Qaytarishlar</button>` : ''}
       <button class="tab" data-target="t-timeline" onclick="switchTab('od','t-timeline')">Tarix</button>
     </div>
 
@@ -98,23 +105,24 @@ if (!o) {
           <div class="card">
             <div class="card-h"><h2>Buyurtma tarkibi</h2></div>
             <div class="card-b" style="padding-top: 0">
-              <div class="row-item"><div><div class="nm">14 ta qism</div><small style="color:var(--ink-6)">LDSP 18 mm · 6 list</small></div><div class="meta">6 list</div></div>
-              <div class="row-item"><div><div class="nm">Krom 0.4 mm</div><small style="color:var(--ink-6)">barcha qismlar — yon tomonlar</small></div><div class="meta">18.2 m</div></div>
-              <div class="row-item"><div><div class="nm">Krom 2.0 mm</div><small style="color:var(--ink-6)">P2 qism · barcha tomonlar</small></div><div class="meta">12.8 m</div></div>
+              <div class="row-item"><div><div class="nm">Chizma</div><small style="color:var(--ink-6)">${o.cuttingId}</small></div><div class="meta">${fmtTiyin(o.subtotalCuttingTiyin)}</div></div>
+              <div class="row-item"><div><div class="nm">Material</div><small style="color:var(--ink-6)">ustaxona materiali</small></div><div class="meta">${fmtTiyin(o.subtotalMaterialsTiyin)}</div></div>
+              ${o.subtotalEdgeBandingTiyin ? `<div class="row-item"><div><div class="nm">Krom yopishtirish</div></div><div class="meta">${fmtTiyin(o.subtotalEdgeBandingTiyin)}</div></div>` : ''}
+              ${o.discountTiyin ? `<div class="row-item"><div><div class="nm">Chegirma</div><small style="color:var(--ink-6)">${o.discountReason || ''}</small></div><div class="meta success-text">− ${fmtTiyin(o.discountTiyin)}</div></div>` : ''}
             </div>
           </div>
 
           <div class="card" style="margin-top: 14px">
-            <div class="card-h"><h2>Yetkazma</h2></div>
+            <div class="card-h"><h2>Olib ketish</h2></div>
             <div class="card-b" style="padding-top: 0">
               <div class="row-item">
                 <div>
-                  <div class="nm">${o.deliveryType === 'delivery' ? 'Yetkazib berish' : 'Olib ketish'}</div>
-                  <small style="color:var(--ink-6)">${o.address || (br?.addr || '')}</small>
+                  <div class="nm">${br?.city} · ${br?.name}</div>
+                  <small style="color:var(--ink-6)">${br?.addr || ''}</small>
                 </div>
-                <div class="meta">${fmtTiyin(o.deliveryFeeTiyin || 0)}</div>
+                <div class="meta">${br?.phone || ''}</div>
               </div>
-              ${o.dueAt ? `<div class="row-item"><div><div class="nm">Sana</div></div><div class="meta">${o.dueAt}</div></div>` : ''}
+              ${o.dueAt ? `<div class="row-item"><div><div class="nm">Taxminiy sana</div></div><div class="meta">${o.dueAt}</div></div>` : ''}
             </div>
           </div>
         </section>
@@ -126,55 +134,11 @@ if (!o) {
               <a class="more" href="cutting-result.html?id=${o.cuttingId}">To'liq ko'rish →</a>
             </div>
             <div class="card-b" style="padding-top: 0">
-              <p class="muted" style="font-size:13px;margin:0 0 14px">Chizma algoritmi · FFD-guillotine v1 · 8.2% qoldiq</p>
+              <p class="muted" style="font-size:13px;margin:0 0 14px">Chizma · ${o.cuttingId}${banded ? ' · krom yopishtirish bor' : ''}</p>
               <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlanmoqda')">⬇ Chizmani PDF olish</button>
             </div>
           </div>
         </section>
-
-        <section id="t-payments" data-panel-group="od" hidden>
-          <div class="card">
-            <div class="card-h"><h2>To'lovlar</h2></div>
-            <div class="card-b" style="padding-top: 0">
-              ${o.paidTiyin > 0 ? `
-                <div class="row-item">
-                  <div>
-                    <div class="nm">${o.paymentType === 'advance' ? '50% oldindan to&#39;lov' : 'To&#39;liq to&#39;lov'}</div>
-                    <small style="color:var(--ink-6)">Naqd · ${o.placedAt} · Aziza op. qabul qildi</small>
-                  </div>
-                  <div class="meta success-text">+ ${fmtTiyin(o.paidTiyin)}</div>
-                </div>
-              ` : `<p class="muted" style="font-size:13px;margin:14px 0 0">Hali to'lov yo'q. Ustaxonada to'lash uchun keling yoki haydovchiga to'lang.</p>`}
-              ${o.paidTiyin < o.totalTiyin ? `
-                <div class="row-item">
-                  <div>
-                    <div class="nm">Qolgan summa</div>
-                    <small style="color:var(--ink-6)">olib ketish/yetkazma paytida</small>
-                  </div>
-                  <div class="meta warn-text">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        </section>
-
-        ${o.refundPending ? `
-          <section id="t-refunds" data-panel-group="od" hidden>
-            <div class="card">
-              <div class="card-h"><h2>Qaytarishlar</h2></div>
-              <div class="card-b" style="padding-top: 0">
-                <div class="banner warn"><div class="ic">!</div><div class="grow">Buyurtma bekor qilindi · ustaxonadan pul qaytarishni kutmoqda. Mas'ul: <b>Hasan ako</b>.</div></div>
-                <div class="row-item">
-                  <div>
-                    <div class="nm">Pul qaytarish · kutilmoqda</div>
-                    <small style="color:var(--ink-6)">8 kun · ustaxonaga murojaat qiling</small>
-                  </div>
-                  <div class="meta">${fmtTiyin(o.paidTiyin)}</div>
-                </div>
-              </div>
-            </div>
-          </section>
-        ` : ''}
 
         <section id="t-timeline" data-panel-group="od" hidden>
           <div class="card">
@@ -187,12 +151,15 @@ if (!o) {
       </div>
 
       <aside>
+        ${showFinance ? `
         <div class="totals">
           ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
-          <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(o.totalTiyin)}</span></div>
-          ${o.paidTiyin ? `<div class="r" style="margin-top:6px"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(o.paidTiyin)}</span></div>` : ''}
-          ${o.paidTiyin < o.totalTiyin && o.state !== 'cancelled' ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qolgan</span><span class="num">${fmtTiyin(o.totalTiyin - o.paidTiyin)}</span></div>` : ''}
+          <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(fin.total)}</span></div>
+          ${fin.paid ? `<div class="r" style="margin-top:6px"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(fin.paid)}</span></div>` : ''}
+          ${fin.balance > 0 ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qoldiq</span><span class="num">${fmtTiyin(fin.balance)}</span></div>` : ''}
         </div>
+        <p class="muted" style="font-size:12.5px;margin:10px 2px 0">To'lov ustaxonada qabul qilinadi — qoldiq summa bo'yicha ustaxona bilan bog'laning.</p>
+        ` : ''}
 
         <div class="card" style="margin-top: 14px">
           <div class="card-h"><h2 style="font-size: 16px">Ustaxonaga aloqa</h2></div>
@@ -208,10 +175,9 @@ if (!o) {
 
 function detailActions(o) {
   const actions = [];
-  if (['new','pending_payment'].includes(o.state)) {
-    actions.push(`<a class="btn btn-outline btn-sm" href="order-modify.html?id=${o.id}">✎ O'zgartirish</a>`);
+  if (o.state === 'new') {
     actions.push(`<button class="btn btn-danger btn-sm" type="button" onclick="cancelOrder('${o.id}')">Bekor qilish</button>`);
-  } else if (['cutting','edge_banding','ready','in_delivery'].includes(o.state)) {
+  } else if (['confirmed','cutting','edge_banding','ready'].includes(o.state)) {
     actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('Kuzatish — har bir o\'zgarish Telegramda')">Kuzatish</button>`);
     actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda')">Hujjatlar (PDF)</button>`);
   } else if (o.state === 'completed') {
@@ -220,31 +186,33 @@ function detailActions(o) {
   return actions.join('');
 }
 
+// Client-facing: 5 phases. cutting + edge_banding collapse into "Ishlab chiqarishda".
 function clientFacingState(o) {
   if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
-  if (o.state === 'in_delivery') return 'Yetkazilmoqda';
   return SEED.STATE_LABELS[o.state];
 }
 
 function buildTimeline(o) {
-  const steps = [
-    { label: 'Joylandi', state: 'new', when: o.placedAt },
-    { label: 'To\'lov tasdiqlandi', state: 'confirmed', when: o.paidTiyin > 0 ? '15:18' : '—' },
-    { label: 'Kesilmoqda', state: 'cutting', when: o.cutStartedAt || '—', who: o.cutter ? `Bahodir ako` : '' },
-    { label: 'Krom yopishtirilmoqda', state: 'edge_banding', when: o.edgeStartedAt || '—', who: o.edger ? 'Olim ako' : '' },
-    { label: 'Tayyor', state: 'ready', when: '—' },
-    { label: o.deliveryType === 'delivery' ? 'Yetkazilmoqda' : 'Olishga tayyor', state: o.deliveryType === 'delivery' ? 'in_delivery' : 'ready', when: o.driverStartedAt || '—' },
-    { label: 'Tugatildi', state: 'completed', when: o.deliveredAt || '—' }
-  ];
   if (o.state === 'cancelled') {
     return `<li class="step done"><span class="when">${o.placedAt}</span>Joylandi</li>
-            <li class="step bad"><span class="when">${o.cancelledAt || '—'}</span>Bekor qilindi · <span class="who">${o.cancelReason || ''}</span></li>`;
+            <li class="step bad"><span class="when">${o.cancelledAt || '—'}</span>Bekor qilindi${o.cancelReason ? ` · <span class="who">${o.cancelReason}</span>` : ''}</li>`;
   }
-  const order = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery','completed'];
-  const idx = order.indexOf(o.state);
+  // 5 client phases. "Ishlab chiqarishda" covers internal cutting + edge_banding.
+  const prodWhen = o.cutCompletedAt || '—';
+  let prodSub = '';
+  if (o.state === 'cutting') prodSub = 'Kesish';
+  else if (o.state === 'edge_banding') prodSub = 'Krom yopishtirish';
+  const steps = [
+    { label: 'Joylandi', phase: 0, when: o.placedAt },
+    { label: 'Tasdiqlangan', phase: 1, when: o.confirmedAt || '—' },
+    { label: 'Ishlab chiqarishda', phase: 2, when: prodWhen, who: prodSub },
+    { label: 'Tayyor', phase: 3, when: o.edgeCompletedAt || o.cutCompletedAt || '—' },
+    { label: 'Tugatildi', phase: 4, when: o.pickedUpAt || '—' }
+  ];
+  const phaseOf = { new: 0, confirmed: 1, cutting: 2, edge_banding: 2, ready: 3, completed: 4 };
+  const cur = phaseOf[o.state] ?? 0;
   return steps.map(s => {
-    const i = order.indexOf(s.state);
-    const cls = i < idx ? 'done' : i === idx ? 'now' : '';
+    const cls = s.phase < cur ? 'done' : s.phase === cur ? 'now' : '';
     return `<li class="step ${cls}"><span class="when">${s.when}</span>${s.label}${s.who ? ` · <span class="who">${s.who}</span>` : ''}</li>`;
   }).join('');
 }
@@ -252,7 +220,7 @@ function buildTimeline(o) {
 function cancelOrder(id) {
   confirmAction({
     title: 'Buyurtmani bekor qilish',
-    msg: 'Buyurtma bekor qilinadi. Bu amal qaytarilmaydi. Agar to\'lov bo\'lgan bo\'lsa, pul qaytariladi.',
+    msg: 'Buyurtma bekor qilinadi. Bu amal qaytarilmaydi.',
     reasonField: true, reasonLabel: 'Sabab',
     okText: 'Bekor qilish', danger: true
   }, () => { toast('Buyurtma bekor qilindi'); setTimeout(() => location.href = 'orders.html', 700); });

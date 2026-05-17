@@ -22,27 +22,6 @@
 </main>
 
 <div id="scrim" class="scrim"></div>
-<div class="modal" id="m-comp">
-  <div class="modal-h"><h3>Kompensatsiya · egasi-only</h3><button class="x" data-close-modal>✕</button></div>
-  <div class="modal-b">
-    <div class="banner info"><div class="ic">i</div><div class="grow">Tarif o'zgarishi audit logga yoziladi. Eski oylik hisoblar o'zgartirilmaydi.</div></div>
-    <div class="field">
-      <label>Tarif turi</label>
-      <select id="comp-type">
-        <option value="salary">Oylik</option>
-        <option value="per_sheet">List bo'yicha</option>
-        <option value="per_cut">Chizma soni bo'yicha</option>
-        <option value="per_metre_banding">Metr (krom) bo'yicha</option>
-        <option value="per_delivery">Yetkazma bo'yicha</option>
-        <option value="commission">Komissiya (%)</option>
-        <option value="mixed">Aralash</option>
-      </select>
-    </div>
-    <div class="field"><label>Stavka</label><input value="50 000 / list" /></div>
-    <div class="field"><label>Boshlanish sanasi</label><input type="date" value="2026-05-15" /></div>
-  </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-comp');toast('Tarif saqlandi')">Saqlash</button></div>
-</div>
 
 <script src="../assets/app.js"></script>
 <script src="../assets/data.js"></script>
@@ -86,7 +65,6 @@ if (!u) {
     <div class="tabs" data-tabs="us">
       <button class="tab on" data-target="t-prof" onclick="switchTab('us','t-prof')">Profil</button>
       <button class="tab" data-target="t-perms" onclick="switchTab('us','t-perms')">Ruxsatlar</button>
-      <button class="tab" data-target="t-comp" onclick="switchTab('us','t-comp')">Kompensatsiya</button>
       <button class="tab" data-target="t-sess" onclick="switchTab('us','t-sess')">Sessiyalar</button>
       <button class="tab" data-target="t-audit" onclick="switchTab('us','t-audit')">Audit</button>
     </div>
@@ -120,27 +98,6 @@ if (!u) {
               <tbody>${permsRows}</tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="t-comp" data-panel-group="us" hidden>
-      <div class="card">
-        <div class="card-h"><h2>Joriy tarif</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-comp')">Tahrirlash · egasi-only</button></div>
-        <div class="card-b" style="padding-top: 0">
-          ${u.comp ? `
-            <div class="row-item"><div><div class="nm">Tarif turi</div></div><div class="meta">${u.comp.type}</div></div>
-            <div class="row-item"><div><div class="nm">Stavka</div></div><div class="meta">${u.comp.rate}</div></div>
-            <div class="row-item"><div><div class="nm">Boshlandi</div></div><div class="meta">01-yan 2026</div></div>
-          ` : `<p class="muted" style="font-size:14px;margin:14px 0 0">Tarif belgilanmagan. Egasi tarif qo'shishi kerak.</p>`}
-        </div>
-      </div>
-
-      <div class="card" style="margin-top: 14px">
-        <div class="card-h"><h2>Tarif tarixi</h2></div>
-        <div class="card-b" style="padding-top: 0">
-          <div class="row-item"><div><div class="nm">${u.comp?.type || '—'} · ${u.comp?.rate || ''}</div><small style="color:var(--ink-6)">01-yan 2026 — bugun (joriy)</small></div><div class="meta"><span class="pill p-ok"><span class="pd"></span>Joriy</span></div></div>
-          ${u.id === 'u03' ? `<div class="row-item"><div><div class="nm">per_sheet · 45 000 / list</div><small style="color:var(--ink-6)">01-aug 2025 — 31-dek 2025</small></div><div class="meta muted">Eski</div></div>` : ''}
         </div>
       </div>
     </section>

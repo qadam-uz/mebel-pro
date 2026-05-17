@@ -101,7 +101,7 @@
 
 <script>
 const clientId = 'c01';
-const ACTIVE = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery'];
+const ACTIVE = ['new','confirmed','cutting','edge_banding','ready'];
 
 const myOrders = SEED.orders.filter(o => o.clientId === clientId);
 const active = myOrders.filter(o => ACTIVE.includes(o.state));
@@ -109,10 +109,10 @@ const drafts = SEED.cuttings.filter(c => c.status === 'draft');
 
 // ---- KPI strip ----
 const kReady = active.filter(o => o.state === 'ready').length;
-const kPay = active.filter(o => o.state === 'pending_payment').length;
+const kProd = active.filter(o => ['cutting','edge_banding'].includes(o.state)).length;
 const kpis = [
   { v: active.length, l: 'Faol buyurtma', href: 'orders.html', hot: false },
-  { v: kPay, l: "To'lov kutilmoqda", href: 'orders.html', hot: kPay > 0 },
+  { v: kProd, l: 'Ishlab chiqarishda', href: 'orders.html', hot: false },
   { v: kReady, l: 'Olishga tayyor', href: 'orders.html', hot: kReady > 0 },
   { v: drafts.length, l: 'Saqlangan chizma', href: 'cutting-drafts.html', hot: false },
 ];
@@ -123,19 +123,18 @@ document.getElementById('kpis').innerHTML = kpis.map(k => `
   </a>`).join('');
 
 // ---- Active orders with pipeline progress ----
-// state → progress index across: Qabul · Kesish · Krom · Yetkazish/Olish
+// 5 client phases: Joylandi · Tasdiqlandi · Ishlab chiqarish · Tayyor · Tugatildi
 function stageIndex(state) {
-  if (['new','pending_payment','confirmed'].includes(state)) return 0;
-  if (state === 'cutting') return 1;
-  if (state === 'edge_banding') return 2;
-  if (['ready','in_delivery'].includes(state)) return 3;
+  if (state === 'new') return 0;
+  if (state === 'confirmed') return 1;
+  if (['cutting','edge_banding'].includes(state)) return 2;
+  if (state === 'ready') return 3;
   return 4; // completed
 }
 
 function stepper(o) {
   const cur = stageIndex(o.state);
-  const last = o.deliveryType === 'delivery' ? 'Yetkazish' : 'Olib ketish';
-  const labels = ['Qabul', 'Kesish', 'Krom', last];
+  const labels = ['Joylandi', 'Tasdiqlandi', 'Ishlab chiqarish', 'Tayyor'];
   let h = '<div class="step">';
   labels.forEach((lb, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'cur' : '');
@@ -146,17 +145,18 @@ function stepper(o) {
   return h;
 }
 
+function clientFacingState(o) {
+  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
+  return SEED.STATE_LABELS[o.state];
+}
+
 function nextAction(o) {
-  if (o.state === 'pending_payment')
-    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('To&#39;lov · ustaxonada qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
   if (o.state === 'new')
-    return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Buyurtma yangi holatda — o&#39;zgartirish mumkin')">Tafsilot</span>`;
+    return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Tafsilot</span>`;
   if (o.state === 'ready')
     return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
-  if (o.state === 'in_delivery')
-    return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yo&#39;lda · +998 90 322-15-44')">Haydovchi</span>`;
-  if (['cutting','edge_banding'].includes(o.state))
-    return `<span class="btn btn-outline btn-sm">Kuzatish</span>`;
+  if (['confirmed','cutting','edge_banding'].includes(o.state))
+    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Kuzatish</span>`;
   return '';
 }
 
@@ -172,13 +172,13 @@ if (active.length === 0) {
           <div>
             <div class="id">${o.id} · ${br ? br.name : ''}</div>
             <h3>${o.title}</h3>
-            <div class="meta">${o.placedAt}${o.dueAt ? ` · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olish'} <b>${o.dueAt}</b>` : ''}</div>
+            <div class="meta">${o.placedAt}${o.dueAt ? ` · olib ketish <b>${o.dueAt}</b>` : ''}</div>
           </div>
-          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
+          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
         </div>
         ${stepper(o)}
         <div class="foot">
-          <div class="total">${fmtTiyin(o.totalTiyin)}<small> · ${o.paidTiyin >= o.totalTiyin ? "to'liq to'langan" : 'qisman to&#39;langan'}</small></div>
+          <div class="total">${o.state === 'ready' ? fmtTiyin(o.totalTiyin) : '<small style="font-size:11.5px;color:var(--ink-6)">Narx ustaxona tasdiqlagach</small>'}</div>
           <div>${nextAction(o)}</div>
         </div>
       </article>`;

@@ -114,12 +114,9 @@
       <!-- Step 2: Checkout -->
       <section id="step-checkout" style="display:none">
         <div class="checkout-sec" id="sec-handover">
-          <h3>Buyurtmani olish</h3>
-          <div class="seg" id="handover-seg" role="tablist">
-            <button class="seg-btn on" type="button" data-handover="pickup">Ustaxonadan olib ketaman</button>
-            <button class="seg-btn" type="button" data-handover="delivery" disabled>Yetkazib berish <span class="soon">tez orada</span></button>
-          </div>
-          <div id="handover-detail" style="margin-top: 14px"></div>
+          <h3>Olib ketish</h3>
+          <p class="muted" style="font-size:12.5px;margin:-6px 0 14px">Buyurtma tayyor bo'lgach tanlangan ustaxonadan olib ketasiz.</p>
+          <div id="handover-detail"></div>
         </div>
 
         <div class="checkout-sec" id="sec-contact">
@@ -175,9 +172,6 @@ if (!cutting) {
 let state = {
   step: 'branch',  // 'branch' | 'checkout'
   branchId: null,
-  handover: 'pickup',
-  address: { street: '', city: '', lat: '', lng: '', note: '' },
-  inZone: true,
 };
 
 document.getElementById('back-link').href = `cutting.html?id=${cuttingId}`;
@@ -227,7 +221,6 @@ function renderBranchStep() {
   }).join('');
   wrap.querySelectorAll('.br-card').forEach(c => c.addEventListener('click', () => {
     state.branchId = c.dataset.br;
-    state.handover = 'pickup';
     gotoCheckout();
   }));
   // also show non-active for transparency (greyed)
@@ -262,11 +255,6 @@ function renderCheckout() {
 
 function renderHandover() {
   const br = SEED.lookup.branchById(state.branchId);
-  document.querySelectorAll('#handover-seg button').forEach(b => {
-    if (b.disabled) return;
-    b.classList.toggle('on', b.dataset.handover === state.handover);
-    b.onclick = () => { state.handover = b.dataset.handover; renderHandover(); renderReview(); renderSummary(); };
-  });
   document.getElementById('handover-detail').innerHTML = `
       <div style="padding:12px 14px;background:var(--sunk);border-radius:6px;font:500 13px var(--f-ui);color:var(--ink-10)">
         <div style="margin-bottom:6px"><b>${br.city} · ${br.name}</b></div>
@@ -337,8 +325,8 @@ function resetField(id, val) { document.getElementById(id).value = val; toast('P
 function placeOrder() {
   if (!state.branchId) { toast('Avval ustaxonani tanlang'); return; }
   const newOrderId = 'MP-2026-05-0099';
-  toast('Buyurtma berildi — ustaxona to\'lovni qayd etishini kuting');
-  setTimeout(() => location.href = `order-detail.html?id=${newOrderId}`, 800);
+  toast('Buyurtma berildi — ustaxona ko\'rib chiqib siz bilan bog\'lanadi.');
+  setTimeout(() => location.href = `order-detail.html?id=${newOrderId}&new=1`, 800);
 }
 
 /* boot */

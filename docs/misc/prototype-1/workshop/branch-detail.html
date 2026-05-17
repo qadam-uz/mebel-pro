@@ -109,7 +109,7 @@ if (!b) {
     <div class="kpis" style="grid-template-columns: repeat(4, 1fr)">
       <div class="kpi"><div class="lbl">Faol buyurtma</div><div class="v num">${ordersHere.filter(o => !['completed','cancelled'].includes(o.state)).length}</div></div>
       <div class="kpi"><div class="lbl">Materiallar</div><div class="v num">${bmats.length}</div></div>
-      <div class="kpi warn"><div class="lbl">Past zaxira</div><div class="v num">${bmats.filter(bm => (bm.onHand - bm.reserved) <= bm.minStock).length}</div></div>
+      <div class="kpi warn"><div class="lbl">Past zaxira</div><div class="v num">${bmats.filter(bm => bm.onHand <= bm.minStock).length}</div></div>
       <div class="kpi"><div class="lbl">Xodim</div><div class="v num">${staffHere.length}</div></div>
     </div>
 
@@ -138,7 +138,7 @@ if (!b) {
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>Material</th><th class="right">Narx / list</th><th class="right">Mavjud</th><th>Holat</th></tr></thead>
-            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td><div style="display:flex;gap:11px;align-items:center"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm</small></div></div></td><td class="amt">${fmtTiyin(bm.priceTiyin)}</td><td class="amt ${bm.onHand - bm.reserved <= bm.minStock ? 'warn-text' : ''}">${bm.onHand - bm.reserved}</td><td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Inactive'}</span></td></tr>`; }).join('')}</tbody>
+            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td><div style="display:flex;gap:11px;align-items:center"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm</small></div></div></td><td class="amt">${fmtTiyin(bm.priceTiyin)}</td><td class="amt ${bm.onHand <= bm.minStock ? 'warn-text' : ''}">${bm.onHand}</td><td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Inactive'}</span></td></tr>`; }).join('')}</tbody>
           </table>
         </div>
       </div>
@@ -148,8 +148,8 @@ if (!b) {
       <div class="card"><div class="card-h"><h2>Joriy ombor</h2><a class="more" href="inventory.html">to'liq ko'rinish →</a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
-            <thead><tr><th>Material</th><th class="right">Mavjud</th><th class="right">Rezerv</th><th class="right">Erkin</th><th class="right">Min</th></tr></thead>
-            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); const av = bm.onHand - bm.reserved; return `<tr><td class="nm">${m.name}</td><td class="amt">${bm.onHand}</td><td class="amt muted">${bm.reserved}</td><td class="amt ${av <= bm.minStock ? 'warn-text' : ''}">${av}</td><td class="amt muted">${bm.minStock}</td></tr>`; }).join('')}</tbody>
+            <thead><tr><th>Material</th><th class="right">Mavjud (on_hand)</th><th class="right">Min</th></tr></thead>
+            <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td class="nm">${m.name}</td><td class="amt ${bm.onHand <= bm.minStock ? 'warn-text' : ''}">${bm.onHand}</td><td class="amt muted">${bm.minStock}</td></tr>`; }).join('')}</tbody>
           </table>
         </div>
       </div>
@@ -171,8 +171,8 @@ if (!b) {
       <div class="card"><div class="card-h"><h2>Bu filialdagi xodimlar</h2><a class="more" href="users.html">hammasi →</a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
-            <thead><tr><th>Xodim</th><th>Rol</th><th>Kompensatsiya</th><th>Holat</th></tr></thead>
-            <tbody>${staffHere.map(u => `<tr class="clickable" onclick="location.href='user-detail.html?id=${u.id}'"><td class="nm">${u.name}<small>${u.login} · ${u.phone}</small></td><td>${u.isOwner ? 'Egasi' : Object.keys(u.grants || {}).join(', ')}</td><td><small style="color:var(--ink-8)">${u.comp ? u.comp.type + ' · ' + u.comp.rate : '—'}</small></td><td><span class="pill ${u.status === 'active' ? 'p-ok' : 'p-bad'}"><span class="pd"></span>${u.status === 'active' ? 'Faol' : 'Bloklangan'}</span></td></tr>`).join('')}</tbody>
+            <thead><tr><th>Xodim</th><th>Ruxsatlar</th><th>Holat</th></tr></thead>
+            <tbody>${staffHere.map(u => `<tr class="clickable" onclick="location.href='user-detail.html?id=${u.id}'"><td class="nm">${u.name}<small>${u.login} · ${u.phone}</small></td><td><small style="color:var(--ink-8)">${u.isOwner ? 'Egasi · barcha' : (Object.keys(u.grants || {}).join(', ') || '—')}</small></td><td><span class="pill ${u.status === 'active' ? 'p-ok' : 'p-bad'}"><span class="pd"></span>${u.status === 'active' ? 'Faol' : 'Bloklangan'}</span></td></tr>`).join('')}</tbody>
           </table>
         </div>
       </div>

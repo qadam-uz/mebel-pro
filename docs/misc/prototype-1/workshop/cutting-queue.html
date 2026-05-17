@@ -18,19 +18,19 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1>Chizma navbati</h1>
-        <p class="sub">Tasdiqlangan buyurtmalar · oldindan tayinlanganlari yuqorida.</p>
+        <h1>Kesish navbati</h1>
+        <p class="sub">Sizga tayinlangan buyurtmalar. Boshqaning ishini bu yerda ko'rmaysiz.</p>
       </div>
     </div>
 
     <div class="queue-grid">
       <section class="queue-col">
-        <h2>Navbatda <span class="ct" id="queue-count">0</span></h2>
+        <h2>Kesishni kutmoqda <span class="ct" id="queue-count">0</span></h2>
         <div id="queue"></div>
       </section>
 
       <section class="queue-col">
-        <h2>Mening ishimda <span class="ct" id="active-count">0</span></h2>
+        <h2>Kesilmoqda <span class="ct" id="active-count">0</span></h2>
         <div id="active"></div>
       </section>
     </div>
@@ -43,14 +43,24 @@
 <script>
 renderWorkshopShell();
 
-const queue = SEED.orders.filter(o => o.state === 'confirmed');
-const active = SEED.orders.filter(o => o.state === 'cutting');
+// Current worker (demo): Bahodir Tursunov — sees only orders ASSIGNED to him.
+const ME = 'u03';
+
+// Awaiting cut: confirmed orders assigned to me. In progress: cutting orders
+// assigned to me. No "claim from queue", no priority reorder, no driver.
+const queue = SEED.orders.filter(o => o.state === 'confirmed' && o.assignedCutter === ME);
+const active = SEED.orders.filter(o => o.state === 'cutting' && o.assignedCutter === ME);
 
 document.getElementById('queue-count').textContent = queue.length;
 document.getElementById('active-count').textContent = active.length;
 
+function partsLine(o) {
+  const c = SEED.lookup.cuttingById(o.cuttingId);
+  return c ? `${c.parts} qism · ${c.sheets} list` : 'chizma yo\'q';
+}
+
 document.getElementById('queue').innerHTML = queue.length === 0
-  ? `<div class="empty"><div class="ic">∅</div><h3>Navbat bo'sh</h3><p>Hech narsa kutmaydi — yaxshi!</p></div>`
+  ? `<div class="empty"><div class="ic">∅</div><h3>Sizga tayinlangani yo'q</h3><p>Hozircha tinch — yaxshi!</p></div>`
   : queue.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
@@ -58,19 +68,19 @@ document.getElementById('queue').innerHTML = queue.length === 0
         <div>
           <div class="id">${o.id}</div>
           <h4>${o.title}</h4>
-          <div class="meta">${cl?.name || ''} · <b>14 ta qism · 6 list</b></div>
+          <div class="meta">${cl?.name || ''} · <b>${partsLine(o)}</b> · muddat ${o.dueAt || '—'}</div>
         </div>
-        ${o.assignedCutter === 'u03' ? '<span class="assigned-tag">Sizga</span>' : ''}
+        <span class="assigned-tag">Sizga</span>
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Chizma boshlash',msg:'${o.id} buyurtmasini olasiz.'},()=>{toast('Chizma boshlandi · ${o.id}');setTimeout(()=>location.reload(),700)})">▶ Chizmani boshlash</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'${o.id} · ishlatilgan listlar yoziladi, material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a>
       </div>
     </div>`;
   }).join('');
 
 document.getElementById('active').innerHTML = active.length === 0
-  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Hozir ish bo'lmasa, navbatdan oling.</p></div>`
+  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Hozir kesilayotgan ishingiz yo'q.</p></div>`
   : active.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
@@ -78,14 +88,12 @@ document.getElementById('active').innerHTML = active.length === 0
         <div>
           <div class="id">${o.id}</div>
           <h4>${o.title}</h4>
-          <div class="meta">${cl?.name || ''} · <b>Boshlandi</b>: ${o.cutStartedAt || '—'}</div>
+          <div class="meta">${cl?.name || ''} · <b>${partsLine(o)}</b></div>
         </div>
         <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>
       </div>
-      <div class="bar" style="margin-top:10px"><i style="width:58%"></i></div>
-      <div class="meta" style="margin-top:6px">8 / 14 qism kesildi · 3 / 6 list ishlatildi</div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Chizma tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Chizma tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Chizma tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Chizmani ko'rish</a>
       </div>
     </div>`;

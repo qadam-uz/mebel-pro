@@ -31,6 +31,7 @@
     <div class="tabs" data-tabs="inv">
       <button class="tab on" data-target="t-stock" onclick="switchTab('inv','t-stock')">Joriy ombor</button>
       <button class="tab" data-target="t-tx" onclick="switchTab('inv','t-tx')">Tranzaksiyalar</button>
+      <button class="tab" data-target="t-sup" onclick="switchTab('inv','t-sup')">Yetkazib beruvchilar</button>
     </div>
 
     <section id="t-stock" data-panel-group="inv">
@@ -48,7 +49,7 @@
       <div class="card">
         <table class="tbl">
           <thead>
-            <tr><th>Material</th><th>Filial</th><th class="right">Mavjud</th><th class="right">Rezerv</th><th class="right">Erkin</th><th class="right">Min</th><th>Holat</th><th></th></tr>
+            <tr><th>Material</th><th>Filial</th><th class="right">Mavjud (on_hand)</th><th class="right">Min</th><th>Holat</th><th></th></tr>
           </thead>
           <tbody id="stock-body"></tbody>
         </table>
@@ -59,11 +60,11 @@
       <div class="card">
         <table class="tbl">
           <thead>
-            <tr><th>Vaqt</th><th>Turi</th><th>Material</th><th>Filial</th><th class="right">Miqdor</th><th>Holatdan keyin</th><th>Buyurtma</th><th>Kim qildi</th></tr>
+            <tr><th>Vaqt</th><th>Turi</th><th>Material</th><th>Filial</th><th class="right">Miqdor</th><th>Keyin</th><th>Buyurtma</th><th>Kim qildi</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 09:18</td>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">16-may 09:18</td>
               <td><span class="pill p-bad" style="font-size:10.5px"><span class="pd"></span>consume</span></td>
               <td class="nm">LDSP H1334</td>
               <td>Yunusobod</td>
@@ -73,24 +74,24 @@
               <td>Bahodir T.</td>
             </tr>
             <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 09:14</td>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">16-may 09:14</td>
               <td><span class="pill p-ok" style="font-size:10.5px"><span class="pd"></span>stock_in</span></td>
               <td class="nm">LDSP 8198</td>
               <td>Yunusobod</td>
               <td class="amt" style="color:var(--success)">+40</td>
               <td class="num">61</td>
-              <td class="muted">—</td>
+              <td class="muted">Egger partiya</td>
               <td>Aziza R.</td>
             </tr>
             <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">14-may 11:20</td>
-              <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>reserve</span></td>
-              <td class="nm">LDSP H1334</td>
+              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 11:00</td>
+              <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>restore</span></td>
+              <td class="nm">MDF 16 mm</td>
               <td>Yunusobod</td>
-              <td class="amt" style="color:var(--info)">+8</td>
-              <td class="num">142</td>
-              <td class="id">MP-2026-05-0091</td>
-              <td>System</td>
+              <td class="amt" style="color:var(--success)">+6</td>
+              <td class="num">90</td>
+              <td class="id">MP-2026-05-0090</td>
+              <td>System · revert</td>
             </tr>
             <tr>
               <td class="num" style="font-size:11.5px;color:var(--ink-6)">14-may 09:00</td>
@@ -126,26 +127,52 @@
         </table>
       </div>
     </section>
+
+    <section id="t-sup" data-panel-group="inv" hidden>
+      <div class="page-head" style="margin:0 0 14px">
+        <div></div>
+        <div class="tools"><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-supplier')">+ Yetkazib beruvchi</button></div>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Nomi</th><th>Telefon</th><th>Izoh</th><th>Holat</th><th></th></tr></thead>
+          <tbody id="sup-body"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </main>
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-stockin">
-  <div class="modal-h"><h3>Kirim yozish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Kirim yozish (stock_in)</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
     <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
     <div class="field"><label>Material</label><select id="mat-select"></select></div>
     <div class="field"><label>Miqdor</label><input type="number" value="20" min="1" /></div>
-    <div class="field"><label>Yetkazib beruvchi (ixtiyoriy)</label><input placeholder="Egger partiya 2026/05" /></div>
+    <div class="field">
+      <label>Yetkazib beruvchi</label>
+      <div style="display:flex;gap:8px">
+        <select id="sup-select" style="flex:1"></select>
+        <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('new-sup-wrap').hidden=!document.getElementById('new-sup-wrap').hidden">+ Yangi</button>
+      </div>
+    </div>
+    <div id="new-sup-wrap" hidden style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:4px">
+      <div class="field-row">
+        <div class="field"><label>Nomi</label><input id="new-sup-name" placeholder="Yangi yetkazib beruvchi" /></div>
+        <div class="field"><label>Telefon</label><input placeholder="+998 ..." /></div>
+      </div>
+      <button class="btn btn-acc btn-sm" type="button" onclick="addSupplierInline()">Qo'shish</button>
+    </div>
     <div class="field"><label>Hujjat (ixtiyoriy)</label><input type="file" /></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-stockin');toast('Kirim yozildi')">Yozish</button></div>
 </div>
 
 <div class="modal" id="m-adjust">
-  <div class="modal-h"><h3>Stock tuzatish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Stock tuzatish (adjust)</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <div class="banner warn"><div class="ic">!</div><div class="grow">Tuzatish — rezervdan past tushira olmaysiz. Sabab kerak.</div></div>
+    <div class="banner warn"><div class="ic">!</div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
     <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option></select></div>
     <div class="field"><label>Material</label><select></select></div>
     <div class="field"><label>Imzo (signed delta · "+10" yoki "−3")</label><input value="-3" /></div>
@@ -154,24 +181,34 @@
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-adjust');toast('Stock tuzatildi')">Tasdiqlash</button></div>
 </div>
 
+<div class="modal" id="m-supplier">
+  <div class="modal-h"><h3>Yetkazib beruvchi qo'shish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field"><label>Nomi</label><input placeholder="Egger Distribution UZ" /></div>
+    <div class="field"><label>Telefon</label><input placeholder="+998 ..." /></div>
+    <div class="field"><label>Izoh (ixtiyoriy)</label><input placeholder="LDSP · asosiy" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-supplier');toast('Yetkazib beruvchi qo\'shildi')">Qo'shish</button></div>
+</div>
+
 <script src="../assets/app.js"></script>
 <script src="../assets/data.js"></script>
 <script src="../assets/workshop-shell.js"></script>
 <script>
 renderWorkshopShell();
 
+const unit = m => m.kind === 'edge' ? 'm' : 'list';
+
 const tbody = document.getElementById('stock-body');
 tbody.innerHTML = SEED.branchMaterials.map(bm => {
   const m = SEED.lookup.matById(bm.matId);
   const br = SEED.lookup.branchById(bm.branchId);
-  const available = bm.onHand - bm.reserved;
-  const low = available <= bm.minStock;
+  const low = bm.onHand <= bm.minStock;
+  const dims = m.kind === 'edge' ? `${m.thickness} mm · krom (metr)` : `${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}`;
   return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · oxirgi 30 tranzaksiya')">
-    <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}</small></div></div></td>
+    <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${dims}</small></div></div></td>
     <td>${br.name}</td>
-    <td class="amt">${bm.onHand}</td>
-    <td class="amt muted">${bm.reserved}</td>
-    <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${available}</td>
+    <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${bm.onHand} <small>${unit(m)}</small></td>
     <td class="amt muted">${bm.minStock}</td>
     <td>${low ? '<span class="pill p-warn"><span class="pd"></span>Past</span>' : '<span class="pill p-ok"><span class="pd"></span>OK</span>'}</td>
     <td onclick="event.stopPropagation()">
@@ -190,6 +227,31 @@ tbody.innerHTML = SEED.branchMaterials.map(bm => {
 
 const matSel = document.getElementById('mat-select');
 matSel.innerHTML = SEED.materials.filter(m => m.status === 'active').map(m => `<option>${m.name}</option>`).join('');
+
+function renderSuppliers() {
+  const sel = document.getElementById('sup-select');
+  sel.innerHTML = SEED.suppliers.filter(s => s.status === 'active').map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  document.getElementById('sup-body').innerHTML = SEED.suppliers.map(s => `<tr>
+    <td class="nm">${s.name}</td>
+    <td><small style="color:var(--ink-8);font:400 12px var(--f-mono)">${s.phone || '—'}</small></td>
+    <td><small style="color:var(--ink-8)">${s.note || '—'}</small></td>
+    <td>${s.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-dn"><span class="pd"></span>Faol emas</span>'}</td>
+    <td><div class="menu-wrap"><button class="menu-btn" data-menu-toggle>⋯</button><div class="menu"><button class="mi" onclick="openModal('m-supplier')">Tahrirlash</button><button class="mi danger" onclick="confirmAction({title:'Faol emas qilish',msg:'Yangi kirimda ko\\'rinmaydi.',okText:'Tasdiqlash'},()=>toast('Holat o\\'zgartirildi'))">Faol emas qilish</button></div></div></td>
+  </tr>`).join('');
+}
+renderSuppliers();
+
+window.addSupplierInline = () => {
+  const name = document.getElementById('new-sup-name').value.trim();
+  if (!name) { toast('Nom kiriting', 'warn'); return; }
+  const sel = document.getElementById('sup-select');
+  const opt = document.createElement('option');
+  opt.textContent = name; opt.selected = true;
+  sel.appendChild(opt);
+  document.getElementById('new-sup-wrap').hidden = true;
+  document.getElementById('new-sup-name').value = '';
+  toast('Yetkazib beruvchi qo\'shildi');
+};
 </script>
 </body>
 </html>

@@ -19,18 +19,14 @@
     <div class="page-head">
       <div>
         <h1>Krom yopishtirish navbati</h1>
-        <p class="sub">Chizmasi tugatilgan buyurtmalar — kromi ham yopishtiriladi.</p>
+        <p class="sub">Sizga tayinlangan, krom yopishtirilishi kerak bo'lgan buyurtmalar.</p>
       </div>
     </div>
 
     <div class="queue-grid">
       <section class="queue-col">
-        <h2>Navbatda <span class="ct">1</span></h2>
+        <h2>Krom kutmoqda <span class="ct" id="queue-count">0</span></h2>
         <div id="queue"></div>
-      </section>
-      <section class="queue-col">
-        <h2>Mening ishimda <span class="ct">1</span></h2>
-        <div id="active"></div>
       </section>
     </div>
   </div>
@@ -42,33 +38,30 @@
 <script>
 renderWorkshopShell();
 
-const queue = SEED.orders.filter(o => o.state === 'edge_banding' && !o.edger);
-const active = SEED.orders.filter(o => o.state === 'edge_banding' && o.edger);
+// Current worker (demo): Olim Hojiyev — sees only edge_banding orders
+// ASSIGNED to him. One action only: "Krom tugadi". No claim, no priority.
+const ME = 'u04';
+const queue = SEED.orders.filter(o => o.state === 'edge_banding' && o.assignedEdger === ME);
 
-document.getElementById('queue').innerHTML = (queue.length === 0
-  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Navbat bo'sh.</p></div>`
+document.getElementById('queue-count').textContent = queue.length;
+
+function edgeLine(o) {
+  const c = SEED.lookup.cuttingById(o.cuttingId);
+  const el = c ? (SEED.lookup.chosenAlgo(c)?.edgeLen || {}) : {};
+  const parts = Object.entries(el).map(([t, m]) => `${t} mm: ${m} m`);
+  return parts.length ? parts.join(' · ') : 'krom rejasi';
+}
+
+document.getElementById('queue').innerHTML = queue.length === 0
+  ? `<div class="empty"><div class="ic">∅</div><h3>Sizga tayinlangani yo'q</h3><p>Krom kutayotgan ishingiz yo'q.</p></div>`
   : queue.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
       <div class="top">
-        <div><div class="id">${o.id}</div><h4>${o.title}</h4><div class="meta">${cl?.name} · <b>0.4 mm: 18 m · 2.0 mm: 12 m</b></div></div>
+        <div><div class="id">${o.id}</div><h4>${o.title}</h4><div class="meta">${cl?.name || ''} · <b>${edgeLine(o)}</b> · muddat ${o.dueAt || '—'}</div></div>
+        <span class="assigned-tag">Sizga</span>
       </div>
-      <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kromni boshlash'},()=>{toast('Krom boshlandi · ${o.id}');setTimeout(()=>location.reload(),700)})">▶ Boshlash</button><a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a></div>
-    </div>`;
-  }).join(''));
-
-document.getElementById('active').innerHTML = active.length === 0
-  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Ishingiz bo'lmasa, navbatdan oling.</p></div>`
-  : active.map(o => {
-    const cl = SEED.lookup.clientById(o.clientId);
-    return `<div class="q-card">
-      <div class="top">
-        <div><div class="id">${o.id}</div><h4>${o.title}</h4><div class="meta">${cl?.name} · Boshlandi: ${o.edgeStartedAt || '—'}</div></div>
-        <span class="pill p-eb"><span class="pd"></span>Kromda</span>
-      </div>
-      <div class="bar" style="margin-top:10px"><i style="width:42%"></i></div>
-      <div class="meta" style="margin-top:6px">Qisman tugatildi · 13 m / 31 m</div>
-      <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Krom tugadi'},()=>{toast('Krom tugadi');setTimeout(()=>location.reload(),700)})">✓ Tugatish</button></div>
+      <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Krom tugadi',msg:'${o.id} · krom yopishtirildi, buyurtma Tayyor holatiga o\\'tadi.'},()=>{toast('Krom tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Krom tugadi</button><a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a></div>
     </div>`;
   }).join('');
 </script>

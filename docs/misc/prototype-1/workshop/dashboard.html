@@ -51,28 +51,7 @@
       </div>
     </div>
 
-    <div class="kpis">
-      <div class="kpi" onclick="location.href='finance.html'">
-        <div class="lbl">Bugungi savdo</div>
-        <div class="v num">12.8M <small>so'm</small></div>
-        <div class="d"><span class="up"><b>↑ 18.2%</b> kechagiga</span><span class="muted">21 buyurtma</span></div>
-      </div>
-      <div class="kpi" onclick="location.href='orders.html'">
-        <div class="lbl">Ishlab chiqarishda</div>
-        <div class="v num">7</div>
-        <div class="d"><span class="up"><b>↑ 4</b> oxirgi 24 soatda</span><span class="muted">3 kesilmoqda</span></div>
-      </div>
-      <div class="kpi warn" onclick="location.href='inventory.html'">
-        <div class="lbl">Pastdagi zaxiralar</div>
-        <div class="v num" style="color:var(--warn)">4</div>
-        <div class="d"><span class="warn"><b>2 ta</b> keskin tugamoqda</span><a href="inventory.html" style="color:var(--accent);font-weight:600;text-decoration:none">ombor →</a></div>
-      </div>
-      <div class="kpi" onclick="location.href='payroll.html'">
-        <div class="lbl">May oyi maoshi · loyiha</div>
-        <div class="v num">6.24M <small>so'm</small></div>
-        <div class="d"><span class="muted"><b style="color:var(--ink-12)">31-mayda</b> · 16 kun qoldi</span><span style="color:var(--accent);font-weight:600">17 entry</span></div>
-      </div>
-    </div>
+    <div class="kpis" id="kpis"></div>
 
     <div class="two-col">
       <div style="display: flex; flex-direction: column; gap: 18px">
@@ -156,20 +135,6 @@
       <div style="display: flex; flex-direction: column; gap: 18px">
 
         <div class="card">
-          <div class="card-h"><h2>Eskirgan refundlar</h2><a class="more" href="refunds.html">hammasi →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="banner warn"><div class="ic">!</div><div class="grow"><b>1 ta</b> qaytarish 8 kun bo'ldi · ko'rib chiqish kerak</div></div>
-            <div class="row-item">
-              <div>
-                <div class="nm">MP-2026-04-0856</div>
-                <small style="color:var(--ink-6)">Akmal Norqo'ziyev · 8 kun</small>
-              </div>
-              <div class="meta warn-text">327 500</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
           <div class="card-h"><h2>Tugayotgan zaxira</h2><a class="more" href="inventory.html">ombor →</a></div>
           <div class="card-b" style="padding-top: 0">
             <div class="row-item"><div class="sw sw-4"></div><div><div class="nm">LDSP 0011 · Oq baxmal</div><small style="color:var(--ink-6)">Yunusobod · min 30</small></div><div class="meta warn-text">12<small>list</small></div></div>
@@ -194,6 +159,38 @@
 <script src="../assets/workshop-shell.js"></script>
 <script>
 renderWorkshopShell();
+
+// KPIs: orders in production, income, expenses, net, low-stock (no refunds, no payroll).
+const inProd = SEED.orders.filter(o => ['new','confirmed','cutting','edge_banding','ready'].includes(o.state)).length;
+const income = SEED.incomes.filter(i => i.status === 'recorded').reduce((a, i) => a + i.amountTiyin, 0);
+const expense = SEED.expenses.filter(e => e.status === 'recorded').reduce((a, e) => a + e.amountTiyin, 0);
+const lowStock = SEED.branchMaterials.filter(bm => bm.status === 'active' && bm.onHand <= bm.minStock).length;
+document.getElementById('kpis').innerHTML = `
+  <div class="kpi" onclick="location.href='orders.html'">
+    <div class="lbl">Ishlab chiqarishda</div>
+    <div class="v num">${inProd}</div>
+    <div class="d"><span class="muted">faol buyurtmalar</span><a href="orders.html" style="color:var(--accent);font-weight:600;text-decoration:none">taxta →</a></div>
+  </div>
+  <div class="kpi" onclick="location.href='finance.html'">
+    <div class="lbl">Tushum</div>
+    <div class="v num">${fmtTiyin(income)}</div>
+    <div class="d"><span class="muted">yozilgan</span></div>
+  </div>
+  <div class="kpi" onclick="location.href='expenses.html'">
+    <div class="lbl">Xarajatlar</div>
+    <div class="v num">${fmtTiyin(expense)}</div>
+    <div class="d"><span class="muted">yozilgan</span></div>
+  </div>
+  <div class="kpi" style="background:var(--success-tint);border-color:var(--success-tint)" onclick="location.href='finance.html'">
+    <div class="lbl" style="color:var(--success)">Sof foyda</div>
+    <div class="v num success-text">${fmtTiyin(income - expense)}</div>
+    <div class="d"><span class="muted">tushum − xarajat</span></div>
+  </div>
+  <div class="kpi warn" onclick="location.href='inventory.html'">
+    <div class="lbl">Pastdagi zaxiralar</div>
+    <div class="v num" style="color:var(--warn)">${lowStock}</div>
+    <div class="d"><a href="inventory.html" style="color:var(--accent);font-weight:600;text-decoration:none">ombor →</a></div>
+  </div>`;
 
 // Recent orders
 const recent = SEED.orders.slice(0, 8);

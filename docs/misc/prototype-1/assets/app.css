@@ -415,7 +415,7 @@ textarea { resize: vertical; min-height: 80px; }
 .board-card .who { font-weight: 600; color: var(--ink-12); margin: 4px 0 2px; }
 .board-card .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; color: var(--ink-6); font-size: 11px; margin-top: 6px; }
 
-/* PROD QUEUE CARDS (cutter/edger/driver workspaces) */
+/* PROD QUEUE CARDS (cutter/edger workspaces) */
 .queue-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
 @media (min-width: 880px) { .queue-grid { grid-template-columns: 1fr 1fr; } }
 .queue-col h2 { font-family: var(--f-display); font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }

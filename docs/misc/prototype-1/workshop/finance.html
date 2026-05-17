@@ -19,11 +19,11 @@
     <div class="page-head">
       <div>
         <h1>Moliya hisobotlari</h1>
-        <p class="sub">Tushum · xarajat · maosh · sof foyda — filiallar bo'yicha.</p>
+        <p class="sub">Tushum · xarajat · sof foyda · xodimlar mehnati — filiallar bo'yicha.</p>
       </div>
       <div class="tools">
         <select>
-          <option>Bu oy · 01-may — 15-may</option>
+          <option>Bu oy · 01-may — 16-may</option>
           <option>Oxirgi oy · aprel</option>
           <option>YTD · 2026</option>
           <option>Maxsus diapazon...</option>
@@ -39,58 +39,45 @@
 
     <div class="kpis">
       <div class="kpi">
-        <div class="lbl">Tushum (revenue)</div>
-        <div class="v num">148.2M <small>so'm</small></div>
-        <div class="d"><span class="up"><b>↑ 12.4%</b></span><span class="muted">o'tgan oyga</span></div>
+        <div class="lbl">Tushum (income)</div>
+        <div class="v num" id="kpi-income">—</div>
+        <div class="d"><a href="expenses.html" style="color:var(--accent);font-weight:600;text-decoration:none">tushum boshqaruvi →</a></div>
       </div>
       <div class="kpi">
         <div class="lbl">Xarajatlar</div>
-        <div class="v num">52.4M <small>so'm</small></div>
-        <div class="d"><span class="muted">6 kategoriya</span><a href="expenses.html" style="color:var(--accent);font-weight:600;text-decoration:none">batafsil →</a></div>
+        <div class="v num" id="kpi-expense">—</div>
+        <div class="d"><a href="expenses.html" style="color:var(--accent);font-weight:600;text-decoration:none">batafsil →</a></div>
       </div>
       <div class="kpi">
-        <div class="lbl">Maosh (gross)</div>
-        <div class="v num">6.24M <small>so'm</small></div>
-        <div class="d"><span class="muted">may · 17 entry · loyiha</span></div>
+        <div class="lbl">Shundan maosh xarajati</div>
+        <div class="v num" id="kpi-salary">—</div>
+        <div class="d"><span class="muted">'salary' kategoriyasi</span></div>
       </div>
       <div class="kpi" style="background: var(--success-tint); border-color: var(--success-tint)">
         <div class="lbl" style="color:var(--success)">Sof foyda</div>
-        <div class="v num success-text">89.6M <small>so'm</small></div>
-        <div class="d"><span class="up"><b>60.4%</b> tushum dan</span></div>
+        <div class="v num success-text" id="kpi-net">—</div>
+        <div class="d"><span class="muted">tushum − xarajat</span></div>
       </div>
     </div>
 
     <div class="two-col">
       <div>
         <div class="card">
-          <div class="card-h">
-            <h2>Tushum va xarajatlar · oxirgi 14 kun</h2>
-            <div class="ts">
-              <button class="on">14 K</button>
-              <button onclick="this.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('on'));this.classList.add('on');toast('30 K')">30 K</button>
-            </div>
-          </div>
-          <div class="card-b">
-            <svg class="chart" id="chart" viewBox="0 0 640 200" preserveAspectRatio="none">
-              <g class="grid"><line x1="0" y1="40" x2="640" y2="40"/><line x1="0" y1="80" x2="640" y2="80"/><line x1="0" y1="120" x2="640" y2="120"/><line x1="0" y1="160" x2="640" y2="160"/></g>
-              <g class="bars"></g>
-              <g><line x1="0" y1="195" x2="640" y2="195" stroke="var(--line)"/><text x="20" y="210">2-may</text><text x="300" y="210">8-may</text><text x="560" y="210">15-may</text></g>
-            </svg>
+          <div class="card-h"><h2>Tushum · so'nggi yozuvlar</h2><a class="more" href="expenses.html">hammasi →</a></div>
+          <div class="card-b" style="padding: 0 22px 18px">
+            <table class="tbl">
+              <thead><tr><th>Sana</th><th>Turi</th><th>Buyurtma</th><th>Usul</th><th class="right">Summa</th></tr></thead>
+              <tbody id="income-body"></tbody>
+            </table>
           </div>
         </div>
 
         <div class="card" style="margin-top: 14px">
-          <div class="card-h">
-            <h2>Filiallar bo'yicha</h2>
-          </div>
+          <div class="card-h"><h2>Filiallar bo'yicha</h2></div>
           <div class="card-b" style="padding: 0 22px 18px">
             <table class="tbl">
-              <thead><tr><th>Filial</th><th class="right">Tushum</th><th class="right">Xarajat</th><th class="right">Maosh</th><th class="right">Sof</th></tr></thead>
-              <tbody>
-                <tr><td>Yunusobod</td><td class="amt">94.5M</td><td class="amt">28.4M</td><td class="amt">3.6M</td><td class="amt success-text">62.5M</td></tr>
-                <tr><td>Chilonzor</td><td class="amt">42.8M</td><td class="amt">16.2M</td><td class="amt">2.0M</td><td class="amt success-text">24.6M</td></tr>
-                <tr><td>Yangiyo'l</td><td class="amt">10.9M</td><td class="amt">7.8M</td><td class="amt">0.64M</td><td class="amt success-text">2.5M</td></tr>
-              </tbody>
+              <thead><tr><th>Filial</th><th class="right">Tushum</th><th class="right">Xarajat</th><th class="right">Sof</th></tr></thead>
+              <tbody id="branch-body"></tbody>
             </table>
           </div>
         </div>
@@ -99,23 +86,17 @@
       <div>
         <div class="card">
           <div class="card-h"><h2>Xarajatlar · kategoriya</h2><a class="more" href="expenses.html">hammasi →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="row-item"><div><div class="nm">Ijara</div></div><div class="meta">4.8M</div></div>
-            <div class="row-item"><div><div class="nm">Maosh xarajati</div></div><div class="meta">6.24M</div></div>
-            <div class="row-item"><div><div class="nm">Marketing</div></div><div class="meta">0.8M</div></div>
-            <div class="row-item"><div><div class="nm">Aksessuar / vint</div></div><div class="meta">0.35M</div></div>
-            <div class="row-item"><div><div class="nm">Transport</div></div><div class="meta">0.13M</div></div>
-            <div class="row-item"><div><div class="nm">Elektr</div></div><div class="meta">0.24M</div></div>
-          </div>
+          <div class="card-b" style="padding-top: 0" id="cat-body"></div>
         </div>
 
         <div class="card" style="margin-top: 14px">
-          <div class="card-h"><h2>Xodimlar mehnati · maydon</h2><a class="more" href="payroll.html">maoshlar →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="row-item"><div><div class="nm">Bahodir T. · chizma</div></div><div class="meta">22 list</div></div>
-            <div class="row-item"><div><div class="nm">Olim H. · krom</div></div><div class="meta">142 m</div></div>
-            <div class="row-item"><div><div class="nm">Sherzod A. · yetkazma</div></div><div class="meta">8 ta</div></div>
-            <div class="row-item"><div><div class="nm">Komron S. · chizma · Chilonzor</div></div><div class="meta">14 list</div></div>
+          <div class="card-h"><h2>Xodimlar mehnati · hisobot</h2></div>
+          <div class="card-b" style="padding: 0 22px 18px">
+            <p class="muted" style="font-size:12.5px;margin:14px 0">Buyurtma stamplaridan olinadi. Hisobchi maoshni qo'lda hisoblab, "salary" xarajat sifatida yozadi.</p>
+            <table class="tbl">
+              <thead><tr><th>Xodim</th><th>Davr</th><th class="right">List</th><th class="right">Krom (m)</th><th></th></tr></thead>
+              <tbody id="prod-body"></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -129,20 +110,48 @@
 <script>
 renderWorkshopShell();
 
-// Stacked bars
-const W = 640, H = 200, gap = 6;
-const days = 14, bw = (W - gap * (days - 1)) / days;
-let bars = '';
-for (let i = 0; i < days; i++) {
-  const rev = 60 + Math.sin(i * 0.6) * 20 + Math.random() * 18;
-  const exp = 24 + Math.cos(i * 0.5) * 8 + Math.random() * 6;
-  const rH = (rev / 110) * (H - 40);
-  const eH = (exp / 110) * (H - 40);
-  const x = i * (bw + gap);
-  bars += `<rect x="${x}" y="${H - 30 - rH}" width="${bw}" height="${rH}" rx="2" fill="${i === days - 1 ? 'var(--accent)' : 'var(--ink-2)'}"/>`;
-  bars += `<rect x="${x + bw - 8}" y="${H - 30 - eH}" width="8" height="${eH}" rx="1" fill="var(--warn)" opacity=".75"/>`;
-}
-document.querySelector('.chart .bars').innerHTML = bars;
+const recIncome = SEED.incomes.filter(i => i.status === 'recorded');
+const recExpense = SEED.expenses.filter(e => e.status === 'recorded');
+const income = recIncome.reduce((a, i) => a + i.amountTiyin, 0);
+const expense = recExpense.reduce((a, e) => a + e.amountTiyin, 0);
+const salary = recExpense.filter(e => e.category === 'salary').reduce((a, e) => a + e.amountTiyin, 0);
+
+document.getElementById('kpi-income').innerHTML = fmtTiyin(income);
+document.getElementById('kpi-expense').innerHTML = fmtTiyin(expense);
+document.getElementById('kpi-salary').innerHTML = fmtTiyin(salary);
+document.getElementById('kpi-net').innerHTML = fmtTiyin(income - expense);
+
+const METHOD = { cash: 'Naqd', bank_transfer: 'Bank', card: 'Karta', other: 'Boshqa' };
+document.getElementById('income-body').innerHTML = recIncome.map(i => `<tr>
+  <td class="num" style="font-size:11.5px;color:var(--ink-6)">${i.receivedOn}</td>
+  <td>${i.type === 'order_payment' ? "Buyurtma to'lovi" : 'Boshqa'}</td>
+  <td class="id">${i.orderId || '—'}</td>
+  <td><small style="color:var(--ink-8)">${METHOD[i.method] || i.method}</small></td>
+  <td class="amt success-text">${fmtTiyin(i.amountTiyin)}</td>
+</tr>`).join('');
+
+const CAT = { rent: 'Ijara', utilities: 'Kommunal', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', salary: 'Maosh', other: 'Boshqalar' };
+const byCat = {};
+recExpense.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + e.amountTiyin);
+document.getElementById('cat-body').innerHTML = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([c, v]) =>
+  `<div class="row-item"><div><div class="nm">${CAT[c] || c}</div></div><div class="meta">${fmtTiyin(v)}</div></div>`).join('');
+
+document.getElementById('branch-body').innerHTML = SEED.branches.map(b => {
+  const inc = recIncome.filter(i => i.branchId === b.id).reduce((a, i) => a + i.amountTiyin, 0);
+  const exp = recExpense.filter(e => e.branchId === b.id).reduce((a, e) => a + e.amountTiyin, 0);
+  return `<tr><td>${b.name}</td><td class="amt">${fmtTiyin(inc)}</td><td class="amt">${fmtTiyin(exp)}</td><td class="amt success-text">${fmtTiyin(inc - exp)}</td></tr>`;
+}).join('');
+
+document.getElementById('prod-body').innerHTML = SEED.workerProduction.map(w => {
+  const u = SEED.lookup.userById(w.userId);
+  return `<tr>
+    <td class="nm">${u?.name || w.userId}</td>
+    <td><small style="color:var(--ink-6)">${w.period}</small></td>
+    <td class="amt">${w.sheetsCut} (${w.cutCount} kesim)</td>
+    <td class="amt">${w.metresBanded} (${w.ordersBanded} buyurtma)</td>
+    <td><button class="btn btn-outline btn-sm" type="button" onclick="location.href='expenses.html'">Maosh yozish</button></td>
+  </tr>`;
+}).join('');
 </script>
 </body>
 </html>

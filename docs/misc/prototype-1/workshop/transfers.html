@@ -25,7 +25,7 @@
 
     <div class="banner info">
       <div class="ic">i</div>
-      <div class="grow">Bu egasi-only amal. Rezervdagi list o'tkazib bo'lmaydi — faqat erkin zaxira.</div>
+      <div class="grow">Bu egasi-only amal. Manbada mavjud bo'lgan zaxiradan ko'p o'tkazib bo'lmaydi.</div>
     </div>
 
     <div style="display: grid; gap: 18px; grid-template-columns: 1fr; max-width: 920px">
@@ -56,7 +56,7 @@
               <input id="qty" type="number" value="10" min="1" />
             </div>
             <div class="field">
-              <label>Erkin (manbada)</label>
+              <label>Mavjud (manbada)</label>
               <input id="avail" value="134" readonly />
             </div>
           </div>
@@ -107,14 +107,14 @@ function updateAvail() {
   const br = document.getElementById('from-br').value;
   const mat = document.getElementById('mat-sel').value;
   const bm = SEED.lookup.branchMatFor(br, mat);
-  document.getElementById('avail').value = bm ? bm.onHand - bm.reserved : 0;
+  document.getElementById('avail').value = bm ? bm.onHand : 0;
 }
 updateAvail();
 
 function submitTransfer() {
   const qty = +document.getElementById('qty').value;
   const avail = +document.getElementById('avail').value;
-  if (qty > avail) { toast('Miqdor erkin zaxiradan oshib ketdi', 'warn'); return; }
+  if (qty > avail) { toast('Miqdor mavjud zaxiradan oshib ketdi', 'warn'); return; }
   if (qty < 1) { toast('Miqdor 1 dan kichik bo\'lmasligi kerak', 'warn'); return; }
   confirmAction({ title: 'Transferni yaratish', msg: `${qty} list ${document.getElementById('from-br').value} dan ${document.getElementById('to-br').value} ga o'tkaziladi.`, okText: 'Yaratish' },
     () => { toast('Transfer yaratildi'); setTimeout(() => location.reload(), 700); });

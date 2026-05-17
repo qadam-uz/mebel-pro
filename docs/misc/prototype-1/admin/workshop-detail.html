@@ -55,7 +55,6 @@ if (!w) {
 
     <div class="tabs" data-tabs="ws">
       <button class="tab on" data-target="t-profile" onclick="switchTab('ws','t-profile')">Profil</button>
-      <button class="tab" data-target="t-settings" onclick="switchTab('ws','t-settings')">Sozlamalar</button>
       <button class="tab" data-target="t-branches" onclick="switchTab('ws','t-branches')">Filiallar</button>
       <button class="tab" data-target="t-orders" onclick="switchTab('ws','t-orders')">Buyurtmalar</button>
       <button class="tab" data-target="t-staff" onclick="switchTab('ws','t-staff')">Xodimlar</button>
@@ -65,24 +64,14 @@ if (!w) {
       <div class="card" style="max-width: 720px">
         <div class="card-h"><h2>Ustaxona profili</h2></div>
         <div class="card-b" style="padding-top: 0">
-          <div class="row-item"><div><div class="nm">Ustaxona nomi</div></div><div class="meta">${w.name}</div></div>
-          <div class="row-item"><div><div class="nm">Egasi</div></div><div class="meta">${w.ownerName}</div></div>
-          <div class="row-item"><div><div class="nm">Egasi telefoni</div></div><div class="meta">${w.ownerPhone}</div></div>
-          <div class="row-item"><div><div class="nm">Filiallar soni</div></div><div class="meta">${w.branches}</div></div>
+          <div class="field"><label>Ustaxona nomi</label><input value="${w.name}" /></div>
+          <div class="field-row">
+            <div class="field"><label>Egasi</label><input value="${w.ownerName}" /></div>
+            <div class="field"><label>Egasi telefoni</label><input value="${w.ownerPhone}" /></div>
+          </div>
+          <div class="row-item"><div><div class="nm">Filiallar soni</div><small style="color:var(--ink-6)">filiallar tabidan ko'rinadi · operator o'zgartirmaydi</small></div><div class="meta">${w.branches}</div></div>
           <div class="row-item"><div><div class="nm">Yaratildi</div></div><div class="meta">${w.createdOn}</div></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="t-settings" data-panel-group="ws" hidden>
-      <div class="card" style="max-width: 720px">
-        <div class="card-h"><h2>Ustaxona sozlamalari (read-only · operator)</h2></div>
-        <div class="card-b" style="padding-top: 0">
-          <div class="banner info"><div class="ic">i</div><div class="grow">Operator faqat ko'radi. Egasi sozlamalar tabidan o'zgartiradi.</div></div>
-          <div class="row-item"><div><div class="nm">Default oldindan to'lov</div></div><div class="meta">50%</div></div>
-          <div class="row-item"><div><div class="nm">Yetkazma yoqilgan</div></div><div class="meta">Ha · 3 zona</div></div>
-          <div class="row-item"><div><div class="nm">Payme · merchant</div></div><div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Merchant: ••••8472')">Ko'rsatish</button></div></div>
-          <div class="row-item"><div><div class="nm">Click · merchant</div></div><div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="toast('Merchant: ••••5128')">Ko'rsatish</button></div></div>
+          <div class="flex-end" style="margin-top: 14px"><button class="btn btn-acc" type="button" onclick="toast('Profil saqlandi')">Saqlash</button></div>
         </div>
       </div>
     </section>

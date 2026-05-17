@@ -58,7 +58,7 @@
 </main>
 
 <script>
-const ACTIVE = ['new','pending_payment','confirmed','cutting','edge_banding','ready','in_delivery'];
+const ACTIVE = ['new','confirmed','cutting','edge_banding','ready'];
 let filter = 'all';
 const clientId = 'c01';
 
@@ -85,18 +85,19 @@ function render() {
   wrap.innerHTML = orders.map(o => {
     const br = SEED.lookup.branchById(o.branchId);
     const action = nextAction(o);
+    const showTotal = ['ready','completed'].includes(o.state);
     return `
       <article class="ord-card" onclick="location.href='order-detail.html?id=${o.id}'">
         <div class="top">
           <div>
             <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
             <h3>${o.title}</h3>
-            <div class="meta">${o.placedAt}${o.dueAt ? ` · ${o.deliveryType === 'delivery' ? 'yetkazma' : 'olib ketish'} <b>${o.dueAt}</b>` : ''}</div>
+            <div class="meta">${o.placedAt}${o.dueAt && o.state !== 'cancelled' ? ` · olib ketish <b>${o.dueAt}</b>` : ''}</div>
           </div>
-          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
+          <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
         </div>
         <div class="foot">
-          <div class="total">${fmtTiyin(o.totalTiyin)}<small> · ${o.paidTiyin >= o.totalTiyin ? 'to&#39;liq to&#39;langan' : 'qisman'}</small></div>
+          <div class="total">${showTotal ? fmtTiyin(o.totalTiyin) : '<small style="font-size:12.5px;color:var(--ink-6)">Narx ustaxona tasdiqlagach</small>'}</div>
           <div>${action}</div>
         </div>
       </article>
@@ -104,12 +105,15 @@ function render() {
   }).join('');
 }
 
+function clientFacingState(o) {
+  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
+  return SEED.STATE_LABELS[o.state];
+}
+
 function nextAction(o) {
-  if (o.state === 'pending_payment') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('To&#39;lov · ustaxonada qabul qilinmaguncha buyurtma yangi holatda')">To'lov · ${fmtTiyin(o.totalTiyin)}</span>`;
   if (o.state === 'new') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();cancelOrder('${o.id}')">Bekor qilish</span>`;
-  if (['cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-outline btn-sm">Kuzatish</span>`;
-  if (o.state === 'ready') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
-  if (o.state === 'in_delivery') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();toast('Haydovchi yo&#39;lda · +998 90 322-15-44')">Haydovchi</span>`;
+  if (['confirmed','cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Kuzatish</span>`;
+  if (o.state === 'ready') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
   return '';
 }
 

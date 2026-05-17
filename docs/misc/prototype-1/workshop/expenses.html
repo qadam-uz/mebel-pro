@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Xarajatlar — Mebel Pro · Boshqaruv</title>
+<title>Moliya · Tushum va xarajat — Mebel Pro · Boshqaruv</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -18,69 +18,115 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1>Xarajatlar</h1>
-        <p class="sub">Ustaxona xarajatlari · ijara, elektr, marketing, transport va boshqalar.</p>
+        <h1>Tushum va xarajat</h1>
+        <p class="sub">Buyurtma to'lovlari, boshqa tushumlar va ustaxona xarajatlari (maosh ham shu yerda).</p>
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
-        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi xarajat</button>
+        <button class="btn btn-outline" type="button" onclick="openModal('m-income')">+ Tushum</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-expense')">+ Xarajat</button>
       </div>
     </div>
 
-    <div class="filters">
-      <select>
-        <option>Bu oy</option>
-        <option>Oxirgi 30 kun</option>
-        <option>YTD</option>
-      </select>
-      <select>
-        <option>Hamma kategoriyalar</option>
-        <option>Ijara</option>
-        <option>Elektr</option>
-        <option>Marketing</option>
-        <option>Aksessuar</option>
-        <option>Transport</option>
-        <option>Texnika</option>
-        <option>Boshqalar</option>
-      </select>
-      <select>
-        <option>Hamma filiallar</option>
-        <option>Yunusobod</option>
-        <option>Chilonzor</option>
-      </select>
-      <div class="chips">
-        <button class="chip on">Faol</button>
-        <button class="chip">Bekor qilingan</button>
-        <button class="chip">Hammasi</button>
-      </div>
+    <div class="tabs" data-tabs="fx">
+      <button class="tab on" data-target="t-expense" onclick="switchTab('fx','t-expense')">Xarajatlar</button>
+      <button class="tab" data-target="t-income" onclick="switchTab('fx','t-income')">Tushumlar</button>
     </div>
 
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>Sana</th><th>Kategoriya</th><th>Tavsif</th><th>Filial</th><th>Yetkazib beruvchi</th><th class="right">Summa</th><th>Holat</th><th></th></tr></thead>
-        <tbody id="body"></tbody>
-      </table>
-    </div>
+    <section id="t-expense" data-panel-group="fx">
+      <div class="filters">
+        <select>
+          <option>Bu oy</option><option>Oxirgi 30 kun</option><option>YTD</option>
+        </select>
+        <select>
+          <option>Hamma kategoriyalar</option>
+          <option>Ijara</option><option>Kommunal</option><option>Xom ashyo</option>
+          <option>Aksessuar</option><option>Transport</option><option>Texnika</option>
+          <option>Marketing</option><option>Soliqlar</option><option>Maosh</option><option>Boshqalar</option>
+        </select>
+        <select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></select>
+        <div class="chips">
+          <button class="chip on">Yozilgan</button>
+          <button class="chip">Bekor qilingan</button>
+          <button class="chip">Hammasi</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Sana</th><th>Kategoriya</th><th>Tavsif</th><th>Filial</th><th>Yetkazib beruvchi</th><th class="right">Summa</th><th>Holat</th><th></th></tr></thead>
+          <tbody id="expense-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="t-income" data-panel-group="fx" hidden>
+      <div class="filters">
+        <select><option>Bu oy</option><option>Oxirgi 30 kun</option><option>YTD</option></select>
+        <select><option>Hamma turlar</option><option>Buyurtma to'lovi</option><option>Boshqa</option></select>
+        <select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></select>
+        <div class="chips">
+          <button class="chip on">Yozilgan</button>
+          <button class="chip">Bekor qilingan</button>
+          <button class="chip">Hammasi</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Sana</th><th>Turi</th><th>Buyurtma</th><th>Usul</th><th>Filial</th><th>Izoh</th><th class="right">Summa</th><th>Holat</th><th></th></tr></thead>
+          <tbody id="income-body"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </main>
 
 <div id="scrim" class="scrim"></div>
-<div class="modal" id="m-new">
-  <div class="modal-h"><h3>Yangi xarajat</h3><button class="x" data-close-modal>✕</button></div>
+
+<div class="modal" id="m-expense">
+  <div class="modal-h"><h3>Xarajat yozish</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
     <div class="field-row">
-      <div class="field"><label>Kategoriya</label><select><option>Ijara</option><option>Elektr · gaz · suv</option><option>Aksessuar / vint</option><option>Marketing</option><option>Transport</option><option>Texnika</option><option>Boshqalar</option></select></div>
+      <div class="field"><label>Kategoriya</label><select>
+        <option value="rent">Ijara</option><option value="utilities">Kommunal</option>
+        <option value="raw_materials">Xom ashyo</option><option value="supplies">Aksessuar</option>
+        <option value="transport">Transport</option><option value="equipment">Texnika</option>
+        <option value="marketing">Marketing</option><option value="taxes_and_fees">Soliqlar</option>
+        <option value="salary">Maosh</option><option value="other">Boshqalar</option>
+      </select></div>
       <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Ustaxona-keng (HQ)</option></select></div>
     </div>
-    <div class="field"><label>Tavsif</label><input placeholder="May oyi ijarasi" /></div>
+    <div class="field"><label>Tavsif</label><input placeholder="Masalan: Bahodir T. · 13–15 may · 19 list" /></div>
     <div class="field-row">
-      <div class="field"><label>Yetkazib beruvchi</label><input placeholder="Tinchlik Bldg" /></div>
-      <div class="field"><label>Summa (so'm)</label><input value="4 800 000" /></div>
+      <div class="field"><label>Yetkazib beruvchi (ixtiyoriy)</label><input placeholder="Tinchlik Bldg" /></div>
+      <div class="field"><label>Summa (so'm)</label><input value="185 000" /></div>
     </div>
-    <div class="field"><label>Sana</label><input type="date" value="2026-05-01" /></div>
+    <div class="field"><label>Sana</label><input type="date" value="2026-05-16" /></div>
     <div class="field"><label>Chek/qabul (ixtiyoriy)</label><input type="file" /></div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Xarajat yozildi')">Yozish</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-expense');toast('Xarajat yozildi')">Yozish</button></div>
+</div>
+
+<div class="modal" id="m-income">
+  <div class="modal-h"><h3>Tushum yozish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-b">
+    <div class="field"><label>Turi</label>
+      <select id="inc-type" onchange="document.getElementById('inc-order-wrap').style.display = this.value === 'order_payment' ? 'block' : 'none'">
+        <option value="order_payment">Buyurtma to'lovi</option>
+        <option value="other">Boshqa tushum</option>
+      </select>
+    </div>
+    <div class="field" id="inc-order-wrap"><label>Buyurtma</label><select id="inc-order"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Summa (to'liq yoki qisman)</label><input value="3 142 000" /></div>
+      <div class="field"><label>Usul</label><select><option value="cash">Naqd</option><option value="bank_transfer">Bank o'tkazma</option><option value="other">Boshqa</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+      <div class="field"><label>Qabul sanasi</label><input type="date" value="2026-05-16" /></div>
+    </div>
+    <div class="field"><label>Izoh (ixtiyoriy)</label><input placeholder="kassa raqami yoki bank reference" /></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-income');toast('Tushum yozildi')">Yozish</button></div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -89,14 +135,15 @@
 <script>
 renderWorkshopShell();
 
-const CAT = { rent: 'Ijara', utilities: 'Elektr', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', other: 'Boshqalar' };
+const CAT = { rent: 'Ijara', utilities: 'Kommunal', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', salary: 'Maosh', other: 'Boshqalar' };
+const METHOD = { cash: 'Naqd', bank_transfer: 'Bank o\'tkazma', card: 'Karta', other: 'Boshqa' };
 
-document.getElementById('body').innerHTML = SEED.expenses.map(e => {
+document.getElementById('expense-body').innerHTML = SEED.expenses.map(e => {
   const br = e.branchId ? SEED.lookup.branchById(e.branchId)?.name : '<span class="muted">ustaxona-keng</span>';
   return `<tr class="${e.status === 'voided' ? 'muted' : ''}">
     <td class="num" style="font-size:11.5px;color:var(--ink-6)">${e.incurredOn}</td>
     <td><span style="font-size:12px;font-weight:500">${CAT[e.category] || e.category}</span></td>
-    <td>${e.description}</td>
+    <td>${e.description}${e.status === 'voided' && e.voidedReason ? `<small style="color:var(--ink-6)">bekor: ${e.voidedReason}</small>` : ''}</td>
     <td>${br}</td>
     <td><small style="color:var(--ink-8);font-size:12px">${e.vendor || '—'}</small></td>
     <td class="amt">${fmtTiyin(e.amountTiyin)}</td>
@@ -105,13 +152,41 @@ document.getElementById('body').innerHTML = SEED.expenses.map(e => {
       <div class="menu-wrap">
         <button class="menu-btn" data-menu-toggle>⋯</button>
         <div class="menu">
-          <button class="mi" onclick="openModal('m-new')">Tahrirlash</button>
-          ${e.status !== 'voided' ? `<button class="mi danger" onclick="confirmAction({title:'Xarajatni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : ''}
+          ${e.status !== 'voided' ? `<button class="mi" onclick="openModal('m-expense')">Tahrirlash</button>
+          <button class="mi danger" onclick="confirmAction({title:'Xarajatni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
         </div>
       </div>
     </td>
   </tr>`;
 }).join('');
+
+document.getElementById('income-body').innerHTML = SEED.incomes.map(i => {
+  const br = i.branchId ? SEED.lookup.branchById(i.branchId)?.name : '<span class="muted">—</span>';
+  return `<tr class="${i.status === 'voided' ? 'muted' : ''}">
+    <td class="num" style="font-size:11.5px;color:var(--ink-6)">${i.receivedOn}</td>
+    <td>${i.type === 'order_payment' ? "Buyurtma to'lovi" : 'Boshqa'}</td>
+    <td class="id">${i.orderId || '—'}</td>
+    <td><small style="color:var(--ink-8);font-size:12px">${METHOD[i.method] || i.method}</small></td>
+    <td>${br}</td>
+    <td><small style="color:var(--ink-8);font-size:12px">${i.note || (i.status === 'voided' ? 'bekor: ' + (i.voidedReason || '') : '—')}</small></td>
+    <td class="amt success-text">${fmtTiyin(i.amountTiyin)}</td>
+    <td>${i.status === 'voided' ? '<span class="pill p-dn"><span class="pd"></span>Bekor qilingan</span>' : '<span class="pill p-ok"><span class="pd"></span>Yozilgan</span>'}</td>
+    <td>
+      <div class="menu-wrap">
+        <button class="menu-btn" data-menu-toggle>⋯</button>
+        <div class="menu">
+          ${i.status !== 'voided' ? `<button class="mi" onclick="openModal('m-income')">Tahrirlash</button>
+          <button class="mi danger" onclick="confirmAction({title:'Tushumni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
+        </div>
+      </div>
+    </td>
+  </tr>`;
+}).join('');
+
+// order picker for income modal
+document.getElementById('inc-order').innerHTML = SEED.orders
+  .filter(o => !['cancelled'].includes(o.state))
+  .map(o => `<option value="${o.id}">${o.id} · ${SEED.lookup.clientById(o.clientId)?.name || ''} · ${fmtTiyin(o.totalTiyin)}</option>`).join('');
 </script>
 </body>
 </html>

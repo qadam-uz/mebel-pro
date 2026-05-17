@@ -1,6 +1,14 @@
 /* ===========================================================================
    Mebel Pro — seed data shared by all prototype apps
    Static — no backend, no persistence. Demo numbers only.
+
+   v1 model (PICKUP-ONLY, no delivery / no payroll / no refunds):
+     order state machine: new → confirmed → cutting →
+       edge_banding (only if any part is banded) → ready → completed
+       + cancelled (from any pre-completed state)
+     Money lives in a separate finance module (incomes + expenses),
+     never on the order. Stock auto-decrements at job completion;
+     revert restores it. No reservation.
    =========================================================================== */
 
 window.SEED = (() => {
@@ -12,46 +20,75 @@ window.SEED = (() => {
   ];
 
   // ----- Platform-wide material catalog -----
+  // Two KINDS:
+  //   kind 'sheet' — type dsp/mdf/plywood/…, thickness_mm, color, decor?,
+  //                  sheetLen/sheetWid (mm), grain (bool); priced/stocked per sheet.
+  //   kind 'edge'  — thickness_mm (0.4 / 2.0), color, decor?;
+  //                  priced/stocked per metre; no sheet size, no grain.
   const materials = [
-    { id: 'm01', type: 'dsp', name: 'LDSP H1334 ST9 · Dub Sonoma', thickness: 18, color: 'Dub Sonoma', decor: 'H1334', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-1' },
-    { id: 'm02', type: 'dsp', name: 'LDSP K001 PW · Belarus dub', thickness: 16, color: 'Dub Belarus', decor: 'K001', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-2' },
-    { id: 'm03', type: 'dsp', name: "LDSP 8198 · Ladzio yong'oq", thickness: 18, color: "Yong'oq", decor: '8198', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-3' },
-    { id: 'm04', type: 'dsp', name: 'LDSP 0011 PR · Oq baxmal', thickness: 18, color: 'Oq', decor: '0011', sheetLen: 2750, sheetWid: 1830, grain: false, status: 'active', sw: 'sw-4' },
-    { id: 'm05', type: 'mdf', name: 'MDF 16 mm · qum rang', thickness: 16, color: 'Qum', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-5' },
-    { id: 'm06', type: 'plywood', name: 'Fanera berioz · 8 mm', thickness: 8, color: 'Berioz', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-6' },
-    { id: 'm07', type: 'mdf', name: 'MDF 19 mm · oq glyans', thickness: 19, color: 'Oq glyans', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-4' },
-    { id: 'm08', type: 'dsp', name: 'LDSP H3309 · Mocca', thickness: 18, color: 'Mocca', decor: 'H3309', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-9' },
-    { id: 'm09', type: 'plywood', name: 'Fanera oq qayin · 12 mm', thickness: 12, color: 'Oq qayin', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-10' },
-    { id: 'm10', type: 'mdf', name: 'MDF 8 mm · texnik', thickness: 8, color: 'Texnik', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'inactive', sw: 'sw-5' }
+    // sheets
+    { id: 'm01', kind: 'sheet', type: 'dsp', name: 'LDSP H1334 ST9 · Dub Sonoma', thickness: 18, color: 'Dub Sonoma', decor: 'H1334', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-1' },
+    { id: 'm02', kind: 'sheet', type: 'dsp', name: 'LDSP K001 PW · Belarus dub', thickness: 16, color: 'Dub Belarus', decor: 'K001', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-2' },
+    { id: 'm03', kind: 'sheet', type: 'dsp', name: "LDSP 8198 · Ladzio yong'oq", thickness: 18, color: "Yong'oq", decor: '8198', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-3' },
+    { id: 'm04', kind: 'sheet', type: 'dsp', name: 'LDSP 0011 PR · Oq baxmal', thickness: 18, color: 'Oq', decor: '0011', sheetLen: 2750, sheetWid: 1830, grain: false, status: 'active', sw: 'sw-4' },
+    { id: 'm05', kind: 'sheet', type: 'mdf', name: 'MDF 16 mm · qum rang', thickness: 16, color: 'Qum', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-5' },
+    { id: 'm06', kind: 'sheet', type: 'plywood', name: 'Fanera berioz · 8 mm', thickness: 8, color: 'Berioz', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-6' },
+    { id: 'm07', kind: 'sheet', type: 'mdf', name: 'MDF 19 mm · oq glyans', thickness: 19, color: 'Oq glyans', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-4' },
+    { id: 'm08', kind: 'sheet', type: 'dsp', name: 'LDSP H3309 · Mocca', thickness: 18, color: 'Mocca', decor: 'H3309', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-9' },
+    { id: 'm09', kind: 'sheet', type: 'plywood', name: 'Fanera oq qayin · 12 mm', thickness: 12, color: 'Oq qayin', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-10' },
+    { id: 'm10', kind: 'sheet', type: 'mdf', name: 'MDF 8 mm · texnik', thickness: 8, color: 'Texnik', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'inactive', sw: 'sw-5' },
+    // edge band
+    { id: 'eb04', kind: 'edge', name: 'Krom PVC 0.4 mm · Dub Sonoma', thickness: 0.4, color: 'Dub Sonoma', decor: 'H1334', status: 'active', sw: 'sw-1' },
+    { id: 'eb20', kind: 'edge', name: 'Krom PVC 2.0 mm · Dub Sonoma', thickness: 2.0, color: 'Dub Sonoma', decor: 'H1334', status: 'active', sw: 'sw-1' },
+    { id: 'eb04q', kind: 'edge', name: 'Krom PVC 0.4 mm · Qum', thickness: 0.4, color: 'Qum', status: 'active', sw: 'sw-5' },
+    { id: 'eb20w', kind: 'edge', name: 'Krom PVC 2.0 mm · Oq', thickness: 2.0, color: 'Oq', status: 'active', sw: 'sw-4' }
   ];
 
-  // Per-branch selection: branchId+materialId → { priceTiyin (price per sheet), minStock, onHand, reserved, status }
+  // Per-branch selection: branch picks materials it carries with its own
+  // price + min_stock.  stock_item shape: { branchId, matId, onHand, minStock,
+  // priceTiyin (per sheet for sheets, per metre for edge), status }.
+  // NO reserved, NO available.
   const branchMaterials = [
-    { branchId: 'yunusobod', matId: 'm01', priceTiyin: 41000000, minStock: 20, onHand: 142, reserved: 8, status: 'active' },
-    { branchId: 'yunusobod', matId: 'm02', priceTiyin: 38000000, minStock: 20, onHand: 96, reserved: 4, status: 'active' },
-    { branchId: 'yunusobod', matId: 'm03', priceTiyin: 42500000, minStock: 15, onHand: 61, reserved: 6, status: 'active' },
-    { branchId: 'yunusobod', matId: 'm04', priceTiyin: 32000000, minStock: 30, onHand: 12, reserved: 0, status: 'active' }, // low
-    { branchId: 'yunusobod', matId: 'm05', priceTiyin: 29500000, minStock: 25, onHand: 84, reserved: 7, status: 'active' },
-    { branchId: 'yunusobod', matId: 'm06', priceTiyin: 24000000, minStock: 10, onHand: 42, reserved: 0, status: 'active' },
-    { branchId: 'yunusobod', matId: 'm08', priceTiyin: 44500000, minStock: 15, onHand: 38, reserved: 0, status: 'active' },
-    { branchId: 'chilonzor', matId: 'm01', priceTiyin: 41500000, minStock: 20, onHand: 110, reserved: 4, status: 'active' },
-    { branchId: 'chilonzor', matId: 'm02', priceTiyin: 38500000, minStock: 20, onHand: 4, reserved: 0, status: 'active' }, // low
-    { branchId: 'chilonzor', matId: 'm05', priceTiyin: 30000000, minStock: 20, onHand: 56, reserved: 3, status: 'active' },
-    { branchId: 'chilonzor', matId: 'm06', priceTiyin: 24500000, minStock: 12, onHand: 28, reserved: 0, status: 'active' },
-    { branchId: 'yangiyol', matId: 'm01', priceTiyin: 40500000, minStock: 15, onHand: 35, reserved: 0, status: 'active' },
-    { branchId: 'yangiyol', matId: 'm04', priceTiyin: 31500000, minStock: 20, onHand: 8, reserved: 0, status: 'active' }, // low
+    { branchId: 'yunusobod', matId: 'm01', priceTiyin: 41000000, minStock: 20, onHand: 142, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm02', priceTiyin: 38000000, minStock: 20, onHand: 96, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm03', priceTiyin: 42500000, minStock: 15, onHand: 61, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm04', priceTiyin: 32000000, minStock: 30, onHand: 12, status: 'active' }, // low
+    { branchId: 'yunusobod', matId: 'm05', priceTiyin: 29500000, minStock: 25, onHand: 84, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm06', priceTiyin: 24000000, minStock: 10, onHand: 42, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm08', priceTiyin: 44500000, minStock: 15, onHand: 38, status: 'active' },
+    { branchId: 'yunusobod', matId: 'eb04', priceTiyin: 320000, minStock: 200, onHand: 1840, status: 'active' }, // per metre
+    { branchId: 'yunusobod', matId: 'eb20', priceTiyin: 680000, minStock: 150, onHand: 92, status: 'active' }, // low (per metre)
+    { branchId: 'chilonzor', matId: 'm01', priceTiyin: 41500000, minStock: 20, onHand: 110, status: 'active' },
+    { branchId: 'chilonzor', matId: 'm02', priceTiyin: 38500000, minStock: 20, onHand: 4, status: 'active' }, // low
+    { branchId: 'chilonzor', matId: 'm05', priceTiyin: 30000000, minStock: 20, onHand: 56, status: 'active' },
+    { branchId: 'chilonzor', matId: 'm06', priceTiyin: 24500000, minStock: 12, onHand: 28, status: 'active' },
+    { branchId: 'chilonzor', matId: 'eb04q', priceTiyin: 300000, minStock: 200, onHand: 960, status: 'active' },
+    { branchId: 'chilonzor', matId: 'eb20w', priceTiyin: 640000, minStock: 150, onHand: 410, status: 'active' },
+    { branchId: 'yangiyol', matId: 'm01', priceTiyin: 40500000, minStock: 15, onHand: 35, status: 'active' },
+    { branchId: 'yangiyol', matId: 'm04', priceTiyin: 31500000, minStock: 20, onHand: 8, status: 'active' }, // low
+    { branchId: 'yangiyol', matId: 'eb04', priceTiyin: 310000, minStock: 150, onHand: 520, status: 'active' }
   ];
 
-  // ----- Workshop users (the owner + staff) -----
+  // ----- Suppliers (added on demand from stock-in) -----
+  const suppliers = [
+    { id: 'sup01', workshopId: 'ws-01', name: 'Egger Distribution UZ', phone: '+998 71 150 20 10', note: 'LDSP · asosiy yetkazib beruvchi', status: 'active' },
+    { id: 'sup02', workshopId: 'ws-01', name: 'Kronospan Trade', phone: '+998 71 150 20 11', note: 'MDF va fanera', status: 'active' },
+    { id: 'sup03', workshopId: 'ws-01', name: 'Rehau Krom', phone: '+998 90 330 40 50', note: 'PVC krom lentasi', status: 'active' },
+    { id: 'sup04', workshopId: 'ws-01', name: 'Lokal bozor · Sebzor', phone: null, note: 'Tezkor mayda partiya', status: 'inactive' }
+  ];
+
+  // ----- Workshop users -----
+  // No fixed roles. Coarse per-branch permission grants only; the owner holds
+  // all grants implicitly (isOwner). No compensation data on users.
   const users = [
-    { id: 'u01', name: 'Hasan Karimov', login: 'hasan', phone: '+998 90 100 30 30', isOwner: true, homeBranchId: 'yunusobod', status: 'active', comp: { type: 'salary', rate: '12 000 000 / oy' }, lastLogin: '15-may, 09:14', initials: 'HK' },
-    { id: 'u02', name: 'Aziza Rasulova', login: 'aziza', phone: '+998 90 100 30 31', isOwner: false, homeBranchId: 'yunusobod', status: 'active', comp: { type: 'salary + commission', rate: '5 000 000 / oy + 1.5%' }, lastLogin: '15-may, 09:42', initials: 'AR', grants: { manage_orders: ['yunusobod', 'chilonzor'], view_dashboard: ['yunusobod', 'chilonzor'], manage_inventory: ['yunusobod'] } },
-    { id: 'u03', name: 'Bahodir Tursunov', login: 'bahodir', phone: '+998 90 100 30 32', isOwner: false, homeBranchId: 'yunusobod', status: 'active', comp: { type: 'per_sheet', rate: '50 000 / list' }, lastLogin: '15-may, 08:30', initials: 'BT', grants: { process_production: ['yunusobod'] } },
-    { id: 'u04', name: 'Olim Hojiyev', login: 'olim', phone: '+998 90 100 30 33', isOwner: false, homeBranchId: 'yunusobod', status: 'active', comp: { type: 'per_metre_banding', rate: '1 500 / metr' }, lastLogin: '14-may, 17:50', initials: 'OH', grants: { process_production: ['yunusobod'] } },
-    { id: 'u05', name: 'Sherzod Aliyev', login: 'sherzod', phone: '+998 90 100 30 34', isOwner: false, homeBranchId: 'yunusobod', status: 'active', comp: { type: 'per_delivery', rate: '30 000 / yetkazma' }, lastLogin: '15-may, 06:15', initials: 'SA', grants: { process_delivery: ['yunusobod', 'chilonzor'] } },
-    { id: 'u06', name: 'Dilshod Yo\'ldoshev', login: 'dilshod', phone: '+998 90 100 30 35', isOwner: false, homeBranchId: 'chilonzor', status: 'active', comp: { type: 'salary', rate: '4 200 000 / oy' }, lastLogin: '14-may, 18:00', initials: 'DY', grants: { manage_orders: ['chilonzor'], view_dashboard: ['chilonzor'] } },
-    { id: 'u07', name: 'Komron Saidov', login: 'komron', phone: '+998 90 100 30 36', isOwner: false, homeBranchId: 'chilonzor', status: 'active', comp: { type: 'per_sheet', rate: '48 000 / list' }, lastLogin: '14-may, 16:42', initials: 'KS', grants: { process_production: ['chilonzor'] } },
-    { id: 'u08', name: 'Madina Yusupova', login: 'madina', phone: '+998 90 100 30 37', isOwner: false, homeBranchId: 'yangiyol', status: 'blocked', comp: null, lastLogin: '02-may, 15:00', initials: 'MY', grants: {} }
+    { id: 'u01', name: 'Hasan Karimov', login: 'hasan', phone: '+998 90 100 30 30', isOwner: true, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 09:14', initials: 'HK' },
+    { id: 'u02', name: 'Aziza Rasulova', login: 'aziza', phone: '+998 90 100 30 31', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 09:42', initials: 'AR', grants: { manage_orders: ['yunusobod', 'chilonzor'], view_dashboard: ['yunusobod', 'chilonzor'], manage_inventory: ['yunusobod'] } },
+    { id: 'u03', name: 'Bahodir Tursunov', login: 'bahodir', phone: '+998 90 100 30 32', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 08:30', initials: 'BT', grants: { process_production: ['yunusobod'] } },
+    { id: 'u04', name: 'Olim Hojiyev', login: 'olim', phone: '+998 90 100 30 33', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '15-may, 17:50', initials: 'OH', grants: { process_production: ['yunusobod'] } },
+    { id: 'u05', name: 'Sherzod Aliyev', login: 'sherzod', phone: '+998 90 100 30 34', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 06:15', initials: 'SA', grants: { manage_finance: ['yunusobod'], view_finance_reports: ['yunusobod', 'chilonzor'] } },
+    { id: 'u06', name: 'Dilshod Yo\'ldoshev', login: 'dilshod', phone: '+998 90 100 30 35', isOwner: false, homeBranchId: 'chilonzor', status: 'active', lastLogin: '15-may, 18:00', initials: 'DY', grants: { manage_orders: ['chilonzor'], view_dashboard: ['chilonzor'] } },
+    { id: 'u07', name: 'Komron Saidov', login: 'komron', phone: '+998 90 100 30 36', isOwner: false, homeBranchId: 'chilonzor', status: 'active', lastLogin: '15-may, 16:42', initials: 'KS', grants: { process_production: ['chilonzor'] } },
+    { id: 'u08', name: 'Madina Yusupova', login: 'madina', phone: '+998 90 100 30 37', isOwner: false, homeBranchId: 'yangiyol', status: 'blocked', lastLogin: '02-may, 15:00', initials: 'MY', grants: {} }
   ];
 
   // ----- Clients (platform-wide) -----
@@ -59,7 +96,7 @@ window.SEED = (() => {
     { id: 'c01', name: "Akmal Norqo'ziyev", phone: '+998 90 100 30 60', initials: 'AN', status: 'active', ordersCount: 4 },
     { id: 'c02', name: 'Dilshod Tursunov', phone: '+998 90 100 30 61', initials: 'DT', status: 'active', ordersCount: 2 },
     { id: 'c03', name: "Madina Yo'ldosheva", phone: '+998 90 100 30 62', initials: 'MY', status: 'active', ordersCount: 1 },
-    { id: 'c04', name: 'Sherzod Ahmedov', phone: '+998 90 100 30 63', initials: 'SA', status: 'active', ordersCount: 3 },
+    { id: 'c04', name: 'Sherzod Ahmedov', phone: '+998 90 100 30 63', initials: 'SA', status: 'active', ordersCount: 3 }
   ];
 
   // ----- Cutting drafts and results -----
@@ -86,7 +123,7 @@ window.SEED = (() => {
     // A live multi-material draft for the demo — DSP shelves + MDF backs + an own-material part
     {
       id: 'cr-0085', status: 'draft', orderId: null,
-      branchId: null, when: '15-may, 08:12',
+      branchId: null, when: '16-may, 08:12',
       partList: [
         { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, edges: { t: 2.0, b: 2.0, l: null, r: null } },
         { ref: 'p02', matId: 'm01', source: 'shop', l:  700, w: 400, qty: 4, edges: { t: 2.0, b: 2.0, l: null, r: null } },
@@ -101,17 +138,17 @@ window.SEED = (() => {
       parts: 9, sheets: 3, wastePct: 9.8, cutLen: 64.4, edgeLen: { 0.4: 4.8, 2.0: 8.2 }, algoVer: 'ffd-guillotine-v1',
       matId: 'm01', source: 'shop'
     },
-    // A simpler single-material draft
+    // A simpler single-material draft (no banding at all → would skip edge_banding)
     {
-      id: 'cr-0086', status: 'draft', orderId: null, branchId: null, when: '14-may, 19:42',
+      id: 'cr-0086', status: 'draft', orderId: null, branchId: null, when: '15-may, 19:42',
       partList: [
         { ref: 'p01', matId: 'm05', source: 'shop', l: 1200, w: 600, qty: 1, edges: { t: null, b: null, l: null, r: null } },
-        { ref: 'p02', matId: 'm05', source: 'shop', l:  800, w: 400, qty: 4, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
+        { ref: 'p02', matId: 'm05', source: 'shop', l:  800, w: 400, qty: 4, edges: { t: null, b: null, l: null, r: null } }
       ],
       algorithms: [
-        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 14.6, cutLen: 18.2, edgeLen: { 0.4: 4.8 }, sheetsByMat: { m05: 1 } }
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 14.6, cutLen: 18.2, edgeLen: {}, sheetsByMat: { m05: 1 } }
       ],
-      parts: 5, sheets: 1, wastePct: 14.6, cutLen: 18.2, edgeLen: { 0.4: 4.8 }, algoVer: 'ffd-guillotine-v1',
+      parts: 5, sheets: 1, wastePct: 14.6, cutLen: 18.2, edgeLen: {}, algoVer: 'ffd-guillotine-v1',
       matId: 'm05', source: 'shop'
     },
     {
@@ -131,117 +168,154 @@ window.SEED = (() => {
   // ----- Per-branch pricing knobs the order step reads -----
   // perSheetTiyin = cutting-service rate (per sheet, integer tiyin)
   // edgeRateTiyin = edge-banding rate (per metre, by thickness in mm)
-  // advancePercent = advance %% for the "advance + balance" plan
-  // deliveryFeeTiyin = fixed per-zone fee (single zone in the demo)
+  // NO advance %, NO delivery fee (pickup-only; money is a separate module).
   const branchPricing = {
-    yunusobod: { perSheetTiyin: 10000000, edgeRateTiyin: { 0.4: 200000, 2.0: 450000 }, advancePercent: 50, deliveryFeeTiyin: 3500000 },
-    chilonzor: { perSheetTiyin:  9500000, edgeRateTiyin: { 0.4: 200000, 2.0: 420000 }, advancePercent: 50, deliveryFeeTiyin: 4000000 },
-    yangiyol:  { perSheetTiyin:  9000000, edgeRateTiyin: { 0.4: 180000, 2.0: 400000 }, advancePercent: 50, deliveryFeeTiyin: 5500000 }
+    yunusobod: { perSheetTiyin: 10000000, edgeRateTiyin: { 0.4: 200000, 2.0: 450000 } },
+    chilonzor: { perSheetTiyin:  9500000, edgeRateTiyin: { 0.4: 200000, 2.0: 420000 } },
+    yangiyol:  { perSheetTiyin:  9000000, edgeRateTiyin: { 0.4: 180000, 2.0: 400000 } }
   };
 
   // ----- Orders -----
+  // v1 order: pickup-only, no money on the order (frozen price snapshot only),
+  // production stamps set at transitions.
+  //   price snapshot: subtotalCuttingTiyin, subtotalMaterialsTiyin,
+  //     subtotalEdgeBandingTiyin, discountTiyin, discountReason, totalTiyin
+  //   production stamps: assignedCutter, assignedEdger,
+  //     cutter, cutCompletedAt, sheetsUsed, cutCount,
+  //     edger, edgeCompletedAt, edgeLengthByThickness, pickedUpAt
+  //   per-item material_source lives on the cutting partList (source 'shop'|'own')
+  //   cancel: cancelledAt, cancelledBy, cancelReason (mandatory free text)
   const orders = [
     {
       id: 'MP-2026-05-0091', state: 'cutting', branchId: 'yunusobod', clientId: 'c01',
-      title: "Kuhna mebel — 4 shkaf · stol", cuttingId: 'cr-0091', source: 'shop', deliveryType: 'delivery',
-      address: "Yunusobod, Buyuk Ipak Yo'li 142", deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 60000000, materialsTiyin: 246000000, edgeFeeTiyin: 8200000, discountTiyin: 0,
-      totalTiyin: 317700000, paidTiyin: 158850000, paymentType: 'advance',
-      assignedCutter: 'u03', cutter: 'u03', cutStartedAt: '14-may, 11:20',
-      placedAt: '14-may, 09:42', placedBy: 'c01',
-      dueAt: '16-may, 14:00', priority: 5
+      title: "Kuhna mebel — 4 shkaf · stol", cuttingId: 'cr-0091',
+      subtotalCuttingTiyin: 60000000, subtotalMaterialsTiyin: 246000000, subtotalEdgeBandingTiyin: 8200000,
+      discountTiyin: 0, discountReason: null, totalTiyin: 314200000,
+      assignedCutter: 'u03', assignedEdger: 'u04',
+      placedAt: '14-may, 09:42', placedBy: 'c01', confirmedAt: '14-may, 10:05', confirmedBy: 'u02',
+      dueAt: '17-may, 14:00', priority: 5
     },
     {
       id: 'MP-2026-05-0090', state: 'edge_banding', branchId: 'yunusobod', clientId: 'c02',
-      title: 'MDF · 6 list · krom', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'pickup',
-      cuttingFeeTiyin: 30000000, materialsTiyin: 158000000, edgeFeeTiyin: 5400000, discountTiyin: 0,
-      totalTiyin: 193400000, paidTiyin: 193400000, paymentType: 'full',
-      cutter: 'u03', edger: 'u04', cutCompletedAt: '15-may, 09:18', edgeStartedAt: '15-may, 09:20',
-      placedAt: '13-may, 18:30', dueAt: '15-may, 17:00', priority: 4
+      title: 'MDF · 6 list · krom', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 30000000, subtotalMaterialsTiyin: 158000000, subtotalEdgeBandingTiyin: 5400000,
+      discountTiyin: 0, discountReason: null, totalTiyin: 193400000,
+      assignedCutter: 'u03', assignedEdger: 'u04',
+      cutter: 'u03', cutCompletedAt: '16-may, 09:18', sheetsUsed: { m05: 6 }, cutCount: 6,
+      placedAt: '13-may, 18:30', confirmedAt: '13-may, 19:00', confirmedBy: 'u02',
+      dueAt: '17-may, 17:00', priority: 4
     },
     {
       id: 'MP-2026-05-0089', state: 'ready', branchId: 'yunusobod', clientId: 'c03',
-      title: 'Oshxona · LDSP · 2 list', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'delivery',
-      address: "Yunusobod, Tinchlik 12", deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 12000000, materialsTiyin: 81000000, edgeFeeTiyin: 2200000, discountTiyin: 0,
-      totalTiyin: 98700000, paidTiyin: 49350000, paymentType: 'advance', balanceUnpaid: true,
-      cutter: 'u03', edger: 'u04', placedAt: '13-may, 11:15', dueAt: '15-may, 16:00', priority: 3
+      title: 'Oshxona · LDSP · 2 list', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 12000000, subtotalMaterialsTiyin: 81000000, subtotalEdgeBandingTiyin: 2200000,
+      discountTiyin: 0, discountReason: null, totalTiyin: 95200000,
+      assignedCutter: 'u03', assignedEdger: 'u04',
+      cutter: 'u03', cutCompletedAt: '14-may, 14:00', sheetsUsed: { m01: 2 }, cutCount: 2,
+      edger: 'u04', edgeCompletedAt: '14-may, 17:50', edgeLengthByThickness: { '0.4': 16400 },
+      placedAt: '13-may, 11:15', confirmedAt: '13-may, 12:00', confirmedBy: 'u02',
+      dueAt: '17-may, 16:00', priority: 3
     },
     {
-      id: 'MP-2026-05-0088', state: 'in_delivery', branchId: 'yunusobod', clientId: 'c04',
-      title: 'Stol · fanera', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'delivery',
-      address: "Chilonzor 9-mavze 17", deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 18000000, materialsTiyin: 144000000, edgeFeeTiyin: 0, discountTiyin: 0,
-      totalTiyin: 165500000, paidTiyin: 165500000, paymentType: 'full',
-      cutter: 'u03', driver: 'u05', driverStartedAt: '15-may, 09:30',
-      placedAt: '12-may, 14:20', dueAt: 'bugun · 14:30', priority: 2
+      id: 'MP-2026-05-0088', state: 'ready', branchId: 'yunusobod', clientId: 'c04',
+      title: 'Stol · fanera', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 18000000, subtotalMaterialsTiyin: 144000000, subtotalEdgeBandingTiyin: 0,
+      discountTiyin: 5000000, discountReason: 'Doimiy mijoz chegirmasi', totalTiyin: 157000000,
+      assignedCutter: 'u03', assignedEdger: null,
+      cutter: 'u03', cutCompletedAt: '15-may, 11:30', sheetsUsed: { m06: 4 }, cutCount: 4,
+      placedAt: '12-may, 14:20', confirmedAt: '12-may, 15:00', confirmedBy: 'u02',
+      dueAt: 'bugun · 14:30', priority: 2
     },
     {
       id: 'MP-2026-05-0087', state: 'confirmed', branchId: 'yunusobod', clientId: 'c01',
-      title: 'Krom + aksessuar', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'pickup',
-      cuttingFeeTiyin: 9000000, materialsTiyin: 42000000, edgeFeeTiyin: 0, discountTiyin: 0,
-      totalTiyin: 51000000, paidTiyin: 51000000, paymentType: 'full',
-      placedAt: '15-may, 08:10', dueAt: '17-may', priority: 6
+      title: 'Krom + aksessuar', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 9000000, subtotalMaterialsTiyin: 42000000, subtotalEdgeBandingTiyin: 0,
+      discountTiyin: 0, discountReason: null, totalTiyin: 51000000,
+      assignedCutter: null, assignedEdger: null,
+      placedAt: '16-may, 08:10', confirmedAt: '16-may, 08:40', confirmedBy: 'u02',
+      dueAt: '18-may', priority: 6
     },
     {
-      id: 'MP-2026-05-0086', state: 'pending_payment', branchId: 'yunusobod', clientId: 'c02',
-      title: 'Stol oyog\'i · 1 list', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'pickup',
-      cuttingFeeTiyin: 6000000, materialsTiyin: 29500000, edgeFeeTiyin: 0, discountTiyin: 0,
-      totalTiyin: 35500000, paidTiyin: 0, paymentType: 'full',
-      placedAt: '15-may, 09:00', dueAt: '16-may', priority: 1
+      id: 'MP-2026-05-0086', state: 'new', branchId: 'yunusobod', clientId: 'c02',
+      title: 'Stol oyog\'i · 1 list', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 6000000, subtotalMaterialsTiyin: 29500000, subtotalEdgeBandingTiyin: 0,
+      discountTiyin: 0, discountReason: null, totalTiyin: 35500000,
+      assignedCutter: null, assignedEdger: null,
+      placedAt: '16-may, 09:00', placedBy: 'c02', dueAt: '17-may', priority: 1
     },
     {
       id: 'MP-2026-05-0085', state: 'new', branchId: 'chilonzor', clientId: 'c03',
-      title: 'Garderob · 8 list', cuttingId: 'cr-mock', source: 'shop', deliveryType: 'delivery',
-      address: "Chilonzor 9-mavze 32", deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 48000000, materialsTiyin: 320000000, edgeFeeTiyin: 11200000, discountTiyin: 0,
-      totalTiyin: 382700000, paidTiyin: 0, paymentType: 'full',
-      placedAt: '15-may, 09:30', dueAt: '18-may', priority: 7
+      title: 'Garderob · 8 list', cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 48000000, subtotalMaterialsTiyin: 320000000, subtotalEdgeBandingTiyin: 11200000,
+      discountTiyin: 0, discountReason: null, totalTiyin: 379200000,
+      assignedCutter: null, assignedEdger: null,
+      placedAt: '16-may, 09:30', placedBy: 'c03', dueAt: '19-may', priority: 7
     },
     {
       id: 'MP-2026-05-0072', state: 'completed', branchId: 'yunusobod', clientId: 'c01',
-      title: 'MDF · 7 list · krom · oldingi buyurtma',
-      cuttingId: 'cr-0072', source: 'shop', deliveryType: 'delivery',
-      address: "Yunusobod, Toraqo'rg'on 7", deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 42000000, materialsTiyin: 206500000, edgeFeeTiyin: 4500000, discountTiyin: 0,
-      totalTiyin: 256500000, paidTiyin: 256500000, paymentType: 'advance',
-      cutter: 'u03', edger: 'u04', driver: 'u05',
-      placedAt: '10-may, 14:30', deliveredAt: '13-may, 14:30', priority: 0
+      title: 'MDF · 7 list · krom · oldingi buyurtma', cuttingId: 'cr-0072',
+      subtotalCuttingTiyin: 42000000, subtotalMaterialsTiyin: 206500000, subtotalEdgeBandingTiyin: 4500000,
+      discountTiyin: 0, discountReason: null, totalTiyin: 253000000,
+      assignedCutter: 'u03', assignedEdger: 'u04',
+      cutter: 'u03', cutCompletedAt: '12-may, 11:00', sheetsUsed: { m05: 7 }, cutCount: 7,
+      edger: 'u04', edgeCompletedAt: '12-may, 16:20', edgeLengthByThickness: { '0.4': 12000 },
+      pickedUpAt: '13-may, 14:30',
+      placedAt: '10-may, 14:30', confirmedAt: '10-may, 15:10', confirmedBy: 'u02', priority: 0
     },
     {
       id: 'MP-2026-04-0856', state: 'cancelled', branchId: 'chilonzor', clientId: 'c01',
-      title: "Fanera · oshxona", cuttingId: 'cr-mock', source: 'shop', deliveryType: 'delivery',
-      address: 'Chilonzor 8-mavze 14', deliveryFeeTiyin: 3500000,
-      cuttingFeeTiyin: 14000000, materialsTiyin: 48000000, edgeFeeTiyin: 0, discountTiyin: 0,
-      totalTiyin: 65500000, paidTiyin: 32750000, paymentType: 'advance',
-      placedAt: '08-apr, 11:00', cancelledAt: '09-apr, 14:00', cancelReason: 'Mijoz boshqa filialni tanladi',
-      refundPending: true, priority: 0
+      title: "Fanera · oshxona", cuttingId: 'cr-mock',
+      subtotalCuttingTiyin: 14000000, subtotalMaterialsTiyin: 48000000, subtotalEdgeBandingTiyin: 0,
+      discountTiyin: 0, discountReason: null, totalTiyin: 62000000,
+      assignedCutter: null, assignedEdger: null,
+      placedAt: '08-apr, 11:00', cancelledAt: '09-apr, 14:00', cancelledBy: 'u06',
+      cancelReason: 'Mijoz boshqa filialni tanladi', priority: 0
     }
   ];
 
-  // ----- Expenses -----
+  // ----- Finance: income rows -----
+  // type 'order_payment' requires orderId; 'other' has no orderId.
+  // amount_tiyin > 0 (full or partial). status recorded|voided.
+  const incomes = [
+    { id: 'in01', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0072', amountTiyin: 253000000, method: 'bank_transfer', receivedOn: '13-may', note: "To'liq to'lov", status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in02', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0089', amountTiyin: 50000000, method: 'cash', receivedOn: '14-may', note: 'Qisman to\'lov', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in03', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0088', amountTiyin: 157000000, method: 'cash', receivedOn: '15-may', note: null, status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in04', workshopId: 'ws-01', branchId: 'chilonzor', type: 'order_payment', orderId: 'MP-2026-05-0091', amountTiyin: 150000000, method: 'card', receivedOn: '14-may', note: 'Oldindan', status: 'recorded', recordedByUserId: 'u02' },
+    { id: 'in05', workshopId: 'ws-01', branchId: 'yunusobod', type: 'other', orderId: null, amountTiyin: 12000000, method: 'cash', receivedOn: '11-may', note: 'Eski qoldiq material sotuvi', status: 'recorded', recordedByUserId: 'u01' },
+    { id: 'in06', workshopId: 'ws-01', branchId: 'chilonzor', type: 'order_payment', orderId: 'MP-2026-04-0856', amountTiyin: 31000000, method: 'cash', receivedOn: '08-apr', note: 'Bekor qilingan — qaytarildi', status: 'voided', voidedReason: 'Buyurtma bekor qilindi, pul qaytarildi (xarajat sifatida)', recordedByUserId: 'u06' }
+  ];
+
+  // ----- Finance: expense rows -----
+  // category: rent|utilities|raw_materials|supplies|transport|equipment|
+  //           marketing|taxes_and_fees|salary|other
+  // A worker's pay is booked here as a 'salary' expense (no payroll module).
   const expenses = [
-    { id: 'e01', branchId: 'yunusobod', category: 'rent', amountTiyin: 480000000, incurredOn: '01-may', description: 'May oyi ijarasi', vendor: 'Tinchlik Bldg LLC', status: 'recorded' },
-    { id: 'e02', branchId: 'yunusobod', category: 'utilities', amountTiyin: 24000000, incurredOn: '05-may', description: 'Elektr energiya · aprel', vendor: 'Hududgaz', status: 'recorded' },
-    { id: 'e03', branchId: null, category: 'marketing', amountTiyin: 80000000, incurredOn: '08-may', description: 'Reklama · Telegram kanal', vendor: 'Mediastar', status: 'recorded' },
-    { id: 'e04', branchId: 'chilonzor', category: 'supplies', amountTiyin: 35000000, incurredOn: '12-may', description: 'Aksessuar va vint partiyasi', vendor: 'Hardware.uz', status: 'recorded' },
-    { id: 'e05', branchId: 'yunusobod', category: 'transport', amountTiyin: 12500000, incurredOn: '13-may', description: 'Yangiyo\'lga material transport', vendor: 'JTKlogistika', status: 'recorded' },
-    { id: 'e06', branchId: 'yunusobod', category: 'equipment', amountTiyin: 145000000, incurredOn: '03-may', description: 'Kromchi mashinasiga ehtiyot qism', vendor: 'IMA AG', status: 'voided', voidReason: 'Notog\'ri summa kiritilgan' }
+    { id: 'e01', workshopId: 'ws-01', branchId: 'yunusobod', category: 'rent', amountTiyin: 480000000, incurredOn: '01-may', description: 'May oyi ijarasi', vendor: 'Tinchlik Bldg LLC', status: 'recorded', recordedByUserId: 'u01' },
+    { id: 'e02', workshopId: 'ws-01', branchId: 'yunusobod', category: 'utilities', amountTiyin: 24000000, incurredOn: '05-may', description: 'Elektr energiya · aprel', vendor: 'Hududgaz', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e03', workshopId: 'ws-01', branchId: null, category: 'marketing', amountTiyin: 80000000, incurredOn: '08-may', description: 'Reklama · Telegram kanal', vendor: 'Mediastar', status: 'recorded', recordedByUserId: 'u01' },
+    { id: 'e04', workshopId: 'ws-01', branchId: 'chilonzor', category: 'supplies', amountTiyin: 35000000, incurredOn: '12-may', description: 'Aksessuar va vint partiyasi', vendor: 'Hardware.uz', status: 'recorded', recordedByUserId: 'u06' },
+    { id: 'e05', workshopId: 'ws-01', branchId: 'yunusobod', category: 'raw_materials', amountTiyin: 164000000, incurredOn: '06-may', description: 'LDSP partiya · 40 list', vendor: 'Egger Distribution UZ', status: 'recorded', recordedByUserId: 'u02' },
+    { id: 'e06', workshopId: 'ws-01', branchId: 'yunusobod', category: 'salary', amountTiyin: 18500000, incurredOn: '15-may', description: 'Bahodir T. · 13–15 may · 19 list kesildi (qo\'lda hisoblandi)', vendor: null, status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e07', workshopId: 'ws-01', branchId: 'yunusobod', category: 'salary', amountTiyin: 12300000, incurredOn: '15-may', description: 'Olim H. · 13–15 may · 28.4 m krom (qo\'lda hisoblandi)', vendor: null, status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e08', workshopId: 'ws-01', branchId: 'chilonzor', category: 'transport', amountTiyin: 12500000, incurredOn: '13-may', description: 'Filiallararo material tashish', vendor: 'JTKlogistika', status: 'recorded', recordedByUserId: 'u06' },
+    { id: 'e09', workshopId: 'ws-01', branchId: 'chilonzor', category: 'other', amountTiyin: 31000000, incurredOn: '09-apr', description: 'MP-2026-04-0856 bekor — mijozga pul qaytarildi', vendor: null, status: 'recorded', recordedByUserId: 'u06' },
+    { id: 'e10', workshopId: 'ws-01', branchId: 'yunusobod', category: 'equipment', amountTiyin: 145000000, incurredOn: '03-may', description: 'Kromchi mashinasiga ehtiyot qism', vendor: 'IMA AG', status: 'voided', voidedReason: 'Notog\'ri summa kiritilgan', recordedByUserId: 'u01' }
   ];
 
-  // ----- Payroll runs -----
-  const payrollRuns = [
-    { id: 'pr-2026-05', period: '01-may — 31-may', status: 'draft', generatedBy: 'u01', generatedAt: '15-may', grossTiyin: 624000000, paidTiyin: 0, entries: 17 },
-    { id: 'pr-2026-04', period: '01-apr — 30-apr', status: 'finalized', generatedBy: 'u01', generatedAt: '01-may', finalizedBy: 'u01', finalizedAt: '02-may', grossTiyin: 612400000, paidTiyin: 612400000, entries: 16 },
-    { id: 'pr-2026-03', period: '01-mar — 31-mar', status: 'finalized', generatedBy: 'u01', generatedAt: '01-apr', finalizedBy: 'u01', finalizedAt: '02-apr', grossTiyin: 588000000, paidTiyin: 588000000, entries: 15 }
+  // ----- Worker production report (derived from order stamps) -----
+  // The accountant reads this per user/period to compute pay by hand,
+  // then books it as a 'salary' expense. NOT a payroll entity.
+  const workerProduction = [
+    { userId: 'u03', period: '13–15 may', branchId: 'yunusobod', sheetsCut: 19, cutCount: 19, ordersBanded: 0, metresBanded: 0 },
+    { userId: 'u04', period: '13–15 may', branchId: 'yunusobod', sheetsCut: 0, cutCount: 0, ordersBanded: 2, metresBanded: 28.4 },
+    { userId: 'u07', period: '13–15 may', branchId: 'chilonzor', sheetsCut: 6, cutCount: 6, ordersBanded: 0, metresBanded: 0 }
   ];
 
-  // ----- Permissions catalog -----
+  // ----- Permissions catalog (v1) -----
   const permissions = [
     { key: 'view_dashboard', label: 'Asosiyni ko\'rish' },
     { key: 'manage_orders', label: 'Buyurtmalarni boshqarish' },
     { key: 'process_production', label: 'Kesish / krom yopishtirish' },
-    { key: 'process_delivery', label: 'Yetkazib berish' },
     { key: 'manage_catalog', label: 'Material katalogini boshqarish' },
     { key: 'manage_inventory', label: 'Omborni boshqarish' },
     { key: 'manage_finance', label: 'Moliyani boshqarish' },
@@ -259,60 +333,61 @@ window.SEED = (() => {
 
   // ----- Platform users -----
   const platformUsers = [
-    { id: 'p01', name: 'Nuriddin Obidjonov', login: 'nuriddin', phone: '+998 90 200 00 00', status: 'active', lastLogin: '15-may, 09:00', initials: 'NO' },
-    { id: 'p02', name: 'Aziza Saidova', login: 'aziza', phone: '+998 90 200 00 01', status: 'active', lastLogin: '14-may, 18:30', initials: 'AS' },
+    { id: 'p01', name: 'Nuriddin Obidjonov', login: 'nuriddin', phone: '+998 90 200 00 00', status: 'active', lastLogin: '16-may, 09:00', initials: 'NO' },
+    { id: 'p02', name: 'Aziza Saidova', login: 'aziza', phone: '+998 90 200 00 01', status: 'active', lastLogin: '15-may, 18:30', initials: 'AS' },
     { id: 'p03', name: 'Sardor Tursunov', login: 'sardor', phone: '+998 90 200 00 02', status: 'active', lastLogin: '12-may, 14:20', initials: 'ST' }
   ];
 
   // ----- Scheduled jobs -----
   const jobs = [
-    { id: 'expire-stale-draft-cuttings', name: 'expire-stale-draft-cuttings', schedule: 'Kunlik · 03:00', lastRun: '15-may, 03:00', lastResult: 'ok', summary: '4 ta eskirgan draft o\'chirildi' },
-    { id: 'notify-pay-later-overdue', name: 'notify-pay-later-overdue', schedule: 'Kunlik · 09:00', lastRun: '15-may, 09:00', lastResult: 'ok', summary: '0 ta muddati o\'tgan pay-later' },
-    { id: 'notify-stale-refunds', name: 'notify-stale-refunds', schedule: 'Kunlik · 09:15', lastRun: '15-may, 09:15', lastResult: 'ok', summary: '1 ta stale refund (8 kun)' },
-    { id: 'cleanup-expired-sessions', name: 'cleanup-expired-sessions', schedule: 'Soatlik', lastRun: '15-may, 09:00', lastResult: 'ok', summary: '142 ta sessiya o\'chirildi' },
-    { id: 'daily-low-stock-summary', name: 'daily-low-stock-summary', schedule: 'Kunlik · 08:00', lastRun: '15-may, 08:00', lastResult: 'failed', summary: 'TimeoutError on workshop ws-04', error: 'Connection timeout to inventory DB at 08:00:42' }
+    { id: 'expire-stale-draft-cuttings', name: 'expire-stale-draft-cuttings', schedule: 'Kunlik · 03:00', lastRun: '16-may, 03:00', lastResult: 'ok', summary: '4 ta eskirgan draft o\'chirildi' },
+    { id: 'notify-stale-new-orders', name: 'notify-stale-new-orders', schedule: 'Kunlik · 09:00', lastRun: '16-may, 09:00', lastResult: 'ok', summary: '2 ta tasdiqlanmagan yangi buyurtma' },
+    { id: 'daily-low-stock-summary', name: 'daily-low-stock-summary', schedule: 'Kunlik · 08:00', lastRun: '16-may, 08:00', lastResult: 'failed', summary: 'TimeoutError on workshop ws-04', error: 'Connection timeout to inventory DB at 08:00:42' },
+    { id: 'cleanup-expired-sessions', name: 'cleanup-expired-sessions', schedule: 'Soatlik', lastRun: '16-may, 09:00', lastResult: 'ok', summary: '142 ta sessiya o\'chirildi' }
   ];
 
   // ----- Error monitor -----
   const errors = [
-    { code: 'insufficient_stock', module: 'inventory', count24h: 12, count7d: 38, last: '15-may, 09:14', msg: 'Reserve failed: available < requested', resolved: false },
-    { code: 'optimization_timeout', module: 'cutting', count24h: 3, count7d: 7, last: '14-may, 16:42', msg: 'Cutting optimization exceeded 5s budget (84 parts)', resolved: false },
-    { code: 'delivery_out_of_zone', module: 'orders', count24h: 5, count7d: 14, last: '15-may, 08:20', msg: 'No delivery zone matched (lat, lng)', resolved: false },
-    { code: 'invalid_oauth_signature', module: 'identity', count24h: 1, count7d: 4, last: '15-may, 06:12', msg: 'Telegram payload HMAC mismatch', resolved: false }
+    { code: 'insufficient_stock', module: 'inventory', count24h: 12, count7d: 38, last: '16-may, 09:14', msg: 'Stock decrement on Cutting done went below zero', resolved: false },
+    { code: 'optimization_timeout', module: 'cutting', count24h: 3, count7d: 7, last: '15-may, 16:42', msg: 'Cutting optimization exceeded 5s budget (84 parts)', resolved: false },
+    { code: 'invalid_state_transition', module: 'orders', count24h: 2, count7d: 6, last: '16-may, 08:20', msg: 'Attempted ready→cutting skip (revert is one step only)', resolved: false },
+    { code: 'invalid_oauth_signature', module: 'identity', count24h: 1, count7d: 4, last: '16-may, 06:12', msg: 'Telegram payload HMAC mismatch', resolved: false }
   ];
 
   // ----- Audit log -----
   const auditLog = [
-    { t: '15-may, 09:42', action: 'order.status_changed', actor: 'u02', detail: 'MP-2026-05-0090 · edge_banding → cutting', module: 'orders' },
-    { t: '15-may, 09:30', action: 'order.created', actor: 'c03', detail: 'MP-2026-05-0085 · 8 list, garderob', module: 'orders' },
-    { t: '15-may, 09:18', action: 'order.cut_completed', actor: 'u03', detail: 'MP-2026-05-0090 · 6 list ishlatildi', module: 'orders' },
-    { t: '15-may, 09:14', action: 'inventory.stock_in', actor: 'u02', detail: 'm03 · +40 list · Egger partiya', module: 'inventory' },
-    { t: '15-may, 08:20', action: 'order.delivery_out_of_zone', actor: 'c02', detail: '(41.32, 69.28) — no zone', module: 'orders' },
-    { t: '14-may, 17:50', action: 'order.banding_completed', actor: 'u04', detail: 'MP-2026-05-0089 · 16.4 m', module: 'orders' },
-    { t: '14-may, 11:20', action: 'order.cut_started', actor: 'u03', detail: 'MP-2026-05-0091 · 14 part', module: 'orders' },
+    { t: '16-may, 09:42', action: 'order.status_changed', actor: 'u02', detail: 'MP-2026-05-0090 · cutting → edge_banding', module: 'orders' },
+    { t: '16-may, 09:30', action: 'order.created', actor: 'c03', detail: 'MP-2026-05-0085 · 8 list, garderob', module: 'orders' },
+    { t: '16-may, 09:18', action: 'order.cut_completed', actor: 'u03', detail: 'MP-2026-05-0090 · 6 list ishlatildi', module: 'orders' },
+    { t: '16-may, 09:14', action: 'inventory.stock_in', actor: 'u02', detail: 'm03 · +40 list · Egger partiya', module: 'inventory' },
+    { t: '15-may, 17:50', action: 'order.banding_completed', actor: 'u04', detail: 'MP-2026-05-0089 · 16.4 m', module: 'orders' },
+    { t: '15-may, 11:30', action: 'finance.expense_recorded', actor: 'u05', detail: 'salary · Bahodir T. · 185 000 so\'m', module: 'finance' },
+    { t: '14-may, 10:05', action: 'order.confirmed', actor: 'u02', detail: 'MP-2026-05-0091 · tasdiqlandi', module: 'orders' },
     { t: '14-may, 09:42', action: 'order.created', actor: 'c01', detail: 'MP-2026-05-0091', module: 'orders' }
   ];
 
   // ----- Notifications -----
   const notifications = [
-    { t: '15-may, 09:42', kind: 'order', read: false, title: "Yangi buyurtma · MP-2026-05-0085", body: "Chilonzor · 8 list, garderob — 3.8 M so'm", link: 'order-detail.html?id=MP-2026-05-0085' },
-    { t: '15-may, 09:14', kind: 'inventory', read: false, title: "Past zaxira · 4 ta material", body: "Yunusobod, Chilonzor — ko'rib chiqing", link: 'inventory.html' },
-    { t: '15-may, 09:00', kind: 'finance', read: false, title: "Eskirgan refund · 8 kun", body: "MP-2026-04-0856 · 327 500 so'm", link: 'refunds.html' },
-    { t: '14-may, 18:20', kind: 'order', read: true, title: "Buyurtma tugatildi · MP-2026-05-0072", body: "Akmal Norqo'ziyev · 2 565 000 so'm", link: 'order-detail.html?id=MP-2026-05-0072' },
+    { t: '16-may, 09:42', kind: 'order', read: false, title: "Yangi buyurtma · MP-2026-05-0085", body: "Chilonzor · 8 list, garderob — tasdiqlash kerak", link: 'order-detail.html?id=MP-2026-05-0085' },
+    { t: '16-may, 09:14', kind: 'inventory', read: false, title: "Past zaxira · 4 ta material", body: "Yunusobod, Chilonzor — ko'rib chiqing", link: 'inventory.html' },
+    { t: '16-may, 09:00', kind: 'order', read: false, title: "Tasdiqlanmagan buyurtma", body: "MP-2026-05-0086 · ko'rib chiqing", link: 'order-detail.html?id=MP-2026-05-0086' },
+    { t: '15-may, 18:20', kind: 'order', read: true, title: "Buyurtma tugatildi · MP-2026-05-0072", body: "Akmal Norqo'ziyev · mijoz olib ketdi", link: 'order-detail.html?id=MP-2026-05-0072' },
     { t: '14-may, 09:42', kind: 'order', read: true, title: "Yangi buyurtma · MP-2026-05-0091", body: "Akmal Norqo'ziyev · 4 shkaf + stol", link: 'order-detail.html?id=MP-2026-05-0091' }
   ];
 
-  // ----- State labels -----
+  // ----- State labels (v1: no pending_payment, no in_delivery) -----
   const STATE_LABELS = {
-    new: 'Yangi', pending_payment: "To'lov kutilmoqda", confirmed: 'Tasdiqlangan',
+    new: 'Yangi', confirmed: 'Tasdiqlangan',
     cutting: 'Kesilmoqda', edge_banding: 'Krom yopishtirilmoqda', ready: 'Tayyor',
-    in_delivery: 'Yetkazilmoqda', completed: 'Tugallandi', cancelled: 'Bekor qilindi'
+    completed: 'Tugallandi', cancelled: 'Bekor qilindi'
   };
   const STATE_PILL = {
-    new: 'p-new', pending_payment: 'p-pay', confirmed: 'p-conf',
+    new: 'p-new', confirmed: 'p-conf',
     cutting: 'p-cut', edge_banding: 'p-eb', ready: 'p-rdy',
-    in_delivery: 'p-del', completed: 'p-dn', cancelled: 'p-bad'
+    completed: 'p-dn', cancelled: 'p-bad'
   };
+  // Linear state machine (cancelled reachable from any pre-completed state).
+  const ORDER_STATES = ['new', 'confirmed', 'cutting', 'edge_banding', 'ready', 'completed', 'cancelled'];
 
   const lookup = {
     branchById: id => branches.find(b => b.id === id),
@@ -323,7 +398,25 @@ window.SEED = (() => {
     cuttingById: id => cuttings.find(c => c.id === id),
     branchMatFor: (branchId, matId) => branchMaterials.find(bm => bm.branchId === branchId && bm.matId === matId),
     workshopById: id => workshops.find(w => w.id === id),
+    supplierById: id => suppliers.find(s => s.id === id),
+    incomesForOrder: orderId => incomes.filter(i => i.orderId === orderId && i.status === 'recorded'),
     chosenAlgo: cutting => cutting.algorithms?.find(a => a.chosen) || cutting.algorithms?.[0] || null,
+
+    // does this cutting need an edge_banding step at all?
+    isBanded: cutting => {
+      const algo = lookup.chosenAlgo(cutting);
+      const fromAlgo = algo && algo.edgeLen && Object.keys(algo.edgeLen).length > 0;
+      const fromParts = (cutting.partList || []).some(p => p.edges && Object.values(p.edges).some(v => v != null));
+      return !!(fromAlgo || fromParts);
+    },
+
+    // sum of recorded order payments → paid / balance for an order
+    orderFinance: order => {
+      const paid = incomes
+        .filter(i => i.orderId === order.id && i.status === 'recorded')
+        .reduce((a, i) => a + i.amountTiyin, 0);
+      return { total: order.totalTiyin, paid, balance: Math.max(0, order.totalTiyin - paid) };
+    },
 
     // materials this branch currently carries (active per-branch material rows)
     materialsAtBranch: branchId =>
@@ -353,8 +446,8 @@ window.SEED = (() => {
       return [...missing];
     },
 
-    // sheets in the chosen algorithm result that aren't fully covered by shop parts (i.e. own-source share)
-    // returns a price breakdown at the branch: cuttingFee, materials, edgeFee, subtotal
+    // price breakdown at the branch: cuttingFee, materials, edgeFee, subtotal.
+    // No advance %, no delivery fee in v1.
     pricingAt: (branchId, cutting) => {
       const pricing = branchPricing[branchId];
       const algo = lookup.chosenAlgo(cutting);
@@ -393,8 +486,6 @@ window.SEED = (() => {
       return {
         cuttingFee, materials, edgeFee,
         subtotal: cuttingFee + materials + edgeFee,
-        advancePercent: pricing.advancePercent,
-        deliveryFeeTiyin: pricing.deliveryFeeTiyin,
         totalSheets,
         matLines, edgeLines
       };
@@ -402,10 +493,12 @@ window.SEED = (() => {
   };
 
   return {
-    branches, materials, branchMaterials, branchPricing, users, clients, cuttings, orders,
-    expenses, payrollRuns, permissions, workshops, platformUsers, jobs, errors,
+    branches, materials, branchMaterials, branchPricing, suppliers,
+    users, clients, cuttings, orders,
+    incomes, expenses, workerProduction, permissions,
+    workshops, platformUsers, jobs, errors,
     auditLog, notifications,
-    STATE_LABELS, STATE_PILL,
+    STATE_LABELS, STATE_PILL, ORDER_STATES,
     lookup
   };
 })();

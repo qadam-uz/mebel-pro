@@ -19,7 +19,7 @@
     <div class="page-head">
       <div>
         <h1>Xodimlar</h1>
-        <p class="sub">Ustaxona xodimlari · ruxsatlar · kompensatsiya. Faqat egasi yangi xodim qo'shadi.</p>
+        <p class="sub">Ustaxona xodimlari · ruxsatlar. Faqat egasi yangi xodim qo'shadi.</p>
       </div>
       <div class="tools">
         <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi xodim</button>
@@ -43,7 +43,7 @@
 
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>Xodim</th><th>Login</th><th>Asosiy filial</th><th>Kompensatsiya</th><th>Ruxsatlar</th><th>Oxirgi kirish</th><th>Holat</th><th></th></tr></thead>
+        <thead><tr><th>Xodim</th><th>Login</th><th>Asosiy filial</th><th>Ruxsatlar</th><th>Oxirgi kirish</th><th>Holat</th><th></th></tr></thead>
         <tbody id="body"></tbody>
       </table>
     </div>
@@ -68,13 +68,7 @@
     <p class="muted" style="font-size:12.5px;margin:0 0 12px">Yaratishdan keyin "ruxsatlar" tabidan ham o'zgartirish mumkin.</p>
     <table class="matrix">
       <thead><tr><th class="permission">Ruxsat</th><th>Yunusobod</th><th>Chilonzor</th><th>Yangiyo'l</th></tr></thead>
-      <tbody>
-        <tr><td class="permission">Buyurtmalarni boshqarish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
-        <tr><td class="permission">Kesish / krom</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
-        <tr><td class="permission">Yetkazib berish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
-        <tr><td class="permission">Omborni boshqarish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
-        <tr><td class="permission">Asosiy ko'rish</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>
-      </tbody>
+      <tbody id="new-perms"></tbody>
     </table>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Xodim yaratildi · vaqtinchalik parol: TempPass2026!')">Yaratish</button></div>
@@ -85,6 +79,10 @@
 <script src="../assets/workshop-shell.js"></script>
 <script>
 renderWorkshopShell();
+
+// New-user permission matrix from the v1 permissions catalog (no process_delivery).
+document.getElementById('new-perms').innerHTML = SEED.permissions.map(p =>
+  `<tr><td class="permission">${p.label}</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>`).join('');
 
 let statusF = 'all';
 function setStatus(s) { statusF = s; document.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === s)); render(); }
@@ -105,7 +103,6 @@ function render() {
       <td><div style="display:flex;gap:11px;align-items:center"><div style="width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font:700 12px/30px var(--f-ui);text-align:center;flex:none">${u.initials}</div><div><div class="nm">${u.name}${u.isOwner ? ' <span class="pill p-cut" style="font-size:9.5px;margin-left:4px">Egasi</span>' : ''}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${u.phone}</small></div></div></td>
       <td class="num">${u.login}</td>
       <td>${SEED.lookup.branchById(u.homeBranchId)?.name || '—'}</td>
-      <td><small style="color:var(--ink-8);font-size:12px">${u.comp ? u.comp.type + ' · ' + u.comp.rate : '<span style="color:var(--ink-6)">tariflanmagan</span>'}</small></td>
       <td><small style="color:var(--ink-8);font-size:12px">${grantCount}</small></td>
       <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${u.lastLogin}</span></td>
       <td>${u.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td>

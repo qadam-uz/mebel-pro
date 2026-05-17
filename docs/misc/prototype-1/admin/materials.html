@@ -30,9 +30,8 @@
       <div class="input"><input placeholder="Material nomi..." /></div>
       <div class="chips">
         <button class="chip on">Hammasi</button>
-        <button class="chip">LDSP</button>
-        <button class="chip">MDF</button>
-        <button class="chip">Fanera</button>
+        <button class="chip">List</button>
+        <button class="chip">Krom lentasi</button>
       </div>
       <div class="chips">
         <button class="chip on">Faol</button>
@@ -42,7 +41,7 @@
 
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>Material</th><th>Turi</th><th>Qalinligi</th><th>List o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead>
+        <thead><tr><th>Material</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>List o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead>
         <tbody id="body"></tbody>
       </table>
     </div>
@@ -53,20 +52,36 @@
 <div class="modal" id="m-new">
   <div class="modal-h"><h3>Yangi material</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <div class="field-row">
-      <div class="field"><label>Turi</label><select><option value="dsp">LDSP</option><option value="mdf">MDF</option><option value="plywood">Fanera</option><option value="natural_wood">Tabiiy yog'och</option><option value="other">Boshqa</option></select></div>
-      <div class="field"><label>Qalinlik (mm)</label><input type="number" value="18" /></div>
+    <div class="field"><label>Material turi</label>
+      <select id="f-kind" onchange="syncKind()">
+        <option value="sheet">List (LDSP / MDF / fanera · m²)</option>
+        <option value="edge">Krom lentasi (PVC tasma · metr)</option>
+      </select>
     </div>
-    <div class="field"><label>Nom</label><input placeholder="LDSP H1334 ST9 · Dub Sonoma" /></div>
+
+    <div class="field" id="f-type-wrap">
+      <label>List turi</label>
+      <select><option value="dsp">LDSP</option><option value="mdf">MDF</option><option value="plywood">Fanera</option><option value="natural_wood">Tabiiy yog'och</option><option value="other">Boshqa</option></select>
+    </div>
+
+    <div class="field"><label>Nom</label><input id="f-name" placeholder="LDSP H1334 ST9 · Dub Sonoma" /></div>
+
     <div class="field-row">
+      <div class="field"><label>Qalinlik (mm)</label><input type="number" id="f-thick" value="18" /></div>
       <div class="field"><label>Rangi</label><input placeholder="Dub Sonoma" /></div>
-      <div class="field"><label>Decor kodi (ixtiyoriy)</label><input placeholder="H1334" /></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>List uzunligi (mm) · uzun tomon</label><input type="number" value="2750" /></div>
-      <div class="field"><label>List kengligi (mm)</label><input type="number" value="1830" /></div>
+    <div class="field"><label>Decor kodi (ixtiyoriy)</label><input placeholder="H1334" /></div>
+
+    <div id="f-sheet-only">
+      <div class="field-row">
+        <div class="field"><label>List uzunligi (mm) · uzun tomon</label><input type="number" value="2750" /></div>
+        <div class="field"><label>List kengligi (mm)</label><input type="number" value="1830" /></div>
+      </div>
+      <div class="field"><label>Tola yo'nalishi</label><select><option value="true">Bor (uzun tomon bo'ylab)</option><option value="false">Yo'q (har tomonga aylantirsa bo'ladi)</option></select></div>
     </div>
-    <div class="field"><label>Tola yo'nalishi</label><select><option value="true">Bor (uzun tomon bo'ylab)</option><option value="false">Yo'q (har tomonga aylantirsa bo'ladi)</option></select></div>
+
+    <div class="banner info" id="f-edge-note" hidden><div class="ic">i</div><div class="grow">Krom lentasi metrda o'lchanadi · list o'lchami, tola va list turi yo'q. Tipik qalinlik: 0.4 yoki 2.0 mm.</div></div>
+
     <div class="field"><label>Rasm (ixtiyoriy)</label><input type="file" accept="image/*" /></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-new');toast('Material yaratildi')">Yaratish</button></div>
@@ -80,13 +95,25 @@ renderAdminShell();
 
 const branchesCount = m => SEED.branchMaterials.filter(bm => bm.matId === m.id).length;
 
-document.getElementById('body').innerHTML = SEED.materials.map(m => `
+function syncKind() {
+  const isEdge = document.getElementById('f-kind').value === 'edge';
+  document.getElementById('f-type-wrap').hidden = isEdge;
+  document.getElementById('f-sheet-only').hidden = isEdge;
+  document.getElementById('f-edge-note').hidden = !isEdge;
+  document.getElementById('f-thick').value = isEdge ? '0.4' : '18';
+  document.getElementById('f-name').placeholder = isEdge ? 'Krom PVC 0.4 mm · Dub Sonoma' : 'LDSP H1334 ST9 · Dub Sonoma';
+}
+
+document.getElementById('body').innerHTML = SEED.materials.map(m => {
+  const isEdge = m.kind === 'edge';
+  return `
   <tr>
     <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.decor ? m.decor + ' · ' : ''}${m.color}</small></div></div></td>
-    <td>${m.type.toUpperCase()}</td>
+    <td>${isEdge ? '<span class="pill p-conf"><span class="pd"></span>Krom lentasi</span>' : '<span class="pill p-ok"><span class="pd"></span>List</span>'}</td>
+    <td>${isEdge ? '<small style="color:var(--ink-6)">metr · PVC tasma</small>' : m.type.toUpperCase()}</td>
     <td class="num">${m.thickness} mm</td>
-    <td class="num">${m.sheetLen} × ${m.sheetWid}</td>
-    <td>${m.grain ? 'Ha' : '—'}</td>
+    <td class="num">${isEdge ? '—' : m.sheetLen + ' × ' + m.sheetWid}</td>
+    <td>${isEdge ? '—' : (m.grain ? 'Ha' : '—')}</td>
     <td class="amt">${branchesCount(m)}</td>
     <td>${m.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-dn"><span class="pd"></span>Faol emas</span>'}</td>
     <td>
@@ -101,7 +128,7 @@ document.getElementById('body').innerHTML = SEED.materials.map(m => `
       </div>
     </td>
   </tr>
-`).join('');
+`; }).join('');
 </script>
 </body>
 </html>
