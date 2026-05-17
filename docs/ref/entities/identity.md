@@ -2,15 +2,14 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-16
+updated: 2026-05-17
 order: 10
 ---
 
 # Identity
 
 The auth subjects and the session record. Rules are in
-[`access-patterns.md`](../../access-patterns.md); this page is the data shape. Compensation
-policies attached to workshop users live in [`finance.md`](finance.md).
+[`access-patterns.md`](../../access-patterns.md); this page is the data shape.
 
 ## Platform user
 
@@ -34,11 +33,11 @@ lower + digit); created only by another platform user.
 
 ## Workshop user
 
-A workshop's person on the payroll — **including its owner**, plus office staff, cutters,
-edge banders, drivers, accountants. Logs in with login + password. Belongs to exactly one
-workshop. **There is no separate "worker" entity** — workers are workshop users with the
-right grants + a piece-rate compensation policy. Capability is the owner flag (everything)
-or a set of branch-scoped [permission grants](#permission-grant). Uses the workshop app.
+A workshop's person — **including its owner**, plus office staff, cutters, edge banders,
+accountants. Logs in with login + password. Belongs to exactly one workshop. **There is no
+separate "worker" entity and no fixed role** — capability is the owner flag (everything) or
+a set of branch-scoped [permission grants](#permission-grant), and one person may hold every
+grant. Uses the workshop app.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -47,29 +46,28 @@ or a set of branch-scoped [permission grants](#permission-grant). Uses the works
 | `login` | text | unique per workshop, case-insensitive |
 | `password_hash` / `full_name` / `phone` | text | as above |
 | `is_owner` | bool | **exactly one `true` per workshop** |
-| `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger / driver assignment (an order's `cutter_user_id` / `edger_user_id` / `driver_user_id` must have `home_branch_id = order.branch_id`); for owner / office staff who span branches, set the branch they sit at |
+| `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (an order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`); for owner / office staff who span branches, set the branch they sit at |
 | `status` | enum | `active` / `blocked` |
 | `force_password_change` | bool | default `true` on creation |
 | `failed_login_count` / `locked_until` | int / timestamp? | |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
 
-The user's **current compensation policy** is a 1:1 lookup into
-[`finance.md#compensation-policy`](finance.md#compensation-policy) — at most one `effective_until IS NULL`
-row per user, defining how they are paid. May be absent (a newly created user with no policy
-set yet, or a non-paid arrangement).
+There is **no compensation policy** in v1: the system stores no pay rates and computes no
+salary. A worker's pay is the accountant's manual calculation from the worker-production
+reports, booked as a `salary` expense ([`finance.md`](../features/finance.md)).
 
 Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop;
 `home_branch_id` belongs to the same workshop; blocking the user, or blocking its workshop,
 deletes its sessions; staff with zero grants can log in but has no actionable screens; only a
-platform operator may move ownership to another user; setting / updating a compensation
-policy is owner-only ([`finance.md`](finance.md)).
+platform operator may move ownership to another user.
 
 ## Permission grant
 
 One row that grants a (non-owner) workshop user one coarse permission, scoped to one branch.
-The v1 catalog: `view_dashboard`, `manage_orders`, `process_production`, `process_delivery`,
-`manage_catalog`, `manage_inventory`, `manage_finance`, `view_finance_reports`. See
+The v1 catalog: `view_dashboard`, `manage_orders`, `process_production`, `manage_catalog`,
+`manage_inventory`, `manage_finance`, `view_finance_reports` (`process_delivery` is gated
+out of v1 with delivery). See
 [`../features/access-management.md`](../features/access-management.md) for what each one
 grants and which are owner-only.
 

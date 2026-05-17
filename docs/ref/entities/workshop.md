@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 20
 ---
 
@@ -10,8 +10,7 @@ order: 20
 
 The tenant — and what each tenant publishes per branch: branches. The catalog (materials,
 the branch's selection from them, and branch pricing) lives in [`catalog.md`](catalog.md);
-workshop users (cutters, edgers, drivers, office staff) live in
-[`identity.md`](identity.md); compensation, expenses, and payroll live in
+workshop users live in [`identity.md`](identity.md); income and expenses live in
 [`finance.md`](finance.md). Rules: [`access-patterns.md`](../../access-patterns.md) (tenancy
 + branch status), [`orders.md`](../features/orders.md) (the order state machine + production
 stamps).
@@ -36,17 +35,16 @@ users, and a settings bundle. Provisioned by a platform operator.
 
 | Field | Type | Notes |
 |---|---|---|
-| `settings.delivery_enabled` | bool | default `false` |
-| `settings.delivery_zones` | json | list of `{ id, name, polygon_or_label, fee_tiyin }` — static, admin-entered |
-| `settings.default_advance_percent` | int | 0–100 |
 | `settings.currency` | enum | `UZS` (only value in v1) |
-| `settings.payment_channels` | json | per-channel `{ enabled: bool, credentials: {...} }` for Payme/Click/Uzum/BNPL — **stored, inert in v1**; credentials owner-visible only |
+
+Delivery zones, default advance %, and payment channels are **not in v1** — v1 is
+pickup-only and an order moves no money ([`scope.md`](../../scope.md)); they return with
+delivery and a gateway.
 
 Blocking cascades: the owner's + staff's sessions are revoked immediately; open orders freeze
 (no automatic transitions); clients are unaffected. Unblocking does not restore sessions.
 Invariants: exactly one `is_owner = true` workshop user per workshop (DB/service);
-`owner_user_id` references that user; `settings.payment_channels` credentials visible only to
-the owner; `default_advance_percent ∈ [0, 100]`; never deleted.
+`owner_user_id` references that user; never deleted.
 
 ## Branch
 
@@ -76,5 +74,5 @@ to the same workshop; a branch with active orders can be set `inactive` (orders 
 warns).
 
 Material, Branch material (the per-branch selection), and Branch pricing live in
-[`catalog.md`](catalog.md). Cutters, edgers, drivers, and office staff are all workshop
-users in [`identity.md`](identity.md) — there is no separate `worker` entity in v1.
+[`catalog.md`](catalog.md). Cutters, edgers, and office staff are all workshop users in
+[`identity.md`](identity.md) — there is no separate `worker` entity and no fixed role.

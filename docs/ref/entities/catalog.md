@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-17
 order: 25
 ---
 
@@ -10,36 +10,40 @@ order: 25
 
 The platform's material catalog, each branch's selection from it, and each branch's pricing.
 Materials are **platform-wide master records** — defined once by platform operators; each
-branch picks which it carries and sets its own per-sheet price. Branch pricing (cutting model +
+branch picks which it carries and sets its own price. Branch pricing (cutting model +
 edge-banding rates) drives every order's price. Snapshot semantics (a price change never
 reaches an existing order) live in [`architecture.md`](../../architecture.md) → *Data model
 invariants*.
 
 ## Material
 
-A cuttable sheet product — type, thickness, colour, sheet size, grain. Defined once at the
-platform level (one master record per spec). A client picks a material when starting a cutting;
-the optimizer reads its sheet size and grain; the order snapshots the material's details and
-the branch's price.
+A platform master record (one per spec), of two **kinds** in v1: a `sheet` (a cuttable
+board, stocked and priced per sheet) or an `edge` (edge-banding tape, stocked and measured
+per metre). A client picks a sheet when starting a cutting and an edge thickness per side;
+the optimizer reads the sheet's size and grain; the order snapshots the material's details
+and the branch's price.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `type` | enum | `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
+| `kind` | enum | `sheet` / `edge` |
+| `type` | enum? | `sheet` only: `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
 | `name` | text | required, e.g. "Kronospan DSP White 18mm" |
-| `thickness_mm` | int | required (e.g. 8/10/16/18/22/25) |
+| `thickness_mm` | numeric | required (sheets e.g. 8/16/18; edges e.g. 0.4/2.0) |
 | `color` / `decor_code` | text / text? | required / optional |
-| `sheet_length_mm` / `sheet_width_mm` | int | required; `length ≥ width` (long side = grain direction) |
-| `grain_direction` | bool | `true` if the board has a grain |
+| `sheet_length_mm` / `sheet_width_mm` | int? | **`sheet` only**, required there; `length ≥ width` (long side = grain direction); null for `edge` |
+| `grain_direction` | bool? | **`sheet` only**; `true` if the board has a grain; null for `edge` |
 | `image_file_id` | UUID? | → [file](support.md#file) — sample image |
 | `status` | enum | `active` / `inactive` (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 
-Invariants: one standard sheet size per material (v1); `length ≥ width`; created and edited
-only by a platform operator (platform users have full platform scope; no workshop-side
-permission grants this); `inactive` invisible to new branch selections and to clients; existing
-branch selections of an `inactive` master keep referencing it (history preserved); never
-deleted; editing a master never affects existing orders (snapshots).
+Invariants: `sheet` materials have `type`, sheet size (`length ≥ width`), and grain; `edge`
+materials have none of these and are measured in metres; one standard sheet size per `sheet`
+material (v1); created and edited only by a platform operator (platform users have full
+platform scope; no workshop-side permission grants this); `inactive` invisible to new branch
+selections and to clients; existing branch selections of an `inactive` master keep
+referencing it (history preserved); never deleted; editing a master never affects existing
+orders (snapshots).
 
 ## Branch material
 
@@ -53,9 +57,15 @@ catalog; holds the per-branch price and the branch-level visibility flag. The br
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; references a platform [Material](#material) |
-| `price_tiyin` | bigint | per sheet, integer tiyin, ≥ 0 — the branch's price for this material |
+| `price_tiyin` | bigint | per stock unit (per **sheet** for a `sheet`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
+| `min_stock` | int | low-stock threshold for the branch's stock item; ≥ 0 |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
+
+Order pricing uses a `sheet`'s `price_tiyin` (for `shop` parts) and the branch's
+[Branch pricing](#branch-pricing) for cutting and edge banding. An `edge` material's
+`price_tiyin` is a **cost reference only** — banding is priced from `edge_banding_rates`,
+not the per-metre material price (v1).
 
 Invariants: `(branch_id, material_id)` unique; price is integer tiyin (never float); editing
 the price never affects existing orders (snapshots); created and edited by the workshop owner or

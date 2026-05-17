@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 70
 ---
 
@@ -19,7 +19,7 @@ high-traffic, not regulated — but it moves money on one axis, so that axis get
 | Axis                | Where we are                                                                                                                                                                                            | Consequence                                                                                                                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Scale**           | Tens of workshops · low hundreds of branches · low thousands of clients · low tens of thousands of orders/year. Flat-to-modest growth. Read-heavy. Hottest op: cutting (≤ 100 parts, synchronous, 5 s). | One Postgres, one FastAPI process (replicas if needed). No sharding, no cache layer until something is _measured_ slow.                                                                                                |
-| **Criticality**     | Orders carry money (advance / balance / refunds) and reserve real stock. A double-charge or wrong refund is real harm.                                                                                  | Integer-tiyin money (never float); atomic reserve / consume / release; append-only audit; idempotent ingestion seams; refunds tracked, not moved (manual in v1).                                                       |
+| **Criticality**     | Money (recorded income / expenses) and real stock movement back the orders. A wrong balance or a lost stock decrement is real harm.                                                                     | Integer-tiyin money (never float); atomic stock decrement / restore; append-only audit; idempotent seams; money tracked, not moved (recorded by hand in v1, no order-held payments).                                    |
 | **Security**        | Public on the internet. Holds personal data, staff credentials, workshop payment-gateway credentials. Worth attacking.                                                                                  | Hard authn/authz on every request; opaque DB-backed sessions with instant revocation; password hashing + lockout; payment credentials owner-only; multi-tenant isolation at the service layer on every read and write. |
 | **Latency**         | Back-office-ish — "a second or two" is fine. The one visible expensive op is cutting (5 s budget, synchronous; bigger jobs rejected, not queued in v1).                                                 | No async/queue on the hot path; cutting runs in-process within budget; background jobs on an in-process scheduler.                                                                                                     |
 | **Lifespan × team** | Years; moderate change; ~2-person team.                                                                                                                                                                 | Modular monolith, boring tech (FastAPI · SQLAlchemy · Postgres · Vue · Tailwind), structure two people can operate at 3 a.m.                                                                                           |
@@ -64,8 +64,8 @@ Each SPA stays same-origin with its API (no CORS).
 - **One PostgreSQL** — shared by all modules; each module owns its tables.
 - **One MinIO / S3** — material images, logos, refund / delivery receipts, cutting PDFs. The
   `files` module owns it; others attach/detach by id.
-- **In-process scheduler** — expire draft cuttings, pay-later overdue, stale refunds, expired
-  sessions, daily low-stock summary.
+- **In-process scheduler** — expire draft cuttings, prune expired sessions, daily low-stock
+  summary.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
 - **One external integration** — Telegram Login (OAuth), client auth only.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge

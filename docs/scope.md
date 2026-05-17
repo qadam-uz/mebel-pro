@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-16
+updated: 2026-05-17
 order: 20
 ---
 
@@ -29,21 +29,30 @@ that's a considered substitution.
   platform returns the best result and **names the winning algorithm**. Output includes the
   per-sheet layout, sheet count, waste, cut and edge-banding length, and a print-ready cutting
   map.
-- **Orders** — client-placed orders from a finalized cutting result, with **frozen pricing**,
-  full production workflow, recorded payments (cash / bank, one shot or advance + balance), and
-  offline-recorded cancellations and refunds.
-- **Finance & accounting** — workshop-wide money-in / money-out journal, end-of-day
-  reconciliation, and revenue / refund / outstanding reporting by branch, period, and channel —
-  enough for an accountant to close a month inside the system.
+- **Orders** — client-placed orders from a finalized cutting result, with **frozen pricing**
+  and a small production workflow (verify → cut → band → ready → collected, pickup-only),
+  one-step operator revert, and reasoned cancellation. The order tracks production only — it
+  moves no money and holds no stock.
+- **Finance & accounting** — a workshop money ledger: income (incl. order payments) and
+  expenses (incl. staff salary) recorded by hand, worker-production reports the accountant
+  uses to compute pay, and revenue / expense / net reporting by branch and period — enough
+  to close a month inside the system.
 - **Cross-cutting** — file storage, full audit log, in-app notifications inbox, and a
   platform-ops console (scheduled jobs, error monitor, manual triggers).
 
 ## Out of scope (v1) — explicit
 
-- **Online payment gateways** and **BNPL** — v1 records payments and refunds manually.
+- **Online payment gateways** and **BNPL** — v1 records income and refunds manually; an
+  order moves no money.
+- **Automatic payroll / compensation engine** — v1 stores no pay rates and computes no
+  salary; it reports raw per-worker production and the accountant books salary as an
+  expense by hand.
+- **Post-placement order modification** — a wrong order is cancelled (with a reason) and
+  re-ordered; there is no edit / re-price path.
 - **SMS, email, and bot notifications** — v1 is in-app only.
 - **Delivery fulfilment** — v1 is **pickup-only**. The delivery model (address capture,
-  fixed-fee zones, driver flow, distance-based pricing) is designed but gated out of v1.
+  fixed-fee zones, driver flow, distance-based pricing, the `process_delivery` grant) is
+  designed but gated out of v1.
 - **Delegating workshop-wide controls to non-owner staff** — owner-only in v1.
 - **Operator-created orders** — orders are always client-placed.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout

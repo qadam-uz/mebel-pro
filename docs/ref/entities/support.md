@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-17
 order: 60
 ---
 
@@ -26,7 +26,7 @@ and never touch object storage directly.
 | `content_type` | text | MIME type; validated against the allowed set for the attach context |
 | `size_bytes` | bigint | ≤ configured max (default 10 MB) |
 | `storage_status` | enum | `pending` / `stored` / `deleted` |
-| `entity_type` | text? | what it's attached to (`material` / `workshop` / `order_payment` / `order_refund` / `cutting_result` / `expense` / `payroll_payment` / …) |
+| `entity_type` | text? | what it's attached to (`material` / `workshop` / `income` / `cutting_result` / `expense` / …) |
 | `entity_id` | UUID? | the attached entity's id |
 | `sort_order` | int? | ordering when an entity has several files |
 | `uploaded_by_type` / `uploaded_by_id` | enum / UUID | the principal who uploaded it |
@@ -51,8 +51,8 @@ recipients, polled by the front-end apps. v1's only notification channel.
 | `id` | UUID | PK |
 | `recipient_type` | enum | `platform_user` / `workshop_user` / `client` |
 | `recipient_id` | UUID | the principal |
-| `event_code` | text | e.g. `order.status_changed`, `refund.stale`, `warehouse.low_stock`, `workshop.blocked` |
-| `entity_type` | text? | the subject entity type (`order` / `order_refund` / `stock_item` / `branch` / …) |
+| `event_code` | text | e.g. `order.status_changed`, `warehouse.low_stock`, `workshop.blocked` |
+| `entity_type` | text? | the subject entity type (`order` / `stock_item` / `branch` / …) |
 | `entity_id` | UUID? | the subject entity's id (for the deep link) |
 | `payload` | json | small denormalized fields needed to render without extra lookups |
 | `created_at` | timestamp | |
@@ -98,7 +98,7 @@ state" half of the audit log. Append-only.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `entity_type` | text | `order` / `branch` / `material` / `workshop` / `workshop_user` / `client` / `order_refund` / `expense` / `payroll_run` / `payroll_entry` / … |
+| `entity_type` | text | `order` / `branch` / `material` / `workshop` / `workshop_user` / `client` / `income` / `expense` / … |
 | `entity_id` | UUID | the entity's id |
 | `workshop_id` / `branch_id` | UUID? / UUID? | for scoping the viewer |
 | `from_status` | text? | null for the first |

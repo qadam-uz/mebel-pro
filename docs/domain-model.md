@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 45
 ---
 
@@ -15,26 +15,26 @@ per bounded context.
 ## The main aggregates
 
 - **Platform user** — the team running the platform.
-- **Workshop user** — a workshop's person on the payroll. Carries credentials, a set of
-  permission grants, and a compensation policy (salary, piece-rate, commission, or a mix).
-  The owner is one of these, with full scope. **There is no separate "worker" entity** —
-  a cutter or edge bander is a workshop user with the production grant and a piece-rate
-  policy; a driver is the same with the delivery grant.
+- **Workshop user** — a workshop's person. Carries credentials and a set of permission
+  grants; the owner is one of these, with full scope. **There is no separate "worker"
+  entity and no role** — a cutter or edge bander is just a workshop user holding the
+  production grant; one person may hold every grant. The system stores no pay rates.
 - **Client** — the workshop's customer; global to the platform, picks a branch per order.
 - **Workshop** — one furniture-cutting business; the tenant. Has many branches.
 - **Branch** — a physical location of a workshop. Owns its stock, prices, and the selection
   it carries from the material catalog.
-- **Material** — a cuttable sheet product. A platform-wide master record (type, thickness,
-  colour, sheet size, grain); branches pick which ones they carry and set their own price.
-- **Stock item** — a branch's on-hand balance for one material.
+- **Material** — a platform-wide master record of one of two kinds: a **sheet** (a cuttable
+  board) or an **edge** (edge-banding tape). Branches pick which they carry and set their
+  own price.
+- **Stock item** — a branch's on-hand balance for one material. **Supplier** — where
+  stock-in came from (lightweight, added on demand).
 - **Cutting result** — the output of an optimization run; names the winning algorithm.
 - **Order** — a client's request for panels cut at a branch. Aggregates the parts, the
-  payments, the refunds, the status history, and the cutter / driver who completed it (the
-  inputs payroll reads).
-- **Expense** — a workshop cost not driven by orders or payroll (rent, utilities, supplies,
-  raw consumables).
-- **Payroll run** — a period's compensation, aggregated from workshop users' policies and
-  the production work they did, then disbursed offline and recorded.
+  status history, and the cutter / edger who completed it (the inputs the production reports
+  read). It holds no money and no stock.
+- **Income** — money the workshop received; an order payment carries the order it settles.
+- **Expense** — money the workshop spent: overheads, consumables it buys, and staff salary
+  (computed by the accountant, not the system).
 
 ## Next
 

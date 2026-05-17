@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 60
 ---
 
@@ -15,8 +15,9 @@ rules. The notifications module does not broadcast and does not decide recipient
 
 ## How it works
 
-- **Each principal has their own inbox.** A workshop-wide event (a workshop blocked, a stale
-  refund) fans out one row per affected staff member; each has their own unread count.
+- **Each principal has their own inbox.** A workshop-wide event (a workshop blocked, a
+  low-stock condition) fans out one row per affected staff member; each has their own unread
+  count.
 - **Pull delivery.** Apps poll the unread count every ~30–60 s and pull the list on demand. No
   WebSocket / SSE in v1 — overkill at this scale.
 - **Each row carries a denormalized payload** (order number, branch name, amount, …) so the
@@ -40,8 +41,8 @@ In all three apps (client / workshop / superadmin), in the top bar:
   and marks it read. The dropdown has "mark all as read" and a "see all" link to a full
   notifications page (paginated, with a read/unread filter).
 - **Toasts** for the critical events, in addition to the badge — for the client, an order
-  status change; for workshop staff, a new order or a pending refund; for the owner, a stale
-  refund or low stock; for the platform operator, an error spike or a failed job.
+  status change; for workshop staff, a new order; for the owner, low stock; for the platform
+  operator, an error spike or a failed job.
 - **States** — bell with zero unread (no badge); dropdown loading; dropdown empty ("Nothing
   new"); the notifications page has loading / empty / error. If the notifications endpoint is
   down the bell shows no badge but the underlying data is still reachable on the relevant
@@ -63,6 +64,5 @@ In all three apps (client / workshop / superadmin), in the top bar:
 
 ## Next
 
-[`platform.md`](platform.md) — the jobs that produce some of these (low-stock summary, stale
-refund notify, pay-later overdue) and the error monitor that notifies operators on a job
-failure.
+[`platform.md`](platform.md) — the jobs that produce some of these (low-stock summary,
+cutting-draft expiry) and the error monitor that notifies operators on a job failure.

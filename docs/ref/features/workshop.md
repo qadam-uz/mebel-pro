@@ -2,34 +2,30 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 40
 ---
 
 # Workshop administration
 
 The owner-and-staff surfaces for keeping a workshop running — workshop settings, branch CRUD,
-and the audit viewer. Sign-in, sessions, provisioning, and staff (incl. cutters and drivers)
-management live in [`access-management.md`](access-management.md); compensation, expenses,
-and payroll live in [`finance.md`](finance.md).
+and the audit viewer. Sign-in, sessions, provisioning, and staff management live in
+[`access-management.md`](access-management.md); income, expenses, and the worker-production
+reports live in [`finance.md`](finance.md).
 
 ## Workshop settings
 
-The workshop's mutable profile and operational parameters:
+The workshop's mutable profile:
 
 - **Profile** — name, logo, phone, address. Editable by the workshop's owner (and by a
   platform operator for incident response).
-- **Delivery** — `delivery_enabled` flag; `delivery_zones`, each a name + a label / polygon +
-  a fixed fee (integer tiyin). No geocoder in v1 — zones are workshop-entered.
-- **Default advance %** — 0–100; drives the client's order wizard when payment-type is
-  `advance`.
 - **Currency** — UZS, fixed in v1; named here for future-proofing.
-- **Payment channels** — per-channel enabled flag plus merchant credentials. **Stored, inert
-  in v1** (no gateway integration yet); credentials are owner-visible only and masked by
-  default.
 
-Owner-only powers covered by `is_owner` (see the access-management permission catalog): editing
-settings; viewing payment credentials.
+Delivery zones, advance %, and payment channels are **not in v1** — v1 is pickup-only and an
+order moves no money ([`scope.md`](../../scope.md)); they return with delivery and a gateway.
+
+Owner-only power covered by `is_owner` (see the access-management permission catalog):
+editing settings.
 
 ### UX (superadmin app)
 
@@ -37,14 +33,13 @@ settings; viewing payment credentials.
   created, branches count, orders-30d count. Status filter; name search;
   **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet."
 - **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (edit),
-  **Settings** (delivery + advance % + payment channels grid, credentials masked, reveal on
-  click), **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
+  **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze).
 
 ### UX (workshop app)
 
-- **Workshop settings** (`/workshop/settings`, owner-only): tabs Profile · Delivery zones ·
-  Advance % · Payment channels (credentials owner-visible, masked by default, reveal on click).
+- **Workshop settings** (`/workshop/settings`, owner-only): a single **Profile** tab (name,
+  logo, phone, address).
 
 ## Branches
 

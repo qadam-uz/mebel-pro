@@ -2,52 +2,48 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 30
 ---
 
 # Inventory
 
-A branch's warehouse balance per material, plus the append-only transaction log that records
-every change. The reserve / consume / release contract driven by the order state machine —
-**reserve at `→ confirmed`, consume at cutting completion (`cutting →` next), release on
-cancel from `confirmed` or `cutting`** — is in [`orders.md`](../features/orders.md) →
-*Warehouse contract*.
+A branch's warehouse balance per material, the append-only transaction log, and the
+suppliers stock arrives from. There is **no reservation** in v1: the order state machine
+**consumes** stock as production completes and a revert **restores** it — the contract is in
+[`orders.md`](../features/orders.md) → *The stock seam*.
 
 ## Stock item
 
-A branch's balance for one material — on hand, reserved, the low-stock threshold. One stock item
-per material per branch. The order flow drives reserved/on-hand changes automatically for
-`shop`-source orders; staff drive `stock_in`, `adjust`, and `transfer`.
+A branch's balance for one material — a single on-hand quantity in the material's unit
+(sheets for a `sheet` material, metres for an `edge`) and a low-stock threshold. One per
+material per branch.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; `(branch_id, material_id)` unique |
-| `on_hand` | int | sheets physically in the warehouse; ≥ 0 |
-| `reserved` | int | sheets committed to confirmed orders, not yet consumed; `0 ≤ reserved ≤ on_hand` |
-| `available` | int | derived: `on_hand − reserved` |
+| `on_hand` | int | quantity physically in the warehouse, in the material's unit; ≥ 0 |
 | `min_stock` | int | low-stock alert threshold; ≥ 0 |
 | `updated_at` | timestamp | |
 
-Invariants: `0 ≤ reserved ≤ on_hand`; `available = on_hand − reserved`; `(branch_id,
-material_id)` unique; reserve/consume/release are **atomic** — the row is locked (`FOR UPDATE`)
-for the duration; `reserve(qty)` fails (`insufficient_stock`) if `qty > available`. Stock
-changes only via the `inventory` module's operations (never raw SQL from elsewhere).
+Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
 
-Operations (all atomic):
+- `stock_in(qty)`: `on_hand += qty` (warehouseman; from a supplier).
+- `adjust(delta)`: `on_hand += delta` (stock-take / write-off; bounded ≥ 0; reason note
+  required).
+- `consume(qty)`: `on_hand -= qty` — system, driven by the order state machine.
+- `restore(qty)`: `on_hand += qty` — system, an operator revert of a consumed step.
+- `transfer(qty)`: `on_hand` down on source, up on destination (paired; owner-only).
 
-- `stock_in(qty)`: `on_hand += qty`.
-- `adjust(delta)`: `on_hand += delta` (may correct errors; bounded — can't go below `reserved`
-  or 0; requires a reason note).
-- `reserve(qty)`: `reserved += qty` (rejects if `qty > available`).
-- `consume(qty)`: `reserved -= qty`, `on_hand -= qty`.
-- `release(qty)`: `reserved -= qty` (available goes back up).
-- `transfer(qty)`: `on_hand` down on source, up on destination (paired transactions; owner-only).
-
-When `available ≤ min_stock`, a low-stock notification fires to the branch's `manage_inventory`
-grantees + the owner.
+Invariants: `on_hand ≥ 0` always; `(branch_id, material_id)` unique; stock changes only via
+the inventory module's operations (never raw SQL from elsewhere); `consume` / `restore`
+carry the `order_id` and no actor (system); `stock_in` / `adjust` / `transfer_*` carry an
+actor. When `on_hand ≤ min_stock` after a change, a low-stock notification fires to the
+branch's `manage_inventory` grantees and the owner. The verify-time "projected balance"
+warning ([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time
+computation, not a stored field.
 
 ## Stock transaction
 
@@ -57,16 +53,43 @@ One audit row for one change to a stock item. Append-only.
 |---|---|---|
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
-| `type` | enum | `stock_in` / `reserve` / `release` / `consume` / `transfer_in` / `transfer_out` / `adjust` |
-| `quantity` | int | signed change in sheets (or in `reserved`, for reserve/release); non-zero |
-| `balance_after` | json | snapshot `{ on_hand, reserved, available }` after the change |
-| `order_id` | UUID? | for `reserve` / `release` / `consume`; null otherwise |
+| `type` | enum | `stock_in` / `consume` / `restore` / `transfer_in` / `transfer_out` / `adjust` |
+| `quantity` | int | signed change, non-zero, in the material's unit |
+| `balance_after` | int | `on_hand` after the change |
+| `order_id` | UUID? | for `consume` / `restore`; null otherwise |
+| `supplier_id` | UUID? | for `stock_in`; null otherwise |
 | `transfer_id` | UUID? | groups the `transfer_out` + `transfer_in` legs of one transfer |
-| `actor_user_id` | UUID? | for `stock_in` / `adjust` / `transfer_*`; null when the system did it (reserve/release/consume) |
+| `actor_user_id` | UUID? | for `stock_in` / `adjust` / `transfer_*`; null when the system did it (`consume` / `restore`) |
 | `note` | text? | supplier note, transfer reason, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |
 
-Invariants: matches the change applied in the same atomic operation; `reserve` / `release` /
-`consume` carry an `order_id` and no `actor_user_id` (system); `stock_in` / `adjust` /
-`transfer_*` carry an `actor_user_id`; the two legs of a transfer share a `transfer_id` and net
-to zero across branches; `adjust` requires a `note`; never updated or deleted.
+Invariants: matches the change applied in the same atomic operation; `consume` / `restore`
+carry an `order_id` and no `actor_user_id`; `stock_in` carries a `supplier_id` and an
+`actor_user_id`; `transfer_*` legs share a `transfer_id` and net to zero across branches;
+`adjust` requires a `note`; never updated or deleted.
+
+## Supplier
+
+Where a branch's stock came from — a lightweight, workshop-scoped label, created on demand
+from the stock-in form. No purchase-order or payables flow in v1; the money for a purchase
+is a separate [`finance.md`](../features/finance.md) expense.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `workshop_id` | UUID | required |
+| `name` | text | required |
+| `phone` | text? | optional |
+| `note` | text? | optional |
+| `status` | enum | `active` / `inactive` (soft delete only) |
+| `created_by_user_id` | UUID | the `manage_inventory` user who added it |
+| `created_at` / `updated_at` | timestamp | |
+
+Invariants: `name` required; workshop-scoped (a supplier belongs to one workshop); created
+by a user with `manage_inventory`; never deleted (deactivated if unused).
+
+## Next
+
+- [`catalog-inventory.md`](../features/catalog-inventory.md) — stock-in, adjust, transfer,
+  the projected-balance warning, and the order seam mechanics.
+- [`sales.md`](sales.md) — the order whose state machine consumes and restores stock.

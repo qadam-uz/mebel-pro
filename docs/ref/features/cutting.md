@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-16
+updated: 2026-05-17
 order: 80
 ---
 
@@ -105,7 +105,8 @@ stateDiagram-v2
   thickness across all materials (`edge_length_by_thickness`). The order's pricing reads
   this.
 - **No stock check at cutting time.** The optimiser says only "N sheets needed of material
-  X." Real availability is checked by `reserve` at order confirmation
+  X." Stock is never a gate: the operator sees a non-blocking low-stock warning at order
+  verification and the inventory module auto-decrements as production completes
   (see [`orders.md`](orders.md)).
 - **No pricing computed here.** Pricing depends on the branch — branches set their own
   cutting models, material prices, and edge-banding rates. The optimiser yields structural

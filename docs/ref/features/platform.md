@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-15
+updated: 2026-05-17
 order: 70
 ---
 
@@ -19,8 +19,7 @@ jobs:
 
 | Job | When | What |
 |---|---|---|
-| `notify-pay-later-overdue` | daily | for each pay-later order past its handover deadline, notify the order's branch and the owner |
-| `notify-stale-refunds` | daily | for each `pending` refund > 7 days old, notify the owner; flag stale on the dashboard |
+| `expire-draft-cuttings` | daily | expire cutting drafts past their TTL (see [`cutting.md`](cutting.md)) |
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
 | `daily-low-stock-summary` | daily | per branch, one notification rolling up the day's low-stock conditions |
 

@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-17
 order: 20
 ---
 
@@ -124,58 +124,52 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | Permission | Grants on the granted branch |
 |---|---|
 | `view_dashboard` | see the branch's dashboard / KPIs / order summary |
-| `manage_orders` | the office side of the order workflow — recording payments, applying discounts, pay-later approval, modifying, cancelling (`new` / `pending_payment` / `confirmed`), processing refunds, pre-assigning a cutter / edger / driver. *Except* force-cancelling `cutting`+ orders and reverting refunds (owner-only). |
-| `process_production` | the **cutter & edger workspaces** — claim from the branch cutting queue (→ `cutting`, stamps `cutter_user_id`), mark cut done (→ `edge_banding` or `ready`; stamps cutter snapshot, consumes stock), claim from the branch edge-banding queue (→ `edge_banding`+ already; stamps `edger_user_id`), mark banding done (→ `ready`; stamps edge-length snapshot). Cannot edit the order, record payments, or cancel. Compensation policy (`per_sheet` / `per_cut` / `per_metre_banding` / mixed) determines how each phase pays out. |
-| `process_delivery` | the **driver's workspace** — claim from the branch delivery queue (→ `in_delivery`, stamps `driver_user_id`), mark delivered (→ `completed`, stamps `delivered_at`). Cannot edit the order, record payments, or cancel. |
-| `manage_catalog` | the branch's material selection — add from the platform catalog, set per-sheet price and min-stock, activate / deactivate. (Master materials are platform-side.) |
-| `manage_inventory` | stock-in, adjust, view stock and transactions. Branch-to-branch transfers are owner-only. |
-| `manage_finance` | the finance back office — record expenses, generate / adjust / finalize payroll runs, record payroll payments. (Owner-only carve-outs: set compensation rates, revert a finalized payroll run.) See [`finance.md`](finance.md). |
-| `view_finance_reports` | read-only access to finance dashboards and reports. |
+| `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
+| `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements sheet stock) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock). Cannot edit, verify, cancel, or revert an order. |
+| `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
+| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. Branch-to-branch transfers are owner-only. |
+| `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |
+| `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports. |
+
+`process_delivery` is **gated out of v1** — v1 is pickup-only
+([`scope.md`](../../scope.md)), so there is no driver workspace and the grant is not in the
+catalog; it returns when delivery does.
 
 A staff user with zero grants can log in but sees nothing actionable. Grants live on the
 user, not the branch: changing a branch's status doesn't touch grants; a grant on an
 `inactive` branch is inert and becomes live again on reactivation.
 
-**Workers are workshop users.** A "cutter" is a workshop user holding `process_production` on
-their home branch + a `per_sheet` (or `per_cut`) compensation policy; an "edge bander" is the
-same `process_production` grant + a `per_metre_banding` policy (or a `mixed` policy if they
-also cut); a "driver" is `process_delivery` + a `per_delivery` policy. There is no separate
-`worker` entity. Pay is computed from the work the user actually did, read from the order's
-production stamps (see [`finance.md`](finance.md) and [`orders.md`](orders.md)).
+**Workers are workshop users.** A "cutter" or "edge bander" is just a workshop user holding
+`process_production` on the order's branch — there is **no separate `worker` entity** and
+**no role**: capability is the grant set, and one person may hold `manage_orders` *and*
+`process_production` *and* `manage_finance` and run the whole flow alone. The system stores
+no pay rates; how much a worker is paid is the accountant's manual calculation from the
+work the user actually did, read from the order's production stamps (see
+[`finance.md`](finance.md) and [`orders.md`](orders.md)).
 
 ### Owner-only powers
 
 The owner (`is_owner`) holds every permission on every branch implicitly, plus these powers
 that **cannot be delegated to staff in v1**:
 
-- Create staff (any flavour — cutter, driver, manager, accountant) and grant / revoke their
-  permissions.
-- **Set a workshop user's compensation policy** (rate values are contractually sensitive).
+- Create staff and grant / revoke their permissions.
 - Create and edit branches; change branch status; set branch pricing.
-- Edit workshop settings (delivery zones, payment-channel flags and credentials).
-- View payment credentials.
+- Edit workshop settings (profile).
 - Branch-to-branch stock transfers.
-- Force-cancel an order already `cutting`, `edge_banding`, `ready`, or `in_delivery`.
-- Revert a completed refund.
-- **Revert a finalized payroll run** (exceptional, audited; see [`finance.md`](finance.md)).
 - View workshop-wide reports / the audit log.
 
 ### Operations (owner)
 
 - **Create a workshop user** — `full_name`, `phone`, `login`, `force_password_change = true`,
-  temp password (auto / manual), a `home_branch_id` (the branch the user works at —
-  load-bearing for piece-rate workers, used to gate cutter / driver assignment to an order;
-  for office staff who span branches, set the branch they sit at), and **an optional initial
-  set of `(permission, branch)` grants**. Compensation policy is set in a separate step (see
-  *Set compensation* below) — defaults to none. Created in one atomic operation; returns the
-  user and the temp password **once**.
+  temp password (auto / manual), a `home_branch_id` (the branch the user works at — gates
+  cutter / edger assignment to an order at that branch; for office staff who span branches,
+  set the branch they sit at), and **an optional initial set of `(permission, branch)`
+  grants**. Created in one atomic operation; returns the user and the temp password
+  **once**.
 - **Edit profile fields** — `full_name`, `phone`, `home_branch_id`.
 - **Set grants** — replaces the user's `permission_grant` rows atomically; each
   `(permission, branch)` is validated against the catalog and the workshop's branches. **The
   new grants take effect on the user's next request** — no session revoke.
-- **Set compensation** — owner-only carve-out. Sets / updates the user's compensation policy
-  (type, rates, effective dates). The detail and the UX live in [`finance.md`](finance.md);
-  this is the user-management touchpoint.
 - **Reset password** — a temp password + `force_password_change`; revokes the user's
   sessions.
 - **Block / unblock** — blocking revokes sessions immediately; unblocking does not restore
@@ -187,20 +181,16 @@ that **cannot be delegated to staff in v1**:
 Under **Settings → Users** (owner-only nav item):
 
 - **Users list** (`/workshop/settings/users`) — table: name, login, phone, home branch,
-  compensation summary (e.g., "salary" / "per-sheet 50 000 / sheet" / "—"), granted-branches
-  count, status, last login, action menu. Filters: home branch, compensation type, status.
+  granted-branches count, status, last login, action menu. Filters: home branch, status.
   **+ User**. Empty: "No staff yet — add one to delegate work."
 - **Create-user dialog** — profile fields (incl. home branch) + temp password (auto / manual,
   copy) + an initial grants matrix (permission rows × branch columns, within the workshop).
-  Compensation is set after creation in the user detail's Compensation tab. On success:
-  read-only "share login + temp password — shown once" confirmation with copy.
+  On success: read-only "share login + temp password — shown once" confirmation with copy.
 - **User detail** (`/workshop/settings/users/:id`) — header (name, status badge, home branch,
-  compensation summary, last login); tabs:
+  last login); tabs:
   - **Profile** (edit) — profile fields incl. home branch.
   - **Permissions** — the grants matrix; toggling saves atomically with an explicit Save and
     an unsaved-changes guard.
-  - **Compensation** — current policy + history; Edit (owner-only). See
-    [`finance.md`](finance.md) for the policy types.
   - **Sessions** — list with current marker; revoke one / all.
   - **Audit** — this user's actions, read-only.
 - Row / detail actions: Edit · Reset password (→ one-time-secret confirmation) · Block /
@@ -258,5 +248,5 @@ Rules:
 ## Next
 
 - [`workshop.md`](workshop.md) — branches, workshop settings, and audit.
-- [`finance.md`](finance.md) — compensation policies, expenses, payroll runs, finance reports
-  (the back office that pays the workers granted access here).
+- [`finance.md`](finance.md) — income, expenses, and the worker-production reports the
+  accountant uses to pay the workers granted access here.
