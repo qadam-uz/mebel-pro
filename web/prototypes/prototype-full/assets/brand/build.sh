@@ -6,7 +6,7 @@ B="$(cd "$(dirname "$0")" && pwd)"
 SVG="$B/svg"; ICON="$B/icon"; EXP="$B/exports"
 mkdir -p "$SVG" "$ICON" "$EXP"
 
-# --- palette (verbatim from docs/misc/prototype-1/assets/app.css) ---------
+# --- palette (verbatim from docs/misc/prototype-full/assets/app.css) ---------
 RUST="#A6471F"; RUST_DEEP="#8C3814"; INK="#1A1614"; PAPER="#FAF7F2"; DARK="#1A1614"
 FONT="'Source Serif 4','Charter','Iowan Old Style',Georgia,serif"
 

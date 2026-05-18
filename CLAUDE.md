@@ -8,8 +8,8 @@ WE TREAT THE PROTOTYPE (IN THE FORM OF HTML FILES, IN `web/prototypes/`)
 AS A SERIOUS, CONFIDENT STARTING POINT — NOT A DRAFT THAT CAN BE THROWN AWAY.
 WE TREAT DOCUMENTATION AS THE SOURCE OF TRUTH. ALWAYS KEEP DOCUMENTATION
 UP TO DATE, FOLLOWING THE docs-management SKILL GUIDELINES.
-IF WHAT I ASK AND WHAT THE DOCS SAY DO NOT AGREE, TELL ME
-THE CONFLICT POINTS AND WE'LL CONSOLIDATE THEM TOGETHER.
+IF WHAT USER ASK AND WHAT THE DOCS SAY DO NOT AGREE, TELL TO USER
+THE CONFLICT POINTS AND CONSOLIDATE THEM TOGETHER.
 
 ## Documentation language — English canon, Uzbek mirror
 
@@ -32,6 +32,7 @@ THE CONFLICT POINTS AND WE'LL CONSOLIDATE THEM TOGETHER.
 Furniture-panel cutting platform — see [`docs/index.md`](docs/index.md) (what
 it is) and [`docs/architecture.md`](docs/architecture.md) (the technical shape:
 modular-monolith backend, three SPAs + static landing, topology, invariants).
+Make sure to ALWAYS read all canon specs at docs/ and read other specs (features, entities) on-demand.
 The repo map below is the working layout.
 
 ## Repo map
@@ -82,6 +83,7 @@ CI (`.github/workflows/ci.yml`) mirrors these gates and auto-deploys to the VPS 
 ## Development workflow
 
 Feature work follows: **brainstorm → write docs (on a feature branch) → human review of docs → break into a plan → execute → review/fix → verify → human verify.** Supporting skills: **software-architecture** (system/tech decisions, recorded inline in the doc that owns the area — no separate ADR register), **ui-ux-mastery** (screens, flows, UX specs), **frontend-design** (frontend implementation polish), **docs-management** (anything under `docs/`), **testing-practices** (where a given test belongs). Reach for them as the workflow indicates.
+Use subagents with session fork mode for long running jobs to keep main conversation clean and focused.
 
 ## Conventions
 

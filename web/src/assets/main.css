@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Brand tokens — sourced verbatim from docs/misc/prototype-1/assets/app.css.
+/* Brand tokens — sourced verbatim from docs/misc/prototype-full/assets/app.css.
    Full design contract lives in web/DESIGN.md; this is the minimal brand seed. */
 @theme {
   --font-serif: 'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif;

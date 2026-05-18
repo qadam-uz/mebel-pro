@@ -19,7 +19,7 @@
 #     at /docs and /docs_uz — the live docs site at admin.<BASE_DOMAIN>/docs
 #     (and the Uzbek mirror at /docs-uz) reads them on every request.
 #
-# Required env in deploy/.env (see .env.production):
+# Required env in deploy/.env (create it on the server, chmod 600):
 #   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
 #   the SHARED minio), BACKEND_CORS_ORIGINS, DOCS_AUTH_*, BASE_DOMAIN,
 #   ACME_EMAIL, VITE_API_BASE_URL.

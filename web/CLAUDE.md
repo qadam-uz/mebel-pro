@@ -17,7 +17,7 @@ covers only the **current build state**:
   one `src/main.ts`, one router) — the seed of the **client** app. Pending build
   work: split into three entries + extract shared code. Until then treat the
   scaffold as the client app; **don't add workshop/superadmin screens to it.**
-- **HTML prototype** lives in `web/prototypes/prototype-1/` — a design
+- **HTML prototype** lives in `web/prototypes/prototype-full/` — a design
   reference, not a Vite entry, not built or served. Port screens from it into
   the Vue SPAs; don't wire it into the build.
 
@@ -106,7 +106,7 @@ The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`
 
 ## Design system
 
-[`DESIGN.md`](./DESIGN.md) is the deterministic design contract: tokens, UI primitives, composed components, the shell, route maps for all three SPAs, i18n namespaces, API boundary patterns, and the accessibility baseline. Read it before adding components or screens.
+[`DESIGN.md`](./DESIGN.md) is the deterministic design system contract.
 
 ## Related skills
 
