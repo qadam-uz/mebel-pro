@@ -1,11 +1,17 @@
 """Live-rendered documentation site.
 
-Serves the repository's ``docs/`` Markdown tree as HTML, rendered on every
-request — no build step, no static-site generator. Mounted at ``/docs`` on the
-app (outside the ``/api`` prefix). Edit a file under ``docs/`` and refresh.
+Serves the repository's Markdown trees as HTML, rendered on every request — no
+build step, no static-site generator. Two trees, two mounts (both outside the
+``/api`` prefix, both behind the same HTTP Basic guard):
 
-The directory served is :data:`app.core.config.Settings.DOCS_DIR` (defaults to
-``<repo>/docs``); point it elsewhere with the ``DOCS_DIR`` env var.
+* ``/docs`` — the **English** docs at :data:`Settings.DOCS_DIR` (default
+  ``<repo>/docs``). The single source of truth.
+* ``/docs-uz`` — the **Uzbek** mirror at :data:`Settings.DOCS_UZ_DIR` (default
+  ``<repo>/docs_uz``). A derived, read-only translation of ``/docs``; never a
+  source. Generated one-way from ``docs/`` and kept structurally 1:1 with it.
+
+Every rendered page carries a language switcher linking to its counterpart in
+the other tree (same relative path). Edit a file under either tree and refresh.
 """
 
 from __future__ import annotations
@@ -35,6 +41,47 @@ from app.core.config import settings
 _STATIC_DIR = Path(__file__).parent / "docs_assets"
 _DEFAULT_ORDER = 1000
 
+# --- the two documentation sites --------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Site:
+    """One documentation tree: where it lives, where it mounts, and the link
+    to its counterpart in the other language."""
+
+    lang: str  # "en" | "uz"
+    prefix: str  # URL mount, no trailing slash — "/docs" | "/docs-uz"
+    settings_attr: str  # Settings field naming the root dir
+    dir_label: str  # how the tree is named in chrome/errors ("docs", "docs_uz")
+    this_label: str  # switcher label for *this* site ("EN", "UZ")
+    alt_prefix: str  # counterpart site's mount
+    alt_label: str  # switcher label for the counterpart site
+
+    def root(self) -> Path:
+        root: Path = getattr(settings, self.settings_attr)
+        return root.resolve()
+
+
+EN_SITE = _Site(
+    lang="en",
+    prefix="/docs",
+    settings_attr="DOCS_DIR",
+    dir_label="docs",
+    this_label="EN",
+    alt_prefix="/docs-uz",
+    alt_label="Oʻzbekcha",  # noqa: RUF001 — Uzbek-latin tutuq belgisi (U+02BB), intentional
+)
+UZ_SITE = _Site(
+    lang="uz",
+    prefix="/docs-uz",
+    settings_attr="DOCS_UZ_DIR",
+    dir_label="docs_uz",
+    this_label="UZ",
+    alt_prefix="/docs",
+    alt_label="English",
+)
+SITES: tuple[_Site, ...] = (EN_SITE, UZ_SITE)
+
 # --- HTTP Basic auth (shared with the OpenAPI UIs — see app/main.py) ---------
 
 AUTH_REALM = "Mebel Pro docs"
@@ -47,7 +94,7 @@ _UNAUTHORIZED = HTTPException(
 
 
 def require_docs_auth(credentials: Annotated[HTTPBasicCredentials, Depends(_basic)]) -> None:
-    """HTTP Basic guard for the docs site and the OpenAPI UIs (same credentials)."""
+    """HTTP Basic guard for the docs sites and the OpenAPI UIs (same credentials)."""
     user_ok = secrets.compare_digest(
         credentials.username.encode("utf-8"), settings.DOCS_AUTH_USERNAME.encode("utf-8")
     )
@@ -57,8 +104,6 @@ def require_docs_auth(credentials: Annotated[HTTPBasicCredentials, Depends(_basi
     if not (user_ok and pass_ok):
         raise _UNAUTHORIZED
 
-
-router = APIRouter(tags=["docs"], dependencies=[Depends(require_docs_auth)])
 
 # --- frontmatter -------------------------------------------------------------
 
@@ -107,13 +152,9 @@ def _humanize(name: str) -> str:
 # --- filesystem helpers ------------------------------------------------------
 
 
-def _docs_root() -> Path:
-    return settings.DOCS_DIR.resolve()
-
-
-def _resolve(rel: str) -> Path | None:
-    """Resolve a request path inside the docs root, or ``None`` if it escapes it."""
-    root = _docs_root()
+def _resolve(site: _Site, rel: str) -> Path | None:
+    """Resolve a request path inside the site's root, or ``None`` if it escapes."""
+    root = site.root()
     target = (root / rel).resolve()
     if target != root and root not in target.parents:
         return None
@@ -148,8 +189,8 @@ class NavItem:
         return self.url is None
 
 
-def build_nav() -> list[NavItem]:
-    root = _docs_root()
+def build_nav(site: _Site) -> list[NavItem]:
+    root = site.root()
     if not root.is_dir():
         return []
 
@@ -183,7 +224,7 @@ def build_nav() -> list[NavItem]:
                     continue
                 rel = child.relative_to(root).as_posix()
                 meta = _read_meta(child)
-                url = "/docs" if name == "index.md" else "/docs/" + rel[: -len(".md")]
+                url = site.prefix if name == "index.md" else f"{site.prefix}/" + rel[: -len(".md")]
                 items.append(
                     NavItem(
                         title=meta.title or _humanize(child.stem),
@@ -227,9 +268,9 @@ def _extract_headings(body: str) -> list[str]:
     return [m.group(1).strip() for m in _HEADING_RE.finditer(body)]
 
 
-def build_search_index() -> list[dict[str, object]]:
-    """Walk ``docs/`` and return a flat list of pages for the client-side search."""
-    root = _docs_root()
+def build_search_index(site: _Site) -> list[dict[str, object]]:
+    """Walk the site's tree and return a flat list of pages for client-side search."""
+    root = site.root()
     if not root.is_dir():
         return []
     out: list[dict[str, object]] = []
@@ -252,7 +293,7 @@ def build_search_index() -> list[dict[str, object]]:
         out.append(
             {
                 "title": meta.title or _humanize(path.stem),
-                "url": "/docs" if is_root_index else "/docs/" + rel[: -len(".md")],
+                "url": site.prefix if is_root_index else f"{site.prefix}/" + rel[: -len(".md")],
                 "headings": _extract_headings(body),
                 "text": _strip_md_for_search(body),
             }
@@ -288,17 +329,18 @@ def _render_nav(items: list[NavItem], cur_rel: str) -> str:
 
 
 class _RelLinkTreeprocessor(Treeprocessor):
-    """Rewrite in-repo Markdown links/images so they resolve under ``/docs``.
+    """Rewrite in-repo Markdown links/images so they resolve under the site mount.
 
-    ``[x](scope.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope``;
-    image ``src``\\ s point at their ``/docs/...`` byte route. Absolute URLs,
-    anchors, ``mailto:``/``tel:``, and links that climb out of the docs tree are
-    left untouched.
+    ``[x](scope.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope``
+    (``/docs-uz/...`` on the Uzbek site); image ``src``\\ s point at their byte
+    route. Absolute URLs, anchors, ``mailto:``/``tel:``, and links that climb
+    out of the tree are left untouched.
     """
 
-    def __init__(self, md: markdown.Markdown, cur_rel: str) -> None:
+    def __init__(self, md: markdown.Markdown, cur_rel: str, prefix: str) -> None:
         super().__init__(md)
         self._cur_dir = posixpath.dirname(cur_rel)
+        self._prefix = prefix
 
     def run(self, root: Element) -> None:
         for el in root.iter():
@@ -323,7 +365,7 @@ class _RelLinkTreeprocessor(Treeprocessor):
             return None  # escapes the docs root — leave the link untouched
         if strip_md and resolved.endswith(".md"):
             resolved = resolved[: -len(".md")]
-        out = "/docs/" + resolved
+        out = f"{self._prefix}/" + resolved
         if query:
             out += "?" + query
         if "#" in url:
@@ -332,12 +374,15 @@ class _RelLinkTreeprocessor(Treeprocessor):
 
 
 class _RelLinkExtension(Extension):
-    def __init__(self, cur_rel: str) -> None:
+    def __init__(self, cur_rel: str, prefix: str) -> None:
         super().__init__()
         self._cur_rel = cur_rel
+        self._prefix = prefix
 
     def extendMarkdown(self, md: markdown.Markdown) -> None:
-        md.treeprocessors.register(_RelLinkTreeprocessor(md, self._cur_rel), "docs_rellinks", 3)
+        md.treeprocessors.register(
+            _RelLinkTreeprocessor(md, self._cur_rel, self._prefix), "docs_rellinks", 3
+        )
 
 
 class _MermaidPreprocessor(Preprocessor):
@@ -371,7 +416,7 @@ class _MermaidExtension(Extension):
         md.preprocessors.register(_MermaidPreprocessor(md), "docs_mermaid", 27)
 
 
-def render_markdown(text: str, cur_rel: str) -> tuple[str, _Meta, str, str]:
+def render_markdown(text: str, cur_rel: str, prefix: str) -> tuple[str, _Meta, str, str]:
     """Render a Markdown document → (title, frontmatter, HTML body, on-this-page HTML)."""
     meta, body = _split_frontmatter(text)
     md = markdown.Markdown(
@@ -386,7 +431,7 @@ def render_markdown(text: str, cur_rel: str) -> tuple[str, _Meta, str, str]:
             "md_in_html",
             CodeHiliteExtension(css_class="highlight", guess_lang=False),
             TocExtension(permalink="#", toc_depth="2-4"),
-            _RelLinkExtension(cur_rel),
+            _RelLinkExtension(cur_rel, prefix),
             _MermaidExtension(),
         ],
         output_format="html",
@@ -438,16 +483,19 @@ def _scripts() -> str:
     return (_STATIC_DIR / "docs.js").read_text(encoding="utf-8")
 
 
-def _breadcrumbs(cur_rel: str) -> str:
+def _breadcrumbs(site: _Site, cur_rel: str) -> str:
+    root_crumb = f'<a href="{site.prefix}">{escape(site.dir_label)}</a>'
     if not cur_rel:
         return ""
     parts = cur_rel.split("/")
-    out = ['<a href="/docs">docs</a>']
+    out = [root_crumb]
     acc = ""
     for i, part in enumerate(parts):
         acc = f"{acc}/{part}" if acc else part
         label = escape(_humanize(part[: -len(".md")] if part.endswith(".md") else part))
-        out.append(label if i == len(parts) - 1 else f'<a href="/docs/{escape(acc)}">{label}</a>')
+        out.append(
+            label if i == len(parts) - 1 else f'<a href="{site.prefix}/{escape(acc)}">{label}</a>'
+        )
     return ' <span style="opacity:.5">/</span> '.join(out)
 
 
@@ -466,17 +514,43 @@ _FONTS_HREF = (
     "https://fonts.googleapis.com/css2"
     "?family=Cinzel:wght@400;500;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap"
 )
-_BRAND_HTML = (
-    '<a class="brand" href="/docs">'
-    '<span class="flank">&#8212;</span>Mebel&nbsp;Pro<span class="flank">&#8212;</span></a>'
-)
-_FOOTER_HTML = (
-    '<footer class="foot">Rendered live from <code>docs/</code> &#8212; '
-    "no build step. Edit the file and refresh.</footer>"
-)
+
+
+def _brand_html(site: _Site) -> str:
+    return (
+        f'<a class="brand" href="{site.prefix}">'
+        '<span class="flank">&#8212;</span>Mebel&nbsp;Pro<span class="flank">&#8212;</span></a>'
+    )
+
+
+def _footer_html(site: _Site) -> str:
+    return (
+        f'<footer class="foot">Rendered live from <code>{escape(site.dir_label)}/</code> &#8212; '
+        "no build step. Edit the file and refresh.</footer>"
+    )
+
+
+def _counterpart_url(site: _Site, cur_rel: str) -> str:
+    """The same page in the other language — same relative path, other mount."""
+    rel_noext = cur_rel[: -len(".md")] if cur_rel.endswith(".md") else cur_rel
+    if not rel_noext or rel_noext == "index":
+        return site.alt_prefix
+    return f"{site.alt_prefix}/{rel_noext}"
+
+
+def _lang_switch_html(site: _Site, cur_rel: str) -> str:
+    return (
+        f'<a class="lang-switch" href="{escape(_counterpart_url(site, cur_rel))}" '
+        f'title="{escape(site.alt_label)}" rel="alternate" '
+        f'hreflang="{escape(UZ_SITE.lang if site is EN_SITE else EN_SITE.lang)}">'
+        f'<span class="cur">{escape(site.this_label)}</span>'
+        f'<span class="sep">/</span>'
+        f'<span class="alt">{escape(site.alt_label)}</span></a>'
+    )
 
 
 def _page(
+    site: _Site,
     *,
     title: str,
     content: str,
@@ -484,8 +558,8 @@ def _page(
     meta: _Meta | None = None,
     toc_html: str = "",
 ) -> str:
-    nav_html = _render_nav(build_nav(), cur_rel) or "<p class='nav-empty'>No docs found.</p>"
-    crumbs = _breadcrumbs(cur_rel)
+    nav_html = _render_nav(build_nav(site), cur_rel) or "<p class='nav-empty'>No docs found.</p>"
+    crumbs = _breadcrumbs(site, cur_rel)
     crumbs_html = f'<nav class="crumbs" aria-label="Breadcrumb">{crumbs}</nav>' if crumbs else ""
     page_title = (
         "Mebel Pro · Documentation" if title == "Documentation" else f"{title} · Mebel Pro docs"
@@ -508,7 +582,7 @@ def _page(
         else ""
     )
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{escape(site.lang)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -523,7 +597,7 @@ def _page(
 <input type="checkbox" id="nav-toggle" hidden>
 <header class="topbar">
   <label class="burger" for="nav-toggle" aria-label="Toggle navigation">&#9776;</label>
-  {_BRAND_HTML}
+  {_brand_html(site)}
   <div class="search">
     <button type="button" class="search-trigger" id="docs-search-trigger"
             aria-haspopup="dialog" aria-controls="docs-search-modal"
@@ -532,6 +606,7 @@ def _page(
       <kbd class="search-kbd" id="docs-search-kbd">&#8984;K</kbd>
     </button>
   </div>
+  {_lang_switch_html(site, cur_rel)}
   <a class="api-link" href="/api-docs">API&nbsp;reference&nbsp;&#8599;</a>
 </header>
 <div class="{shell_cls}">
@@ -541,7 +616,7 @@ def _page(
       {crumbs_html}
       {_meta_badges(meta)}
       <article>{content}</article>
-      {_FOOTER_HTML}
+      {_footer_html(site)}
     </div>
   </main>
   {aside}
@@ -562,6 +637,7 @@ def _page(
     </div>
   </div>
 </div>
+<script>window.__DOCS_PREFIX__="{site.prefix}";</script>
 <script>{_scripts()}</script>
 {mermaid_html}
 </body>
@@ -571,15 +647,19 @@ def _page(
 # --- routes ------------------------------------------------------------------
 
 
-def _render_doc_file(path: Path) -> HTMLResponse:
-    rel = path.relative_to(_docs_root()).as_posix()
-    title, meta, html, toc_html = render_markdown(path.read_text(encoding="utf-8"), rel)
-    return HTMLResponse(_page(title=title, content=html, cur_rel=rel, meta=meta, toc_html=toc_html))
+def _render_doc_file(site: _Site, path: Path) -> HTMLResponse:
+    rel = path.relative_to(site.root()).as_posix()
+    title, meta, html, toc_html = render_markdown(
+        path.read_text(encoding="utf-8"), rel, site.prefix
+    )
+    return HTMLResponse(
+        _page(site, title=title, content=html, cur_rel=rel, meta=meta, toc_html=toc_html)
+    )
 
 
-def _dir_entry(label: str, path_suffix: str, mono: str) -> str:
+def _dir_entry(site: _Site, label: str, path_suffix: str, mono: str) -> str:
     return (
-        f'<li><a href="/docs/{escape(path_suffix)}">'
+        f'<li><a href="{site.prefix}/{escape(path_suffix)}">'
         f'<span class="t">{escape(label)}</span>'
         f'<span class="d">{escape(mono)}</span></a></li>'
     )
@@ -594,13 +674,13 @@ def _find_in_nav(items: list[NavItem], rel: str) -> NavItem | None:
     return None
 
 
-def _render_folder(path: Path) -> HTMLResponse:
+def _render_folder(site: _Site, path: Path) -> HTMLResponse:
     # Render the folder index from the same NavItem tree the sidebar uses, so the
     # body's listing matches the sidebar's order (frontmatter `order`, then title)
     # rather than alphabetical-by-filename.
-    root = _docs_root()
+    root = site.root()
     rel = path.relative_to(root).as_posix() if path != root else ""
-    nav_root = build_nav()
+    nav_root = build_nav(site)
     items: list[NavItem] = nav_root if not rel else []
     if rel:
         folder = _find_in_nav(nav_root, rel)
@@ -609,62 +689,82 @@ def _render_folder(path: Path) -> HTMLResponse:
     entries: list[str] = []
     for it in items:
         if it.is_folder:
-            entries.append(_dir_entry(f"{it.title}/", it.rel, f"{it.rel}/"))
+            entries.append(_dir_entry(site, f"{it.title}/", it.rel, f"{it.rel}/"))
         else:
             path_suffix = it.rel[: -len(".md")] if it.rel.endswith(".md") else it.rel
-            entries.append(_dir_entry(it.title, path_suffix, it.rel))
+            entries.append(_dir_entry(site, it.title, path_suffix, it.rel))
     title = _humanize(path.name) if rel else "Documentation"
     listing = "".join(entries) or "<li>Empty.</li>"
     body = f'<h1>{escape(title)}</h1><ul class="dir-index">{listing}</ul>'
-    return HTMLResponse(_page(title=title, content=body, cur_rel=rel))
+    return HTMLResponse(_page(site, title=title, content=body, cur_rel=rel))
 
 
-@router.get("/docs/_search.json", include_in_schema=False)
-async def docs_search_index() -> list[dict[str, object]]:
-    """Index consumed by the ⌘K search modal in ``docs_assets/docs.js``."""
-    return build_search_index()
-
-
-@router.get("/docs", response_class=HTMLResponse, include_in_schema=False)
-async def docs_home() -> HTMLResponse:
-    root = _docs_root()
+def _docs_home(site: _Site) -> HTMLResponse:
+    root = site.root()
     if not root.is_dir():
         body = (
-            f"<h1>Documentation</h1><p>No <code>docs/</code> directory at "
-            f"<code>{escape(str(root))}</code>. Set <code>DOCS_DIR</code> to point at it.</p>"
+            f"<h1>Documentation</h1><p>No <code>{escape(site.dir_label)}/</code> directory at "
+            f"<code>{escape(str(root))}</code>. Set "
+            f"<code>{escape(site.settings_attr)}</code> to point at it.</p>"
         )
-        return HTMLResponse(_page(title="Documentation", content=body, cur_rel=""), status_code=404)
+        return HTMLResponse(
+            _page(site, title="Documentation", content=body, cur_rel=""), status_code=404
+        )
     for name in ("index.md", "README.md"):
         f = root / name
         if f.is_file():
-            return _render_doc_file(f)
-    return _render_folder(root)
+            return _render_doc_file(site, f)
+    return _render_folder(site, root)
 
 
-@router.get("/docs/{doc_path:path}", response_class=HTMLResponse, include_in_schema=False)
-async def docs_page(doc_path: str) -> Response:
+def _docs_page(site: _Site, doc_path: str) -> Response:
     doc_path = doc_path.strip("/")
     if not doc_path:
-        return await docs_home()
-    target = _resolve(doc_path)
-    # Anything under /docs that doesn't resolve to a real file/folder — a stale
-    # link, a typo, a `..`-escape — sends the reader home rather than dead-ending.
+        return _docs_home(site)
+    target = _resolve(site, doc_path)
+    # Anything that doesn't resolve to a real file/folder — a stale link, a
+    # typo, a `..`-escape — sends the reader to this site's home rather than
+    # dead-ending.
     if target is None:
-        return RedirectResponse("/docs", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(site.prefix, status_code=status.HTTP_302_FOUND)
 
     # An exact file: an asset, or an explicit `.md` link.
     if target.is_file():
-        return _render_doc_file(target) if target.suffix == ".md" else FileResponse(target)
+        return _render_doc_file(site, target) if target.suffix == ".md" else FileResponse(target)
 
     # An extension-less Markdown page, or a folder (with an optional index file).
     md_file = target.with_suffix(".md")
     if md_file.is_file():
-        return _render_doc_file(md_file)
+        return _render_doc_file(site, md_file)
     if target.is_dir():
         for name in ("index.md", "README.md"):
             f = target / name
             if f.is_file():
-                return _render_doc_file(f)
-        return _render_folder(target)
+                return _render_doc_file(site, f)
+        return _render_folder(site, target)
 
-    return RedirectResponse("/docs", status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(site.prefix, status_code=status.HTTP_302_FOUND)
+
+
+def _make_router(site: _Site) -> APIRouter:
+    """Build the three routes (search index · home · catch-all) for one site."""
+    r = APIRouter(tags=["docs"], dependencies=[Depends(require_docs_auth)])
+
+    @r.get(f"{site.prefix}/_search.json", include_in_schema=False)
+    async def docs_search_index() -> list[dict[str, object]]:
+        """Index consumed by the ⌘K search modal in ``docs_assets/docs.js``."""
+        return build_search_index(site)
+
+    @r.get(site.prefix, response_class=HTMLResponse, include_in_schema=False)
+    async def docs_home() -> HTMLResponse:
+        return _docs_home(site)
+
+    @r.get(f"{site.prefix}/{{doc_path:path}}", response_class=HTMLResponse, include_in_schema=False)
+    async def docs_page(doc_path: str) -> Response:
+        return _docs_page(site, doc_path)
+
+    return r
+
+
+# Two mounts: English at /docs (source of truth) and Uzbek at /docs-uz (mirror).
+routers: list[APIRouter] = [_make_router(s) for s in SITES]

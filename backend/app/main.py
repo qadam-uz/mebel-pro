@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from app.api.router import api_router
 from app.core.config import settings
 from app.docs_site import require_docs_auth
-from app.docs_site import router as docs_router
+from app.docs_site import routers as docs_routers
 
 # The OpenAPI schema stays under the API prefix; the interactive UIs sit beside
 # the docs site at /api-docs and /api-redoc (`/docs` is the docs site). All
@@ -48,7 +48,8 @@ def create_app() -> FastAPI:
 
     _register_openapi_routes(app)
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(docs_router)
+    for docs_router in docs_routers:
+        app.include_router(docs_router)
     return app
 
 

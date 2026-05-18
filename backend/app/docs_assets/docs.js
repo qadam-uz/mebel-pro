@@ -1,9 +1,16 @@
 /* Progressive enhancement for the docs site (app/docs_site.py):
    (1) ⌘K / Ctrl+K opens a search modal that ranks pages from the JSON index
-       served at /docs/_search.json, and
+       served at <prefix>/_search.json (/docs or /docs-uz), and
    (2) highlights the section you're reading in the "on this page" rail. */
 (function () {
   "use strict";
+
+  // Mount prefix for the active tree ("/docs" for English, "/docs-uz" for the
+  // Uzbek mirror), injected by the page shell so search + crumbs work on both.
+  var PREFIX = String(window.__DOCS_PREFIX__ || "/docs").replace(/\/+$/, "");
+  var PREFIX_RE = new RegExp(
+    "^" + PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\/?"
+  );
 
   // --- (1) ⌘K search modal ------------------------------------------------
   var trigger = document.getElementById("docs-search-trigger");
@@ -25,7 +32,7 @@
     function loadIndex() {
       if (index) return Promise.resolve(index);
       if (indexPromise) return indexPromise;
-      indexPromise = fetch("/docs/_search.json", { credentials: "same-origin" })
+      indexPromise = fetch(PREFIX + "/_search.json", { credentials: "same-origin" })
         .then(function (r) { return r.ok ? r.json() : []; })
         .then(function (data) { index = Array.isArray(data) ? data : []; return index; })
         .catch(function () { index = []; return index; });
@@ -47,7 +54,7 @@
     }
 
     function crumb(url) {
-      var parts = url.replace(/^\/docs\/?/, "").split("/").filter(Boolean);
+      var parts = url.replace(PREFIX_RE, "").split("/").filter(Boolean);
       return parts.slice(0, -1).map(humanize).join(" › ");
     }
 

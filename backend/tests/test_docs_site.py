@@ -26,6 +26,17 @@ def docs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (root / "spec" / "scope.md").write_text("---\ntitle: Scope\norder: 20\n---\n\n# Scope\n")
     (root / "assets" / "diagram.txt").write_text("hello-asset")
     monkeypatch.setattr(settings, "DOCS_DIR", root)
+
+    # The Uzbek mirror is a structural 1:1 of docs/ with translated copy.
+    uz = tmp_path / "docs_uz"
+    (uz / "spec").mkdir(parents=True)
+    (uz / "index.md").write_text("# Bosh sahifa\n\nXush kelibsiz.\n")
+    (uz / "spec" / "vision.md").write_text(
+        "---\ntitle: Mahsulot Tasavvuri\nstatus: stable\norder: 10\n---\n\n"
+        "# Tasavvur\n\n[Qamrov](scope.md) sahifasiga qayting.\n"
+    )
+    (uz / "spec" / "scope.md").write_text("---\ntitle: Qamrov\norder: 20\n---\n\n# Qamrov\n")
+    monkeypatch.setattr(settings, "DOCS_UZ_DIR", uz)
     return root
 
 
@@ -38,6 +49,9 @@ async def test_docs_and_openapi_require_basic_auth(client: AsyncClient, docs_dir
         "/docs/spec/vision",
         "/docs/assets/diagram.txt",
         "/docs/_search.json",
+        "/docs-uz",
+        "/docs-uz/spec/vision",
+        "/docs-uz/_search.json",
         "/api-docs",
         "/api-redoc",
     )
@@ -153,6 +167,59 @@ async def test_missing_docs_dir_yields_404(
     resp = await client.get("/docs", auth=AUTH)
     assert resp.status_code == 404
     assert "No <code>docs/</code>" in resp.text
+
+
+# --- the Uzbek mirror (/docs-uz) + language switcher ------------------------
+
+
+async def test_uz_mirror_renders_from_its_own_tree(client: AsyncClient, docs_dir: Path) -> None:
+    resp = await client.get("/docs-uz", auth=AUTH)
+    assert resp.status_code == 200
+    assert 'lang="uz"' in resp.text
+    assert "Bosh sahifa" in resp.text  # Uzbek index, not the English one
+    page = await client.get("/docs-uz/spec/vision", auth=AUTH)
+    assert page.status_code == 200
+    assert "Mahsulot Tasavvuri · Mebel Pro docs" in page.text
+    # In-doc links rewrite under the /docs-uz mount, not /docs.
+    assert 'href="/docs-uz/spec/scope"' in page.text
+
+
+async def test_uz_search_index_uses_uz_urls(client: AsyncClient, docs_dir: Path) -> None:
+    resp = await client.get("/docs-uz/_search.json", auth=AUTH)
+    assert resp.status_code == 200
+    data = resp.json()
+    by_title = {d["title"]: d for d in data}
+    assert by_title["Mahsulot Tasavvuri"]["url"] == "/docs-uz/spec/vision"
+    # English search index is independent and stays on /docs.
+    en = (await client.get("/docs/_search.json", auth=AUTH)).json()
+    assert {d["url"] for d in en} <= {"/docs", "/docs/spec/vision", "/docs/spec/scope"}
+
+
+async def test_language_switcher_links_to_counterpart(client: AsyncClient, docs_dir: Path) -> None:
+    en = await client.get("/docs/spec/vision", auth=AUTH)
+    assert 'class="lang-switch"' in en.text
+    assert 'href="/docs-uz/spec/vision"' in en.text  # EN → same page in UZ
+    uz = await client.get("/docs-uz/spec/vision", auth=AUTH)
+    assert 'href="/docs/spec/vision"' in uz.text  # UZ → same page in EN
+    # Home maps to the other site's home, not "/…/index".
+    home = await client.get("/docs", auth=AUTH)
+    assert 'href="/docs-uz"' in home.text
+
+
+async def test_uz_prefix_injected_for_client_search(client: AsyncClient, docs_dir: Path) -> None:
+    resp = await client.get("/docs-uz/spec/scope", auth=AUTH)
+    assert 'window.__DOCS_PREFIX__="/docs-uz"' in resp.text
+
+
+async def test_missing_uz_dir_yields_404(
+    client: AsyncClient, docs_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # /docs stays healthy even when the Uzbek mirror is absent.
+    monkeypatch.setattr(settings, "DOCS_UZ_DIR", tmp_path / "no-uz")
+    assert (await client.get("/docs", auth=AUTH)).status_code == 200
+    resp = await client.get("/docs-uz", auth=AUTH)
+    assert resp.status_code == 404
+    assert "No <code>docs_uz/</code>" in resp.text
 
 
 # --- OpenAPI UIs ------------------------------------------------------------

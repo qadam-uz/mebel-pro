@@ -13,6 +13,8 @@ The design [`docs/architecture.md`](../docs/architecture.md) → _Why three SPAs
 
 **Current state:** the **static landing exists** — `web/landing/index.html`, its own Vite entry (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at the apex by the Caddy edge (`deploy/Caddyfile` rewrites `/` → `/landing/index.html`); it is _not_ part of the Vue tree. The Vue side is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. Pending build work: splitting the Vue side into three entries + extracting shared code; until then, treat the scaffold as the client app and don't add workshop/superadmin screens to it.
 
+**HTML prototype:** the confident UI/UX starting point lives in `web/prototypes/prototype-1/` (`client/`, `workshop/`, `admin/`, `landing/`, shared `assets/`). It is a **design reference**, not part of any Vite entry and not built or served — port screens from it into the Vue SPAs; don't wire it into the build.
+
 ## Toolchain
 
 | Concern      | Tool                                                                                                     |

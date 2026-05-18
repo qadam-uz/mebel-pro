@@ -29,9 +29,15 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
     # --- Docs site ---------------------------------------------------------
-    # Directory rendered live at `/docs` (Markdown → HTML, no build step).
-    # Defaults to the repo's `docs/`; override in containers via `DOCS_DIR`.
+    # English docs — the single source of truth — rendered live at `/docs`
+    # (Markdown → HTML, no build step). Defaults to the repo's `docs/`;
+    # override in containers via `DOCS_DIR`.
     DOCS_DIR: Path = _BACKEND_ROOT.parent / "docs"
+
+    # Uzbek mirror of `docs/` — a derived, read-only translation rendered live
+    # at `/docs-uz`. Defaults to the repo's `docs_uz/`; override via
+    # `DOCS_UZ_DIR`. Never a source: generated one-way from `DOCS_DIR`.
+    DOCS_UZ_DIR: Path = _BACKEND_ROOT.parent / "docs_uz"
 
     # HTTP Basic credentials guarding `/docs` *and* the OpenAPI UIs
     # (`/api-docs`, `/api-redoc`, the schema). Change these in any real deploy.

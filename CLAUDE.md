@@ -4,12 +4,46 @@ WE ARE CURRENTLY AT THE STAGE OF DEVELOPING BUSINESS LOGIC,
 THE BEST USER EXPERIENCE, AND PROTOTYPING.
 CONSIDER THIS WHEN MAKING DECISIONS, GIVING OPTIONS, AND ASKING QUESTIONS.
 DON'T BE AFRAID TO MAKE FUNDAMENTAL CHANGES IF NECESSARY.
-WE TREAT THE PROTOTYPE (IN THE FORM OF HTML FILES) AS A SERIOUS,
-CONFIDENT STARTING POINT — NOT A DRAFT THAT CAN BE THROWN AWAY.
+WE TREAT THE PROTOTYPE (IN THE FORM OF HTML FILES, IN `web/prototypes/`)
+AS A SERIOUS, CONFIDENT STARTING POINT — NOT A DRAFT THAT CAN BE THROWN AWAY.
 WE TREAT DOCUMENTATION AS THE SOURCE OF TRUTH. ALWAYS KEEP DOCUMENTATION
 UP TO DATE, FOLLOWING THE docs-management SKILL GUIDELINES.
 IF WHAT I ASK AND WHAT THE DOCS SAY DO NOT AGREE, TELL ME
 THE CONFLICT POINTS AND WE'LL CONSOLIDATE THEM TOGETHER.
+
+## Documentation language — English canon, Uzbek mirror
+
+The project keeps **two** documentation trees:
+
+- **`docs/` — the single source of truth, in English.** Both agents and humans
+  work from this. All reasoning, planning, editing, and the docs-management
+  skill operate **only** here.
+- **`docs_uz/` — a read-only Uzbek mirror of `docs/`,** for Uzbek-speaking
+  team members. It is a **generated artifact**, not a source.
+
+Hard rules:
+
+- Translation flows **one way only: `docs/` → `docs_uz/`. Never the reverse.**
+- **Agents must never treat `docs_uz/` as a source** — don't read it to answer
+  questions, don't reason over it, don't let it drive a decision. The only
+  permitted write to `docs_uz/` is regenerating a page from its `docs/`
+  original after that original changed.
+- `docs_uz/` mirrors `docs/` **1:1** — identical paths, structure, code blocks,
+  link targets, mermaid node IDs, and **frontmatter (including `title:`) byte
+  for byte**.
+- **Only the natural-language prose is rendered into Uzbek — for readability,
+  not as a full translation.** Keep **every technical and domain term, concept,
+  and product/feature/role name in English**: entity and role names, feature
+  names, architecture & CS vocabulary (state machine, invariant, idempotent,
+  scheduler, queue, cache, tenant, migration, endpoint, schema, optimizer,
+  nesting, kerf, grain, seam, snapshot, aggregate, bounded context, edge cases,
+  …), status/enum values, identifiers. Translate only the connective sentences
+  around them. **When in doubt, keep it English.** The result reads the way an
+  Uzbek engineering team actually talks: Uzbek grammar carrying English terms.
+- **When you change a `docs/` page, regenerate its `docs_uz/` counterpart** so
+  the two stay in sync. If they drift, `docs/` wins. But they should never drift. Keep them in sync.
+- Both are served live by the backend — `docs/` at `/docs`, `docs_uz/` at
+  `/docs-uz` — and every page links to its counterpart.
 
 Furniture-management application. Monorepo: a FastAPI modular-monolith backend, a
 Vue 3 web repo (the design is three SPAs — **client** / **workshop** /
@@ -20,13 +54,14 @@ tests, and Docker Compose deployment.
 
 ## Repo map
 
-| Path       | What                                               | Stack                                                                                 | Details                                   |
-| ---------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `backend/` | REST API (JSON, `/api/v1`)                         | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/CLAUDE.md`](backend/CLAUDE.md)  |
-| `web/`     | Web client (target: 3 SPAs + static landing)       | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/CLAUDE.md`](web/CLAUDE.md)          |
-| `e2e/`     | End-to-end browser tests                           | Playwright · TypeScript · **pnpm**                                                    | [`e2e/CLAUDE.md`](e2e/CLAUDE.md)          |
-| `deploy/`  | Container orchestration                            | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/CLAUDE.md`](deploy/CLAUDE.md)    |
-| `docs/`    | Project documentation (served live by the backend) | Markdown                                                                              | managed via the **docs-management** skill |
+| Path       | What                                                                          | Stack                                                                                 | Details                                                                     |
+| ---------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `backend/` | REST API (JSON, `/api/v1`)                                                    | Python 3.12 · FastAPI · async SQLAlchemy 2.0 · Alembic · Postgres · MinIO/S3 · **uv** | [`backend/CLAUDE.md`](backend/CLAUDE.md)                                    |
+| `web/`     | Web client (target: 3 SPAs + static landing)                                  | Vue 3 · Vite 7 · TypeScript · Pinia · Vue Router · Tailwind v4 · Vitest · **pnpm**    | [`web/CLAUDE.md`](web/CLAUDE.md)                                            |
+| `e2e/`     | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/CLAUDE.md`](e2e/CLAUDE.md)                                            |
+| `deploy/`  | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/CLAUDE.md`](deploy/CLAUDE.md)                                      |
+| `docs/`    | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill                                   |
+| `docs_uz/` | Uzbek **mirror** of `docs/` — derived, read-only (served live at `/docs-uz`)  | Markdown                                                                              | generated from `docs/`; never a source — see _Documentation language_ above |
 
 Each subproject is self-contained with its own toolchain and `CLAUDE.md` —
 **read the relevant one before working in that directory.** There is no
