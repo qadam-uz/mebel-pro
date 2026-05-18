@@ -13,44 +13,26 @@ THE CONFLICT POINTS AND WE'LL CONSOLIDATE THEM TOGETHER.
 
 ## Documentation language — English canon, Uzbek mirror
 
-The project keeps **two** documentation trees:
+- **`docs/`** is the single source of truth, in English. Agents and humans work
+  **only** from it; all reasoning, planning, editing, and the docs-management
+  skill operate here.
+- **`docs_uz/`** is a read-only Uzbek mirror — a generated artifact, never a
+  source. **Agents must never read or reason over it.** Translation flows one
+  way: `docs/` → `docs_uz/`, never the reverse.
+- The mirror is **1:1** with `docs/` — identical paths, structure, code blocks,
+  link targets, mermaid node IDs, and **frontmatter (incl. `title:`) byte for
+  byte**. Only connective prose is rendered into Uzbek; **every technical/
+  domain/feature/role term, status value, and identifier stays English** (when
+  in doubt, keep it English). It reads as Uzbek grammar carrying English terms.
+- **When you change a `docs/` page, regenerate its `docs_uz/` counterpart in
+  the same change** — they must never drift; if they do, `docs/` wins.
+- Both are served live: `docs/` at `/docs`, `docs_uz/` at `/docs-uz`, each page
+  linking to its counterpart.
 
-- **`docs/` — the single source of truth, in English.** Both agents and humans
-  work from this. All reasoning, planning, editing, and the docs-management
-  skill operate **only** here.
-- **`docs_uz/` — a read-only Uzbek mirror of `docs/`,** for Uzbek-speaking
-  team members. It is a **generated artifact**, not a source.
-
-Hard rules:
-
-- Translation flows **one way only: `docs/` → `docs_uz/`. Never the reverse.**
-- **Agents must never treat `docs_uz/` as a source** — don't read it to answer
-  questions, don't reason over it, don't let it drive a decision. The only
-  permitted write to `docs_uz/` is regenerating a page from its `docs/`
-  original after that original changed.
-- `docs_uz/` mirrors `docs/` **1:1** — identical paths, structure, code blocks,
-  link targets, mermaid node IDs, and **frontmatter (including `title:`) byte
-  for byte**.
-- **Only the natural-language prose is rendered into Uzbek — for readability,
-  not as a full translation.** Keep **every technical and domain term, concept,
-  and product/feature/role name in English**: entity and role names, feature
-  names, architecture & CS vocabulary (state machine, invariant, idempotent,
-  scheduler, queue, cache, tenant, migration, endpoint, schema, optimizer,
-  nesting, kerf, grain, seam, snapshot, aggregate, bounded context, edge cases,
-  …), status/enum values, identifiers. Translate only the connective sentences
-  around them. **When in doubt, keep it English.** The result reads the way an
-  Uzbek engineering team actually talks: Uzbek grammar carrying English terms.
-- **When you change a `docs/` page, regenerate its `docs_uz/` counterpart** so
-  the two stay in sync. If they drift, `docs/` wins. But they should never drift. Keep them in sync.
-- Both are served live by the backend — `docs/` at `/docs`, `docs_uz/` at
-  `/docs-uz` — and every page links to its counterpart.
-
-Furniture-management application. Monorepo: a FastAPI modular-monolith backend, a
-Vue 3 web repo (the design is three SPAs — **client** / **workshop** /
-**superadmin** — plus a static SEO landing page; the current `web/` tree is the
-initial single-app scaffold, not yet split — see [`web/CLAUDE.md`](web/CLAUDE.md)
-and [`docs/architecture.md`](docs/architecture.md)), Playwright E2E
-tests, and Docker Compose deployment.
+Furniture-panel cutting platform — see [`docs/index.md`](docs/index.md) (what
+it is) and [`docs/architecture.md`](docs/architecture.md) (the technical shape:
+modular-monolith backend, three SPAs + static landing, topology, invariants).
+The repo map below is the working layout.
 
 ## Repo map
 
@@ -95,9 +77,7 @@ E2E: `cd e2e && pnpm install && pnpm install:browsers && pnpm test` (boots the d
 - `web/`: `pnpm lint:check && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`
 - `e2e/`: `pnpm typecheck && pnpm test`
 
-CI mirrors these. `.github/workflows/ci.yml` runs the per-directory gates (backend, web, e2e typecheck) and a docker-build smoke job on every PR and every push to `main`; on a green push to `main` it then SSHes to the VPS and runs `deploy/scripts/deploy.sh`, which `git fetch`s the commit and brings the prod stack up (no registry, no rsync). Auto-HTTPS via the Caddy edge. See [`deploy/CLAUDE.md`](deploy/CLAUDE.md).
-
-The prod stack does **not** run its own Postgres / MinIO — the VPS already provides them on an external Docker network (`infra-net`); the backend joins that network and reaches them by service name. Local dev still spins up its own data services via `compose.yaml`.
+CI (`.github/workflows/ci.yml`) mirrors these gates and auto-deploys to the VPS on a green push to `main` — see [`deploy/CLAUDE.md`](deploy/CLAUDE.md) for the CI/CD flow, prod topology, and infra contract.
 
 ## Development workflow
 

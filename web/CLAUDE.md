@@ -5,15 +5,21 @@ for routing, Tailwind v4 for styling. Package manager: **pnpm**.
 
 ## Target shape vs. current state
 
-The design [`docs/architecture.md`](../docs/architecture.md) → _Why three SPAs + a static landing_ is:
+The target — a static SEO landing + three Vue SPAs (**client** / **workshop** /
+**superadmin**) sharing primitives, the API client, tokens, and i18n — and the
+rationale live in [`docs/architecture.md`](../docs/architecture.md). This file
+covers only the **current build state**:
 
-1. a **static, SEO-optimized landing page** — plain HTML + minimal CSS/JS, served at `/`, _not_ part of this Vue tree;
-2. **three Vue SPAs** in this repo, each its own Vite entry, auth surface, and route set — **client** (Telegram-auth customers: cutting + ordering + tracking), **workshop** (login-auth workshop owner & staff, every screen gated by permission grants), **superadmin** (login-auth platform operators);
-3. shared UI primitives, the API client, design tokens, and i18n living once in the repo, consumed by all three.
-
-**Current state:** the **static landing exists** — `web/landing/index.html`, its own Vite entry (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at the apex by the Caddy edge (`deploy/Caddyfile` rewrites `/` → `/landing/index.html`); it is _not_ part of the Vue tree. The Vue side is still the **initial single-app scaffold** (one `index.html`, one `src/main.ts`, one router) — the seed of the **client** app. Pending build work: splitting the Vue side into three entries + extracting shared code; until then, treat the scaffold as the client app and don't add workshop/superadmin screens to it.
-
-**HTML prototype:** the confident UI/UX starting point lives in `web/prototypes/prototype-1/` (`client/`, `workshop/`, `admin/`, `landing/`, shared `assets/`). It is a **design reference**, not part of any Vite entry and not built or served — port screens from it into the Vue SPAs; don't wire it into the build.
+- **Static landing exists** — `web/landing/index.html`, its own Vite entry
+  (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at
+  the apex by the Caddy edge; _not_ part of the Vue tree.
+- **The Vue side is still the initial single-app scaffold** (one `index.html`,
+  one `src/main.ts`, one router) — the seed of the **client** app. Pending build
+  work: split into three entries + extract shared code. Until then treat the
+  scaffold as the client app; **don't add workshop/superadmin screens to it.**
+- **HTML prototype** lives in `web/prototypes/prototype-1/` — a design
+  reference, not a Vite entry, not built or served. Port screens from it into
+  the Vue SPAs; don't wire it into the build.
 
 ## Toolchain
 
@@ -96,7 +102,7 @@ web/
 
 ## Backend contract
 
-The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. In prod, the **Caddy edge** (`deploy/Caddyfile`) routes by **subdomain** under one apex `BASE_DOMAIN`: apex → landing; `app.*` → client SPA; `workshop.*` → workshop SPA; `admin.*` → superadmin SPA (+ `/docs`, `/api-docs`, `/api-redoc`). `/api/*` on every SPA subdomain → backend (same-origin, no CORS). The `web` container is a plain nginx static server (`web/nginx.conf`) doing the HTML5-history fallback.
+The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`. In dev, `vite.config.ts` proxies `/api` to `http://localhost:8000`, so run `uv run fastapi dev app/main.py` alongside `pnpm dev`. The API is same-origin in every environment (no CORS); prod subdomain routing is owned by [`docs/architecture.md`](../docs/architecture.md) (topology) and `deploy/Caddyfile`. The `web` container is a plain nginx static server (`web/nginx.conf`) doing the HTML5-history fallback.
 
 ## Design system
 
