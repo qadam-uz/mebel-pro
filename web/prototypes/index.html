@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mebel Pro — prototip darvozasi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0c0d10;--panel:#15171c;--panel-2:#1b1e25;--line:rgba(255,255,255,.09);
+    --ink:#eceef2;--ink-2:#aeb3bd;--ink-3:#7c818c;--acc:#7b8cff;
+    --f:'Inter',system-ui,sans-serif;--m:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;background:
+    radial-gradient(820px 480px at 84% -10%,rgba(123,140,255,.16),transparent 60%),
+    radial-gradient(620px 480px at 8% 104%,rgba(79,200,255,.10),transparent 60%)}
+  a{color:inherit;text-decoration:none}
+  .wrap{position:relative;max-width:1080px;margin:0 auto;padding:64px 24px 90px}
+  .eyebrow{font:700 11px var(--m);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+  h1{font-size:38px;font-weight:800;letter-spacing:-.035em;margin:14px 0 0}
+  .lead{color:var(--ink-2);font-size:15.5px;max-width:660px;margin-top:14px}
+  .note{display:flex;gap:12px;align-items:flex-start;margin-top:26px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px;color:var(--ink-2)}
+  .note b{color:var(--ink)}
+  .note .d{width:7px;height:7px;border-radius:50%;background:#f6c455;flex:none;margin-top:6px}
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(2,1fr);margin-top:40px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden;transition:.16s}
+  .card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2)}
+  .card .hd{display:block;padding:24px 24px 20px;border-bottom:1px solid var(--line)}
+  .swatch{display:flex;gap:6px;margin-bottom:16px}
+  .swatch i{width:34px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.14)}
+  .card h2{font-size:21px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+  .card h2 .tag{font:600 10px var(--m);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line);padding:3px 8px;border-radius:999px}
+  .card p{color:var(--ink-2);font-size:13px;margin-top:8px}
+  .open{display:inline-flex;align-items:center;gap:7px;margin-top:16px;font:700 13px var(--f);color:var(--acc)}
+  .links{padding:18px 24px 22px;display:grid;gap:8px}
+  .lrow{display:flex;align-items:center;gap:10px}
+  .lrow .role{font:600 11px var(--m);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);width:82px;flex:none}
+  .lrow a{flex:1;display:flex;justify-content:space-between;align-items:center;padding:8px 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);font-weight:600;font-size:12.5px;color:var(--ink-2);transition:.12s}
+  .lrow a:hover{color:var(--ink);border-color:rgba(255,255,255,.22)}
+  .lrow a span{font:500 10.5px var(--m);color:var(--ink-3)}
+  footer{margin-top:48px;color:var(--ink-3);font-size:12.5px;border-top:1px solid var(--line);padding-top:20px}
+  footer code{font-family:var(--m);color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Mebel Pro · Design exploration</div>
+  <h1>Prototip darvozasi</h1>
+  <p class="lead">To‘rt xil design system — bir xil v1 mahsulot oqimi va statik ma’lumot bilan. Har biri client, workshop va superadmin ilovalaridan tanlangan sahifalarni ko‘rsatadi. Maqsad: yagona design tilini tanlab, uni <code style="font-family:var(--m)">web/DESIGN.md</code> ga muhrlash.</p>
+
+  <div class="note"><span class="d"></span><div><b>Vaqtinchalik.</b> Bu darvoza va prototiplar <code>admin.&lt;domain&gt;/prototypes</code> manzilida xizmat qiladi. Design system tanlanib <code>web/DESIGN.md</code> ga yozilgach, prototip rout'i va u uchun qilingan deploy/nginx o‘zgarishlari olib tashlanadi.</div></div>
+
+  <div class="grid">
+
+    <div class="card">
+      <a class="hd" href="prototype-full/index.html">
+        <div class="swatch"><i style="background:#FAF7F2"></i><i style="background:#1a1714"></i><i style="background:#b4530a"></i><i style="background:#2f7d4f"></i></div>
+        <h2>Full <span class="tag">warm · serif</span></h2>
+        <p>To‘liq, mukammal prototip — barcha rollar va sahifalar. Issiq qog‘oz fon, Source Serif sarlavhalar. Joriy referens dizayn.</p>
+        <span class="open">Launcher ochish →</span>
+      </a>
+      <div class="links">
+        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-full/client/home.html">Bosh sahifa <span>client/home</span></a></div>
+        <div class="lrow"><span class="role">Workshop</span><a href="prototype-full/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
+        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-full/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <a class="hd" href="prototype-noir/index.html">
+        <div class="swatch"><i style="background:#0a0b0d"></i><i style="background:#15171c"></i><i style="background:#38d6ff"></i><i style="background:#a78bfa"></i></div>
+        <h2>Noir <span class="tag">dark · dense</span></h2>
+        <p>Keyboard-first dark SaaS — grafit yuzalar, hairline chiziqlar, elektr-siyan akcent, monospace raqamlar. Linear/Vercel uslubi.</p>
+        <span class="open">Launcher ochish →</span>
+      </a>
+      <div class="links">
+        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-noir/client/home.html">Bosh sahifa <span>client/home</span></a></div>
+        <div class="lrow"><span class="role">Workshop</span><a href="prototype-noir/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
+        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-noir/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <a class="hd" href="prototype-swiss/index.html">
+        <div class="swatch"><i style="background:#ffffff"></i><i style="background:#111111"></i><i style="background:#e4002b"></i><i style="background:#f4f4f2"></i></div>
+        <h2>Swiss <span class="tag">editorial · grid</span></h2>
+        <p>International Typographic Style — oq fon, qora hairline chiziqlar, qat’iy grid, bitta signal-qizil. Soyasiz, burchaksiz, tipografik.</p>
+        <span class="open">Launcher ochish →</span>
+      </a>
+      <div class="links">
+        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-swiss/client/home.html">Bosh sahifa <span>client/home</span></a></div>
+        <div class="lrow"><span class="role">Workshop</span><a href="prototype-swiss/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
+        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-swiss/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <a class="hd" href="prototype-aurora/index.html">
+        <div class="swatch"><i style="background:#f4f5fb"></i><i style="background:#7b5cff"></i><i style="background:#4f9dff"></i><i style="background:#ffffff"></i></div>
+        <h2>Aurora <span class="tag">glass · gradient</span></h2>
+        <p>Zamonaviy yorug‘ SaaS — aurora mesh fon, frosted-glass kartalar, keng bo‘shliq, violet→ko‘k gradient. Stripe/Framer uslubi.</p>
+        <span class="open">Launcher ochish →</span>
+      </a>
+      <div class="links">
+        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-aurora/client/home.html">Bosh sahifa <span>client/home</span></a></div>
+        <div class="lrow"><span class="role">Workshop</span><a href="prototype-aurora/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
+        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-aurora/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Har bir prototip o‘z <code>assets/</code> jildidagi mustaqil design system'ga ega — bir-biriga bog‘liq emas.
+    Full prototip ham SEO landing'ni o‘z ichiga oladi. Tanlangach: yutgan tilni <code>web/DESIGN.md</code> ga, qolganini arxivga.
+  </footer>
+</div>
+</body>
+</html>

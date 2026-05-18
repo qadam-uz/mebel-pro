@@ -10,7 +10,16 @@ export default defineConfigWithVueTs(
     files: ['**/*.{ts,mts,tsx,vue}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '**/node_modules/**']),
+  // `prototypes/` holds static HTML/JS design references — not part of the
+  // app build or type-checked surface (see web/CLAUDE.md). Keep them out of
+  // the lint gate so design exploration never blocks CI.
+  globalIgnores([
+    '**/dist/**',
+    '**/dist-ssr/**',
+    '**/coverage/**',
+    '**/node_modules/**',
+    'prototypes/**',
+  ]),
 
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
