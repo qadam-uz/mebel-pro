@@ -8,8 +8,9 @@
 #   • app.{$BASE_DOMAIN}       → client SPA       (+ /api/* → backend)
 #   • workshop.{$BASE_DOMAIN}  → workshop SPA     (+ /api/* → backend)
 #   • admin.{$BASE_DOMAIN}     → superadmin SPA   (+ /api/* → backend,
-#                                                  + /docs, /api-docs,
-#                                                    /api-redoc → backend,
+#                                                  + /docs, /docs-uz,
+#                                                    /api-docs, /api-redoc
+#                                                    → backend,
 #                                                    HTTP Basic-gated server-side)
 #
 # Auto-HTTPS: the box must be reachable from the internet on 80 and 443 and DNS
@@ -72,7 +73,7 @@ workshop.{$BASE_DOMAIN} {
 admin.{$BASE_DOMAIN} {
 	import common
 
-	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
+	@backend path /api/* /docs /docs/* /docs-uz /docs-uz/* /api-docs /api-docs/* /api-redoc /api-redoc/*
 	reverse_proxy @backend backend:8000
 
 	# TEMPORARY: /prototypes (static design gallery) needs no rule of its own —

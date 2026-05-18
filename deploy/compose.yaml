@@ -98,6 +98,7 @@ services:
       MINIO_USE_SSL: "false"
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
       DOCS_DIR: /docs
+      DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
     # `fastapi dev` = uvicorn with autoreload.
@@ -106,6 +107,7 @@ services:
       - ../backend:/app
       - backend-venv:/app/.venv
       - ../docs:/docs:ro
+      - ../docs_uz:/docs_uz:ro
     ports:
       - "8000:8000"
     healthcheck:

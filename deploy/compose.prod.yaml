@@ -15,8 +15,9 @@
 #     nginx image serving the built SPA bundle.
 #   - Resource limits + log rotation, so a runaway query/leak can't OOM
 #     the host and JSON logs can't fill the disk.
-#   - The repo's docs/ tree is bind-mounted into `backend` at /docs — the
-#     live docs site at admin.<BASE_DOMAIN>/docs reads it on every request.
+#   - The repo's docs/ and docs_uz/ trees are bind-mounted into `backend`
+#     at /docs and /docs_uz — the live docs site at admin.<BASE_DOMAIN>/docs
+#     (and the Uzbek mirror at /docs-uz) reads them on every request.
 #
 # Required env in deploy/.env (see .env.production):
 #   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
@@ -46,12 +47,15 @@ services:
       MINIO_USE_SSL: "false"
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-[]}
       DOCS_DIR: /docs
+      DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
     volumes:
-      # Live docs site reads this on every request — no build step. The
-      # repo is present on the host (the deploy pulls it).
+      # Live docs site reads these on every request — no build step. The
+      # repo is present on the host (the deploy pulls it). docs_uz/ is the
+      # Uzbek mirror served at /docs-uz; without it that route 404s.
       - ../docs:/docs:ro
+      - ../docs_uz:/docs_uz:ro
     expose:
       - "8000"
     healthcheck:
