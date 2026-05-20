@@ -6,7 +6,7 @@
 <title>Mebel Pro — prototype-full · launcher</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="assets/app.css" />
 <link rel="icon" href="assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="assets/brand/exports/favicon.ico" sizes="32x32" />
@@ -20,20 +20,21 @@
   .role-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
   @media (min-width: 760px) { .role-grid { grid-template-columns: 1fr 1fr; } }
   @media (min-width: 1100px) { .role-grid { grid-template-columns: repeat(3, 1fr); } }
-  .role-tile { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 24px 22px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: all .15s; }
-  .role-tile:hover { border-color: var(--ink-12); transform: translateY(-2px); }
+  .role-tile { background: var(--elev); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px 22px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--sh-1); transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+  .role-tile:hover { border-color: var(--line-strong); transform: translateY(-3px); box-shadow: var(--sh-3); }
+  .role-tile:hover .go { gap: 9px; }
   .role-tile .e { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
   .role-tile h3 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 4px; }
   .role-tile p { color: var(--ink-8); font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; flex: 1; }
-  .role-tile .go { display: inline-flex; align-items: center; gap: 6px; font: 600 13px var(--f-ui); color: var(--accent); }
+  .role-tile .go { display: inline-flex; align-items: center; gap: 6px; font: 600 13px var(--f-ui); color: var(--accent); transition: gap .15s ease; }
 
   .index-section { margin-top: 56px; }
-  .index-section h2 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--ink-12); }
+  .index-section h2 { font-family: var(--f-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line-strong); }
   .page-list { display: grid; gap: 8px; grid-template-columns: 1fr; }
   @media (min-width: 760px) { .page-list { grid-template-columns: 1fr 1fr; } }
   @media (min-width: 1100px) { .page-list { grid-template-columns: repeat(3, 1fr); } }
-  .page-list a { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 7px; font: 500 13.5px var(--f-ui); text-decoration: none; color: var(--ink-12); transition: border-color .12s, background .12s; }
-  .page-list a:hover { background: var(--sunk); border-color: var(--ink-12); color: var(--accent); }
+  .page-list a { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: var(--r-sm); font: 500 13.5px var(--f-ui); text-decoration: none; color: var(--ink-12); box-shadow: var(--sh-1); transition: border-color .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease; }
+  .page-list a:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-h); box-shadow: var(--sh-2); }
   .page-list a small { font: 400 11px var(--f-mono); color: var(--ink-6); margin-left: auto; }
 </style>
 </head>
