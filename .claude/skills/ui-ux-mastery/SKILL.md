@@ -1,7 +1,7 @@
 ---
 name: ui-ux-mastery
 description: >-
-  Discipline and layered reference library for designing usable, accessible, considered user interfaces — covering UX foundations (users, jobs-to-be-done, information architecture, user flows, content), accessibility, interaction and touch, responsive layout, forms and system states (empty/loading/error/success), visual design and design tokens, and motion. Framework-agnostic; produces UX specifications, prioritized UX reviews, or implementation-ready interaction/component specs. Use this whenever you are designing or evaluating anything a person looks at and operates: defining a product's screens, navigation, or flows; writing the UX/design section of a spec, brief, PRD, or design doc; building or refactoring a page or component; choosing layout grids, spacing scales, type scales, or color tokens; reviewing an interface for usability, accessibility, or consistency; or whenever someone gives vague "this feels off / looks unpolished / is confusing / hard to use" feedback about an interface and the cause isn't named. Reach for it even when the request never says "UX" or "design" — if the output has a user who has to figure out how to use it, this applies.
+  Discipline and reference library for designing usable, accessible, considered interfaces — UX foundations, accessibility, interaction/touch, responsive layout, forms and states (empty/loading/error/success), visual design, tokens, motion. Framework-agnostic. Use when designing or evaluating anything a person operates: screens, navigation, flows, the UX section of a spec, a new/refactored component, layout grids or type/color scales, or vague "this feels off / hard to use" feedback.
 ---
 
 # UI / UX Mastery

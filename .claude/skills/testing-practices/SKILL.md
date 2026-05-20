@@ -1,6 +1,7 @@
 ---
 name: testing-practices
-description: Apply this skill when designing, writing, reviewing, or arguing about test strategies — backend, frontend, or end-to-end — in any language or framework. Use it whenever the user asks about the test pyramid, what to unit test versus integration test, why tests pass but bugs reach production, how to organize test folders, what to test in agent-driven development, when E2E tests are worth writing, mocking strategy, TDD outcomes, test naming, or how to decide whether a specific test is worth keeping. Also trigger when reviewing a pull request that contains tests, planning a CI test suite, debating mocks versus real dependencies, choosing between Playwright/Cypress/component tests, structuring `tests/` directories, or evaluating coverage metrics — even when the user does not explicitly say "testing strategy." Bias toward applying this skill, since testing decisions are easy to get wrong by default.
+description: >-
+  Apply when designing, writing, reviewing, or arguing about test strategy — backend, frontend, or E2E, any language. Use for the test pyramid, unit vs. integration, why passing tests still ship bugs, mocking strategy, test layout, when E2E is worth it, or whether a test earns its keep. Also when reviewing a PR with tests, planning a CI suite, or choosing Playwright/Cypress/component tests. Bias toward applying it — testing is easy to get wrong.
 ---
 
 # Testing Practices

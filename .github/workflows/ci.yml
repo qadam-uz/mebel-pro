@@ -7,7 +7,7 @@
 #        - verify-web     : pnpm lint:check · format:check · typecheck · test · build
 #        - verify-e2e     : pnpm typecheck
 #      These mirror the per-directory check gates documented in the repo
-#      CLAUDE.md. Run them locally before pushing; CI is the safety net.
+#      AGENTS.md. Run them locally before pushing; CI is the safety net.
 #
 #   2. Docker build smoke (PR + push to main, after verify)
 #        - Just verifies the backend + web images still compile. No registry.

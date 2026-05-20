@@ -11,6 +11,7 @@ coverage/
 .eslintcache
 *.log
 CLAUDE.md
+AGENTS.md
 README.md
 .dockerignore
 Dockerfile

@@ -1,22 +1,7 @@
 ---
 name: docs-management
 description: >-
-  Owns the project's documentation corpus — its structure, form, routing, linking, and upkeep,
-  and the fact that it's served live by the backend (markdown rendered on the fly). Use this skill
-  whenever you create, edit, organize, move, or review anything under `docs/`; whenever you file
-  architecture decisions, UX specs, feature ideas, entity definitions, or research / ideation
-  notes into the docs; whenever you write or update a feature spec, an entity page, or a
-  system-wide concern doc, or need to record a consequential decision and its rationale;
-  whenever someone asks where a doc belongs or proposes a new doc or a new docs folder; whenever
-  a path might be about to change (it's a URL now); whenever docs might have gone stale,
-  contradictory, duplicated, leaking between layers, or orphaned; and at the end of a `shape`
-  cycle to judge whether the v1 documentation is actually complete. It keeps the doc tree small
-  and predictable for humans, agents, and the live renderer alike; **separates the three layers
-  cleanly — canon (model + rules), `ref/features/` (mechanics), `ref/entities/` (shape) — and
-  pushes leakage back where it belongs**; keeps the canon lean and skimmable in a sitting;
-  enforces one-fact-one-home, stable paths, append-only decision history, mermaid diagrams over
-  ASCII art, and **minimal cross-document references** (a single "Next" block per doc, not a
-  thicket of inline links); and defines when documentation is "done."
+  Owns the project's `docs/` corpus — structure, routing, linking, upkeep — served live as markdown by the backend. Use whenever you create, edit, move, organize, or review docs; file an architecture decision, UX spec, feature, or entity page; ask where a doc belongs; or suspect docs are stale, duplicated, orphaned, or leaking between layers. Keeps the tree small; separates canon / `ref/features` / `ref/entities`; enforces one-fact-one-home, stable paths, and mermaid over ASCII.
 ---
 
 # Documentation Management

@@ -11,7 +11,7 @@ export default defineConfigWithVueTs(
   },
 
   // `prototypes/` holds static HTML/JS design references — not part of the
-  // app build or type-checked surface (see web/CLAUDE.md). Keep them out of
+  // app build or type-checked surface (see web/AGENTS.md). Keep them out of
   // the lint gate so design exploration never blocks CI.
   globalIgnores([
     '**/dist/**',

@@ -1,17 +1,7 @@
 ---
 name: software-architecture
 description: >-
-  Use when designing or restructuring software architecture, choosing a tech stack or system
-  topology, making or reviewing a consequential technical-design decision, weighing patterns
-  (monolith vs. microservices, sync vs. async, SQL vs. NoSQL, where module/service boundaries
-  go, what to cache, where a queue earns its keep), or producing the architecture content of
-  project documentation (overviews, ADRs). Reach for this skill whenever a decision will be
-  costly to reverse, whenever someone proposes adding a service / queue / cache / layer /
-  abstraction, and whenever "scalable", "flexible", "enterprise", "future-proof",
-  "event-driven", "clean architecture", or "microservices" enters a design discussion without
-  numbers behind it. It calibrates the design to the system's real operating envelope — scale,
-  criticality, security, latency, lifespan, team — and pushes back hard on over-engineering
-  (the default failure mode) without letting genuinely high-stakes systems be under-built.
+  Use when designing or restructuring architecture, choosing a stack or topology, or making/reviewing a consequential, costly-to-reverse technical decision — monolith vs. microservices, sync vs. async, SQL vs. NoSQL, service boundaries, caching, queues. Triggers when someone proposes adding a service/queue/cache/layer, or when "scalable", "enterprise", "event-driven", or "microservices" appears without numbers. Calibrates to the real envelope and pushes back on over-engineering.
 ---
 
 # Software Architecture
