@@ -35,6 +35,11 @@ modular-monolith backend, three SPAs + static landing, topology, invariants).
 Make sure to ALWAYS read all canon specs at docs/ and read other specs (features, entities) on-demand.
 The repo map below is the working layout.
 
+## Prototypes
+
+- `prototype-full` is the "full" version of the prototype, with all features.
+- `prototype-{style}` is the "style" version of prototypes, with only the 1-2 pages for each role for defining design system of apps.
+
 ## Repo map
 
 | Path       | What                                                                          | Stack                                                                                 | Details                                                                     |

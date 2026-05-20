@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-20
 order: 70
 ---
 
@@ -85,9 +85,10 @@ keyinchalik in-app creation yo'l bo'ladi.
   action menu (Edit · Reset password → one-time-secret confirmation · Block / Unblock).
   "+ Platform user" → dialog (field'lar + auto / manual temp password).
 
-Cross-workshop **Orders** (`/admin/orders`, read-only) [`orders.md`](orders.md)'da yashaydi;
-**Audit** viewer [`workshop.md`](workshop.md)'da yashaydi (bu app'da cross-workshop render
-qilinadi).
+**Audit** viewer [`workshop.md`](workshop.md)'da yashaydi — v1'da u **superadmin-only**
+surface, bu app'da cross-workshop render qilinadi. v1'da **cross-workshop orders view yo'q**:
+operator provision qiladi, block qiladi va monitor qiladi, ammo workshop'larning order'larini
+browse qilmaydi (qarang [`scope.md`](../../scope.md)).
 
 States: har bir page'da loading / empty / error; har bir state-changing action'da
 confirmation; user yaratgandan yoki password reset qilgandan keyin one-time-secret

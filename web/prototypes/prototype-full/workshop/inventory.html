@@ -23,7 +23,6 @@
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-adjust')">± Tuzatish</button>
-        <button class="btn btn-outline btn-sm" type="button" onclick="location.href='transfers.html'">⇄ Transfer</button>
         <button class="btn btn-acc" type="button" onclick="openModal('m-stockin')">+ Kirim yozish</button>
       </div>
     </div>
@@ -209,7 +208,6 @@ window.renderStock = () => {
           <div class="menu">
             <button class="mi" onclick="openStockIn('${bm.branchId}','${bm.matId}')">Kirim yozish</button>
             <button class="mi" onclick="openAdjust('${bm.branchId}','${bm.matId}')">Tuzatish</button>
-            ${isOwner() ? '<div class="sep"></div><button class="mi" onclick="location.href=\'transfers.html\'">Transfer</button>' : ''}
           </div>
         </div>` : '<span class="muted" style="font-size:11px">faqat o\'qish</span>'}
       </td>
@@ -235,7 +233,7 @@ window.openAdjust = (branchId, matId) => {
 // PU6: a believable, reconciling transactions log DERIVED from the order +
 // stock seed. consume/restore carry a SYSTEM actor + an order link and no
 // human actor; no contradictory consume+restore pair on the same order; no
-// orphan adjust. Stock-in / transfer rows mirror the audit + transfers seed.
+// orphan adjust. Stock-in rows mirror the action-log seed.
 function buildTransactions() {
   const tx = [];
   // consume rows: every order whose Cutting done was stamped consumed its
@@ -258,15 +256,12 @@ function buildTransactions() {
     const mm = /^(\S+\s?\S*)\s·\s\+(\d+)/.exec(a.detail) || [];
     tx.push({ t: a.t, type: 'stock_in', matName: (mm[1] || a.detail), branchId: 'yunusobod', qty: +(mm[2] || 0), supplier: 'Egger partiya', actor: SEED.lookup.userById(a.actor)?.name || a.actor });
   });
-  // a transfer pair (owner-only action) from the transfers seed.
-  if (MY_BR.includes('yunusobod')) tx.push({ t: '13-may 16:00', type: 'transfer_out', matName: 'MDF 16 mm · qum rang', branchId: 'yunusobod', qty: -10, ref: 'tf-0042', actor: 'Hasan Karimov' });
-  if (MY_BR.includes('chilonzor')) tx.push({ t: '13-may 16:00', type: 'transfer_in', matName: 'MDF 16 mm · qum rang', branchId: 'chilonzor', qty: 10, ref: 'tf-0042', actor: 'Hasan Karimov' });
   // one believable adjust (a write-off with a note — never an orphan).
   if (MY_BR.includes('yunusobod')) tx.push({ t: '14-may 09:00', type: 'adjust', matName: 'LDSP 0011 PR · Oq baxmal', branchId: 'yunusobod', qty: -3, note: 'Yorilgan partiya hisobdan chiqarildi', actor: 'Hasan Karimov' });
   return tx.sort((a, b) => (b.t || '').localeCompare(a.t || ''));
 }
 
-const TYPE_PILL = { consume: 'p-bad', stock_in: 'p-ok', restore: 'p-conf', adjust: 'p-warn', transfer_out: 'p-del', transfer_in: 'p-del' };
+const TYPE_PILL = { consume: 'p-bad', stock_in: 'p-ok', restore: 'p-conf', adjust: 'p-warn' };
 window.renderTx = () => {
   const tb = document.getElementById('tx-body');
   if (NO_BRANCHES) { tb.innerHTML = `<tr><td colspan="8">${stEmpty('Filial biriktirilmagan')}</td></tr>`; return; }

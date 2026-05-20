@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 30
 ---
 
@@ -35,11 +35,10 @@ Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
   required).
 - `consume(qty)`: `on_hand -= qty` — system, driven by the order state machine.
 - `restore(qty)`: `on_hand += qty` — system, an operator revert of a consumed step.
-- `transfer(qty)`: `on_hand` down on source, up on destination (paired; owner-only).
 
 Invariants: `on_hand ≥ 0` always; `(branch_id, material_id)` unique; stock changes only via
 the inventory module's operations (never raw SQL from elsewhere); `consume` / `restore`
-carry the `order_id` and no actor (system); `stock_in` / `adjust` / `transfer_*` carry an
+carry the `order_id` and no actor (system); `stock_in` / `adjust` carry an
 actor. When `on_hand ≤ min_stock` after a change, a low-stock notification fires to the
 branch's `manage_inventory` grantees and the owner. The verify-time "projected balance"
 warning ([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time
@@ -53,20 +52,18 @@ One audit row for one change to a stock item. Append-only.
 |---|---|---|
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
-| `type` | enum | `stock_in` / `consume` / `restore` / `transfer_in` / `transfer_out` / `adjust` |
+| `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
 | `quantity` | int | signed change, non-zero, in the material's unit |
 | `balance_after` | int | `on_hand` after the change |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
 | `supplier_id` | UUID? | for `stock_in`; null otherwise |
-| `transfer_id` | UUID? | groups the `transfer_out` + `transfer_in` legs of one transfer |
-| `actor_user_id` | UUID? | for `stock_in` / `adjust` / `transfer_*`; null when the system did it (`consume` / `restore`) |
-| `note` | text? | supplier note, transfer reason, adjustment reason (required for `adjust`) |
+| `actor_user_id` | UUID? | for `stock_in` / `adjust`; null when the system did it (`consume` / `restore`) |
+| `note` | text? | supplier note, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |
 
 Invariants: matches the change applied in the same atomic operation; `consume` / `restore`
 carry an `order_id` and no `actor_user_id`; `stock_in` carries a `supplier_id` and an
-`actor_user_id`; `transfer_*` legs share a `transfer_id` and net to zero across branches;
-`adjust` requires a `note`; never updated or deleted.
+`actor_user_id`; `adjust` requires a `note`; never updated or deleted.
 
 ## Supplier
 
@@ -90,6 +87,6 @@ by a user with `manage_inventory`; never deleted (deactivated if unused).
 
 ## Next
 
-- [`catalog-inventory.md`](../features/catalog-inventory.md) — stock-in, adjust, transfer,
+- [`catalog-inventory.md`](../features/catalog-inventory.md) — stock-in, adjust,
   the projected-balance warning, and the order seam mechanics.
 - [`sales.md`](sales.md) — the order whose state machine consumes and restores stock.

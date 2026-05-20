@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-20
 order: 70
 ---
 
@@ -83,8 +83,10 @@ Under a **Platform** section:
   action menu (Edit · Reset password → one-time-secret confirmation · Block / Unblock).
   "+ Platform user" → dialog (fields + auto / manual temp password).
 
-Cross-workshop **Orders** (`/admin/orders`, read-only) live in [`orders.md`](orders.md); the
-**Audit** viewer lives in [`workshop.md`](workshop.md) (rendered cross-workshop in this app).
+The **Audit** viewer lives in [`workshop.md`](workshop.md) — in v1 it is a **superadmin-only**
+surface, rendered cross-workshop in this app. There is **no cross-workshop orders view** in
+v1: the operator provisions, blocks, and monitors, but does not browse workshops' orders (see
+[`scope.md`](../../scope.md)).
 
 States: loading / empty / error on every page; confirmation on every state-changing action;
 the one-time-secret confirmation after creating a user or resetting a password. Action menus

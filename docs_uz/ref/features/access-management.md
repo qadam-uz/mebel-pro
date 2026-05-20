@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-20
 order: 20
 ---
 
@@ -133,7 +133,7 @@ bir permission'ni implicitly ushlab turadi, plus owner-only carve-out'lar.
 | `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
 | `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements sheet stock) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
-| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. Branch-to-branch transfers are owner-only. |
+| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. |
 | `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |
 | `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports. |
 
@@ -161,8 +161,7 @@ v1'da **staff'ga delegate qilib bo'lmaydigan** quyidagi power'lar:
 - Staff yaratish va ularning permission'larini grant / revoke qilish.
 - Branch yaratish va edit qilish; branch status'ini o'zgartirish; branch pricing set qilish.
 - Workshop settings'ni edit qilish (profile).
-- Branch-to-branch stock transfer'lar.
-- Workshop-wide report'lar / audit log'ni ko'rish.
+- Workshop-wide report'larni ko'rish.
 
 ### Operations (owner)
 
@@ -196,7 +195,6 @@ v1'da **staff'ga delegate qilib bo'lmaydigan** quyidagi power'lar:
   - **Permissions** — grants matrix; toggling explicit Save va unsaved-changes guard bilan
     atomik saqlaydi.
   - **Sessions** — current marker bilan list; bittasini / hammasini revoke.
-  - **Audit** — bu user'ning action'lari, read-only.
 - Row / detail action'lar: Edit · Reset password (→ one-time-secret confirmation) · Block /
   Unblock (block session'lar revoke qilinishini ogohlantiradi) · Revoke sessions.
 
@@ -216,8 +214,6 @@ Rules:
 - Picker UI hech qachon user'ga scope qila olmaydigan branch tanlashga ruxsat bermaydi.
   Server baribir unga ishonmaydi — har bir request hali ham target'ning branch'ini nomlaydi,
   grant set'ga qarshi tekshiriladi.
-- Owner-only cross-branch task'lar uchun (masalan, stock transfer), screen current-branch
-  state o'rniga explicit two-branch picker ishlatadi.
 
 ## How a request is authorized
 

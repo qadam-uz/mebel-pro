@@ -2,16 +2,19 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 40
 ---
 
 # Workshop administration
 
-Workshop'ni ishlab turishi uchun owner-and-staff surface'lar — workshop settings, branch CRUD,
-va audit viewer. Sign-in, sessions, provisioning, va staff management
-[`access-management.md`](access-management.md)'da yashaydi; income, expenses, va
-worker-production report'lar [`finance.md`](finance.md)'da yashaydi.
+Workshop'ni ishlab turishi uchun owner-and-staff surface'lar — workshop settings va branch
+CRUD. Workshop'ning action va status log'lari ustidagi **audit viewer** ham shu yerda spec
+qilinadi, ammo v1'da u **faqat superadmin-app surface** — workshop owner'lar hali in-app audit
+screen olmaydi (qarang [`scope.md`](../../scope.md)). Sign-in,
+sessions, provisioning, va staff management [`access-management.md`](access-management.md)'da
+yashaydi; income, expenses, va worker-production report'lar [`finance.md`](finance.md)'da
+yashaydi.
 
 ## Workshop settings
 
@@ -91,18 +94,17 @@ Bu feature'ni ikkita append-only log qo'llaydi: **action log** (har bir mutating
 yozadi — actor, action, entity, branch, masked details) va **status change log** (har bir
 order status transition). Ikkalasi ham source'da write-only; bu feature ularni faqat o'qiydi.
 
-- Owner o'z workshop'ining row'larini ko'radi (ular tegadigan branch'larga scoped).
-- Platform operator'lar hammasini ko'radi, plus workshop filter.
+v1'da viewer **faqat superadmin app'da** yashaydi — platform operator'lar workshop'lar boʻylab
+hammasini ko'radi, workshop filter bilan. Workshop owner'ning hali **in-app audit viewer'i
+yo'q** (log'lar baribir ularning workshop'iga qarshi yoziladi).
 
 ### UX
 
-- Workshop app'da (owner / `view_reports`): ikkita tab'li **Audit** section —
-  **Action log** (filters: action type / family, module, actor search, entity type + id, date
-  range, branch; JSON-collapsible `details` preview'li row'lar) va
-  **Status changes** (filters: entity type + id, from→to, actor, date range; transition'ni
-  ko'rsatadigan row'lar). Har bir row mavjud bo'lsa ta'sirlangan entity'ga link qiladi.
-  Read-only.
-- Superadmin app'da: xuddi shu, plus workshop filter va workshop scoping yo'q.
+- Superadmin app'da: ikkita tab'li **Audit** section — **Action log** (filters: action type /
+  family, module, actor search, entity type + id, date range, branch, **workshop**;
+  JSON-collapsible `details` preview'li row'lar) va **Status changes** (filters: entity type +
+  id, from→to, actor, date range; transition'ni ko'rsatadigan row'lar). Har bir row mavjud
+  bo'lsa ta'sirlangan entity'ga link qiladi. Read-only; workshop scoping yo'q.
 - States: loading (skeleton row'lar), empty, error (`trace_id` bilan); `details` expander
   masked JSON'ni ochib beradi.
 

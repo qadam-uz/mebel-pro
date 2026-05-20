@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 50
 ---
 
@@ -96,8 +96,6 @@ decrement qiladi.
 - **Adjust** (xuddi shu caller) — **mandatory note** bilan signed delta; `on_hand` 0'dan
   pasaymasligi mumkin emas. Stock-take va write-off uchun ishlatiladi (jumladan
   cancelled-mid-production order fizik consume qilgan material).
-- **Branch-to-branch transfer** (owner only) — ikkala branch saqlaydigan material, quantity
-  ≤ source `on_hand`; bitta transfer id ostida juftlashgan `transfer_out` + `transfer_in`.
 - **Consume / restore** (system) — to'liq order state machine tomonidan haydaladi.
 
 **The order seam.** [`orders.md`](orders.md) bo'yicha: `shop` sheet item'lar order'ning
@@ -137,10 +135,8 @@ Branch tab'lari ostida (va branch filter'li owner-wide view'larda):
   unit, last updated; low-stock row'lar highlight qilingan (chip + colour). Per-row **Record
   stock-in** → modal (qty, inline add'li supplier picker, receipt upload). Inline
   min-stock. **Adjust** → modal (signed delta + mandatory reason). **Transactions** — to'liq
-  log: type (`stock_in` / `consume` / `restore` / `transfer_in` / `transfer_out` /
-  `adjust`), signed quantity, balance-after, order link (consume/restore uchun), supplier
-  (stock_in uchun), actor, note, date; read-only. **Transfer** (owner) — from/to branch,
-  ikkala branch saqlaydigan material, qty ≤ source on-hand.
+  log: type (`stock_in` / `consume` / `restore` / `adjust`), signed quantity, balance-after,
+  order link (consume/restore uchun), supplier (stock_in uchun), actor, note, date; read-only.
 - **Suppliers** (`manage_inventory`) — oddiy list (name, phone, note, active); add / edit /
   deactivate. Asosan stock-in'dan inline yetib boriladi.
 
@@ -174,7 +170,6 @@ focus'ni manage qiladi; owner-only control'lar non-owner'lar uchun ko'rinarli ga
 - **Operator reverts a completed job** — system o'sha step consume qilgan quantity'ni aynan
   `restore` qiladi.
 - **Adjust below 0** — reject qilinadi.
-- **Transfer more than on-hand** — reject qilinadi.
 - **Stock-in for a branch-deactivated material** — ruxsat etiladi (selection hali mavjud);
   u reactivate qilingunicha client'larga taklif qilinmaydi xolos.
 - **`own`-source order** — umuman inventory interaction yo'q.

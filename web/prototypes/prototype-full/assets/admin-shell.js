@@ -46,7 +46,6 @@ window.renderAdminShell = () => {
         <div class="lbl">Platforma</div>
         <a class="sb-it" data-href="dashboard.html" href="dashboard.html"><span class="ic">◐</span> Asosiy</a>
         <a class="sb-it" data-href="workshops.html" href="workshops.html"><span class="ic">▥</span> Ustaxonalar <span class="ct">${(SEED.workshops || []).length}</span></a>
-        <a class="sb-it" data-href="orders.html" href="orders.html"><span class="ic">▣</span> Buyurtmalar (cross)</a>
       </div>
       <div class="sb-grp">
         <div class="lbl">Katalog</div>

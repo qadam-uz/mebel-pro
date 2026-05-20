@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 20
 ---
 
@@ -22,9 +22,8 @@ that's a considered substitution.
   brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
-- **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals, adjustments, and
-  inter-branch transfers; reservations and consumptions driven automatically by orders;
-  low-stock surfacing.
+- **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments;
+  reservations and consumptions driven automatically by orders; low-stock surfacing.
 - **Optimized cutting** — multiple cutting-optimization algorithms run in parallel; the
   platform returns the best result and **names the winning algorithm**. Output includes the
   per-sheet layout, sheet count, waste, cut and edge-banding length, and a print-ready cutting
@@ -55,6 +54,13 @@ that's a considered substitution.
   designed but gated out of v1.
 - **Delegating workshop-wide controls to non-owner staff** — owner-only in v1.
 - **Operator-created orders** — orders are always client-placed.
+- **Inter-branch stock transfers** — each branch's stock is independent in v1 (arrivals and
+  adjustments only); there is no branch-to-branch transfer. Moving material is booked by hand
+  as an adjustment at each branch if it ever needs to happen.
+- **Workshop-side audit viewer** — the audit log is recorded everywhere, but v1 surfaces a
+  viewer only in the superadmin app; workshop owners get no in-app audit screen yet.
+- **Operator browsing of workshop orders** — the platform operator provisions, blocks, and
+  monitors; v1 has no cross-workshop order view and operators don't read order contents.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
   edits, multiple sheet sizes, 3D nesting, CNC paths.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion

@@ -173,23 +173,23 @@ window.renderWorkshopShell = (active = '') => {
   const NAV = [
     { grp: 'Boshqaruv', items: [
       { href: 'dashboard.html', ic: '◐', label: 'Asosiy', gate: null },
-      { href: 'orders.html', ic: '▣', label: 'Buyurtmalar', gate: ['manage_orders', 'view_dashboard'] },
+      { href: 'orders.html', ic: '▣', label: 'Buyurtmalar', gate: ['manage_orders', 'view_dashboard'] }
+    ]},
+    { grp: 'Ishlab chiqarish', items: [
       { href: 'cutting-queue.html', ic: '⌥', label: 'Kesish navbati', gate: ['process_production'] },
       { href: 'banding-queue.html', ic: '▥', label: 'Krom navbati', gate: ['process_production'] }
     ]},
     { grp: 'Resurslar', items: [
       { href: 'inventory.html', ic: '⊟', label: 'Ombor', gate: ['manage_inventory'] },
-      { href: 'catalog.html', ic: '⊞', label: 'Material katalogi', gate: ['manage_catalog'] },
-      { href: 'transfers.html', ic: '⇄', label: 'Filiallar orasi', gate: 'owner' },
-      { href: 'branches.html', ic: '◫', label: 'Filiallar', gate: 'owner' }
+      { href: 'catalog.html', ic: '⊞', label: 'Material katalogi', gate: ['manage_catalog'] }
     ]},
     { grp: 'Moliya', items: [
       { href: 'finance.html', ic: '∑', label: 'Hisobotlar', gate: ['manage_finance', 'view_finance_reports'] },
       { href: 'expenses.html', ic: '↕', label: 'Xarajatlar', gate: ['manage_finance', 'view_finance_reports'] }
     ]},
     { grp: 'Tizim', items: [
+      { href: 'branches.html', ic: '◫', label: 'Filiallar', gate: 'owner' },
       { href: 'users.html', ic: '◆', label: 'Xodimlar', gate: 'owner' },
-      { href: 'audit.html', ic: '≡', label: 'Audit log', gate: 'owner' },
       { href: 'settings.html', ic: '⚙', label: 'Sozlamalar', gate: 'owner' }
     ]}
   ];

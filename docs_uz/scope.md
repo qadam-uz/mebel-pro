@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 20
 ---
 
@@ -23,9 +23,9 @@ substitution.
 - **Workshops & branches** — multi-branch workshop'lar; har bir branch platform-curated material
   catalog'dan nimani olib yurishini tanlaydi va oʻz price'lari, worker'lari va settings'ini
   belgilaydi.
-- **Warehouse & inventory** (ERP core) — arrivals, adjustments va inter-branch transfer'lar bilan
-  per-branch stock; order'lar tomonidan avtomatik boshqariladigan reservation'lar va
-  consumption'lar; low-stock surfacing.
+- **Warehouse & inventory** (ERP core) — arrivals va adjustments bilan per-branch stock;
+  order'lar tomonidan avtomatik boshqariladigan reservation'lar va consumption'lar; low-stock
+  surfacing.
 - **Optimized cutting** — bir nechta cutting-optimization algoritmlari parallel run boʻladi;
   platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni nomlaydi**. Output har bir sheet
   boʻyicha layout, sheet count, waste, cut va edge-banding length va print-ready cutting map'ni
@@ -38,8 +38,8 @@ substitution.
   expense'lar (jumladan staff salary) qoʻlda yozib boriladi, accountant pay'ni hisoblashda
   foydalanadigan worker-production report'lar va branch va period boʻyicha revenue / expense / net
   reporting — system ichida bir oyni yopish uchun yetarli.
-- **Cross-cutting** — file storage, toʻliq audit log, in-app notifications inbox va platform-ops
-  console (scheduled jobs, error monitor, manual triggers).
+- **Cross-cutting** — file storage, toʻliq audit log, in-app notifications inbox va
+  platform-ops console (scheduled jobs, error monitor, manual triggers).
 
 ## Out of scope (v1) — explicit
 
@@ -56,6 +56,13 @@ substitution.
   loyihalangan, ammo v1 dan tashqariga gate qilingan.
 - **Workshop-wide control'larni non-owner staff'ga delegatsiya qilish** — v1 da owner-only.
 - **Operator-created order'lar** — order'lar har doim client tomonidan joylashtiriladi.
+- **Inter-branch stock transfer'lar** — v1 da har bir branch'ning stock'i mustaqil (faqat
+  arrivals va adjustments); branch-to-branch transfer yoʻq. Agar material koʻchirish kerak boʻlsa,
+  u har bir branch'da adjustment sifatida qoʻlda yoziladi.
+- **Workshop-side audit viewer** — audit log hamma joyda yoziladi, ammo v1 viewer'ni faqat
+  superadmin app'da koʻrsatadi; workshop owner'lar hali in-app audit screen olmaydi.
+- **Operator browsing of workshop orders** — platform operator provision qiladi, block qiladi va
+  monitor qiladi; v1 da cross-workshop order view yoʻq va operator'lar order kontentini oʻqimaydi.
 - **Advanced cutting** — alternative result'lar, juda katta job'lar uchun async mode, manual layout
   edit'lar, bir nechta sheet size, 3D nesting, CNC path'lar.
 - **Advanced orders** — batching, reorder, template'lar, partial fulfilment, post-completion

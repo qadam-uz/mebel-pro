@@ -2,16 +2,18 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 40
 ---
 
 # Workshop administration
 
-The owner-and-staff surfaces for keeping a workshop running — workshop settings, branch CRUD,
-and the audit viewer. Sign-in, sessions, provisioning, and staff management live in
-[`access-management.md`](access-management.md); income, expenses, and the worker-production
-reports live in [`finance.md`](finance.md).
+The owner-and-staff surfaces for keeping a workshop running — workshop settings and branch
+CRUD. The **audit viewer** over a workshop's action and status logs is specified here too,
+but in v1 it is a **superadmin-app surface only** — workshop owners get no in-app audit screen
+yet (see [`scope.md`](../../scope.md)). Sign-in, sessions,
+provisioning, and staff management live in [`access-management.md`](access-management.md);
+income, expenses, and the worker-production reports live in [`finance.md`](finance.md).
 
 ## Workshop settings
 
@@ -88,17 +90,17 @@ Two append-only logs back this feature: the **action log** (every mutating use c
 row — actor, action, entity, branch, masked details) and the **status change log** (every
 order status transition). Both are write-only at source; this feature only reads them.
 
-- Owner sees their workshop's rows (scoped to the branches they touch).
-- Platform operators see everything, plus a workshop filter.
+In v1 the viewer lives **only in the superadmin app** — platform operators see everything
+across workshops, with a workshop filter. The workshop owner has **no in-app audit viewer**
+yet (the logs are still recorded against their workshop).
 
 ### UX
 
-- In the workshop app (owner / `view_reports`): **Audit** section with two tabs —
-  **Action log** (filters: action type / family, module, actor search, entity type + id, date
-  range, branch; rows with a JSON-collapsible `details` preview) and
-  **Status changes** (filters: entity type + id, from→to, actor, date range; rows showing the
-  transition). Each row links to the affected entity where one exists. Read-only.
-- In the superadmin app: the same, plus a workshop filter and no workshop scoping.
+- In the superadmin app: an **Audit** section with two tabs — **Action log** (filters: action
+  type / family, module, actor search, entity type + id, date range, branch, **workshop**;
+  rows with a JSON-collapsible `details` preview) and **Status changes** (filters: entity type
+  + id, from→to, actor, date range; rows showing the transition). Each row links to the
+  affected entity where one exists. Read-only; no workshop scoping.
 - States: loading (skeleton rows), empty, error (with `trace_id`); the `details` expander
   reveals masked JSON.
 

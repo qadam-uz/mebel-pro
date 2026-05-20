@@ -2,7 +2,7 @@
 title: Personas
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 30
 ---
 
@@ -24,9 +24,8 @@ Furniture workshop'ga egalik qiluvchi yoki uni yurituvchi shaxs. Oʻz workshop'i
 authority: workshop'ni boshidan oxirigacha tiklaydi (branches, stock, pricing, staff va har bir
 branch platforma material catalog'idan nimani olib yurishi), staff permission'larini grant va
 revoke qiladi, order pipeline va books'ni nazorat qiladi va owner-only richaglarni — staff va
-branch yaratish, branch pricing belgilash, branch-to-branch stock transfer'lar va workshop-wide
-report'lar va audit log — ushlab turadi. Platforma tomonidan provision qilinadi; workshop ichidan
-yaratib yoki demote qilib boʻlmaydi.
+branch yaratish, branch pricing belgilash va workshop-wide report'lar — ushlab turadi.
+Platforma tomonidan provision qilinadi; workshop ichidan yaratib yoki demote qilib boʻlmaydi.
 
 ## Workshop staff
 

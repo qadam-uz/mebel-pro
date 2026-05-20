@@ -313,15 +313,6 @@
               </div>
             </div>
           </div>
-
-          <div class="card">
-            <div class="card-h">
-              <h2>So'nggi harakatlar</h2><a class="more" href="audit.html">log →</a>
-            </div>
-            <div class="card-b" style="padding-top: 6px">
-              <div id="audit-feed"></div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -398,15 +389,6 @@
     <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td>
     <td class="amt">${fmtTiyin(o.totalTiyin)}</td>
   </tr>`;
-    }).join('');
-
-    // Audit feed
-    document.getElementById('audit-feed').innerHTML = SEED.auditLog.slice(0, 7).map(a => {
-      const actor = SEED.lookup.userById(a.actor) || SEED.lookup.clientById(a.actor);
-      return `<div class="alog-it">
-    <div class="t">${a.t}</div>
-    <div class="b"><b>${actor?.name || a.actor}</b> · ${a.detail}</div>
-  </div>`;
     }).join('');
 
     // Chart bars

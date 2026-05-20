@@ -2,7 +2,7 @@
 title: Personas
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 30
 ---
 
@@ -23,7 +23,7 @@ The person who owns or runs the furniture workshop. Top authority inside their w
 the workshop up end-to-end (branches, stock, pricing, staff, and what each branch carries from
 the platform's material catalog), grants and revokes staff permissions, oversees the order
 pipeline and the books, and holds the owner-only levers — creating staff and branches, setting
-branch pricing, branch-to-branch stock transfers, and the workshop-wide reports and audit log.
+branch pricing, and the workshop-wide reports.
 Provisioned by the platform; cannot be created or demoted from inside the workshop.
 
 ## Workshop staff

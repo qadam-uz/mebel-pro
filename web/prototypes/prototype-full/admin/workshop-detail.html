@@ -51,8 +51,6 @@ if (state === 'loading') {
   wrap.innerHTML = emptyState('∅', 'Ustaxona topilmadi', 'Bu ID bo\'yicha ustaxona mavjud emas.');
 } else {
   const isBlocked = w.status === 'blocked';
-  // Orders that belong to this workshop (cross-workshop read-only view)
-  const wsOrders = SEED.orders.filter(o => (o.workshopId || 'ws-01') === w.id);
 
   wrap.innerHTML = `
     <div class="page-head" style="margin-top: 8px">
@@ -78,7 +76,6 @@ if (state === 'loading') {
     <div class="tabs" data-tabs="ws">
       <button class="tab on" data-target="t-profile" onclick="switchTab('ws','t-profile')">Profil</button>
       <button class="tab" data-target="t-branches" onclick="switchTab('ws','t-branches')">Filiallar</button>
-      <button class="tab" data-target="t-orders" onclick="switchTab('ws','t-orders')">Buyurtmalar</button>
       <button class="tab" data-target="t-staff" onclick="switchTab('ws','t-staff')">Xodimlar</button>
     </div>
 
@@ -105,19 +102,6 @@ if (state === 'loading') {
             <thead><tr><th>Nom</th><th>Manzil</th><th>Status</th></tr></thead>
             <tbody>${SEED.branches.map(b => `<tr><td class="nm">${b.name}</td><td>${b.addr}</td><td>${b.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-warn"><span class="pd"></span>Vaqtincha yopiq</span>'}</td></tr>`).join('')}</tbody>
           </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="t-orders" data-panel-group="ws" hidden>
-      <div class="card">
-        <div class="card-h"><h2>Bu ustaxonaning buyurtmalari (cross-workshop · read-only)</h2>${isBlocked ? '<span class="pill p-bad"><span class="pd"></span>Muzlatilgan</span>' : ''}</div>
-        <div class="card-b" style="padding: 0 22px 18px">
-          ${isBlocked ? `<div class="banner warn" style="margin:14px 0 0"><div class="ic">!</div><div class="grow">Ustaxona bloklangani uchun bu buyurtmalar <b>muzlatilgan</b> — xodimlar harakat qila olmaydi.</div></div>` : ''}
-          ${wsOrders.length ? `<table class="tbl">
-            <thead><tr><th>ID</th><th>Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>
-            <tbody>${wsOrders.map(o => { const cl = SEED.lookup.clientById(o.clientId); const br = SEED.lookup.branchById(o.branchId); return `<tr><td class="id">${o.id}</td><td>${br?.name || '—'}</td><td>${cl?.name || '—'}</td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>${isBlocked && o.state !== 'completed' && o.state !== 'cancelled' ? ' <span class="pill p-bad" style="font-size:9.5px"><span class="pd"></span>muzlatilgan</span>' : ''}</td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`; }).join('')}</tbody>
-          </table>` : emptyState('▣', 'Buyurtma yo\'q', 'Bu ustaxonada hali buyurtma yo\'q.')}
         </div>
       </div>
     </section>

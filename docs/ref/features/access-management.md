@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-20
 order: 20
 ---
 
@@ -132,7 +132,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
 | `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements sheet stock) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
-| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. Branch-to-branch transfers are owner-only. |
+| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. |
 | `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |
 | `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports. |
 
@@ -160,8 +160,7 @@ that **cannot be delegated to staff in v1**:
 - Create staff and grant / revoke their permissions.
 - Create and edit branches; change branch status; set branch pricing.
 - Edit workshop settings (profile).
-- Branch-to-branch stock transfers.
-- View workshop-wide reports / the audit log.
+- View workshop-wide reports.
 
 ### Operations (owner)
 
@@ -197,7 +196,6 @@ Under **Settings → Users** (owner-only nav item):
   - **Permissions** — the grants matrix; toggling saves atomically with an explicit Save and
     an unsaved-changes guard.
   - **Sessions** — list with current marker; revoke one / all.
-  - **Audit** — this user's actions, read-only.
 - Row / detail actions: Edit · Reset password (→ one-time-secret confirmation) · Block /
   Unblock (block warns sessions are revoked) · Revoke sessions.
 
@@ -217,8 +215,6 @@ Rules:
 - The picker UI never lets the user pick a branch they can't scope to. The server never
   trusts it anyway — every request still names the target's branch, checked against the
   grant set.
-- For owner-only cross-branch tasks (e.g., stock transfer), the screen uses an explicit
-  two-branch picker rather than the current-branch state.
 
 ## How a request is authorized
 

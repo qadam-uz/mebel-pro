@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 30
 ---
 
@@ -35,13 +35,11 @@ Operation'lar (hammasi atomic; row davomida `FOR UPDATE` lock qilinadi):
   note required).
 - `consume(qty)`: `on_hand -= qty` — system, order state machine tomonidan boshqariladi.
 - `restore(qty)`: `on_hand += qty` — system, consumed step'ning operator revert'i.
-- `transfer(qty)`: source'da `on_hand` pastga, destination'da yuqoriga (paired;
-  owner-only).
 
 Invariant'lar: doim `on_hand ≥ 0`; `(branch_id, material_id)` unique; stock faqat
 inventory module'ning operation'lari orqali oʻzgaradi (boshqa joydan hech qachon raw SQL
 emas); `consume` / `restore` `order_id`'ni olib yuradi va actor'siz (system); `stock_in` /
-`adjust` / `transfer_*` actor olib yuradi. O'zgarishdan keyin `on_hand ≤ min_stock`
+`adjust` actor olib yuradi. O'zgarishdan keyin `on_hand ≤ min_stock`
 boʻlganda branch'ning `manage_inventory` grantee'lariga va owner'ga low-stock notification
 fire qilinadi. Verify-time "projected balance" warning
 ([`catalog-inventory.md`](../features/catalog-inventory.md)) bu read-time computation,
@@ -55,20 +53,18 @@ Stock item'ga bitta oʻzgarish uchun bitta audit row. Append-only.
 |---|---|---|
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
-| `type` | enum | `stock_in` / `consume` / `restore` / `transfer_in` / `transfer_out` / `adjust` |
+| `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
 | `quantity` | int | signed change, non-zero, in the material's unit |
 | `balance_after` | int | `on_hand` after the change |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
 | `supplier_id` | UUID? | for `stock_in`; null otherwise |
-| `transfer_id` | UUID? | groups the `transfer_out` + `transfer_in` legs of one transfer |
-| `actor_user_id` | UUID? | for `stock_in` / `adjust` / `transfer_*`; null when the system did it (`consume` / `restore`) |
-| `note` | text? | supplier note, transfer reason, adjustment reason (required for `adjust`) |
+| `actor_user_id` | UUID? | for `stock_in` / `adjust`; null when the system did it (`consume` / `restore`) |
+| `note` | text? | supplier note, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |
 
 Invariant'lar: bir xil atomic operation'da apply qilingan oʻzgarishga mos keladi;
 `consume` / `restore` `order_id`'ni olib yuradi va `actor_user_id`'siz; `stock_in`
-`supplier_id` va `actor_user_id`'ni olib yuradi; `transfer_*` leg'lar `transfer_id`'ni
-share qiladi va branch'lar boʻylab nol'ga net boʻladi; `adjust` `note` talab qiladi; hech
+`supplier_id` va `actor_user_id`'ni olib yuradi; `adjust` `note` talab qiladi; hech
 qachon update yoki delete qilinmaydi.
 
 ## Supplier
@@ -94,6 +90,6 @@ Invariant'lar: `name` required; workshop-scoped (supplier bitta workshop'ga tegi
 
 ## Next
 
-- [`catalog-inventory.md`](../features/catalog-inventory.md) — stock-in, adjust, transfer,
+- [`catalog-inventory.md`](../features/catalog-inventory.md) — stock-in, adjust,
   projected-balance warning va order seam mexanikasi.
 - [`sales.md`](sales.md) — state machine'i stock'ni consume va restore qiladigan order.

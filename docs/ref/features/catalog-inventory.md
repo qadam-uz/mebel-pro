@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-20
 order: 50
 ---
 
@@ -91,8 +91,6 @@ material's unit (sheets or metres) and a `min_stock` threshold. **No `reserved`,
 - **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't go
   below 0. Used for stock-takes and write-offs (including material a cancelled-mid-production
   order physically consumed).
-- **Branch-to-branch transfer** (owner only) — material carried by both branches, quantity
-  ≤ source `on_hand`; paired `transfer_out` + `transfer_in` under one transfer id.
 - **Consume / restore** (system) — driven entirely by the order state machine.
 
 **The order seam.** Per [`orders.md`](orders.md): `shop` sheet items are **consumed** when
@@ -130,10 +128,8 @@ Under a branch's tabs (and owner-wide views with a branch filter):
   unit, last updated; low-stock rows highlighted (chip + colour). Per-row **Record
   stock-in** → modal (qty, supplier picker with inline add, receipt upload). Inline
   min-stock. **Adjust** → modal (signed delta + mandatory reason). **Transactions** — full
-  log: type (`stock_in` / `consume` / `restore` / `transfer_in` / `transfer_out` /
-  `adjust`), signed quantity, balance-after, order link (for consume/restore), supplier
-  (for stock_in), actor, note, date; read-only. **Transfer** (owner) — from/to branch,
-  material carried by both, qty ≤ source on-hand.
+  log: type (`stock_in` / `consume` / `restore` / `adjust`), signed quantity, balance-after,
+  order link (for consume/restore), supplier (for stock_in), actor, note, date; read-only.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, active); add / edit /
   deactivate. Mostly reached inline from stock-in.
 
@@ -164,7 +160,6 @@ manage focus; owner-only controls are visibly gated for non-owners.
 - **Operator reverts a completed job** — the system `restore`s exactly the quantity that
   step consumed.
 - **Adjust below 0** — rejected.
-- **Transfer more than on-hand** — rejected.
 - **Stock-in for a branch-deactivated material** — allowed (the selection still exists); it
   just won't be offered to clients until reactivated.
 - **`own`-source order** — no inventory interaction at all.
