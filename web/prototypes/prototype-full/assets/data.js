@@ -85,7 +85,7 @@ window.SEED = (() => {
     { id: 'u02', name: 'Aziza Rasulova', login: 'aziza', phone: '+998 90 100 30 31', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 09:42', initials: 'AR', grants: { manage_orders: ['yunusobod', 'chilonzor'], view_dashboard: ['yunusobod', 'chilonzor'], manage_inventory: ['yunusobod'] } },
     { id: 'u03', name: 'Bahodir Tursunov', login: 'bahodir', phone: '+998 90 100 30 32', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 08:30', initials: 'BT', grants: { process_production: ['yunusobod'] } },
     { id: 'u04', name: 'Olim Hojiyev', login: 'olim', phone: '+998 90 100 30 33', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '15-may, 17:50', initials: 'OH', grants: { process_production: ['yunusobod'] } },
-    { id: 'u05', name: 'Sherzod Aliyev', login: 'sherzod', phone: '+998 90 100 30 34', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 06:15', initials: 'SA', grants: { manage_finance: ['yunusobod'], view_finance_reports: ['yunusobod', 'chilonzor'] } },
+    { id: 'u05', name: 'Sherzod Aliyev', login: 'sherzod', phone: '+998 90 100 30 34', isOwner: false, homeBranchId: 'yunusobod', status: 'active', lastLogin: '16-may, 06:15', initials: 'SA', grants: { manage_finance: ['yunusobod', 'chilonzor'], view_finance_reports: ['yunusobod', 'chilonzor'] } },
     { id: 'u06', name: 'Dilshod Yo\'ldoshev', login: 'dilshod', phone: '+998 90 100 30 35', isOwner: false, homeBranchId: 'chilonzor', status: 'active', lastLogin: '15-may, 18:00', initials: 'DY', grants: { manage_orders: ['chilonzor'], view_dashboard: ['chilonzor'] } },
     { id: 'u07', name: 'Komron Saidov', login: 'komron', phone: '+998 90 100 30 36', isOwner: false, homeBranchId: 'chilonzor', status: 'active', lastLogin: '15-may, 16:42', initials: 'KS', grants: { process_production: ['chilonzor'] } },
     { id: 'u08', name: 'Madina Yusupova', login: 'madina', phone: '+998 90 100 30 37', isOwner: false, homeBranchId: 'yangiyol', status: 'blocked', lastLogin: '02-may, 15:00', initials: 'MY', grants: {} }
@@ -105,7 +105,7 @@ window.SEED = (() => {
   // mirrored onto the cutting itself as flat fields for legacy callers.
   const cuttings = [
     {
-      id: 'cr-0091', status: 'confirmed', orderId: 'MP-2026-05-0091',
+      id: 'cr-0091', status: 'confirmed', orderId: 'ORD-2026-000091',
       branchId: 'yunusobod', when: '14-may, 09:24',
       partList: [
         { ref: 'p01', matId: 'm01', source: 'shop', l: 1800, w: 400, qty: 2, edges: { t: 2.0, b: 2.0, l: null, r: null } },
@@ -152,7 +152,7 @@ window.SEED = (() => {
       matId: 'm05', source: 'shop'
     },
     {
-      id: 'cr-0072', status: 'confirmed', orderId: 'MP-2026-05-0072',
+      id: 'cr-0072', status: 'confirmed', orderId: 'ORD-2026-000072',
       branchId: 'yunusobod', when: '13-may, 14:32',
       partList: [
         { ref: 'p01', matId: 'm05', source: 'shop', l: 1400, w: 600, qty: 2, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } }
@@ -162,6 +162,99 @@ window.SEED = (() => {
       ],
       parts: 8, sheets: 7, wastePct: 6.1, cutLen: 88.4, edgeLen: { 0.4: 12.0 }, algoVer: 'ffd-guillotine-v1',
       matId: 'm05', source: 'shop'
+    },
+
+    // --- Confirmed results bound to the remaining orders (immutable, one per
+    //     order; no `cr-mock`). Each is branchId = its order's branch and its
+    //     metrics cohere with that order's price snapshot + production stamps. ---
+    {
+      id: 'cr-0090', status: 'confirmed', orderId: 'ORD-2026-000090',
+      branchId: 'yunusobod', when: '13-may, 18:38',
+      partList: [
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 900, w: 600, qty: 4, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
+        { ref: 'p02', matId: 'm05', source: 'shop', l: 600, w: 400, qty: 2, edges: { t: 0.4, b: 0.4, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 11.4, cutLen: 71.2, edgeLen: { 0.4: 14.4 }, sheetsByMat: { m05: 6 } }
+      ],
+      parts: 6, sheets: 6, wastePct: 11.4, cutLen: 71.2, edgeLen: { 0.4: 14.4 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm05', source: 'shop'
+    },
+    {
+      id: 'cr-0089', status: 'confirmed', orderId: 'ORD-2026-000089',
+      branchId: 'yunusobod', when: '13-may, 11:20',
+      partList: [
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 1200, w: 500, qty: 2, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l: 800, w: 400, qty: 4, edges: { t: 0.4, b: 0.4, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 9.2, cutLen: 52.6, edgeLen: { 0.4: 16.4 }, sheetsByMat: { m01: 2 } }
+      ],
+      parts: 6, sheets: 2, wastePct: 9.2, cutLen: 52.6, edgeLen: { 0.4: 16.4 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm01', source: 'shop'
+    },
+    {
+      id: 'cr-0088', status: 'confirmed', orderId: 'ORD-2026-000088',
+      branchId: 'yunusobod', when: '12-may, 14:26',
+      partList: [
+        { ref: 'p01', matId: 'm06', source: 'shop', l: 1400, w: 700, qty: 4, edges: { t: null, b: null, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 7.8, cutLen: 41.0, edgeLen: {}, sheetsByMat: { m06: 4 } }
+      ],
+      parts: 4, sheets: 4, wastePct: 7.8, cutLen: 41.0, edgeLen: {}, algoVer: 'ffd-guillotine-v1',
+      matId: 'm06', source: 'shop'
+    },
+    {
+      id: 'cr-0087', status: 'confirmed', orderId: 'ORD-2026-000087',
+      branchId: 'yunusobod', when: '16-may, 08:06',
+      partList: [
+        { ref: 'p01', matId: 'm02', source: 'shop', l: 700, w: 500, qty: 3, edges: { t: null, b: null, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 13.0, cutLen: 14.8, edgeLen: {}, sheetsByMat: { m02: 1 } }
+      ],
+      parts: 3, sheets: 1, wastePct: 13.0, cutLen: 14.8, edgeLen: {}, algoVer: 'ffd-guillotine-v1',
+      matId: 'm02', source: 'shop'
+    },
+    {
+      id: 'cr-o086', status: 'confirmed', orderId: 'ORD-2026-000086',
+      branchId: 'yunusobod', when: '16-may, 08:58',
+      partList: [
+        { ref: 'p01', matId: 'm05', source: 'shop', l: 720, w: 80, qty: 4, edges: { t: null, b: null, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 22.5, cutLen: 9.6, edgeLen: {}, sheetsByMat: { m05: 1 } }
+      ],
+      parts: 4, sheets: 1, wastePct: 22.5, cutLen: 9.6, edgeLen: {}, algoVer: 'ffd-guillotine-v1',
+      matId: 'm05', source: 'shop'
+    },
+    {
+      id: 'cr-o085', status: 'confirmed', orderId: 'ORD-2026-000085',
+      branchId: 'chilonzor', when: '16-may, 09:28',
+      partList: [
+        { ref: 'p01', matId: 'm01', source: 'shop', l: 2000, w: 600, qty: 4, edges: { t: 2.0, b: 2.0, l: null, r: null } },
+        { ref: 'p02', matId: 'm01', source: 'shop', l: 900, w: 500, qty: 8, edges: { t: 0.4, b: 0.4, l: 0.4, r: 0.4 } },
+        { ref: 'p03', matId: 'm01', source: 'shop', l: 560, w: 400, qty: 6, edges: { t: 0.4, b: 0.4, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct: 10.6, cutLen: 188.4, edgeLen: { 0.4: 22.0, 2.0: 14.0 }, sheetsByMat: { m01: 8 } },
+        { name: 'best-fit-2d',    ver: '1.0', chosen: false, wastePct: 12.1, cutLen: 176.2, edgeLen: { 0.4: 22.0, 2.0: 14.0 }, sheetsByMat: { m01: 8 } }
+      ],
+      parts: 18, sheets: 8, wastePct: 10.6, cutLen: 188.4, edgeLen: { 0.4: 22.0, 2.0: 14.0 }, algoVer: 'ffd-guillotine-v1',
+      matId: 'm01', source: 'shop'
+    },
+    {
+      id: 'cr-0856', status: 'confirmed', orderId: 'ORD-2026-000856',
+      branchId: 'chilonzor', when: '08-apr, 10:54',
+      partList: [
+        { ref: 'p01', matId: 'm06', source: 'shop', l: 1100, w: 600, qty: 3, edges: { t: null, b: null, l: null, r: null } }
+      ],
+      algorithms: [
+        { name: 'ffd-guillotine', ver: '1.0', chosen: true, wastePct: 9.0, cutLen: 24.2, edgeLen: {}, sheetsByMat: { m06: 2 } }
+      ],
+      parts: 3, sheets: 2, wastePct: 9.0, cutLen: 24.2, edgeLen: {}, algoVer: 'ffd-guillotine-v1',
+      matId: 'm06', source: 'shop'
     }
   ];
 
@@ -187,7 +280,7 @@ window.SEED = (() => {
   //   cancel: cancelledAt, cancelledBy, cancelReason (mandatory free text)
   const orders = [
     {
-      id: 'MP-2026-05-0091', state: 'cutting', branchId: 'yunusobod', clientId: 'c01',
+      id: 'ORD-2026-000091', state: 'cutting', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
       title: "Kuhna mebel — 4 shkaf · stol", cuttingId: 'cr-0091',
       subtotalCuttingTiyin: 60000000, subtotalMaterialsTiyin: 246000000, subtotalEdgeBandingTiyin: 8200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 314200000,
@@ -196,8 +289,8 @@ window.SEED = (() => {
       dueAt: '17-may, 14:00', priority: 5
     },
     {
-      id: 'MP-2026-05-0090', state: 'edge_banding', branchId: 'yunusobod', clientId: 'c02',
-      title: 'MDF · 6 list · krom', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000090', state: 'edge_banding', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c02',
+      title: 'MDF · 6 list · krom', cuttingId: 'cr-0090',
       subtotalCuttingTiyin: 30000000, subtotalMaterialsTiyin: 158000000, subtotalEdgeBandingTiyin: 5400000,
       discountTiyin: 0, discountReason: null, totalTiyin: 193400000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -206,8 +299,8 @@ window.SEED = (() => {
       dueAt: '17-may, 17:00', priority: 4
     },
     {
-      id: 'MP-2026-05-0089', state: 'ready', branchId: 'yunusobod', clientId: 'c03',
-      title: 'Oshxona · LDSP · 2 list', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000089', state: 'ready', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c03',
+      title: 'Oshxona · LDSP · 2 list', cuttingId: 'cr-0089',
       subtotalCuttingTiyin: 12000000, subtotalMaterialsTiyin: 81000000, subtotalEdgeBandingTiyin: 2200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 95200000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -217,8 +310,8 @@ window.SEED = (() => {
       dueAt: '17-may, 16:00', priority: 3
     },
     {
-      id: 'MP-2026-05-0088', state: 'ready', branchId: 'yunusobod', clientId: 'c04',
-      title: 'Stol · fanera', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000088', state: 'ready', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c04',
+      title: 'Stol · fanera', cuttingId: 'cr-0088',
       subtotalCuttingTiyin: 18000000, subtotalMaterialsTiyin: 144000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 5000000, discountReason: 'Doimiy mijoz chegirmasi', totalTiyin: 157000000,
       assignedCutter: 'u03', assignedEdger: null,
@@ -227,8 +320,8 @@ window.SEED = (() => {
       dueAt: 'bugun · 14:30', priority: 2
     },
     {
-      id: 'MP-2026-05-0087', state: 'confirmed', branchId: 'yunusobod', clientId: 'c01',
-      title: 'Krom + aksessuar', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000087', state: 'confirmed', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
+      title: 'LDSP polka · 1 list', cuttingId: 'cr-0087',
       subtotalCuttingTiyin: 9000000, subtotalMaterialsTiyin: 42000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 51000000,
       assignedCutter: null, assignedEdger: null,
@@ -236,23 +329,23 @@ window.SEED = (() => {
       dueAt: '18-may', priority: 6
     },
     {
-      id: 'MP-2026-05-0086', state: 'new', branchId: 'yunusobod', clientId: 'c02',
-      title: 'Stol oyog\'i · 1 list', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000086', state: 'new', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c02',
+      title: 'Stol oyog\'i · 1 list', cuttingId: 'cr-o086',
       subtotalCuttingTiyin: 6000000, subtotalMaterialsTiyin: 29500000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 35500000,
       assignedCutter: null, assignedEdger: null,
       placedAt: '16-may, 09:00', placedBy: 'c02', dueAt: '17-may', priority: 1
     },
     {
-      id: 'MP-2026-05-0085', state: 'new', branchId: 'chilonzor', clientId: 'c03',
-      title: 'Garderob · 8 list', cuttingId: 'cr-mock',
+      id: 'ORD-2026-000085', state: 'new', workshopId: 'ws-01', branchId: 'chilonzor', clientId: 'c03',
+      title: 'Garderob · 8 list', cuttingId: 'cr-o085',
       subtotalCuttingTiyin: 48000000, subtotalMaterialsTiyin: 320000000, subtotalEdgeBandingTiyin: 11200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 379200000,
       assignedCutter: null, assignedEdger: null,
       placedAt: '16-may, 09:30', placedBy: 'c03', dueAt: '19-may', priority: 7
     },
     {
-      id: 'MP-2026-05-0072', state: 'completed', branchId: 'yunusobod', clientId: 'c01',
+      id: 'ORD-2026-000072', state: 'completed', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
       title: 'MDF · 7 list · krom · oldingi buyurtma', cuttingId: 'cr-0072',
       subtotalCuttingTiyin: 42000000, subtotalMaterialsTiyin: 206500000, subtotalEdgeBandingTiyin: 4500000,
       discountTiyin: 0, discountReason: null, totalTiyin: 253000000,
@@ -263,8 +356,8 @@ window.SEED = (() => {
       placedAt: '10-may, 14:30', confirmedAt: '10-may, 15:10', confirmedBy: 'u02', priority: 0
     },
     {
-      id: 'MP-2026-04-0856', state: 'cancelled', branchId: 'chilonzor', clientId: 'c01',
-      title: "Fanera · oshxona", cuttingId: 'cr-mock',
+      id: 'ORD-2026-000856', state: 'cancelled', workshopId: 'ws-01', branchId: 'chilonzor', clientId: 'c01',
+      title: "Fanera · oshxona", cuttingId: 'cr-0856',
       subtotalCuttingTiyin: 14000000, subtotalMaterialsTiyin: 48000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 62000000,
       assignedCutter: null, assignedEdger: null,
@@ -276,13 +369,17 @@ window.SEED = (() => {
   // ----- Finance: income rows -----
   // type 'order_payment' requires orderId; 'other' has no orderId.
   // amount_tiyin > 0 (full or partial). status recorded|voided.
+  // Recorded/voided ONLY by a user with manage_finance (u05 — the accountant,
+  // grants on yunusobod + chilonzor). method ∈ cash|bank_transfer|other (NO
+  // `card` — a terminal/karta payment is bank_transfer). An order_payment's
+  // branchId equals its order's branch. Σ recorded payments per order ≤ total.
   const incomes = [
-    { id: 'in01', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0072', amountTiyin: 253000000, method: 'bank_transfer', receivedOn: '13-may', note: "To'liq to'lov", status: 'recorded', recordedByUserId: 'u05' },
-    { id: 'in02', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0089', amountTiyin: 50000000, method: 'cash', receivedOn: '14-may', note: 'Qisman to\'lov', status: 'recorded', recordedByUserId: 'u05' },
-    { id: 'in03', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'MP-2026-05-0088', amountTiyin: 157000000, method: 'cash', receivedOn: '15-may', note: null, status: 'recorded', recordedByUserId: 'u05' },
-    { id: 'in04', workshopId: 'ws-01', branchId: 'chilonzor', type: 'order_payment', orderId: 'MP-2026-05-0091', amountTiyin: 150000000, method: 'card', receivedOn: '14-may', note: 'Oldindan', status: 'recorded', recordedByUserId: 'u02' },
-    { id: 'in05', workshopId: 'ws-01', branchId: 'yunusobod', type: 'other', orderId: null, amountTiyin: 12000000, method: 'cash', receivedOn: '11-may', note: 'Eski qoldiq material sotuvi', status: 'recorded', recordedByUserId: 'u01' },
-    { id: 'in06', workshopId: 'ws-01', branchId: 'chilonzor', type: 'order_payment', orderId: 'MP-2026-04-0856', amountTiyin: 31000000, method: 'cash', receivedOn: '08-apr', note: 'Bekor qilingan — qaytarildi', status: 'voided', voidedReason: 'Buyurtma bekor qilindi, pul qaytarildi (xarajat sifatida)', recordedByUserId: 'u06' }
+    { id: 'in01', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'ORD-2026-000072', amountTiyin: 253000000, method: 'bank_transfer', receivedOn: '13-may', note: "To'liq to'lov", status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in02', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'ORD-2026-000089', amountTiyin: 50000000, method: 'cash', receivedOn: '14-may', note: 'Qisman to\'lov', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in03', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'ORD-2026-000088', amountTiyin: 157000000, method: 'cash', receivedOn: '15-may', note: null, status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in04', workshopId: 'ws-01', branchId: 'yunusobod', type: 'order_payment', orderId: 'ORD-2026-000091', amountTiyin: 150000000, method: 'bank_transfer', receivedOn: '14-may', note: 'Oldindan (karta terminali)', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in05', workshopId: 'ws-01', branchId: 'yunusobod', type: 'other', orderId: null, amountTiyin: 12000000, method: 'cash', receivedOn: '11-may', note: 'Eski qoldiq material sotuvi', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'in06', workshopId: 'ws-01', branchId: 'chilonzor', type: 'order_payment', orderId: 'ORD-2026-000856', amountTiyin: 31000000, method: 'cash', receivedOn: '08-apr', note: 'Bekor qilingan — qaytarildi', status: 'voided', voidedReason: 'Buyurtma bekor qilindi, pul xarajat sifatida qaytarildi', voidedByUserId: 'u05', recordedByUserId: 'u05' }
   ];
 
   // ----- Finance: expense rows -----
@@ -290,16 +387,16 @@ window.SEED = (() => {
   //           marketing|taxes_and_fees|salary|other
   // A worker's pay is booked here as a 'salary' expense (no payroll module).
   const expenses = [
-    { id: 'e01', workshopId: 'ws-01', branchId: 'yunusobod', category: 'rent', amountTiyin: 480000000, incurredOn: '01-may', description: 'May oyi ijarasi', vendor: 'Tinchlik Bldg LLC', status: 'recorded', recordedByUserId: 'u01' },
+    { id: 'e01', workshopId: 'ws-01', branchId: 'yunusobod', category: 'rent', amountTiyin: 480000000, incurredOn: '01-may', description: 'May oyi ijarasi', vendor: 'Tinchlik Bldg LLC', status: 'recorded', recordedByUserId: 'u05' },
     { id: 'e02', workshopId: 'ws-01', branchId: 'yunusobod', category: 'utilities', amountTiyin: 24000000, incurredOn: '05-may', description: 'Elektr energiya · aprel', vendor: 'Hududgaz', status: 'recorded', recordedByUserId: 'u05' },
-    { id: 'e03', workshopId: 'ws-01', branchId: null, category: 'marketing', amountTiyin: 80000000, incurredOn: '08-may', description: 'Reklama · Telegram kanal', vendor: 'Mediastar', status: 'recorded', recordedByUserId: 'u01' },
-    { id: 'e04', workshopId: 'ws-01', branchId: 'chilonzor', category: 'supplies', amountTiyin: 35000000, incurredOn: '12-may', description: 'Aksessuar va vint partiyasi', vendor: 'Hardware.uz', status: 'recorded', recordedByUserId: 'u06' },
-    { id: 'e05', workshopId: 'ws-01', branchId: 'yunusobod', category: 'raw_materials', amountTiyin: 164000000, incurredOn: '06-may', description: 'LDSP partiya · 40 list', vendor: 'Egger Distribution UZ', status: 'recorded', recordedByUserId: 'u02' },
+    { id: 'e03', workshopId: 'ws-01', branchId: null, category: 'marketing', amountTiyin: 80000000, incurredOn: '08-may', description: 'Reklama · Telegram kanal', vendor: 'Mediastar', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e04', workshopId: 'ws-01', branchId: 'chilonzor', category: 'supplies', amountTiyin: 35000000, incurredOn: '12-may', description: 'Aksessuar va vint partiyasi', vendor: 'Hardware.uz', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e05', workshopId: 'ws-01', branchId: 'yunusobod', category: 'raw_materials', amountTiyin: 164000000, incurredOn: '06-may', description: 'LDSP partiya · 40 list', vendor: 'Egger Distribution UZ', status: 'recorded', recordedByUserId: 'u05' },
     { id: 'e06', workshopId: 'ws-01', branchId: 'yunusobod', category: 'salary', amountTiyin: 18500000, incurredOn: '15-may', description: 'Bahodir T. · 13–15 may · 19 list kesildi (qo\'lda hisoblandi)', vendor: null, status: 'recorded', recordedByUserId: 'u05' },
     { id: 'e07', workshopId: 'ws-01', branchId: 'yunusobod', category: 'salary', amountTiyin: 12300000, incurredOn: '15-may', description: 'Olim H. · 13–15 may · 28.4 m krom (qo\'lda hisoblandi)', vendor: null, status: 'recorded', recordedByUserId: 'u05' },
-    { id: 'e08', workshopId: 'ws-01', branchId: 'chilonzor', category: 'transport', amountTiyin: 12500000, incurredOn: '13-may', description: 'Filiallararo material tashish', vendor: 'JTKlogistika', status: 'recorded', recordedByUserId: 'u06' },
-    { id: 'e09', workshopId: 'ws-01', branchId: 'chilonzor', category: 'other', amountTiyin: 31000000, incurredOn: '09-apr', description: 'MP-2026-04-0856 bekor — mijozga pul qaytarildi', vendor: null, status: 'recorded', recordedByUserId: 'u06' },
-    { id: 'e10', workshopId: 'ws-01', branchId: 'yunusobod', category: 'equipment', amountTiyin: 145000000, incurredOn: '03-may', description: 'Kromchi mashinasiga ehtiyot qism', vendor: 'IMA AG', status: 'voided', voidedReason: 'Notog\'ri summa kiritilgan', recordedByUserId: 'u01' }
+    { id: 'e08', workshopId: 'ws-01', branchId: 'chilonzor', category: 'transport', amountTiyin: 12500000, incurredOn: '13-may', description: 'Filiallararo material tashish', vendor: 'JTKlogistika', status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e09', workshopId: 'ws-01', branchId: 'chilonzor', category: 'other', amountTiyin: 31000000, incurredOn: '09-apr', description: 'ORD-2026-000856 bekor — mijozga pul qaytarildi', vendor: null, status: 'recorded', recordedByUserId: 'u05' },
+    { id: 'e10', workshopId: 'ws-01', branchId: 'yunusobod', category: 'equipment', amountTiyin: 145000000, incurredOn: '03-may', description: 'Kromchi mashinasiga ehtiyot qism', vendor: 'IMA AG', status: 'voided', voidedReason: 'Notog\'ri summa kiritilgan', voidedByUserId: 'u05', recordedByUserId: 'u05' }
   ];
 
   // ----- Worker production report (derived from order stamps) -----
@@ -339,40 +436,65 @@ window.SEED = (() => {
   ];
 
   // ----- Scheduled jobs -----
+  // v1 in-process scheduler — exactly these two (see docs platform.md).
+  // Cutting drafts have NO expiry job: they persist until the client deletes
+  // them or hits the 50-draft cap. No auto-cleanup of drafts anywhere.
+  // `running` guards a job from a concurrent run; a failed job records its
+  // error and can be re-triggered manually.
   const jobs = [
-    { id: 'expire-stale-draft-cuttings', name: 'expire-stale-draft-cuttings', schedule: 'Kunlik · 03:00', lastRun: '16-may, 03:00', lastResult: 'ok', summary: '4 ta eskirgan draft o\'chirildi' },
-    { id: 'notify-stale-new-orders', name: 'notify-stale-new-orders', schedule: 'Kunlik · 09:00', lastRun: '16-may, 09:00', lastResult: 'ok', summary: '2 ta tasdiqlanmagan yangi buyurtma' },
-    { id: 'daily-low-stock-summary', name: 'daily-low-stock-summary', schedule: 'Kunlik · 08:00', lastRun: '16-may, 08:00', lastResult: 'failed', summary: 'TimeoutError on workshop ws-04', error: 'Connection timeout to inventory DB at 08:00:42' },
-    { id: 'cleanup-expired-sessions', name: 'cleanup-expired-sessions', schedule: 'Soatlik', lastRun: '16-may, 09:00', lastResult: 'ok', summary: '142 ta sessiya o\'chirildi' }
+    { id: 'cleanup-expired-sessions', name: 'cleanup-expired-sessions', schedule: 'Soatlik', lastRun: '19-may, 09:00', lastResult: 'ok', running: false, durationMs: 412, summary: '142 ta muddati o\'tgan sessiya o\'chirildi' },
+    { id: 'daily-low-stock-summary', name: 'daily-low-stock-summary', schedule: 'Kunlik · 08:00', lastRun: '19-may, 08:00', lastResult: 'failed', running: false, durationMs: 30021, summary: 'Inventarizatsiya bazasiga ulanishda timeout', error: 'TimeoutError: connection to inventory DB timed out at 08:00:42 (trace tr-9f2a4c)', retriable: true }
   ];
 
   // ----- Error monitor -----
+  // Per-row context so the monitor renders real per-error detail (not shared
+  // literals): a real trace id, the affected workshops (nullable — null = not
+  // tenant-attributable), masked context, a stack preview. `spike` flags a
+  // code whose 24h count crossed the notify threshold.
   const errors = [
-    { code: 'insufficient_stock', module: 'inventory', count24h: 12, count7d: 38, last: '16-may, 09:14', msg: 'Stock decrement on Cutting done went below zero', resolved: false },
-    { code: 'optimization_timeout', module: 'cutting', count24h: 3, count7d: 7, last: '15-may, 16:42', msg: 'Cutting optimization exceeded 5s budget (84 parts)', resolved: false },
-    { code: 'invalid_state_transition', module: 'orders', count24h: 2, count7d: 6, last: '16-may, 08:20', msg: 'Attempted ready→cutting skip (revert is one step only)', resolved: false },
-    { code: 'invalid_oauth_signature', module: 'identity', count24h: 1, count7d: 4, last: '16-may, 06:12', msg: 'Telegram payload HMAC mismatch', resolved: false }
+    { code: 'insufficient_stock', module: 'inventory', count24h: 12, count7d: 38, last: '19-may, 09:14', resolved: false, spike: true,
+      msg: 'Stock decrement on Cutting done went below zero',
+      traceId: 'tr-1a77e0', affectedWorkshops: ['ws-01'], affectedUser: 'u03',
+      context: { order: 'ORD-2026-000090', material: 'm05', branch: 'yunusobod', onHand: 2, requested: 6 },
+      stack: 'inventory/service.py:142 decrement_stock()\n  → orders/service.py:88 mark_cutting_done()' },
+    { code: 'optimization_timeout', module: 'cutting', count24h: 3, count7d: 7, last: '18-may, 16:42', resolved: false, spike: false,
+      msg: 'Cutting optimization exceeded 5s budget (84 parts)',
+      traceId: 'tr-4c91b2', affectedWorkshops: null, affectedUser: null,
+      context: { parts: 84, sheetsEstimated: 19, elapsedMs: 5012 },
+      stack: 'cutting/solver.py:301 run_guillotine()\n  → cutting/api.py:54 optimise()' },
+    { code: 'invalid_state_transition', module: 'orders', count24h: 2, count7d: 6, last: '19-may, 08:20', resolved: true, spike: false,
+      msg: 'Attempted ready→cutting skip (revert is one step only)',
+      traceId: 'tr-7d33aa', affectedWorkshops: ['ws-05'], affectedUser: null,
+      context: { order: 'ORD-2026-000061', from: 'ready', to: 'cutting' },
+      stack: 'orders/state_machine.py:77 assert_transition()' },
+    { code: 'invalid_oauth_signature', module: 'identity', count24h: 1, count7d: 4, last: '19-may, 06:12', resolved: false, spike: false,
+      msg: 'Telegram payload HMAC mismatch',
+      traceId: 'tr-b50f18', affectedWorkshops: null, affectedUser: null,
+      context: { authDateAgeSec: 41, ip: '213.230.•••.•••' },
+      stack: 'identity/telegram.py:33 verify_hmac()' }
   ];
 
-  // ----- Audit log -----
+  // ----- Audit log (action half — support.md; status-change half = statusEvents) -----
+  // workshopId on every row so the cross-workshop admin viewer renders the real
+  // workshop name, never a hardcoded one.
   const auditLog = [
-    { t: '16-may, 09:42', action: 'order.status_changed', actor: 'u02', detail: 'MP-2026-05-0090 · cutting → edge_banding', module: 'orders' },
-    { t: '16-may, 09:30', action: 'order.created', actor: 'c03', detail: 'MP-2026-05-0085 · 8 list, garderob', module: 'orders' },
-    { t: '16-may, 09:18', action: 'order.cut_completed', actor: 'u03', detail: 'MP-2026-05-0090 · 6 list ishlatildi', module: 'orders' },
-    { t: '16-may, 09:14', action: 'inventory.stock_in', actor: 'u02', detail: 'm03 · +40 list · Egger partiya', module: 'inventory' },
-    { t: '15-may, 17:50', action: 'order.banding_completed', actor: 'u04', detail: 'MP-2026-05-0089 · 16.4 m', module: 'orders' },
-    { t: '15-may, 11:30', action: 'finance.expense_recorded', actor: 'u05', detail: 'salary · Bahodir T. · 185 000 so\'m', module: 'finance' },
-    { t: '14-may, 10:05', action: 'order.confirmed', actor: 'u02', detail: 'MP-2026-05-0091 · tasdiqlandi', module: 'orders' },
-    { t: '14-may, 09:42', action: 'order.created', actor: 'c01', detail: 'MP-2026-05-0091', module: 'orders' }
+    { t: '19-may, 09:42', workshopId: 'ws-01', action: 'order.status_changed', actor: 'u02', detail: 'ORD-2026-000090 · cutting → edge_banding', module: 'orders' },
+    { t: '19-may, 09:30', workshopId: 'ws-01', action: 'order.created', actor: 'c03', detail: 'ORD-2026-000085 · 8 list, garderob', module: 'orders' },
+    { t: '19-may, 09:18', workshopId: 'ws-01', action: 'order.cut_completed', actor: 'u03', detail: 'ORD-2026-000090 · 6 list ishlatildi', module: 'orders' },
+    { t: '19-may, 09:14', workshopId: 'ws-01', action: 'inventory.stock_in', actor: 'u02', detail: 'm03 · +40 list · Egger partiya', module: 'inventory' },
+    { t: '15-may, 17:50', workshopId: 'ws-01', action: 'order.banding_completed', actor: 'u04', detail: 'ORD-2026-000089 · 16.4 m', module: 'orders' },
+    { t: '15-may, 11:30', workshopId: 'ws-01', action: 'finance.expense_recorded', actor: 'u05', detail: 'salary · Bahodir T. · 185 000 so\'m', module: 'finance' },
+    { t: '14-may, 10:05', workshopId: 'ws-01', action: 'order.confirmed', actor: 'u02', detail: 'ORD-2026-000091 · tasdiqlandi', module: 'orders' },
+    { t: '14-may, 09:42', workshopId: 'ws-01', action: 'order.created', actor: 'c01', detail: 'ORD-2026-000091', module: 'orders' }
   ];
 
   // ----- Notifications -----
   const notifications = [
-    { t: '16-may, 09:42', kind: 'order', read: false, title: "Yangi buyurtma · MP-2026-05-0085", body: "Chilonzor · 8 list, garderob — tasdiqlash kerak", link: 'order-detail.html?id=MP-2026-05-0085' },
+    { t: '16-may, 09:42', kind: 'order', read: false, title: "Yangi buyurtma · ORD-2026-000085", body: "Chilonzor · 8 list, garderob — tasdiqlash kerak", link: 'order-detail.html?id=ORD-2026-000085' },
     { t: '16-may, 09:14', kind: 'inventory', read: false, title: "Past zaxira · 4 ta material", body: "Yunusobod, Chilonzor — ko'rib chiqing", link: 'inventory.html' },
-    { t: '16-may, 09:00', kind: 'order', read: false, title: "Tasdiqlanmagan buyurtma", body: "MP-2026-05-0086 · ko'rib chiqing", link: 'order-detail.html?id=MP-2026-05-0086' },
-    { t: '15-may, 18:20', kind: 'order', read: true, title: "Buyurtma tugatildi · MP-2026-05-0072", body: "Akmal Norqo'ziyev · mijoz olib ketdi", link: 'order-detail.html?id=MP-2026-05-0072' },
-    { t: '14-may, 09:42', kind: 'order', read: true, title: "Yangi buyurtma · MP-2026-05-0091", body: "Akmal Norqo'ziyev · 4 shkaf + stol", link: 'order-detail.html?id=MP-2026-05-0091' }
+    { t: '16-may, 09:00', kind: 'order', read: false, title: "Tasdiqlanmagan buyurtma", body: "ORD-2026-000086 · ko'rib chiqing", link: 'order-detail.html?id=ORD-2026-000086' },
+    { t: '15-may, 18:20', kind: 'order', read: true, title: "Buyurtma tugatildi · ORD-2026-000072", body: "Akmal Norqo'ziyev · mijoz olib ketdi", link: 'order-detail.html?id=ORD-2026-000072' },
+    { t: '14-may, 09:42', kind: 'order', read: true, title: "Yangi buyurtma · ORD-2026-000091", body: "Akmal Norqo'ziyev · 4 shkaf + stol", link: 'order-detail.html?id=ORD-2026-000091' }
   ];
 
   // ----- State labels (v1: no pending_payment, no in_delivery) -----
@@ -388,6 +510,36 @@ window.SEED = (() => {
   };
   // Linear state machine (cancelled reachable from any pre-completed state).
   const ORDER_STATES = ['new', 'confirmed', 'cutting', 'edge_banding', 'ready', 'completed', 'cancelled'];
+
+  // Client-facing 5 phases (cutting + edge_banding collapse to "Ishlab chiqarishda").
+  // Single source — client app never hardcodes these.
+  const CLIENT_PHASES = {
+    new: 'Joylashtirildi', confirmed: 'Tasdiqlandi',
+    cutting: 'Ishlab chiqarishda', edge_banding: 'Ishlab chiqarishda',
+    ready: 'Tayyor', completed: 'Topshirildi', cancelled: 'Bekor qilindi'
+  };
+
+  // One demo "today" anchor (project date 2026-05-19). Every screen reads this
+  // instead of inventing its own "bugun".
+  const TODAY = '19-may';
+
+  // Order status-change log (the audit "Status changes" half — support.md).
+  // Generated to agree with the order seed; current = the order's live state.
+  const statusEvents = orders.flatMap(o => {
+    const ev = [];
+    const wsId = o.workshopId || 'ws-01';
+    const cut = cuttings.find(c => c.id === o.cuttingId);
+    const banded = !!(cut && cut.edgeLen && Object.keys(cut.edgeLen).length > 0);
+    const push = (from, to, t, actor, actorType, reason) =>
+      ev.push({ orderId: o.id, workshopId: wsId, from, to, t, actor, actorType, reason: reason || null });
+    push(null, 'new', o.placedAt, o.placedBy || o.clientId, 'client');
+    if (o.confirmedAt) push('new', 'confirmed', o.confirmedAt, o.confirmedBy || 'u02', 'workshop_user');
+    if (o.cutCompletedAt) push('cutting', banded ? 'edge_banding' : 'ready', o.cutCompletedAt, o.cutter, 'workshop_user');
+    if (o.edgeCompletedAt) push('edge_banding', 'ready', o.edgeCompletedAt, o.edger, 'workshop_user');
+    if (o.pickedUpAt) push('ready', 'completed', o.pickedUpAt, o.confirmedBy || 'u02', 'workshop_user');
+    if (o.cancelledAt) push('new', 'cancelled', o.cancelledAt, o.cancelledBy, 'workshop_user', o.cancelReason);
+    return ev;
+  });
 
   const lookup = {
     branchById: id => branches.find(b => b.id === id),
@@ -497,8 +649,8 @@ window.SEED = (() => {
     users, clients, cuttings, orders,
     incomes, expenses, workerProduction, permissions,
     workshops, platformUsers, jobs, errors,
-    auditLog, notifications,
-    STATE_LABELS, STATE_PILL, ORDER_STATES,
+    auditLog, statusEvents, notifications,
+    STATE_LABELS, STATE_PILL, ORDER_STATES, CLIENT_PHASES, TODAY,
     lookup
   };
 })();

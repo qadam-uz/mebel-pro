@@ -135,10 +135,36 @@
 <script>
 renderWorkshopShell();
 
-const CAT = { rent: 'Ijara', utilities: 'Kommunal', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', salary: 'Maosh', other: 'Boshqalar' };
-const METHOD = { cash: 'Naqd', bank_transfer: 'Bank o\'tkazma', card: 'Karta', other: 'Boshqa' };
+// CR4: visible to manage_finance OR view_finance_reports (owner always);
+// mutation needs manage_finance. Data scoped to the granted branches.
+const FIN_BR = isOwner() ? myBranches()
+  : myBranches().filter(id => can('manage_finance', id) || can('view_finance_reports', id));
+const canView = isOwner() || canAny('manage_finance') || canAny('view_finance_reports');
+const canMutate = isOwner() || canAny('manage_finance');
 
-document.getElementById('expense-body').innerHTML = SEED.expenses.map(e => {
+if (!canView || FIN_BR.length === 0) {
+  document.querySelector('.page .tools')?.remove();
+  document.querySelector('.tabs')?.remove();
+  document.querySelectorAll('.page section').forEach(n => n.remove());
+  const box = document.createElement('div');
+  box.innerHTML = stEmpty('Moliya bo\'limiga ruxsatingiz yo\'q',
+    'Bu sahifa manage_finance yoki view_finance_reports ruxsatiga ega xodimlarga ochiq — ustaxona egasiga murojaat qiling.');
+  document.querySelector('.page').appendChild(box.firstElementChild);
+  throw 'halt-fx';
+}
+if (!canMutate) document.querySelectorAll('.page .tools .btn-acc, .page .tools .btn-outline').forEach(b => {
+  if (/Tushum|Xarajat/.test(b.textContent)) b.remove();
+});
+
+const CAT = { rent: 'Ijara', utilities: 'Kommunal', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', salary: 'Maosh', other: 'Boshqalar' };
+const METHOD = { cash: 'Naqd', bank_transfer: 'Bank / karta', other: 'Boshqa' };
+
+const dsx = demoState();
+const expRows = SEED.expenses.filter(e => e.branchId == null || FIN_BR.includes(e.branchId));
+document.getElementById('expense-body').innerHTML =
+  dsx === 'loading' ? skRows(8, 6) :
+  dsx === 'error' ? `<tr><td colspan="8">${stError()}</td></tr>` :
+  expRows.length ? expRows.map(e => {
   const br = e.branchId ? SEED.lookup.branchById(e.branchId)?.name : '<span class="muted">ustaxona-keng</span>';
   return `<tr class="${e.status === 'voided' ? 'muted' : ''}">
     <td class="num" style="font-size:11.5px;color:var(--ink-6)">${e.incurredOn}</td>
@@ -152,15 +178,19 @@ document.getElementById('expense-body').innerHTML = SEED.expenses.map(e => {
       <div class="menu-wrap">
         <button class="menu-btn" data-menu-toggle>⋯</button>
         <div class="menu">
-          ${e.status !== 'voided' ? `<button class="mi" onclick="openModal('m-expense')">Tahrirlash</button>
-          <button class="mi danger" onclick="confirmAction({title:'Xarajatni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
+          ${e.status !== 'voided' ? (canMutate ? `<button class="mi" onclick="openModal('m-expense')">Tahrirlash</button>
+          <button class="mi danger" onclick="confirmAction({title:'Xarajatni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<span class="mi" style="opacity:.5">Faqat o\'qish</span>') : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
         </div>
       </div>
     </td>
   </tr>`;
-}).join('');
+}).join('') : `<tr><td colspan="8">${stEmpty('Bu davrda xarajat yo\'q')}</td></tr>`;
 
-document.getElementById('income-body').innerHTML = SEED.incomes.map(i => {
+const incRows = SEED.incomes.filter(i => FIN_BR.includes(i.branchId));
+document.getElementById('income-body').innerHTML =
+  dsx === 'loading' ? skRows(8, 6) :
+  dsx === 'error' ? `<tr><td colspan="9">${stError()}</td></tr>` :
+  incRows.length ? incRows.map(i => {
   const br = i.branchId ? SEED.lookup.branchById(i.branchId)?.name : '<span class="muted">—</span>';
   return `<tr class="${i.status === 'voided' ? 'muted' : ''}">
     <td class="num" style="font-size:11.5px;color:var(--ink-6)">${i.receivedOn}</td>
@@ -175,17 +205,18 @@ document.getElementById('income-body').innerHTML = SEED.incomes.map(i => {
       <div class="menu-wrap">
         <button class="menu-btn" data-menu-toggle>⋯</button>
         <div class="menu">
-          ${i.status !== 'voided' ? `<button class="mi" onclick="openModal('m-income')">Tahrirlash</button>
-          <button class="mi danger" onclick="confirmAction({title:'Tushumni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
+          ${i.status !== 'voided' ? (canMutate ? `<button class="mi" onclick="openModal('m-income')">Tahrirlash</button>
+          <button class="mi danger" onclick="confirmAction({title:'Tushumni bekor qilish',msg:'Hisobotlarga kirmaydi. Sabab kerak.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi'))">Bekor qilish</button>` : '<span class="mi" style="opacity:.5">Faqat o\'qish</span>') : '<button class="mi" disabled style="opacity:.4">Bekor qilingan</button>'}
         </div>
       </div>
     </td>
   </tr>`;
-}).join('');
+}).join('') : `<tr><td colspan="9">${stEmpty('Bu davrda tushum yo\'q')}</td></tr>`;
 
-// order picker for income modal
-document.getElementById('inc-order').innerHTML = SEED.orders
-  .filter(o => !['cancelled'].includes(o.state))
+// order picker for income modal — scoped to the user's finance branches
+const incOrderSel = document.getElementById('inc-order');
+if (incOrderSel) incOrderSel.innerHTML = SEED.orders
+  .filter(o => !['cancelled'].includes(o.state) && FIN_BR.includes(o.branchId))
   .map(o => `<option value="${o.id}">${o.id} · ${SEED.lookup.clientById(o.clientId)?.name || ''} · ${fmtTiyin(o.totalTiyin)}</option>`).join('');
 </script>
 </body>

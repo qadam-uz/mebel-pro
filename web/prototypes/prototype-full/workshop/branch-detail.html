@@ -75,8 +75,10 @@ const id = new URLSearchParams(location.search).get('id') || 'yunusobod';
 const b = SEED.lookup.branchById(id);
 const wrap = document.getElementById('wrap');
 
-if (!b) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Filial topilmadi</h3></div>`;
+if (!ownerOnly()) {
+  // Denied panel rendered into #wrap by ownerOnly().
+} else if (!b) {
+  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Filial topilmadi</h3></div>`;
 } else {
   document.getElementById('ed-name').value = b.name;
   document.getElementById('ed-addr').value = b.addr;
@@ -100,11 +102,17 @@ if (!b) {
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-pricing')">% Narx sozlamalari</button>
         <button class="btn btn-outline" type="button" onclick="openModal('m-edit')">✎ Tahrirlash</button>
-        <button class="btn btn-danger" type="button" onclick="confirmAction({title:'Filialni yopish',msg:'Filial vaqtincha yopiq bo\'ladi. Mijoz uni ko\'radi lekin buyurtma bera olmaydi.',reasonField:true,okText:'Yopish',danger:true},()=>toast('Filial yopildi'))">Vaqtincha yopish</button>
+        <div class="menu-wrap">
+          <button class="btn btn-outline" type="button" data-menu-toggle>Holat: ${b.status === 'active' ? 'Faol' : b.status === 'temporarily_closed' ? 'Vaqtincha yopiq' : 'Faol emas'} ▾</button>
+          <div class="menu" style="min-width:240px">
+            ${statusMenu(b)}
+          </div>
+        </div>
       </div>
     </div>
 
     ${b.status === 'temporarily_closed' ? `<div class="banner warn"><div class="ic">!</div><div class="grow"><b>Vaqtincha yopiq</b> · ${b.closedReason || ''}</div></div>` : ''}
+    ${b.status === 'inactive' ? `<div class="banner danger"><div class="ic">!</div><div class="grow"><b>Faol emas</b> · bu filial buyurtma qabul qilmaydi. Mavjud ochiq buyurtmalar yakunlanadi.</div></div>` : ''}
 
     <div class="kpis" style="grid-template-columns: repeat(4, 1fr)">
       <div class="kpi"><div class="lbl">Faol buyurtma</div><div class="v num">${ordersHere.filter(o => !['completed','cancelled'].includes(o.state)).length}</div></div>
@@ -190,6 +198,42 @@ if (!b) {
     </section>
   `;
 }
+
+// PU7: tri-state status control active ↔ temporarily_closed ↔ inactive
+// (owner-only). The page is already owner-gated. Each target names its effect;
+// → inactive with open orders warns + lists the count; → temporarily_closed
+// captures closed_reason; reopen / reactivate paths provided.
+function statusMenu(b) {
+  const openCount = SEED.orders.filter(o => o.branchId === b.id && !['completed', 'cancelled'].includes(o.state)).length;
+  const items = [];
+  const cur = b.status;
+  if (cur !== 'active')
+    items.push(`<button class="mi" onclick="setBranchStatus('${b.id}','active',${openCount})">→ Faol qilish (qayta ochish)</button>`);
+  if (cur !== 'temporarily_closed')
+    items.push(`<button class="mi" onclick="setBranchStatus('${b.id}','temporarily_closed',${openCount})">→ Vaqtincha yopish</button>`);
+  if (cur !== 'inactive')
+    items.push(`<button class="mi danger" onclick="setBranchStatus('${b.id}','inactive',${openCount})">→ Faol emas qilish</button>`);
+  return items.join('');
+}
+
+window.setBranchStatus = (bid, target, openCount) => {
+  if (target === 'active') {
+    confirmAction({ title: 'Filialni faollashtirish', msg: 'Filial yana buyurtma qabul qiladi. Xodimlar grantlari avtomatik tiklanadi.', okText: 'Faollashtirish' },
+      () => { toast('Filial faollashtirildi'); setTimeout(() => location.reload(), 700); });
+    return;
+  }
+  if (target === 'temporarily_closed') {
+    confirmAction({ title: 'Vaqtincha yopish', msg: 'Mijoz filialni ko\'radi lekin buyurtma bera olmaydi. Sabab kiriting (closed_reason).', reasonField: true, reasonLabel: 'Yopilish sababi', okText: 'Yopish', danger: true },
+      () => { toast('Filial vaqtincha yopildi'); setTimeout(() => location.reload(), 700); });
+    return;
+  }
+  // → inactive
+  const warn = openCount > 0
+    ? `Diqqat: bu filialda <b>${openCount} ta ochiq buyurtma</b> bor — ular odatdagidek yakunlanadi. Filial yangi buyurtma qabul qilmaydi. Xodim grantlari tiklanmaguncha inert bo'ladi.`
+    : 'Filial yangi buyurtma qabul qilmaydi. Xodim grantlari filial qayta faollashtirilmaguncha inert bo\'ladi.';
+  confirmAction({ title: 'Filialni faol emas qilish', msg: warn, reasonField: true, reasonLabel: 'Sabab', okText: 'Faol emas qilish', danger: true },
+    () => { toast('Filial faol emas qilindi'); setTimeout(() => location.reload(), 700); });
+};
 </script>
 </body>
 </html>

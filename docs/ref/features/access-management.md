@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 20
 ---
 
@@ -103,8 +103,13 @@ A platform operator provisions a workshop atomically with its first user:
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
   restore sessions — users log in again.
 
-Workshop *editing* (profile, settings, payment channels) lives in
-[`workshop.md`](workshop.md).
+The operator's **only** workshop write actions are: provision (workshop + first owner,
+atomic), block, and unblock. The operator does **not** edit the workshop profile or the
+owner's identity fields (name / phone / login) — that is owner territory and there is no
+operator path to it. Workshop *editing* (profile, settings, payment channels) lives in
+[`workshop.md`](workshop.md); owner-identity edits are owner self-service / owner-managed,
+not operator-managed. If correcting an owner's phone via the operator ever becomes a real
+need, it must be specified here first — it is deliberately absent in v1.
 
 ### UX
 
@@ -237,6 +242,10 @@ Rules:
   actionable screens until it's reactivated or they're granted another; the branch picker
   hides the inactive entry.
 - **Staff user with zero grants** — can log in; every workshop screen is empty / hidden.
+- **Owner as cutter / edger on a non-home branch** — allowed: `is_owner` holds
+  `process_production` on every branch and is **exempt** from the
+  `home_branch_id = order.branch_id` assignment check that binds non-owner staff (see
+  [`orders.md`](orders.md)).
 - **Grant on a branch that later goes `inactive`** — inert; the branch disappears from the
   picker; reactivating makes the grant live again.
 - **Owner blocks themselves** — disallowed (a workshop must have an active owner).

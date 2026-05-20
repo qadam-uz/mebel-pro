@@ -24,6 +24,9 @@
   .totals .r .num { color: var(--ink-12); font-weight: 500; }
   .totals .grand { padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--ink-12); font-size: 15px; font-weight: 600; }
   .totals .grand .num { font-family: var(--f-display); font-size: 22px; }
+  .ro-figure { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ro-figure:last-child { border-bottom: 0; }
+  .ro-figure .v { font-family: var(--f-mono); color: var(--ink-12); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -40,31 +43,43 @@
 <script>
 renderWorkshopShell();
 
-const id = new URLSearchParams(location.search).get('id') || 'MP-2026-05-0091';
+const id = new URLSearchParams(location.search).get('id') || 'ORD-2026-000091';
 const o = SEED.lookup.orderById(id);
 const wrap = document.getElementById('od-wrap');
 
-// Demo: the current user holds all grants (owner). In v1 there are no fixed
-// roles — every action is permission-gated, but one user may hold them all.
-const ME = { id: 'u01', grants: ['view_dashboard','manage_orders','process_production','manage_catalog','manage_inventory','manage_finance','view_finance_reports'], isOwner: true };
-const can = g => ME.isOwner || ME.grants.includes(g);
+// CR4: capability is derived from window.can(permission, branchId). No local
+// role. All gating below keys to the ORDER's branch.
+const B = o ? o.branchId : null;
+const canOrders = () => can('manage_orders', B);
+const canProd = () => can('process_production', B);
+const canFinanceView = () => can('view_finance_reports', B) || can('manage_finance', B);
 
 if (!o) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
+  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
+} else if (!isOwner() && !canOrders() && !canProd() && !can('view_dashboard', B)) {
+  // No visibility into this branch at all.
+  wrap.innerHTML = `<div class="st-error" role="alert"><div class="ic">⊘</div><h3>Bu buyurtma sizning filialingizda emas</h3><p>Bu buyurtmani ko'rish uchun ruxsatingiz yo'q — ustaxona egasiga murojaat qiling.</p><a class="btn btn-outline btn-sm" href="orders.html">← Buyurtmalar</a></div>`;
 } else {
   const br = SEED.lookup.branchById(o.branchId);
   const cl = SEED.lookup.clientById(o.clientId);
   const cutting = SEED.lookup.cuttingById(o.cuttingId);
   const banded = cutting ? SEED.lookup.isBanded(cutting) : false;
+  const algo = cutting ? SEED.lookup.chosenAlgo(cutting) : null;
   const fin = SEED.lookup.orderFinance(o);
+  const cuttingInvalidated = cutting && cutting.status === 'invalidated';
 
-  // projected low-stock: any shop-source sheet material at this branch that
-  // would fall to/below min after this order's sheets are consumed.
+  // Read-only cutting-result figures (PU4a) — what the worker confirms, never
+  // re-types: sheets from the chosen algorithm, cut count derived from the
+  // parts, edge metres by thickness from the algorithm.
+  const algoSheets = algo ? Object.values(algo.sheetsByMat || {}).reduce((a, b) => a + b, 0) : 0;
+  const cutCount = cutting ? (cutting.partList || []).reduce((a, p) => a + (p.qty || 0), 0) : 0;
+  const edgeByThick = algo ? (algo.edgeLen || {}) : {};
+
+  // projected low-stock warning (unchanged behaviour).
   let lowWarn = '';
-  if (cutting && ['confirmed','cutting'].includes(o.state)) {
-    const algo = SEED.lookup.chosenAlgo(cutting);
+  if (cutting && ['confirmed','cutting'].includes(o.state) && algo) {
     const shorts = [];
-    if (algo) for (const matId of Object.keys(algo.sheetsByMat || {})) {
+    for (const matId of Object.keys(algo.sheetsByMat || {})) {
       const bm = SEED.lookup.branchMatFor(o.branchId, matId);
       const m = SEED.lookup.matById(matId);
       if (bm && (bm.onHand - algo.sheetsByMat[matId]) <= bm.minStock) {
@@ -86,8 +101,22 @@ if (!o) {
     return `<div class="row-item"><div><div class="nm">${m?.name || p.matId} · ${p.l}×${p.w}</div><small style="color:var(--ink-6)">${p.source === 'own' ? "mijoz materiali" : 'ustaxona materiali'}</small></div><div class="meta">${p.qty} dona</div></div>`;
   }).join('') : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`;
 
-  const edgeRows = cutting ? Object.entries(SEED.lookup.chosenAlgo(cutting)?.edgeLen || {}).map(([t, m]) =>
+  const edgeRows = banded ? Object.entries(edgeByThick).map(([t, m]) =>
     `<div class="row-item"><div><div class="nm">Krom ${t} mm</div></div><div class="meta">${m} m</div></div>`).join('') : '';
+
+  // CR7 + OQ2: a read-only settlement summary at ANY status, only for a
+  // viewer with view_finance_reports / manage_finance on the order's branch
+  // (owner always). NOT a payments tab.
+  const settlementCard = canFinanceView() ? `
+    <div class="card" style="margin-top: 14px">
+      <div class="card-h"><h2 style="font-size:16px">To'lov holati <span class="pill p-dn" style="font-size:9.5px;margin-left:6px"><span class="pd"></span>faqat o'qish</span></h2></div>
+      <div class="card-b" style="padding-top: 0">
+        <div class="ro-figure"><span>Jami summa</span><span class="v">${fmtTiyin(fin.total)}</span></div>
+        <div class="ro-figure"><span>Yozilgan to'lov</span><span class="v success-text">${fmtTiyin(fin.paid)}</span></div>
+        <div class="ro-figure"><span>Qoldiq</span><span class="v">${fmtTiyin(fin.balance)}</span></div>
+        <p class="muted" style="font-size:11.5px;margin:12px 0 0">Ko'rsatma uchun — moliya modulidan olinadi. To'lov yozish/tuzatish shu yerda emas, moliya modulida bajariladi.</p>
+      </div>
+    </div>` : '';
 
   wrap.innerHTML = `
     <div class="od-head">
@@ -131,6 +160,8 @@ if (!o) {
             </div>
           </div>
 
+          ${settlementCard}
+
           <div class="card" style="margin-top: 14px">
             <div class="card-h"><h2>Ishlab chiqarish</h2></div>
             <div class="card-b" style="padding-top: 0">
@@ -139,10 +170,10 @@ if (!o) {
                 <div class="meta">${o.cutter ? SEED.lookup.userById(o.cutter)?.name : (o.assignedCutter ? SEED.lookup.userById(o.assignedCutter)?.name : '—')}</div>
               </div>
               ${o.cutter ? `<div class="row-item"><div><div class="nm">Kesilgan</div></div><div class="meta">${o.cutCount || 0} ta · ${Object.values(o.sheetsUsed || {}).reduce((a,b)=>a+b,0)} list</div></div>` : ''}
-              <div class="row-item">
-                <div><div class="nm">Krom yopishtiruvchi</div><small style="color:var(--ink-6)">${o.edger ? 'Bajardi · ' + (o.edgeCompletedAt || '') : (o.assignedEdger ? 'tayinlangan' : (banded ? 'tayinlanmagan' : 'krom kerak emas'))}</small></div>
+              ${banded ? `<div class="row-item">
+                <div><div class="nm">Krom yopishtiruvchi</div><small style="color:var(--ink-6)">${o.edger ? 'Bajardi · ' + (o.edgeCompletedAt || '') : (o.assignedEdger ? 'tayinlangan' : 'tayinlanmagan')}</small></div>
                 <div class="meta">${o.edger ? SEED.lookup.userById(o.edger)?.name : (o.assignedEdger ? SEED.lookup.userById(o.assignedEdger)?.name : '—')}</div>
-              </div>
+              </div>` : `<div class="row-item"><div><div class="nm">Krom yopishtirish</div><small style="color:var(--ink-6)">bu buyurtmada krom yo'q</small></div><div class="meta muted">—</div></div>`}
             </div>
           </div>
 
@@ -150,9 +181,9 @@ if (!o) {
             <div class="card-h"><h2>Ichki izoh</h2></div>
             <div class="card-b">
               <div class="field">
-                <textarea rows="4" id="note" placeholder="Bu buyurtma haqida ichki izoh — faqat ustaxona xodimlari ko'radi">Mijoz erta tugatilishini so'ragan — imkon bo'lsa muddatdan oldin tugatishga harakat qilish kerak.</textarea>
+                <textarea rows="4" id="note" ${canOrders() ? '' : 'readonly'} placeholder="Bu buyurtma haqida ichki izoh — faqat ustaxona xodimlari ko'radi">Mijoz erta tugatilishini so'ragan — imkon bo'lsa muddatdan oldin tugatishga harakat qilish kerak.</textarea>
               </div>
-              <button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')">Saqlash</button>
+              ${canOrders() ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')">Saqlash</button>` : `<p class="muted" style="font-size:12px;margin:0">Tahrirlash uchun manage_orders ruxsati kerak.</p>`}
             </div>
           </div>
         </section>
@@ -161,9 +192,10 @@ if (!o) {
           <div class="card">
             <div class="card-h"><h2>Chizma rejasi</h2></div>
             <div class="card-b">
+              ${cuttingInvalidated ? `<div class="banner warn"><div class="ic">!</div><div class="grow">Bu chizma natijasi <b>invalidated</b> — chizma boshqa joyda qayta hisoblangan. Buyurtmaga bog'langan natija o'zgarmagan. <a href="#" onclick="toast('Joriy natijaga o\\'tildi (demo)')" style="color:inherit;text-decoration:underline">Joriy natijani ko'rish</a></div></div>` : ''}
               ${cutting ? `<div class="row-item"><div><div class="nm">${cutting.parts} ta qism · ${cutting.sheets} list</div><small style="color:var(--ink-6)">qoldiq ${cutting.wastePct}% · ${cutting.algoVer || ''}</small></div><div class="meta">${cutting.cutLen} m kesim</div></div>` : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`}
               <div class="sheet" style="border:0;padding:0;margin-top:12px">
-                <svg viewBox="0 0 550 366">
+                <svg viewBox="0 0 550 366" role="img" aria-label="Chizma rejasi (namuna)">
                   <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
                   <rect x="2" y="2" width="546" height="362" fill="none" stroke="#A6471F" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
                   <rect x="6" y="6" width="150" height="100" fill="#A6471F" fill-opacity=".18" stroke="#A6471F" stroke-width="1.5"/>
@@ -174,6 +206,7 @@ if (!o) {
                   <text x="106" y="174" font-family="JetBrains Mono" font-size="11" fill="#2E5E4E" font-weight="700" text-anchor="middle">P2</text>
                 </svg>
               </div>
+              <p class="muted" style="font-size:11.5px;margin:8px 0 0">Namuna ko'rinish — to'liq reja PDF da.</p>
               <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px">⬇ Chizma (PDF)</button>
             </div>
           </div>
@@ -200,8 +233,6 @@ if (!o) {
         <div class="totals">
           ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
           <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(o.totalTiyin)}</span></div>
-          ${fin.paid ? `<div class="r"><span>To'langan (moliya)</span><span class="num success-text">− ${fmtTiyin(fin.paid)}</span></div>` : ''}
-          ${fin.balance > 0 && o.state !== 'cancelled' ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qoldiq</span><span class="num">${fmtTiyin(fin.balance)}</span></div>` : ''}
         </div>
 
         <div class="card" style="margin-top: 14px">
@@ -216,50 +247,65 @@ if (!o) {
     </div>
   `;
 
-  // Populate the "who did this work" picker with process_production users.
+  // PU5 + OQ1: the cutter/edger picker filters to users with
+  // process_production on the ORDER's branch AND home_branch_id ===
+  // order.branch_id — EXCEPT the owner (exempt from the same-branch rule;
+  // holds process_production everywhere). Blocked users excluded.
   window._fillWorkerPicker = (selId, fallback) => {
     const sel = document.getElementById(selId);
     if (!sel) return;
-    const workers = SEED.users.filter(u => u.status === 'active' && (u.isOwner || (u.grants && u.grants.process_production)));
-    sel.innerHTML = workers.map(u => `<option value="${u.id}" ${u.id === fallback ? 'selected' : ''}>${u.name}${u.id === fallback ? ' · tayinlangan' : ''}</option>`).join('');
+    const workers = SEED.users.filter(u => {
+      if (u.status === 'blocked') return false;
+      if (u.isOwner) return true; // OQ1: exempt from the home-branch rule
+      const hasProd = u.grants && (u.grants.process_production || []).includes(o.branchId);
+      return hasProd && u.homeBranchId === o.branchId;
+    });
+    sel.innerHTML = workers.length
+      ? workers.map(u => `<option value="${u.id}" ${u.id === fallback ? 'selected' : ''}>${u.name}${u.id === fallback ? ' · tayinlangan' : ''}${u.isOwner ? ' · egasi' : ''}</option>`).join('')
+      : `<option value="" disabled selected>Bu filialda mos xodim yo'q</option>`;
   };
 }
 
 function detailActions(o) {
   const a = [];
   if (o.state === 'new') {
-    if (can('manage_orders')) {
+    if (canOrders()) {
       a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Tasdiqlash',msg:'Buyurtma tasdiqlanadi (→ Tasdiqlangan).'},()=>{toast('Tasdiqlandi');setTimeout(()=>location.reload(),700)})">✓ Tasdiqlash</button>`);
       a.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">✕ Bekor qilish</button>`);
     }
   } else if (o.state === 'confirmed') {
-    if (can('manage_orders')) {
+    if (canOrders()) {
       a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('assign-cutter')">Kesuvchi tayinlash (→ Kesilmoqda)</button>`);
-      a.push(`<button class="btn btn-outline btn-sm" onclick="openModal('assign-edger')">Krom yopishtiruvchi</button>`);
+      if (SEED.lookup.isBanded(SEED.lookup.cuttingById(o.cuttingId) || {}))
+        a.push(`<button class="btn btn-outline btn-sm" onclick="openModal('assign-edger')">Krom yopishtiruvchi</button>`);
       a.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'cutting') {
-    if (can('process_production') || can('manage_orders')) {
+    if (canProd() || canOrders()) {
       a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('cut-done')">✓ Kesish tugadi</button>`);
     }
-    if (can('manage_orders')) {
+    if (canOrders()) {
       a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Tasdiqlanganga qaytarish')">↩ Tasdiqlanganga</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'edge_banding') {
-    if (can('process_production') || can('manage_orders')) {
+    if (canProd() || canOrders()) {
       a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('band-done')">✓ Krom tugadi</button>`);
     }
-    if (can('manage_orders')) {
+    if (canOrders()) {
       a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Kesishga qaytarish')">↩ Kesishga</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'ready') {
-    if (can('manage_orders')) {
+    if (canOrders()) {
+      // PU4c: the revert target is exactly one step back — edge_banding if
+      // the order was banded, else cutting. Label it concretely.
+      const wasBanded = SEED.lookup.isBanded(SEED.lookup.cuttingById(o.cuttingId) || {});
+      const tgtLabel = wasBanded ? 'Kromga' : 'Kesishga';
       a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Olib ketildi',msg:'Mijoz hammasini olib ketdimi?',okText:'Ha, olib ketdi'},()=>{toast('Tugallandi');setTimeout(()=>location.reload(),700)})">✓ Mijoz olib ketdi</button>`);
-      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Kromga qaytarish')">↩ Kromga / Kesishga</button>`);
+      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('${tgtLabel} qaytarish')">↩ ${tgtLabel}</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'completed') {
@@ -267,6 +313,7 @@ function detailActions(o) {
   } else if (o.state === 'cancelled') {
     a.push(`<span class="muted" style="font-size:13px">Faqat o'qish uchun.</span>`);
   }
+  if (!a.length) a.push(`<span class="muted" style="font-size:13px">Bu holatda siz uchun amal yo'q (faqat o'qish).</span>`);
   return a.join('');
 }
 
@@ -298,7 +345,7 @@ function revert(title) {
 <div class="modal" id="assign-cutter">
   <div class="modal-h"><h3>Kesuvchi tayinlash</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <p class="muted" style="font-size:13px;margin:0 0 14px">Tayinlash buyurtmani "Kesilmoqda" holatiga o'tkazadi va kesuvchining navbatida ko'rinadi.</p>
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Tayinlash buyurtmani "Kesilmoqda" holatiga o'tkazadi va kesuvchining navbatida ko'rinadi. Ro'yxatda shu filialda ishlaydigan, kesish ruxsatiga ega xodimlar (va egasi) ko'rinadi.</p>
     <div class="field"><label>Kesuvchi</label><select id="cutter-pick"></select></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-cutter');toast('Kesuvchi tayinlandi · Kesilmoqda');setTimeout(()=>location.reload(),700)">Tayinlash</button></div>
@@ -315,12 +362,9 @@ function revert(title) {
 <div class="modal" id="cut-done">
   <div class="modal-h"><h3>Kesish tugadi</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <div class="banner info"><div class="ic">i</div><div class="grow">Material stockdan avtomatik chiqariladi. Krom kerak bo'lsa → Krom yopishtirilmoqda, aks holda → Tayyor.</div></div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Quyidagi raqamlar chizma natijasidan olinadi — qo'lda kiritilmaydi. Material stockdan avtomatik chiqariladi.</div></div>
     <div class="field"><label>Kim bajardi?</label><select id="cut-who"></select></div>
-    <div class="field-row">
-      <div class="field"><label>Kesilgan list</label><input type="number" value="6" min="1" /></div>
-      <div class="field"><label>Qism soni</label><input type="number" value="14" min="1" /></div>
-    </div>
+    <div id="cut-figures"></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('cut-done');toast('Kesish tugadi');setTimeout(()=>location.reload(),700)">Tasdiqlash</button></div>
 </div>
@@ -328,23 +372,37 @@ function revert(title) {
 <div class="modal" id="band-done">
   <div class="modal-h"><h3>Krom tugadi</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <div class="banner info"><div class="ic">i</div><div class="grow">Buyurtma "Tayyor" holatiga o'tadi.</div></div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Krom uzunligi chizma natijasidan olinadi — qo'lda kiritilmaydi. Buyurtma "Tayyor" holatiga o'tadi.</div></div>
     <div class="field"><label>Kim bajardi?</label><select id="band-who"></select></div>
-    <div class="field-row">
-      <div class="field"><label>0.4 mm (m)</label><input type="number" value="18.2" step="0.1" /></div>
-      <div class="field"><label>2.0 mm (m)</label><input type="number" value="12.8" step="0.1" /></div>
-    </div>
+    <div id="band-figures"></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('band-done');toast('Krom tugadi · Tayyor');setTimeout(()=>location.reload(),700)">Tasdiqlash</button></div>
 </div>
 
 <script>
-// Fill worker pickers once the page is built.
+// Fill worker pickers + read-only figures once the page is built (PU4a/PU5).
 if (o) {
   _fillWorkerPicker('cutter-pick', o.assignedCutter);
   _fillWorkerPicker('edger-pick', o.assignedEdger);
   _fillWorkerPicker('cut-who', o.assignedCutter);
   _fillWorkerPicker('band-who', o.assignedEdger);
+
+  const cutting = SEED.lookup.cuttingById(o.cuttingId);
+  const algo = cutting ? SEED.lookup.chosenAlgo(cutting) : null;
+  const sheets = algo ? Object.values(algo.sheetsByMat || {}).reduce((a, b) => a + b, 0) : 0;
+  const cuts = cutting ? (cutting.partList || []).reduce((a, p) => a + (p.qty || 0), 0) : 0;
+  const cf = document.getElementById('cut-figures');
+  if (cf) cf.innerHTML = `
+    <div class="ro-figure"><span>Ishlatilgan list</span><span class="v">${sheets} list</span></div>
+    <div class="ro-figure"><span>Qism soni (kesim)</span><span class="v">${cuts} ta</span></div>`;
+
+  const edgeByThick = algo ? (algo.edgeLen || {}) : {};
+  const bf = document.getElementById('band-figures');
+  if (bf) {
+    const rows = Object.entries(edgeByThick).map(([t, m]) =>
+      `<div class="ro-figure"><span>Krom ${t} mm</span><span class="v">${m} m</span></div>`).join('');
+    bf.innerHTML = rows || `<div class="ro-figure"><span>Krom</span><span class="v">—</span></div>`;
+  }
 }
 </script>
 </body>

@@ -80,8 +80,16 @@
 <script>
 renderWorkshopShell();
 
+const OWNER = isOwner();
+if (!OWNER) {
+  document.querySelector('.page .tools')?.remove();
+  document.querySelector('.page .filters')?.remove();
+  document.querySelector('.page .card')?.remove();
+  ownerOnly('.page');
+}
+
 // New-user permission matrix from the v1 permissions catalog (no process_delivery).
-document.getElementById('new-perms').innerHTML = SEED.permissions.map(p =>
+if (OWNER) document.getElementById('new-perms').innerHTML = SEED.permissions.map(p =>
   `<tr><td class="permission">${p.label}</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>`).join('');
 
 let statusF = 'all';
@@ -122,7 +130,7 @@ function render() {
     </tr>`;
   }).join('');
 }
-render();
+if (OWNER) render();
 </script>
 </body>
 </html>

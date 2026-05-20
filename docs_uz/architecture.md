@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 70
 ---
 
@@ -68,8 +68,7 @@ Har bir SPA oʻz API'si bilan same-origin qoladi (CORS yoʻq).
   egalik qiladi.
 - **One MinIO / S3** — material image'lari, logo'lar, refund / delivery receipt'lari,
   cutting PDF'lari. `files` moduli unga egalik qiladi; boshqalari id boʻyicha attach/detach qiladi.
-- **In-process scheduler** — draft cutting'larni expire qilish, expired session'larni prune
-  qilish, kunlik low-stock summary.
+- **In-process scheduler** — expired session'larni prune qilish, kunlik low-stock summary.
 - **Three SPAs + a static landing.** API `/api` ostida same-origin.
 - **One external integration** — Telegram Login (OAuth), faqat client auth.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge

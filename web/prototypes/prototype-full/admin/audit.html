@@ -19,26 +19,29 @@
     <div class="page-head">
       <div>
         <h1>Audit log · platforma</h1>
-        <p class="sub">Barcha ustaxonalardagi muhim amallar.</p>
+        <p class="sub">Barcha ustaxonalardagi amallar va holat o'zgarishlari (read-only).</p>
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
       </div>
     </div>
 
-    <div class="filters">
-      <select><option>Barcha ustaxonalar</option><option>Furniture House</option><option>Toshkent Mebel</option></select>
-      <select><option>Hamma modullar</option><option>orders</option><option>inventory</option><option>identity</option><option>finance</option><option>workshop</option></select>
-      <select><option>Oxirgi 24 soat</option><option>Oxirgi 7 kun</option></select>
-      <div class="input"><input placeholder="Obyekt ID..." /></div>
+    <div class="filters" id="filters" hidden>
+      <select id="f-ws" onchange="render()"><option value="all">Barcha ustaxonalar</option></select>
+      <select id="f-mod" onchange="render()">
+        <option value="all">Hamma modullar</option>
+        <option>orders</option><option>inventory</option><option>identity</option><option>finance</option><option>workshop</option>
+      </select>
+      <div class="input"><input id="q" placeholder="Obyekt ID..." oninput="render()" /></div>
     </div>
 
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>Vaqt</th><th>Ustaxona</th><th>Modul</th><th>Amal</th><th>Xodim</th><th>Tafsilot</th></tr></thead>
-        <tbody id="body"></tbody>
-      </table>
+    <div class="tabs" data-tabs="au" id="tabs" hidden>
+      <button class="tab on" data-target="t-actions" onclick="switchTab('au','t-actions');render()">Amallar (Action log)</button>
+      <button class="tab" data-target="t-status" onclick="switchTab('au','t-status');render()">Holat o'zgarishlari (Status changes)</button>
     </div>
+
+    <section id="t-actions" data-panel-group="au"><div id="actions-body"></div></section>
+    <section id="t-status" data-panel-group="au" hidden><div id="status-body"></div></section>
   </div>
 </main>
 
@@ -48,17 +51,88 @@
 <script>
 renderAdminShell();
 
-document.getElementById('body').innerHTML = SEED.auditLog.map(a => {
-  const actor = SEED.lookup.userById(a.actor) || SEED.lookup.clientById(a.actor);
-  return `<tr>
-    <td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td>
-    <td><small style="color:var(--ink-8)">Furniture House</small></td>
-    <td><small style="color:var(--ink-8);font-size:12px">${a.module}</small></td>
-    <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td>
-    <td>${actor?.name || a.actor}</td>
-    <td><small style="color:var(--ink-10);font-size:12.5px">${a.detail}</small></td>
-  </tr>`;
-}).join('');
+const state = demoState();
+
+function fillWs() {
+  const sel = document.getElementById('f-ws');
+  SEED.workshops.forEach(w => {
+    const o = document.createElement('option');
+    o.value = w.id; o.textContent = w.name;
+    sel.appendChild(o);
+  });
+}
+
+function actorName(id) {
+  return SEED.lookup.userById(id)?.name || SEED.lookup.clientById(id)?.name || id;
+}
+
+function render() {
+  const aBody = document.getElementById('actions-body');
+  const sBody = document.getElementById('status-body');
+
+  if (state === 'loading') {
+    const sk = `<div class="card"><table class="tbl"><thead><tr><th>Vaqt</th><th>Ustaxona</th><th>Modul</th><th>Amal</th><th>Aktor</th><th>Tafsilot</th></tr></thead><tbody>${skRows(6, 6)}</tbody></table></div>`;
+    aBody.innerHTML = sk; sBody.innerHTML = sk;
+    return;
+  }
+  if (state === 'error') {
+    aBody.innerHTML = errState('Audit logni yuklab bo\'lmadi.', 'tr-1a77e0');
+    sBody.innerHTML = errState('Audit logni yuklab bo\'lmadi.', 'tr-1a77e0');
+    return;
+  }
+
+  document.getElementById('filters').hidden = false;
+  document.getElementById('tabs').hidden = false;
+
+  const wsF = document.getElementById('f-ws').value;
+  const modF = document.getElementById('f-mod').value;
+  const q = (document.getElementById('q')?.value || '').toLowerCase();
+
+  // ----- Actions tab — from SEED.auditLog, workshop via workshopId -----
+  const aRows = SEED.auditLog.filter(a =>
+    (wsF === 'all' || (a.workshopId || 'ws-01') === wsF) &&
+    (modF === 'all' || a.module === modF) &&
+    (!q || (a.detail || '').toLowerCase().includes(q)));
+
+  aBody.innerHTML = aRows.length ? `<div class="card"><table class="tbl">
+    <thead><tr><th>Vaqt</th><th>Ustaxona</th><th>Modul</th><th>Amal</th><th>Aktor</th><th>Tafsilot</th></tr></thead>
+    <tbody>${aRows.map(a => {
+      const ws = SEED.lookup.workshopById(a.workshopId || 'ws-01');
+      return `<tr>
+        <td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td>
+        <td><small style="color:var(--ink-8)">${ws?.name || '—'}</small></td>
+        <td><small style="color:var(--ink-8);font-size:12px">${a.module}</small></td>
+        <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td>
+        <td>${actorName(a.actor)}</td>
+        <td><small style="color:var(--ink-10);font-size:12.5px">${a.detail}</small></td>
+      </tr>`; }).join('')}</tbody></table></div>`
+    : emptyState('≡', 'Amal topilmadi', 'Bu filtr bo\'yicha audit yozuvi yo\'q.');
+
+  // ----- Status changes tab — from SEED.statusEvents, actor + order link -----
+  const sRows = SEED.statusEvents.filter(ev =>
+    (wsF === 'all' || (ev.workshopId || 'ws-01') === wsF) &&
+    (modF === 'all' || modF === 'orders') &&
+    (!q || ev.orderId.toLowerCase().includes(q)));
+
+  sBody.innerHTML = sRows.length ? `<div class="card"><table class="tbl">
+    <thead><tr><th>Vaqt</th><th>Ustaxona</th><th>Buyurtma</th><th>O'tish</th><th>Aktor</th><th>Sabab</th></tr></thead>
+    <tbody>${sRows.map(ev => {
+      const ws = SEED.lookup.workshopById(ev.workshopId || 'ws-01');
+      const fromL = ev.from ? (SEED.STATE_LABELS[ev.from] || ev.from) : '—';
+      const toL = SEED.STATE_LABELS[ev.to] || ev.to;
+      return `<tr>
+        <td class="num" style="font-size:11.5px;color:var(--ink-6)">${ev.t}</td>
+        <td><small style="color:var(--ink-8)">${ws?.name || '—'}</small></td>
+        <td><a class="id" style="color:var(--accent);text-decoration:none" href="../client/order-detail.html?id=${ev.orderId}">${ev.orderId}</a></td>
+        <td><small style="color:var(--ink-10);font-size:12.5px">${fromL} → <b>${toL}</b></small></td>
+        <td>${actorName(ev.actor)} <small style="color:var(--ink-6)">· ${ev.actorType}</small></td>
+        <td><small style="color:var(--ink-8);font-size:12px">${ev.reason || '—'}</small></td>
+      </tr>`; }).join('')}</tbody></table></div>`
+    : emptyState('≡', 'Holat o\'zgarishi topilmadi', 'Bu filtr bo\'yicha status yozuvi yo\'q.');
+}
+
+fillWs();
+render();
 </script>
 </body>
 </html>

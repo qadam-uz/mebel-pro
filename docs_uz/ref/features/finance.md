@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 55
 ---
 
@@ -35,10 +35,12 @@ qolganlari (`other`) hech narsa olib yurmaydi.
 - **Record an income** — `type`; `order_id` (**`order_payment` bo'lsa va faqat shunda
   required**, scope'dagi branch order'i bo'lishi shart); `amount_tiyin` (> 0; client to'liq
   order amount'ni yoki uning bir qismini to'ladi); `method` (`cash` / `bank_transfer` /
-  `other`); `received_on` (date); optional `note` (bank reference / receipt id) va receipt
-  scan. Record qiluvchi user log qilinadi. Bitta order uchun bir nechta order payment record
-  qilinishi mumkin (avval advance keyin balance); ularning running sum'i **order'ning
-  `total_tiyin`'idan ≤** bo'lishi validate qilinadi.
+  `other` — aniq shu uchtasi; plastic-card yoki terminal payment ("karta") `bank_transfer`
+  sifatida record qilinadi, alohida `card` method yo'q); `received_on` (date); optional
+  `note` (bank reference / receipt id) va receipt scan. Record qiluvchi user log qilinadi.
+  Bitta order uchun bir nechta order payment record qilinishi mumkin (avval advance keyin
+  balance); ularning running sum'i **order'ning `total_tiyin`'idan ≤** bo'lishi validate
+  qilinadi.
 - **Edit an income** — faqat `recorded` paytida; audited.
 - **Void an income** — **mandatory reason** bilan `status = voided` (xatoni tuzatish uchun
   ishlatiladi, masalan client "to'ladim, marked emas" deb dispute qiladi). Voided income

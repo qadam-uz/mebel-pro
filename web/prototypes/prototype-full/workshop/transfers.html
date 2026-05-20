@@ -103,13 +103,18 @@
 <script>
 renderWorkshopShell();
 
+if (!isOwner()) {
+  document.querySelectorAll('.page .banner, .page > div[style*="grid"]').forEach(n => n.remove());
+  ownerOnly('.page');
+}
+
 function updateAvail() {
   const br = document.getElementById('from-br').value;
   const mat = document.getElementById('mat-sel').value;
   const bm = SEED.lookup.branchMatFor(br, mat);
   document.getElementById('avail').value = bm ? bm.onHand : 0;
 }
-updateAvail();
+if (isOwner()) updateAvail();
 
 function submitTransfer() {
   const qty = +document.getElementById('qty').value;

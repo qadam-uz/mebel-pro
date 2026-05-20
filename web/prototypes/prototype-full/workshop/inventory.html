@@ -36,14 +36,9 @@
 
     <section id="t-stock" data-panel-group="inv">
       <div class="filters">
-        <div class="input"><input placeholder="Material qidirish..." /></div>
-        <select id="br-filter">
-          <option value="all">Barcha filiallar</option>
-          <option>Yunusobod</option>
-          <option>Chilonzor</option>
-          <option>Yangiyo'l</option>
-        </select>
-        <button class="chip ghost on">Faqat past zaxiralar</button>
+        <div class="input"><input id="m-search" placeholder="Material qidirish..." oninput="renderStock()" /></div>
+        <select id="br-filter" onchange="onBranchChange()"></select>
+        <button class="chip ghost" id="low-only" onclick="this.classList.toggle('on');renderStock()">Faqat past zaxiralar</button>
       </div>
 
       <div class="card">
@@ -62,68 +57,7 @@
           <thead>
             <tr><th>Vaqt</th><th>Turi</th><th>Material</th><th>Filial</th><th class="right">Miqdor</th><th>Keyin</th><th>Buyurtma</th><th>Kim qildi</th></tr>
           </thead>
-          <tbody>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">16-may 09:18</td>
-              <td><span class="pill p-bad" style="font-size:10.5px"><span class="pd"></span>consume</span></td>
-              <td class="nm">LDSP H1334</td>
-              <td>Yunusobod</td>
-              <td class="amt" style="color:var(--danger)">−6</td>
-              <td class="num">136</td>
-              <td class="id">MP-2026-05-0090</td>
-              <td>Bahodir T.</td>
-            </tr>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">16-may 09:14</td>
-              <td><span class="pill p-ok" style="font-size:10.5px"><span class="pd"></span>stock_in</span></td>
-              <td class="nm">LDSP 8198</td>
-              <td>Yunusobod</td>
-              <td class="amt" style="color:var(--success)">+40</td>
-              <td class="num">61</td>
-              <td class="muted">Egger partiya</td>
-              <td>Aziza R.</td>
-            </tr>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">15-may 11:00</td>
-              <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>restore</span></td>
-              <td class="nm">MDF 16 mm</td>
-              <td>Yunusobod</td>
-              <td class="amt" style="color:var(--success)">+6</td>
-              <td class="num">90</td>
-              <td class="id">MP-2026-05-0090</td>
-              <td>System · revert</td>
-            </tr>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">14-may 09:00</td>
-              <td><span class="pill p-warn" style="font-size:10.5px"><span class="pd"></span>adjust</span></td>
-              <td class="nm">LDSP 0011</td>
-              <td>Yunusobod</td>
-              <td class="amt" style="color:var(--warn)">−3</td>
-              <td class="num">12</td>
-              <td class="muted">—</td>
-              <td>Hasan K.</td>
-            </tr>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">13-may 16:00</td>
-              <td><span class="pill p-del" style="font-size:10.5px"><span class="pd"></span>transfer_out</span></td>
-              <td class="nm">MDF 16 mm</td>
-              <td>Yunusobod</td>
-              <td class="amt" style="color:var(--danger)">−10</td>
-              <td class="num">84</td>
-              <td class="muted">tf-0042</td>
-              <td>Hasan K.</td>
-            </tr>
-            <tr>
-              <td class="num" style="font-size:11.5px;color:var(--ink-6)">13-may 16:00</td>
-              <td><span class="pill p-del" style="font-size:10.5px"><span class="pd"></span>transfer_in</span></td>
-              <td class="nm">MDF 16 mm</td>
-              <td>Chilonzor</td>
-              <td class="amt" style="color:var(--success)">+10</td>
-              <td class="num">56</td>
-              <td class="muted">tf-0042</td>
-              <td>Hasan K.</td>
-            </tr>
-          </tbody>
+          <tbody id="tx-body"></tbody>
         </table>
       </div>
     </section>
@@ -147,7 +81,7 @@
 <div class="modal" id="m-stockin">
   <div class="modal-h"><h3>Kirim yozish (stock_in)</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
-    <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+    <div class="field"><label>Filial</label><select id="si-branch" onchange="fillMatSelect('mat-select', this.value)"></select></div>
     <div class="field"><label>Material</label><select id="mat-select"></select></div>
     <div class="field"><label>Miqdor</label><input type="number" value="20" min="1" /></div>
     <div class="field">
@@ -173,8 +107,8 @@
   <div class="modal-h"><h3>Stock tuzatish (adjust)</h3><button class="x" data-close-modal>✕</button></div>
   <div class="modal-b">
     <div class="banner warn"><div class="ic">!</div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
-    <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option></select></div>
-    <div class="field"><label>Material</label><select></select></div>
+    <div class="field"><label>Filial</label><select id="adj-branch" onchange="fillMatSelect('adj-mat', this.value)"></select></div>
+    <div class="field"><label>Material</label><select id="adj-mat"></select></div>
     <div class="field"><label>Imzo (signed delta · "+10" yoki "−3")</label><input value="-3" /></div>
     <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Yorilgan partiya"></textarea></div>
   </div>
@@ -199,34 +133,167 @@ renderWorkshopShell();
 
 const unit = m => m.kind === 'edge' ? 'm' : 'list';
 
-const tbody = document.getElementById('stock-body');
-tbody.innerHTML = SEED.branchMaterials.map(bm => {
-  const m = SEED.lookup.matById(bm.matId);
-  const br = SEED.lookup.branchById(bm.branchId);
-  const low = bm.onHand <= bm.minStock;
-  const dims = m.kind === 'edge' ? `${m.thickness} mm · krom (metr)` : `${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}`;
-  return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · oxirgi 30 tranzaksiya')">
-    <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${dims}</small></div></div></td>
-    <td>${br.name}</td>
-    <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${bm.onHand} <small>${unit(m)}</small></td>
-    <td class="amt muted">${bm.minStock}</td>
-    <td>${low ? '<span class="pill p-warn"><span class="pd"></span>Past</span>' : '<span class="pill p-ok"><span class="pd"></span>OK</span>'}</td>
-    <td onclick="event.stopPropagation()">
-      <div class="menu-wrap">
-        <button class="menu-btn" data-menu-toggle>⋯</button>
-        <div class="menu">
-          <button class="mi" onclick="openModal('m-stockin')">Kirim yozish</button>
-          <button class="mi" onclick="openModal('m-adjust')">Tuzatish</button>
-          <div class="sep"></div>
-          <button class="mi" onclick="location.href='transfers.html'">Transfer</button>
-        </div>
-      </div>
-    </td>
-  </tr>`;
-}).join('');
+// CR4: only branches the user can scope to (manage_inventory / owner).
+const MY_BR = myBranches().filter(id => isOwner() || can('manage_inventory', id));
+const canMutate = bid => isOwner() || can('manage_inventory', bid);
 
-const matSel = document.getElementById('mat-select');
-matSel.innerHTML = SEED.materials.filter(m => m.status === 'active').map(m => `<option>${m.name}</option>`).join('');
+// Branch filter offers only the user's branches.
+(() => {
+  const sel = document.getElementById('br-filter');
+  const brs = SEED.branches.filter(b => MY_BR.includes(b.id));
+  sel.innerHTML = (brs.length > 1 ? `<option value="all">${isOwner() ? 'Barcha filiallar' : 'Mening filiallarim'}</option>` : '') +
+    brs.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  // Modal branch selects scoped the same way.
+  ['si-branch', 'adj-branch'].forEach(mid => {
+    const m = document.getElementById(mid);
+    if (m) m.innerHTML = brs.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  });
+})();
+
+const NO_BRANCHES = MY_BR.length === 0;
+
+// PU6: material selects scoped to a branch's ACTIVE branchMaterials.
+window.fillMatSelect = (selId, branchId) => {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const rows = SEED.branchMaterials.filter(bm => bm.branchId === branchId && bm.status === 'active');
+  sel.innerHTML = rows.length
+    ? rows.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<option value="${bm.matId}">${m?.name || bm.matId}</option>`; }).join('')
+    : `<option value="" disabled selected>Bu filialda faol material yo'q</option>`;
+};
+
+function currentBranchScope() {
+  const v = document.getElementById('br-filter').value;
+  return (!v || v === 'all') ? MY_BR : [v];
+}
+
+window.renderStock = () => {
+  const tbody = document.getElementById('stock-body');
+  if (NO_BRANCHES) {
+    tbody.innerHTML = `<tr><td colspan="6">${stEmpty('Filial biriktirilmagan — ustaxona egasiga murojaat qiling')}</td></tr>`;
+    return;
+  }
+  const ds = demoState();
+  if (ds === 'loading') { tbody.innerHTML = skRows(6, 6); return; }
+  if (ds === 'error') { tbody.innerHTML = `<tr><td colspan="6">${stError()}</td></tr>`; return; }
+
+  const scope = currentBranchScope();
+  const q = (document.getElementById('m-search').value || '').trim().toLowerCase();
+  const lowOnly = document.getElementById('low-only').classList.contains('on');
+  const rows = SEED.branchMaterials.filter(bm => {
+    if (!scope.includes(bm.branchId)) return false;
+    if (bm.status !== 'active') return false;
+    const m = SEED.lookup.matById(bm.matId);
+    if (q && !(m?.name || '').toLowerCase().includes(q)) return false;
+    if (lowOnly && !(bm.onHand <= bm.minStock)) return false;
+    return true;
+  });
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6">${stEmpty('Bu filialda material tanlanmagan', 'Bu filialga material qo\'shing.')}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(bm => {
+    const m = SEED.lookup.matById(bm.matId);
+    const br = SEED.lookup.branchById(bm.branchId);
+    const low = bm.onHand <= bm.minStock;
+    const dims = m.kind === 'edge' ? `${m.thickness} mm · krom (metr)` : `${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}`;
+    return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · tranzaksiyalar tabida')">
+      <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${dims}</small></div></div></td>
+      <td>${br.name}</td>
+      <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${bm.onHand} <small>${unit(m)}</small></td>
+      <td class="amt muted">${bm.minStock}</td>
+      <td>${low ? '<span class="pill p-warn"><span class="pd"></span>Past</span>' : '<span class="pill p-ok"><span class="pd"></span>OK</span>'}</td>
+      <td onclick="event.stopPropagation()">${canMutate(bm.branchId) ? `
+        <div class="menu-wrap">
+          <button class="menu-btn" data-menu-toggle aria-label="Amallar">⋯</button>
+          <div class="menu">
+            <button class="mi" onclick="openStockIn('${bm.branchId}','${bm.matId}')">Kirim yozish</button>
+            <button class="mi" onclick="openAdjust('${bm.branchId}','${bm.matId}')">Tuzatish</button>
+            ${isOwner() ? '<div class="sep"></div><button class="mi" onclick="location.href=\'transfers.html\'">Transfer</button>' : ''}
+          </div>
+        </div>` : '<span class="muted" style="font-size:11px">faqat o\'qish</span>'}
+      </td>
+    </tr>`;
+  }).join('');
+};
+
+window.openStockIn = (branchId, matId) => {
+  const bs = document.getElementById('si-branch');
+  if (branchId) bs.value = branchId;
+  fillMatSelect('mat-select', bs.value);
+  if (matId) document.getElementById('mat-select').value = matId;
+  openModal('m-stockin');
+};
+window.openAdjust = (branchId, matId) => {
+  const bs = document.getElementById('adj-branch');
+  if (branchId) bs.value = branchId;
+  fillMatSelect('adj-mat', bs.value);
+  if (matId) document.getElementById('adj-mat').value = matId;
+  openModal('m-adjust');
+};
+
+// PU6: a believable, reconciling transactions log DERIVED from the order +
+// stock seed. consume/restore carry a SYSTEM actor + an order link and no
+// human actor; no contradictory consume+restore pair on the same order; no
+// orphan adjust. Stock-in / transfer rows mirror the audit + transfers seed.
+function buildTransactions() {
+  const tx = [];
+  // consume rows: every order whose Cutting done was stamped consumed its
+  // shop sheets (one row per material). Banding done consumed edge metres.
+  SEED.orders.forEach(o => {
+    if (!MY_BR.includes(o.branchId)) return;
+    if (o.cutCompletedAt && o.sheetsUsed) {
+      Object.entries(o.sheetsUsed).forEach(([matId, qty]) => {
+        const m = SEED.lookup.matById(matId);
+        tx.push({ t: o.cutCompletedAt, type: 'consume', matName: m?.name || matId, branchId: o.branchId, qty: -qty, order: o.id, actor: 'System · order' });
+      });
+    }
+    if (o.edgeCompletedAt && o.edgeLengthByThickness) {
+      const total = Object.values(o.edgeLengthByThickness).reduce((a, b) => a + b, 0) / 1000;
+      tx.push({ t: o.edgeCompletedAt, type: 'consume', matName: 'Krom (PVC)', branchId: o.branchId, qty: -Math.round(total * 10) / 10, order: o.id, actor: 'System · order' });
+    }
+  });
+  // stock-in rows from the action log (inventory.stock_in).
+  SEED.auditLog.filter(a => a.action === 'inventory.stock_in').forEach(a => {
+    const mm = /^(\S+\s?\S*)\s·\s\+(\d+)/.exec(a.detail) || [];
+    tx.push({ t: a.t, type: 'stock_in', matName: (mm[1] || a.detail), branchId: 'yunusobod', qty: +(mm[2] || 0), supplier: 'Egger partiya', actor: SEED.lookup.userById(a.actor)?.name || a.actor });
+  });
+  // a transfer pair (owner-only action) from the transfers seed.
+  if (MY_BR.includes('yunusobod')) tx.push({ t: '13-may 16:00', type: 'transfer_out', matName: 'MDF 16 mm · qum rang', branchId: 'yunusobod', qty: -10, ref: 'tf-0042', actor: 'Hasan Karimov' });
+  if (MY_BR.includes('chilonzor')) tx.push({ t: '13-may 16:00', type: 'transfer_in', matName: 'MDF 16 mm · qum rang', branchId: 'chilonzor', qty: 10, ref: 'tf-0042', actor: 'Hasan Karimov' });
+  // one believable adjust (a write-off with a note — never an orphan).
+  if (MY_BR.includes('yunusobod')) tx.push({ t: '14-may 09:00', type: 'adjust', matName: 'LDSP 0011 PR · Oq baxmal', branchId: 'yunusobod', qty: -3, note: 'Yorilgan partiya hisobdan chiqarildi', actor: 'Hasan Karimov' });
+  return tx.sort((a, b) => (b.t || '').localeCompare(a.t || ''));
+}
+
+const TYPE_PILL = { consume: 'p-bad', stock_in: 'p-ok', restore: 'p-conf', adjust: 'p-warn', transfer_out: 'p-del', transfer_in: 'p-del' };
+window.renderTx = () => {
+  const tb = document.getElementById('tx-body');
+  if (NO_BRANCHES) { tb.innerHTML = `<tr><td colspan="8">${stEmpty('Filial biriktirilmagan')}</td></tr>`; return; }
+  const ds = demoState();
+  if (ds === 'loading') { tb.innerHTML = skRows(8, 6); return; }
+  if (ds === 'error') { tb.innerHTML = `<tr><td colspan="8">${stError()}</td></tr>`; return; }
+  const rows = buildTransactions();
+  tb.innerHTML = rows.length ? rows.map(r => {
+    const br = SEED.lookup.branchById(r.branchId);
+    const pos = r.qty >= 0;
+    return `<tr>
+      <td class="num" style="font-size:11.5px;color:var(--ink-6)">${r.t}</td>
+      <td><span class="pill ${TYPE_PILL[r.type] || 'p-conf'}" style="font-size:10.5px"><span class="pd"></span>${r.type}</span></td>
+      <td class="nm">${r.matName}</td>
+      <td>${br?.name || r.branchId}</td>
+      <td class="amt" style="color:${pos ? 'var(--success)' : 'var(--danger)'}">${pos ? '+' : ''}${r.qty}</td>
+      <td class="num muted">—</td>
+      <td>${r.order ? `<a class="id" href="order-detail.html?id=${r.order}" style="color:var(--accent);text-decoration:none">${r.order}</a>` : `<span class="muted">${r.ref || r.supplier || r.note || '—'}</span>`}</td>
+      <td><small style="color:var(--ink-8)">${r.actor}</small></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8">${stEmpty('Tranzaksiya yo\'q')}</td></tr>`;
+};
+
+window.onBranchChange = () => { renderStock(); };
+
+renderStock();
+renderTx();
 
 function renderSuppliers() {
   const sel = document.getElementById('sup-select');
@@ -240,6 +307,12 @@ function renderSuppliers() {
   </tr>`).join('');
 }
 renderSuppliers();
+
+// Initial modal material selects, scoped to the first available branch (PU6).
+if (!NO_BRANCHES) {
+  fillMatSelect('mat-select', document.getElementById('si-branch').value);
+  fillMatSelect('adj-mat', document.getElementById('adj-branch').value);
+}
 
 window.addSupplierInline = () => {
   const name = document.getElementById('new-sup-name').value.trim();

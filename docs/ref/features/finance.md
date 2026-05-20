@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 55
 ---
 
@@ -34,7 +34,9 @@ Money the workshop received. Recorded by a user with `manage_finance`. Every inc
 
 - **Record an income** — `type`; `order_id` (**required iff `order_payment`**, must be an
   order of a branch in scope); `amount_tiyin` (> 0; the client paid the full order amount or
-  a part of it); `method` (`cash` / `bank_transfer` / `other`); `received_on` (date);
+  a part of it); `method` (`cash` / `bank_transfer` / `other` — exactly these three; a
+plastic-card or terminal payment ("karta") is recorded as `bank_transfer`, there is no
+separate `card` method); `received_on` (date);
   optional `note` (bank reference / receipt id) and receipt scan. The recording user is
   logged. Several order payments may be recorded for one order (advance then balance); their
   running sum is validated **≤ the order's `total_tiyin`**.

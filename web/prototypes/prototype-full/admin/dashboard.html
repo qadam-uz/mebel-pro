@@ -19,91 +19,14 @@
     <div class="page-head">
       <div>
         <h1>Platforma asosiy</h1>
-        <div class="date">Juma, <b>15-may 2026</b> · 09:42 UTC+5</div>
+        <div class="date">Loyiha kuni · <b>19-may 2026</b> · platforma sog'ligi va insidentlar</div>
       </div>
       <div class="tools">
         <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Yangilandi')">↻ Yangilash</button>
       </div>
     </div>
 
-    <div class="kpis">
-      <div class="kpi" onclick="location.href='workshops.html'">
-        <div class="lbl">Faol ustaxonalar</div>
-        <div class="v num">4 / 5</div>
-        <div class="d"><span class="up"><b>↑ 1</b> bu oy</span><span class="muted">1 bloklangan</span></div>
-      </div>
-      <div class="kpi" onclick="location.href='orders.html'">
-        <div class="lbl">Bu oy buyurtmalar</div>
-        <div class="v num">290</div>
-        <div class="d"><span class="up"><b>↑ 14%</b></span><span class="muted">o'tgan oyga</span></div>
-      </div>
-      <div class="kpi warn" onclick="location.href='errors.html'">
-        <div class="lbl">Xatoliklar · 24 soat</div>
-        <div class="v num" style="color: var(--warn)">21</div>
-        <div class="d"><span class="warn"><b>4 ta</b> kod</span><a href="errors.html" style="color:var(--accent);font-weight:600;text-decoration:none">monitor →</a></div>
-      </div>
-      <div class="kpi bad" onclick="location.href='jobs.html'">
-        <div class="lbl">Ish failed</div>
-        <div class="v num danger-text">1</div>
-        <div class="d"><span class="danger-text"><b>daily-low-stock</b></span><a href="jobs.html" style="color:var(--accent);font-weight:600;text-decoration:none">ko'rish →</a></div>
-      </div>
-    </div>
-
-    <div class="two-col">
-      <div style="display: flex; flex-direction: column; gap: 18px">
-        <div class="card">
-          <div class="card-h">
-            <div><h2>Platforma savdo · oxirgi 14 kun</h2><div class="sub">Hammasi · <b>148.2M so'm</b> · faol ustaxonalardan</div></div>
-          </div>
-          <div class="card-b">
-            <svg class="chart" viewBox="0 0 640 200" preserveAspectRatio="none">
-              <g class="grid"><line x1="0" y1="40" x2="640" y2="40"/><line x1="0" y1="80" x2="640" y2="80"/><line x1="0" y1="120" x2="640" y2="120"/><line x1="0" y1="160" x2="640" y2="160"/></g>
-              <g class="bars" id="chart-bars"></g>
-              <g><line x1="0" y1="195" x2="640" y2="195" stroke="var(--line)"/><text x="20" y="210">2-may</text><text x="300" y="210">8-may</text><text x="560" y="210">15-may</text></g>
-            </svg>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h2>Ustaxonalar bo'yicha</h2><a class="more" href="workshops.html">hammasi →</a></div>
-          <div class="card-b" style="padding: 0 22px 18px">
-            <table class="tbl">
-              <thead><tr><th>Ustaxona</th><th class="right">Buyurtma</th><th class="right">30 kun · revenue</th><th>Holat</th></tr></thead>
-              <tbody id="ws-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 18px">
-        <div class="card">
-          <div class="card-h"><h2>Failed ish</h2><a class="more" href="jobs.html">hammasi →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="banner danger"><div class="ic">!</div><div class="grow"><b>daily-low-stock-summary</b> · TimeoutError · 15-may 08:00</div></div>
-            <button class="btn btn-acc btn-block" type="button" onclick="confirmAction({title:'Ishni qaytadan ishga tushirish'},()=>toast('Ish boshlandi'))" style="margin-top:6px">↻ Qaytadan ishga tushirish</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h2>So'nggi xatoliklar</h2><a class="more" href="errors.html">monitor →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="row-item"><div><div class="nm">insufficient_stock</div><small style="color:var(--ink-6)">inventory · 12 ta 24 soatda</small></div><div class="meta warn-text">12</div></div>
-            <div class="row-item"><div><div class="nm">optimization_timeout</div><small style="color:var(--ink-6)">cutting · 3 ta 24 soatda</small></div><div class="meta">3</div></div>
-            <div class="row-item"><div><div class="nm">invalid_state_transition</div><small style="color:var(--ink-6)">orders · 2 ta 24 soatda</small></div><div class="meta">2</div></div>
-            <div class="row-item"><div><div class="nm">invalid_oauth_signature</div><small style="color:var(--ink-6)">identity · 1 ta</small></div><div class="meta">1</div></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h2>So'nggi ustaxonalar</h2><a class="more" href="workshops.html">hammasi →</a></div>
-          <div class="card-b" style="padding-top: 0">
-            <div class="row-item"><div><div class="nm">Samarqand Yog'och</div><small style="color:var(--ink-6)">14-apr · Aziz K.</small></div><div class="meta"><span class="pill p-ok"><span class="pd"></span>Faol</span></div></div>
-            <div class="row-item"><div><div class="nm">Buxoro Stol</div><small style="color:var(--ink-6)">08-mar · Olim N.</small></div><div class="meta"><span class="pill p-bad"><span class="pd"></span>Bloklangan</span></div></div>
-            <div class="row-item"><div><div class="nm">Mebel Markazi</div><small style="color:var(--ink-6)">21-feb · Bahodir S.</small></div><div class="meta"><span class="pill p-ok"><span class="pd"></span>Faol</span></div></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="page-body"></div>
   </div>
 </main>
 
@@ -113,24 +36,96 @@
 <script>
 renderAdminShell();
 
-document.getElementById('ws-body').innerHTML = SEED.workshops.map(w => `
-  <tr class="clickable" onclick="location.href='workshop-detail.html?id=${w.id}'">
-    <td class="nm">${w.name}<small>${w.ownerName} · ${w.branches} filial</small></td>
-    <td class="amt">${w.orders30d}</td>
-    <td class="amt">${(w.orders30d * 1.2).toFixed(1)}M so'm</td>
-    <td>${w.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td>
-  </tr>
-`).join('');
+const body = document.getElementById('page-body');
+const state = demoState();
 
-const data = [42, 56, 48, 70, 60, 84, 52, 64, 80, 96, 74, 102, 86, 128];
-const W = 640, H = 200, gap = 6, bw = (W - gap * (data.length - 1)) / data.length;
-const max = Math.max(...data);
-document.getElementById('chart-bars').innerHTML = data.map((v, i) => {
-  const h = (v / max) * (H - 40);
-  const y = H - 30 - h;
-  const cls = i === data.length - 1 ? 'hi' : i === data.indexOf(max) ? 'md' : '';
-  return `<rect x="${i * (bw + gap)}" y="${y}" width="${bw}" height="${h}" rx="2" class="${cls}"/>`;
-}).join('');
+if (state === 'loading') {
+  body.innerHTML = `
+    <div class="kpis">${'<div class="kpi"><div class="sk-line w-60"></div><div class="sk" style="height:34px;width:70%;margin:10px 0"></div><div class="sk-line w-80"></div></div>'.repeat(4)}</div>
+    <div class="card"><div class="card-b" style="padding:22px">${'<div class="sk-line"></div>'.repeat(6)}</div></div>`;
+} else if (state === 'error') {
+  body.innerHTML = errState('Platforma ko\'rsatkichlarini yuklab bo\'lmadi.', 'tr-9f2a4c');
+} else {
+  // ---- Health counts only — NO money / revenue anywhere (OQ4) ----
+  const ws = SEED.workshops;
+  const activeWs = ws.filter(w => w.status === 'active').length;
+  const blockedWs = ws.filter(w => w.status === 'blocked').length;
+  const totalBranches = ws.reduce((a, w) => a + (w.branches || 0), 0);
+  const totalClients = SEED.clients.length;
+  const failedJobs = SEED.jobs.filter(j => j.lastResult === 'failed');
+  const openErrors = SEED.errors.filter(e => !e.resolved);
+  const err24h = SEED.errors.reduce((a, e) => a + e.count24h, 0);
+
+  body.innerHTML = `
+    <div class="kpis">
+      <div class="kpi" onclick="location.href='workshops.html'">
+        <div class="lbl">Faol ustaxonalar</div>
+        <div class="v num">${activeWs} <small>/ ${ws.length}</small></div>
+        <div class="d"><span class="muted">${blockedWs} bloklangan</span><a href="workshops.html" style="color:var(--accent);font-weight:600;text-decoration:none">ro'yxat →</a></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Filiallar · mijozlar</div>
+        <div class="v num">${totalBranches} <small>filial</small></div>
+        <div class="d"><span class="muted">${totalClients} mijoz platformada</span></div>
+      </div>
+      <div class="kpi ${err24h > 10 ? 'warn' : ''}" onclick="location.href='errors.html'">
+        <div class="lbl">Xatoliklar · 24 soat</div>
+        <div class="v num" ${err24h > 10 ? 'style="color:var(--warn)"' : ''}>${err24h}</div>
+        <div class="d"><span class="${err24h > 10 ? 'warn' : 'muted'}"><b>${openErrors.length} ta</b> ochiq kod</span><a href="errors.html" style="color:var(--accent);font-weight:600;text-decoration:none">monitor →</a></div>
+      </div>
+      <div class="kpi ${failedJobs.length ? 'bad' : ''}" onclick="location.href='jobs.html'">
+        <div class="lbl">Background ish</div>
+        <div class="v num ${failedJobs.length ? 'danger-text' : ''}">${failedJobs.length} <small>failed</small></div>
+        <div class="d"><span class="${failedJobs.length ? 'danger-text' : 'muted'}"><b>${failedJobs[0]?.name || 'hammasi ok'}</b></span><a href="jobs.html" style="color:var(--accent);font-weight:600;text-decoration:none">ko'rish →</a></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="card">
+          <div class="card-h"><h2>So'nggi ustaxonalar</h2><a class="more" href="workshops.html">hammasi →</a></div>
+          <div class="card-b" style="padding:0 22px 18px">
+            <table class="tbl">
+              <thead><tr><th>Ustaxona</th><th>Egasi</th><th>Filial</th><th>Yaratildi</th><th>Holat</th></tr></thead>
+              <tbody id="ws-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:18px">
+        ${failedJobs.length ? `
+        <div class="card">
+          <div class="card-h"><h2>Failed ish</h2><a class="more" href="jobs.html">hammasi →</a></div>
+          <div class="card-b" style="padding-top:0">
+            <div class="banner danger"><div class="ic">!</div><div class="grow"><b>${failedJobs[0].name}</b> · ${failedJobs[0].lastRun}</div></div>
+            <p style="margin:8px 0 12px;font-size:12.5px;color:var(--ink-8)">${failedJobs[0].error || failedJobs[0].summary}</p>
+            <button class="btn btn-acc btn-block" type="button" onclick="confirmAction({title:'Ishni qaytadan ishga tushirish',msg:'${failedJobs[0].name} ishi qo\\'lda qayta ishga tushiriladi.',okText:'Ishga tushirish'},()=>toast('Ish boshlandi'))">↻ Qaytadan ishga tushirish</button>
+          </div>
+        </div>` : ''}
+
+        <div class="card">
+          <div class="card-h"><h2>So'nggi xatoliklar</h2><a class="more" href="errors.html">monitor →</a></div>
+          <div class="card-b" style="padding-top:0" id="err-body"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('ws-body').innerHTML = ws.slice().reverse().slice(0, 5).map(w => `
+    <tr class="clickable" onclick="location.href='workshop-detail.html?id=${w.id}'">
+      <td class="nm">${w.name}</td>
+      <td><small style="color:var(--ink-6)">${w.ownerName}</small></td>
+      <td class="num">${w.branches}</td>
+      <td class="num" style="font-size:11.5px;color:var(--ink-6)">${w.createdOn}</td>
+      <td>${w.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : `<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>`}</td>
+    </tr>`).join('');
+
+  document.getElementById('err-body').innerHTML = SEED.errors.map(e => `
+    <a class="row-item clickable" style="text-decoration:none;color:inherit" href="errors.html?code=${e.code}">
+      <div><div class="nm">${e.code} ${e.spike ? '<span class="pill p-bad" style="font-size:9.5px;margin-left:4px"><span class="pd"></span>spike</span>' : ''}</div><small style="color:var(--ink-6)">${e.module} · ${e.count24h} ta 24 soatda${e.resolved ? ' · tasdiqlangan' : ''}</small></div>
+      <div class="meta ${e.count24h > 10 ? 'warn-text' : ''}">${e.count24h}</div>
+    </a>`).join('');
+}
 </script>
 </body>
 </html>

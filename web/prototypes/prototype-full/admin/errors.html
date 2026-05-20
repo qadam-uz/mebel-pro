@@ -23,43 +23,38 @@
       </div>
     </div>
 
-    <div class="filters">
-      <select><option>Hamma modullar</option><option>orders</option><option>inventory</option><option>cutting</option><option>identity</option></select>
-      <select><option>Oxirgi 24 soat</option><option>Oxirgi 7 kun</option><option>Oxirgi 30 kun</option></select>
-      <div class="chips">
-        <button class="chip on">Hammasi</button>
-        <button class="chip">Yangi</button>
-        <button class="chip">Tasdiqlangan</button>
+    <div class="filters" id="filters" hidden>
+      <select id="f-mod" onchange="render()"><option value="all">Hamma modullar</option><option>orders</option><option>inventory</option><option>cutting</option><option>identity</option></select>
+      <select id="f-thr" onchange="render()">
+        <option value="0">Har qanday count</option>
+        <option value="3">24 soat ≥ 3</option>
+        <option value="10">24 soat ≥ 10</option>
+      </select>
+      <div class="chips" id="r-chips">
+        <button class="chip on" data-r="all">Hammasi</button>
+        <button class="chip" data-r="open">Ochiq</button>
+        <button class="chip" data-r="resolved">Tasdiqlangan</button>
       </div>
     </div>
 
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>Kod</th><th>Modul</th><th class="right">24 soat</th><th class="right">7 kun</th><th>Oxirgi</th><th>Tavsif</th><th></th></tr></thead>
-        <tbody id="body"></tbody>
-      </table>
-    </div>
+    <div id="page-body"></div>
   </div>
 </main>
 
 <div id="scrim" class="scrim"></div>
 <div class="modal wide" id="m-detail">
-  <div class="modal-h"><h3 id="d-title">Xatolik tafsiloti</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3 id="d-title">Xatolik tafsiloti</h3><button class="x" data-close-modal="m-detail">✕</button></div>
   <div class="modal-b">
     <div class="banner danger"><div class="ic">!</div><div class="grow" id="d-msg"></div></div>
     <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:14px 0 8px">Stack</h4>
-    <pre style="background:var(--deep);color:#D6CDBE;padding:14px 16px;border-radius:8px;font:500 12px/1.5 var(--f-mono);overflow:auto;max-height:280px" id="d-stack"></pre>
-    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:14px 0 8px">Kontekst</h4>
-    <table class="tbl">
-      <tbody>
-        <tr><td class="muted" style="width:160px">Trace ID</td><td class="num">tr-872391·a4b2</td></tr>
-        <tr><td class="muted">Ta'sirlangan ustaxonalar</td><td>Furniture House, Toshkent Mebel</td></tr>
-        <tr><td class="muted">Foydalanuvchi</td><td>•••• (mask qilingan)</td></tr>
-        <tr><td class="muted">Modul</td><td id="d-module"></td></tr>
-      </tbody>
-    </table>
+    <pre style="background:var(--deep);color:#D6CDBE;padding:14px 16px;border-radius:8px;font:500 12px/1.5 var(--f-mono);overflow:auto;max-height:240px;white-space:pre-wrap" id="d-stack"></pre>
+    <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:14px 0 8px">Kontekst (maxfiy maydonlar maskalangan)</h4>
+    <table class="tbl"><tbody id="d-ctx"></tbody></table>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Yopish</button><button class="btn btn-acc" onclick="closeModal('m-detail');toast('Xatolik tasdiqlangan deb belgilandi')">Tasdiqlandi</button></div>
+  <div class="modal-f">
+    <button class="btn btn-outline" data-close-modal="m-detail">Yopish</button>
+    <button class="btn btn-acc" type="button" id="d-resolve">Tasdiqlandi</button>
+  </div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -68,55 +63,103 @@
 <script>
 renderAdminShell();
 
-const _errByCode = {};
-SEED.errors.forEach(e => _errByCode[e.code] = e);
+const body = document.getElementById('page-body');
+const state = demoState();
+// Live, mutable copy so "Resolve" toggles a working flag reflected in the row.
+const errs = SEED.errors.map(e => ({ ...e }));
+const errByCode = {};
+errs.forEach(e => errByCode[e.code] = e);
+let rFilter = 'all';
 
-document.getElementById('body').innerHTML = SEED.errors.map(e => `
-  <tr class="clickable" data-code="${e.code}">
-    <td class="nm">${e.code}</td>
-    <td><small style="color:var(--ink-8);font-size:12px">${e.module}</small></td>
-    <td class="amt ${e.count24h > 10 ? 'warn-text' : ''}">${e.count24h}</td>
-    <td class="amt">${e.count7d}</td>
-    <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${e.last}</span></td>
-    <td><small style="color:var(--ink-8);font-size:12px">${e.msg}</small></td>
-    <td onclick="event.stopPropagation()">
-      <div class="menu-wrap">
-        <button class="menu-btn" data-menu-toggle>⋯</button>
-        <div class="menu">
-          <button class="mi" data-action="detail" data-code="${e.code}">Tafsilotlar</button>
-          <button class="mi" data-action="resolve" data-code="${e.code}">Tasdiqlash</button>
-        </div>
-      </div>
-    </td>
-  </tr>
-`).join('');
+const preselect = new URLSearchParams(location.search).get('code');
 
-document.getElementById('body').addEventListener('click', ev => {
-  const action = ev.target.dataset.action;
-  const code = ev.target.dataset.code || ev.target.closest('tr')?.dataset.code;
-  if (!code) return;
-  if (action === 'resolve') {
-    confirmAction({ title: 'Tasdiqlanganga o\'tkazish', msg: 'Bu xatolik kodi monitor ro\'yxatidan olib tashlanadi.', okText: 'Tasdiqlash' }, () => toast('Tasdiqlandi'));
-  } else {
-    showErr(code);
+function workshopsLabel(arr) {
+  if (arr == null) return '<span style="color:var(--ink-6)">— tegishli emas (tenant-attributable emas)</span>';
+  if (!arr.length) return '<span style="color:var(--ink-6)">—</span>';
+  return arr.map(id => SEED.lookup.workshopById(id)?.name || id).join(', ');
+}
+
+function render() {
+  if (state === 'loading') {
+    body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Kod</th><th>Modul</th><th class="right">24 soat</th><th class="right">7 kun</th><th>Oxirgi</th><th>Tavsif</th><th></th></tr></thead><tbody>${skRows(7, 4)}</tbody></table></div>`;
+    return;
   }
-});
+  if (state === 'error') { body.innerHTML = errState('Xatolik monitorini yuklab bo\'lmadi.', 'tr-b50f18'); return; }
+
+  document.getElementById('filters').hidden = false;
+  const modF = document.getElementById('f-mod').value;
+  const thr = +document.getElementById('f-thr').value;
+  let rows = errs.filter(e =>
+    (modF === 'all' || e.module === modF) &&
+    (e.count24h >= thr) &&
+    (rFilter === 'all' || (rFilter === 'open' ? !e.resolved : e.resolved)));
+
+  if (!rows.length) {
+    // Documented canon empty copy (platform.md): "No errors recorded — nice."
+    body.innerHTML = emptyState('✓', 'No errors recorded — nice.', 'Bu filtr bo\'yicha xatolik yo\'q.');
+    return;
+  }
+
+  body.innerHTML = `<div class="card"><table class="tbl">
+    <thead><tr><th>Kod</th><th>Modul</th><th class="right">24 soat</th><th class="right">7 kun</th><th>Oxirgi</th><th>Tavsif</th><th></th></tr></thead>
+    <tbody>${rows.map(e => `
+      <tr class="clickable" data-code="${e.code}" onclick="showErr('${e.code}')">
+        <td class="nm">${e.code} ${e.spike ? '<span class="pill p-bad" style="font-size:9.5px;margin-left:4px"><span class="pd"></span>spike</span>' : ''}${e.resolved ? ' <span class="pill p-ok" style="font-size:9.5px;margin-left:4px"><span class="pd"></span>tasdiqlangan</span>' : ''}</td>
+        <td><small style="color:var(--ink-8);font-size:12px">${e.module}</small></td>
+        <td class="amt ${e.count24h > 10 ? 'warn-text' : ''}">${e.count24h}</td>
+        <td class="amt">${e.count7d}</td>
+        <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${e.last}</span></td>
+        <td><small style="color:var(--ink-8);font-size:12px">${e.msg}</small></td>
+        <td onclick="event.stopPropagation()">
+          <div class="menu-wrap">
+            <button class="menu-btn" data-menu-toggle aria-label="Amallar">⋯</button>
+            <div class="menu" role="menu">
+              <button class="mi" onclick="showErr('${e.code}')">Tafsilotlar</button>
+              <button class="mi" onclick="toggleResolve('${e.code}')">${e.resolved ? 'Ochiq deb belgilash' : 'Tasdiqlash (resolve)'}</button>
+            </div>
+          </div>
+        </td>
+      </tr>`).join('')}</tbody></table></div>`;
+}
+
+function toggleResolve(code) {
+  const e = errByCode[code];
+  if (!e) return;
+  if (e.resolved) { e.resolved = false; toast('Ochiq deb belgilandi'); render(); return; }
+  confirmAction({ title: 'Tasdiqlanganga o\'tkazish', msg: `&quot;${code}&quot; kodi tasdiqlangan deb belgilanadi (ro'yxatda aks etadi).`, okText: 'Tasdiqlash' }, () => {
+    e.resolved = true;
+    toast('Tasdiqlandi');
+    render();
+  });
+}
 
 function showErr(code) {
-  const e = _errByCode[code];
+  const e = errByCode[code];
   if (!e) return;
-  const mod = e.module, msg = e.msg;
-  document.getElementById('d-title').textContent = code;
-  document.getElementById('d-msg').textContent = msg;
-  document.getElementById('d-module').textContent = mod;
-  document.getElementById('d-stack').textContent = `Traceback (most recent call last):
-  File "/app/services/${mod}/use_cases.py", line 142, in handle
-    result = await session.execute(stmt)
-  File "/app/db.py", line 88, in execute
-    raise BusinessError("${code}", ...)
-${mod}.errors.${code}: ${msg}`;
+  document.getElementById('d-title').textContent = code + (e.spike ? '  · spike' : '');
+  document.getElementById('d-msg').textContent = e.msg;
+  document.getElementById('d-stack').textContent = e.stack || '(stack mavjud emas)';
+  const ctx = Object.entries(e.context || {}).map(([k, v]) => `<tr><td class="muted" style="width:180px">${k}</td><td class="num">${v}</td></tr>`).join('');
+  document.getElementById('d-ctx').innerHTML = `
+    <tr><td class="muted" style="width:180px">Trace ID</td><td class="num">${e.traceId}</td></tr>
+    <tr><td class="muted">Modul</td><td>${e.module}</td></tr>
+    <tr><td class="muted">Ta'sirlangan ustaxonalar</td><td>${workshopsLabel(e.affectedWorkshops)}</td></tr>
+    <tr><td class="muted">Foydalanuvchi</td><td>${e.affectedUser ? (SEED.lookup.userById(e.affectedUser)?.name || e.affectedUser) : '<span style="color:var(--ink-6)">— tegishli emas</span>'}</td></tr>
+    ${ctx}`;
+  const rb = document.getElementById('d-resolve');
+  rb.textContent = e.resolved ? 'Ochiq deb belgilash' : 'Tasdiqlandi';
+  rb.onclick = () => { closeModal('m-detail'); setTimeout(() => toggleResolve(code), 50); };
   openModal('m-detail');
 }
+
+document.getElementById('r-chips').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip'); if (!b) return;
+  document.querySelectorAll('#r-chips .chip').forEach(c => c.classList.remove('on'));
+  b.classList.add('on'); rFilter = b.dataset.r; render();
+});
+
+render();
+if (preselect && errByCode[preselect]) setTimeout(() => showErr(preselect), 200);
 </script>
 </body>
 </html>

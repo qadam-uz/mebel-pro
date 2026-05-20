@@ -58,9 +58,15 @@
 </main>
 
 <script>
+/* Pricing is frozen at placement — the order card shows the frozen total
+   from the very first status (never "price after confirm").
+   Client status uses CLIENT_PHASES (5 phases). ?state= for the demo. */
 const ACTIVE = ['new','confirmed','cutting','edge_banding','ready'];
 let filter = 'all';
 const clientId = 'c01';
+const forced = new URLSearchParams(location.search).get('state');
+let loaded = false;
+let dataEmpty = false;
 
 function setFilter(f) {
   filter = f;
@@ -68,9 +74,41 @@ function setFilter(f) {
   render();
 }
 
+function clientFacingState(o) { return SEED.CLIENT_PHASES[o.state]; }
+
+function nextAction(o) {
+  if (o.state === 'new') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();cancelOrder('${o.id}')">Bekor qilish</span>`;
+  if (['confirmed','cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Kuzatish</span>`;
+  if (o.state === 'ready') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Olishga tayyor</span>`;
+  if (o.state === 'completed') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Tafsilot</span>`;
+  return '';
+}
+
+function skeleton() {
+  document.getElementById('orders').innerHTML = Array.from({ length: 4 }).map(() => `
+    <div class="ord-card">
+      <div class="sk sk-line" style="width:30%"></div>
+      <div class="sk sk-line" style="width:55%;margin-top:10px;height:18px"></div>
+      <div class="sk sk-line" style="width:38%;margin-top:18px"></div>
+    </div>`).join('');
+}
+
+function errorState() {
+  document.getElementById('orders').innerHTML = `
+    <div class="st-error">
+      <div class="ic">!</div>
+      <h3>Buyurtmalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
+      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+    </div>`;
+}
+
 function render() {
+  if (!loaded) return;
   const q = document.getElementById('search').value.trim().toLowerCase();
-  const orders = SEED.orders.filter(o => o.clientId === clientId).filter(o => {
+  const all = dataEmpty ? [] : SEED.orders.filter(o => o.clientId === clientId);
+  const orders = all.filter(o => {
     if (filter === 'active' && !ACTIVE.includes(o.state)) return false;
     if (filter === 'completed' && o.state !== 'completed') return false;
     if (filter === 'cancelled' && o.state !== 'cancelled') return false;
@@ -79,13 +117,15 @@ function render() {
   });
   const wrap = document.getElementById('orders');
   if (orders.length === 0) {
-    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma yo&#39;q</h3><p>${filter === 'all' ? 'Hali buyurtma bermagansiz — chizmadan boshlang.' : 'Bu filterga mos buyurtma yo&#39;q.'}</p><a class="btn btn-acc" href="cutting-drafts.html">+ Yangi buyurtma</a></div>`;
+    const msg = (filter === 'all' && !q)
+      ? 'Hali buyurtma bermagansiz — chizmadan boshlang.'
+      : 'Bu so\'rovga mos buyurtma topilmadi.';
+    wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Buyurtma yo'q</h3><p>${msg}</p><a class="btn btn-acc" href="cutting-drafts.html">+ Yangi buyurtma</a></div>`;
     return;
   }
   wrap.innerHTML = orders.map(o => {
     const br = SEED.lookup.branchById(o.branchId);
     const action = nextAction(o);
-    const showTotal = ['ready','completed'].includes(o.state);
     return `
       <article class="ord-card" onclick="location.href='order-detail.html?id=${o.id}'">
         <div class="top">
@@ -97,24 +137,12 @@ function render() {
           <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
         </div>
         <div class="foot">
-          <div class="total">${showTotal ? fmtTiyin(o.totalTiyin) : '<small style="font-size:12.5px;color:var(--ink-6)">Narx ustaxona tasdiqlagach</small>'}</div>
+          <div class="total">${fmtTiyin(o.totalTiyin)} <small>jami narx</small></div>
           <div>${action}</div>
         </div>
       </article>
     `;
   }).join('');
-}
-
-function clientFacingState(o) {
-  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
-  return SEED.STATE_LABELS[o.state];
-}
-
-function nextAction(o) {
-  if (o.state === 'new') return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();cancelOrder('${o.id}')">Bekor qilish</span>`;
-  if (['confirmed','cutting','edge_banding'].includes(o.state)) return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Kuzatish</span>`;
-  if (o.state === 'ready') return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
-  return '';
 }
 
 function cancelOrder(id) {
@@ -126,7 +154,14 @@ function cancelOrder(id) {
   }, () => { toast('Buyurtma bekor qilindi'); render(); });
 }
 
-render();
+function boot() {
+  loaded = false;
+  if (forced === 'error') { errorState(); return; }
+  if (forced === 'empty') { dataEmpty = true; loaded = true; render(); return; }
+  skeleton();
+  setTimeout(() => { loaded = true; render(); }, forced === 'loading' ? 100000 : 450);
+}
+boot();
 </script>
 </body>
 </html>

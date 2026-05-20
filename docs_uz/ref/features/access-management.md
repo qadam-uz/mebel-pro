@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 20
 ---
 
@@ -104,7 +104,13 @@ Platform operator workshop'ni uning first user'i bilan atomik provision qiladi:
   order'lar **freeze** bo'ladi — staff act qila olmaydi, chunki ular log in qila olmaydi; avtomatik
   transition yo'q. Unblock qilish session'larni **tiklamaydi** — user'lar qayta log in qiladi.
 
-Workshop *editing* (profile, settings, payment channels) [`workshop.md`](workshop.md)'da.
+Operator'ning **yagona** workshop write action'lari: provision (workshop + first owner,
+atomik), block va unblock. Operator workshop profile'ni yoki owner'ning identity field'larini
+(name / phone / login) **edit qilmaydi** — bu owner hududi va unga operator path yo'q.
+Workshop *editing* (profile, settings, payment channels) [`workshop.md`](workshop.md)'da;
+owner-identity edit'lar owner self-service / owner-managed, operator-managed emas. Agar
+operator orqali owner'ning phone'ini tuzatish hech qachon real ehtiyojga aylansa, u avval
+shu yerda specify qilinishi kerak — u v1'da ataylab yo'q.
 
 ### UX
 
@@ -235,6 +241,10 @@ Rules:
   yoki ularga boshqasi grant qilinmaguncha ular amalda actionable screen'larsiz qoladi; branch
   picker inactive entry'ni yashiradi.
 - **Zero grant'li staff user** — log in qila oladi; har bir workshop screen empty / hidden.
+- **Owner non-home branch'da cutter / edger** — allowed: `is_owner` har bir branch'da
+  `process_production` ushlab turadi va non-owner staff'ni bog'laydigan
+  `home_branch_id = order.branch_id` assignment check'dan **exempt** (qarang
+  [`orders.md`](orders.md)).
 - **Keyinroq `inactive` bo'ladigan branch'dagi grant** — inert; branch picker'dan
   yo'qoladi; reactivate qilish grant'ni yana live qiladi.
 - **Owner o'zini block qiladi** — disallowed (workshop'da active owner bo'lishi kerak).

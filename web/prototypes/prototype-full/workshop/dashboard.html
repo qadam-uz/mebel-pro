@@ -333,23 +333,44 @@
   <script>
     renderWorkshopShell();
 
+    // CR4: a staff user with zero grants can log in but sees nothing
+    // actionable — the canonical zero-grant home.
+    const hasAnyGrant = isOwner() || (ME.grants && Object.keys(ME.grants).length > 0);
+    if (!hasAnyGrant) {
+      document.querySelector('.page .tools')?.remove();
+      const pg = document.querySelector('.page');
+      pg.querySelectorAll('.kpis, .two-col').forEach(n => n.remove());
+      pg.querySelector('.page-head .date').textContent = 'Furniture House';
+      const box = document.createElement('div');
+      box.innerHTML = stEmpty('Sizga hali hech qanday ruxsat berilmagan — ustaxona egasiga murojaat qiling',
+        'Ustaxona egasi sizga filial va vazifa biriktirgach, shu sahifada ishingiz ko\'rinadi.');
+      pg.appendChild(box.firstElementChild);
+      throw 'halt-zero-grant';
+    }
+
+    // CR4: scope all dashboard data to the branches the user can see.
+    const MY_BR = myBranches();
+    const canFin = isOwner() || canAny('manage_finance') || canAny('view_finance_reports');
+    const canOrd = isOwner() || canAny('manage_orders') || canAny('view_dashboard');
+    const canInv = isOwner() || canAny('manage_inventory');
+
     // KPIs: orders in production, income, expenses, net, low-stock (no refunds, no payroll).
-    const inProd = SEED.orders.filter(o => ['new', 'confirmed', 'cutting', 'edge_banding', 'ready'].includes(o.state)).length;
-    const income = SEED.incomes.filter(i => i.status === 'recorded').reduce((a, i) => a + i.amountTiyin, 0);
-    const expense = SEED.expenses.filter(e => e.status === 'recorded').reduce((a, e) => a + e.amountTiyin, 0);
-    const lowStock = SEED.branchMaterials.filter(bm => bm.status === 'active' && bm.onHand <= bm.minStock).length;
+    const inProd = SEED.orders.filter(o => MY_BR.includes(o.branchId) && ['new', 'confirmed', 'cutting', 'edge_banding', 'ready'].includes(o.state)).length;
+    const income = SEED.incomes.filter(i => i.status === 'recorded' && MY_BR.includes(i.branchId)).reduce((a, i) => a + i.amountTiyin, 0);
+    const expense = SEED.expenses.filter(e => e.status === 'recorded' && (e.branchId == null || MY_BR.includes(e.branchId))).reduce((a, e) => a + e.amountTiyin, 0);
+    const lowStock = SEED.branchMaterials.filter(bm => bm.status === 'active' && MY_BR.includes(bm.branchId) && bm.onHand <= bm.minStock).length;
     document.getElementById('kpis').innerHTML = `
-  <div class="kpi" onclick="location.href='orders.html'">
+  ${canOrd ? `<div class="kpi" onclick="location.href='orders.html'">
     <div class="lbl">Ishlab chiqarishda</div>
     <div class="v num">${inProd}</div>
     <div class="d"><span class="muted">faol buyurtmalar</span><a href="orders.html" style="color:var(--accent);font-weight:600;text-decoration:none">taxta →</a></div>
-  </div>
-  <div class="kpi" onclick="location.href='finance.html'">
+  </div>` : ''}
+  ${canFin ? `<div class="kpi" onclick="location.href='finance.html'">
     <div class="lbl">Tushum</div>
     <div class="v num">${fmtTiyin(income)}</div>
     <div class="d"><span class="muted">yozilgan</span></div>
-  </div>
-  <div class="kpi" onclick="location.href='expenses.html'">
+  </div>` : ''}
+  ${canFin ? `<div class="kpi" onclick="location.href='expenses.html'">
     <div class="lbl">Xarajatlar</div>
     <div class="v num">${fmtTiyin(expense)}</div>
     <div class="d"><span class="muted">yozilgan</span></div>
@@ -358,15 +379,15 @@
     <div class="lbl" style="color:${income - expense >= 0 ? 'var(--success)' : 'var(--danger)'}">Foyda</div>
     <div class="v num ${income - expense >= 0 ? 'success-text' : 'danger-text'}">${fmtTiyin(income - expense)}</div>
     <div class="d"><span class="muted">tushum − xarajat</span></div>
-  </div>
-  <div class="kpi warn" onclick="location.href='inventory.html'">
+  </div>` : ''}
+  ${canInv ? `<div class="kpi warn" onclick="location.href='inventory.html'">
     <div class="lbl">Pastdagi zaxiralar</div>
     <div class="v num" style="color:var(--warn)">${lowStock}</div>
     <div class="d"><a href="inventory.html" style="color:var(--accent);font-weight:600;text-decoration:none">ombor →</a></div>
-  </div>`;
+  </div>` : ''}`;
 
-    // Recent orders
-    const recent = SEED.orders.slice(0, 8);
+    // Recent orders (branch-scoped)
+    const recent = SEED.orders.filter(o => MY_BR.includes(o.branchId)).slice(0, 8);
     document.getElementById('home-orders').innerHTML = recent.map(o => {
       const cl = SEED.lookup.clientById(o.clientId);
       const br = SEED.lookup.branchById(o.branchId);

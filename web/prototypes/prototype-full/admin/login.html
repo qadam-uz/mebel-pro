@@ -15,30 +15,127 @@
 </head>
 <body>
 <div class="auth-wrap">
-  <div class="auth-card">
-    <a class="brand" href="../landing/landing.html">
+  <!-- ===== Sign-in ===== -->
+  <div class="auth-card" id="card-login">
+    <span class="brand">
       <span class="mk">M</span>
       <span style="font-family:var(--f-display);font-size:19px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">Superadmin</small></span>
-    </a>
+    </span>
     <h1>Operator paneliga kirish</h1>
-    <p class="sub">Bu sahifa faqat platforma xodimlari uchun. Boshqa rollar avtomatik blokga oladi.</p>
+    <p class="sub">Bu panel platforma operatorlari uchun.</p>
 
-    <form onsubmit="login(event)">
-      <div class="field"><label>Login</label><input value="nuriddin" required /></div>
-      <div class="field"><label>Parol</label><input type="password" value="••••••••" required /></div>
-      <button class="btn btn-primary btn-block btn-lg" type="submit">Kirish</button>
+    <div class="lockout" id="lockout" hidden></div>
+    <div class="err-msg" id="login-err" hidden>Login yoki parol noto'g'ri.</div>
+
+    <form onsubmit="doLogin(event)" novalidate>
+      <div class="field"><label>Login</label><input id="lg-login" value="nuriddin" autocomplete="username" required /></div>
+      <div class="field"><label>Parol</label><input id="lg-pass" type="password" placeholder="••••••••" autocomplete="current-password" required /></div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit" id="lg-btn">Kirish</button>
     </form>
 
     <div class="meta">
-      Platforma xodimlari backend CLI orqali yaratiladi.<br>
-      <a href="../landing/landing.html" style="margin-top:6px;display:inline-block">← Sahifaga qaytish</a>
+      Platforma operatorlari backend CLI orqali yaratiladi (chicken-and-egg).<br>
+      5 ta noto'g'ri urinishdan keyin 15 daqiqaga bloklanadi.
     </div>
+  </div>
+
+  <!-- ===== Force password change (first login / after a reset) ===== -->
+  <div class="auth-card" id="card-fpc" hidden>
+    <span class="brand">
+      <span class="mk">M</span>
+      <span style="font-family:var(--f-display);font-size:19px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">Superadmin</small></span>
+    </span>
+    <h1>Yangi parol o'rnating</h1>
+    <p class="sub">Hisobingiz vaqtinchalik parol bilan yaratilgan. Davom etishdan oldin doimiy parol o'rnating.</p>
+
+    <form onsubmit="doFpc(event)" novalidate>
+      <div class="field">
+        <label>Yangi parol</label>
+        <input id="fpc-new" type="password" autocomplete="new-password" oninput="onPwInput()" required />
+        <div class="pw-meter" id="pw-meter"><i></i><i></i><i></i><i></i></div>
+        <div class="pw-reqs" id="pw-reqs">
+          <span data-r="len">kamida 8 belgi</span>
+          <span data-r="hasU">1 bosh harf</span>
+          <span data-r="hasL">1 kichik harf</span>
+          <span data-r="hasD">1 raqam</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Parolni tasdiqlang</label>
+        <input id="fpc-confirm" type="password" autocomplete="new-password" required />
+        <div class="err" id="fpc-err" hidden>Parollar mos kelmadi.</div>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit" id="fpc-btn" disabled>Saqlash va davom etish</button>
+    </form>
+    <div class="meta">Bu ekran parol o'rnatilmaguncha panelni bloklaydi.</div>
   </div>
 </div>
 
 <script src="../assets/app.js"></script>
 <script>
-function login(e) { e.preventDefault(); toast('Kirildi'); setTimeout(() => location.href = 'dashboard.html', 600); }
+// Demo: ?fpc=1 jumps straight to force-password-change; ?locked=1 shows lockout.
+const qp = new URLSearchParams(location.search);
+let attempts = 0;
+let lockedUntil = null;
+
+if (qp.get('fpc') === '1') { show('card-fpc'); }
+if (qp.get('locked') === '1') { lock(); }
+
+function show(id) {
+  document.querySelectorAll('.auth-card').forEach(c => c.hidden = c.id !== id);
+}
+function lock() {
+  const until = new Date(Date.now() + 15 * 60 * 1000);
+  lockedUntil = until;
+  const hh = String(until.getHours()).padStart(2, '0');
+  const mm = String(until.getMinutes()).padStart(2, '0');
+  const el = document.getElementById('lockout');
+  el.textContent = `Juda ko'p urinish. ${hh}:${mm} da qayta urinib ko'ring.`;
+  el.hidden = false;
+  document.getElementById('lg-btn').disabled = true;
+}
+function doLogin(e) {
+  e.preventDefault();
+  if (lockedUntil && lockedUntil > new Date()) return;
+  const pass = document.getElementById('lg-pass').value;
+  // Demo auth: empty/"temp" → first-login force-change; "wrong" → generic error.
+  if (!pass || pass.toLowerCase() === 'temp') {
+    document.getElementById('login-err').hidden = true;
+    toast('Vaqtinchalik parol qabul qilindi');
+    setTimeout(() => show('card-fpc'), 500);
+    return;
+  }
+  if (pass.toLowerCase() === 'wrong') {
+    attempts++;
+    document.getElementById('login-err').hidden = false;
+    if (attempts >= 5) lock();
+    return;
+  }
+  document.getElementById('login-err').hidden = true;
+  toast('Kirildi');
+  setTimeout(() => location.href = 'dashboard.html', 600);
+}
+function onPwInput() {
+  const v = document.getElementById('fpc-new').value;
+  const s = pwStrength(v);
+  const m = document.getElementById('pw-meter');
+  m.className = 'pw-meter s' + s.score;
+  ['len', 'hasU', 'hasL', 'hasD'].forEach(k => {
+    document.querySelector(`#pw-reqs span[data-r="${k}"]`).classList.toggle('ok', !!s[k]);
+  });
+  document.getElementById('fpc-btn').disabled = !s.ok;
+}
+function doFpc(e) {
+  e.preventDefault();
+  const a = document.getElementById('fpc-new').value;
+  const b = document.getElementById('fpc-confirm').value;
+  const err = document.getElementById('fpc-err');
+  if (!pwStrength(a).ok) return;
+  if (a !== b) { err.hidden = false; return; }
+  err.hidden = true;
+  toast('Parol o\'rnatildi');
+  setTimeout(() => location.href = 'dashboard.html', 600);
+}
 </script>
 </body>
 </html>

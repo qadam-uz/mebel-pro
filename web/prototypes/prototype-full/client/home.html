@@ -102,28 +102,14 @@
 <script>
 const clientId = 'c01';
 const ACTIVE = ['new','confirmed','cutting','edge_banding','ready'];
+const forced = new URLSearchParams(location.search).get('state');
 
 const myOrders = SEED.orders.filter(o => o.clientId === clientId);
-const active = myOrders.filter(o => ACTIVE.includes(o.state));
-const drafts = SEED.cuttings.filter(c => c.status === 'draft');
-
-// ---- KPI strip ----
-const kReady = active.filter(o => o.state === 'ready').length;
-const kProd = active.filter(o => ['cutting','edge_banding'].includes(o.state)).length;
-const kpis = [
-  { v: active.length, l: 'Faol buyurtma', href: 'orders.html', hot: false },
-  { v: kProd, l: 'Ishlab chiqarishda', href: 'orders.html', hot: false },
-  { v: kReady, l: 'Olishga tayyor', href: 'orders.html', hot: kReady > 0 },
-  { v: drafts.length, l: 'Saqlangan chizma', href: 'cutting-drafts.html', hot: false },
-];
-document.getElementById('kpis').innerHTML = kpis.map(k => `
-  <a class="kpi ${k.hot ? 'hot' : ''}" href="${k.href}">
-    <div class="v">${k.v}<small> ta</small></div>
-    <div class="l">${k.l}</div>
-  </a>`).join('');
+let active = myOrders.filter(o => ACTIVE.includes(o.state));
+let drafts = SEED.cuttings.filter(c => c.status === 'draft');
 
 // ---- Active orders with pipeline progress ----
-// 5 client phases: Joylandi · Tasdiqlandi · Ishlab chiqarish · Tayyor · Tugatildi
+// 5 client phases: Joylashtirildi · Tasdiqlandi · Ishlab chiqarishda · Tayyor · Topshirildi
 function stageIndex(state) {
   if (state === 'new') return 0;
   if (state === 'confirmed') return 1;
@@ -134,7 +120,13 @@ function stageIndex(state) {
 
 function stepper(o) {
   const cur = stageIndex(o.state);
-  const labels = ['Joylandi', 'Tasdiqlandi', 'Ishlab chiqarish', 'Tayyor'];
+  // Labels from CLIENT_PHASES — never hardcode the phase text.
+  const labels = [
+    SEED.CLIENT_PHASES.new,
+    SEED.CLIENT_PHASES.confirmed,
+    SEED.CLIENT_PHASES.cutting,
+    SEED.CLIENT_PHASES.ready
+  ];
   let h = '<div class="step">';
   labels.forEach((lb, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'cur' : '');
@@ -145,25 +137,67 @@ function stepper(o) {
   return h;
 }
 
-function clientFacingState(o) {
-  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
-  return SEED.STATE_LABELS[o.state];
-}
+// Single source for the client-facing phase label.
+function clientFacingState(o) { return SEED.CLIENT_PHASES[o.state]; }
 
 function nextAction(o) {
   if (o.state === 'new')
     return `<span class="btn btn-outline btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Tafsilot</span>`;
   if (o.state === 'ready')
-    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();toast('Olishga tayyor · ustaxonaga keling')">Olishga tayyor</span>`;
+    return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Olishga tayyor</span>`;
   if (['confirmed','cutting','edge_banding'].includes(o.state))
     return `<span class="btn btn-acc btn-sm" onclick="event.stopPropagation();location.href='order-detail.html?id=${o.id}'">Kuzatish</span>`;
   return '';
 }
 
-const aw = document.getElementById('active');
-if (active.length === 0) {
-  aw.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Faol buyurtma yo&#39;q</h3><p>Chizmadan boshlab birinchi buyurtmangizni bering.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
-} else {
+// ---- KPI strip ----
+function renderKpis() {
+  const kReady = active.filter(o => o.state === 'ready').length;
+  const kProd = active.filter(o => ['cutting','edge_banding'].includes(o.state)).length;
+  const kpis = [
+    { v: active.length, l: 'Faol buyurtma', href: 'orders.html', hot: false },
+    { v: kProd, l: 'Ishlab chiqarishda', href: 'orders.html', hot: false },
+    { v: kReady, l: 'Olishga tayyor', href: 'orders.html', hot: kReady > 0 },
+    { v: drafts.length, l: 'Saqlangan chizma', href: 'cutting-drafts.html', hot: false },
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(k => `
+    <a class="kpi ${k.hot ? 'hot' : ''}" href="${k.href}">
+      <div class="v">${k.v}<small> ta</small></div>
+      <div class="l">${k.l}</div>
+    </a>`).join('');
+}
+
+function skeleton() {
+  document.getElementById('kpis').innerHTML = Array.from({ length: 4 }).map(() =>
+    `<div class="kpi"><div class="sk sk-line" style="width:40px;height:24px"></div><div class="sk sk-line" style="width:70%;margin-top:10px"></div></div>`).join('');
+  document.getElementById('active').innerHTML = Array.from({ length: 2 }).map(() => `
+    <div class="ao">
+      <div class="sk sk-line" style="width:30%"></div>
+      <div class="sk sk-line" style="width:55%;margin-top:10px;height:18px"></div>
+      <div class="sk sk-line" style="width:100%;margin-top:18px;height:32px"></div>
+      <div class="sk sk-line" style="width:40%;margin-top:16px"></div>
+    </div>`).join('');
+  document.getElementById('drafts').innerHTML = Array.from({ length: 2 }).map(() =>
+    `<div class="dr"><div><div class="sk sk-line" style="width:50%"></div><div class="sk sk-line" style="width:70%;margin-top:8px"></div></div><div class="sk sk-line" style="width:56px"></div></div>`).join('');
+}
+
+function errorState(targetId) {
+  document.getElementById(targetId).innerHTML = `
+    <div class="st-error">
+      <div class="ic">!</div>
+      <h3>Ma'lumotni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
+      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+    </div>`;
+}
+
+function renderActive() {
+  const aw = document.getElementById('active');
+  if (active.length === 0) {
+    aw.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Faol buyurtma yo'q</h3><p>Hali buyurtma bermagansiz — chizmadan boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+    return;
+  }
   aw.innerHTML = active.map(o => {
     const br = SEED.lookup.branchById(o.branchId);
     return `
@@ -178,18 +212,19 @@ if (active.length === 0) {
         </div>
         ${stepper(o)}
         <div class="foot">
-          <div class="total">${o.state === 'ready' ? fmtTiyin(o.totalTiyin) : '<small style="font-size:11.5px;color:var(--ink-6)">Narx ustaxona tasdiqlagach</small>'}</div>
+          <div class="total">${fmtTiyin(o.totalTiyin)} <small>jami narx</small></div>
           <div>${nextAction(o)}</div>
         </div>
       </article>`;
   }).join('');
 }
 
-// ---- Recent drafts (up to 3) ----
-const dw = document.getElementById('drafts');
-if (drafts.length === 0) {
-  dw.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Saqlangan chizma yo&#39;q</h3><p>Yangi chizmadan boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
-} else {
+function renderDrafts() {
+  const dw = document.getElementById('drafts');
+  if (drafts.length === 0) {
+    dw.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Saqlangan chizma yo'q</h3><p>Saqlangan chizma yo'q — yangisini boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+    return;
+  }
   dw.innerHTML = drafts.slice(0, 3).map(c => {
     const matIds = [...new Set(c.partList.map(p => p.matId).filter(Boolean))];
     const matLabels = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean);
@@ -212,6 +247,25 @@ if (drafts.length === 0) {
       </article>`;
   }).join('');
 }
+
+function renderAll() {
+  renderKpis();
+  renderActive();
+  renderDrafts();
+}
+
+function boot() {
+  if (forced === 'error') {
+    document.getElementById('kpis').innerHTML = '';
+    errorState('active');
+    document.getElementById('drafts').innerHTML = '';
+    return;
+  }
+  if (forced === 'empty') { active = []; drafts = []; renderAll(); return; }
+  skeleton();
+  setTimeout(() => { renderAll(); }, forced === 'loading' ? 100000 : 450);
+}
+boot();
 </script>
 </body>
 </html>

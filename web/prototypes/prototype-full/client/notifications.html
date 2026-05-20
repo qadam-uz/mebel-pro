@@ -13,8 +13,9 @@
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
 <meta name="theme-color" content="#FAF7F2" />
 <style>
-  .note-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; transition: border-color .12s; }
+  .note-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; transition: border-color .12s; text-align: left; width: 100%; box-sizing: border-box; }
   .note-card:hover { border-color: var(--ink-12); }
+  .note-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .note-card.unread { background: var(--accent-soft); border-color: var(--accent-tint); }
   .note-card .ic { width: 38px; height: 38px; border-radius: 8px; display: grid; place-items: center; font: 700 14px var(--f-display); color: #fff; }
   .note-card .ic.order { background: var(--accent); }
@@ -23,6 +24,8 @@
   .note-card .nm { font: 600 14px var(--f-ui); color: var(--ink-12); }
   .note-card .body { font-size: 12.5px; color: var(--ink-8); margin-top: 2px; }
   .note-card .t { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-6); white-space: nowrap; }
+  .sk-note { display: grid; grid-template-columns: 38px 1fr 64px; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; }
+  .sk-note .sk { width: 38px; height: 38px; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -48,6 +51,7 @@
     <div class="chips">
       <button class="chip on" data-filter="all" onclick="setFilter('all')">Hammasi</button>
       <button class="chip" data-filter="unread" onclick="setFilter('unread')">O'qilmagan</button>
+      <button class="chip" data-filter="read" onclick="setFilter('read')">O'qilgan</button>
     </div>
   </div>
 
@@ -55,14 +59,12 @@
 </main>
 
 <script>
-const items = [
-  { id: 'n1', kind: 'order', read: false, t: '5 daqiqa', title: 'Ishlab chiqarishda · MP-2026-05-0091', body: '"Kuhna mebel — 4 shkaf · stol" buyurtmangiz ustaxonada ishlanmoqda', link: 'order-detail.html?id=MP-2026-05-0091' },
-  { id: 'n2', kind: 'order', read: false, t: 'bugun · 08:40', title: 'Buyurtma tasdiqlandi · MP-2026-05-0087', body: 'Ustaxona buyurtmangizni qabul qildi — tez orada ishga olinadi', link: 'order-detail.html?id=MP-2026-05-0087' },
-  { id: 'n3', kind: 'ready', read: false, t: 'kecha · 16:00', title: 'Olishga tayyor · MP-2026-05-0089', body: 'Yunusobod ustaxonasidan olib ketishingiz mumkin', link: 'order-detail.html?id=MP-2026-05-0089' },
-  { id: 'n4', kind: 'order', read: true, t: '13-may · 18:42', title: 'Buyurtma tugatildi · MP-2026-05-0072', body: 'Mijoz olib ketdi — rahmat!', link: 'order-detail.html?id=MP-2026-05-0072' },
-  { id: 'n5', kind: 'cancel', read: true, t: '09-apr · 14:00', title: 'Buyurtma bekor qilindi · MP-2026-04-0856', body: 'Sabab: mijoz boshqa filialni tanladi', link: 'order-detail.html?id=MP-2026-04-0856' },
-];
+/* The notification inbox shares the client's notification store from
+   client-shell.js, so the bell badge and this page never drift.
+   ?state=loading|error|empty toggles the data-screen states for the demo. */
+const items = window.clientNotifications || [];
 let filter = 'all';
+const forced = new URLSearchParams(location.search).get('state');
 
 function setFilter(f) {
   filter = f;
@@ -70,22 +72,51 @@ function setFilter(f) {
   render();
 }
 
+function skeleton() {
+  const wrap = document.getElementById('notes');
+  wrap.innerHTML = Array.from({ length: 5 }).map(() => `
+    <div class="sk-note">
+      <div class="sk"></div>
+      <div><div class="sk sk-line" style="width:60%"></div><div class="sk sk-line" style="width:85%;margin-top:8px"></div></div>
+      <div class="sk sk-line" style="width:48px"></div>
+    </div>`).join('');
+}
+
+function errorState() {
+  document.getElementById('notes').innerHTML = `
+    <div class="st-error">
+      <div class="ic">!</div>
+      <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
+      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+    </div>`;
+}
+
 function render() {
-  const list = items.filter(n => filter === 'all' || (filter === 'unread' && !n.read));
+  const list = items.filter(n =>
+    filter === 'all' ||
+    (filter === 'unread' && !n.read) ||
+    (filter === 'read' && n.read));
   const wrap = document.getElementById('notes');
   if (list.length === 0) {
-    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Bildirishnomalar yo'q</h3><p>Yangi xabar kelganda shu yerda paydo bo'ladi.</p></div>`;
+    const msg = filter === 'unread'
+      ? "O'qilmagan bildirishnoma yo'q — hammasini ko'rib chiqdingiz."
+      : filter === 'read'
+      ? "O'qilgan bildirishnoma yo'q."
+      : "Hozircha bildirishnoma yo'q — buyurtma holati o'zgarsa shu yerda ko'rinadi.";
+    wrap.innerHTML = `<div class="st-empty"><div class="ic">✓</div><h3>Bildirishnoma yo'q</h3><p>${msg}</p></div>`;
     return;
   }
   wrap.innerHTML = list.map(n => `
-    <article class="note-card ${n.read ? '' : 'unread'}" onclick="openNote('${n.id}', '${n.link}')">
+    <button class="note-card ${n.read ? '' : 'unread'}" type="button" onclick="openNote('${n.id}', '${n.link}')">
       <div class="ic ${n.kind}">${n.kind[0].toUpperCase()}</div>
       <div>
         <div class="nm">${n.title}</div>
         <div class="body">${n.body}</div>
       </div>
       <div class="t">${n.t}</div>
-    </article>
+    </button>
   `).join('');
 }
 
@@ -95,8 +126,22 @@ function openNote(id, link) {
   location.href = link;
 }
 
-function markAllRead() { items.forEach(n => n.read = true); toast('Hammasi o\'qildi deb belgilandi'); render(); }
-render();
+function markAllRead() {
+  items.forEach(n => n.read = true);
+  toast('Hammasi o\'qildi deb belgilandi');
+  render();
+}
+
+function boot() {
+  if (forced === 'error') { errorState(); return; }
+  if (forced === 'empty') { items.length = 0; render(); return; }
+  skeleton();
+  // Simulated fetch — never an infinite spinner.
+  setTimeout(() => {
+    render();
+  }, forced === 'loading' ? 100000 : 450);
+}
+boot();
 </script>
 </body>
 </html>

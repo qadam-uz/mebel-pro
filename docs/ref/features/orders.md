@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 30
 ---
 
@@ -106,10 +106,15 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 
 ### Production stamps
 
-The cutter and edger are workshop users holding `process_production` on the order's branch
-(no separate worker entity — see [`access-patterns.md`](../../access-patterns.md)). The
-system stamps the order at each job's completion; these stamps are the **only** input to the
-worker-production reports the accountant uses ([`finance.md`](finance.md)).
+The cutter and edger are workshop users holding `process_production` on the order's branch,
+with `home_branch_id = order.branch_id` — **except the owner**, who holds
+`process_production` on every branch implicitly and may be assigned as cutter or edger on
+any branch regardless of their `home_branch_id` (a one-person shop's owner floats between
+branches; the constraint exists to keep non-owner staff at the branch they physically work
+at, and the owner has no such home). No separate worker entity — see
+[`access-patterns.md`](../../access-patterns.md). The system stamps the order at each job's
+completion; these stamps are the **only** input to the worker-production reports the
+accountant uses ([`finance.md`](finance.md)).
 
 | Stamp | Set at | Read by |
 |---|---|---|
@@ -144,10 +149,22 @@ The order **never holds payments or refunds**. All money lives in the finance mo
 the order — the amount the client actually paid (full or partial) and the date — at the
 counter. No in-system payment, no gateway, no payment-driven status.
 
-- **The client sees the order's finance summary only at `ready` and `completed`** (order
-  total, recorded so far, balance) — the figure they need to settle on collection and their
-  receipt afterwards. There is no in-app payment action; a discrepancy ("I paid, it's not
-  marked") is resolved out-of-system by calling the workshop.
+- **One disclosure rule.** Split the order's money into two parts and gate them
+  differently:
+  - The **frozen total + price breakdown** is visible to the client **from placement
+    onward** (the Overview tab). The client already saw these figures in the order wizard;
+    pricing is frozen at creation and never re-priced, so there is nothing to hide and
+    hiding it only confuses ("what will this cost?").
+  - The **settlement figures** — recorded-so-far and balance — appear to the client
+    **only at `ready` and `completed`** (the Finance tab), the moment they need to settle
+    on collection and the receipt afterwards. There is no in-app payment action; a
+    discrepancy ("I paid, it's not marked") is resolved out-of-system by calling the
+    workshop.
+  - **Workshop side.** Staff with `view_finance_reports` or `manage_finance` see a
+    read-only settlement summary (total / recorded / balance) on the order detail at
+    **any** status, sourced from the finance module — distinct from the client's
+    ready/completed gate. This is not a payments tab; recording and correcting money stays
+    in the finance module ([`finance.md`](finance.md)).
 - **Cancellation never creates a refund record.** If money must go back, the accountant
   books an *expense* in the finance module. A cancelled order carries only its reason.
 
@@ -203,8 +220,10 @@ orders**). Branch is chosen later, at placement, against a specific cutting.
   `/c/orders/:id` with a banner: *"Order placed — the workshop will review and call you."*
 
 - **My orders** (`/c/orders`) — filter chips (All / Active / Completed / Cancelled), search
-  by order number, cards (order #, branch, date, status badge, primary action — "Track").
-  Empty: "No orders yet — start from a cutting."
+  by order number, cards (order #, branch, date, status badge, the **frozen total** —
+  shown from placement, never "price after confirm" since pricing is frozen at creation —
+  primary action "Track", which opens the order detail). Empty: "No orders yet — start
+  from a cutting."
 - **Order detail** (`/c/orders/:id`) — header (order #, branch, status badge, times). The
   client-facing status is **five phases**: Placed → **Confirmed** → **In production** →
   **Ready** → Done — collapsing `cutting`/`edge_banding` into "In production" with optional
@@ -246,10 +265,13 @@ Permission names below are the per-branch grants from
   chosen user is credited). Destructive actions (cancel, revert) and "Mark collected" use a
   danger / confirm dialog that names the effect ("client collected everything?").
 
-  Tabs: Overview (item snapshots, price breakdown, the warehouse warning if a `shop`
-  material is short, the internal note — inline editable), Cutting (SVG + PDF; an
-  invalidated note if applicable), Timeline (status events + audit), Notes. There is **no**
-  Payments or Refunds tab here — money is the finance module.
+  Tabs: Overview (item snapshots, price breakdown, a **read-only settlement summary**
+  — total / recorded / balance, sourced from the finance module, shown at any status to
+  staff with `view_finance_reports`/`manage_finance`; hidden otherwise — the warehouse
+  warning if a `shop` material is short, the internal note — inline editable), Cutting
+  (SVG + PDF; an invalidated note if applicable), Timeline (status events + audit), Notes.
+  There is **no** Payments or Refunds tab here — recording and correcting money is the
+  finance module; the summary is a read-only mirror.
 
 - **Cutter workspace** (`/workshop/cutting`, `process_production`) — tablet-optimised. Lists
   orders **assigned to this user** that are `confirmed` (assigned, awaiting cut) and
@@ -292,7 +314,9 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Concurrent staff transitions / cancel** → optimistic-lock conflict on the second;
   refresh and retry.
 - **Cutter / edger from another branch, a blocked user, or one without `process_production`
-  on this branch** — rejected at assignment.
+  on this branch** — rejected at assignment. The **owner is exempt** from the
+  same-branch (`home_branch_id = order.branch_id`) check — they hold `process_production`
+  everywhere and may self-assign on any branch.
 - **No worker available** — the order waits in `confirmed` (or `edge_banding`); the board
   flags the column count; a `manage_orders` user can complete on-behalf. No auto-timeout.
 - **Client disputes a recorded payment** — out-of-system; the client calls the workshop and

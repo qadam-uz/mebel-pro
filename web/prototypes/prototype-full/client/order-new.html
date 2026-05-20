@@ -121,20 +121,21 @@
 
         <div class="checkout-sec" id="sec-contact">
           <h3>Aloqa ma'lumotlari</h3>
-          <div class="share-note">
+          <div class="share-note" role="note">
             <span class="ic">i</span>
-            <span>Bu ma'lumotlar tanlangan ustaxonaga uzatiladi — buyurtmangiz haqida sizga aloqalanish uchun.</span>
+            <span>Bu ma'lumot ustaxona siz bilan bog'lanishi uchun ulashiladi.</span>
           </div>
           <div class="grid-2">
             <div class="field">
-              <label>Ism</label>
-              <input id="ct-name" value="Akmal Norqo'ziyev" />
-              <div class="helper"><a onclick="resetField('ct-name', &quot;Akmal Norqo'ziyev&quot;)">Profil bo'yicha qayta tiklash</a></div>
+              <label for="ct-name">Ism</label>
+              <input id="ct-name" autocomplete="name" oninput="onContactInput('name', this.value)" />
+              <div class="helper"><a onclick="resetField('name')">Profildan tiklash</a></div>
             </div>
             <div class="field">
-              <label>Telefon</label>
-              <input id="ct-phone" value="+998 90 100 30 60" />
-              <div class="helper"><a onclick="resetField('ct-phone', '+998 90 100 30 60')">Profil bo'yicha qayta tiklash</a></div>
+              <label for="ct-phone">Telefon</label>
+              <input id="ct-phone" type="tel" inputmode="tel" placeholder="+998XXXXXXXXX" autocomplete="tel" oninput="onContactInput('phone', this.value)" />
+              <div class="err" id="ct-phone-err" style="display:none;color:var(--danger);font:500 11.5px var(--f-ui);margin-top:4px">Telefon +998XXXXXXXXX shaklida bo'lishi kerak</div>
+              <div class="helper"><a onclick="resetField('phone')">Profildan tiklash</a></div>
             </div>
           </div>
         </div>
@@ -161,20 +162,55 @@
 </main>
 
 <script>
+/* Order create wizard. Reached ONLY from a finalized cutting result
+   (cutting.html → Place order). No hardcoded default cutting — the id
+   must be passed, must be a draft with a chosen result, and there must
+   be a branch that can fulfil it; otherwise we redirect with a toast
+   (the documented pre-checks: cutting_result_not_usable / branch_closed
+   / workshop_blocked). Entered data survives validation errors. */
 const params = new URLSearchParams(location.search);
-const cuttingId = params.get('cutting') || 'cr-0085';
-const cutting = SEED.lookup.cuttingById(cuttingId);
+const cuttingId = params.get('cutting');
 
-if (!cutting) {
-  document.querySelector('main').innerHTML = `<div class="empty"><div class="ic">!</div><h3>Chizma topilmadi</h3><p>Qaytib chizma ro&#39;yxatiga o&#39;ting.</p><a class="btn btn-acc" href="cutting-drafts.html">Chizmalar</a></div>`;
+// Telegram profile / seed client the contact fields prefill from.
+const PROFILE = (() => {
+  const c = SEED.lookup.clientById('c01');
+  return { name: c ? c.name : '', phone: c ? c.phone : '' };
+})();
+
+function bail(msg, href) {
+  toast(msg, 'warn');
+  setTimeout(() => location.replace(href), 1100);
+}
+
+const cutting = cuttingId ? SEED.lookup.cuttingById(cuttingId) : null;
+let entryOk = true;
+
+if (!cuttingId || !cutting) {
+  entryOk = false;
+  document.querySelector('main').innerHTML = `<div class="st-empty" style="margin-top:40px"><div class="ic">∅</div><h3>Chizma topilmadi</h3><p>Buyurtma berish uchun avval chizmani tanlang.</p><a class="btn btn-acc" href="cutting-drafts.html">Saqlangan chizmalar</a></div>`;
+} else if (cutting.status !== 'draft') {
+  // cutting_result_not_usable → its detail (read-only cutting view)
+  entryOk = false;
+  bail('Bu chizma allaqachon ishlatilgan — natija sahifasiga o\'tkazildi', `cutting.html?id=${encodeURIComponent(cuttingId)}`);
+} else if (!cutting.algorithms || !cutting.algorithms.some(a => a.chosen)) {
+  // no chosen result → back to the cutting to finalize it
+  entryOk = false;
+  bail('Avval chizmani optimallashtiring va natijani tanlang', `cutting.html?id=${encodeURIComponent(cuttingId)}`);
+} else if (SEED.lookup.fulfillingBranches(cutting.partList).length === 0
+           && SEED.branches.some(b => b.status === 'active')) {
+  // branch_closed / workshop_blocked is represented on the branch step's
+  // empty state; only a true no-active-branch case is a hard stop here.
+  // (handled in renderBranchStep)
 }
 
 let state = {
   step: 'branch',  // 'branch' | 'checkout'
   branchId: null,
+  // contact is held in state so it survives re-renders and validation
+  contact: { name: PROFILE.name, phone: PROFILE.phone },
 };
 
-document.getElementById('back-link').href = `cutting.html?id=${cuttingId}`;
+if (entryOk) document.getElementById('back-link').href = `cutting.html?id=${cuttingId}`;
 
 /* ============ Branch step ============ */
 function renderBranchStep() {
@@ -201,13 +237,26 @@ function renderBranchStep() {
   }
   wrap.innerHTML = fulfilling.map(b => {
     const pr = SEED.lookup.pricingAt(b.id, cutting);
-    if (!pr) return '';
-    return `
-      <article class="br-card" data-br="${b.id}">
+    if (!pr) {
+      // Branch pricing incomplete — can't take orders right now (greyed).
+      return `
+      <article class="br-card disabled">
         <div class="br-hd">
           <div>
             <div class="br-nm">${b.city} · ${b.name}</div>
             <div class="br-meta">${b.addr} · ${b.hours}</div>
+          </div>
+          <div class="br-total" style="color:var(--ink-6)">—</div>
+        </div>
+        <div class="price-lines"><div class="ln"><span>Bu ustaxona hozircha buyurtma qabul qila olmaydi (narx sozlanmagan).</span></div></div>
+      </article>`;
+    }
+    return `
+      <article class="br-card" data-br="${b.id}" tabindex="0" role="button" aria-label="${b.city} ${b.name} ustaxonasini tanlash">
+        <div class="br-hd">
+          <div>
+            <div class="br-nm">${b.city} · ${b.name}</div>
+            <div class="br-meta">${b.addr} · bugun: ${b.hours}</div>
           </div>
           <div class="br-total">${fmtTiyin(pr.subtotal)}</div>
         </div>
@@ -219,22 +268,27 @@ function renderBranchStep() {
         </div>
       </article>`;
   }).join('');
-  wrap.querySelectorAll('.br-card').forEach(c => c.addEventListener('click', () => {
-    state.branchId = c.dataset.br;
-    gotoCheckout();
-  }));
-  // also show non-active for transparency (greyed)
+  wrap.querySelectorAll('.br-card[data-br]').forEach(c => {
+    const pick = () => { state.branchId = c.dataset.br; gotoCheckout(); };
+    c.addEventListener('click', pick);
+    c.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+  // Closed / inactive branches shown greyed with their reason (transparency).
   const inactive = SEED.branches.filter(b => b.status !== 'active');
   inactive.forEach(b => {
+    const reason = b.status === 'temporarily_closed'
+      ? (b.closedReason || 'vaqtincha yopiq')
+      : 'faol emas';
     wrap.insertAdjacentHTML('beforeend', `
-      <article class="br-card disabled">
+      <article class="br-card disabled" aria-disabled="true">
         <div class="br-hd">
           <div>
             <div class="br-nm">${b.city} · ${b.name}</div>
-            <div class="br-meta">${b.addr} · ${b.closedReason || 'yopiq'}</div>
+            <div class="br-meta">${b.addr}</div>
           </div>
           <div class="br-total" style="color:var(--ink-6)">—</div>
         </div>
+        <div class="price-lines"><div class="ln"><span>Hozircha buyurtma qabul qilmaydi · ${reason}</span></div></div>
       </article>`);
   });
 }
@@ -249,8 +303,34 @@ function renderCheckout() {
   document.getElementById('step-sub').textContent = `${br.city} · ${br.name} ustaxonasiga buyurtma — pastdagi tafsilotlarni tekshiring va tasdiqlang.`;
   document.getElementById('step-branch').style.display = 'none';
   document.getElementById('step-checkout').style.display = '';
+  // restore contact from state so entered data survives navigation/errors
+  document.getElementById('ct-name').value = state.contact.name;
+  document.getElementById('ct-phone').value = state.contact.phone;
+  validatePhone(false);
   renderHandover();
   renderReview();
+}
+
+function onContactInput(field, val) {
+  state.contact[field] = val;
+  if (field === 'phone') validatePhone(false);
+  renderReview();
+}
+
+// Phone must be exactly +998XXXXXXXXX (12 digits after +998).
+function phoneOk() {
+  return /^\+998\d{9}$/.test((state.contact.phone || '').replace(/\s/g, ''));
+}
+function validatePhone(showError) {
+  const ok = phoneOk();
+  const errEl = document.getElementById('ct-phone-err');
+  const inp = document.getElementById('ct-phone');
+  if (!errEl || !inp) return ok;
+  const show = !ok && (showError || (state.contact.phone || '').replace(/\s/g, '').length >= 4);
+  errEl.style.display = show ? '' : 'none';
+  inp.classList.toggle('bad', show);
+  inp.style.borderColor = show ? 'var(--danger)' : '';
+  return ok;
 }
 
 function renderHandover() {
@@ -271,8 +351,8 @@ function renderReview() {
   const handoverText = `Ustaxonadan olib ketish · ${br.addr}`;
   wrap.innerHTML = `
     <div class="ln"><div>Ustaxona</div><div><b>${br.city} · ${br.name}</b> <span class="edit" onclick="gotoBranch()">o'zgartirish</span></div></div>
-    <div class="ln"><div>Olib ketish</div><div><b>${handoverText}</b></div></div>
-    <div class="ln"><div>Aloqa</div><div><b>${document.getElementById('ct-name').value} · ${document.getElementById('ct-phone').value}</b></div></div>
+    <div class="ln"><div>Olib ketish</div><div><b>${handoverText}</b> · ${br.hours}</div></div>
+    <div class="ln"><div>Aloqa</div><div><b>${state.contact.name || '—'} · ${state.contact.phone || '—'}</b> <span class="edit" onclick="document.getElementById('ct-name').focus()">tahrirlash</span></div></div>
   `;
   const matLines = pr.matLines.map(ml => {
     const mat = SEED.lookup.matById(ml.matId);
@@ -320,17 +400,33 @@ function renderSummary() {
   document.getElementById('sum-cutting').innerHTML = html;
 }
 
-function resetField(id, val) { document.getElementById(id).value = val; toast('Profil bo\'yicha qayta tiklandi'); }
+function resetField(field) {
+  state.contact[field] = PROFILE[field];
+  document.getElementById('ct-' + field).value = PROFILE[field];
+  if (field === 'phone') validatePhone(false);
+  renderReview();
+  toast('Profildan tiklandi');
+}
 
 function placeOrder() {
-  if (!state.branchId) { toast('Avval ustaxonani tanlang'); return; }
-  const newOrderId = 'MP-2026-05-0099';
-  toast('Buyurtma berildi — ustaxona ko\'rib chiqib siz bilan bog\'lanadi.');
-  setTimeout(() => location.href = `order-detail.html?id=${newOrderId}&new=1`, 800);
+  if (!state.branchId) { toast('Avval ustaxonani tanlang', 'warn'); return; }
+  if (!state.contact.name.trim()) {
+    toast('Ismni kiriting', 'warn');
+    document.getElementById('ct-name').focus();
+    return;
+  }
+  if (!validatePhone(true)) {
+    toast('Telefon raqamini to\'g\'ri kiriting: +998XXXXXXXXX', 'warn');
+    document.getElementById('ct-phone').focus();
+    return;  // entered data is preserved (held in state)
+  }
+  const newOrderId = 'ORD-2026-000099';
+  toast('Buyurtma qabul qilindi — ustaxona ko\'rib chiqib qo\'ng\'iroq qiladi.');
+  setTimeout(() => location.href = `order-detail.html?id=${newOrderId}&new=1`, 900);
 }
 
 /* boot */
-if (cutting) {
+if (entryOk) {
   renderBranchStep();
   renderSummary();
 }

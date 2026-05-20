@@ -163,6 +163,106 @@ window.confirmAction = (opts, onConfirm) => {
   };
 };
 
+// ---------- One-time-secret confirmation (create / reset) ----------
+// ONE standardised component reused across create-workshop, create-operator,
+// and reset-password. Shows a credential exactly once, with a copy button and
+// the "faqat bir marta ko'rsatiladi" warning. Keyboard-operable.
+window.showSecret = (opts) => {
+  const o = opts || {};
+  const rows = (o.rows || []).map(r => `
+    <div class="secret-row">
+      <div class="secret-row-l"><span class="k">${r.k}</span><span class="v num" data-secret-val>${r.v}</span></div>
+      <button class="btn btn-outline btn-sm" type="button" data-copy="${String(r.v).replace(/"/g, '&quot;')}">Nusxa</button>
+    </div>`).join('');
+  const html = `
+    <div class="modal on" id="secret-modal" role="dialog" aria-modal="true" aria-labelledby="secret-title">
+      <div class="modal-h">
+        <h3 id="secret-title">${o.title || 'Maxfiy ma\'lumot'}</h3>
+        <button class="x" type="button" data-close-modal="secret-modal" aria-label="Yopish">✕</button>
+      </div>
+      <div class="modal-b">
+        <div class="banner warn"><div class="ic">!</div><div class="grow">${o.note || 'Bu ma\'lumot faqat bir marta ko\'rsatiladi — egasiga yetkazib, saqlab oling.'}</div></div>
+        <div class="secret-box">${rows}</div>
+        ${o.hint ? `<p style="margin:12px 0 0;color:var(--ink-6);font-size:12.5px">${o.hint}</p>` : ''}
+      </div>
+      <div class="modal-f">
+        <button class="btn btn-outline btn-sm" type="button" id="secret-copy-all">Hammasini nusxalash</button>
+        <button class="btn btn-acc" type="button" data-close-modal="secret-modal">Yopdim · saqladim</button>
+      </div>
+    </div>`;
+  let scrim = document.getElementById('scrim');
+  if (!scrim) {
+    scrim = document.createElement('div');
+    scrim.id = 'scrim';
+    scrim.className = 'scrim';
+    document.body.appendChild(scrim);
+  }
+  scrim.classList.add('on');
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const modal = wrap.firstElementChild;
+  document.body.appendChild(modal);
+  const copy = (txt) => {
+    navigator.clipboard?.writeText(txt).then(() => toast('Nusxalandi')).catch(() => toast('Nusxalab bo\'lmadi', 'warn'));
+  };
+  modal.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
+  modal.querySelector('#secret-copy-all').onclick = () =>
+    copy((o.rows || []).map(r => `${r.k}: ${r.v}`).join('\n'));
+  modal.addEventListener('click', e => {
+    if (e.target.matches('[data-close-modal]')) {
+      closeModal('secret-modal');
+      setTimeout(() => modal.remove(), 220);
+      o.onClose && o.onClose();
+    }
+  });
+  modal.querySelector('.x').focus();
+};
+
+// ---------- Password strength (≥8, upper + lower + digit) ----------
+window.pwStrength = (v) => {
+  v = v || '';
+  const hasU = /[A-Z]/.test(v), hasL = /[a-z]/.test(v), hasD = /\d/.test(v), len = v.length >= 8;
+  const score = [hasU, hasL, hasD, len].filter(Boolean).length;
+  const ok = hasU && hasL && hasD && len;
+  return { ok, score, hasU, hasL, hasD, len };
+};
+window.genTempPassword = () => {
+  const U = 'ABCDEFGHJKLMNPQRSTUVWXYZ', L = 'abcdefghijkmnpqrstuvwxyz', D = '23456789';
+  const pick = s => s[Math.floor(Math.random() * s.length)];
+  let p = pick(U) + pick(L) + pick(D);
+  const all = U + L + D;
+  for (let i = 0; i < 7; i++) p += pick(all);
+  return p.split('').sort(() => Math.random() - 0.5).join('') + '!';
+};
+
+// ---------- Prototype state demo (?state=loading|empty|error) ----------
+// Lets any data screen demonstrate its loading / empty / error states without
+// a backend. Screens read window.demoState() and branch their render.
+window.demoState = () => new URLSearchParams(location.search).get('state') || 'ready';
+window.skRows = (cols, n = 6) => {
+  let body = '';
+  for (let r = 0; r < n; r++) {
+    body += '<tr>';
+    for (let c = 0; c < cols; c++) body += `<td><div class="sk-line w-${c === 0 ? '80' : '60'}" style="margin:2px 0"></div></td>`;
+    body += '</tr>';
+  }
+  return body;
+};
+window.errState = (msg, traceId) => `
+  <div class="st-error" role="alert">
+    <div class="ic">!</div>
+    <h3>Ma'lumotni yuklab bo'lmadi</h3>
+    <p>${msg || 'Server bilan bog\'lanishda xatolik yuz berdi.'}</p>
+    <p class="trace">trace_id: <b>${traceId || 'tr-' + Math.random().toString(16).slice(2, 8)}</b></p>
+    <button class="btn btn-outline" type="button" onclick="location.reload()">↻ Qayta urinish</button>
+  </div>`;
+window.emptyState = (icon, title, body) => `
+  <div class="st-empty">
+    <div class="ic">${icon || '∅'}</div>
+    <h3>${title || 'Hozircha bo\'sh'}</h3>
+    ${body ? `<p>${body}</p>` : ''}
+  </div>`;
+
 // ---------- Active nav helper ----------
 window.markActiveNav = (key) => {
   document.querySelectorAll('.sb-it').forEach(el => {

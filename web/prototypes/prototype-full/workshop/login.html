@@ -16,14 +16,14 @@
 <body>
 <div class="auth-wrap">
   <div class="auth-card">
-    <a class="brand" href="../landing/landing.html">
+    <span class="brand">
       <span class="mk">M</span>
       <span style="font-family:var(--f-display);font-size:19px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">Ustaxona boshqaruvi</small></span>
-    </a>
+    </span>
     <h1>Boshqaruv kabineti</h1>
     <p class="sub">Login va parolingiz bilan kiring. Parolni unutgan bo'lsangiz, ustaxona egasiga murojaat qiling.</p>
 
-    <div class="lockout" id="lockout" style="display:none">5 ta noto'g'ri urinishdan keyin bloklandingiz. <b>10 daqiqadan</b> keyin qayta urinib ko'ring.</div>
+    <div class="lockout" id="lockout" style="display:none">5 ta noto'g'ri urinishdan keyin hisob 15 daqiqaga bloklandi. <b id="retry-at">—</b> da qayta urinib ko'ring.</div>
 
     <form onsubmit="login(event)">
       <div class="field"><label>Login</label><input value="hasan" required /></div>
@@ -32,18 +32,38 @@
     </form>
 
     <div class="meta">
-      Egasi yo xodim sifatida ishlaysiz? Login va parolingizni ustaxona egasidan oling.<br>
-      <a href="../landing/landing.html" style="margin-top:6px;display:inline-block">← Sahifaga qaytish</a>
+      Egasi yo xodim sifatida ishlaysiz? Login va parolingizni ustaxona egasidan oling.
     </div>
   </div>
 </div>
 
 <script src="../assets/app.js"></script>
 <script>
+// Demo lockout: 5 consecutive bad attempts → 15-minute lockout, surfaced as
+// an absolute "HH:MM da qayta urinib ko'ring" retry time (IN2).
+let attempts = 0;
+
+function showLockout() {
+  const until = new Date(Date.now() + 15 * 60 * 1000);
+  const hh = String(until.getHours()).padStart(2, '0');
+  const mm = String(until.getMinutes()).padStart(2, '0');
+  document.getElementById('retry-at').textContent = `${hh}:${mm}`;
+  document.getElementById('lockout').style.display = '';
+}
+
 function login(e) {
   e.preventDefault();
-  toast('Kirildi · boshqaruv kabineti ochilmoqda...');
-  setTimeout(() => location.href = 'dashboard.html', 700);
+  // Demo: the seeded creds (hasan / ••••••••) succeed; type anything else to
+  // exercise the lockout after 5 tries.
+  const pw = e.target.querySelector('input[type="password"]').value;
+  if (pw === '••••••••') {
+    toast('Kirildi · boshqaruv kabineti ochilmoqda...');
+    setTimeout(() => location.href = 'dashboard.html', 700);
+    return;
+  }
+  attempts++;
+  if (attempts >= 5) { showLockout(); toast('Hisob bloklandi', 'danger'); return; }
+  toast(`Login yoki parol noto'g'ri (${attempts}/5)`, 'warn');
 }
 </script>
 </body>

@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 55
 ---
 
@@ -27,7 +27,7 @@ Money the workshop received, recorded by a user with `manage_finance`. Typed; th
 | `type` | enum | `order_payment` / `other` |
 | `order_id` | UUID? | **required iff `type = order_payment`**; null otherwise; an order in the workshop |
 | `amount_tiyin` | bigint | > 0 (full order amount or a partial payment) |
-| `method` | enum | `cash` / `bank_transfer` / `other` |
+| `method` | enum | `cash` / `bank_transfer` / `other` — exactly these three; card/terminal ("karta") is recorded as `bank_transfer` (no `card` value) |
 | `received_on` | date | when the money changed hands |
 | `note` | text? | bank reference / receipt id |
 | `receipt_file_id` | UUID? | → [file](support.md#file) — optional scan |

@@ -19,50 +19,13 @@
     <div class="page-head">
       <div>
         <h1>Audit log</h1>
-        <p class="sub">Ustaxonada har bir muhim amal yoziladi — kim, qachon, nima qildi.</p>
+        <p class="sub">Ustaxonada har bir muhim amal yoziladi — kim, qachon, nima qildi. Faqat o'qish uchun.</p>
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
       </div>
     </div>
-
-    <div class="tabs" data-tabs="au">
-      <button class="tab on" data-target="t-actions" onclick="switchTab('au','t-actions')">Amallar</button>
-      <button class="tab" data-target="t-statuses" onclick="switchTab('au','t-statuses')">Buyurtma holatlari</button>
-    </div>
-
-    <div class="filters">
-      <select><option>Hamma modullar</option><option>orders</option><option>inventory</option><option>identity</option><option>finance</option></select>
-      <select><option>Hamma xodimlar</option><option>Hasan ako</option><option>Aziza op.</option><option>Bahodir T.</option></select>
-      <select><option>Oxirgi 24 soat</option><option>Oxirgi 7 kun</option><option>Bu oy</option></select>
-      <div class="input"><input placeholder="Obyekt ID..." /></div>
-    </div>
-
-    <section id="t-actions" data-panel-group="au">
-      <div class="card">
-        <table class="tbl">
-          <thead><tr><th>Vaqt</th><th>Modul</th><th>Amal</th><th>Xodim</th><th>Tafsilot</th></tr></thead>
-          <tbody>${(() => '')()}</tbody>
-        </table>
-        <div id="action-body" style="padding: 0 22px 18px"></div>
-      </div>
-    </section>
-
-    <section id="t-statuses" data-panel-group="au" hidden>
-      <div class="card">
-        <div class="card-b" style="padding: 16px 22px 22px">
-          <ol class="tl">
-            <li class="step done"><span class="when">16-may 09:42</span><b>MP-2026-05-0090</b> · cutting → <b>edge_banding</b> (Aziza R. · 6 list)</li>
-            <li class="step done"><span class="when">16-may 09:30</span><b>MP-2026-05-0085</b> · → <b>new</b> (mijoz yaratdi · Madina Y.)</li>
-            <li class="step now"><span class="when">14-may 10:05</span><b>MP-2026-05-0091</b> · new → <b>confirmed</b> (Aziza R.)</li>
-            <li class="step done"><span class="when">15-may 17:50</span><b>MP-2026-05-0089</b> · edge_banding → <b>ready</b> (Olim H. · 16.4 m)</li>
-            <li class="step done"><span class="when">14-may 09:42</span><b>MP-2026-05-0091</b> · → <b>new</b> (mijoz yaratdi · Akmal N.)</li>
-            <li class="step done"><span class="when">13-may 14:30</span><b>MP-2026-05-0072</b> · ready → <b>completed</b> (mijoz olib ketdi)</li>
-            <li class="step bad"><span class="when">09-apr 14:00</span><b>MP-2026-04-0856</b> · confirmed → <b>cancelled</b> (Akmal N. · mijoz boshqa filial)</li>
-          </ol>
-        </div>
-      </div>
-    </section>
+    <div id="wrap"></div>
   </div>
 </main>
 
@@ -72,17 +35,127 @@
 <script>
 renderWorkshopShell();
 
-const tbody = document.querySelector('#t-actions table tbody');
-tbody.innerHTML = SEED.auditLog.map(a => {
-  const actor = SEED.lookup.userById(a.actor) || SEED.lookup.clientById(a.actor);
-  return `<tr>
-    <td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td>
-    <td><small style="color:var(--ink-8);font-size:12px">${a.module}</small></td>
-    <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td>
-    <td>${actor?.name || a.actor}</td>
-    <td><small style="color:var(--ink-10);font-size:12.5px">${a.detail}</small></td>
-  </tr>`;
-}).join('');
+const wrap = document.getElementById('wrap');
+
+// Audit is an owner-only / view_reports surface — non-owners are denied.
+if (!ownerOnly()) {
+  // ownerOnly() rendered the denied panel into #wrap.
+} else {
+  wrap.innerHTML = `
+    <div class="tabs" data-tabs="au">
+      <button class="tab on" data-target="t-actions" onclick="switchTab('au','t-actions')">Amallar</button>
+      <button class="tab" data-target="t-statuses" onclick="switchTab('au','t-statuses')">Buyurtma holatlari</button>
+    </div>
+
+    <div class="filters">
+      <select id="f-module" onchange="renderAll()">
+        <option value="all">Hamma modullar</option>
+        <option value="orders">orders</option>
+        <option value="inventory">inventory</option>
+        <option value="identity">identity</option>
+        <option value="finance">finance</option>
+      </select>
+      <select id="f-actor" onchange="renderAll()"></select>
+      <select id="f-date" onchange="renderAll()">
+        <option value="all">Hamma sanalar</option>
+        <option value="24h">Oxirgi 24 soat</option>
+        <option value="7d">Oxirgi 7 kun</option>
+      </select>
+      <div class="input"><input id="f-obj" placeholder="Obyekt ID (masalan ORD-2026-000091)..." oninput="renderAll()" /></div>
+    </div>
+
+    <section id="t-actions" data-panel-group="au">
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Vaqt</th><th>Modul</th><th>Amal</th><th>Xodim</th><th>Tafsilot</th></tr></thead>
+          <tbody id="action-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="t-statuses" data-panel-group="au" hidden>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Vaqt</th><th>Buyurtma</th><th>O'zgarish</th><th>Kim</th><th>Sabab</th></tr></thead>
+          <tbody id="status-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+  // Workshop scoping: the owner sees their workshop's rows only.
+  const WS = 'ws-01';
+  const nameOf = id => (SEED.lookup.userById(id)?.name) || (SEED.lookup.clientById(id)?.name) || id || '—';
+
+  // Actor filter options derived from the data (workshop users + clients seen).
+  const actors = new Map();
+  SEED.auditLog.concat(SEED.statusEvents.map(e => ({ actor: e.actor }))).forEach(r => {
+    if (r.actor && !actors.has(r.actor)) actors.set(r.actor, nameOf(r.actor));
+  });
+  document.getElementById('f-actor').innerHTML =
+    `<option value="all">Hamma xodimlar</option>` +
+    [...actors.entries()].map(([id, nm]) => `<option value="${id}">${nm}</option>`).join('');
+
+  const matchDate = (t, f) => {
+    if (f === 'all') return true;
+    const s = (t || '').toLowerCase();
+    if (f === '24h') return /19-may|18-may/.test(s);
+    if (f === '7d') return /1[3-9]-may/.test(s);
+    return true;
+  };
+
+  window.renderAll = () => {
+    const mod = document.getElementById('f-module').value;
+    const act = document.getElementById('f-actor').value;
+    const dt = document.getElementById('f-date').value;
+    const obj = document.getElementById('f-obj').value.trim().toLowerCase();
+
+    // Action log — workshop-scoped, filters wired.
+    const actions = SEED.auditLog.filter(a => {
+      if ((a.workshopId || WS) !== WS) return false;
+      if (mod !== 'all' && a.module !== mod) return false;
+      if (act !== 'all' && a.actor !== act) return false;
+      if (!matchDate(a.t, dt)) return false;
+      if (obj && !(a.detail || '').toLowerCase().includes(obj)) return false;
+      return true;
+    });
+    const at = document.getElementById('action-tbody');
+    at.innerHTML = actions.length ? actions.map(a => {
+      const m = /ORD-\d{4}-\d{6}/.exec(a.detail || '');
+      const cell = m
+        ? `<a href="order-detail.html?id=${m[0]}" style="color:var(--accent);text-decoration:none">${a.detail}</a>`
+        : a.detail;
+      return `<tr>
+        <td class="num" style="font-size:11.5px;color:var(--ink-6)">${a.t}</td>
+        <td><small style="color:var(--ink-8);font-size:12px">${a.module}</small></td>
+        <td><span class="pill p-conf" style="font-size:10.5px"><span class="pd"></span>${a.action}</span></td>
+        <td>${nameOf(a.actor)}</td>
+        <td><small style="color:var(--ink-10);font-size:12.5px">${cell}</small></td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5">${stEmpty('Mos amal yo\'q', 'Filtrlarga mos audit yozuvi topilmadi.')}</td></tr>`;
+
+    // Status-change log — rendered from SEED.statusEvents (PU17), workshop
+    // filtered, never contradicting the order seed.
+    const evs = SEED.statusEvents
+      .filter(e => (e.workshopId || WS) === WS)
+      .filter(e => mod === 'all' || mod === 'orders')
+      .filter(e => act === 'all' || e.actor === act)
+      .filter(e => matchDate(e.t, dt))
+      .filter(e => !obj || e.orderId.toLowerCase().includes(obj))
+      .slice()
+      .sort((a, b) => (b.t || '').localeCompare(a.t || ''));
+    const stPill = to => `pill ${SEED.STATE_PILL[to] || 'p-conf'}`;
+    const st = document.getElementById('status-tbody');
+    st.innerHTML = evs.length ? evs.map(e => `<tr class="clickable" onclick="location.href='order-detail.html?id=${e.orderId}'">
+        <td class="num" style="font-size:11.5px;color:var(--ink-6)">${e.t}</td>
+        <td class="id">${e.orderId}</td>
+        <td><span style="font:400 12px var(--f-mono);color:var(--ink-8)">${e.from || '—'}</span> → <span class="${stPill(e.to)}" style="font-size:10.5px"><span class="pd"></span>${SEED.STATE_LABELS[e.to] || e.to}</span></td>
+        <td>${nameOf(e.actor)}<small style="display:block;color:var(--ink-6);font-size:10.5px">${e.actorType === 'client' ? 'mijoz' : 'xodim'}</small></td>
+        <td><small style="color:var(--ink-8)">${e.reason || '—'}</small></td>
+      </tr>`).join('') : `<tr><td colspan="5">${stEmpty('Mos holat o\'zgarishi yo\'q')}</td></tr>`;
+  };
+  renderAll();
+}
 </script>
 </body>
 </html>

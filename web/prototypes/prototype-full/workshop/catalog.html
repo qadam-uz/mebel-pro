@@ -27,12 +27,7 @@
     </div>
 
     <div class="filters">
-      <select id="br-filter" onchange="render()">
-        <option value="all">Barcha filiallar</option>
-        <option value="yunusobod">Yunusobod</option>
-        <option value="chilonzor">Chilonzor</option>
-        <option value="yangiyol">Yangiyo'l</option>
-      </select>
+      <select id="br-filter" onchange="render()"></select>
       <div class="chips">
         <button class="chip on">Hammasi</button>
         <button class="chip">Faol</button>
@@ -86,6 +81,27 @@
 <script>
 renderWorkshopShell();
 
+// CR4: branch material selection is owner or manage_catalog on the branch.
+const CAT_BR = isOwner() ? myBranches() : myBranches().filter(id => can('manage_catalog', id));
+const canCat = isOwner() || canAny('manage_catalog');
+
+if (!canCat || CAT_BR.length === 0) {
+  document.querySelector('.page .tools')?.remove();
+  document.querySelector('.filters')?.remove();
+  document.querySelector('.card')?.remove();
+  const box = document.createElement('div');
+  box.innerHTML = stEmpty('Material katalogiga ruxsatingiz yo\'q',
+    'Bu sahifa manage_catalog ruxsatiga ega xodimlarga ochiq — ustaxona egasiga murojaat qiling.');
+  document.querySelector('.page').appendChild(box.firstElementChild);
+  throw 'halt-cat';
+}
+(() => {
+  const sel = document.getElementById('br-filter');
+  const brs = SEED.branches.filter(b => CAT_BR.includes(b.id));
+  sel.innerHTML = (brs.length > 1 ? `<option value="all">${isOwner() ? 'Barcha filiallar' : 'Mening filiallarim'}</option>` : '') +
+    brs.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+})();
+
 function matMeta(m) {
   if (m.kind === 'edge') return `krom · ${m.thickness} mm · ${m.color}`;
   return `${m.type?.toUpperCase() || 'list'} · ${m.thickness} mm · ${m.color} · ${m.sheetLen}×${m.sheetWid}${m.grain ? ' · tola yo\'nalishli' : ''}`;
@@ -97,9 +113,14 @@ function kindPill(m) {
 }
 
 function render() {
+  const tb = document.getElementById('body');
+  const ds = demoState();
+  if (ds === 'loading') { tb.innerHTML = skRows(7, 6); return; }
+  if (ds === 'error') { tb.innerHTML = `<tr><td colspan="7">${stError()}</td></tr>`; return; }
   const br = document.getElementById('br-filter').value;
-  const rows = SEED.branchMaterials.filter(bm => br === 'all' || bm.branchId === br);
-  document.getElementById('body').innerHTML = rows.map(bm => {
+  const rows = SEED.branchMaterials.filter(bm => (!br || br === 'all' ? CAT_BR.includes(bm.branchId) : bm.branchId === br));
+  if (rows.length === 0) { tb.innerHTML = `<tr><td colspan="7">${stEmpty('Bu filialga material qo\'shilmagan', 'Platforma katalogidan material qo\'shing.')}</td></tr>`; return; }
+  tb.innerHTML = rows.map(bm => {
     const m = SEED.lookup.matById(bm.matId);
     const b = SEED.lookup.branchById(bm.branchId);
     const priceUnit = m.kind === 'edge' ? '/ metr' : '/ list';

@@ -269,31 +269,103 @@
 <script>
 /* ============================================================
    State — the cutting draft we're editing.
-   Bootstrapped from ?id=cr-0085 (or any draft from SEED.cuttings).
-   New parts get a per-row UUID-ish ref.
+
+   Entry rules (PU3):
+     ?id=new           → an explicit new, blank editable draft (cr-new)
+     ?id=<draft id>     → that cutting; if status is confirmed/invalidated
+                          it renders fully READ-ONLY (bound to an order)
+     ?id=<unknown>      → a proper not-found state, never a blank draft
+     no id              → My drafts (nothing to edit blindly)
+
+   Limits (PU9 — from cutting.md):
+     Part min  50×50 mm inclusive
+     Part max  sheet − 2×10mm trim (per the part's material)
+     ≤100 parts total · ≤20 sheets/material/result · ≤50 open drafts
    ============================================================ */
 const params = new URLSearchParams(location.search);
-const initialDraftId = params.get('id') || 'cr-0085';
+const rawId = params.get('id');
 
-const SEED_DRAFT = initialDraftId === 'new'
-  ? null
-  : SEED.cuttings.find(c => c.id === initialDraftId);
+const LIM = { PART_MIN: 50, MAX_PARTS: 100, MAX_SHEETS_PER_MAT: 20, EDGE_TRIM: 10, MAX_DRAFTS: 50 };
 
-let draft = SEED_DRAFT
-  ? JSON.parse(JSON.stringify(SEED_DRAFT))  // editable copy of the looked-up cutting
-  : { id: 'cr-new', status: 'draft', partList: [], algorithms: [], when: 'hozir' };
+let notFound = false;
+let draft;
 
-// Empty draft → start with one blank row
-if (!draft.partList.length) {
+if (rawId === 'new') {
+  draft = { id: 'cr-new', status: 'draft', orderId: null, partList: [], algorithms: [], when: 'hozir' };
+} else if (!rawId) {
+  // No id — there's nothing to edit; send the client to My drafts.
+  location.replace('cutting-drafts.html');
+  draft = { id: 'cr-new', status: 'draft', orderId: null, partList: [], algorithms: [], when: 'hozir' };
+} else {
+  const seed = SEED.cuttings.find(c => c.id === rawId);
+  if (!seed) {
+    notFound = true;
+    draft = { id: rawId, status: 'missing', orderId: null, partList: [], algorithms: [], when: '' };
+  } else {
+    draft = JSON.parse(JSON.stringify(seed));  // editable copy
+  }
+}
+
+const readOnly = draft.status === 'confirmed' || draft.status === 'invalidated';
+
+// Empty editable draft → start with one blank row (only when truly editable)
+if (!notFound && !readOnly && !draft.partList.length) {
   draft.partList = [{ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges: { t: null, b: null, l: null, r: null } }];
   draft.algorithms = [];
 }
 
 let resultStale = false;   // when the user edits a row after a run, the result is marked stale
+let ranOnce = false;       // a run happened; Optimise stays disabled until a row changes
 let pickingPartRef = null; // when the material modal is open, which part it's for
 let editingEdgesRef = null;
 let activeMatTab = null;
 let activeSheet = 1;
+
+/* ============================================================
+   Validation — per-part, against the chosen material's bounds.
+   Returns { ok, code, msg } for the roll-up + per-row .bad marks.
+   ============================================================ */
+function partMaxFor(matId) {
+  const m = matId ? SEED.lookup.matById(matId) : null;
+  if (!m || m.kind !== 'sheet') return null;
+  return { l: m.sheetLen - 2 * LIM.EDGE_TRIM, w: m.sheetWid - 2 * LIM.EDGE_TRIM };
+}
+
+// Validate one part. inclusive 50×50 minimum (fixes the off-by-one that
+// rejected exactly 50×50). Checks material presence and max bounds.
+function validatePart(p) {
+  if (!p.matId) return { ok: false, code: 'no_material', msg: 'Material tanlanmagan' };
+  const mat = SEED.lookup.matById(p.matId);
+  if (!mat || mat.status !== 'active') return { ok: false, code: 'material_not_found', msg: 'Material katalogda topilmadi yoki olib tashlangan' };
+  if (p.l == null || p.w == null || !p.qty) return { ok: false, code: 'incomplete', msg: "O'lcham yoki soni to'ldirilmagan" };
+  if (p.l < LIM.PART_MIN || p.w < LIM.PART_MIN)
+    return { ok: false, code: 'part_too_small', msg: `Qism juda kichik — eng kami ${LIM.PART_MIN}×${LIM.PART_MIN} mm` };
+  const max = partMaxFor(p.matId);
+  if (max && (p.l > max.l || p.w > max.w))
+    return { ok: false, code: 'part_too_large', msg: `Qism listga sig'maydi — eng kattasi ${max.l}×${max.w} mm (${mat.name.split('·')[0].trim()})` };
+  // grain: a grained material can't rotate; if the part is wider than the
+  // sheet's grain-aligned dimension allows in its forced orientation → fail.
+  if (mat.grain && max && p.w > max.w && p.l > max.w)
+    return { ok: false, code: 'impossible_grain', msg: 'Tolali materialda bu qism aylantirilmasdan sig\'maydi' };
+  if (p.qty > LIM.MAX_PARTS) return { ok: false, code: 'too_many_parts', msg: 'Bitta qatorda soni juda ko\'p' };
+  return { ok: true };
+}
+
+// Whole-draft gate: returns the first blocking failure, or { ok:true }.
+function validateDraft() {
+  const totalUnits = draft.partList.reduce((a, p) => a + (p.qty || 0), 0);
+  if (totalUnits > LIM.MAX_PARTS)
+    return { ok: false, code: 'too_many_parts', msg: `Qismlar soni ${LIM.MAX_PARTS} tadan oshib ketdi (${totalUnits}). Buyurtmani bo'ling.` };
+  const filled = draft.partList.filter(p => p.matId || p.l != null || p.w != null);
+  if (filled.length === 0) return { ok: false, code: 'empty', msg: "Hech bo'lmasa bitta to'liq qism kiriting" };
+  for (let i = 0; i < draft.partList.length; i++) {
+    const v = validatePart(draft.partList[i]);
+    if (!v.ok && v.code !== 'incomplete') return { ok: false, code: v.code, msg: `#${i + 1}-qism: ${v.msg}` };
+  }
+  const anyValid = draft.partList.some(p => validatePart(p).ok);
+  if (!anyValid) return { ok: false, code: 'incomplete', msg: "Hech bo'lmasa bitta to'liq qism kiriting" };
+  return { ok: true };
+}
 
 /* ============================================================
    Render: parts list
@@ -309,6 +381,14 @@ function partRowHtml(p, idx) {
   const edges = p.edges || { t: null, b: null, l: null, r: null };
   const ec = (v) => v ? `<span class="e has">${v}</span>` : '<span class="e">–</span>';
 
+  // per-row inline validation marks
+  const v = validatePart(p);
+  const max = partMaxFor(p.matId);
+  const lBad = !v.ok && (v.code === 'part_too_small' || v.code === 'part_too_large' || v.code === 'impossible_grain') && (p.l != null) && (p.l < LIM.PART_MIN || (max && p.l > max.l));
+  const wBad = !v.ok && (v.code === 'part_too_small' || v.code === 'part_too_large' || v.code === 'impossible_grain') && (p.w != null) && (p.w < LIM.PART_MIN || (max && p.w > max.w));
+  const rowErr = (!v.ok && v.code !== 'incomplete' && v.code !== 'no_material')
+    ? `<div class="row-err" style="grid-column:1/-1;font:500 11.5px var(--f-ui);color:var(--danger);padding:2px 4px 0">${v.msg}</div>` : '';
+
   return `
     <div class="part-row" data-ref="${p.ref}">
       <div class="rownum">#${idx + 1}</div>
@@ -319,9 +399,9 @@ function partRowHtml(p, idx) {
         </button>
         <button class="src-chip ${srcCls}" type="button" data-action="toggle-src" data-ref="${p.ref}" title="Material manbasi">${srcLabel}</button>
       </div>
-      <input class="num" type="number" placeholder="Uzun." min="50" data-ref="${p.ref}" data-field="l" value="${p.l ?? ''}" oninput="onPartInput(event)" />
-      <input class="num" type="number" placeholder="En" min="50" data-ref="${p.ref}" data-field="w" value="${p.w ?? ''}" oninput="onPartInput(event)" />
-      <input class="num" type="number" placeholder="Soni" min="1" data-ref="${p.ref}" data-field="qty" value="${p.qty ?? 1}" oninput="onPartInput(event)" />
+      <input class="num ${lBad ? 'bad' : ''}" type="number" placeholder="Uzun." min="50" data-ref="${p.ref}" data-field="l" value="${p.l ?? ''}" oninput="onPartInput(event)" aria-label="Uzunligi (mm)" />
+      <input class="num ${wBad ? 'bad' : ''}" type="number" placeholder="En" min="50" data-ref="${p.ref}" data-field="w" value="${p.w ?? ''}" oninput="onPartInput(event)" aria-label="Eni (mm)" />
+      <input class="num" type="number" placeholder="Soni" min="1" data-ref="${p.ref}" data-field="qty" value="${p.qty ?? 1}" oninput="onPartInput(event)" aria-label="Soni" />
       <button class="edges-btn" type="button" data-action="edit-edges" data-ref="${p.ref}" title="Krom yopishtirish">
         ${ec(edges.t)}${ec(edges.b)}${ec(edges.l)}${ec(edges.r)}
       </button>
@@ -332,6 +412,7 @@ function partRowHtml(p, idx) {
           <button class="mi danger" type="button" data-action="delete" data-ref="${p.ref}">O'chirish</button>
         </div>
       </div>
+      ${rowErr}
     </div>`;
 }
 
@@ -344,6 +425,25 @@ function renderParts() {
   wrap.querySelectorAll('.mat-sw').forEach(el => {
     el.style.background = swatchColor(el.dataset.sw);
   });
+  syncOptimiseState();
+}
+
+/* Optimise is disabled while no valid part exists / a part is invalid,
+   and after a run until any row changes (so a stale layout isn't re-run). */
+function syncOptimiseState() {
+  const btn = document.getElementById('optimize-btn');
+  const hint = document.getElementById('opt-hint');
+  if (!btn || readOnly) return;
+  const v = validateDraft();
+  let disabled = false, msg = '';
+  if (!v.ok) { disabled = true; msg = v.msg; }
+  else if (ranOnce && !resultStale) { disabled = true; msg = 'Natija tayyor — qaytadan hisoblash uchun qismni o\'zgartiring.'; }
+  else if (resultStale) { msg = 'Qismlar o\'zgardi — qayta ishga tushiring.'; }
+  else { msg = 'Qismlarni kiriting, so\'ng optimal joylashuvni hisoblang.'; }
+  btn.disabled = disabled;
+  btn.style.opacity = disabled ? '0.55' : '';
+  btn.style.cursor = disabled ? 'not-allowed' : '';
+  hint.textContent = msg;
 }
 
 function swatchColor(swId) {
@@ -417,6 +517,7 @@ function duplicatePart(ref) {
   renderAll();
 }
 
+let _inputT = null;
 function onPartInput(ev) {
   const ref = ev.target.dataset.ref;
   const field = ev.target.dataset.field;
@@ -425,6 +526,18 @@ function onPartInput(ev) {
   const v = ev.target.value;
   part[field] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
   markStale();
+  ranOnce = false; // any row change re-enables Optimise
+  // debounced re-render so inline validation marks update without losing focus
+  clearTimeout(_inputT);
+  _inputT = setTimeout(() => {
+    const active = document.activeElement;
+    const aRef = active?.dataset?.ref, aField = active?.dataset?.field;
+    renderParts();
+    if (aRef && aField) {
+      const restore = document.querySelector(`.part-row[data-ref="${aRef}"] input[data-field="${aField}"]`);
+      if (restore) { restore.focus(); const val = restore.value; restore.value = ''; restore.value = val; }
+    }
+  }, 400);
 }
 
 // Click delegation on parts container
@@ -552,29 +665,60 @@ function markStale() {
   document.getElementById('stale-pill').classList.remove('hide');
 }
 
+// Render a documented failure state below the editor instead of running.
+function showRunFailure(code, msg) {
+  let box = document.getElementById('run-fail');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'run-fail';
+    box.className = 'br-strip warn';
+    box.style.cssText = 'margin-top:14px;display:flex;gap:12px;align-items:flex-start';
+    document.querySelector('.run').after(box);
+  }
+  box.innerHTML = `<span class="ic">!</span><span><b>Optimallashtirib bo'lmadi</b> · <code style="font:600 11.5px var(--f-mono)">${code}</code><br>${msg}</span>`;
+  box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function clearRunFailure() { document.getElementById('run-fail')?.remove(); }
+
 function runOptimizer() {
-  const validParts = draft.partList.filter(p => p.matId && p.l > 50 && p.w > 50 && p.qty > 0);
-  if (validParts.length === 0) {
-    toast("Hech bo'lmasa bitta to'liq qism kiriting");
+  clearRunFailure();
+  // Whole-draft validation gate — surfaces the documented failure codes.
+  const v = validateDraft();
+  if (!v.ok) {
+    if (v.code === 'empty' || v.code === 'incomplete') toast(v.msg, 'warn');
+    else showRunFailure(v.code, v.msg);
     return;
   }
+  const validParts = draft.partList.filter(p => validatePart(p).ok);
   if (validParts.length < draft.partList.length) {
     toast(`${draft.partList.length - validParts.length} ta qism to'ldirilmagan — ular optimizatsiyaga kirmaydi`);
   }
-  // simulate running
+  // simulate running (5s hard cap → optimization_timeout)
   const btn = document.getElementById('optimize-btn');
   btn.disabled = true; btn.textContent = '⏳ Hisoblanmoqda...';
   setTimeout(() => {
-    btn.disabled = false; btn.textContent = '▶ Qayta ishga tushirish';
-    // if the draft already has algorithms (the seed), use them; otherwise synthesize
-    if (!draft.algorithms || !draft.algorithms.length) {
-      draft.algorithms = synthAlgorithms(validParts);
+    btn.textContent = '▶ Qayta ishga tushirish';
+    // if the draft already has seed algorithms, use them; otherwise synthesize
+    let algos = (draft.algorithms && draft.algorithms.length)
+      ? draft.algorithms : synthAlgorithms(validParts);
+
+    // sheet cap per material → too_many_sheets_needed (split the job)
+    const chosen = algos.find(a => a.chosen) || algos[0];
+    const over = Object.entries(chosen.sheetsByMat).find(([, n]) => n > LIM.MAX_SHEETS_PER_MAT);
+    if (over) {
+      const mn = SEED.lookup.matById(over[0])?.name.split('·')[0].trim() || over[0];
+      showRunFailure('too_many_sheets_needed', `${mn} uchun ${over[1]} list kerak — bitta natijada ${LIM.MAX_SHEETS_PER_MAT} listdan oshmasligi kerak. Buyurtmani bo'ling.`);
+      syncOptimiseState();
+      return;
     }
+
+    draft.algorithms = algos;
     resultStale = false;
+    ranOnce = true;
     document.getElementById('stale-pill').classList.add('hide');
     document.getElementById('result').classList.remove('hide');
-    document.getElementById('opt-hint').textContent = 'Optimallashtirish tayyor — natija quyida.';
     renderResult();
+    syncOptimiseState();
     document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 500);
 }
@@ -620,8 +764,13 @@ function renderResult() {
     return `${mat?.name.split('·')[0].trim() || m}: ${n}`;
   }).join(' · ');
   const edgeBits = Object.entries(algo.edgeLen).filter(([,v])=>v>0).map(([k,v])=>`${k}: ${v} m`).join(' · ') || '—';
+  // Parts placed: only valid parts are placed; any invalid part is "not fit".
   const partsTotal = draft.partList.reduce((a,p) => a + (p.qty || 0), 0);
-  const placed = partsTotal; // demo: assume all fit
+  const unfit = draft.partList.filter(p => !validatePart(p).ok);
+  const unfitUnits = unfit.reduce((a,p) => a + (p.qty || 0), 0);
+  const placed = partsTotal - unfitUnits;
+  const allFit = unfitUnits === 0;
+  const unfitList = unfit.map((p,i) => `#${draft.partList.indexOf(p)+1}`).join(' · ');
 
   document.getElementById('metrics').innerHTML = `
     <div class="metric ${algo.wastePct <= 10 ? 'ok' : algo.wastePct >= 18 ? 'warn' : ''}">
@@ -639,10 +788,10 @@ function renderResult() {
       <div class="v">${(Object.values(algo.edgeLen).reduce((a,b)=>a+b,0)).toFixed(1)} m</div>
       <div class="sub">${edgeBits}</div>
     </div>
-    <div class="metric ok">
+    <div class="metric ${allFit ? 'ok' : 'warn'}">
       <div class="lab">Qismlar</div>
-      <div class="v">${placed} / ${partsTotal} ✓</div>
-      <div class="sub">${algo.cutLen} m kesish</div>
+      <div class="v">${placed} / ${partsTotal} ${allFit ? '✓' : '✕'}</div>
+      <div class="sub">${allFit ? `${algo.cutLen} m kesish` : `Sig'magan: ${unfitList}`}</div>
     </div>`;
 
   // current algo summary
@@ -694,8 +843,33 @@ function renderResult() {
   // SVG + legend
   renderSheetSvg(algo);
 
-  // place order link
-  document.getElementById('place-order-btn').href = `order-new.html?cutting=${encodeURIComponent(draft.id)}`;
+  // Place order: pass the REAL draft id and run the documented pre-checks
+  // before navigating (PU1). A blank/unsaved draft can't be ordered.
+  const pob = document.getElementById('place-order-btn');
+  pob.href = `order-new.html?cutting=${encodeURIComponent(draft.id)}`;
+  pob.onclick = (e) => { e.preventDefault(); placeOrderFromCutting(); };
+}
+
+function placeOrderFromCutting() {
+  // The wizard is only reachable from a finalized result.
+  if (draft.id === 'cr-new' || draft.status !== 'draft') {
+    toast('Avval chizmani saqlang va optimallashtirib bo\'ling', 'warn');
+    return;
+  }
+  const v = validateDraft();
+  if (!v.ok) { toast(v.msg, 'warn'); return; }
+  if (!draft.algorithms || !draft.algorithms.some(a => a.chosen)) {
+    toast('Algoritm natijasi tanlanmagan — avval optimallashtiring', 'warn');
+    return;
+  }
+  if (resultStale) { toast('Qismlar o\'zgardi — qayta optimallashtiring', 'warn'); return; }
+  // Any active branch that can take this composition?
+  const branches = SEED.lookup.fulfillingBranches(draft.partList);
+  if (branches.length === 0) {
+    toast('Hozircha bu materiallarni hech bir faol ustaxona qabul qila olmaydi', 'warn');
+    return;
+  }
+  location.href = `order-new.html?cutting=${encodeURIComponent(draft.id)}`;
 }
 
 function renderSheetSvg(algo) {
@@ -771,27 +945,60 @@ function renderSheetSvg(algo) {
     <span title="List chetidan qirqib tashlanadigan ishlatilmaydigan zona">Chekka qirqim: <b>10 mm</b></span>`;
 }
 
-/* Read-only banner when this is a bound (confirmed) result */
-if (draft.status === 'confirmed' && draft.orderId) {
-  const banner = document.createElement('div');
-  banner.className = 'banner ok';
-  banner.style.cssText = 'margin: 12px 0; padding: 12px 16px; background: rgba(45,96,69,.06); border: 1px solid rgba(45,96,69,.18); border-radius: 6px; font: 500 13.5px var(--f-ui); color: #2d6045; display: flex; align-items: center; gap: 12px;';
-  banner.innerHTML = `<span style="font:700 14px var(--f-mono)">✓</span><span>Bu chizma buyurtmaga biriktirilgan · <a href="order-detail.html?id=${draft.orderId}" style="color:#2d6045;text-decoration:underline;font-weight:600">${draft.orderId}</a></span>`;
-  document.querySelector('main .page-head').after(banner);
-  // disable editing
+function lockEditing() {
   document.querySelector('.seg').style.opacity = '0.5';
   document.querySelector('.seg').style.pointerEvents = 'none';
-  document.querySelector('.editor').style.pointerEvents = 'none';
-  document.querySelector('.editor').style.opacity = '0.7';
-  document.getElementById('optimize-btn').style.display = 'none';
+  const ed = document.querySelector('.editor');
+  ed.style.pointerEvents = 'none';
+  ed.style.opacity = '0.75';
+  ed.querySelectorAll('input, button').forEach(el => el.disabled = true);
+  document.querySelector('.run').style.display = 'none';
+  document.getElementById('br-strip').style.display = 'none';
 }
 
-/* boot */
-renderAll();
-if (draft.algorithms && draft.algorithms.length) {
-  document.getElementById('result').classList.remove('hide');
-  document.getElementById('opt-hint').textContent = 'Optimallashtirish tayyor — natija quyida.';
-  renderResult();
+/* boot — PU3 entry handling */
+if (notFound) {
+  // Unknown / missing id → proper not-found, never a blank editable draft.
+  document.querySelector('main').innerHTML = `
+    <div class="st-empty" style="margin-top:40px">
+      <div class="ic">∅</div>
+      <h3>Chizma topilmadi</h3>
+      <p>Bunday chizma yo'q yoki sizga tegishli emas.</p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
+        <a class="btn btn-outline" href="cutting-drafts.html">Saqlangan chizmalar</a>
+      </div>
+    </div>`;
+} else if (readOnly) {
+  // Confirmed / invalidated → fully read-only, bound to an order.
+  renderAll();
+  if (draft.algorithms && draft.algorithms.length) {
+    document.getElementById('result').classList.remove('hide');
+    renderResult();
+    // strip the editing affordances out of the read-only result
+    const eb = document.getElementById('place-order-btn'); if (eb) eb.remove();
+    document.querySelectorAll('.result-actions .btn-ghost').forEach(b => b.remove());
+    document.querySelectorAll('#algos-tbody .use').forEach(b => b.remove());
+  }
+  const banner = document.createElement('div');
+  banner.className = 'banner';
+  if (draft.status === 'invalidated') {
+    banner.classList.add('warn');
+    banner.innerHTML = `<div class="ic">!</div><div class="grow">Bu chizmaga yangiroq chizma biriktirilgan — bu natija faqat tarix uchun saqlangan.${draft.orderId ? ` <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">Joriy natijani ko'rish (${draft.orderId})</a>` : ''}</div>`;
+  } else {
+    banner.classList.add('success');
+    banner.innerHTML = `<div class="ic">✓</div><div class="grow">Bu chizma buyurtmaga biriktirilgan${draft.orderId ? ` · <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">${draft.orderId}</a>` : ''}. Tahrirlash yopiq.</div>`;
+  }
+  document.querySelector('main .page-head').after(banner);
+  lockEditing();
+} else {
+  renderAll();
+  if (draft.algorithms && draft.algorithms.length) {
+    ranOnce = true;
+    document.getElementById('result').classList.remove('hide');
+    renderResult();
+  }
+  syncOptimiseState();
 }
 </script>
 </body>

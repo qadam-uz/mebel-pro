@@ -28,7 +28,7 @@
       </div>
     </div>
 
-    <div class="filters">
+    <div id="ord-filters" class="filters">
       <div class="chips">
         <button class="chip on" data-state="all" onclick="setStateFilter('all')">Hammasi</button>
         <button class="chip" data-state="active" onclick="setStateFilter('active')">Faol</button>
@@ -48,12 +48,7 @@
         <option value="week">Oxirgi 7 kun</option>
         <option value="month">May oyi</option>
       </select>
-      <select id="branch-filter" onchange="render()">
-        <option value="all">Barcha filiallar</option>
-        <option value="yunusobod">Yunusobod</option>
-        <option value="chilonzor">Chilonzor</option>
-        <option value="yangiyol">Yangiyo'l</option>
-      </select>
+      <select id="branch-filter" onchange="render()"></select>
     </div>
 
     <!-- BOARD -->
@@ -87,6 +82,21 @@ let mode = 'board', stateFilter = 'all';
 // v1 board: linear pickup-only flow, no payment / delivery columns.
 const COLS = ['new', 'confirmed', 'cutting', 'edge_banding', 'ready'];
 
+// CR4: branches the user can see; whether they can act vs. only view.
+const MY_BR = myBranches();
+const canActOn = bid => isOwner() || can('manage_orders', bid);
+
+// Populate the branch filter from MY_BR only (never offer a branch the user
+// can't scope to).
+(() => {
+  const sel = document.getElementById('branch-filter');
+  const brs = SEED.branches.filter(b => MY_BR.includes(b.id));
+  sel.innerHTML = (brs.length > 1 ? `<option value="all">${isOwner() ? 'Barcha filiallar' : 'Mening filiallarim'}</option>` : '') +
+    brs.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+})();
+
+const NO_BRANCHES = MY_BR.length === 0;
+
 function setMode(m) { mode = m; document.getElementById('board-view').hidden = m !== 'board'; document.getElementById('table-view').hidden = m !== 'table'; document.getElementById('mode-board').classList.toggle('on', m === 'board'); document.getElementById('mode-table').classList.toggle('on', m === 'table'); render(); }
 function setStateFilter(s) { stateFilter = s; document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('on', b.dataset.state === s)); render(); }
 
@@ -109,7 +119,8 @@ function getOrders() {
   const br = document.getElementById('branch-filter').value;
   const df = document.getElementById('date-filter').value;
   return SEED.orders.filter(o => {
-    if (br !== 'all' && o.branchId !== br) return false;
+    if (!MY_BR.includes(o.branchId)) return false; // CR4 branch scoping
+    if (br && br !== 'all' && o.branchId !== br) return false;
     if (!matchDate(o, df)) return false;
     if (stateFilter !== 'all' && stateFilter !== 'active' && o.state !== stateFilter) return false;
     if (stateFilter === 'active' && !COLS.includes(o.state)) return false;
@@ -122,14 +133,42 @@ function getOrders() {
 }
 
 function render() {
+  // Zero branches → canonical orders.md copy; nothing actionable.
+  if (NO_BRANCHES) {
+    document.getElementById('ord-filters').hidden = true;
+    document.getElementById('table-view').hidden = true;
+    document.querySelector('.page .tools').hidden = true;
+    document.getElementById('board-view').hidden = false;
+    document.getElementById('board').innerHTML = stEmpty(
+      'Filial biriktirilmagan — ustaxona egasiga murojaat qiling',
+      'Sizga hali hech qaysi filial biriktirilmagan, shuning uchun buyurtmalar ko\'rinmaydi.');
+    return;
+  }
+  // PU11 demo states.
+  const ds = demoState();
+  const host = mode === 'board' ? document.getElementById('board') : document.getElementById('tbody');
+  if (ds === 'loading') {
+    host.innerHTML = mode === 'board' ? skCards(6) : skRows(8, 7);
+    return;
+  }
+  if (ds === 'error') {
+    host.innerHTML = mode === 'board'
+      ? stError()
+      : `<tr><td colspan="8">${stError()}</td></tr>`;
+    return;
+  }
   const orders = getOrders();
   if (mode === 'board') renderBoard(orders);
   else renderTable(orders);
 }
 
 // Status actions available on a card by state (no drag between columns).
+// Only a manage_orders grant on THAT order's branch (or owner) may act.
 function cardActions(o) {
   const items = [];
+  if (!canActOn(o.branchId)) {
+    return `<a class="mi" href="order-detail.html?id=${o.id}">Tafsilotlar</a>`;
+  }
   if (o.state === 'new') {
     items.push(`<button class="mi" onclick="ev();confirmAction({title:'Tasdiqlash',msg:'${o.id} tasdiqlanadi (→ Tasdiqlangan).'},()=>{toast('Tasdiqlandi · ${o.id}')})">Tasdiqlash</button>`);
     items.push(`<button class="mi danger" onclick="ev();confirmAction({title:'Bekor qilish',msg:'Sabab kiriting.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi · ${o.id}'))">Bekor qilish</button>`);
@@ -160,6 +199,11 @@ function workerChip(o) {
 
 function renderBoard(orders) {
   const board = document.getElementById('board');
+  if (orders.length === 0) {
+    board.innerHTML = stEmpty("Filial(lar)ingizda buyurtma yo'q",
+      'Filterga yoki sizning filial(lar)ingizga mos buyurtma topilmadi.');
+    return;
+  }
   board.innerHTML = COLS.map(c => {
     const cards = orders.filter(o => o.state === c).sort((a, b) => (b.priority || 0) - (a.priority || 0));
     return `<div class="board-col">
@@ -192,7 +236,7 @@ function renderBoard(orders) {
 
 function renderTable(orders) {
   const tb = document.getElementById('tbody');
-  if (orders.length === 0) { tb.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="ic">∅</div><h3>Buyurtma yo'q</h3><p>Filterga mos buyurtma yo'q.</p></div></td></tr>`; return; }
+  if (orders.length === 0) { tb.innerHTML = `<tr><td colspan="8">${stEmpty("Filial(lar)ingizda buyurtma yo'q", 'Filterga yoki sizning filial(lar)ingizga mos buyurtma topilmadi.')}</td></tr>`; return; }
   tb.innerHTML = orders.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     const br = SEED.lookup.branchById(o.branchId);
@@ -214,11 +258,11 @@ function renderTable(orders) {
   }).join('');
 }
 
-window.addEventListener('branchchange', () => {
-  const br = document.getElementById('br-name').textContent.toLowerCase().includes('hamma') ? 'all' :
-             document.getElementById('br-name').textContent.toLowerCase().includes('yunus') ? 'yunusobod' :
-             document.getElementById('br-name').textContent.toLowerCase().includes('chilon') ? 'chilonzor' : 'yangiyol';
-  document.getElementById('branch-filter').value = br;
+window.addEventListener('branchchange', (e) => {
+  const sel = document.getElementById('branch-filter');
+  const id = e.detail?.id;
+  if (id && [...sel.options].some(o => o.value === id)) sel.value = id;
+  else if ([...sel.options].some(o => o.value === 'all')) sel.value = 'all';
   render();
 });
 

@@ -58,28 +58,38 @@ renderWorkshopShell();
 
 let filter = 'all';
 function setF(f) { filter = f; document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === f)); render(); }
-function markAll() { SEED.notifications.forEach(n => n.read = true); toast('Hammasi o\'qildi'); render(); }
+function markAll() { markAllNotifsRead(); toast('Hammasi o\'qildi'); render(); }
 
 function render() {
+  const wrap = document.getElementById('list');
+  const ds = demoState();
+  if (ds === 'loading') {
+    wrap.innerHTML = skCards(6);
+    return;
+  }
+  if (ds === 'error') {
+    wrap.innerHTML = stError();
+    return;
+  }
   const list = SEED.notifications.filter(n => {
     if (filter === 'unread' && n.read) return false;
     if (['order','inventory','finance'].includes(filter) && n.kind !== filter) return false;
     return true;
   });
-  const wrap = document.getElementById('list');
   if (list.length === 0) {
-    wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Bildirishnomalar yo'q</h3></div>`;
+    wrap.innerHTML = stEmpty(filter === 'unread' ? "O'qilmagan bildirishnoma yo'q" : "Bildirishnoma yo'q",
+      filter === 'all' ? 'Yangi buyurtma, ombor yoki moliya hodisalari shu yerda chiqadi.' : '');
     return;
   }
   wrap.innerHTML = list.map(n => `
-    <article class="note ${n.read ? '' : 'unread'}" onclick="location.href='${n.link}'">
+    <a class="note ${n.read ? '' : 'unread'}" href="${n.link}" style="text-decoration:none;color:inherit">
       <div class="ic ${n.kind}">${n.kind[0].toUpperCase()}</div>
       <div>
         <div style="font:600 14px var(--f-ui);color:var(--ink-12)">${n.title}</div>
         <div style="font-size:12.5px;color:var(--ink-8);margin-top:2px">${n.body}</div>
       </div>
       <div class="t">${n.t}</div>
-    </article>
+    </a>
   `).join('');
 }
 render();

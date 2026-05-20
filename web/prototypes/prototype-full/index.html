@@ -19,7 +19,7 @@
   .launcher .lead { color: var(--ink-8); font-size: 16px; max-width: 720px; margin-bottom: 38px; line-height: 1.55; }
   .role-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
   @media (min-width: 760px) { .role-grid { grid-template-columns: 1fr 1fr; } }
-  @media (min-width: 1100px) { .role-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (min-width: 1100px) { .role-grid { grid-template-columns: repeat(3, 1fr); } }
   .role-tile { background: var(--elev); border: 1px solid var(--line); border-radius: 12px; padding: 24px 22px 20px; text-decoration: none; color: inherit; display: flex; flex-direction: column; gap: 8px; transition: all .15s; }
   .role-tile:hover { border-color: var(--ink-12); transform: translateY(-2px); }
   .role-tile .e { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
@@ -40,21 +40,15 @@
 <body>
 
 <div class="launcher">
-  <a class="brand" href="landing/landing.html" style="display:inline-flex;align-items:center;gap:11px;text-decoration:none;color:inherit;margin-bottom:32px">
+  <span class="brand" style="display:inline-flex;align-items:center;gap:11px;color:inherit;margin-bottom:32px">
     <span class="mk">M</span>
     <span style="font-family:var(--f-display);font-size:21px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">prototype-full</small></span>
-  </a>
+  </span>
 
   <h1>Klikladigan prototype</h1>
-  <p class="lead">v1 reliz uchun barcha rollar va sahifalar — statik ma'lumotlar bilan. Har bir tugma ishlaydi, lekin haqiqiy backend ulanmagan. Quyidagi to'rt yo'naltirishdan boshlang.</p>
+  <p class="lead">v1 reliz uchun barcha rollar va sahifalar — statik ma'lumotlar bilan. Har bir tugma ishlaydi, lekin haqiqiy backend ulanmagan. Quyidagi uch yo'naltirishdan boshlang.</p>
 
   <div class="role-grid">
-    <a class="role-tile" href="landing/landing.html">
-      <div class="e">Sahifa</div>
-      <h3>Landing</h3>
-      <p>SEO sahifa · marketingni va rollar kiritish nuqtalari.</p>
-      <span class="go">Ochish <span>→</span></span>
-    </a>
     <a class="role-tile" href="client/login.html">
       <div class="e">Mijoz</div>
       <h3>Mijoz kabineti</h3>
@@ -86,7 +80,7 @@
       <a href="client/cutting.html?id=cr-0091">Biriktirilgan chizma (read-only)<small>cutting.html?id=cr-0091</small></a>
       <a href="client/order-new.html?cutting=cr-0085">Buyurtma berish (multi-material)<small>order-new.html?cutting=cr-0085</small></a>
       <a href="client/orders.html">Mening buyurtmalarim<small>orders.html</small></a>
-      <a href="client/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
+      <a href="client/order-detail.html?id=ORD-2026-000091">Buyurtma sahifasi<small>order-detail.html</small></a>
       <a href="client/branches.html">Ustaxonalar (passiv ro'yxat)<small>branches.html</small></a>
       <a href="client/notifications.html">Bildirishnomalar<small>notifications.html</small></a>
       <a href="client/profile.html">Profil va sessiyalar<small>profile.html</small></a>
@@ -99,7 +93,7 @@
       <a href="workshop/login.html">Kirish<small>login.html</small></a>
       <a href="workshop/dashboard.html">Asosiy<small>dashboard.html</small></a>
       <a href="workshop/orders.html">Buyurtmalar (board/table)<small>orders.html</small></a>
-      <a href="workshop/order-detail.html?id=MP-2026-05-0091">Buyurtma sahifasi<small>order-detail.html</small></a>
+      <a href="workshop/order-detail.html?id=ORD-2026-000091">Buyurtma sahifasi<small>order-detail.html</small></a>
       <a href="workshop/cutting-queue.html">Chizma navbati<small>cutting-queue.html</small></a>
       <a href="workshop/banding-queue.html">Krom navbati<small>banding-queue.html</small></a>
       <a href="workshop/inventory.html">Ombor<small>inventory.html</small></a>

@@ -26,22 +26,20 @@
       </div>
     </div>
 
-    <div class="filters">
-      <select id="ws"><option value="all">Barcha ustaxonalar</option><option>Furniture House</option><option>Toshkent Mebel</option></select>
-      <div class="chips">
-        <button class="chip on">Hammasi</button>
-        <button class="chip">Faol</button>
-        <button class="chip">Tugatilgan</button>
+    <div class="filters" id="filters" hidden>
+      <select id="ws-sel" onchange="render()">
+        <option value="all">Barcha ustaxonalar</option>
+      </select>
+      <div class="chips" id="st-chips">
+        <button class="chip on" data-s="all">Hammasi</button>
+        <button class="chip" data-s="active">Faol</button>
+        <button class="chip" data-s="completed">Tugatilgan</button>
+        <button class="chip" data-s="frozen">Muzlatilgan</button>
       </div>
-      <div class="input"><input placeholder="ID yoki mijoz..." /></div>
+      <div class="input"><input id="q" placeholder="ID yoki mijoz..." oninput="render()" /></div>
     </div>
 
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>ID</th><th>Ustaxona / Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th><th>Vaqt</th></tr></thead>
-        <tbody id="body"></tbody>
-      </table>
-    </div>
+    <div id="page-body"></div>
   </div>
 </main>
 
@@ -51,18 +49,84 @@
 <script>
 renderAdminShell();
 
-document.getElementById('body').innerHTML = SEED.orders.map(o => {
-  const cl = SEED.lookup.clientById(o.clientId);
-  const br = SEED.lookup.branchById(o.branchId);
-  return `<tr>
-    <td class="id">${o.id}</td>
-    <td><div class="nm">Furniture House<small style="color:var(--ink-6);font:400 11px var(--f-mono)">${br?.name}</small></div></td>
-    <td>${cl?.name}</td>
-    <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td>
-    <td class="amt">${fmtTiyin(o.totalTiyin)}</td>
-    <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${o.placedAt}</span></td>
-  </tr>`;
-}).join('');
+const body = document.getElementById('page-body');
+const state = demoState();
+let sFilter = 'all';
+
+const ACTIVE_STATES = ['new', 'confirmed', 'cutting', 'edge_banding', 'ready'];
+
+// A workshop is blocked? then its open orders are frozen (PU15).
+function isFrozen(o) {
+  const ws = SEED.lookup.workshopById(o.workshopId || 'ws-01');
+  return ws && ws.status === 'blocked' && ACTIVE_STATES.includes(o.state);
+}
+
+function fillWsSelect() {
+  const sel = document.getElementById('ws-sel');
+  SEED.workshops.forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = w.id;
+    opt.textContent = w.name + (w.status === 'blocked' ? ' (bloklangan)' : '');
+    sel.appendChild(opt);
+  });
+}
+
+function render() {
+  if (state === 'loading') {
+    body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>ID</th><th>Ustaxona / Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th><th>Vaqt</th></tr></thead><tbody>${skRows(6, 7)}</tbody></table></div>`;
+    return;
+  }
+  if (state === 'error') { body.innerHTML = errState('Buyurtmalarni yuklab bo\'lmadi.', 'tr-7d33aa'); return; }
+
+  document.getElementById('filters').hidden = false;
+  const wsId = document.getElementById('ws-sel').value;
+  const q = (document.getElementById('q')?.value || '').toLowerCase();
+  let rows = SEED.orders.filter(o => {
+    if (wsId !== 'all' && (o.workshopId || 'ws-01') !== wsId) return false;
+    if (sFilter === 'active' && !ACTIVE_STATES.includes(o.state)) return false;
+    if (sFilter === 'completed' && o.state !== 'completed') return false;
+    if (sFilter === 'frozen' && !isFrozen(o)) return false;
+    if (q && !(o.id.toLowerCase().includes(q) || (SEED.lookup.clientById(o.clientId)?.name || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  if (!rows.length) { body.innerHTML = emptyState('▣', 'Buyurtma topilmadi', 'Filtr yoki qidiruvni o\'zgartiring.'); return; }
+
+  const frozenCount = SEED.orders.filter(isFrozen).length;
+
+  body.innerHTML = `
+    ${frozenCount && sFilter !== 'frozen' ? `<div class="banner warn"><div class="ic">!</div><div class="grow">${frozenCount} ta buyurtma bloklangan ustaxonada — <b>muzlatilgan</b>. <button class="btn btn-ghost btn-sm" type="button" onclick="setFilter('frozen')" style="padding:2px 6px;color:var(--accent)">faqat shularni ko'rsat</button></div></div>` : ''}
+    <div class="card"><table class="tbl">
+      <thead><tr><th>ID</th><th>Ustaxona / Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th><th>Vaqt</th></tr></thead>
+      <tbody>${rows.map(o => {
+        const cl = SEED.lookup.clientById(o.clientId);
+        const br = SEED.lookup.branchById(o.branchId);
+        const ws = SEED.lookup.workshopById(o.workshopId || 'ws-01');
+        const frozen = isFrozen(o);
+        return `<tr>
+          <td class="id">${o.id}</td>
+          <td><div class="nm">${ws?.name || '—'}<small style="color:var(--ink-6);font:400 11px var(--f-mono)">${br?.name || '—'}</small></div></td>
+          <td>${cl?.name || '—'}</td>
+          <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>${frozen ? ' <span class="pill p-bad" style="font-size:9.5px"><span class="pd"></span>muzlatilgan</span>' : ''}</td>
+          <td class="amt">${fmtTiyin(o.totalTiyin)}</td>
+          <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${o.placedAt}</span></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+}
+
+function setFilter(s) {
+  sFilter = s;
+  document.querySelectorAll('#st-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.s === s));
+  render();
+}
+
+document.getElementById('st-chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  setFilter(b.dataset.s);
+});
+
+fillWsSelect();
+render();
 </script>
 </body>
 </html>

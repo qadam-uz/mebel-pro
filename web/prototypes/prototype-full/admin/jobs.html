@@ -12,6 +12,10 @@
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
 <meta name="theme-color" content="#FAF7F2" />
+<style>
+  .job-fail td { background: var(--danger-tint); }
+  .job-fail td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+</style>
 </head>
 <body>
 <main class="page-content">
@@ -19,26 +23,21 @@
     <div class="page-head">
       <div>
         <h1>Background ish · scheduler</h1>
-        <p class="sub">Avtomatik ravishda ishlaydigan ishlar (in-process scheduler).</p>
+        <p class="sub">In-process scheduler · v1 da aniq ikkita ish. Tashqi navbat / Celery / cron yo'q.</p>
       </div>
     </div>
 
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>Ish nomi</th><th>Jadval</th><th>Oxirgi ishlashi</th><th>Natija</th><th>Xulosa</th><th></th></tr></thead>
-        <tbody id="body"></tbody>
-      </table>
-    </div>
+    <div id="page-body"></div>
   </div>
 </main>
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-log">
-  <div class="modal-h"><h3 id="log-title">Ish jurnali</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3 id="log-title">Ish jurnali</h3><button class="x" data-close-modal="m-log">✕</button></div>
   <div class="modal-b">
     <pre id="log-body" style="background:var(--deep);color:#D6CDBE;padding:14px 16px;border-radius:8px;font:500 12px/1.5 var(--f-mono);overflow:auto;max-height:60vh"></pre>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Yopish</button><button class="btn btn-acc" onclick="closeModal('m-log');toast('Ish ishga tushdi')">Hozir ishga tushirish</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal="m-log">Yopish</button></div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -47,46 +46,59 @@
 <script>
 renderAdminShell();
 
-const _jobsById = {};
-SEED.jobs.forEach(j => _jobsById[j.id] = j);
+const body = document.getElementById('page-body');
+const state = demoState();
+const jobsById = {};
+SEED.jobs.forEach(j => jobsById[j.id] = j);
 
-document.getElementById('body').innerHTML = SEED.jobs.map(j => `
-  <tr class="clickable" data-job="${j.id}">
-    <td class="nm">${j.name}</td>
-    <td><small style="color:var(--ink-8);font:400 12px var(--f-mono)">${j.schedule}</small></td>
-    <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${j.lastRun}</span></td>
-    <td>${j.lastResult === 'ok' ? '<span class="pill p-ok"><span class="pd"></span>Muvaffaqiyatli</span>' : '<span class="pill p-bad"><span class="pd"></span>Failed</span>'}</td>
-    <td><small style="color:${j.lastResult === 'failed' ? 'var(--danger)' : 'var(--ink-8)'};font-size:12px">${j.summary}</small></td>
-    <td onclick="event.stopPropagation()">
-      <div class="menu-wrap">
-        <button class="menu-btn" data-menu-toggle>⋯</button>
-        <div class="menu">
-          <button class="mi" data-action="log" data-job="${j.id}">Jurnalni ko'rish</button>
-          <button class="mi" data-action="run">Hozir ishga tushirish</button>
-        </div>
-      </div>
-    </td>
-  </tr>
-`).join('');
-
-document.getElementById('body').addEventListener('click', e => {
-  const action = e.target.dataset.action;
-  const jobId = e.target.dataset.job || e.target.closest('tr')?.dataset.job;
-  if (!jobId) return;
-  if (action === 'run') {
-    confirmAction({ title: 'Ishni hozir ishga tushirish' }, () => toast('Ish ishga tushdi'));
-  } else {
-    showLog(jobId);
+function render() {
+  if (state === 'loading') {
+    body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Ish nomi</th><th>Jadval</th><th>Oxirgi ishlashi</th><th>Natija</th><th>Xulosa</th><th></th></tr></thead><tbody>${skRows(6, 2)}</tbody></table></div>`;
+    return;
   }
-});
+  if (state === 'error') { body.innerHTML = errState('Ishlar ro\'yxatini yuklab bo\'lmadi.', 'tr-9f2a4c'); return; }
+  if (!SEED.jobs.length) { body.innerHTML = emptyState('⌥', 'Ish yo\'q', 'Scheduler hozircha bo\'sh.'); return; }
+
+  body.innerHTML = `<div class="card"><table class="tbl">
+    <thead><tr><th>Ish nomi</th><th>Jadval</th><th>Oxirgi ishlashi</th><th>Natija</th><th>Xulosa</th><th></th></tr></thead>
+    <tbody>${SEED.jobs.map(j => {
+      const failed = j.lastResult === 'failed';
+      return `<tr class="${failed ? 'job-fail' : ''}">
+        <td class="nm">${j.name}${j.running ? ' <span class="pill p-cut" style="font-size:9.5px"><span class="pd"></span>ishlamoqda</span>' : ''}</td>
+        <td><small style="color:var(--ink-8);font:400 12px var(--f-mono)">${j.schedule}</small></td>
+        <td><span class="num" style="font-size:11.5px;color:var(--ink-6)">${j.lastRun}</span></td>
+        <td>${failed ? '<span class="pill p-bad"><span class="pd"></span>Failed</span>' : '<span class="pill p-ok"><span class="pd"></span>Muvaffaqiyatli</span>'}</td>
+        <td><small style="color:${failed ? 'var(--danger)' : 'var(--ink-8)'};font-size:12px">${failed ? (j.error || j.summary) : j.summary}</small></td>
+        <td>
+          <div class="menu-wrap">
+            <button class="menu-btn" data-menu-toggle aria-label="Amallar">⋯</button>
+            <div class="menu" role="menu">
+              <button class="mi" onclick="showLog('${j.id}')">Jurnalni ko'rish</button>
+              ${j.running
+                ? `<button class="mi" disabled style="opacity:.4;cursor:not-allowed" title="Ish hozir ishlamoqda">Hozir ishlamoqda</button>`
+                : `<button class="mi" onclick="confirmAction({title:'Ishni hozir ishga tushirish',msg:'&quot;${j.name}&quot; rejadan tashqari hozir ishga tushiriladi.',okText:'Ishga tushirish'},()=>toast('Ish ishga tushdi'))">Hozir ishga tushirish</button>`}
+              ${failed && j.retriable && !j.running
+                ? `<button class="mi danger" onclick="confirmAction({title:'Muvaffaqiyatsiz ishni qayta urinish',msg:'&quot;${j.name}&quot; oxirgi ishlashida xato berdi — qo\\'lda qayta urinib ko\\'rasizmi?',okText:'Qayta urinish'},()=>toast('Ish qayta ishga tushdi'))">Qayta urinish (failed)</button>`
+                : ''}
+            </div>
+          </div>
+        </td>
+      </tr>`; }).join('')}</tbody></table></div>`;
+}
 
 function showLog(id) {
-  const j = _jobsById[id];
+  const j = jobsById[id];
   if (!j) return;
   document.getElementById('log-title').textContent = j.id;
-  document.getElementById('log-body').textContent = `[INFO] Job ${j.id} started at 08:00:00\n[INFO] Connecting to inventory DB...\n${j.error ? '[ERROR] ' + j.error + '\n[ERROR] Job aborted' : '[INFO] ' + j.summary + '\n[INFO] Completed in 184ms'}`;
+  document.getElementById('log-body').textContent =
+    `[INFO] Job ${j.id} started · ${j.lastRun}\n` +
+    (j.lastResult === 'failed'
+      ? `[ERROR] ${j.error}\n[ERROR] Job aborted after ${j.durationMs}ms`
+      : `[INFO] ${j.summary}\n[INFO] Completed in ${j.durationMs}ms`);
   openModal('m-log');
 }
+
+render();
 </script>
 </body>
 </html>

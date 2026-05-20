@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 70
 ---
 
@@ -64,8 +64,7 @@ Each SPA stays same-origin with its API (no CORS).
 - **One PostgreSQL** — shared by all modules; each module owns its tables.
 - **One MinIO / S3** — material images, logos, refund / delivery receipts, cutting PDFs. The
   `files` module owns it; others attach/detach by id.
-- **In-process scheduler** — expire draft cuttings, prune expired sessions, daily low-stock
-  summary.
+- **In-process scheduler** — prune expired sessions, daily low-stock summary.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
 - **One external integration** — Telegram Login (OAuth), client auth only.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge

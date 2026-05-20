@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 10
 ---
 
@@ -47,7 +47,7 @@ odam har bir grant'ni ushlab turishi mumkin. Workshop app'dan foydalanadi.
 | `login` | text | unique per workshop, case-insensitive |
 | `password_hash` / `full_name` / `phone` | text | as above |
 | `is_owner` | bool | **exactly one `true` per workshop** |
-| `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (an order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`); for owner / office staff who span branches, set the branch they sit at |
+| `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (a **non-owner** order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`; the **owner is exempt** — `is_owner` holds `process_production` on every branch and may be assigned regardless of `home_branch_id`); for owner / office staff who span branches, set the branch they sit at |
 | `status` | enum | `active` / `blocked` |
 | `force_password_change` | bool | default `true` on creation |
 | `failed_login_count` / `locked_until` | int / timestamp? | |

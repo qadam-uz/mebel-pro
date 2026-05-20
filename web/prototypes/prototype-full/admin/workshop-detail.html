@@ -28,12 +28,32 @@
 renderAdminShell();
 
 const id = new URLSearchParams(location.search).get('id') || 'ws-01';
+const state = demoState();
 const w = SEED.lookup.workshopById(id);
 const wrap = document.getElementById('wrap');
 
-if (!w) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Ustaxona topilmadi</h3></div>`;
+// Permission summary helper (IN1 — never a role name; granted permissions + branches)
+function permSummary(u) {
+  if (u.isOwner) return '<span class="pill p-ok" style="font-size:10px"><span class="pd"></span>is_owner</span> <small style="color:var(--ink-6)">barcha ruxsatlar · barcha filiallar</small>';
+  const g = u.grants || {};
+  const keys = Object.keys(g);
+  if (!keys.length) return '<small style="color:var(--ink-6)">ruxsat berilmagan</small>';
+  const labelOf = k => (SEED.permissions.find(p => p.key === k) || {}).label || k;
+  const branches = [...new Set(keys.flatMap(k => g[k]))].map(b => SEED.lookup.branchById(b)?.name || b);
+  return `<small style="color:var(--ink-10)">${keys.map(labelOf).join(', ')}</small><small style="display:block;color:var(--ink-6);font-size:11px">Filiallar: ${branches.join(', ')}</small>`;
+}
+
+if (state === 'loading') {
+  wrap.innerHTML = `<div class="card" style="max-width:720px;margin-top:8px"><div class="card-b" style="padding:24px">${'<div class="sk-line"></div>'.repeat(6)}</div></div>`;
+} else if (state === 'error') {
+  wrap.innerHTML = errState('Ustaxona ma\'lumotlarini yuklab bo\'lmadi.', 'tr-7d33aa');
+} else if (!w) {
+  wrap.innerHTML = emptyState('∅', 'Ustaxona topilmadi', 'Bu ID bo\'yicha ustaxona mavjud emas.');
 } else {
+  const isBlocked = w.status === 'blocked';
+  // Orders that belong to this workshop (cross-workshop read-only view)
+  const wsOrders = SEED.orders.filter(o => (o.workshopId || 'ws-01') === w.id);
+
   wrap.innerHTML = `
     <div class="page-head" style="margin-top: 8px">
       <div>
@@ -42,16 +62,18 @@ if (!w) {
           <div>
             <h1>${w.name}</h1>
             <p class="sub">${w.branches} filial · ${w.orders30d} buyurtma (30 kun) · ${w.createdOn} dan</p>
-            <div style="margin-top: 6px">${w.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : `<span class="pill p-bad"><span class="pd"></span>Bloklangan · ${w.blockedReason || ''}</span>`}</div>
+            <div style="margin-top: 6px">${isBlocked ? `<span class="pill p-bad"><span class="pd"></span>Bloklangan · ${w.blockedReason || ''}</span>` : '<span class="pill p-ok"><span class="pd"></span>Faol</span>'}</div>
           </div>
         </div>
       </div>
       <div class="tools">
-        ${w.status === 'active' ?
-          `<button class="btn btn-danger" type="button" onclick="confirmAction({title:'Ustaxonani bloklash',msg:'Egasi va xodimlar sessiyalari yopiladi. Buyurtmalar to\'xtaydi (mijozlarga ta\'sir qilmaydi).',reasonField:true,danger:true,okText:'Bloklash'},()=>toast('Bloklandi'))">Ustaxonani bloklash</button>` :
-          `<button class="btn btn-acc" type="button" onclick="toast('Faollashtirildi')">Faollashtirish</button>`}
+        ${isBlocked
+          ? `<button class="btn btn-acc" type="button" onclick="confirmAction({title:'Ustaxonani blokdan chiqarish',msg:'Sessiyalar TIKLANMAYDI — egasi va xodimlar qaytadan kirishlari kerak. Buyurtmalar yana harakatlanadi.',okText:'Blokdan chiqarish'},()=>toast('Ustaxona blokdan chiqarildi'))">Blokdan chiqarish</button>`
+          : `<button class="btn btn-danger" type="button" onclick="confirmAction({title:'Ustaxonani bloklash',msg:'Egasi va xodimlar sessiyalari darhol yopiladi va keyingi kirish rad etiladi. Ochiq buyurtmalar muzlatiladi. Mijozlarga ta\\'sir qilmaydi.',reasonField:true,reasonLabel:'Bloklash sababi',danger:true,okText:'Bloklash'},()=>toast('Ustaxona bloklandi','danger'))">Ustaxonani bloklash</button>`}
       </div>
     </div>
+
+    ${isBlocked ? `<div class="banner danger"><div class="ic">!</div><div class="grow"><b>Ustaxona bloklangan → buyurtmalar muzlatilgan.</b> Xodimlar kira olmaydi, hech qanday avtomatik o'tish bo'lmaydi. Blokdan chiqarilganda sessiyalar tiklanmaydi.</div></div>` : ''}
 
     <div class="tabs" data-tabs="ws">
       <button class="tab on" data-target="t-profile" onclick="switchTab('ws','t-profile')">Profil</button>
@@ -62,16 +84,15 @@ if (!w) {
 
     <section id="t-profile" data-panel-group="ws">
       <div class="card" style="max-width: 720px">
-        <div class="card-h"><h2>Ustaxona profili</h2></div>
+        <div class="card-h"><h2>Ustaxona profili</h2><span class="sub">faqat ko'rish · operator tahrirlamaydi</span></div>
         <div class="card-b" style="padding-top: 0">
-          <div class="field"><label>Ustaxona nomi</label><input value="${w.name}" /></div>
-          <div class="field-row">
-            <div class="field"><label>Egasi</label><input value="${w.ownerName}" /></div>
-            <div class="field"><label>Egasi telefoni</label><input value="${w.ownerPhone}" /></div>
-          </div>
-          <div class="row-item"><div><div class="nm">Filiallar soni</div><small style="color:var(--ink-6)">filiallar tabidan ko'rinadi · operator o'zgartirmaydi</small></div><div class="meta">${w.branches}</div></div>
+          <div class="banner info"><div class="ic">i</div><div class="grow">Ustaxona profili va egasining ma'lumotlari (nom · telefon · login) egasining hududi. Operatorda tahrirlash yo'li yo'q — faqat <b>provision</b>, <b>bloklash</b>, <b>blokdan chiqarish</b>.</div></div>
+          <div class="row-item"><div><div class="nm">Ustaxona nomi</div></div><div class="meta">${w.name}</div></div>
+          <div class="row-item"><div><div class="nm">Egasi</div></div><div class="meta">${w.ownerName}</div></div>
+          <div class="row-item"><div><div class="nm">Egasi telefoni</div></div><div class="meta">${w.ownerPhone}</div></div>
+          <div class="row-item"><div><div class="nm">Filiallar soni</div><small style="color:var(--ink-6)">filiallar tabidan ko'rinadi</small></div><div class="meta">${w.branches}</div></div>
           <div class="row-item"><div><div class="nm">Yaratildi</div></div><div class="meta">${w.createdOn}</div></div>
-          <div class="flex-end" style="margin-top: 14px"><button class="btn btn-acc" type="button" onclick="toast('Profil saqlandi')">Saqlash</button></div>
+          <div class="row-item"><div><div class="nm">Holat</div></div><div class="meta">${isBlocked ? 'Bloklangan' : 'Faol'}</div></div>
         </div>
       </div>
     </section>
@@ -90,23 +111,24 @@ if (!w) {
 
     <section id="t-orders" data-panel-group="ws" hidden>
       <div class="card">
-        <div class="card-h"><h2>Bu ustaxonaning buyurtmalari (cross-workshop · read-only)</h2></div>
+        <div class="card-h"><h2>Bu ustaxonaning buyurtmalari (cross-workshop · read-only)</h2>${isBlocked ? '<span class="pill p-bad"><span class="pd"></span>Muzlatilgan</span>' : ''}</div>
         <div class="card-b" style="padding: 0 22px 18px">
-          <table class="tbl">
+          ${isBlocked ? `<div class="banner warn" style="margin:14px 0 0"><div class="ic">!</div><div class="grow">Ustaxona bloklangani uchun bu buyurtmalar <b>muzlatilgan</b> — xodimlar harakat qila olmaydi.</div></div>` : ''}
+          ${wsOrders.length ? `<table class="tbl">
             <thead><tr><th>ID</th><th>Filial</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>
-            <tbody>${SEED.orders.slice(0, 6).map(o => { const cl = SEED.lookup.clientById(o.clientId); const br = SEED.lookup.branchById(o.branchId); return `<tr><td class="id">${o.id}</td><td>${br?.name}</td><td>${cl?.name}</td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`; }).join('')}</tbody>
-          </table>
+            <tbody>${wsOrders.map(o => { const cl = SEED.lookup.clientById(o.clientId); const br = SEED.lookup.branchById(o.branchId); return `<tr><td class="id">${o.id}</td><td>${br?.name || '—'}</td><td>${cl?.name || '—'}</td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>${isBlocked && o.state !== 'completed' && o.state !== 'cancelled' ? ' <span class="pill p-bad" style="font-size:9.5px"><span class="pd"></span>muzlatilgan</span>' : ''}</td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`; }).join('')}</tbody>
+          </table>` : emptyState('▣', 'Buyurtma yo\'q', 'Bu ustaxonada hali buyurtma yo\'q.')}
         </div>
       </div>
     </section>
 
     <section id="t-staff" data-panel-group="ws" hidden>
       <div class="card">
-        <div class="card-h"><h2>Xodimlar (read-only)</h2></div>
+        <div class="card-h"><h2>Xodimlar (read-only)</h2><span class="sub">rol yo'q — is_owner + berilgan ruxsatlar</span></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
-            <thead><tr><th>Xodim</th><th>Rol</th><th>Holat</th></tr></thead>
-            <tbody>${SEED.users.map(u => `<tr><td class="nm">${u.name}<small>${u.login}</small></td><td>${u.isOwner ? 'Egasi' : 'Xodim'}</td><td>${u.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Xodim</th><th>Ruxsatlar / filiallar</th><th>Holat</th></tr></thead>
+            <tbody>${SEED.users.map(u => `<tr><td class="nm">${u.name}<small>${u.login}</small></td><td>${permSummary(u)}</td><td>${u.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-bad"><span class="pd"></span>Bloklangan</span>'}</td></tr>`).join('')}</tbody>
           </table>
         </div>
       </div>

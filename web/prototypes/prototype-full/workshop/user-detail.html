@@ -33,8 +33,10 @@ const id = new URLSearchParams(location.search).get('id') || 'u03';
 const u = SEED.lookup.userById(id);
 const wrap = document.getElementById('wrap');
 
-if (!u) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Xodim topilmadi</h3></div>`;
+if (!ownerOnly()) {
+  // Denied panel rendered into #wrap.
+} else if (!u) {
+  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Xodim topilmadi</h3></div>`;
 } else {
   const branches = SEED.branches;
   const permsRows = SEED.permissions.map(p => {

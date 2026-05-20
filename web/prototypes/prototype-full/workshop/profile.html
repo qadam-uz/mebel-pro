@@ -19,7 +19,7 @@
     <div class="page-head">
       <div>
         <h1>Mening profilim</h1>
-        <p class="sub">Hasan ako · Egasi · Furniture House</p>
+        <p class="sub" id="pr-sub">—</p>
       </div>
       <div class="tools">
         <button class="btn btn-danger" type="button" onclick="confirmAction({title:'Chiqib ketish',msg:'Boshqaruv kabinetidan chiqasiz.',okText:'Chiqish',danger:true},()=>{toast('Chiqildi');setTimeout(()=>location.href='login.html',500)})">Chiqib ketish</button>
@@ -35,13 +35,11 @@
     <section id="t-profile" data-panel-group="pr">
       <div class="card" style="max-width: 640px">
         <div class="card-h"><h2>Ma'lumotlar</h2></div>
-        <div class="card-b">
-          <div class="row-item"><div><div class="nm">F.I.O</div></div><div class="meta">Hasan Karimov</div></div>
-          <div class="row-item"><div><div class="nm">Login</div></div><div class="meta">hasan</div></div>
-          <div class="row-item"><div><div class="nm">Telefon</div></div><div class="meta">+998 90 100 30 30</div></div>
-          <div class="row-item"><div><div class="nm">Rol</div></div><div class="meta">Egasi · barcha ruxsatlar</div></div>
-          <div class="row-item"><div><div class="nm">Ustaxona</div></div><div class="meta">Furniture House</div></div>
-        </div>
+        <div class="card-b" id="pr-info"></div>
+      </div>
+      <div class="card" style="max-width: 640px;margin-top:14px">
+        <div class="card-h"><h2>Ruxsatlar</h2></div>
+        <div class="card-b" id="pr-grants"></div>
       </div>
     </section>
 
@@ -73,6 +71,36 @@
 <script src="../assets/app.js"></script>
 <script src="../assets/data.js"></script>
 <script src="../assets/workshop-shell.js"></script>
-<script>renderWorkshopShell();</script>
+<script>
+renderWorkshopShell();
+
+// IN1: no role. Show an is_owner indicator + an explicit granted-permissions
+// / branches summary, driven by the acting user (ME).
+const me = ME;
+document.getElementById('pr-sub').textContent =
+  `${me.name} · ${me.isOwner ? 'Egasi' : 'Xodim'} · Furniture House`;
+
+document.getElementById('pr-info').innerHTML = `
+  <div class="row-item"><div><div class="nm">F.I.O</div></div><div class="meta">${me.name}</div></div>
+  <div class="row-item"><div><div class="nm">Login</div></div><div class="meta">${me.login || '—'}</div></div>
+  <div class="row-item"><div><div class="nm">Telefon</div></div><div class="meta">${me.phone || '—'}</div></div>
+  <div class="row-item"><div><div class="nm">Asosiy filial</div></div><div class="meta">${SEED.lookup.branchById(me.homeBranchId)?.name || '—'}</div></div>
+  <div class="row-item"><div><div class="nm">Egasi (is_owner)</div></div><div class="meta">${me.isOwner ? '<span class="pill p-ok"><span class="pd"></span>Ha · barcha ruxsatlar</span>' : '<span class="pill p-dn"><span class="pd"></span>Yo\'q</span>'}</div></div>
+  <div class="row-item"><div><div class="nm">Ustaxona</div></div><div class="meta">Furniture House</div></div>`;
+
+const gEl = document.getElementById('pr-grants');
+if (me.isOwner) {
+  gEl.innerHTML = `<div class="banner info"><div class="ic">i</div><div class="grow">Egasi sifatida barcha filialda barcha ruxsatga avtomatik egasiz.</div></div>`;
+} else {
+  const grants = me.grants || {};
+  const keys = Object.keys(grants);
+  if (!keys.length) {
+    gEl.innerHTML = `<p class="muted" style="font-size:13px;margin:0">Sizga hali hech qanday ruxsat berilmagan — ustaxona egasiga murojaat qiling.</p>`;
+  } else {
+    const permLabel = k => (SEED.permissions.find(p => p.key === k)?.label) || k;
+    gEl.innerHTML = keys.map(k => `<div class="row-item"><div><div class="nm">${permLabel(k)}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${k}</small></div><div class="meta">${grants[k].map(b => SEED.lookup.branchById(b)?.name || b).join(', ')}</div></div>`).join('');
+  }
+}
+</script>
 </body>
 </html>

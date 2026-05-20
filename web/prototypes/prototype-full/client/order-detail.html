@@ -45,22 +45,61 @@
 </main>
 
 <script>
-const id = new URLSearchParams(location.search).get('id') || 'MP-2026-05-0091';
+/* One money rule (CR7): the frozen total + full price breakdown is on the
+   Overview tab from placement onward (pricing is frozen at creation —
+   nothing to hide). The settlement figures (to'langan / qoldiq) live on a
+   dedicated Finance tab that is gated to ready/completed only.
+   Client status uses CLIENT_PHASES. ?state=loading|error for the demo. */
+const id = new URLSearchParams(location.search).get('id') || 'ORD-2026-000091';
 const isNew = new URLSearchParams(location.search).get('new') === '1';
+const forced = new URLSearchParams(location.search).get('state');
 if (isNew) document.getElementById('new-banner').style.display = '';
-
-const o = SEED.lookup.orderById(id);
 const wrap = document.getElementById('od-wrap');
-if (!o) {
-  wrap.innerHTML = `<div class="empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
-} else {
-  const br = SEED.lookup.branchById(o.branchId);
-  const cl = SEED.lookup.clientById(o.clientId);
-  const tl = buildTimeline(o);
-  const banded = SEED.lookup.isBanded(SEED.lookup.cuttingById(o.cuttingId) || {});
-  const fin = SEED.lookup.orderFinance(o);
-  const showFinance = ['ready', 'completed'].includes(o.state);
 
+// Single source for the client-facing phase label.
+function clientFacingState(o) { return SEED.CLIENT_PHASES[o.state]; }
+
+function notFound() {
+  document.getElementById('new-banner').style.display = 'none';
+  wrap.innerHTML = `<div class="st-empty">
+    <div class="ic">∅</div>
+    <h3>Buyurtma topilmadi</h3>
+    <p>Bunday raqamli buyurtma yo'q yoki sizga tegishli emas.</p>
+    <a class="btn btn-acc" href="orders.html">Buyurtmalarim</a>
+  </div>`;
+}
+
+function skeleton() {
+  wrap.innerHTML = `
+    <div class="od-head">
+      <div class="sk sk-line" style="width:28%"></div>
+      <div class="sk sk-line" style="width:55%;margin-top:12px;height:26px"></div>
+      <div class="sk sk-line" style="width:40%;margin-top:18px;height:30px"></div>
+    </div>
+    <div class="sk sk-line" style="width:100%;height:200px;border-radius:12px"></div>`;
+}
+
+function errorState() {
+  wrap.innerHTML = `
+    <div class="st-error">
+      <div class="ic">!</div>
+      <h3>Buyurtmani yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
+      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+    </div>`;
+}
+
+function renderOrder(o) {
+  const br = SEED.lookup.branchById(o.branchId);
+  const tl = buildTimeline(o);
+  const cutting = SEED.lookup.cuttingById(o.cuttingId);
+  const banded = SEED.lookup.isBanded(cutting || {});
+  const cuttingInvalidated = cutting && cutting.status === 'invalidated';
+  const fin = SEED.lookup.orderFinance(o);
+  const financeOpen = ['ready', 'completed'].includes(o.state);
+
+  // Frozen price breakdown — always shown on Overview from placement on.
   const itemsRows = [
     { lbl: 'Chizma xizmati', val: fmtTiyin(o.subtotalCuttingTiyin) },
     { lbl: 'Material', val: fmtTiyin(o.subtotalMaterialsTiyin) }
@@ -78,7 +117,8 @@ if (!o) {
         </div>
         <div style="text-align: right">
           <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
-          ${showFinance ? `<div class="num" style="margin-top: 6px; font-size: 18px; font-weight: 600">${fmtTiyin(o.totalTiyin)}</div>` : ''}
+          <div class="num" style="margin-top: 6px; font-size: 18px; font-weight: 600">${fmtTiyin(o.totalTiyin)}</div>
+          <div style="font:500 11px var(--f-ui);color:var(--ink-6)">jami narx (qat'iy)</div>
         </div>
       </div>
       <div class="actions">
@@ -96,6 +136,7 @@ if (!o) {
     <div class="tabs" data-tabs="od">
       <button class="tab on" data-target="t-overview" onclick="switchTab('od','t-overview')">Umumiy</button>
       <button class="tab" data-target="t-cutting" onclick="switchTab('od','t-cutting')">Chizma</button>
+      <button class="tab" data-target="t-finance" onclick="onFinanceTab(${financeOpen})">To'lov</button>
       <button class="tab" data-target="t-timeline" onclick="switchTab('od','t-timeline')">Tarix</button>
     </div>
 
@@ -113,6 +154,17 @@ if (!o) {
           </div>
 
           <div class="card" style="margin-top: 14px">
+            <div class="card-h"><h2>Narx</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="totals" style="margin-top:4px">
+                ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
+                <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(o.totalTiyin)}</span></div>
+              </div>
+              <p class="muted" style="font-size:12.5px;margin:10px 2px 0">Narx buyurtma berilganda qat'iy belgilangan — keyin o'zgarmaydi.</p>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 14px">
             <div class="card-h"><h2>Olib ketish</h2></div>
             <div class="card-b" style="padding-top: 0">
               <div class="row-item">
@@ -122,22 +174,52 @@ if (!o) {
                 </div>
                 <div class="meta">${br?.phone || ''}</div>
               </div>
+              <div class="row-item"><div><div class="nm">Ish vaqti</div></div><div class="meta">${br?.hours || ''}</div></div>
               ${o.dueAt ? `<div class="row-item"><div><div class="nm">Taxminiy sana</div></div><div class="meta">${o.dueAt}</div></div>` : ''}
             </div>
           </div>
         </section>
 
         <section id="t-cutting" data-panel-group="od" hidden>
+          ${cuttingInvalidated ? `
+            <div class="banner warn" style="margin-bottom:14px">
+              <div class="ic">!</div>
+              <div class="grow">Bu buyurtmaga yangiroq chizma natijasi biriktirilgan. Quyidagi tugma orqali joriy natijani ko'ring.</div>
+            </div>` : ''}
           <div class="card">
             <div class="card-h">
               <h2>Chizma</h2>
-              <a class="more" href="cutting-result.html?id=${o.cuttingId}">To'liq ko'rish →</a>
+              <a class="more" href="cutting.html?id=${o.cuttingId}">To'liq ko'rish →</a>
             </div>
             <div class="card-b" style="padding-top: 0">
               <p class="muted" style="font-size:13px;margin:0 0 14px">Chizma · ${o.cuttingId}${banded ? ' · krom yopishtirish bor' : ''}</p>
               <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlanmoqda')">⬇ Chizmani PDF olish</button>
             </div>
           </div>
+        </section>
+
+        <section id="t-finance" data-panel-group="od" hidden>
+          ${financeOpen ? `
+          <div class="card">
+            <div class="card-h"><h2>To'lov</h2></div>
+            <div class="card-b" style="padding-top: 0">
+              <div class="totals" style="margin-top:4px">
+                <div class="r"><span>Jami</span><span class="num">${fmtTiyin(fin.total)}</span></div>
+                <div class="r"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(fin.paid)}</span></div>
+                <div class="r grand"><span>Qoldiq</span><span class="num">${fmtTiyin(fin.balance)}</span></div>
+              </div>
+              <p class="muted" style="font-size:12.5px;margin:12px 2px 0">To'lov ustaxonada qabul qilinadi. Agar to'lov bo'yicha nomuvofiqlik bo'lsa — to'lov bo'yicha ustaxonaga murojaat qiling.</p>
+            </div>
+          </div>` : `
+          <div class="card">
+            <div class="card-b">
+              <div class="st-empty" style="border:0;padding:32px 16px">
+                <div class="ic">🔒</div>
+                <h3>To'lov ma'lumotlari hali yopiq</h3>
+                <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
+              </div>
+            </div>
+          </div>`}
         </section>
 
         <section id="t-timeline" data-panel-group="od" hidden>
@@ -151,21 +233,12 @@ if (!o) {
       </div>
 
       <aside>
-        ${showFinance ? `
-        <div class="totals">
-          ${itemsRows.map(r => `<div class="r"><span>${r.lbl}</span><span class="num">${r.val}</span></div>`).join('')}
-          <div class="r grand"><span>Jami</span><span class="num">${fmtTiyin(fin.total)}</span></div>
-          ${fin.paid ? `<div class="r" style="margin-top:6px"><span>To'langan</span><span class="num success-text">− ${fmtTiyin(fin.paid)}</span></div>` : ''}
-          ${fin.balance > 0 ? `<div class="r" style="font-weight:600;color:var(--ink-12)"><span>Qoldiq</span><span class="num">${fmtTiyin(fin.balance)}</span></div>` : ''}
-        </div>
-        <p class="muted" style="font-size:12.5px;margin:10px 2px 0">To'lov ustaxonada qabul qilinadi — qoldiq summa bo'yicha ustaxona bilan bog'laning.</p>
-        ` : ''}
-
-        <div class="card" style="margin-top: 14px">
+        <div class="card">
           <div class="card-h"><h2 style="font-size: 16px">Ustaxonaga aloqa</h2></div>
           <div class="card-b" style="padding-top: 0; font-size: 13px">
             <div class="row-item"><div><div class="nm">Furniture House</div></div><div class="meta">${br?.phone || ''}</div></div>
             <div class="row-item"><div><div class="nm">${br?.city} ${br?.name}</div><small style="color:var(--ink-6)">${br?.addr || ''}</small></div><div></div></div>
+            <div class="row-item"><div><div class="nm">Ish vaqti</div></div><div class="meta">${br?.hours || ''}</div></div>
           </div>
         </div>
       </aside>
@@ -173,12 +246,19 @@ if (!o) {
   `;
 }
 
+// Finance tab is gated to ready/completed — clicking it before then keeps
+// the locked panel visible and explains when it opens.
+function onFinanceTab(open) {
+  switchTab('od', 't-finance');
+  if (!open) toast("To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi", 'warn');
+}
+
 function detailActions(o) {
   const actions = [];
   if (o.state === 'new') {
     actions.push(`<button class="btn btn-danger btn-sm" type="button" onclick="cancelOrder('${o.id}')">Bekor qilish</button>`);
   } else if (['confirmed','cutting','edge_banding','ready'].includes(o.state)) {
-    actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('Kuzatish — har bir o\'zgarish Telegramda')">Kuzatish</button>`);
+    actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="switchTab('od','t-timeline');document.getElementById('t-timeline').scrollIntoView({behavior:'smooth'})">Holatni kuzatish</button>`);
     actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda')">Hujjatlar (PDF)</button>`);
   } else if (o.state === 'completed') {
     actions.push(`<button class="btn btn-outline btn-sm" type="button" onclick="toast('PDF tayyorlanmoqda')">Hujjatlar (PDF)</button>`);
@@ -186,28 +266,23 @@ function detailActions(o) {
   return actions.join('');
 }
 
-// Client-facing: 5 phases. cutting + edge_banding collapse into "Ishlab chiqarishda".
-function clientFacingState(o) {
-  if (['cutting','edge_banding'].includes(o.state)) return 'Ishlab chiqarishda';
-  return SEED.STATE_LABELS[o.state];
-}
-
 function buildTimeline(o) {
   if (o.state === 'cancelled') {
-    return `<li class="step done"><span class="when">${o.placedAt}</span>Joylandi</li>
-            <li class="step bad"><span class="when">${o.cancelledAt || '—'}</span>Bekor qilindi${o.cancelReason ? ` · <span class="who">${o.cancelReason}</span>` : ''}</li>`;
+    return `<li class="step done"><span class="when">${o.placedAt}</span>${SEED.CLIENT_PHASES.new}</li>
+            <li class="step bad"><span class="when">${o.cancelledAt || '—'}</span>${SEED.CLIENT_PHASES.cancelled}${o.cancelReason ? ` · <span class="who">${o.cancelReason}</span>` : ''}</li>`;
   }
-  // 5 client phases. "Ishlab chiqarishda" covers internal cutting + edge_banding.
+  // 5 client phases from CLIENT_PHASES. "Ishlab chiqarishda" covers internal
+  // cutting + edge_banding; the sub-text names the current internal step.
   const prodWhen = o.cutCompletedAt || '—';
   let prodSub = '';
-  if (o.state === 'cutting') prodSub = 'Kesish';
-  else if (o.state === 'edge_banding') prodSub = 'Krom yopishtirish';
+  if (o.state === 'cutting') prodSub = 'Kesilmoqda';
+  else if (o.state === 'edge_banding') prodSub = 'Krom yopishtirilmoqda';
   const steps = [
-    { label: 'Joylandi', phase: 0, when: o.placedAt },
-    { label: 'Tasdiqlangan', phase: 1, when: o.confirmedAt || '—' },
-    { label: 'Ishlab chiqarishda', phase: 2, when: prodWhen, who: prodSub },
-    { label: 'Tayyor', phase: 3, when: o.edgeCompletedAt || o.cutCompletedAt || '—' },
-    { label: 'Tugatildi', phase: 4, when: o.pickedUpAt || '—' }
+    { label: SEED.CLIENT_PHASES.new, phase: 0, when: o.placedAt },
+    { label: SEED.CLIENT_PHASES.confirmed, phase: 1, when: o.confirmedAt || '—' },
+    { label: SEED.CLIENT_PHASES.cutting, phase: 2, when: prodWhen, who: prodSub },
+    { label: SEED.CLIENT_PHASES.ready, phase: 3, when: o.edgeCompletedAt || o.cutCompletedAt || '—' },
+    { label: SEED.CLIENT_PHASES.completed, phase: 4, when: o.pickedUpAt || '—' }
   ];
   const phaseOf = { new: 0, confirmed: 1, cutting: 2, edge_banding: 2, ready: 3, completed: 4 };
   const cur = phaseOf[o.state] ?? 0;
@@ -225,6 +300,15 @@ function cancelOrder(id) {
     okText: 'Bekor qilish', danger: true
   }, () => { toast('Buyurtma bekor qilindi'); setTimeout(() => location.href = 'orders.html', 700); });
 }
+
+function boot() {
+  if (forced === 'error') { errorState(); return; }
+  const o = SEED.lookup.orderById(id);
+  if (!o) { notFound(); return; }
+  skeleton();
+  setTimeout(() => { renderOrder(o); }, forced === 'loading' ? 100000 : 400);
+}
+boot();
 </script>
 </body>
 </html>

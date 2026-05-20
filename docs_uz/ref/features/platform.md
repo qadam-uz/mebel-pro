@@ -2,13 +2,13 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 70
 ---
 
 # Platform operations
 
-Superadmin app'ning ops burchagi: scheduled background job'lar, application-error monitor, va
+Superadmin app'ning ops burchagi: scheduled background job'lar, application-error monitor va
 platform-user registry. Workshop provisioning va block / unblock
 [`access-management.md`](access-management.md)'da yashaydi.
 
@@ -19,9 +19,12 @@ job'lari:
 
 | Job | When | What |
 |---|---|---|
-| `expire-draft-cuttings` | daily | expire cutting drafts past their TTL (see [`cutting.md`](cutting.md)) |
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
 | `daily-low-stock-summary` | daily | per branch, one notification rolling up the day's low-stock conditions |
+
+Cutting draft'larda **expiry job yo'q** — ular client ularni delete qilguncha yoki 50-draft
+cap'ga yetguncha saqlanadi ([`cutting.md`](cutting.md)). Hech qayerda draft'larning
+auto-cleanup'i yo'q.
 
 Job ikki marta concurrent ishlamaydi (guard). Failed job o'z result'ini record qiladi va
 platform operator'larni notify qiladi; operator uni qo'lda re-trigger qila oladi.
@@ -58,6 +61,16 @@ Platform user'lar dastlab backend CLI command bilan seed qilinadi (chicken-and-e
 keyinchalik in-app creation yo'l bo'ladi.
 
 ## UX (superadmin app)
+
+- **Dashboard** (`/admin`) — platform health bir qarashda: workshop / branch / client
+  count'lar, recent provisioning va job + error status. U **workshop financials** olib
+  yurmaydi — operator'lar health va incident'larni monitor qiladi, workshop money'ni emas
+  ([`personas.md`](../../personas.md)); revenue rollup'lar operator scope'dan tashqarida,
+  shuning uchun bu yerda per-workshop yoki platform revenue raqami ko'rinmaydi.
+- **Docs & API reference** — `/docs`, `/api-docs`, `/api-redoc` ga nav link (live docs site
+  va OpenAPI reference'lar). Bular edge'da HTTP-Basic-gated, **app session'dan alohida
+  sign-in** — link yangi tab'da ochiladi va shunday belgilanganki ikkinchi prompt syurpriz
+  bo'lmaydi.
 
 **Platform** section ostida:
 

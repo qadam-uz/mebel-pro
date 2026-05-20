@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 70
 ---
 
@@ -19,9 +19,11 @@ jobs:
 
 | Job | When | What |
 |---|---|---|
-| `expire-draft-cuttings` | daily | expire cutting drafts past their TTL (see [`cutting.md`](cutting.md)) |
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
 | `daily-low-stock-summary` | daily | per branch, one notification rolling up the day's low-stock conditions |
+
+Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
+the 50-draft cap ([`cutting.md`](cutting.md)). There is no auto-cleanup of drafts anywhere.
 
 A job doesn't run twice concurrently (a guard). A failed job records its result and notifies
 platform operators; the operator can re-trigger it manually.
@@ -57,6 +59,16 @@ Platform users are seeded initially by a backend CLI command (chicken-and-egg); 
 in-app creation is the path.
 
 ## UX (superadmin app)
+
+- **Dashboard** (`/admin`) — platform health at a glance: workshop / branch / client
+  counts, recent provisioning, and job + error status. It carries **no workshop
+  financials** — operators monitor health and incidents, not workshop money
+  ([`personas.md`](../../personas.md)); revenue rollups are out of operator scope, so no
+  per-workshop or platform revenue figure appears here.
+- **Docs & API reference** — a nav link out to `/docs`, `/api-docs`, `/api-redoc` (the
+  live docs site and the OpenAPI references). These are HTTP-Basic-gated at the edge, a
+  **sign-in separate from the app session** — the link opens in a new tab and is labelled
+  so the second prompt isn't a surprise.
 
 Under a **Platform** section:
 

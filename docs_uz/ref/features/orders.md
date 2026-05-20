@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-19
 order: 30
 ---
 
@@ -106,10 +106,15 @@ Har bir qadamni kim trigger qiladi (per-branch grant bo'yicha — fixed role'lar
 
 ### Production stamps
 
-Cutter va edger — order'ning branch'ida `process_production` ushlab turgan workshop user'lar
-(alohida worker entity yo'q — qarang [`access-patterns.md`](../../access-patterns.md)).
-System har bir job tugaganda order'ni stamp qiladi; bu stamp'lar accountant ishlatadigan
-worker-production report'larga **yagona** input ([`finance.md`](finance.md)).
+Cutter va edger — order'ning branch'ida `process_production` ushlab turgan workshop user'lar,
+`home_branch_id = order.branch_id` bilan — **owner bundan mustasno**, u har bir branch'da
+`process_production`'ni implicitly ushlab turadi va o'z `home_branch_id`'sidan qat'i nazar
+istalgan branch'da cutter yoki edger sifatida assign qilinishi mumkin (bir kishilik shop'ning
+owner'i branch'lar orasida suzadi; constraint non-owner staff'ni o'zlari fizik ishlaydigan
+branch'da ushlab turish uchun mavjud va owner'ning bunday home'i yo'q). Alohida worker
+entity yo'q — qarang [`access-patterns.md`](../../access-patterns.md). System har bir job
+tugaganda order'ni stamp qiladi; bu stamp'lar accountant ishlatadigan worker-production
+report'larga **yagona** input ([`finance.md`](finance.md)).
 
 | Stamp | Set at | Read by |
 |---|---|---|
@@ -145,10 +150,22 @@ Order **hech qachon payment yoki refund saqlamaydi**. Barcha money finance modul
 client haqiqatda to'lagan summa (to'liq yoki partial) va sanasi — counter'da.
 In-system payment yo'q, gateway yo'q, payment-driven status yo'q.
 
-- **Client order'ning finance summary'sini faqat `ready` va `completed`'da ko'radi** (order
-  total, hozirgacha recorded, balance) — collection'da hisob-kitob qilish uchun kerakli raqam va
-  keyin receipt'i. In-app payment action yo'q; discrepancy ("Men to'ladim, belgilanmagan")
-  workshop'ga qo'ng'iroq qilib system'dan tashqarida hal qilinadi.
+- **Bitta disclosure rule.** Order'ning money'sini ikki qismga bo'l va ularni boshqacha
+  gate qil:
+  - **Frozen total + price breakdown** client'ga **placement'dan boshlab** ko'rinadi
+    (Overview tab). Client bu raqamlarni order wizard'da allaqachon ko'rgan; pricing
+    yaratishda frozen va hech qachon re-price qilinmaydi, shuning uchun yashiradigan narsa
+    yo'q va uni yashirish faqat chalkashtiradi ("bu qancha turadi?").
+  - **Settlement figures** — hozirgacha recorded va balance — client'ga **faqat `ready` va
+    `completed`'da** ko'rinadi (Finance tab), aynan ularga collection'da hisob-kitob qilish
+    kerak bo'lgan va keyin receipt'i kerak bo'lgan paytda. In-app payment action yo'q;
+    discrepancy ("Men to'ladim, belgilanmagan") workshop'ga qo'ng'iroq qilib system'dan
+    tashqarida hal qilinadi.
+  - **Workshop side.** `view_finance_reports` yoki `manage_finance` ushlab turgan staff
+    order detail'da **istalgan** status'da read-only settlement summary (total / recorded /
+    balance) ko'radi, finance module'dan olingan — client'ning ready/completed gate'idan
+    farqli. Bu payments tab emas; money'ni record qilish va tuzatish finance module'da
+    qoladi ([`finance.md`](finance.md)).
 - **Cancellation hech qachon refund record yaratmaydi.** Agar money qaytishi kerak bo'lsa, accountant
   finance module'da *expense* book qiladi. Cancel qilingan order faqat o'z reason'ini olib yuradi.
 
@@ -204,8 +221,10 @@ orders**). Branch keyinroq, placement'da, aniq cutting'ga qarshi tanlanadi.
   `/c/orders/:id` banner bilan: *"Order placed — the workshop will review and call you."*
 
 - **My orders** (`/c/orders`) — filter chip'lar (All / Active / Completed / Cancelled), order
-  number bo'yicha search, card'lar (order #, branch, date, status badge, primary action — "Track").
-  Empty: "No orders yet — start from a cutting."
+  number bo'yicha search, card'lar (order #, branch, date, status badge, **frozen total** —
+  placement'dan boshlab ko'rsatiladi, hech qachon "price after confirm" emas chunki pricing
+  yaratishda frozen — primary action "Track", u order detail'ni ochadi). Empty: "No orders
+  yet — start from a cutting."
 - **Order detail** (`/c/orders/:id`) — header (order #, branch, status badge, times).
   Client-facing status — **besh phase**: Placed → **Confirmed** → **In production** →
   **Ready** → Done — `cutting`/`edge_banding`'ni "In production"'ga collapse qilib optional
@@ -247,10 +266,13 @@ grant'lar; bitta user ularning hammasini ushlab turishi mumkin.
   user credit oladi). Destructive action'lar (cancel, revert) va "Mark collected" effect'ni
   nomlovchi danger / confirm dialog ishlatadi ("client collected everything?").
 
-  Tab'lar: Overview (item snapshots, price breakdown, agar `shop` material yetishmasa warehouse
-  warning, internal note — inline editable), Cutting (SVG + PDF; agar applicable bo'lsa
-  invalidated note), Timeline (status events + audit), Notes. Bu yerda Payments yoki Refunds
-  tab'i **yo'q** — money — finance module.
+  Tab'lar: Overview (item snapshots, price breakdown, **read-only settlement summary**
+  — total / recorded / balance, finance module'dan olingan, `view_finance_reports`/
+  `manage_finance` ushlab turgan staff'ga istalgan status'da ko'rsatiladi; aks holda
+  yashirilgan — agar `shop` material yetishmasa warehouse warning, internal note — inline
+  editable), Cutting (SVG + PDF; agar applicable bo'lsa invalidated note), Timeline (status
+  events + audit), Notes. Bu yerda Payments yoki Refunds tab'i **yo'q** — money'ni record
+  qilish va tuzatish — finance module; summary — read-only mirror.
 
 - **Cutter workspace** (`/workshop/cutting`, `process_production`) — tablet-optimised.
   **Bu user'ga assign qilingan** `confirmed` (assigned, awaiting cut) va `cutting`
@@ -293,7 +315,9 @@ action'lar danger-styled va o'z effect'ini nomlaydi; modal focus boshqariladi.
 - **Bir vaqtdagi staff transition'lar / cancel** → ikkinchisida optimistic-lock conflict;
   refresh va retry.
 - **Boshqa branch'dan cutter / edger, blocked user, yoki bu branch'da `process_production`
-  bo'lmagan user** — assignment'da rejected.
+  bo'lmagan user** — assignment'da rejected. **Owner mustasno** — u
+  same-branch (`home_branch_id = order.branch_id`) check'dan ozod; u har joyda
+  `process_production` ushlab turadi va istalgan branch'da o'zini assign qilishi mumkin.
 - **Worker yo'q** — order `confirmed`'da (yoki `edge_banding`'da) kutadi; board
   column count'ni flag qiladi; `manage_orders` user on-behalf yakunlashi mumkin. Auto-timeout yo'q.
 - **Client recorded payment'ni dispute qiladi** — system'dan tashqarida; client workshop'ga qo'ng'iroq qiladi va

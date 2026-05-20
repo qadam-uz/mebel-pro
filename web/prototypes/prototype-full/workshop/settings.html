@@ -41,6 +41,12 @@
 <script src="../assets/app.js"></script>
 <script src="../assets/data.js"></script>
 <script src="../assets/workshop-shell.js"></script>
-<script>renderWorkshopShell();</script>
+<script>
+renderWorkshopShell();
+if (!isOwner()) {
+  document.querySelector('.page section')?.remove();
+  ownerOnly('.page');
+}
+</script>
 </body>
 </html>

@@ -110,8 +110,38 @@
 <script>
 renderWorkshopShell();
 
-const recIncome = SEED.incomes.filter(i => i.status === 'recorded');
-const recExpense = SEED.expenses.filter(e => e.status === 'recorded');
+// CR4: Finance is gated by manage_finance OR view_finance_reports (owner
+// always). Data is scoped to the branches the user holds those grants on.
+const FIN_BR = isOwner() ? myBranches()
+  : myBranches().filter(id => can('manage_finance', id) || can('view_finance_reports', id));
+const canFinance = isOwner() || canAny('manage_finance') || canAny('view_finance_reports');
+
+if (!canFinance || FIN_BR.length === 0) {
+  document.querySelector('.page .tools')?.remove();
+  document.querySelector('.kpis')?.remove();
+  document.querySelector('.two-col')?.remove();
+  const box = document.createElement('div');
+  box.innerHTML = stEmpty('Moliya bo\'limiga ruxsatingiz yo\'q',
+    'Bu sahifa manage_finance yoki view_finance_reports ruxsatiga ega xodimlarga ochiq — ustaxona egasiga murojaat qiling.');
+  document.querySelector('.page').appendChild(box.firstElementChild);
+  throw 'halt-finance';
+}
+
+const ds = demoState();
+if (ds === 'loading' || ds === 'error') {
+  ['income-body', 'branch-body', 'prod-body'].forEach(tid => {
+    const el = document.getElementById(tid);
+    if (el) el.innerHTML = ds === 'loading' ? skRows(5, 5) : `<tr><td colspan="5">${stError()}</td></tr>`;
+  });
+  document.getElementById('cat-body').innerHTML = ds === 'loading' ? skCards(4) : stError();
+  ['kpi-income', 'kpi-expense', 'kpi-salary', 'kpi-net'].forEach(k => {
+    const el = document.getElementById(k); if (el) el.textContent = ds === 'loading' ? '···' : '—';
+  });
+  throw 'halt-state';
+}
+
+const recIncome = SEED.incomes.filter(i => i.status === 'recorded' && FIN_BR.includes(i.branchId));
+const recExpense = SEED.expenses.filter(e => e.status === 'recorded' && (e.branchId == null || FIN_BR.includes(e.branchId)));
 const income = recIncome.reduce((a, i) => a + i.amountTiyin, 0);
 const expense = recExpense.reduce((a, e) => a + e.amountTiyin, 0);
 const salary = recExpense.filter(e => e.category === 'salary').reduce((a, e) => a + e.amountTiyin, 0);
@@ -129,14 +159,14 @@ const netEl = document.getElementById('kpi-net');
 netEl.className = 'v num ' + (netGood ? 'success-text' : 'danger-text');
 netEl.innerHTML = fmtTiyin(net);
 
-const METHOD = { cash: 'Naqd', bank_transfer: 'Bank', card: 'Karta', other: 'Boshqa' };
-document.getElementById('income-body').innerHTML = recIncome.map(i => `<tr>
+const METHOD = { cash: 'Naqd', bank_transfer: 'Bank / karta', other: 'Boshqa' };
+document.getElementById('income-body').innerHTML = recIncome.length ? recIncome.map(i => `<tr>
   <td class="num" style="font-size:11.5px;color:var(--ink-6)">${i.receivedOn}</td>
   <td>${i.type === 'order_payment' ? "Buyurtma to'lovi" : 'Boshqa'}</td>
   <td class="id">${i.orderId || '—'}</td>
   <td><small style="color:var(--ink-8)">${METHOD[i.method] || i.method}</small></td>
   <td class="amt success-text">${fmtTiyin(i.amountTiyin)}</td>
-</tr>`).join('');
+</tr>`).join('') : `<tr><td colspan="5">${stEmpty('Bu davrda tushum yo\'q')}</td></tr>`;
 
 const CAT = { rent: 'Ijara', utilities: 'Kommunal', supplies: 'Aksessuar', marketing: 'Marketing', transport: 'Transport', equipment: 'Texnika', raw_materials: 'Xom ashyo', taxes_and_fees: 'Soliqlar', salary: 'Maosh', other: 'Boshqalar' };
 const byCat = {};
@@ -144,13 +174,14 @@ recExpense.forEach(e => byCat[e.category] = (byCat[e.category] || 0) + e.amountT
 document.getElementById('cat-body').innerHTML = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([c, v]) =>
   `<div class="row-item"><div><div class="nm">${CAT[c] || c}</div></div><div class="meta">${fmtTiyin(v)}</div></div>`).join('');
 
-document.getElementById('branch-body').innerHTML = SEED.branches.map(b => {
+document.getElementById('branch-body').innerHTML = SEED.branches.filter(b => FIN_BR.includes(b.id)).map(b => {
   const inc = recIncome.filter(i => i.branchId === b.id).reduce((a, i) => a + i.amountTiyin, 0);
   const exp = recExpense.filter(e => e.branchId === b.id).reduce((a, e) => a + e.amountTiyin, 0);
   return `<tr><td>${b.name}</td><td class="amt">${fmtTiyin(inc)}</td><td class="amt">${fmtTiyin(exp)}</td><td class="amt ${inc - exp >= 0 ? 'success-text' : 'danger-text'}">${fmtTiyin(inc - exp)}</td></tr>`;
 }).join('');
 
-document.getElementById('prod-body').innerHTML = SEED.workerProduction.map(w => {
+const prodRows = SEED.workerProduction.filter(w => FIN_BR.includes(w.branchId));
+document.getElementById('prod-body').innerHTML = prodRows.length ? prodRows.map(w => {
   const u = SEED.lookup.userById(w.userId);
   return `<tr>
     <td class="nm">${u?.name || w.userId}</td>
@@ -159,7 +190,7 @@ document.getElementById('prod-body').innerHTML = SEED.workerProduction.map(w => 
     <td class="amt">${w.metresBanded} (${w.ordersBanded} buyurtma)</td>
     <td><button class="btn btn-outline btn-sm" type="button" onclick="location.href='expenses.html'">Maosh yozish</button></td>
   </tr>`;
-}).join('');
+}).join('') : `<tr><td colspan="5">${stEmpty('Bu davrda ishlab chiqarish yo\'q')}</td></tr>`;
 </script>
 </body>
 </html>

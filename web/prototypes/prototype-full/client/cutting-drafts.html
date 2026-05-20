@@ -13,25 +13,27 @@
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
 <meta name="theme-color" content="#FAF7F2" />
 <style>
-  .hero { padding: 40px 0 28px; }
-  .hero h1 { font: 600 32px var(--f-display); color: var(--ink-12); margin: 0 0 10px; letter-spacing: -.02em; }
-  .hero p { font: 400 15.5px/1.55 var(--f-ui); color: var(--ink-8); margin: 0; max-width: 56ch; }
-  .hero .cta { margin-top: 22px; display: flex; gap: 12px; flex-wrap: wrap; }
-
-  .drafts-hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0 12px; border-bottom: 1px solid var(--line); margin: 12px 0 18px; }
+  .drafts-hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0 12px; border-bottom: 1px solid var(--line); margin: 12px 0 18px; gap: 12px; flex-wrap: wrap; }
   .drafts-hd h2 { font: 600 18px var(--f-display); margin: 0; color: var(--ink-12); }
   .drafts-hd .ct { font: 500 13px var(--f-mono); color: var(--ink-6); }
+  .drafts-hd .ct b { color: var(--ink-12); }
 
-  .draft-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: border-color .12s, transform .12s; }
+  .draft-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; transition: border-color .12s, transform .12s; }
   .draft-card:hover { border-color: var(--ink-10); transform: translateY(-1px); }
+  .draft-card .main { cursor: pointer; min-width: 0; }
   .draft-card .nm { font: 500 14.5px var(--f-ui); color: var(--ink-12); margin-bottom: 4px; }
   .draft-card .meta { font: 400 12px var(--f-mono); color: var(--ink-6); }
   .draft-card .stats { display: flex; gap: 14px; flex-wrap: wrap; font: 500 12px var(--f-ui); color: var(--ink-10); margin-top: 6px; }
   .draft-card .stats b { font: 600 13px var(--f-mono); color: var(--ink-12); }
-  .draft-card .right { display: flex; align-items: center; gap: 8px; }
-  .open-aff { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--f-ui); color: var(--accent); white-space: nowrap; }
+  .draft-card .right { display: flex; align-items: center; gap: 6px; }
+  .open-aff { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--f-ui); color: var(--accent); white-space: nowrap; cursor: pointer; background: none; border: 0; padding: 6px 8px; border-radius: 6px; }
   .open-aff svg { width: 14px; height: 14px; transition: transform .12s; }
   .draft-card:hover .open-aff svg { transform: translateX(2px); }
+  .del-btn { background: none; border: 1px solid var(--line); color: var(--ink-7); cursor: pointer; border-radius: 6px; width: 32px; height: 32px; display: grid; place-items: center; }
+  .del-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-tint); }
+  .del-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .sk-draft { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -44,7 +46,7 @@
   <div class="page-head">
     <div>
       <h1>Saqlangan chizmalar</h1>
-      <p class="sub">Saqlangan chizmani oching yoki yangi chizma boshlang.</p>
+      <p class="sub">Saqlangan chizmani oching yoki yangi chizma boshlang. Chizmalar muddatsiz saqlanadi.</p>
     </div>
     <div class="tools">
       <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
@@ -53,22 +55,48 @@
 
   <div class="drafts-hd">
     <h2>Hammasi</h2>
-    <span class="ct" id="drafts-ct">0 ta</span>
+    <span class="ct" id="drafts-ct">—</span>
   </div>
 
   <div id="drafts"></div>
 </main>
 
 <script>
+/* Cutting drafts never expire — the only cap is 50 open drafts; the client
+   deletes one to free a slot. ?state=loading|error|empty for the demo. */
+const DRAFT_CAP = 50;
+const forced = new URLSearchParams(location.search).get('state');
+let drafts = SEED.cuttings.filter(c => c.status === 'draft').map(c => ({ ...c }));
+
+function skeleton() {
+  document.getElementById('drafts-ct').innerHTML = '<span class="sk sk-line" style="display:inline-block;width:70px;height:14px"></span>';
+  document.getElementById('drafts').innerHTML = Array.from({ length: 3 }).map(() => `
+    <div class="sk-draft">
+      <div><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:78%;margin-top:10px"></div></div>
+      <div class="sk sk-line" style="width:64px"></div>
+    </div>`).join('');
+}
+
+function errorState() {
+  document.getElementById('drafts-ct').textContent = '';
+  document.getElementById('drafts').innerHTML = `
+    <div class="st-error">
+      <div class="ic">!</div>
+      <h3>Chizmalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
+      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+    </div>`;
+}
+
 function renderDrafts() {
-  const drafts = SEED.cuttings.filter(c => c.status === 'draft');
-  document.getElementById('drafts-ct').textContent = drafts.length + ' ta';
+  document.getElementById('drafts-ct').innerHTML = `<b>${drafts.length}</b> / ${DRAFT_CAP} chizma`;
   const wrap = document.getElementById('drafts');
   if (drafts.length === 0) {
-    wrap.innerHTML = `<div class="empty">
+    wrap.innerHTML = `<div class="st-empty">
       <div class="ic">∅</div>
-      <h3>Saqlangan chizma yo&#39;q</h3>
-      <p>Yangi chizmadan boshlang.</p>
+      <h3>Saqlangan chizma yo'q</h3>
+      <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
       <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
     </div>`;
     return;
@@ -81,8 +109,8 @@ function renderDrafts() {
     const sheets = algo ? Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0) : 0;
     const totalQty = c.partList.reduce((a,p) => a + (p.qty || 0), 0);
     return `
-      <article class="draft-card" onclick="location.href='cutting.html?id=${c.id}'">
-        <div>
+      <article class="draft-card" data-id="${c.id}">
+        <div class="main" onclick="location.href='cutting.html?id=${c.id}'">
           <div class="nm">${c.id} · ${matLabel || 'Material tanlanmagan'}</div>
           <div class="stats">
             <span><b>${totalQty}</b> qism</span>
@@ -92,13 +120,35 @@ function renderDrafts() {
           </div>
         </div>
         <div class="right">
-          <span class="open-aff">Ochish<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+          <button class="open-aff" type="button" onclick="location.href='cutting.html?id=${c.id}'">Ochish<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button class="del-btn" type="button" aria-label="Chizmani o'chirish" title="O'chirish" onclick="deleteDraft('${c.id}')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+          </button>
         </div>
       </article>
     `;
   }).join('');
 }
-renderDrafts();
+
+function deleteDraft(id) {
+  confirmAction({
+    title: 'Chizmani o\'chirish',
+    msg: 'Bu chizma butunlay o\'chiriladi. Bu amal qaytarilmaydi.',
+    okText: 'O\'chirish', danger: true
+  }, () => {
+    drafts = drafts.filter(c => c.id !== id);
+    toast('Chizma o\'chirildi');
+    renderDrafts();
+  });
+}
+
+function boot() {
+  if (forced === 'error') { errorState(); return; }
+  if (forced === 'empty') { drafts = []; renderDrafts(); return; }
+  skeleton();
+  setTimeout(() => { renderDrafts(); }, forced === 'loading' ? 100000 : 450);
+}
+boot();
 </script>
 </body>
 </html>
