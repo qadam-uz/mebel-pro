@@ -120,8 +120,8 @@ if (!o) {
 
   wrap.innerHTML = `
     <div class="od-head">
-      <div class="id">${o.id} · ${br?.name || ''} · ${o.placedAt}</div>
-      <h1>${o.title}</h1>
+      <h1>${o.id}</h1>
+      <div class="id">${br?.name || ''} · ${o.placedAt}</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;color:var(--ink-8)">
         <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span>
         <span>Mijoz: <b style="color:var(--ink-12)">${cl?.name || '—'}</b> · ${cl?.phone || ''}</span>

@@ -215,7 +215,6 @@ function renderBoard(orders) {
         <article class="board-card" onclick="if(!event.target.closest('.menu-wrap'))location.href='order-detail.html?id=${o.id}'">
           <div class="top"><span class="id">${o.id}</span><span class="amt">${fmtTiyin(o.totalTiyin)}</span></div>
           <div class="who">${cl?.name || ''}</div>
-          <div class="meta"><span style="color:var(--ink-8)">${o.title}</span></div>
           <div class="meta">
             ${n ? `<span style="font-size:10.5px;color:var(--ink-6)">${n} qism</span>` : ''}
             <span style="font-size:10.5px;color:var(--ink-6)">${o.placedAt || ''}</span>
@@ -242,7 +241,7 @@ function renderTable(orders) {
     const br = SEED.lookup.branchById(o.branchId);
     return `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'">
       <td class="id">${o.id}</td>
-      <td class="nm">${cl?.name || '—'}<small>${o.title}</small></td>
+      <td class="nm">${cl?.name || '—'}</td>
       <td>${br?.name || ''}</td>
       <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td>
       <td>${workerChip(o) || '<span class="muted">—</span>'}</td>

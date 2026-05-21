@@ -191,7 +191,7 @@ if (!ownerOnly()) {
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>ID</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>
-            <tbody>${ordersHere.slice(0, 6).map(o => `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'"><td class="id">${o.id}</td><td class="nm">${SEED.lookup.clientById(o.clientId)?.name || ''}<small>${o.title}</small></td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`).join('')}</tbody>
+            <tbody>${ordersHere.slice(0, 6).map(o => `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'"><td class="id">${o.id}</td><td class="nm">${SEED.lookup.clientById(o.clientId)?.name || ''}</td><td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td><td class="amt">${fmtTiyin(o.totalTiyin)}</td></tr>`).join('')}</tbody>
           </table>
         </div>
       </div>

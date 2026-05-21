@@ -130,9 +130,8 @@ function render() {
       <article class="ord-card" onclick="location.href='order-detail.html?id=${o.id}'">
         <div class="top">
           <div>
-            <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
-            <h3>${o.title}</h3>
-            <div class="meta">${o.placedAt}${o.dueAt && o.state !== 'cancelled' ? ` · olib ketish <b>${o.dueAt}</b>` : ''}</div>
+            <h3>${o.id}</h3>
+            <div class="meta">${br?.city} ${br?.name} · ${o.placedAt}${o.dueAt && o.state !== 'cancelled' ? ` · olib ketish ${o.dueAt}` : ''}</div>
           </div>
           <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>
         </div>

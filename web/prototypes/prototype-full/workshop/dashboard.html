@@ -384,7 +384,7 @@
       const br = SEED.lookup.branchById(o.branchId);
       return `<tr class="clickable" onclick="location.href='order-detail.html?id=${o.id}'">
     <td class="id">${o.id}</td>
-    <td class="nm">${cl?.name || '—'}<small>${o.title}</small></td>
+    <td class="nm">${cl?.name || '—'}</td>
     <td><span style="font-size:12px;color:var(--ink-8)">${br?.name || ''}</span></td>
     <td><span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${SEED.STATE_LABELS[o.state]}</span></td>
     <td class="amt">${fmtTiyin(o.totalTiyin)}</td>

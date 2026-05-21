@@ -111,9 +111,8 @@ function renderOrder(o) {
     <div class="od-head">
       <div class="top">
         <div>
-          <div class="id">${o.id} · ${br?.city} ${br?.name}</div>
-          <h1>${o.title}</h1>
-          <div class="muted">${o.placedAt} · ustaxonadan olib ketish</div>
+          <h1>${o.id}</h1>
+          <div class="muted">${br?.city} ${br?.name} · ${o.placedAt} · ustaxonadan olib ketish</div>
         </div>
         <div style="text-align: right">
           <span class="pill ${SEED.STATE_PILL[o.state]}"><span class="pd"></span>${clientFacingState(o)}</span>

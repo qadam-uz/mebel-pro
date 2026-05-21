@@ -284,7 +284,7 @@ window.SEED = (() => {
   const orders = [
     {
       id: 'ORD-2026-000091', state: 'cutting', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
-      title: "Kuhna mebel — 4 shkaf · stol", cuttingId: 'cr-0091',
+      cuttingId: 'cr-0091',
       subtotalCuttingTiyin: 60000000, subtotalMaterialsTiyin: 246000000, subtotalEdgeBandingTiyin: 8200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 314200000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -293,7 +293,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000090', state: 'edge_banding', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c02',
-      title: 'MDF · 6 list · krom', cuttingId: 'cr-0090',
+      cuttingId: 'cr-0090',
       subtotalCuttingTiyin: 30000000, subtotalMaterialsTiyin: 158000000, subtotalEdgeBandingTiyin: 5400000,
       discountTiyin: 0, discountReason: null, totalTiyin: 193400000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -303,7 +303,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000089', state: 'ready', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c03',
-      title: 'Oshxona · LDSP · 2 list', cuttingId: 'cr-0089',
+      cuttingId: 'cr-0089',
       subtotalCuttingTiyin: 12000000, subtotalMaterialsTiyin: 81000000, subtotalEdgeBandingTiyin: 2200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 95200000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -314,7 +314,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000088', state: 'ready', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c04',
-      title: 'Stol · fanera', cuttingId: 'cr-0088',
+      cuttingId: 'cr-0088',
       subtotalCuttingTiyin: 18000000, subtotalMaterialsTiyin: 144000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 5000000, discountReason: 'Doimiy mijoz chegirmasi', totalTiyin: 157000000,
       assignedCutter: 'u03', assignedEdger: null,
@@ -324,7 +324,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000087', state: 'confirmed', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
-      title: 'LDSP polka · 1 list', cuttingId: 'cr-0087',
+      cuttingId: 'cr-0087',
       subtotalCuttingTiyin: 9000000, subtotalMaterialsTiyin: 42000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 51000000,
       assignedCutter: null, assignedEdger: null,
@@ -333,7 +333,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000086', state: 'new', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c02',
-      title: 'Stol oyog\'i · 1 list', cuttingId: 'cr-o086',
+      cuttingId: 'cr-o086',
       subtotalCuttingTiyin: 6000000, subtotalMaterialsTiyin: 29500000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 35500000,
       assignedCutter: null, assignedEdger: null,
@@ -341,7 +341,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000085', state: 'new', workshopId: 'ws-01', branchId: 'chilonzor', clientId: 'c03',
-      title: 'Garderob · 8 list', cuttingId: 'cr-o085',
+      cuttingId: 'cr-o085',
       subtotalCuttingTiyin: 48000000, subtotalMaterialsTiyin: 320000000, subtotalEdgeBandingTiyin: 11200000,
       discountTiyin: 0, discountReason: null, totalTiyin: 379200000,
       assignedCutter: null, assignedEdger: null,
@@ -349,7 +349,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000072', state: 'completed', workshopId: 'ws-01', branchId: 'yunusobod', clientId: 'c01',
-      title: 'MDF · 7 list · krom · oldingi buyurtma', cuttingId: 'cr-0072',
+      cuttingId: 'cr-0072',
       subtotalCuttingTiyin: 42000000, subtotalMaterialsTiyin: 206500000, subtotalEdgeBandingTiyin: 4500000,
       discountTiyin: 0, discountReason: null, totalTiyin: 253000000,
       assignedCutter: 'u03', assignedEdger: 'u04',
@@ -360,7 +360,7 @@ window.SEED = (() => {
     },
     {
       id: 'ORD-2026-000856', state: 'cancelled', workshopId: 'ws-01', branchId: 'chilonzor', clientId: 'c01',
-      title: "Fanera · oshxona", cuttingId: 'cr-0856',
+      cuttingId: 'cr-0856',
       subtotalCuttingTiyin: 14000000, subtotalMaterialsTiyin: 48000000, subtotalEdgeBandingTiyin: 0,
       discountTiyin: 0, discountReason: null, totalTiyin: 62000000,
       assignedCutter: null, assignedEdger: null,

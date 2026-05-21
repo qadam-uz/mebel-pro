@@ -66,8 +66,7 @@ document.getElementById('queue').innerHTML = queue.length === 0
     return `<div class="q-card">
       <div class="top">
         <div>
-          <div class="id">${o.id}</div>
-          <h4>${o.title}</h4>
+          <h4>${o.id}</h4>
           <div class="meta">${cl?.name || ''} · <b>${partsLine(o)}</b> · muddat ${o.dueAt || '—'}</div>
         </div>
         <span class="assigned-tag">Sizga</span>
@@ -86,8 +85,7 @@ document.getElementById('active').innerHTML = active.length === 0
     return `<div class="q-card">
       <div class="top">
         <div>
-          <div class="id">${o.id}</div>
-          <h4>${o.title}</h4>
+          <h4>${o.id}</h4>
           <div class="meta">${cl?.name || ''} · <b>${partsLine(o)}</b></div>
         </div>
         <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>

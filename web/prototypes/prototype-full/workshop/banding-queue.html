@@ -58,7 +58,7 @@ document.getElementById('queue').innerHTML = queue.length === 0
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
       <div class="top">
-        <div><div class="id">${o.id}</div><h4>${o.title}</h4><div class="meta">${cl?.name || ''} · <b>${edgeLine(o)}</b> · muddat ${o.dueAt || '—'}</div></div>
+        <div><h4>${o.id}</h4><div class="meta">${cl?.name || ''} · <b>${edgeLine(o)}</b> · muddat ${o.dueAt || '—'}</div></div>
         <span class="assigned-tag">Sizga</span>
       </div>
       <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Krom tugadi',msg:'${o.id} · krom yopishtirildi, buyurtma Tayyor holatiga o\\'tadi.'},()=>{toast('Krom tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Krom tugadi</button><a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a></div>
