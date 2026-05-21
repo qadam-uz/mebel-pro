@@ -63,7 +63,7 @@ in-app creation is the path.
 - **Dashboard** (`/admin`) — platform health at a glance: workshop / branch / client
   counts, recent provisioning, and job + error status. It carries **no workshop
   financials** — operators monitor health and incidents, not workshop money
-  ([`personas.md`](../../personas.md)); revenue rollups are out of operator scope, so no
+  ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollups are out of operator scope, so no
   per-workshop or platform revenue figure appears here.
 - **Docs & API reference** — a nav link out to `/docs`, `/api-docs`, `/api-redoc` (the
   live docs site and the OpenAPI references). These are HTTP-Basic-gated at the edge, a

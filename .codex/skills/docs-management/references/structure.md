@@ -18,9 +18,8 @@ docs/
 │
 │ # THE CANON — flat at the top of docs/. High-level decisions & specs everyone works from. Lean.
 ├── scope.md             # in / out / explicit non-goals for v1
-├── personas.md          # the roles and what each needs
 ├── domain-model.md      # ubiquitous language + the high-level entity map; per-entity detail → ref/entities/
-├── access-patterns.md   # principals, the access model, tenancy — the one cross-cutting concern that earns its own canon doc today
+├── access-patterns.md   # personas (who v1 is for) + principals, the access model, tenancy — the cross-cutting concern that earns its own canon doc today
 ├── architecture.md      # operating envelope · topology · stack · data-model invariants · quality requirements
 │                        #   (decisions + their rationale live inside whichever canon or feature doc owns the area — no separate ADR / decisions/ register)
 │                        #   No `spec/` subdirectory; the canon is the flat top-level of docs/.
@@ -109,9 +108,9 @@ auth, with the nav built from the tree + frontmatter. The implications:
 ### The canon — flat at the top of `docs/`
 
 - **Belongs:** the high-level **model** and **normative rules** everyone works from, each as a
-  single flat file under `docs/`: product framing (`scope`, `personas`), the domain model
-  (`domain-model` — the words and the high-level shape), the access model
-  (`access-patterns` — principals, the access model, tenancy), and the system view
+  single flat file under `docs/`: scope framing (`scope`), the domain model
+  (`domain-model` — the words and the high-level shape), the personas + access model
+  (`access-patterns` — who v1 is for, principals, the access model, tenancy), and the system view
   (`architecture` — operating envelope, topology, stack, data-model invariants, quality
   requirements). **The decisions and their rationale live inside these docs**, woven in where
   each belongs — there is no separate ADR genre and no `decisions/` folder.
@@ -240,7 +239,7 @@ edit.
 |---|---|---|---|---|
 | Product vision + Getting Started ladder | `docs/index.md` | — | links into the canon, ordered | The home page. Keep it short. |
 | Scope / non-goals for v1 | `docs/scope.md` | — | none required | The "out" list matters as much as the "in" list. |
-| A user role | `docs/personas.md` | — | none required | One file, a section per role. |
+| A user role | the **Personas** section of `docs/access-patterns.md` | — | none required | A section per role, leading the identity/access doc. |
 | Ubiquitous-language term / the high-level entity map | `docs/domain-model.md` | — | `ref/entities/<context>.md` per bounded context (in the map only) | Canon — the lean view. Per-entity detail → `ref/entities/`. |
 | The access model (principals · access · tenancy) | `docs/access-patterns.md` | `canon.md` (when created from scratch) | the entity context page (`ref/entities/identity.md`) at most once | Canon. The *model*; the mechanics live in `ref/features/access-management.md`. |
 | The architecture overview (envelope · topology · stack · data-model invariants · quality requirements) | `docs/architecture.md` | — | `web/DESIGN.md` (for the route map / why three SPAs reference), at most once | Canon. Carries the topology / stack / data-model **decisions and their rationale** inline. |

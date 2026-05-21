@@ -65,7 +65,7 @@ keyinchalik in-app creation yo'l bo'ladi.
 - **Dashboard** (`/admin`) — platform health bir qarashda: workshop / branch / client
   count'lar, recent provisioning va job + error status. U **workshop financials** olib
   yurmaydi — operator'lar health va incident'larni monitor qiladi, workshop money'ni emas
-  ([`personas.md`](../../personas.md)); revenue rollup'lar operator scope'dan tashqarida,
+  ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollup'lar operator scope'dan tashqarida,
   shuning uchun bu yerda per-workshop yoki platform revenue raqami ko'rinmaydi.
 - **Docs & API reference** — `/docs`, `/api-docs`, `/api-redoc` ga nav link (live docs site
   va OpenAPI reference'lar). Bular edge'da HTTP-Basic-gated, **app session'dan alohida

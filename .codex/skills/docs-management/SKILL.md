@@ -78,9 +78,8 @@ docs/
 │
 │ # THE CANON — flat at the top of docs/. High-level decisions & specs everyone works from. Lean.
 ├── scope.md             # in / out / explicit non-goals for v1
-├── personas.md          # the roles and what each needs
 ├── domain-model.md      # the ubiquitous language + the high-level entity map (per-entity detail → ref/entities/)
-├── access-patterns.md   # principals, the access model, tenancy — the one cross-cutting concern that earns its own canon doc today
+├── access-patterns.md   # personas (who v1 is for) + principals, the access model, tenancy — the cross-cutting concern that earns its own canon doc today
 ├── architecture.md      # operating envelope · topology · stack · data-model invariants · quality requirements
 │                        #   (decisions + their rationale live inside whichever canon or feature doc owns the area — no separate ADR / decisions/ register)
 │
@@ -212,8 +211,8 @@ A handful of shapes. Pick the one that fits; don't invent more.
 - **`docs/<canon>.md`** — canon. The lean, normative docs. Decisions live here, with their
   rationale woven inline. Template: `canon.md` for a *new* cross-cutting concern that genuinely
   earns one (high bar — most "concerns" are feature domains and belong in `ref/features/`).
-  Existing canon docs (`architecture`, `domain-model`, `scope`, `personas`, `access-patterns`)
-  are bespoke shapes.
+  Existing canon docs (`architecture`, `domain-model`, `scope`, `access-patterns`) are bespoke
+  shapes.
 - **`docs/ref/features/<domain>.md`** — a working spec for a **cohesive feature domain**
   (orders covers placement + fulfilment + modification + refunds + UX on one page; not one
   file per CRUD). Problem · domain rules · stories · UX · edge cases. **No endpoint table**
@@ -236,7 +235,7 @@ A handful of shapes. Pick the one that fits; don't invent more.
 |---|---|
 | Product vision / Getting Started ladder | `docs/index.md` |
 | Scope / non-goals for v1 | `docs/scope.md` |
-| A user role | `docs/personas.md` |
+| A user role | the **Personas** section of `docs/access-patterns.md` |
 | The ubiquitous language / the high-level entity map | `docs/domain-model.md` (per-entity detail → `ref/entities/<context>.md`) |
 | Auth / authz / tenancy — the *model* every feature obeys | `docs/access-patterns.md` |
 | Architecture (envelope · topology · stack · data-model invariants · quality requirements) | `docs/architecture.md` |

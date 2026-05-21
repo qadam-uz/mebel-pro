@@ -73,4 +73,4 @@ substitution.
 
 ## Next
 
-[`personas.md`](personas.md) — v1 ga tegadigan toʻrtta rol va har biriga nima kerak.
+[`domain-model.md`](domain-model.md) — rol'lar boʻlishadigan ubiquitous language va entity map.

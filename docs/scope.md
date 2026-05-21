@@ -71,4 +71,4 @@ that's a considered substitution.
 
 ## Next
 
-[`personas.md`](personas.md) — the four roles touching v1 and what each needs.
+[`domain-model.md`](domain-model.md) — the ubiquitous language and the entity map the roles share.

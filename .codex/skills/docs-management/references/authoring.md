@@ -44,7 +44,7 @@ meaningful changes, not typo fixes.
 ### `docs/index.md` — Getting Started landing
 The home page. Open with a one-paragraph product summary (what it is, who it's for, the bet);
 then a numbered **"Read in this order"** ladder that walks a new contributor through the canon
-(scope → personas → domain model → access patterns → architecture), then features, then
+(scope → domain model → access patterns → architecture), then features, then
 entities. Optionally close with a brief pointer to the repo-root README for local setup, and a
 one-line note on how the docs are served. Keep it short — ≤ 80 lines is a good ceiling. When
 the canon set changes, update the ladder.
@@ -66,8 +66,7 @@ entity specifics. Length is a signal: a long canon doc is usually carrying detai
 in `ref/`, or it's two docs. The whole canon is meant to be read in a sitting — protect that.
 
 A *new* canon concern doc is created from the `canon` template; existing canon docs
-(`architecture`, `scope`, `personas`, `domain-model`, `access-patterns`) are bespoke shapes —
-no template.
+(`architecture`, `scope`, `domain-model`, `access-patterns`) are bespoke shapes — no template.
 
 ### `ref/features/<domain>.md` — the working spec for a cohesive domain
 From the `feature` template. **One file per cohesive domain, not per CRUD.** This page is the
@@ -239,12 +238,12 @@ for v1" actually means. The cycle isn't done until every box holds:
 - [ ] `docs/index.md` exists, is `stable`, and contains a one-paragraph vision + a "Read in
   this order" ladder that covers the canon, features, and entities.
 - [ ] `docs/scope.md` exists and is `stable` — and is the single home for what's out of v1.
-- [ ] `docs/personas.md` covers every role that touches v1.
 - [ ] `docs/domain-model.md` exists; every bounded context it names has a page under
   `ref/entities/`; every entity referenced anywhere in the canon or `ref/features/` has a
   section under its bounded-context page.
-- [ ] `docs/access-patterns.md` exists and is `stable` — the principals, the access model, and
-  tenancy. Its mechanics live in `ref/features/access-management.md`, not in the canon doc.
+- [ ] `docs/access-patterns.md` exists and is `stable` — its **Personas** section covers every
+  role that touches v1, followed by the principals, the access model, and tenancy. Its mechanics
+  live in `ref/features/access-management.md`, not in the canon doc.
 - [ ] `docs/architecture.md` exists and is `stable`; it carries the operating envelope (tier,
   the "not built for" line), the topology, the stack, the data-model invariants, and the
   quality requirements (audit, performance, observability, i18n).

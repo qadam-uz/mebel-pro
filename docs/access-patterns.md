@@ -8,7 +8,43 @@ order: 50
 
 # Identity, access & tenancy
 
-Who proves who they are, what a workshop user may do, what each principal may see.
+The humans v1 is built for, who proves who they are, what a workshop user may do, and what each
+principal may see.
+
+## Personas
+
+Four humans across three apps — a platform-ops console, a workshop app, and a client app.
+
+### Platform operator
+
+The team running the platform. Onboards new workshops and their first owner; blocks or unblocks
+a workshop; watches the platform across all workshops for incidents; operates platform-wide jobs
+and the error monitor. Not a workshop user — does not run anyone's day-to-day.
+
+### Workshop owner
+
+The person who owns or runs the furniture workshop. Top authority inside their workshop: stands
+the workshop up end-to-end (branches, stock, pricing, staff, and what each branch carries from
+the platform's material catalog), grants and revokes staff permissions, oversees the order
+pipeline and the books, and holds the owner-only levers — creating staff and branches, setting
+branch pricing, and the workshop-wide reports.
+
+### Workshop staff
+
+Branch employees — order desk, warehouse, cutter, edge bander, accountant. **Not fixed roles**:
+each works within the per-branch permission set the owner grants them, one person may hold all of
+them and run the whole flow alone, and a freshly created member with no grants sees nothing
+actionable. In practice the grants cover verifying and progressing orders, the cutting / banding
+work, keeping stock and suppliers current, and recording the workshop's income and expenses.
+
+### Client
+
+The workshop's customer — a person or a small business that needs panels cut, often first-time
+and often comparing options across workshops. Self-registers on demand and is global to the
+platform, picking a workshop and a branch per order. Works from both a desktop browser and a
+phone; in v1 the priority is the desktop web experience, with a mobile-first pass to follow. Sees
+only their own side — catalog, cutting result, their orders, and what they owe once an order is
+ready — nothing about the workshop's internals.
 
 ## Principals
 

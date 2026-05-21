@@ -8,8 +8,46 @@ order: 50
 
 # Identity, access & tenancy
 
-Kim oʻzining kimligini isbotlaydi, workshop user nima qila oladi, har bir principal nimani koʻra
-oladi.
+v1 kim uchun qurilgan odamlar, kim oʻzining kimligini isbotlaydi, workshop user nima qila oladi
+va har bir principal nimani koʻra oladi.
+
+## Personas
+
+Uchta app boʻylab toʻrtta odam — platform-ops console, workshop app va client app.
+
+### Platform operator
+
+Platformani yurituvchi jamoa. Yangi workshop'larni va ularning birinchi owner'ini onboard qiladi;
+workshop'ni block yoki unblock qiladi; barcha workshop'lar boʻylab platformani incident'larga
+kuzatadi; platform-wide job'larni va error monitor'ni boshqaradi. Workshop user emas — hech kimning
+kundalik ishini yuritmaydi.
+
+### Workshop owner
+
+Furniture workshop'ga egalik qiluvchi yoki uni yurituvchi shaxs. Oʻz workshop'i ichidagi top
+authority: workshop'ni boshidan oxirigacha tiklaydi (branches, stock, pricing, staff va har bir
+branch platforma material catalog'idan nimani olib yurishi), staff permission'larini grant va
+revoke qiladi, order pipeline va books'ni nazorat qiladi va owner-only richaglarni — staff va
+branch yaratish, branch pricing belgilash va workshop-wide report'lar — ushlab turadi.
+
+### Workshop staff
+
+Branch xodimlari — order desk, warehouse, cutter, edge bander, accountant. **Fixed role'lar
+emas**: har biri owner unga bergan per-branch permission set bilan ishlaydi, bir shaxs ularning
+hammasini ushlab butun flow'ni yolgʻiz yurita oladi va hech qanday grant'siz yangi yaratilgan
+member amal qilsa boʻladigan hech narsani koʻrmaydi. Amalda grant'lar order'larni verify qilish va
+oldinga surish, cutting / banding ishi, stock va supplier'larni joriy holatda saqlash va income va
+expense'larni yozishni qamraydi.
+
+### Client
+
+Workshop'ning mijozi — panel kestirishi kerak boʻlgan shaxs yoki kichik biznes, koʻpincha
+first-time va koʻpincha workshop'lar boʻylab variantlarni solishtiradi. Talab boʻyicha oʻzini oʻzi
+self-register qiladi va platforma uchun global, har bir order'da workshop va branch tanlaydi. Ham
+desktop browser, ham telefondan foydalanadi; v1'da priority — desktop web tajribasi, keyinroq
+mobile-first pass rejalashtirilgan. Faqat oʻz tomonini koʻradi — catalog, cutting result, oʻz
+order'lari va order ready boʻlgach koʻrinadigan qarzdorligi — workshop'ning internal'lari haqida
+hech narsa emas.
 
 ## Principals
 
