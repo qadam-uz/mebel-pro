@@ -11,19 +11,19 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
-    <button class="back" type="button" onclick="location.href='branches.html'">← Filiallar</button>
+    <button class="back" type="button" onclick="location.href='branches.html'"><i class="ic" data-icon="arrow-left"></i> Filiallar</button>
     <div id="wrap"></div>
   </div>
 </main>
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-edit">
-  <div class="modal-h"><h3>Filialni tahrirlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Filialni tahrirlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
       <div class="field"><label>Nom</label><input id="ed-name" /></div>
@@ -38,11 +38,11 @@
 Yak: 10:00-16:00</textarea>
     </div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')">Saqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
 
 <div class="modal" id="m-pricing">
-  <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi chizma va krom narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
     <div class="field">
@@ -62,7 +62,7 @@ Yak: 10:00-16:00</textarea>
     <div class="field"><label>Krom narxi · 0.4 mm (so'm / metr)</label><input value="2 500" /></div>
     <div class="field"><label>Krom narxi · 2.0 mm (so'm / metr)</label><input value="3 000" /></div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Narxlar saqlandi')">Saqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Narxlar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -78,7 +78,7 @@ const wrap = document.getElementById('wrap');
 if (!ownerOnly()) {
   // Denied panel rendered into #wrap by ownerOnly().
 } else if (!b) {
-  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Filial topilmadi</h3></div>`;
+  wrap.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Filial topilmadi</h3></div>`;
 } else {
   document.getElementById('ed-name').value = b.name;
   document.getElementById('ed-addr').value = b.addr;
@@ -101,9 +101,9 @@ if (!ownerOnly()) {
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-pricing')">% Narx sozlamalari</button>
-        <button class="btn btn-outline" type="button" onclick="openModal('m-edit')">✎ Tahrirlash</button>
+        <button class="btn btn-outline" type="button" onclick="openModal('m-edit')"><i class="ic" data-icon="edit"></i> Tahrirlash</button>
         <div class="menu-wrap">
-          <button class="btn btn-outline" type="button" data-menu-toggle>Holat: ${b.status === 'active' ? 'Faol' : b.status === 'temporarily_closed' ? 'Vaqtincha yopiq' : 'Faol emas'} ▾</button>
+          <button class="btn btn-outline" type="button" data-menu-toggle>Holat: ${b.status === 'active' ? 'Faol' : b.status === 'temporarily_closed' ? 'Vaqtincha yopiq' : 'Faol emas'} ${window.icon('chevron-down',{size:13})}</button>
           <div class="menu" style="min-width:240px">
             ${statusMenu(b)}
           </div>
@@ -111,8 +111,8 @@ if (!ownerOnly()) {
       </div>
     </div>
 
-    ${b.status === 'temporarily_closed' ? `<div class="banner warn"><div class="ic">!</div><div class="grow"><b>Vaqtincha yopiq</b> · ${b.closedReason || ''}</div></div>` : ''}
-    ${b.status === 'inactive' ? `<div class="banner danger"><div class="ic">!</div><div class="grow"><b>Faol emas</b> · bu filial buyurtma qabul qilmaydi. Mavjud ochiq buyurtmalar yakunlanadi.</div></div>` : ''}
+    ${b.status === 'temporarily_closed' ? `<div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow"><b>Vaqtincha yopiq</b> · ${b.closedReason || ''}</div></div>` : ''}
+    ${b.status === 'inactive' ? `<div class="banner danger"><div class="ic"><i data-icon="alert"></i></div><div class="grow"><b>Faol emas</b> · bu filial buyurtma qabul qilmaydi. Mavjud ochiq buyurtmalar yakunlanadi.</div></div>` : ''}
 
     <div class="kpis" style="grid-template-columns: repeat(4, 1fr)">
       <div class="kpi"><div class="lbl">Faol buyurtma</div><div class="v num">${ordersHere.filter(o => !['completed','cancelled'].includes(o.state)).length}</div></div>
@@ -142,7 +142,7 @@ if (!ownerOnly()) {
     </section>
 
     <section id="t-mats" data-panel-group="br" hidden>
-      <div class="card"><div class="card-h"><h2>Filial materiallari</h2><a class="more" href="catalog.html">to'liq katalog →</a></div>
+      <div class="card"><div class="card-h"><h2>Filial materiallari</h2><a class="more" href="catalog.html">to'liq katalog <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>Material</th><th class="right">Narx / list</th><th class="right">Mavjud</th><th>Holat</th></tr></thead>
@@ -153,7 +153,7 @@ if (!ownerOnly()) {
     </section>
 
     <section id="t-stock" data-panel-group="br" hidden>
-      <div class="card"><div class="card-h"><h2>Joriy ombor</h2><a class="more" href="inventory.html">to'liq ko'rinish →</a></div>
+      <div class="card"><div class="card-h"><h2>Joriy ombor</h2><a class="more" href="inventory.html">to'liq ko'rinish <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>Material</th><th class="right">Mavjud (on_hand)</th><th class="right">Min</th></tr></thead>
@@ -165,7 +165,7 @@ if (!ownerOnly()) {
 
     <section id="t-pricing" data-panel-group="br" hidden>
       <div class="card">
-        <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')">Tahrirlash</button></div>
+        <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')"><i class="ic" data-icon="edit"></i> Tahrirlash</button></div>
         <div class="card-b" style="padding-top: 0">
           <div class="row-item"><div><div class="nm">Chizma modeli</div></div><div class="meta">List bo'yicha</div></div>
           <div class="row-item"><div><div class="nm">Chizma narxi</div></div><div class="meta">100 000 so'm / list</div></div>
@@ -176,7 +176,7 @@ if (!ownerOnly()) {
     </section>
 
     <section id="t-staff" data-panel-group="br" hidden>
-      <div class="card"><div class="card-h"><h2>Bu filialdagi xodimlar</h2><a class="more" href="users.html">hammasi →</a></div>
+      <div class="card"><div class="card-h"><h2>Bu filialdagi xodimlar</h2><a class="more" href="users.html">hammasi <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>Xodim</th><th>Ruxsatlar</th><th>Holat</th></tr></thead>
@@ -187,7 +187,7 @@ if (!ownerOnly()) {
     </section>
 
     <section id="t-orders" data-panel-group="br" hidden>
-      <div class="card"><div class="card-h"><h2>Bu filialdagi buyurtmalar</h2><a class="more" href="orders.html?branch=${id}">hammasi →</a></div>
+      <div class="card"><div class="card-h"><h2>Bu filialdagi buyurtmalar</h2><a class="more" href="orders.html?branch=${id}">hammasi <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
             <thead><tr><th>ID</th><th>Mijoz</th><th>Holat</th><th class="right">Summa</th></tr></thead>

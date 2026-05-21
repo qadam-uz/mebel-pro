@@ -53,7 +53,7 @@
     const mount = document.querySelector('#wrap')
       || document.querySelector('.page');
     const html = `<div class="st-error" role="alert" style="margin-top:8px">
-      <div class="ic">⊘</div>
+      <div class="ic">${window.icon('ban', { size: 26 })}</div>
       <h3>Bu sahifa faqat ustaxona egasiga ochiq</h3>
       <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona egasiga murojaat qiling.</p>
       <a class="btn btn-outline btn-sm" href="dashboard.html">← Asosiyga qaytish</a>
@@ -126,15 +126,15 @@ window.skCards = (n = 4) =>
 
 window.stError = (traceId = 'tr-' + Math.random().toString(16).slice(2, 8)) =>
   `<div class="st-error" role="alert">
-    <div class="ic">⚠</div>
+    <div class="ic">${window.icon('alert', { size: 26 })}</div>
     <h3>Ma'lumotni yuklab bo'lmadi</h3>
     <p>Vaqtinchalik xatolik. Birozdan keyin qayta urinib ko'ring.</p>
     <p style="font:400 11.5px var(--f-mono);color:var(--ink-6)">trace_id: ${traceId}</p>
     <button class="btn btn-outline btn-sm" type="button" onclick="location.href=location.pathname">Qayta urinish</button>
   </div>`;
 
-window.stEmpty = (title, body = '') =>
-  `<div class="st-empty"><div class="ic">∅</div><h3>${title}</h3>${body ? `<p>${body}</p>` : ''}</div>`;
+window.stEmpty = (title, body = '', ic = 'inbox') =>
+  `<div class="st-empty"><div class="ic">${window.icon(ic, { size: 25 })}</div><h3>${title}</h3>${body ? `<p>${body}</p>` : ''}</div>`;
 
 // Fallback styling for the shared state classes, in a CSS @layer so the
 // canonical (unlayered) app.css definitions added by the other worker always
@@ -172,25 +172,25 @@ window.renderWorkshopShell = (active = '') => {
   // null → always visible (profile etc.).
   const NAV = [
     { grp: 'Boshqaruv', items: [
-      { href: 'dashboard.html', ic: '◐', label: 'Asosiy', gate: null },
-      { href: 'orders.html', ic: '▣', label: 'Buyurtmalar', gate: ['manage_orders', 'view_dashboard'] }
+      { href: 'dashboard.html', ic: 'dashboard', label: 'Asosiy', gate: null },
+      { href: 'orders.html', ic: 'orders', label: 'Buyurtmalar', gate: ['manage_orders', 'view_dashboard'] }
     ]},
     { grp: 'Ishlab chiqarish', items: [
-      { href: 'cutting-queue.html', ic: '⌥', label: 'Kesish navbati', gate: ['process_production'] },
-      { href: 'banding-queue.html', ic: '▥', label: 'Krom navbati', gate: ['process_production'] }
+      { href: 'cutting-queue.html', ic: 'scissors', label: 'Kesish navbati', gate: ['process_production'] },
+      { href: 'banding-queue.html', ic: 'layers', label: 'Krom navbati', gate: ['process_production'] }
     ]},
     { grp: 'Resurslar', items: [
-      { href: 'inventory.html', ic: '⊟', label: 'Ombor', gate: ['manage_inventory'] },
-      { href: 'catalog.html', ic: '⊞', label: 'Material katalogi', gate: ['manage_catalog'] }
+      { href: 'inventory.html', ic: 'box', label: 'Ombor', gate: ['manage_inventory'] },
+      { href: 'catalog.html', ic: 'grid', label: 'Material katalogi', gate: ['manage_catalog'] }
     ]},
     { grp: 'Moliya', items: [
-      { href: 'finance.html', ic: '∑', label: 'Hisobotlar', gate: ['manage_finance', 'view_finance_reports'] },
-      { href: 'expenses.html', ic: '↕', label: 'Xarajatlar', gate: ['manage_finance', 'view_finance_reports'] }
+      { href: 'finance.html', ic: 'chart', label: 'Hisobotlar', gate: ['manage_finance', 'view_finance_reports'] },
+      { href: 'expenses.html', ic: 'wallet', label: 'Xarajatlar', gate: ['manage_finance', 'view_finance_reports'] }
     ]},
     { grp: 'Tizim', items: [
-      { href: 'branches.html', ic: '◫', label: 'Filiallar', gate: 'owner' },
-      { href: 'users.html', ic: '◆', label: 'Xodimlar', gate: 'owner' },
-      { href: 'settings.html', ic: '⚙', label: 'Sozlamalar', gate: 'owner' }
+      { href: 'branches.html', ic: 'store', label: 'Filiallar', gate: 'owner' },
+      { href: 'users.html', ic: 'users', label: 'Xodimlar', gate: 'owner' },
+      { href: 'settings.html', ic: 'settings', label: 'Sozlamalar', gate: 'owner' }
     ]}
   ];
 
@@ -205,7 +205,7 @@ window.renderWorkshopShell = (active = '') => {
     if (!items.length) return '';
     return `<div class="sb-grp">
       <div class="lbl">${g.grp}</div>
-      ${items.map(it => `<a class="sb-it" data-href="${it.href}" href="${it.href}"><span class="ic">${it.ic}</span> ${it.label}</a>`).join('')}
+      ${items.map(it => `<a class="sb-it" data-href="${it.href}" href="${it.href}"><span class="ic">${window.icon(it.ic)}</span> ${it.label}</a>`).join('')}
     </div>`;
   }).join('');
 
@@ -226,13 +226,13 @@ window.renderWorkshopShell = (active = '') => {
       </div>
     </div>
     <nav class="sb-nav">
-      ${navGroups || `<div class="sb-grp"><div class="lbl">Boshqaruv</div><a class="sb-it on" data-href="dashboard.html" href="dashboard.html"><span class="ic">◐</span> Asosiy</a></div>`}
+      ${navGroups || `<div class="sb-grp"><div class="lbl">Boshqaruv</div><a class="sb-it on" data-href="dashboard.html" href="dashboard.html"><span class="ic">${window.icon('dashboard')}</span> Asosiy</a></div>`}
     </nav>
     <div class="sb-foot">
       <a class="sb-user" href="profile.html" title="${me.name || ''}">
         <span class="av">${avInitials}</span>
         <div class="info" style="min-width:0;flex:1">
-          <div class="nm">${me.name || '—'}${me.isOwner ? ' <span style="font-size:9.5px;background:rgba(255,255,255,.18);padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.04em">EGASI</span>' : ''}</div>
+          <div class="nm">${me.name || '—'}${me.isOwner ? ' <span style="font-size:9.5px;background:var(--accent-tint);color:var(--accent-h);padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.04em">EGASI</span>' : ''}</div>
           <div class="rl">${window.meSummary()}</div>
         </div>
       </a>
@@ -271,7 +271,7 @@ window.renderWorkshopShell = (active = '') => {
   const switcher = `
     <div class="me-switch menu-wrap" title="Demo · ko'rinishni almashtirish">
       <button class="ib" type="button" data-menu-toggle aria-label="Ko'rinishni almashtirish" style="width:auto;padding:0 10px;gap:6px;font:600 12px var(--f-ui)">
-        <span style="color:var(--ink-6);font-weight:500">Ko'rinish:</span> ${me.name ? me.name.split(' ')[0] : '—'} <span style="font-size:9px">▾</span>
+        <span style="color:var(--ink-6);font-weight:500">Ko'rinish:</span> ${me.name ? me.name.split(' ')[0] : '—'} ${window.icon('chevron-down', { size: 13 })}
       </button>
       <div class="menu" style="min-width:248px">
         <div style="font:700 10px var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-6);padding:8px 12px 4px">Demo · qaysi xodim sifatida</div>
@@ -288,7 +288,7 @@ window.renderWorkshopShell = (active = '') => {
 
   const topbar = `
   <div class="tb">
-    <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">☰ Menu</button>
+    <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">${window.icon('menu', { size: 16 })} Menu</button>
     ${branchPicker}
     <div class="tb-search">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
@@ -308,7 +308,7 @@ window.renderWorkshopShell = (active = '') => {
             <button class="btn btn-ghost btn-sm" type="button" onclick="event.stopPropagation();markAllNotifsRead()">Hammasini o'qildi</button>
           </div>
           <div id="notif-dd-list" style="max-height:360px;overflow-y:auto"></div>
-          <a class="mi" href="notifications.html" style="justify-content:center;border-top:1px solid var(--line);border-radius:0;font-weight:600;padding:11px">Hammasini ko'rish →</a>
+          <a class="mi" href="notifications.html" style="justify-content:center;border-top:1px solid var(--line);border-radius:0;font-weight:600;padding:11px">Hammasini ko'rish ${window.icon('arrow-right', { size: 13 })}</a>
         </div>
       </div>
     </div>

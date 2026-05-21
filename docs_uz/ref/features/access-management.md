@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 20
 ---
 
@@ -65,29 +65,62 @@ o'z `me`'sini fetch qila oladi (principal type, id'lar, `is_owner`, grant set,
   Change password (strength meter), Sessions list (current marker, row bo'yicha "revoke", "log out
   everywhere").
 
-## Client sign-in (Telegram OAuth)
+## Client sign-in (phone + Telegram OTP)
 
-Client Telegram Login Widget'ning payload'ini (`telegram_id`, `first_name`, `last_name`,
-`username`, `photo_url`, `phone_number`, `auth_date`, `hash`) o'tkazib sign in qiladi.
-System uni bot token'ga qarshi **HMAC-verify** qiladi; bad signature yoki stale `auth_date`
-rejected (`invalid_oauth_signature` / `oauth_expired`).
+Client **Telegram orqali yuborilgan one-time code bilan tasdiqlangan phone number** orqali sign
+in qiladi — password yoʻq, widget yoʻq, app-switch yoʻq. Phone — bu identity; flow bitta uzluksiz
+path boʻlib, raqam yangi boʻlgandagina registration'ga branch qiladi. Uchta qadam:
 
-**Phone number talab qilinadi.** Agar Telegram bittasini share qilmagan bo'lsa, client'dan
-phone-sharing'ga ruxsat berib retry qilish so'raladi (`missing_phone_number`). Phone — client'ning
-primary human identifier'i; profile (telegram id, username, phone, photo, name) har bir
-login'da payload'dan refresh qilinadi.
+1. **Code soʻrash.** Client `+998XXXXXXXXX` phone yuboradi. System
+   [verification challenge](../entities/identity.md#phone-verification-challenge) issue qiladi va
+   oʻsha raqamga **Telegram orqali** (Telegram Gateway orqali) 6 xonali code yuboradi. Malformed
+   raqam `invalid_phone`; Telegram'da reachable boʻlmagan raqam `phone_unreachable_on_telegram`
+   (v1'da **SMS fallback yoʻq** — client'da oʻsha raqamda Telegram boʻlishi shart); resend
+   cooldown (60 s) yoki per-phone / per-IP send rate limit'dan oshish `code_send_rate_limited`.
+2. **Code'ni verify qilish.** Client phone + code yuboradi. Notoʻgʻri code `invalid_code`
+   (challenge omon qoladi, attempt counter oshadi); 5-chi notoʻgʻri attempt challenge'ni burn
+   qiladi (`too_many_attempts`, yangi code soʻrash kerak); 5-minutlik TTL'dan oʻtgan code
+   `code_expired`.
+3. **Sign in yoki register.** Toʻgʻri code'da:
+   - **Phone topildi, `active`** → sign in.
+   - **Phone topildi, `blocked`** → `account_blocked`.
+   - **Phone topilmadi** → response `is_new = true` olib keladi; client `name` beradi (1–80 belgi;
+     boʻsh boʻlsa `name_required`) va system client'ni yaratadi (`status = active`) hamda sign in
+     qiladi.
 
-Not found → client'ni yaratish (`status = active`, `is_new = true`); found → ishlatish. Blocked →
-`account_blocked`. Qanday bo'lmasin, success'da session yaratiladi. Self-service session
-management workshop / platform user'lar bilan bir xil.
+Verification'dan *oldin* account-existence oracle yoʻq — sign-in-vs-register branch faqat toʻgʻri
+code'dan keyin oshkor boʻladi. Success'da session yaratiladi; self-service session management
+workshop / platform user'lar bilan bir xil.
+
+### Dev & local sign-in
+
+Local, CI va E2E run'larda Telegram Gateway ham, real phone ham yoʻq, shuning uchun code aslida
+yuborib boʻlmaydi. Buni bitta setting — **`otp_dev_codes`**, fixed code'lar ro'yxati — qoplaydi:
+u **non-empty** boʻlganda send qadami no-op boʻladi (Gateway call yoʻq) va verification **har
+qanday** phone uchun ro'yxatdagi **har qanday** code'ni qabul qiladi, shunda developer istalgan
+raqam bilan, masalan `000000`, sign in qiladi. U **empty** boʻlganda — default, va **production'da
+majburiy** — real flow ishlaydi: Telegram orqali yetkaziladigan bitta random per-challenge code.
+Bitta field, ikkita emas: code'lar mavjudligining oʻzi *on-switch*, alohida enable flag yoʻq;
+production'da non-empty `otp_dev_codes` — boot-time misconfiguration.
 
 ### UX
 
-- **Sign-in card** (client app `/auth/telegram`) — bot username bilan mounted qilingan Telegram
-  Login Widget; yagona error state'lar `missing_phone_number` ("share your phone with the
-  bot and try again"), `account_blocked`, `invalid_oauth_signature` / `oauth_expired`.
-- **Client profile** (`/c/profile`) — Telegram-synced field'lar read-only; current marker
-  bilan sessions list; "log out" / "log out everywhere".
+Bitta sign-in card (client app `/auth/login`) qadamlarni joyida almashtiradi — oldinga yoki
+orqaga oʻtganda client allaqachon yozgan phone hech qachon yoʻqolmaydi:
+
+- **Phone qadami** — `+998` bilan prefilled bitta phone field, primary **Send code**. Error'lar
+  inline: `invalid_phone`, `phone_unreachable_on_telegram` ("Bu raqamni Telegram'da topa olmadik —
+  sign-in uchun shu raqamda Telegram kerak"), `code_send_rate_limited` ("N s dan keyin urinib
+  koʻring").
+- **Code qadami** — 6 xonali code input, masked target phone, phone qadamiga qaytaruvchi **Edit**
+  affordance, va cooldown oʻtguncha live countdown bilan disabled boʻlgan **Resend**. Error'lar:
+  `invalid_code` (qolgan attempt'lar bilan), `code_expired` va `too_many_attempts` (ikkalasi ham
+  client'ni resend / yangi code soʻrashga qaytaradi).
+- **Name qadami** — faqat verification `is_new = true` qaytarganda koʻrsatiladi: bitta `name`
+  field, primary **Continue**; qaytuvchi client'lar toʻgʻridan-toʻgʻri app'ga oʻtadi.
+- **Client profile** (`/c/profile`) — `name` editable (u client tomonidan kiritiladi, sync emas);
+  `phone` read-only (uni oʻzgartirish re-verification'ni anglatadi — v1'da out of scope); current
+  marker bilan sessions list; "log out" / "log out everywhere".
 
 ## Workshop provisioning (superadmin app)
 
@@ -244,9 +277,13 @@ Rules:
 - **Keyinroq `inactive` bo'ladigan branch'dagi grant** — inert; branch picker'dan
   yo'qoladi; reactivate qilish grant'ni yana live qiladi.
 - **Owner o'zini block qiladi** — disallowed (workshop'da active owner bo'lishi kerak).
-- **Shared phone'siz client** — `missing_phone_number`; sign-in card phone-share prompt ko'rsatadi.
-- **Telegram payload signature mismatch** — `invalid_oauth_signature`; OAuth-expiry window'dan
-  eski `auth_date` → `oauth_expired`.
+- **Client'ning raqami Telegram'da yoʻq** — `phone_unreachable_on_telegram`; sign-in card sign-in
+  uchun shu raqamda Telegram kerakligini tushuntiradi (v1'da SMS fallback yoʻq).
+- **Client code'ni notoʻgʻri yozadi** — `invalid_code`, qolgan attempt'lar bilan; 5-chi notoʻgʻri
+  attempt challenge'ni burn qiladi (`too_many_attempts`) va 5-minutlik TTL'dan oʻtgan code
+  `code_expired` — ikkalasi ham client'ni yangi code soʻrashga qaytaradi.
+- **Code juda tez-tez soʻraladi** — `code_send_rate_limited`; resend control 60 s cooldown
+  oʻtguncha countdown bilan disabled qoladi.
 
 ## Next
 

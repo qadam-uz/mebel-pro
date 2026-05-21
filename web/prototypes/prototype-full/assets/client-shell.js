@@ -106,10 +106,10 @@ window.renderClientHeader = (active = '') => {
         <span class="mk">M</span><span class="nm">Mebel Pro</span>
       </a>
       <nav class="hdr-nav" aria-label="Asosiy navigatsiya">
-        <a data-href="home.html" href="home.html">Bosh sahifa</a>
-        <a data-href="cutting-drafts.html" href="cutting-drafts.html">Chizmalar</a>
-        <a data-href="orders.html" href="orders.html">Buyurtmalar</a>
-        <a data-href="branches.html" href="branches.html">Ustaxonalar</a>
+        <a data-href="home.html" href="home.html">${window.icon('home', { size: 15 })} Bosh sahifa</a>
+        <a data-href="cutting-drafts.html" href="cutting-drafts.html">${window.icon('scissors', { size: 15 })} Chizmalar</a>
+        <a data-href="orders.html" href="orders.html">${window.icon('orders', { size: 15 })} Buyurtmalar</a>
+        <a data-href="branches.html" href="branches.html">${window.icon('store', { size: 15 })} Ustaxonalar</a>
       </nav>
       <div class="hdr-actions">
         <div class="cl-bell-wrap">
@@ -126,7 +126,7 @@ window.renderClientHeader = (active = '') => {
             </div>
             <div class="cl-bell-list" id="cl-bell-list"></div>
             <div class="cl-bell-foot">
-              <a href="notifications.html">Hammasini ko'rish →</a>
+              <a href="notifications.html">Hammasini ko'rish ${window.icon('arrow-right', { size: 13 })}</a>
             </div>
           </div>
         </div>
@@ -139,7 +139,7 @@ window.renderClientHeader = (active = '') => {
   </header>
   <style>
     .cl-bell-wrap { position: relative; display: inline-block; }
-    .cl-bell-dd { position: absolute; right: 0; top: calc(100% + 6px); width: 340px; max-width: calc(100vw - 32px); background: var(--elev); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 18px 38px -12px rgba(26,22,20,.26); z-index: 60; display: none; overflow: hidden; }
+    .cl-bell-dd { position: absolute; right: 0; top: calc(100% + 6px); width: 340px; max-width: calc(100vw - 32px); background: var(--elev); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--sh-4); z-index: 60; display: none; overflow: hidden; }
     .cl-bell-dd.on { display: block; }
     .cl-bell-hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); font: 600 13.5px var(--f-ui); color: var(--ink-12); }
     .cl-bell-mark { background: none; border: 0; color: var(--accent); font: 600 11.5px var(--f-ui); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
@@ -150,7 +150,7 @@ window.renderClientHeader = (active = '') => {
     .cl-bell-it:hover { background: var(--sunk); }
     .cl-bell-it:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .cl-bell-dot { width: 7px; height: 7px; border-radius: 50%; background: transparent; flex-shrink: 0; margin-top: 6px; }
-    .cl-bell-it.unread { background: var(--accent-soft, rgba(166,71,31,.05)); }
+    .cl-bell-it.unread { background: var(--accent-soft); }
     .cl-bell-it.unread .cl-bell-dot { background: var(--accent); }
     .cl-bell-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .cl-bell-tt { font: 600 13px var(--f-ui); color: var(--ink-12); }

@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .od-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
   @media (min-width: 1100px) { .od-grid { grid-template-columns: 1.4fr .8fr; } }
@@ -32,7 +32,7 @@
 <body>
 <main class="page-content">
   <div class="page">
-    <button class="back" type="button" onclick="history.back()">← Buyurtmalar</button>
+    <button class="back" type="button" onclick="history.back()"><i class="ic" data-icon="arrow-left"></i> Buyurtmalar</button>
     <div id="od-wrap"></div>
   </div>
 </main>
@@ -55,10 +55,10 @@ const canProd = () => can('process_production', B);
 const canFinanceView = () => can('view_finance_reports', B) || can('manage_finance', B);
 
 if (!o) {
-  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Buyurtma topilmadi</h3></div>`;
+  wrap.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Buyurtma topilmadi</h3></div>`;
 } else if (!isOwner() && !canOrders() && !canProd() && !can('view_dashboard', B)) {
   // No visibility into this branch at all.
-  wrap.innerHTML = `<div class="st-error" role="alert"><div class="ic">⊘</div><h3>Bu buyurtma sizning filialingizda emas</h3><p>Bu buyurtmani ko'rish uchun ruxsatingiz yo'q — ustaxona egasiga murojaat qiling.</p><a class="btn btn-outline btn-sm" href="orders.html">← Buyurtmalar</a></div>`;
+  wrap.innerHTML = `<div class="st-error" role="alert"><div class="ic"><i data-icon="ban"></i></div><h3>Bu buyurtma sizning filialingizda emas</h3><p>Bu buyurtmani ko'rish uchun ruxsatingiz yo'q — ustaxona egasiga murojaat qiling.</p><a class="btn btn-outline btn-sm" href="orders.html"><i class="ic" data-icon="arrow-left"></i> Buyurtmalar</a></div>`;
 } else {
   const br = SEED.lookup.branchById(o.branchId);
   const cl = SEED.lookup.clientById(o.clientId);
@@ -86,7 +86,7 @@ if (!o) {
         shorts.push(`${m?.name || matId} → ${bm.onHand - algo.sheetsByMat[matId]} / min ${bm.minStock}`);
       }
     }
-    if (shorts.length) lowWarn = `<div class="banner warn"><div class="ic">!</div><div class="grow">Kesishdan keyin past zaxira: <b>${shorts.join(' · ')}</b></div></div>`;
+    if (shorts.length) lowWarn = `<div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Kesishdan keyin past zaxira: <b>${shorts.join(' · ')}</b></div></div>`;
   }
 
   const itemsRows = [
@@ -128,7 +128,7 @@ if (!o) {
         ${o.dueAt ? `<span>Muddat: <b style="color:var(--ink-12)">${o.dueAt}</b></span>` : ''}
       </div>
       <div class="actions">${detailActions(o)}</div>
-      ${o.state === 'cancelled' ? `<div class="banner warn" style="margin-top:12px"><div class="ic">!</div><div class="grow">Bekor qilindi · ${SEED.lookup.userById(o.cancelledBy)?.name || o.cancelledBy || ''} · ${o.cancelReason || ''}</div></div>` : ''}
+      ${o.state === 'cancelled' ? `<div class="banner warn" style="margin-top:12px"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Bekor qilindi · ${SEED.lookup.userById(o.cancelledBy)?.name || o.cancelledBy || ''} · ${o.cancelReason || ''}</div></div>` : ''}
     </div>
 
     <div class="tabs" data-tabs="od">
@@ -183,7 +183,7 @@ if (!o) {
               <div class="field">
                 <textarea rows="4" id="note" ${canOrders() ? '' : 'readonly'} placeholder="Bu buyurtma haqida ichki izoh — faqat ustaxona xodimlari ko'radi">Mijoz erta tugatilishini so'ragan — imkon bo'lsa muddatdan oldin tugatishga harakat qilish kerak.</textarea>
               </div>
-              ${canOrders() ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')">Saqlash</button>` : `<p class="muted" style="font-size:12px;margin:0">Tahrirlash uchun manage_orders ruxsati kerak.</p>`}
+              ${canOrders() ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Izoh saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button>` : `<p class="muted" style="font-size:12px;margin:0">Tahrirlash uchun manage_orders ruxsati kerak.</p>`}
             </div>
           </div>
         </section>
@@ -192,16 +192,16 @@ if (!o) {
           <div class="card">
             <div class="card-h"><h2>Chizma rejasi</h2></div>
             <div class="card-b">
-              ${cuttingInvalidated ? `<div class="banner warn"><div class="ic">!</div><div class="grow">Bu chizma natijasi <b>invalidated</b> — chizma boshqa joyda qayta hisoblangan. Buyurtmaga bog'langan natija o'zgarmagan. <a href="#" onclick="toast('Joriy natijaga o\\'tildi (demo)')" style="color:inherit;text-decoration:underline">Joriy natijani ko'rish</a></div></div>` : ''}
+              ${cuttingInvalidated ? `<div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Bu chizma natijasi <b>invalidated</b> — chizma boshqa joyda qayta hisoblangan. Buyurtmaga bog'langan natija o'zgarmagan. <a href="#" onclick="toast('Joriy natijaga o\\'tildi (demo)')" style="color:inherit;text-decoration:underline">Joriy natijani ko'rish</a></div></div>` : ''}
               ${cutting ? `<div class="row-item"><div><div class="nm">${cutting.parts} ta qism · ${cutting.sheets} list</div><small style="color:var(--ink-6)">qoldiq ${cutting.wastePct}% · ${cutting.algoVer || ''}</small></div><div class="meta">${cutting.cutLen} m kesim</div></div>` : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`}
               <div class="sheet" style="border:0;padding:0;margin-top:12px">
                 <svg viewBox="0 0 550 366" role="img" aria-label="Chizma rejasi (namuna)">
                   <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
-                  <rect x="2" y="2" width="546" height="362" fill="none" stroke="#A6471F" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
-                  <rect x="6" y="6" width="150" height="100" fill="#A6471F" fill-opacity=".18" stroke="#A6471F" stroke-width="1.5"/>
-                  <text x="81" y="60" font-family="JetBrains Mono" font-size="11" fill="#A6471F" font-weight="700" text-anchor="middle">P1</text>
-                  <rect x="160" y="6" width="150" height="100" fill="#A6471F" fill-opacity=".18" stroke="#A6471F" stroke-width="1.5"/>
-                  <text x="235" y="60" font-family="JetBrains Mono" font-size="11" fill="#A6471F" font-weight="700" text-anchor="middle">P1</text>
+                  <rect x="2" y="2" width="546" height="362" fill="none" stroke="#0F766E" stroke-dasharray="4 4" stroke-width="1" opacity=".3"/>
+                  <rect x="6" y="6" width="150" height="100" fill="#0F766E" fill-opacity=".18" stroke="#0F766E" stroke-width="1.5"/>
+                  <text x="81" y="60" font-family="JetBrains Mono" font-size="11" fill="#0F766E" font-weight="700" text-anchor="middle">P1</text>
+                  <rect x="160" y="6" width="150" height="100" fill="#0F766E" fill-opacity=".18" stroke="#0F766E" stroke-width="1.5"/>
+                  <text x="235" y="60" font-family="JetBrains Mono" font-size="11" fill="#0F766E" font-weight="700" text-anchor="middle">P1</text>
                   <rect x="6" y="110" width="200" height="124" fill="#2E5E4E" fill-opacity=".18" stroke="#2E5E4E" stroke-width="1.5"/>
                   <text x="106" y="174" font-family="JetBrains Mono" font-size="11" fill="#2E5E4E" font-weight="700" text-anchor="middle">P2</text>
                 </svg>
@@ -270,9 +270,9 @@ function detailActions(o) {
   const a = [];
   if (o.state === 'new') {
     if (canOrders()) {
-      a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Tasdiqlash',msg:'Buyurtma tasdiqlanadi (→ Tasdiqlangan).'},()=>{toast('Tasdiqlandi');setTimeout(()=>location.reload(),700)})">✓ Tasdiqlash</button>`);
+      a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Tasdiqlash',msg:'Buyurtma tasdiqlanadi (→ Tasdiqlangan).'},()=>{toast('Tasdiqlandi');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Tasdiqlash</button>`);
       a.push(`<button class="btn btn-outline btn-sm" onclick="openModal('discount')">% Chegirma</button>`);
-      a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">✕ Bekor qilish</button>`);
+      a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()"><i class="ic" data-icon="x"></i> Bekor qilish</button>`);
     }
   } else if (o.state === 'confirmed') {
     if (canOrders()) {
@@ -284,18 +284,18 @@ function detailActions(o) {
     }
   } else if (o.state === 'cutting') {
     if (canProd() || canOrders()) {
-      a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('cut-done')">✓ Kesish tugadi</button>`);
+      a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('cut-done')"><i class="ic" data-icon="check"></i> Kesish tugadi</button>`);
     }
     if (canOrders()) {
-      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Tasdiqlanganga qaytarish')">↩ Tasdiqlanganga</button>`);
+      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Tasdiqlanganga qaytarish')"><i class="ic" data-icon="undo"></i> Tasdiqlanganga</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'edge_banding') {
     if (canProd() || canOrders()) {
-      a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('band-done')">✓ Krom tugadi</button>`);
+      a.push(`<button class="btn btn-acc btn-sm" onclick="openModal('band-done')"><i class="ic" data-icon="check"></i> Krom tugadi</button>`);
     }
     if (canOrders()) {
-      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Kesishga qaytarish')">↩ Kesishga</button>`);
+      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('Kesishga qaytarish')"><i class="ic" data-icon="undo"></i> Kesishga</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'ready') {
@@ -304,8 +304,8 @@ function detailActions(o) {
       // the order was banded, else cutting. Label it concretely.
       const wasBanded = SEED.lookup.isBanded(SEED.lookup.cuttingById(o.cuttingId) || {});
       const tgtLabel = wasBanded ? 'Kromga' : 'Kesishga';
-      a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Olib ketildi',msg:'Mijoz hammasini olib ketdimi?',okText:'Ha, olib ketdi'},()=>{toast('Tugallandi');setTimeout(()=>location.reload(),700)})">✓ Mijoz olib ketdi</button>`);
-      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('${tgtLabel} qaytarish')">↩ ${tgtLabel}</button>`);
+      a.push(`<button class="btn btn-acc btn-sm" onclick="confirmAction({title:'Olib ketildi',msg:'Mijoz hammasini olib ketdimi?',okText:'Ha, olib ketdi'},()=>{toast('Tugallandi');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Mijoz olib ketdi</button>`);
+      a.push(`<button class="btn btn-outline btn-sm" onclick="revert('${tgtLabel} qaytarish')"><i class="ic" data-icon="undo"></i> ${tgtLabel}</button>`);
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'completed') {
@@ -331,7 +331,7 @@ function revert(title) {
 <div id="scrim" class="scrim"></div>
 
 <div class="modal" id="discount">
-  <div class="modal-h"><h3>Chegirma qo'shish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Chegirma qo'shish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
       <div class="field"><label>Turi</label><select><option value="pct">% Foiz</option><option value="abs">Fiks summa</option></select></div>
@@ -343,7 +343,7 @@ function revert(title) {
 </div>
 
 <div class="modal" id="assign-cutter">
-  <div class="modal-h"><h3>Kesuvchi tayinlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Kesuvchi tayinlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <p class="muted" style="font-size:13px;margin:0 0 14px">Tayinlash buyurtmani "Kesilmoqda" holatiga o'tkazadi va kesuvchining navbatida ko'rinadi. Ro'yxatda shu filialda ishlaydigan, kesish ruxsatiga ega xodimlar (va egasi) ko'rinadi.</p>
     <div class="field"><label>Kesuvchi</label><select id="cutter-pick"></select></div>
@@ -352,15 +352,15 @@ function revert(title) {
 </div>
 
 <div class="modal" id="assign-edger">
-  <div class="modal-h"><h3>Krom yopishtiruvchi tayinlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Krom yopishtiruvchi tayinlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Krom yopishtiruvchi</label><select id="edger-pick"></select></div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-edger');toast('Krom yopishtiruvchi tayinlandi')">Saqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-edger');toast('Krom yopishtiruvchi tayinlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
 
 <div class="modal" id="cut-done">
-  <div class="modal-h"><h3>Kesish tugadi</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Kesish tugadi</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner info"><div class="ic">i</div><div class="grow">Quyidagi raqamlar chizma natijasidan olinadi — qo'lda kiritilmaydi. Material stockdan avtomatik chiqariladi.</div></div>
     <div class="field"><label>Kim bajardi?</label><select id="cut-who"></select></div>
@@ -370,7 +370,7 @@ function revert(title) {
 </div>
 
 <div class="modal" id="band-done">
-  <div class="modal-h"><h3>Krom tugadi</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Krom tugadi</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner info"><div class="ic">i</div><div class="grow">Krom uzunligi chizma natijasidan olinadi — qo'lda kiritilmaydi. Buyurtma "Tayyor" holatiga o'tadi.</div></div>
     <div class="field"><label>Kim bajardi?</label><select id="band-who"></select></div>

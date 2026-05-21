@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -22,7 +22,7 @@
         <p class="sub">Filial qaysi materiallarni sotadi va qanday narxda — mijozlar shu ro'yxatdan ko'radi.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-acc" type="button" onclick="openModal('m-add')">+ Material qo'shish</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-add')"><i class="ic" data-icon="plus"></i> Material qo'shish</button>
       </div>
     </div>
 
@@ -48,7 +48,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-add">
-  <div class="modal-h"><h3>Filialga material qo'shish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Filialga material qo'shish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
     <div class="field"><label>Platforma katalogidan tanlash</label>
@@ -64,7 +64,7 @@
 </div>
 
 <div class="modal" id="m-edit">
-  <div class="modal-h"><h3>Tahrirlash</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Tahrirlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
       <div class="field"><label>Narx (so'm)</label><input type="text" value="410 000" /></div>
@@ -72,7 +72,7 @@
     </div>
     <p class="muted" style="font-size:12.5px;margin:0">Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')">Saqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
 
 <script src="../assets/app.js"></script>

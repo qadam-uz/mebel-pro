@@ -74,7 +74,7 @@ web/
   eslint.config.ts          # flat config
   nginx.conf                # used by the Docker image to serve dist/ (SPA history fallback)
   Dockerfile                # node:22 build (corepack→pnpm) → nginx:alpine runtime
-  .env.example              # build-time VITE_* vars
+  .env.dev.example          # build-time VITE_* vars (dev); .env.prod.example mirrors it
   src/
     main.ts                 # createApp + Pinia + Router, mount
     App.vue                 # root layout + <RouterView>
@@ -96,7 +96,7 @@ web/
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
-- **Env vars**: only `VITE_`-prefixed vars reach client code; declare them in `env.d.ts` (`ImportMetaEnv`) and document in `.env.example`. In dev leave `VITE_API_BASE_URL` empty (Vite proxies `/api`); same in prod (the Caddy edge serves the API same-origin under `/api`).
+- **Env vars**: only `VITE_`-prefixed vars reach client code; declare them in `env.d.ts` (`ImportMetaEnv`) and document in `.env.dev.example` + `.env.prod.example`. In dev leave `VITE_API_BASE_URL` empty (Vite proxies `/api`); same in prod (the Caddy edge serves the API same-origin under `/api`).
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`.
 - **Clean gate**: `eslint`, `prettier --check`, `vue-tsc`, and the test suite must all pass; `pnpm build` must succeed (it type-checks via `vue-tsc --build`). Fix issues rather than disabling rules; scope any `eslint-disable` to the line with a reason.
 

@@ -49,7 +49,7 @@ cd "$APP_DIR/deploy"
 echo "==> Verifying deploy/.env exists"
 if [ ! -f .env ]; then
     echo "ERROR: $APP_DIR/deploy/.env is missing." >&2
-    echo "       Copy .env.example, fill in the prod values, chmod 600 .env, and retry." >&2
+    echo "       Copy .env.prod.example, fill in the {{change-me}} values, chmod 600 .env, and retry." >&2
     exit 1
 fi
 

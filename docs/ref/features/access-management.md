@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 20
 ---
 
@@ -64,28 +64,60 @@ revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant 
   Change password (strength meter), Sessions list (current marker, "revoke" per row, "log out
   everywhere").
 
-## Client sign-in (Telegram OAuth)
+## Client sign-in (phone + Telegram OTP)
 
-The client signs in by passing the Telegram Login Widget's payload (`telegram_id`,
-`first_name`, `last_name`, `username`, `photo_url`, `phone_number`, `auth_date`, `hash`). The
-system **HMAC-verifies** it against the bot token; a bad signature or a stale `auth_date` is
-rejected (`invalid_oauth_signature` / `oauth_expired`).
+The client signs in with a **phone number verified by a one-time code sent over Telegram** — no
+password, no widget, no app-switch. The phone is the identity; the flow is one continuous path
+that branches to registration only when the number is new. Three steps:
 
-**The phone number is required.** If Telegram didn't share one, the client is asked to allow
-phone-sharing and retry (`missing_phone_number`). The phone is the client's primary human
-identifier; the profile (telegram id, username, phone, photo, name) is refreshed from the
-payload on every login.
+1. **Request a code.** Client submits a `+998XXXXXXXXX` phone. The system issues a
+   [verification challenge](../entities/identity.md#phone-verification-challenge) and sends a
+   6-digit code to that number **over Telegram** (via the Telegram Gateway). A malformed number
+   is `invalid_phone`; a number not reachable on Telegram is `phone_unreachable_on_telegram`
+   (there is **no SMS fallback** in v1 — the client must have Telegram on that number); exceeding
+   the resend cooldown (60 s) or the per-phone / per-IP send rate limit is `code_send_rate_limited`.
+2. **Verify the code.** Client submits the phone + code. A wrong code is `invalid_code` (the
+   challenge survives, attempt counter bumped); the 5th wrong attempt burns the challenge
+   (`too_many_attempts`, must request a new code); a code past its 5-minute TTL is `code_expired`.
+3. **Log in or register.** On a correct code:
+   - **Phone found, `active`** → log in.
+   - **Phone found, `blocked`** → `account_blocked`.
+   - **Phone not found** → the response carries `is_new = true`; the client supplies a `name`
+     (1–80 chars; `name_required` if blank) and the system creates the client
+     (`status = active`) and logs them in.
 
-Not found → create the client (`status = active`, `is_new = true`); found → use it. Blocked →
-`account_blocked`. Either way, on success a session is created. Self-service session
+There is no account-existence oracle *before* verification — the login-vs-register branch is
+only revealed after a correct code. On success a session is created; self-service session
 management is the same as workshop / platform users.
+
+### Dev & local sign-in
+
+Local, CI, and E2E runs have no Telegram Gateway and no real phone, so a code can't actually be
+sent. A single setting — **`otp_dev_codes`**, a list of fixed codes — covers this: when it is
+**non-empty**, the send step is a no-op (no Gateway call) and verification accepts **any** code
+in the list for **any** phone, so a developer signs in as any number with, say, `000000`. When
+it is **empty** — the default, and **mandatory in production** — the real flow runs: one random
+per-challenge code delivered over Telegram. One field, not two: the presence of codes *is* the
+on-switch, there is no separate enable flag; a non-empty `otp_dev_codes` in production is a
+boot-time misconfiguration.
 
 ### UX
 
-- **Sign-in card** (client app `/auth/telegram`) — the Telegram Login Widget mounted with the
-  bot username; the only error states are `missing_phone_number` ("share your phone with the
-  bot and try again"), `account_blocked`, `invalid_oauth_signature` / `oauth_expired`.
-- **Client profile** (`/c/profile`) — Telegram-synced fields read-only; sessions list with
+One sign-in card (client app `/auth/login`) that advances through steps in place — never lose
+the phone the client already typed when stepping forward or back:
+
+- **Phone step** — a single phone field prefilled with `+998`, primary **Send code**. Errors
+  inline: `invalid_phone`, `phone_unreachable_on_telegram` ("We couldn't reach this number on
+  Telegram — sign-in needs Telegram on this number"), `code_send_rate_limited` ("Try again in
+  N s").
+- **Code step** — a 6-digit code input, the masked target phone, an **Edit** affordance back to
+  the phone step, and a **Resend** that's disabled with a live countdown until the cooldown
+  elapses. Errors: `invalid_code` (with attempts remaining), `code_expired` and
+  `too_many_attempts` (both route the client back to resend / request a new code).
+- **Name step** — shown **only** when verification returned `is_new = true`: one `name` field,
+  primary **Continue**; returning clients skip straight into the app.
+- **Client profile** (`/c/profile`) — `name` editable (it's client-entered, not synced); `phone`
+  read-only (changing it would mean re-verification — out of scope in v1); sessions list with a
   current marker; "log out" / "log out everywhere".
 
 ## Workshop provisioning (superadmin app)
@@ -245,10 +277,13 @@ Rules:
 - **Grant on a branch that later goes `inactive`** — inert; the branch disappears from the
   picker; reactivating makes the grant live again.
 - **Owner blocks themselves** — disallowed (a workshop must have an active owner).
-- **Client without a shared phone** — `missing_phone_number`; the sign-in card shows the
-  phone-share prompt.
-- **Telegram payload signature mismatch** — `invalid_oauth_signature`; an `auth_date` older
-  than the OAuth-expiry window → `oauth_expired`.
+- **Client's number isn't on Telegram** — `phone_unreachable_on_telegram`; the sign-in card
+  explains sign-in needs Telegram on that number (no SMS fallback in v1).
+- **Client mistypes the code** — `invalid_code` with attempts remaining; the 5th wrong attempt
+  burns the challenge (`too_many_attempts`) and a code past its 5-minute TTL is `code_expired` —
+  both send the client back to request a fresh code.
+- **Code requested too often** — `code_send_rate_limited`; the resend control stays disabled
+  with a countdown until the 60 s cooldown elapses.
 
 ## Next
 

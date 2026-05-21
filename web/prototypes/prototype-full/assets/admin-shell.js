@@ -35,7 +35,7 @@ window.renderAdminShell = () => {
       <span class="nm">Mebel Pro<small>superadmin</small></span>
     </a>
     <div class="sb-tenant">
-      <span class="av" style="background:linear-gradient(135deg,#2A4D6B,#1F3A50)">PL</span>
+      <span class="av" style="background:linear-gradient(135deg,var(--deep-2),var(--deep))">PL</span>
       <div class="info">
         <div class="nm">Platforma</div>
         <div class="role">${(SEED.workshops || []).length} ta ustaxona · O'Z</div>
@@ -44,26 +44,26 @@ window.renderAdminShell = () => {
     <nav class="sb-nav">
       <div class="sb-grp">
         <div class="lbl">Platforma</div>
-        <a class="sb-it" data-href="dashboard.html" href="dashboard.html"><span class="ic">◐</span> Asosiy</a>
-        <a class="sb-it" data-href="workshops.html" href="workshops.html"><span class="ic">▥</span> Ustaxonalar <span class="ct">${(SEED.workshops || []).length}</span></a>
+        <a class="sb-it" data-href="dashboard.html" href="dashboard.html"><span class="ic">${window.icon('dashboard')}</span> Asosiy</a>
+        <a class="sb-it" data-href="workshops.html" href="workshops.html"><span class="ic">${window.icon('factory')}</span> Ustaxonalar <span class="ct">${(SEED.workshops || []).length}</span></a>
       </div>
       <div class="sb-grp">
         <div class="lbl">Katalog</div>
-        <a class="sb-it" data-href="materials.html" href="materials.html"><span class="ic">⊞</span> Materiallar <span class="ct">${(SEED.materials || []).length}</span></a>
+        <a class="sb-it" data-href="materials.html" href="materials.html"><span class="ic">${window.icon('package')}</span> Materiallar <span class="ct">${(SEED.materials || []).length}</span></a>
       </div>
       <div class="sb-grp">
         <div class="lbl">Operatorlik</div>
-        <a class="sb-it" data-href="jobs.html" href="jobs.html"><span class="ic">⌥</span> Background ish <span class="ct" style="color:#F2D6CE;background:rgba(140,46,28,.25)">${(SEED.jobs || []).filter(j => j.lastResult === 'failed').length}</span></a>
-        <a class="sb-it" data-href="errors.html" href="errors.html"><span class="ic">!</span> Xatolik monitor <span class="ct">${(SEED.errors || []).filter(e => !e.resolved).length}</span></a>
-        <a class="sb-it" data-href="audit.html" href="audit.html"><span class="ic">≡</span> Audit log</a>
+        <a class="sb-it" data-href="jobs.html" href="jobs.html"><span class="ic">${window.icon('activity')}</span> Background ish <span class="ct" style="color:var(--danger);background:var(--danger-tint)">${(SEED.jobs || []).filter(j => j.lastResult === 'failed').length}</span></a>
+        <a class="sb-it" data-href="errors.html" href="errors.html"><span class="ic">${window.icon('alert')}</span> Xatolik monitor <span class="ct">${(SEED.errors || []).filter(e => !e.resolved).length}</span></a>
+        <a class="sb-it" data-href="audit.html" href="audit.html"><span class="ic">${window.icon('list')}</span> Audit log</a>
       </div>
       <div class="sb-grp">
         <div class="lbl">Tizim</div>
-        <a class="sb-it" data-href="platform-users.html" href="platform-users.html"><span class="ic">◆</span> Operatorlar <span class="ct">${(SEED.platformUsers || []).filter(u => u.status === 'active').length}</span></a>
+        <a class="sb-it" data-href="platform-users.html" href="platform-users.html"><span class="ic">${window.icon('users')}</span> Operatorlar <span class="ct">${(SEED.platformUsers || []).filter(u => u.status === 'active').length}</span></a>
       </div>
       <div class="sb-grp">
         <div class="lbl">Ma'lumotnoma</div>
-        <a class="sb-it" href="/docs" target="_blank" rel="noopener"><span class="ic">¶</span> Hujjatlar &amp; API <span class="ct" title="Alohida kirish — chetda HTTP-Basic">↗</span></a>
+        <a class="sb-it" href="/docs" target="_blank" rel="noopener"><span class="ic">${window.icon('book')}</span> Hujjatlar &amp; API <span class="ct" title="Alohida kirish — chetda HTTP-Basic" style="display:inline-flex;align-items:center">${window.icon('external-link', { size: 11 })}</span></a>
         <div style="font-size:10.5px;color:var(--ink-6);padding:2px 10px 4px;line-height:1.4">/docs · /api-docs · /api-redoc — <b style="color:var(--ink-4)">alohida kirish</b> (chetda HTTP-Basic, yangi oynada)</div>
       </div>
     </nav>
@@ -81,7 +81,7 @@ window.renderAdminShell = () => {
   const noteList = notes.length
     ? notes.slice(0, 10).map(n => `
       <a class="nd-item ${n.read ? '' : 'unread'}" href="${n.link}">
-        <span class="nd-ic ${n.kind}">${n.kind === 'job' ? 'J' : 'E'}</span>
+        <span class="nd-ic ${n.kind}">${window.icon(n.kind === 'job' ? 'activity' : 'alert', { size: 15 })}</span>
         <span class="nd-tx"><b>${n.title}</b><small>${n.body}</small></span>
         <span class="nd-t">${n.t}</span>
       </a>`).join('')
@@ -89,9 +89,9 @@ window.renderAdminShell = () => {
 
   const topbar = `
   <div class="tb">
-    <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">☰ Menu</button>
+    <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">${window.icon('menu', { size: 16 })} Menu</button>
     <div class="tb-search">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+      ${window.icon('search', { size: 15, cls: 'tb-search-i' })}
       <input id="tb-search" placeholder="Ustaxona, mijoz, buyurtma yoki xatolik kodi..." />
       <span class="kbd">⌘ K</span>
     </div>
@@ -104,10 +104,10 @@ window.renderAdminShell = () => {
         <div class="menu nd-menu" id="bell-menu" role="menu" aria-label="Bildirishnomalar">
           <div class="nd-head"><b>Bildirishnomalar</b><button class="nd-mark" type="button" id="bell-mark">Hammasini o'qilgan</button></div>
           <div class="nd-body" id="bell-body">${noteList}</div>
-          <a class="nd-all" href="notifications.html">Hammasini ko'rish →</a>
+          <a class="nd-all" href="notifications.html">Hammasini ko'rish ${window.icon('arrow-right', { size: 13 })}</a>
         </div>
       </div>
-      <a class="btn btn-acc" href="workshops.html">+ Yangi ustaxona</a>
+      <a class="btn btn-acc" href="workshops.html">${window.icon('plus')} Yangi ustaxona</a>
     </div>
   </div>`;
 

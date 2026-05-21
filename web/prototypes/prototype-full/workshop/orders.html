@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -22,7 +22,7 @@
         <p class="sub">Barcha filiallar bo'yicha buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-outline btn-sm" id="mode-board" type="button" onclick="setMode('board')">▦ Taxta</button>
+        <button class="btn btn-outline btn-sm" id="mode-board" type="button" onclick="setMode('board')"><i class="ic" data-icon="grid"></i> Taxta</button>
         <button class="btn btn-outline btn-sm" id="mode-table" type="button" onclick="setMode('table')">≡ Jadval</button>
         <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
       </div>
@@ -192,8 +192,8 @@ window.ev = () => {};
 
 function workerChip(o) {
   const chips = [];
-  if (o.assignedCutter) chips.push(`<span class="pill p-cut" style="font-size:9.5px">✄ ${SEED.lookup.userById(o.assignedCutter)?.initials || ''}</span>`);
-  if (o.assignedEdger) chips.push(`<span class="pill p-eb" style="font-size:9.5px">▥ ${SEED.lookup.userById(o.assignedEdger)?.initials || ''}</span>`);
+  if (o.assignedCutter) chips.push(`<span class="pill p-cut" style="font-size:9.5px">${window.icon('scissors',{size:11})} ${SEED.lookup.userById(o.assignedCutter)?.initials || ''}</span>`);
+  if (o.assignedEdger) chips.push(`<span class="pill p-eb" style="font-size:9.5px">${window.icon('layers',{size:11})} ${SEED.lookup.userById(o.assignedEdger)?.initials || ''}</span>`);
   return chips.join(' ');
 }
 

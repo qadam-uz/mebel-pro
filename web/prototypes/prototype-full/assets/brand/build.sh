@@ -6,8 +6,11 @@ B="$(cd "$(dirname "$0")" && pwd)"
 SVG="$B/svg"; ICON="$B/icon"; EXP="$B/exports"
 mkdir -p "$SVG" "$ICON" "$EXP"
 
-# --- palette (verbatim from docs/misc/prototype-full/assets/app.css) ---------
-RUST="#A6471F"; RUST_DEEP="#8C3814"; INK="#1A1614"; PAPER="#FAF7F2"; DARK="#1A1614"
+# --- palette (verbatim from prototype-full/assets/app.css "studio" v3) --------
+# RUST/RUST_DEEP keep their names for the gradient recipe below, but now hold
+# the teal brand accent (--accent / --accent-h). INK/PAPER/DARK are the cool
+# slate neutrals (--ink-12 / a cool off-white / the dark colorway ground).
+RUST="#0F766E"; RUST_DEEP="#0B5A54"; INK="#0F1B2A"; PAPER="#F4F6F8"; DARK="#0F1B2A"
 FONT="'Source Serif 4','Charter','Iowan Old Style',Georgia,serif"
 
 # --- symbol geometry: three nested cut panels on a 32u stock sheet -------

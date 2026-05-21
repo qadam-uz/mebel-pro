@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -22,7 +22,7 @@
         <p class="sub">Barcha ustaxonalar shu katalogdan o'z filialiga material qo'shadi.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-acc" type="button" onclick="openMat(null)">+ Yangi material</button>
+        <button class="btn btn-acc" type="button" onclick="openMat(null)"><i class="ic" data-icon="plus"></i> Yangi material</button>
       </div>
     </div>
 
@@ -46,7 +46,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-mat">
-  <div class="modal-h"><h3 id="mat-title">Yangi material</h3><button class="x" data-close-modal="m-mat">✕</button></div>
+  <div class="modal-h"><h3 id="mat-title">Yangi material</h3><button class="x" data-close-modal="m-mat"><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Material turi (kind)</label>
       <select id="f-kind" onchange="syncKind()">

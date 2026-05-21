@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -22,7 +22,7 @@
         <p class="sub">Platforma boshqaruvchilari · barcha ustaxonalarga to'liq kirish.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-acc" type="button" onclick="openOp(null)">+ Yangi operator</button>
+        <button class="btn btn-acc" type="button" onclick="openOp(null)"><i class="ic" data-icon="plus"></i> Yangi operator</button>
       </div>
     </div>
 
@@ -37,7 +37,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-op">
-  <div class="modal-h"><h3 id="op-title">Yangi operator</h3><button class="x" data-close-modal="m-op">✕</button></div>
+  <div class="modal-h"><h3 id="op-title">Yangi operator</h3><button class="x" data-close-modal="m-op"><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
       <div class="field"><label>F.I.O</label><input id="op-name" /></div>
@@ -53,7 +53,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <input id="op-pass" value="TempPass2026!" style="flex:1" readonly />
-          <button class="btn btn-outline btn-sm" type="button" id="op-regen" onclick="document.getElementById('op-pass').value=genTempPassword();toast('Parol qayta yaratildi')">↻ Qayta</button>
+          <button class="btn btn-outline btn-sm" type="button" id="op-regen" onclick="document.getElementById('op-pass').value=genTempPassword();toast('Parol qayta yaratildi')"><i class="ic" data-icon="refresh"></i> Qayta</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="navigator.clipboard?.writeText(document.getElementById('op-pass').value).then(()=>toast('Nusxalandi'))">Nusxa</button>
         </div>
       </div>

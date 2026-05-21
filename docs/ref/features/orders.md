@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 30
 ---
 
@@ -209,7 +209,7 @@ orders**). Branch is chosen later, at placement, against a specific cutting.
      link); branch went `temporarily_closed` (greyed card with reason); branch pricing
      incomplete (greyed, "this branch can't take orders right now").
   2. **Checkout** — one scrollable page, two sections:
-     - **Contact** — phone and name, prefilled from the Telegram profile, editable inline,
+     - **Contact** — phone and name, prefilled from the client's profile, editable inline,
        with a non-dismissible note: *"This is shared with the workshop so they can call you
        about your order."* and a reset-to-profile link per field.
      - **Review** — the final price breakdown + pickup branch (address + hours) + contact.

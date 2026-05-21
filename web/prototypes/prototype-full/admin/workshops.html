@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -22,7 +22,7 @@
         <p class="sub">Platformada ro'yxatdan o'tgan barcha ustaxonalar.</p>
       </div>
       <div class="tools">
-        <button class="btn btn-acc" type="button" onclick="openModal('m-new')">+ Yangi ustaxona</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-new')"><i class="ic" data-icon="plus"></i> Yangi ustaxona</button>
       </div>
     </div>
 
@@ -41,7 +41,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal wide" id="m-new">
-  <div class="modal-h"><h3>Yangi ustaxona + egasi · atomik yaratish</h3><button class="x" data-close-modal="m-new">✕</button></div>
+  <div class="modal-h"><h3>Yangi ustaxona + egasi · atomik yaratish</h3><button class="x" data-close-modal="m-new"><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <h4 style="font:600 12px var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:0 0 10px">Ustaxona ma'lumotlari</h4>
     <div class="field-row">
@@ -60,7 +60,7 @@
       <div class="field"><label>Vaqtinchalik parol</label>
         <div style="display:flex;gap:8px">
           <input id="o-pass" value="TempPass2026!" style="flex:1" />
-          <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('o-pass').value=genTempPassword();toast('Parol qayta yaratildi')">↻ Qayta</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('o-pass').value=genTempPassword();toast('Parol qayta yaratildi')"><i class="ic" data-icon="refresh"></i> Qayta</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="navigator.clipboard?.writeText(document.getElementById('o-pass').value).then(()=>toast('Nusxalandi'))">Nusxa</button>
         </div>
       </div>
@@ -102,7 +102,7 @@ function render() {
     <thead><tr><th>Ustaxona</th><th>Egasi</th><th>Filial</th><th>Buyurtma · 30 kun</th><th>Yaratildi</th><th>Holat</th><th></th></tr></thead>
     <tbody>${rows.map(w => `
       <tr class="clickable" onclick="location.href='workshop-detail.html?id=${w.id}'">
-        <td><div style="display:flex;align-items:center;gap:11px"><div style="width:34px;height:34px;border-radius:6px;background:linear-gradient(135deg,#A6471F,#8C3814);color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center">${w.mk}</div><div class="nm">${w.name}</div></div></td>
+        <td><div style="display:flex;align-items:center;gap:11px"><div style="width:34px;height:34px;border-radius:6px;background:linear-gradient(135deg,#0F766E,#0B5A54);color:#fff;font:700 13px/1 var(--f-display);display:grid;place-items:center">${w.mk}</div><div class="nm">${w.name}</div></div></td>
         <td><div class="nm" style="font-weight:500">${w.ownerName}<small style="color:var(--ink-6);font:400 11px var(--f-mono)">${w.ownerPhone}</small></div></td>
         <td>${w.branches}</td>
         <td class="num">${w.orders30d}</td>

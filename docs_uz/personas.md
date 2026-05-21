@@ -2,7 +2,7 @@
 title: Personas
 status: stable
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 30
 ---
 
@@ -40,9 +40,10 @@ holatda saqlash va workshop'ning income va expense'larini yozish.
 ## Client
 
 Workshop'ning mijozi — panel kestirishi kerak boʻlgan shaxs yoki kichik biznes. Talab boʻyicha
-social sign-in orqali parolsiz oʻzini oʻzi self-register qiladi; platforma uchun global, har bir
-order'da workshop va branch tanlaydi. Koʻpincha telefonda, koʻpincha first-time, koʻpincha
-workshop'lar boʻylab variantlarni solishtiradi — shuning uchun tajriba mobile-first. Faqat oʻz
+Telegram orqali tasdiqlangan phone number bilan parolsiz oʻzini oʻzi self-register qiladi; platforma uchun global, har bir
+order'da workshop va branch tanlaydi. Ham desktop browser, ham telefondan foydalanadi; v1'da
+priority — desktop web tajribasi, keyinroq mobile-first pass rejalashtirilgan. Koʻpincha
+first-time, koʻpincha workshop'lar boʻylab variantlarni solishtiradi. Faqat oʻz
 tomonini koʻradi: catalog, cutting result, oʻz order'lari va qarzdorligi (order ready boʻlgach
 koʻrinadi) — workshop'ning internal'lari haqida hech narsa emas.
 

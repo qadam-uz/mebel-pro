@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -60,7 +60,7 @@ function partsLine(o) {
 }
 
 document.getElementById('queue').innerHTML = queue.length === 0
-  ? `<div class="empty"><div class="ic">∅</div><h3>Sizga tayinlangani yo'q</h3><p>Hozircha tinch — yaxshi!</p></div>`
+  ? `<div class="empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Sizga tayinlangani yo'q</h3><p>Hozircha tinch — yaxshi!</p></div>`
   : queue.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
@@ -73,14 +73,14 @@ document.getElementById('queue').innerHTML = queue.length === 0
         <span class="assigned-tag">Sizga</span>
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'${o.id} · ishlatilgan listlar yoziladi, material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesish tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'${o.id} · ishlatilgan listlar yoziladi, material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a>
       </div>
     </div>`;
   }).join('');
 
 document.getElementById('active').innerHTML = active.length === 0
-  ? `<div class="empty" style="border-style:dashed"><div class="ic">∅</div><p>Hozir kesilayotgan ishingiz yo'q.</p></div>`
+  ? `<div class="empty" style="border-style:dashed"><div class="ic"><i data-icon="inbox"></i></div><p>Hozir kesilayotgan ishingiz yo'q.</p></div>`
   : active.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
@@ -93,7 +93,7 @@ document.getElementById('active').innerHTML = active.length === 0
         <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Kesish tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Chizmani ko'rish</a>
       </div>
     </div>`;

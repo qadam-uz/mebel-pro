@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 30
 ---
 
@@ -210,7 +210,7 @@ orders**). Branch keyinroq, placement'da, aniq cutting'ga qarshi tanlanadi.
      link); branch `temporarily_closed` bo'lgan (reason bilan greyed card); branch pricing
      incomplete (greyed, "this branch can't take orders right now").
   2. **Checkout** — bitta scrollable page, ikki section:
-     - **Contact** — phone va name, Telegram profile'dan prefilled, inline editable,
+     - **Contact** — phone va name, client profile'dan prefilled, inline editable,
        non-dismissible note bilan: *"This is shared with the workshop so they can call you
        about your order."* va field bo'yicha reset-to-profile link.
      - **Review** — final price breakdown + pickup branch (address + hours) + contact.

@@ -11,12 +11,12 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
-    <button class="back" type="button" onclick="location.href='users.html'">← Xodimlar</button>
+    <button class="back" type="button" onclick="location.href='users.html'"><i class="ic" data-icon="arrow-left"></i> Xodimlar</button>
     <div id="wrap"></div>
   </div>
 </main>
@@ -36,7 +36,7 @@ const wrap = document.getElementById('wrap');
 if (!ownerOnly()) {
   // Denied panel rendered into #wrap.
 } else if (!u) {
-  wrap.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Xodim topilmadi</h3></div>`;
+  wrap.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Xodim topilmadi</h3></div>`;
 } else {
   const branches = SEED.branches;
   const permsRows = SEED.permissions.map(p => {
@@ -83,14 +83,14 @@ if (!ownerOnly()) {
               <select>${branches.map(b => `<option ${u.homeBranchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}</select>
             </div>
           </div>
-          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Saqlandi')">Saqlash</button></div>
+          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
         </div>
       </div>
     </section>
 
     <section id="t-perms" data-panel-group="us" hidden>
       <div class="card">
-        <div class="card-h"><h2>Ruxsatlar matritsasi</h2>${!u.isOwner ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Ruxsatlar saqlandi — keyingi sorovdan kuchga kiradi')">Saqlash</button>` : ''}</div>
+        <div class="card-h"><h2>Ruxsatlar matritsasi</h2>${!u.isOwner ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Ruxsatlar saqlandi — keyingi sorovdan kuchga kiradi')"><i class="ic" data-icon="save"></i> Saqlash</button>` : ''}</div>
         <div class="card-b">
           ${u.isOwner ? `<div class="banner info"><div class="ic">i</div><div class="grow">Egasi avtomatik tarzda barcha filialda barcha ruxsatga ega.</div></div>` : ''}
           <div style="overflow-x: auto">

@@ -3,7 +3,7 @@
 Docker Compose definitions and deploy scripts for running the whole stack.
 Run `docker compose` commands **from this directory** (`deploy/`) — build
 contexts are `../backend` and `../web`, and env is read from `deploy/.env`
-(copy `.env.example`).
+(copy `.env.dev.example`).
 
 Two **standalone** compose files — not an overlay pair. Each is a complete
 stack on its own; pick whichever matches the environment.
@@ -15,7 +15,8 @@ stack on its own; pick whichever matches the environment.
 | `Caddyfile`         | Edge reverse-proxy config. **Baked into the edge image**, not mounted — a config change ships as a new image, so `up -d --build` recreates the edge deterministically (a bind-mounted file's contents are invisible to Compose and would strand Caddy on a stale in-memory config). |
 | `edge.Dockerfile`   | Two lines: `FROM caddy:2.8-alpine` + `COPY Caddyfile`. Build context is this `deploy/` dir, scoped by `.dockerignore` to just the Caddyfile. Per-env values (`BASE_DOMAIN`, `ACME_EMAIL`) stay runtime env — Caddy substitutes them at load. |
 | `scripts/deploy.sh` | What CI runs on the server over SSH: `git fetch` + `git reset --hard $DEPLOY_REF`, then **re-exec the freshly-checked-out script once** (so a fix to the deploy flow applies the same deploy, not the next) → verify `deploy/.env` and `infra-net` exist → `docker compose -f compose.prod.yaml up -d --build --remove-orphans` → wait for backend healthcheck → prune dangling images. Idempotent; runnable manually too. |
-| `.env.example`      | Single env contract for both files. Sections flagged DEV / PROD. Copy to `.env`. |
+| `.env.dev.example`  | Dev env contract — ready-to-use defaults. Copy to `.env` for `compose.yaml`. |
+| `.env.prod.example` | Prod env contract — same shape, secrets as `{{change-me}}`. Copy to `.env` for `compose.prod.yaml`. |
 
 > The `web` *container* still has its own minimal nginx config (`../web/nginx.conf`, SPA history fallback) — it's purely a static file server behind the edge and never touches TLS. `deploy/Caddyfile` is the **edge** in front of everything; that's the one that terminates HTTPS and auto-renews the certificate.
 
@@ -26,7 +27,7 @@ stack on its own; pick whichever matches the environment.
 ## Commands
 
 ```bash
-cp .env.example .env                               # first time
+cp .env.dev.example .env                               # first time
 
 # Dev — full stack with hot reload
 docker compose up --build
@@ -76,7 +77,7 @@ The VPS is already provisioned for other projects: Docker Engine + Compose v2 ar
 sudo mkdir -p /opt/mebel-pro && sudo chown "$USER" /opt/mebel-pro
 git clone https://github.com/qadam-uz/mebel-pro.git /opt/mebel-pro
 
-cp /opt/mebel-pro/deploy/.env.example /opt/mebel-pro/deploy/.env
+cp /opt/mebel-pro/deploy/.env.prod.example /opt/mebel-pro/deploy/.env
 $EDITOR /opt/mebel-pro/deploy/.env
 chmod 600 /opt/mebel-pro/deploy/.env
 #   Set: POSTGRES_USER/PASSWORD/DB    — credentials of a DB on the shared Postgres
@@ -102,7 +103,7 @@ Pre-reqs that `deploy.sh` will refuse to run without: `deploy/.env` exists on th
 
 - Always `cd deploy/` before `docker compose …` (relative build contexts + `.env` discovery).
 - The two compose files are **independent stacks**. Don't try `-f compose.yaml -f compose.prod.yaml` — that's the old overlay shape we deliberately moved away from.
-- `.env` is gitignored; `.env.example` is the contract. Keep them in sync, and mirror backend-relevant vars with `backend/.env.example`.
+- `.env` is gitignored; `.env.dev.example` / `.env.prod.example` are the contract. Keep them in sync with each other, and mirror backend-relevant vars with `backend/.env.dev.example` + `backend/.env.prod.example`.
 - In prod, postgres/minio creds in `deploy/.env` are credentials **on the shared infra**, not credentials we provision. The DB and the MinIO access key must already exist on those shared services before deploy.
 - The `backend` image runs `alembic upgrade head` on start (see `../backend/Dockerfile` CMD); fresh DBs get the schema automatically. A failed migration crash-loops the new container; `deploy.sh`'s healthcheck wait will fail and the script exits non-zero.
 - The prod stack does **not** create the MinIO bucket — provision it once on the shared MinIO (console or `mc`) before the first deploy; the dev stack still has a `createbuckets` one-shot for local convenience.

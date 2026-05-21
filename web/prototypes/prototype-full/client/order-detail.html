@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .od-grid { display: grid; gap: 18px; grid-template-columns: 1fr; }
   @media (min-width: 1024px) { .od-grid { grid-template-columns: 1.4fr .85fr; gap: 24px; } }
@@ -34,10 +34,10 @@
 <script>renderClientHeader('orders.html');</script>
 
 <main class="container" style="padding: 24px 0 64px">
-  <button class="back" type="button" onclick="history.back()">← Buyurtmalar</button>
+  <button class="back" type="button" onclick="history.back()"><i class="ic" data-icon="arrow-left"></i> Buyurtmalar</button>
 
   <div id="new-banner" class="banner success" style="display: none">
-    <div class="ic">✓</div>
+    <div class="ic"><i data-icon="check"></i></div>
     <div class="grow">Buyurtma berildi — ustaxona ko'rib chiqib siz bilan bog'lanadi.</div>
   </div>
 
@@ -62,7 +62,7 @@ function clientFacingState(o) { return SEED.CLIENT_PHASES[o.state]; }
 function notFound() {
   document.getElementById('new-banner').style.display = 'none';
   wrap.innerHTML = `<div class="st-empty">
-    <div class="ic">∅</div>
+    <div class="ic"><i data-icon="inbox"></i></div>
     <h3>Buyurtma topilmadi</h3>
     <p>Bunday raqamli buyurtma yo'q yoki sizga tegishli emas.</p>
     <a class="btn btn-acc" href="orders.html">Buyurtmalarim</a>
@@ -82,11 +82,11 @@ function skeleton() {
 function errorState() {
   wrap.innerHTML = `
     <div class="st-error">
-      <div class="ic">!</div>
+      <div class="ic"><i data-icon="alert"></i></div>
       <h3>Buyurtmani yuklab bo'lmadi</h3>
       <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
       <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
-      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+      <button class="btn btn-outline" type="button" onclick="boot()"><i class="ic" data-icon="refresh"></i> Qayta urinish</button>
     </div>`;
 }
 
@@ -128,7 +128,7 @@ function renderOrder(o) {
 
     ${o.state === 'cancelled' ? `
       <div class="banner warn" style="margin-bottom: 18px">
-        <div class="ic">!</div>
+        <div class="ic"><i data-icon="alert"></i></div>
         <div class="grow">Buyurtma bekor qilindi${o.cancelledAt ? ` · ${o.cancelledAt}` : ''}.${o.cancelReason ? ` Sabab: <b>${o.cancelReason}</b>` : ''}</div>
       </div>
     ` : ''}
@@ -183,13 +183,13 @@ function renderOrder(o) {
         <section id="t-cutting" data-panel-group="od" hidden>
           ${cuttingInvalidated ? `
             <div class="banner warn" style="margin-bottom:14px">
-              <div class="ic">!</div>
+              <div class="ic"><i data-icon="alert"></i></div>
               <div class="grow">Bu buyurtmaga yangiroq chizma natijasi biriktirilgan. Quyidagi tugma orqali joriy natijani ko'ring.</div>
             </div>` : ''}
           <div class="card">
             <div class="card-h">
               <h2>Chizma</h2>
-              <a class="more" href="cutting.html?id=${o.cuttingId}">To'liq ko'rish →</a>
+              <a class="more" href="cutting.html?id=${o.cuttingId}">To'liq ko'rish <i class="ic" data-icon="arrow-right"></i></a>
             </div>
             <div class="card-b" style="padding-top: 0">
               <p class="muted" style="font-size:13px;margin:0 0 14px">Chizma · ${o.cuttingId}${banded ? ' · krom yopishtirish bor' : ''}</p>
@@ -214,7 +214,7 @@ function renderOrder(o) {
           <div class="card">
             <div class="card-b">
               <div class="st-empty" style="border:0;padding:32px 16px">
-                <div class="ic">🔒</div>
+                <div class="ic"><i data-icon="lock"></i></div>
                 <h3>To'lov ma'lumotlari hali yopiq</h3>
                 <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
               </div>

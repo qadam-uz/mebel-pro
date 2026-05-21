@@ -63,7 +63,7 @@ Two options:
 **A. All in Docker (hot reload):**
 
 ```bash
-cd deploy && cp .env.example .env && docker compose up --build
+cd deploy && cp .env.dev.example .env && docker compose up --build
 # web → http://localhost:5173 · API → http://localhost:8000 · docs → http://localhost:8000/docs · Postgres → :5432 · MinIO → :9000 (console :9001)
 ```
 
@@ -87,13 +87,43 @@ CI (`.github/workflows/ci.yml`) mirrors these gates and auto-deploys to the VPS 
 
 ## Development workflow
 
-Feature work follows: **brainstorm → write docs (on a feature branch) → human review of docs → break into a plan → execute → review/fix → verify → human verify.** Supporting skills: **software-architecture** (system/tech decisions, recorded inline in the doc that owns the area — no separate ADR register), **ui-ux-mastery** (screens, flows, UX specs), **frontend-design** (frontend implementation polish), **docs-management** (anything under `docs/`), **testing-practices** (where a given test belongs). Reach for them as the workflow indicates.
+Feature work follows: **brainstorm → write docs (on a feature branch) → human review of docs → break into a plan → execute → review/fix → verify → human verify.**
 Use subagents with session fork mode for long running jobs to keep main conversation clean and focused.
+
+### Skills are NON-NEGOTIABLE
+
+**Skills are not optional suggestions. Before you act on any task that matches a
+trigger below, you MUST invoke the matching skill via the Skill tool — FIRST,
+before writing, editing, reviewing, or planning anything in that area. This is a
+hard, blocking requirement. Do not rely on memory, do not improvise the skill's
+guidance from your own knowledge, and never silently skip a skill. If a task
+touches more than one area, load every matching skill. When in doubt, load it.**
+
+| If the task touches…                                                                                                                                                         | You MUST first invoke     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Anything under `docs/` — create, edit, move, organize, review docs; ask where a doc belongs; suspect stale/duplicated/orphaned docs                                          | **docs-management**       |
+| System/tech decisions, stack/topology, service boundaries, costly-to-reverse architecture choices (recorded inline in the doc that owns the area — no separate ADR register) | **software-architecture** |
+| Screens, flows, navigation, UX specs, component design, "this feels off" feedback                                                                                            | **ui-ux-mastery**         |
+| Frontend implementation polish                                                                                                                                               | **frontend-design**       |
+| Test strategy — where a test belongs, unit vs. integration vs. E2E                                                                                                           | **testing-practices**     |
 
 ## Conventions
 
 - Work happens on feature branches off `main`; commit only when asked.
 - API surface is owned by the backend (`/api/v1`); the web client talks to it through `web/src/api/client.ts`. In every environment the API is same-origin under `/api` (Vite proxy in dev, Caddy edge in prod) — don't hardcode `localhost:8000` in app code.
-- Keep env contracts in sync: `backend/.env.example`, `web/.env.example`, `deploy/.env.example`. Real `.env` files are gitignored.
 - Pin versions (Docker image tags, `packageManager`, `requires-python`, lockfiles are committed). Don't introduce `latest`.
 - Add new dependencies via the project's tool (`uv add`, `pnpm add`) so the lockfile updates.
+
+### Convention over Configuration
+
+Prefer sensible behavior baked in over knobs the user must set. **Every config has a default**, and the default's _direction_ is deliberate:
+
+- **Non-security config → default leans to dev.** Convenience for the common local case (e.g. `ENV=dev`, `DEBUG=true`, verbose logs, a dev OTP code present). Running with zero configuration should give a working dev setup.
+- **Security config → default leans to prod (fail safe).** The baked-in default is the _locked-down_ one (e.g. an empty `OTP_DEV_CODES`, auth required, no secret bypass). A misconfiguration must err toward refusing access, never toward opening it. Secrets have **no real default** — they're `{{change-me}}` placeholders that must be set.
+
+**Env files come in two committed templates per subproject** — kept in sync across `backend/`, `web/`, `deploy/`:
+
+- **`.env.dev.example`** — ready-to-use dev defaults; copy to `.env` and run, no edits needed.
+- **`.env.prod.example`** — same shape; every secret/security value is a `{{change-me}}` placeholder, non-security values carry prod-sane settings.
+
+Real `.env` files are gitignored; only the two `*.example` templates are committed. A new setting is added to `Settings` (`backend/app/core/config.py`) with a default that follows the direction rule above, then surfaced in both templates.

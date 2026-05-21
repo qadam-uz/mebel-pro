@@ -17,8 +17,8 @@ Thumbs.db
 # Environment / secrets — every `.env*` is gitignored except the two templates.
 .env
 .env.*
-!.env.example
-!.env.production
+!.env.dev.example
+!.env.prod.example
 *.pem
 *.key
 

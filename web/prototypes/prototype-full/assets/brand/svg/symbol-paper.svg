@@ -2,8 +2,8 @@
   <title>Mebel Pro</title>
   <defs>
     <linearGradient id="mp-rust" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#A6471F"/>
-      <stop offset="1" stop-color="#8C3814"/>
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="1" stop-color="#0B5A54"/>
     </linearGradient>
   </defs>
   <g fill="url(#mp-rust)">

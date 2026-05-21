@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 30px; }
   .kpi { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; text-decoration: none; transition: border-color .12s, transform .12s; }
@@ -37,12 +37,12 @@
   .step { display: flex; align-items: center; gap: 0; margin: 16px 0 14px; }
   .step .node { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; }
   .step .dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line); background: var(--elev); box-sizing: border-box; }
-  .step .node.done .dot { background: var(--ink-12); border-color: var(--ink-12); }
-  .step .node.cur .dot { border-color: var(--ink-12); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink-12) 14%, transparent); }
+  .step .node.done .dot { background: var(--accent); border-color: var(--accent); }
+  .step .node.cur .dot { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-ring); }
   .step .node .cap { font: 500 10.5px var(--f-ui); color: var(--ink-6); white-space: nowrap; }
-  .step .node.done .cap, .step .node.cur .cap { color: var(--ink-12); font-weight: 600; }
+  .step .node.done .cap, .step .node.cur .cap { color: var(--ink-10); font-weight: 600; }
   .step .bar { flex: 1 1 auto; height: 2px; background: var(--line); margin: 0 6px; margin-bottom: 22px; }
-  .step .bar.done { background: var(--ink-12); }
+  .step .bar.done { background: var(--accent); }
 
   .ao .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
   .ao .total { font: 600 14.5px var(--f-mono); color: var(--ink-12); }
@@ -57,10 +57,10 @@
   .open-aff svg { width: 14px; height: 14px; transition: transform .12s; }
   .dr:hover .open-aff svg { transform: translateX(2px); }
 
-  .new-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--ink-12); color: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .new-cta { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: linear-gradient(135deg, var(--accent), var(--accent-h)); color: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
   .new-cta .t { font: 600 17px var(--f-display); }
   .new-cta .s { font: 400 13px var(--f-ui); opacity: .8; margin-top: 3px; }
-  .new-cta .btn { background: #fff; color: var(--ink-12); border: 0; font-weight: 600; }
+  .new-cta .btn { background: #fff; color: var(--accent-h); border: 0; font-weight: 600; }
 
   @media (max-width: 720px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
@@ -83,18 +83,18 @@
       <div class="t">Yangi kesim chizmasi</div>
       <div class="s">Qism o'lchamlarini kiriting — tizim listlarga optimal joylashtiradi va ustaxona narxini hisoblaydi.</div>
     </div>
-    <a class="btn" href="cutting.html?id=new">+ Yangi chizma</a>
+    <a class="btn" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
   </div>
 
   <div class="sec-hd">
     <h2>Faol buyurtmalar</h2>
-    <a href="orders.html">Barcha buyurtmalar →</a>
+    <a href="orders.html">Barcha buyurtmalar <i class="ic" data-icon="arrow-right"></i></a>
   </div>
   <div id="active"></div>
 
   <div class="sec-hd">
     <h2>So'nggi chizmalar</h2>
-    <a href="cutting-drafts.html">Barcha chizmalar →</a>
+    <a href="cutting-drafts.html">Barcha chizmalar <i class="ic" data-icon="arrow-right"></i></a>
   </div>
   <div id="drafts"></div>
 </main>
@@ -184,18 +184,18 @@ function skeleton() {
 function errorState(targetId) {
   document.getElementById(targetId).innerHTML = `
     <div class="st-error">
-      <div class="ic">!</div>
+      <div class="ic"><i data-icon="alert"></i></div>
       <h3>Ma'lumotni yuklab bo'lmadi</h3>
       <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
       <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
-      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+      <button class="btn btn-outline" type="button" onclick="boot()"><i class="ic" data-icon="refresh"></i> Qayta urinish</button>
     </div>`;
 }
 
 function renderActive() {
   const aw = document.getElementById('active');
   if (active.length === 0) {
-    aw.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Faol buyurtma yo'q</h3><p>Hali buyurtma bermagansiz — chizmadan boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+    aw.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Faol buyurtma yo'q</h3><p>Hali buyurtma bermagansiz — chizmadan boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a></div>`;
     return;
   }
   aw.innerHTML = active.map(o => {
@@ -222,7 +222,7 @@ function renderActive() {
 function renderDrafts() {
   const dw = document.getElementById('drafts');
   if (drafts.length === 0) {
-    dw.innerHTML = `<div class="st-empty"><div class="ic">∅</div><h3>Saqlangan chizma yo'q</h3><p>Saqlangan chizma yo'q — yangisini boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a></div>`;
+    dw.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Saqlangan chizma yo'q</h3><p>Saqlangan chizma yo'q — yangisini boshlang.</p><a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a></div>`;
     return;
   }
   dw.innerHTML = drafts.slice(0, 3).map(c => {

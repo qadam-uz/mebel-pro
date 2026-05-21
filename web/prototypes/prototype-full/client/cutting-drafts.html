@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .drafts-hd { display: flex; align-items: baseline; justify-content: space-between; padding: 0 0 12px; border-bottom: 1px solid var(--line); margin: 12px 0 18px; gap: 12px; flex-wrap: wrap; }
   .drafts-hd h2 { font: 600 18px var(--f-display); margin: 0; color: var(--ink-12); }
@@ -49,7 +49,7 @@
       <p class="sub">Saqlangan chizmani oching yoki yangi chizma boshlang. Chizmalar muddatsiz saqlanadi.</p>
     </div>
     <div class="tools">
-      <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
+      <a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
     </div>
   </div>
 
@@ -81,11 +81,11 @@ function errorState() {
   document.getElementById('drafts-ct').textContent = '';
   document.getElementById('drafts').innerHTML = `
     <div class="st-error">
-      <div class="ic">!</div>
+      <div class="ic"><i data-icon="alert"></i></div>
       <h3>Chizmalarni yuklab bo'lmadi</h3>
       <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
       <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
-      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+      <button class="btn btn-outline" type="button" onclick="boot()"><i class="ic" data-icon="refresh"></i> Qayta urinish</button>
     </div>`;
 }
 
@@ -94,10 +94,10 @@ function renderDrafts() {
   const wrap = document.getElementById('drafts');
   if (drafts.length === 0) {
     wrap.innerHTML = `<div class="st-empty">
-      <div class="ic">∅</div>
+      <div class="ic"><i data-icon="inbox"></i></div>
       <h3>Saqlangan chizma yo'q</h3>
       <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
-      <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
+      <a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
     </div>`;
     return;
   }

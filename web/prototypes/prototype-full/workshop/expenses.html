@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -23,8 +23,8 @@
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="toast('CSV yuklanmoqda')">CSV</button>
-        <button class="btn btn-outline" type="button" onclick="openModal('m-income')">+ Tushum</button>
-        <button class="btn btn-acc" type="button" onclick="openModal('m-expense')">+ Xarajat</button>
+        <button class="btn btn-outline" type="button" onclick="openModal('m-income')"><i class="ic" data-icon="plus"></i> Tushum</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-expense')"><i class="ic" data-icon="plus"></i> Xarajat</button>
       </div>
     </div>
 
@@ -83,7 +83,7 @@
 <div id="scrim" class="scrim"></div>
 
 <div class="modal" id="m-expense">
-  <div class="modal-h"><h3>Xarajat yozish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Xarajat yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
       <div class="field"><label>Kategoriya</label><select>
@@ -107,7 +107,7 @@
 </div>
 
 <div class="modal" id="m-income">
-  <div class="modal-h"><h3>Tushum yozish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Tushum yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Turi</label>
       <select id="inc-type" onchange="document.getElementById('inc-order-wrap').style.display = this.value === 'order_payment' ? 'block' : 'none'">

@@ -14,7 +14,7 @@
   <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
   <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-  <meta name="theme-color" content="#FAF7F2" />
+  <meta name="theme-color" content="#F4F6F8" />
   <style>
     .prod-strip {
       display: grid;
@@ -169,7 +169,7 @@
           <div class="date">Juma, <b>15-may 2026</b> · 09:42 (UTC+5)</div>
         </div>
         <div class="tools">
-          <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Yangilandi')">↻ Yangilash</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="toast('Yangilandi')"><i class="ic" data-icon="refresh"></i> Yangilash</button>
           <button class="btn btn-outline btn-sm" type="button" onclick="toast('Hisobot CSV yuklanmoqda','ok')">CSV
             eksport</button>
         </div>
@@ -227,7 +227,7 @@
           <div class="card">
             <div class="card-h">
               <h2>Ishlab chiqarish · filiallar bo'yicha</h2>
-              <a class="more" href="branches.html">filiallar →</a>
+              <a class="more" href="branches.html">filiallar <i class="ic" data-icon="arrow-right"></i></a>
             </div>
             <div class="card-b">
               <div class="prod-strip">
@@ -261,7 +261,7 @@
                 <h2>So'nggi buyurtmalar</h2>
                 <div class="sub">Oxirgi 24 soat · 8 ta</div>
               </div>
-              <a class="more" href="orders.html">taxtani ochish →</a>
+              <a class="more" href="orders.html">taxtani ochish <i class="ic" data-icon="arrow-right"></i></a>
             </div>
             <div class="card-b" style="padding-top: 0">
               <table class="tbl">
@@ -284,7 +284,7 @@
 
           <div class="card">
             <div class="card-h">
-              <h2>Tugayotgan zaxira</h2><a class="more" href="inventory.html">ombor →</a>
+              <h2>Tugayotgan zaxira</h2><a class="more" href="inventory.html">ombor <i class="ic" data-icon="arrow-right"></i></a>
             </div>
             <div class="card-b" style="padding-top: 0">
               <div class="row-item">
@@ -354,7 +354,7 @@
   ${canOrd ? `<div class="kpi" onclick="location.href='orders.html'">
     <div class="lbl">Ishlab chiqarishda</div>
     <div class="v num">${inProd}</div>
-    <div class="d"><span class="muted">faol buyurtmalar</span><a href="orders.html" style="color:var(--accent);font-weight:600;text-decoration:none">taxta →</a></div>
+    <div class="d"><span class="muted">faol buyurtmalar</span><a href="orders.html" style="color:var(--accent);font-weight:600;text-decoration:none">taxta <i class="ic" data-icon="arrow-right"></i></a></div>
   </div>` : ''}
   ${canFin ? `<div class="kpi" onclick="location.href='finance.html'">
     <div class="lbl">Tushum</div>
@@ -374,7 +374,7 @@
   ${canInv ? `<div class="kpi warn" onclick="location.href='inventory.html'">
     <div class="lbl">Pastdagi zaxiralar</div>
     <div class="v num" style="color:var(--warn)">${lowStock}</div>
-    <div class="d"><a href="inventory.html" style="color:var(--accent);font-weight:600;text-decoration:none">ombor →</a></div>
+    <div class="d"><a href="inventory.html" style="color:var(--accent);font-weight:600;text-decoration:none">ombor <i class="ic" data-icon="arrow-right"></i></a></div>
   </div>` : ''}`;
 
     // Recent orders (branch-scoped)

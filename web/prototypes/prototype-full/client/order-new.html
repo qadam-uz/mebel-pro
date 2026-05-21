@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .layout { display: grid; grid-template-columns: 1fr; gap: 24px; margin-top: 22px; }
   @media (min-width: 1000px) { .layout { grid-template-columns: 1fr 320px; } }
@@ -29,7 +29,7 @@
   .br-list { display: grid; gap: 12px; }
   .br-card { background: var(--elev); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; cursor: pointer; transition: border-color .12s, transform .12s; }
   .br-card:hover { border-color: var(--ink-10); transform: translateY(-1px); }
-  .br-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(166,71,31,.12); }
+  .br-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(15,118,110,.12); }
   .br-card.disabled { opacity: .55; pointer-events: none; }
   .br-card .br-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
   .br-card .br-nm { font: 600 17px var(--f-display); color: var(--ink-12); }
@@ -48,7 +48,7 @@
 
   .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
   .seg-btn { padding: 9px 16px; background: transparent; border: 0; border-radius: 6px; color: var(--ink-8); font: 500 13px var(--f-ui); cursor: pointer; }
-  .seg-btn.on { background: var(--ink-12); color: #fff; }
+  .seg-btn.on { background: var(--accent); color: #fff; }
   .seg-btn[disabled] { opacity: .55; cursor: not-allowed; }
   .seg-btn .soon { display: inline-block; margin-left: 6px; padding: 2px 6px; font: 600 9.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-6); background: var(--line); border-radius: 999px; }
 
@@ -63,7 +63,7 @@
   .share-note .ic { font: 700 13px var(--f-mono); }
 
   .opt-row { display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
-  .opt-row.on { border-color: var(--accent); background: rgba(166,71,31,.06); }
+  .opt-row.on { border-color: var(--accent); background: rgba(15,118,110,.06); }
   .opt-row.disabled { opacity: .5; cursor: not-allowed; }
   .opt-row .rd { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink-8); flex-shrink: 0; position: relative; }
   .opt-row.on .rd { border-color: var(--accent); }
@@ -100,7 +100,7 @@
       <p class="sub" id="step-sub">Materiallaringiz mavjud faol ustaxonalardan birini tanlang. Narx shu ustaxonaga muvofiq belgilanadi.</p>
     </div>
     <div class="tools">
-      <a class="btn btn-ghost" id="back-link" href="#">← Chizmaga qaytish</a>
+      <a class="btn btn-ghost" id="back-link" href="#"><i class="ic" data-icon="arrow-left"></i> Chizmaga qaytish</a>
     </div>
   </div>
 
@@ -147,8 +147,8 @@
         </div>
 
         <div class="checkout-actions">
-          <button class="btn btn-outline" type="button" onclick="gotoBranch()">← Ustaxonani o'zgartirish</button>
-          <button class="btn btn-acc" type="button" onclick="placeOrder()" style="font-size: 14.5px; padding: 12px 24px">Buyurtma berish ✓</button>
+          <button class="btn btn-outline" type="button" onclick="gotoBranch()"><i class="ic" data-icon="arrow-left"></i> Ustaxonani o'zgartirish</button>
+          <button class="btn btn-acc" type="button" onclick="placeOrder()" style="font-size: 14.5px; padding: 12px 24px"><i class="ic" data-icon="check"></i> Buyurtma berish</button>
         </div>
       </section>
     </div>
@@ -171,7 +171,7 @@
 const params = new URLSearchParams(location.search);
 const cuttingId = params.get('cutting');
 
-// Telegram profile / seed client the contact fields prefill from.
+// Client profile / seed client the contact fields prefill from.
 const PROFILE = (() => {
   const c = SEED.lookup.clientById('c01');
   return { name: c ? c.name : '', phone: c ? c.phone : '' };
@@ -187,7 +187,7 @@ let entryOk = true;
 
 if (!cuttingId || !cutting) {
   entryOk = false;
-  document.querySelector('main').innerHTML = `<div class="st-empty" style="margin-top:40px"><div class="ic">∅</div><h3>Chizma topilmadi</h3><p>Buyurtma berish uchun avval chizmani tanlang.</p><a class="btn btn-acc" href="cutting-drafts.html">Saqlangan chizmalar</a></div>`;
+  document.querySelector('main').innerHTML = `<div class="st-empty" style="margin-top:40px"><div class="ic"><i data-icon="inbox"></i></div><h3>Chizma topilmadi</h3><p>Buyurtma berish uchun avval chizmani tanlang.</p><a class="btn btn-acc" href="cutting-drafts.html"><i class="ic" data-icon="save"></i> Saqlangan chizmalar</a></div>`;
 } else if (cutting.status !== 'draft') {
   // cutting_result_not_usable → its detail (read-only cutting view)
   entryOk = false;
@@ -228,10 +228,10 @@ function renderBranchStep() {
     });
     const missingNames = [...missing].map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim()).filter(Boolean).join(' · ');
     wrap.innerHTML = `<div class="empty">
-      <div class="ic">!</div>
+      <div class="ic"><i data-icon="alert"></i></div>
       <h3>Hech bir ustaxona bu kombinatsiyaga mos kelmaydi</h3>
       <p>Bu materiallarni hech qaysi faol ustaxona tashimaydi: <b>${missingNames}</b>. Chizmaga qaytib ushbu qismlarni <i>O&#39;zim olib kelaman</i>ga aylantiring yoki boshqa material tanlang.</p>
-      <a class="btn btn-outline" href="cutting.html?id=${cuttingId}">← Chizmaga qaytish</a>
+      <a class="btn btn-outline" href="cutting.html?id=${cuttingId}"><i class="ic" data-icon="arrow-left"></i> Chizmaga qaytish</a>
     </div>`;
     return;
   }

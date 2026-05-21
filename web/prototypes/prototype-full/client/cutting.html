@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
   .seg-btn { padding: 7px 14px; background: transparent; border: 0; border-radius: 6px; color: var(--ink-8); font: 500 13px var(--f-ui); cursor: pointer; }
@@ -36,7 +36,7 @@
   .part-row .mat-btn .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .part-row .mat-btn .placeholder { color: var(--ink-6); }
   .part-row .src-chip { padding: 3px 8px; font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-8); cursor: pointer; white-space: nowrap; }
-  .part-row .src-chip.own { background: rgba(166,71,31,.08); border-color: rgba(166,71,31,.3); color: var(--accent); }
+  .part-row .src-chip.own { background: rgba(15,118,110,.08); border-color: rgba(15,118,110,.3); color: var(--accent); }
   .part-row input.num { padding: 7px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 13px var(--f-mono); background: var(--elev); color: var(--ink-12); width: 100%; box-sizing: border-box; }
   .part-row input.num:focus { outline: 0; border-color: var(--ink-12); }
   .part-row input.num.bad { border-color: var(--danger); background: rgba(180,38,38,.05); }
@@ -121,7 +121,7 @@
   .algos-list table { width: 100%; border-collapse: collapse; }
   .algos-list th, .algos-list td { text-align: left; padding: 10px 16px; font: 500 12.5px var(--f-mono); border-top: 1px solid var(--line); color: var(--ink-10); }
   .algos-list th { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); background: var(--sunk); }
-  .algos-list tr.chosen td { background: rgba(166,71,31,.05); color: var(--ink-12); }
+  .algos-list tr.chosen td { background: rgba(15,118,110,.05); color: var(--ink-12); }
   .algos-list .use { padding: 4px 10px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 500 11px var(--f-ui); cursor: pointer; color: var(--ink-12); }
   .algos-list .use:hover { background: var(--elev); border-color: var(--ink-10); }
   .algos-list .badge { padding: 2px 8px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--accent); color: #fff; border-radius: 999px; }
@@ -130,7 +130,7 @@
   .viz { background: var(--elev); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
   .viz-tabs { display: flex; gap: 4px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
   .viz-tabs button { padding: 6px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; font: 500 12px var(--f-ui); color: var(--ink-8); cursor: pointer; white-space: nowrap; }
-  .viz-tabs button.on { background: var(--ink-12); color: #fff; border-color: var(--ink-12); }
+  .viz-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   .viz-tabs button .ct { margin-left: 6px; padding: 1px 6px; background: rgba(0,0,0,.1); border-radius: 999px; font-size: 10px; }
   .viz-tabs button.on .ct { background: rgba(255,255,255,.2); }
 
@@ -177,14 +177,14 @@
     </div>
     <div class="parts-grid" id="parts"></div>
     <div style="padding: 10px 16px 16px">
-      <button class="btn btn-outline" type="button" onclick="addPart()">+ Yangi qism</button>
+      <button class="btn btn-outline" type="button" onclick="addPart()"><i class="ic" data-icon="plus"></i> Yangi qism</button>
     </div>
   </section>
 
   <div id="br-strip"></div>
 
   <div class="run">
-    <button class="btn btn-acc" id="optimize-btn" type="button" onclick="runOptimizer()">▶ Optimallashtirish</button>
+    <button class="btn btn-acc" id="optimize-btn" type="button" onclick="runOptimizer()"><i class="ic" data-icon="play"></i> Optimallashtirish</button>
     <span class="sub" id="opt-hint">Qismlarni kiriting, so'ng optimal joylashuvni hisoblang.</span>
   </div>
 
@@ -199,7 +199,7 @@
     <div class="algos" id="algos">
       <div class="algos-hd">
         <span>Algoritm: <b id="cur-algo">—</b> · <span id="cur-algo-meta">—</span></span>
-        <button class="expand" type="button" onclick="document.getElementById('algos').classList.toggle('open')">Boshqa algoritmlar ▾</button>
+        <button class="expand" type="button" onclick="document.getElementById('algos').classList.toggle('open')">Boshqa algoritmlar ${window.icon('chevron-down',{size:13})}</button>
       </div>
       <div class="algos-list">
         <table>
@@ -220,7 +220,7 @@
     </div>
 
     <div class="result-actions">
-      <a class="btn btn-acc" id="place-order-btn" href="#">Shu chizma bilan buyurtma berish →</a>
+      <a class="btn btn-acc" id="place-order-btn" href="#">Shu chizma bilan buyurtma berish <i class="ic" data-icon="arrow-right"></i></a>
       <button class="btn btn-outline" type="button" onclick="toast('PDF tayyorlanmoqda…')">PDF yuklab olish</button>
       <button class="btn btn-ghost" type="button" onclick="document.getElementById('parts').scrollIntoView({behavior:'smooth'})">Qismlarni tahrirlash ↑</button>
     </div>
@@ -230,7 +230,7 @@
 <!-- Material picker modal -->
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-mat">
-  <div class="modal-h"><h3>Material tanlang</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Material tanlang</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <input class="mat-search" id="mat-search" placeholder="Material nomi yoki qalinlik..." oninput="renderMatList()" />
     <div class="mat-list" id="mat-list"></div>
@@ -239,7 +239,7 @@
 
 <!-- Edges popover modal -->
 <div class="modal" id="m-edges">
-  <div class="modal-h"><h3>Krom yopishtirish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Krom yopishtirish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b edges-pop">
     <div class="presets">
       <button type="button" onclick="presetEdges(null)">Hech qaysi</button>
@@ -456,7 +456,7 @@ function renderBranchStrip() {
   const strip = document.getElementById('br-strip');
   const shopParts = draft.partList.filter(p => p.source === 'shop' && p.matId);
   if (shopParts.length === 0) {
-    strip.innerHTML = `<div class="br-strip"><span class="ic">✓</span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan ustaxona qabul qiladi.</span></div>`;
+    strip.innerHTML = `<div class="br-strip"><span class="ic"><i data-icon="check"></i></span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan ustaxona qabul qiladi.</span></div>`;
     return;
   }
   const fulfilling = SEED.lookup.fulfillingBranches(draft.partList);
@@ -469,7 +469,7 @@ function renderBranchStrip() {
     const missingNames = [...missing].map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim()).filter(Boolean);
     strip.innerHTML = `
       <div class="br-strip warn">
-        <span class="ic">!</span>
+        <span class="ic"><i data-icon="alert"></i></span>
         <span>Hech bir faol ustaxona <b>${missingNames.join(' · ')}</b> materialini tashimaydi. Shu qism(lar)ni <em>O'zim olib kelaman</em>ga aylantiring yoki boshqa material tanlang.</span>
       </div>`;
     return;
@@ -675,7 +675,7 @@ function showRunFailure(code, msg) {
     box.style.cssText = 'margin-top:14px;display:flex;gap:12px;align-items:flex-start';
     document.querySelector('.run').after(box);
   }
-  box.innerHTML = `<span class="ic">!</span><span><b>Optimallashtirib bo'lmadi</b> · <code style="font:600 11.5px var(--f-mono)">${code}</code><br>${msg}</span>`;
+  box.innerHTML = `<span class="ic"><i data-icon="alert"></i></span><span><b>Optimallashtirib bo'lmadi</b> · <code style="font:600 11.5px var(--f-mono)">${code}</code><br>${msg}</span>`;
   box.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function clearRunFailure() { document.getElementById('run-fail')?.remove(); }
@@ -697,7 +697,7 @@ function runOptimizer() {
   const btn = document.getElementById('optimize-btn');
   btn.disabled = true; btn.textContent = '⏳ Hisoblanmoqda...';
   setTimeout(() => {
-    btn.textContent = '▶ Qayta ishga tushirish';
+    btn.innerHTML = window.icon('play',{size:13}) + ' Qayta ishga tushirish';
     // if the draft already has seed algorithms, use them; otherwise synthesize
     let algos = (draft.algorithms && draft.algorithms.length)
       ? draft.algorithms : synthAlgorithms(validParts);
@@ -910,7 +910,7 @@ function renderSheetSvg(algo) {
     cx += pl + 4; rowH = Math.max(rowH, pw);
   }
 
-  const palette = ['#A6471F','#7e6f53','#2d6045','#664a2d','#b87024','#4a5b3f','#856a48','#5a4438'];
+  const palette = ['#0F766E','#7e6f53','#2d6045','#664a2d','#b87024','#4a5b3f','#856a48','#5a4438'];
   const partColor = (idx) => palette[idx % palette.length];
 
   const svgW = 800, svgH = Math.round(svgW * H / W);
@@ -961,12 +961,12 @@ if (notFound) {
   // Unknown / missing id → proper not-found, never a blank editable draft.
   document.querySelector('main').innerHTML = `
     <div class="st-empty" style="margin-top:40px">
-      <div class="ic">∅</div>
+      <div class="ic"><i data-icon="inbox"></i></div>
       <h3>Chizma topilmadi</h3>
       <p>Bunday chizma yo'q yoki sizga tegishli emas.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
-        <a class="btn btn-outline" href="cutting-drafts.html">Saqlangan chizmalar</a>
+        <a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
+        <a class="btn btn-outline" href="cutting-drafts.html"><i class="ic" data-icon="save"></i> Saqlangan chizmalar</a>
       </div>
     </div>`;
 } else if (readOnly) {
@@ -984,10 +984,10 @@ if (notFound) {
   banner.className = 'banner';
   if (draft.status === 'invalidated') {
     banner.classList.add('warn');
-    banner.innerHTML = `<div class="ic">!</div><div class="grow">Bu chizmaga yangiroq chizma biriktirilgan — bu natija faqat tarix uchun saqlangan.${draft.orderId ? ` <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">Joriy natijani ko'rish (${draft.orderId})</a>` : ''}</div>`;
+    banner.innerHTML = `<div class="ic"><i data-icon="alert"></i></div><div class="grow">Bu chizmaga yangiroq chizma biriktirilgan — bu natija faqat tarix uchun saqlangan.${draft.orderId ? ` <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">Joriy natijani ko'rish (${draft.orderId})</a>` : ''}</div>`;
   } else {
     banner.classList.add('success');
-    banner.innerHTML = `<div class="ic">✓</div><div class="grow">Bu chizma buyurtmaga biriktirilgan${draft.orderId ? ` · <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">${draft.orderId}</a>` : ''}. Tahrirlash yopiq.</div>`;
+    banner.innerHTML = `<div class="ic"><i data-icon="check"></i></div><div class="grow">Bu chizma buyurtmaga biriktirilgan${draft.orderId ? ` · <a href="order-detail.html?id=${draft.orderId}" style="text-decoration:underline;font-weight:600">${draft.orderId}</a>` : ''}. Tahrirlash yopiq.</div>`;
   }
   document.querySelector('main .page-head').after(banner);
   lockEditing();

@@ -2,7 +2,7 @@
 title: Personas
 status: stable
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 30
 ---
 
@@ -39,9 +39,10 @@ workshop's income and expenses.
 ## Client
 
 The workshop's customer — a person or a small business that needs panels cut. Self-registers
-on demand through social sign-in, no password; global to the platform, picks a workshop and a
-branch per order. Often on a phone, often first-time, often comparing options across workshops
-— so the experience is mobile-first. Sees only their own side: catalog, cutting result, their
+on demand with a phone number verified over Telegram, no password; global to the platform, picks a workshop and a
+branch per order. Works from both a desktop browser and a phone; in v1 the priority is the desktop web
+experience, with a mobile-first pass to follow. Often first-time, often comparing options
+across workshops. Sees only their own side: catalog, cutting result, their
 orders, and what they owe (visible once an order is ready) — nothing about the workshop's
 internals.
 

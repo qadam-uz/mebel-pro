@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -53,7 +53,7 @@ function edgeLine(o) {
 }
 
 document.getElementById('queue').innerHTML = queue.length === 0
-  ? `<div class="empty"><div class="ic">∅</div><h3>Sizga tayinlangani yo'q</h3><p>Krom kutayotgan ishingiz yo'q.</p></div>`
+  ? `<div class="empty"><div class="ic"><i data-icon="inbox"></i></div><h3>Sizga tayinlangani yo'q</h3><p>Krom kutayotgan ishingiz yo'q.</p></div>`
   : queue.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     return `<div class="q-card">
@@ -61,7 +61,7 @@ document.getElementById('queue').innerHTML = queue.length === 0
         <div><div class="id">${o.id}</div><h4>${o.title}</h4><div class="meta">${cl?.name || ''} · <b>${edgeLine(o)}</b> · muddat ${o.dueAt || '—'}</div></div>
         <span class="assigned-tag">Sizga</span>
       </div>
-      <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Krom tugadi',msg:'${o.id} · krom yopishtirildi, buyurtma Tayyor holatiga o\\'tadi.'},()=>{toast('Krom tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})">✓ Krom tugadi</button><a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a></div>
+      <div class="act"><button class="btn btn-acc" type="button" onclick="confirmAction({title:'Krom tugadi',msg:'${o.id} · krom yopishtirildi, buyurtma Tayyor holatiga o\\'tadi.'},()=>{toast('Krom tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Krom tugadi</button><a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a></div>
     </div>`;
   }).join('');
 </script>

@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-05-14
+updated: 2026-05-22
 order: 50
 ---
 
@@ -21,7 +21,7 @@ bir-biriga overlap qilmaydi.
 | **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | full platform scope                                                            | superadmin app |
 | **Workshop user — owner** (`is_owner`) | login + password                      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
 | **Workshop user — staff**              | login + password                      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
-| **Client**                             | Telegram OAuth only; no password      | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
+| **Client**                             | phone + Telegram OTP; no password     | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
 
 ## The model
 
@@ -29,8 +29,9 @@ bir-biriga overlap qilmaydi.
   provisioning chogʻida platform operator tomonidan yaratiladi; platform user'lar backend CLI
   orqali seed qilinadi (ular hierarchy'ning tepasida, shuning uchun ularni in-app yaratish uchun
   yuqoriroq principal mavjud emas).
-- **Client'lar faqat Telegram OAuth bilan kiradi** — password yoʻq, fallback path yoʻq. Ular
-  birinchi handshake'da oʻzini oʻzi self-register qiladi; phone number talab qilinadi.
+- **Client'lar Telegram orqali yuborilgan one-time code bilan tasdiqlangan phone number bilan
+  kiradi** — password yoʻq, fallback path yoʻq. Phone — bu identity; ular yangi raqam birinchi
+  marta verify qilinganda oʻzini oʻzi self-register qiladi (faqat name).
 - **Session'lar — JWT emas, opaque DB-backed token'lar**, chunki system'ga _instant revocation_
   (block, "log out everywhere", password change) va _fresh authorization_ (yangi grant keyingi
   request'da apply boʻlishi kerak) zarur. User oʻz password'ini oʻzi reset qila olmaydi —

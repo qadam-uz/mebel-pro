@@ -11,12 +11,12 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
   <div class="page">
-    <button class="back" type="button" onclick="location.href='workshops.html'">← Ustaxonalar</button>
+    <button class="back" type="button" onclick="location.href='workshops.html'"><i class="ic" data-icon="arrow-left"></i> Ustaxonalar</button>
     <div id="wrap"></div>
   </div>
 </main>
@@ -56,7 +56,7 @@ if (state === 'loading') {
     <div class="page-head" style="margin-top: 8px">
       <div>
         <div style="display:flex;align-items:center;gap:14px">
-          <div style="width:54px;height:54px;border-radius:10px;background:linear-gradient(135deg,#A6471F,#8C3814);color:#fff;font:700 22px/1 var(--f-display);display:grid;place-items:center;flex:none">${w.mk}</div>
+          <div style="width:54px;height:54px;border-radius:10px;background:linear-gradient(135deg,#0F766E,#0B5A54);color:#fff;font:700 22px/1 var(--f-display);display:grid;place-items:center;flex:none">${w.mk}</div>
           <div>
             <h1>${w.name}</h1>
             <p class="sub">${w.branches} filial · ${w.orders30d} buyurtma (30 kun) · ${w.createdOn} dan</p>
@@ -71,7 +71,7 @@ if (state === 'loading') {
       </div>
     </div>
 
-    ${isBlocked ? `<div class="banner danger"><div class="ic">!</div><div class="grow"><b>Ustaxona bloklangan → buyurtmalar muzlatilgan.</b> Xodimlar kira olmaydi, hech qanday avtomatik o'tish bo'lmaydi. Blokdan chiqarilganda sessiyalar tiklanmaydi.</div></div>` : ''}
+    ${isBlocked ? `<div class="banner danger"><div class="ic"><i data-icon="alert"></i></div><div class="grow"><b>Ustaxona bloklangan → buyurtmalar muzlatilgan.</b> Xodimlar kira olmaydi, hech qanday avtomatik o'tish bo'lmaydi. Blokdan chiqarilganda sessiyalar tiklanmaydi.</div></div>` : ''}
 
     <div class="tabs" data-tabs="ws">
       <button class="tab on" data-target="t-profile" onclick="switchTab('ws','t-profile')">Profil</button>

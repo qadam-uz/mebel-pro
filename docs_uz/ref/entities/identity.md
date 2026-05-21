@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 10
 ---
 
@@ -89,25 +89,50 @@ yaratadi/olib tashlaydi; `inactive` branch'dagi grant inert.
 
 ## Client
 
-Customer. Workshop/platform user'lardan **alohida entity**. Faqat Telegram-OAuth identity;
-birinchi OAuth handshake'da oʻzini self-register qiladi; platform'ga global (workshop/branch
-binding yoʻq); har bir order uchun branch tanlaydi. Client app'dan foydalanadi.
+Customer. Workshop/platform user'lardan **alohida entity**. **Telegram orqali yuborilgan
+one-time code bilan tasdiqlangan phone number** orqali identify qilinadi; yangi raqam birinchi
+marta verify qilinganda oʻzini self-register qiladi (faqat name); platform'ga global
+(workshop/branch binding yoʻq); har bir order uchun branch tanlaydi. Client app'dan foydalanadi.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `telegram_id` | bigint | unique; required |
-| `phone` | text | `+998XXXXXXXXX`; required (Telegram must share it) |
-| `first_name` / `last_name` / `photo_url` | text / text? / text? | from Telegram (last/photo optional) |
+| `phone` | text | `+998XXXXXXXXX`; **unique, required** — verified identity va natural key |
+| `name` | text | required; client'ning oʻz display name'i, registration'da yoziladi (1–80 belgi); workshop unga shunday murojaat qiladi |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
-Telegram profile field'lari (`first_name`, `last_name`, `photo_url`) **har bir login'da
-OAuth payload'idan refresh qilinadi** — Telegram source of truth. Telegram **username
-saqlanmaydi**: u user-mutable va biz uning oʻzgarishlarini track qilmaymiz; customer'ga
-`first_name` bilan murojaat qiling. Password yoʻq, forced-change / lockout yoʻq (auth
-integrity bu HMAC check). Client verified Telegram identity va shared phone number'siz
-mavjud boʻla olmaydi (aks holda `missing_phone_number`).
+Phone — yagona verified fakt; `name` esa client tomonidan kiritiladi va oʻzgartirilishi mumkin
+(external source of truth yoʻq — Telegram'dan hech narsa sync qilinmaydi, u faqat login code'ning
+delivery channel'i). Password yoʻq, forced-change / lockout yoʻq (auth integrity bu OTP check).
+Client [code challenge](#phone-verification-challenge) orqali verify qilingan phone'siz mavjud
+boʻla olmaydi; row faqat yangi raqamning birinchi muvaffaqiyatli verification'ida yaratiladi.
+
+Invariant'lar: `phone` unique (DB) va `+998XXXXXXXXX` shaklida; block qilish uning session'larini
+oʻchiradi; faqat muvaffaqiyatli birinchi verification orqali yaratiladi (hech qachon operator yoki
+boshqa principal tomonidan emas).
+
+## Phone verification challenge
+
+In-flight client sign-in uchun transient state: Telegram orqali phone'ga yuborilgan bitta code,
+kiritilishini kutmoqda. `Client` row'iga bogʻliq emas — u login/registration'dan oldin keladi va
+ham qaytuvchi, ham butunlay yangi raqamlar uchun mavjud.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `phone` | text | `+998XXXXXXXXX`; code yuborilgan raqam |
+| `code_hash` | text | 6 xonali code'ning SHA-256'i; plaintext hech qachon saqlanmaydi |
+| `expires_at` | timestamp | issue'da now + 5 min |
+| `attempt_count` | int | notoʻgʻri-code counter; 5 da burn qilinadi |
+| `consumed_at` | timestamp? | toʻgʻri code qabul qilinganda set qilinadi; single-use |
+| `created_at` | timestamp | |
+
+Invariant'lar: code 6 xonali, at rest hash qilinadi, single-use, 5-minutlik TTL; challenge
+burn qilinishidan oldin ≤ 5 verify attempt; per-phone resend cooldown (60 s) va per-phone /
+per-IP send rate limit; row qisqa umrli va periodic session/expiry job tomonidan prune qilinadi.
+Delivery **Telegram-only** — Telegram'da reachable boʻlmagan raqam kira olmaydi (v1'da SMS
+fallback yoʻq).
 
 ## Session
 

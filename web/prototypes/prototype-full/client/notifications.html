@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .note-card { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; padding: 14px 18px; background: var(--elev); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; align-items: center; cursor: pointer; transition: border-color .12s; text-align: left; width: 100%; box-sizing: border-box; }
   .note-card:hover { border-color: var(--ink-12); }
@@ -35,7 +35,7 @@
 <script>renderClientHeader('');</script>
 
 <main class="container" style="padding: 24px 0 64px">
-  <button class="back" type="button" onclick="history.back()">← Orqaga</button>
+  <button class="back" type="button" onclick="history.back()"><i class="ic" data-icon="arrow-left"></i> Orqaga</button>
 
   <div class="page-head">
     <div>
@@ -85,11 +85,11 @@ function skeleton() {
 function errorState() {
   document.getElementById('notes').innerHTML = `
     <div class="st-error">
-      <div class="ic">!</div>
+      <div class="ic"><i data-icon="alert"></i></div>
       <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
       <p>Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring.</p>
       <p class="trace">trace_id: tr-${Math.random().toString(16).slice(2,8)}</p>
-      <button class="btn btn-outline" type="button" onclick="boot()">Qayta urinish</button>
+      <button class="btn btn-outline" type="button" onclick="boot()"><i class="ic" data-icon="refresh"></i> Qayta urinish</button>
     </div>`;
 }
 
@@ -105,7 +105,7 @@ function render() {
       : filter === 'read'
       ? "O'qilgan bildirishnoma yo'q."
       : "Hozircha bildirishnoma yo'q — buyurtma holati o'zgarsa shu yerda ko'rinadi.";
-    wrap.innerHTML = `<div class="st-empty"><div class="ic">✓</div><h3>Bildirishnoma yo'q</h3><p>${msg}</p></div>`;
+    wrap.innerHTML = `<div class="st-empty"><div class="ic"><i data-icon="check"></i></div><h3>Bildirishnoma yo'q</h3><p>${msg}</p></div>`;
     return;
   }
   wrap.innerHTML = list.map(n => `

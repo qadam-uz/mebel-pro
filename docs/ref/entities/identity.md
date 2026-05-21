@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 10
 ---
 
@@ -86,25 +86,49 @@ an `inactive` branch is inert.
 
 ## Client
 
-The customer. A **separate entity** from workshop/platform users. Telegram-OAuth identity only;
-self-registers on first OAuth handshake; global to the platform (no workshop/branch binding);
-picks a branch per order. Uses the client app.
+The customer. A **separate entity** from workshop/platform users. Identified by a **phone
+number verified by a one-time code sent over Telegram**; self-registers (name only) the first
+time a new number is verified; global to the platform (no workshop/branch binding); picks a
+branch per order. Uses the client app.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `telegram_id` | bigint | unique; required |
-| `phone` | text | `+998XXXXXXXXX`; required (Telegram must share it) |
-| `first_name` / `last_name` / `photo_url` | text / text? / text? | from Telegram (last/photo optional) |
+| `phone` | text | `+998XXXXXXXXX`; **unique, required** — the verified identity and natural key |
+| `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
-Telegram profile fields (`first_name`, `last_name`, `photo_url`) are **refreshed from the
-OAuth payload on every login** — Telegram is the source of truth. The Telegram **username is
-not stored**: it is user-mutable and we don't track its changes; address the customer by
-`first_name`. No password, no forced-change / lockout (auth integrity is the HMAC check).
-A client cannot exist without a verified Telegram identity and a shared phone number
-(`missing_phone_number` otherwise).
+The phone is the only verified fact; `name` is self-entered and editable by the client (no
+external source of truth — nothing is synced from Telegram, which is only the delivery channel
+for the login code). No password, no forced-change / lockout (auth integrity is the OTP check).
+A client cannot exist without a phone that has been verified via the
+[code challenge](#phone-verification-challenge); the row is created only on the first
+successful verification of a new number.
+
+Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; blocking deletes its sessions;
+created only by a successful first verification (never by an operator or another principal).
+
+## Phone verification challenge
+
+Transient state for an in-flight client sign-in: one code sent to a phone over Telegram,
+awaiting entry. Not tied to a `Client` row — it precedes login/registration and exists for both
+returning and brand-new numbers.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `phone` | text | `+998XXXXXXXXX`; the number the code was sent to |
+| `code_hash` | text | SHA-256 of the 6-digit code; plaintext never stored |
+| `expires_at` | timestamp | now + 5 min at issue |
+| `attempt_count` | int | wrong-code counter; burned at 5 |
+| `consumed_at` | timestamp? | set when a correct code is accepted; single-use |
+| `created_at` | timestamp | |
+
+Invariants: code is 6 digits, hashed at rest, single-use, 5-minute TTL; ≤ 5 verify attempts
+before the challenge is burned; per-phone resend cooldown (60 s) and a per-phone / per-IP send
+rate limit; the row is short-lived and pruned by the periodic session/expiry job. Delivery is
+**Telegram-only** — a number not reachable on Telegram cannot sign in (no SMS fallback in v1).
 
 ## Session
 

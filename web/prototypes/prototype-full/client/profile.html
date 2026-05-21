@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <script src="../assets/app.js"></script>
@@ -20,12 +20,12 @@
 <script>renderClientHeader('');</script>
 
 <main class="container" style="padding: 24px 0 64px">
-  <button class="back" type="button" onclick="history.back()">← Orqaga</button>
+  <button class="back" type="button" onclick="history.back()"><i class="ic" data-icon="arrow-left"></i> Orqaga</button>
 
   <div class="page-head">
     <div>
       <h1>Profil</h1>
-      <p class="sub">Telegram ma'lumotlaringiz va faol sessiyalar.</p>
+      <p class="sub">Profilingiz va faol sessiyalar.</p>
     </div>
     <div class="tools">
       <button class="btn btn-outline" type="button" onclick="confirmAction({title:'Chiqib ketish',msg:'Mijoz kabinetidan chiqasiz.',okText:'Chiqish',danger:true},()=>{toast('Chiqildi');setTimeout(()=>location.href='login.html',500)})">Chiqib ketish</button>
@@ -35,10 +35,10 @@
   <div style="display: grid; gap: 18px; max-width: 720px">
 
     <div class="card">
-      <div class="card-h"><h2>Telegramdan sinxronlangan</h2></div>
+      <div class="card-h"><h2>Profil</h2></div>
       <div class="card-b">
-        <div class="row-item"><div><div class="nm">Ism</div><small style="color:var(--ink-6)">Telegramdagi ismdan</small></div><div class="meta" style="font-weight:500;color:var(--ink-12)">Akmal Norqo'ziyev</div></div>
-        <div class="row-item"><div><div class="nm">Telefon</div><small style="color:var(--ink-6)">Telegramdan ulashilgan</small></div><div class="meta">+998 90 100 30 60</div></div>
+        <div class="row-item"><div><div class="nm">Ism</div><small style="color:var(--ink-6)">Ustaxona buyurtmangiz bo'yicha sizga shunday murojaat qiladi</small></div><div class="meta" style="display:flex;align-items:center;gap:10px"><span style="font-weight:500;color:var(--ink-12)">Akmal Norqo'ziyev</span><button class="btn btn-outline btn-sm" type="button" onclick="toast('Ism o\'zgartirish — demo')">O'zgartirish</button></div></div>
+        <div class="row-item"><div><div class="nm">Telefon</div><small style="color:var(--ink-6)">Kirish uchun ishlatiladi · o'zgartirib bo'lmaydi</small></div><div class="meta">+998 90 100 30 60</div></div>
         <div class="row-item" style="border-bottom: 0"><div><div class="nm">Buyurtmalar soni</div></div><div class="meta">4 ta</div></div>
       </div>
     </div>
@@ -65,7 +65,7 @@
         </div>
         <div class="row-item" style="border-bottom: 0">
           <div>
-            <div class="nm">Android · Telegram in-app</div>
+            <div class="nm">Android · Chrome</div>
             <small style="color:var(--ink-6)">Toshkent · 10-may, 11:18</small>
           </div>
           <div class="meta"><button class="btn btn-outline btn-sm" type="button" onclick="this.closest('.row-item').remove();toast('Sessiya yopildi')">Yopish</button></div>

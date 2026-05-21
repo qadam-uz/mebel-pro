@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 <style>
   .br-card { display: grid; grid-template-columns: 50px 1fr auto; gap: 14px; align-items: center; padding: 18px 22px; background: var(--elev); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; }
   .br-card.closed { opacity: .65; }
@@ -40,7 +40,7 @@
       <p class="sub">Faol ustaxonalar va ularda mavjud materiallar.</p>
     </div>
     <div class="tools">
-      <a class="btn btn-acc" href="cutting.html?id=new">+ Yangi chizma</a>
+      <a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
     </div>
   </div>
 
@@ -78,7 +78,7 @@ function render() {
           <div class="nm">${b.city} · ${b.name}</div>
           <div class="meta">${b.addr} · ${b.hours} · ${b.phone}</div>
           ${matsLine}
-          ${closed ? `<div class="meta" style="color:var(--warn);margin-top:6px">⚠ ${b.closedReason || 'Vaqtincha yopiq'}</div>` : ''}
+          ${closed ? `<div class="meta" style="color:var(--warn);margin-top:6px">${window.icon('alert',{size:12})} ${b.closedReason || 'Vaqtincha yopiq'}</div>` : ''}
         </div>
         <div>
           ${closed ? `<span class="badge" style="background:var(--warn-tint);color:var(--warn)">Vaqtincha yopiq</span>` : `<span class="badge" style="background:rgba(45,96,69,.1);color:#2d6045">Faol</span>`}

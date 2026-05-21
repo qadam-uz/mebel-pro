@@ -7,7 +7,8 @@ coverage/
 .gitignore
 .env
 .env.*
-!.env.example
+!.env.dev.example
+!.env.prod.example
 .eslintcache
 *.log
 CLAUDE.md

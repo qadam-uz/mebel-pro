@@ -9,7 +9,7 @@
 #   docker compose down                                # add -v to drop volumes
 #
 # Build contexts are `../backend` and `../web`; env comes from `deploy/.env`
-# (copy `.env.example`). For production use `compose.prod.yaml` — these files
+# (copy `.env.dev.example`). For production use `compose.prod.yaml` — these files
 # are deliberately NOT overlays, they are two separate stacks; keep service
 # names and env-var names consistent so the contract for `backend` and `web`
 # stays the same in both.

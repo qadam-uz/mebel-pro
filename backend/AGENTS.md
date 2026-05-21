@@ -76,7 +76,8 @@ backend/
     conftest.py           # db_session (in-memory sqlite, schema via metadata.create_all) + httpx client w/ get_session override
     test_*.py
   Dockerfile              # multi-stage, uv in builder, non-root runtime; CMD runs `alembic upgrade head` then uvicorn
-  .env.example            # local non-Docker env (Compose uses deploy/.env)
+  .env.dev.example        # local non-Docker env, dev defaults (Compose uses deploy/.env)
+  .env.prod.example       # same shape, secrets as {{change-me}}
 ```
 
 ## Conventions
@@ -88,7 +89,7 @@ backend/
 - **Schemas vs models**: ORM objects never cross the API boundary — convert to a `schemas/` Pydantic model (`response_model=...`). Response schemas extend `APIModel` (`from_attributes=True`).
 - **Routes thin, services fat**: non-trivial logic lives in `app/services/`; routes parse input, call a service, shape the response.
 - **Module boundaries**: the codebase is layer-first (`models/` `schemas/` `services/` `api/routes/`), but the domain is split into logical _modules_ — the module map in [`docs/architecture.md`](../docs/architecture.md). A feature's files (model/schema/service/route) belong to one module; code in one module calls another module's **service** functions, never reads another module's tables or imports its ORM models.
-- **Config**: add new settings to `Settings` in `app/core/config.py` with a sensible dev default; surface them in `.env.example` and `deploy/.env.example`. Read config via the `settings` singleton.
+- **Config**: add new settings to `Settings` in `app/core/config.py` with a default following the repo's Convention-over-Configuration rule (non-security → leans dev, security → leans prod/locked; secrets have no default). Surface each in all four templates — `.env.dev.example` + `.env.prod.example` here and in `deploy/`. Read config via the `settings` singleton.
 - **Errors**: raise `fastapi.HTTPException` (or a subclass) for client-facing failures; let unexpected errors propagate (they 500 + log).
 - **API prefix**: everything under `settings.API_V1_PREFIX` (`/api/v1`). `GET /api/v1/healthz` (liveness) and `/readyz` (DB-check) already exist.
 - **Built-in pages**: `/docs` serves the project's `docs/` Markdown tree rendered live (`app/docs_site.py`; directory = `settings.DOCS_DIR`, default `<repo>/docs`; no build step — edit a file and refresh `:8000/docs`). The OpenAPI UIs moved to **`/api-docs`** (Swagger) and `/api-redoc` (ReDoc); the schema stays at `/api/v1/openapi.json`. **All four are behind HTTP Basic** with the same credentials — `settings.DOCS_AUTH_USERNAME` / `DOCS_AUTH_PASSWORD` (dev default `docs`/`docs`; change in any non-local deploy). Health endpoints (`/api/v1/healthz`, `/readyz`) stay open.

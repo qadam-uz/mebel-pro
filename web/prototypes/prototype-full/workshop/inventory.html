@@ -11,7 +11,7 @@
 <link rel="icon" href="../assets/brand/icon/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="../assets/brand/exports/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="../assets/brand/exports/apple-touch-icon-180.png" />
-<meta name="theme-color" content="#FAF7F2" />
+<meta name="theme-color" content="#F4F6F8" />
 </head>
 <body>
 <main class="page-content">
@@ -23,7 +23,7 @@
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-adjust')">± Tuzatish</button>
-        <button class="btn btn-acc" type="button" onclick="openModal('m-stockin')">+ Kirim yozish</button>
+        <button class="btn btn-acc" type="button" onclick="openModal('m-stockin')"><i class="ic" data-icon="plus"></i> Kirim yozish</button>
       </div>
     </div>
 
@@ -64,7 +64,7 @@
     <section id="t-sup" data-panel-group="inv" hidden>
       <div class="page-head" style="margin:0 0 14px">
         <div></div>
-        <div class="tools"><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-supplier')">+ Yetkazib beruvchi</button></div>
+        <div class="tools"><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-supplier')"><i class="ic" data-icon="plus"></i> Yetkazib beruvchi</button></div>
       </div>
       <div class="card">
         <table class="tbl">
@@ -78,7 +78,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-stockin">
-  <div class="modal-h"><h3>Kirim yozish (stock_in)</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Kirim yozish (stock_in)</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Filial</label><select id="si-branch" onchange="fillMatSelect('mat-select', this.value)"></select></div>
     <div class="field"><label>Material</label><select id="mat-select"></select></div>
@@ -87,7 +87,7 @@
       <label>Yetkazib beruvchi</label>
       <div style="display:flex;gap:8px">
         <select id="sup-select" style="flex:1"></select>
-        <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('new-sup-wrap').hidden=!document.getElementById('new-sup-wrap').hidden">+ Yangi</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('new-sup-wrap').hidden=!document.getElementById('new-sup-wrap').hidden"><i class="ic" data-icon="plus"></i> Yangi</button>
       </div>
     </div>
     <div id="new-sup-wrap" hidden style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:4px">
@@ -103,9 +103,9 @@
 </div>
 
 <div class="modal" id="m-adjust">
-  <div class="modal-h"><h3>Stock tuzatish (adjust)</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Stock tuzatish (adjust)</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <div class="banner warn"><div class="ic">!</div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
+    <div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
     <div class="field"><label>Filial</label><select id="adj-branch" onchange="fillMatSelect('adj-mat', this.value)"></select></div>
     <div class="field"><label>Material</label><select id="adj-mat"></select></div>
     <div class="field"><label>Imzo (signed delta · "+10" yoki "−3")</label><input value="-3" /></div>
@@ -115,7 +115,7 @@
 </div>
 
 <div class="modal" id="m-supplier">
-  <div class="modal-h"><h3>Yetkazib beruvchi qo'shish</h3><button class="x" data-close-modal>✕</button></div>
+  <div class="modal-h"><h3>Yetkazib beruvchi qo'shish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Nomi</label><input placeholder="Egger Distribution UZ" /></div>
     <div class="field"><label>Telefon</label><input placeholder="+998 ..." /></div>
