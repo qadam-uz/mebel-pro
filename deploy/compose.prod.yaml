@@ -50,6 +50,10 @@ services:
       DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
+      # Client Telegram auth — required in prod (boot refused if the token is
+      # empty; an empty token would make client sign-in forgeable).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
     volumes:
       # Live docs site reads these on every request — no build step. The
       # repo is present on the host (the deploy pulls it). docs_uz/ is the

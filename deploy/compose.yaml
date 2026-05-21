@@ -101,6 +101,9 @@ services:
       DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
+      # Empty in dev → Telegram signature check is skipped (no bot needed).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
     # `fastapi dev` = uvicorn with autoreload.
     command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
     volumes:

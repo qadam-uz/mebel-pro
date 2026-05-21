@@ -40,6 +40,15 @@ Invariants: size and content-type bounds enforced per attach context; a mutating
 borrows the caller's DB transaction; other modules reference files only by `id`; download access
 is scope-checked the same way as the referencing entity.
 
+Upload is a single multipart `POST /files` (any authenticated principal): the bytes are validated
+(content-type against the attach context, size ≤ `MAX_UPLOAD_BYTES`, default 10 MiB), stored under
+a generated `storage_key`, and the row flips `pending → stored`. `GET /files/{id}` streams the blob.
+The v1 download scope rule is pragmatic: the uploader may always read their own file, a platform
+operator may read any file, and a workshop user may read any file attached to an entity; a precise
+per-workshop join is deferred to the calling module. The importable helpers `attach_file` /
+`detach_file` / `replace_file` (atomic detach-old + attach-new) let other modules wire a file to an
+entity inside their own transaction.
+
 ## Notification
 
 One in-app inbox item for one principal. Produced by the module where the event happened

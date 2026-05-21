@@ -38,7 +38,9 @@ export default defineConfig({
         },
         {
           command: 'pnpm --dir ../web dev',
-          url: BASE_URL,
+          // No root entry (three SPAs: client/workshop/admin.html), so probe a
+          // real entry for readiness rather than `/` (which 404s).
+          url: `${BASE_URL}/client.html`,
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },

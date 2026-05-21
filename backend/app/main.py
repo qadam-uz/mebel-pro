@@ -10,6 +10,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.errors import register_exception_handlers
+from app.core.logging import configure_logging
+from app.core.trace import TraceMiddleware
 from app.docs_site import require_docs_auth
 from app.docs_site import routers as docs_routers
 
@@ -21,8 +24,14 @@ OPENAPI_URL = f"{settings.API_V1_PREFIX}/openapi.json"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    # Startup hooks (warm caches, etc.) go here. Shutdown after `yield`.
-    yield
+    configure_logging()
+    from app.services.scheduler import scheduler
+
+    await scheduler.start()
+    try:
+        yield
+    finally:
+        await scheduler.stop()
 
 
 def create_app() -> FastAPI:
@@ -36,6 +45,9 @@ def create_app() -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+
+    app.add_middleware(TraceMiddleware)
+    register_exception_handlers(app)
 
     if settings.BACKEND_CORS_ORIGINS:
         app.add_middleware(

@@ -43,6 +43,16 @@ qilinadi; mutating attach/replace caller'ning DB transaction'ini qarz oladi; bos
 module'lar file'larga faqat `id` orqali reference qiladi; download access referencing
 entity bilan bir xil tarzda scope-check qilinadi.
 
+Upload — bitta multipart `POST /files` (har qanday authenticated principal): bytes validate
+qilinadi (content-type attach context boʻyicha, size ≤ `MAX_UPLOAD_BYTES`, default 10 MiB),
+generate qilingan `storage_key` ostida store qilinadi va row `pending → stored`'ga oʻtadi.
+`GET /files/{id}` blob'ni stream qiladi. v1 download scope rule pragmatik: uploader oʻzining
+file'ini doim oʻqiy oladi, platform operator har qanday file'ni oʻqiy oladi va workshop user
+entity'ga attach qilingan har qanday file'ni oʻqiy oladi; aniq per-workshop join calling
+module'ga qoldiriladi. Importable helper'lar `attach_file` / `detach_file` / `replace_file`
+(atomic detach-old + attach-new) boshqa module'larga file'ni entity'ga oʻz transaction'i ichida
+ulashga imkon beradi.
+
 ## Notification
 
 Bitta principal uchun bitta in-app inbox item. Event sodir boʻlgan module
