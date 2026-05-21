@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-22
 order: 25
 ---
 
@@ -18,7 +18,7 @@ invariants*'da yotadi.
 
 ## Material
 
-Platform master record (har bir spec uchun bittadan), v1'da ikki **kind**'da: `sheet`
+Platform master record (har bir spec va sheet size uchun bittadan), v1'da ikki **kind**'da: `sheet`
 (kesiladigan board, sheet boʻyicha stock qilinadi va price beriladi) yoki `edge`
 (edge-banding tape, metr boʻyicha stock qilinadi va oʻlchanadi). Client cutting boshlaganda
 sheet'ni va har bir side uchun edge thickness'ni tanlaydi; optimizer sheet'ning size va
@@ -30,7 +30,7 @@ qiladi.
 | `id` | UUID | PK |
 | `kind` | enum | `sheet` / `edge` |
 | `type` | enum? | `sheet` only: `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
-| `name` | text | required, e.g. "Kronospan DSP White 18mm" |
+| `name` | text | required, includes the sheet size, e.g. "Kronospan DSP White 18mm · 2750×1830" |
 | `thickness_mm` | numeric | required (sheets e.g. 8/16/18; edges e.g. 0.4/2.0) |
 | `color` / `decor_code` | text / text? | required / optional |
 | `sheet_length_mm` / `sheet_width_mm` | int? | **`sheet` only**, required there; `length ≥ width` (long side = grain direction); null for `edge` |
@@ -41,7 +41,9 @@ qiladi.
 
 Invariant'lar: `sheet` material'larda `type`, sheet size (`length ≥ width`) va grain bor;
 `edge` material'larda bularning hech biri yoʻq va metrda oʻlchanadi; har bir `sheet`
-material uchun bitta standart sheet size (v1); faqat platform operator yaratadi va
+material uchun bitta standart sheet size (v1) — material'ning identity'si uning spec'i **va**
+oʻsha size'i, shuning uchun bir xil spec ikki sheet size'da saqlansa ikkita alohida material
+boʻladi, har biri oʻz size'ini nomida koʻrsatadi; faqat platform operator yaratadi va
 tahrirlaydi (platform user'lar toʻliq platform scope'ga ega; workshop tomonidagi hech bir
 permission grant buni bermaydi); `inactive` yangi branch tanlovlariga va client'larga
 koʻrinmaydi; `inactive` master'ning mavjud branch tanlovlari unga reference qilishda davom

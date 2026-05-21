@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 50
 ---
 
@@ -28,8 +28,9 @@ catalog'dan tanlaydi. v1'da ikki **kind**:
 
 **Operations (platform operator):**
 
-- **Create / edit a material** — `kind` + o'sha kind uchun field'lar. Spec'ga bitta master
-  record. Bu level'da narx yo'q — narx per-branch.
+- **Create / edit a material** — `kind` + o'sha kind uchun field'lar. (spec, sheet size)'ga
+  bitta master record — bir xil spec ikki sheet size'da ikkita material, har biri o'z size'ini
+  nomida ko'rsatadi. Bu level'da narx yo'q — narx per-branch.
 - **Activate / deactivate** platform level'da. `inactive` yangi branch selection'lar va
   client'lar uchun ko'rinmaydi; mavjud branch selection'lar master'ga reference qilishni
   davom ettiradi (history saqlanadi). Delete yo'q.

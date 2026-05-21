@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-22
 order: 25
 ---
 
@@ -17,7 +17,7 @@ invariants*.
 
 ## Material
 
-A platform master record (one per spec), of two **kinds** in v1: a `sheet` (a cuttable
+A platform master record (one per spec and sheet size), of two **kinds** in v1: a `sheet` (a cuttable
 board, stocked and priced per sheet) or an `edge` (edge-banding tape, stocked and measured
 per metre). A client picks a sheet when starting a cutting and an edge thickness per side;
 the optimizer reads the sheet's size and grain; the order snapshots the material's details
@@ -28,7 +28,7 @@ and the branch's price.
 | `id` | UUID | PK |
 | `kind` | enum | `sheet` / `edge` |
 | `type` | enum? | `sheet` only: `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
-| `name` | text | required, e.g. "Kronospan DSP White 18mm" |
+| `name` | text | required, includes the sheet size, e.g. "Kronospan DSP White 18mm · 2750×1830" |
 | `thickness_mm` | numeric | required (sheets e.g. 8/16/18; edges e.g. 0.4/2.0) |
 | `color` / `decor_code` | text / text? | required / optional |
 | `sheet_length_mm` / `sheet_width_mm` | int? | **`sheet` only**, required there; `length ≥ width` (long side = grain direction); null for `edge` |
@@ -39,7 +39,9 @@ and the branch's price.
 
 Invariants: `sheet` materials have `type`, sheet size (`length ≥ width`), and grain; `edge`
 materials have none of these and are measured in metres; one standard sheet size per `sheet`
-material (v1); created and edited only by a platform operator (platform users have full
+material (v1) — a material's identity is its spec **and** that size, so the same spec stocked in
+two sheet sizes is two separate materials, each naming its size; created and edited only by a
+platform operator (platform users have full
 platform scope; no workshop-side permission grants this); `inactive` invisible to new branch
 selections and to clients; existing branch selections of an `inactive` master keep
 referencing it (history preserved); never deleted; editing a master never affects existing

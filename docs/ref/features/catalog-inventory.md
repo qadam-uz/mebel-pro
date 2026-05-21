@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-22
 order: 50
 ---
 
@@ -28,7 +28,8 @@ catalog. Two **kinds** in v1:
 **Operations (platform operator):**
 
 - **Create / edit a material** — `kind` + the fields for that kind. One master record per
-  spec. No price at this level — price is per-branch.
+  (spec, sheet size) — the same spec in two sheet sizes is two materials, each naming its
+  size. No price at this level — price is per-branch.
 - **Activate / deactivate** at the platform level. `inactive` is invisible to new branch
   selections and to clients; existing branch selections keep referencing the master
   (history preserved). No delete.

@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-22
 order: 80
 ---
 
@@ -97,7 +97,9 @@ stateDiagram-v2
   the part 90°. For a **non-grained material**, the algorithm is free to rotate parts. If a
   part on a grained material can't fit in its forced orientation, the run fails with
   `impossible_grain`. The user is never asked to set grain on a part.
-- **One catalog material → one standard sheet size.** Custom sheet sizes are future.
+- **One catalog material → one standard sheet size.** The same spec in another size is a
+  separate catalog material (size is part of its identity and name); custom sheet sizes per run
+  are future.
 - **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = sheet − 2× edge
   trim).
 - **Edge-banding length is computed here.** For each part edge with a banding thickness, the
@@ -160,7 +162,7 @@ The parts table:
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Material** | searchable dropdown of the platform catalog (by name / thickness / colour); shows the picked material's short label (e.g. `DSP 18mm Bel`) with an inline source chip: `From shop` ↔ `I'll bring it` |
+| **Material** | searchable dropdown of the platform catalog (by name / thickness / colour / size); shows the picked material's short label (e.g. `DSP 18mm Bel 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it` |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen material |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
@@ -209,7 +211,7 @@ On success, the panel scrolls into view with three regions:
      to swap the visualisation.
 
 2. **Sheet layout visualiser.**
-   - A material tab strip (`DSP 18mm Bel · 3 sheets` · `MDF 16mm · 1 sheet`). Within a
+   - A material tab strip (`DSP 18mm Bel 2750×1830 · 3 sheets` · `MDF 16mm 2800×2070 · 1 sheet`). Within a
      material, sheet tabs (`Sheet 1 / 2 / 3`).
    - The active sheet renders as an interactive SVG (pan / zoom on mobile). Hovering a
      placement highlights it in the side legend (part #, dimensions, quantity index, rotation

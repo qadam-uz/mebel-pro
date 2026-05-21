@@ -27,16 +27,18 @@ window.SEED = (() => {
   //                  priced/stocked per metre; no sheet size, no grain.
   const materials = [
     // sheets
-    { id: 'm01', kind: 'sheet', type: 'dsp', name: 'LDSP H1334 ST9 · Dub Sonoma', thickness: 18, color: 'Dub Sonoma', decor: 'H1334', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-1' },
-    { id: 'm02', kind: 'sheet', type: 'dsp', name: 'LDSP K001 PW · Belarus dub', thickness: 16, color: 'Dub Belarus', decor: 'K001', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-2' },
-    { id: 'm03', kind: 'sheet', type: 'dsp', name: "LDSP 8198 · Ladzio yong'oq", thickness: 18, color: "Yong'oq", decor: '8198', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-3' },
-    { id: 'm04', kind: 'sheet', type: 'dsp', name: 'LDSP 0011 PR · Oq baxmal', thickness: 18, color: 'Oq', decor: '0011', sheetLen: 2750, sheetWid: 1830, grain: false, status: 'active', sw: 'sw-4' },
-    { id: 'm05', kind: 'sheet', type: 'mdf', name: 'MDF 16 mm · qum rang', thickness: 16, color: 'Qum', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-5' },
-    { id: 'm06', kind: 'sheet', type: 'plywood', name: 'Fanera berioz · 8 mm', thickness: 8, color: 'Berioz', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-6' },
-    { id: 'm07', kind: 'sheet', type: 'mdf', name: 'MDF 19 mm · oq glyans', thickness: 19, color: 'Oq glyans', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-4' },
-    { id: 'm08', kind: 'sheet', type: 'dsp', name: 'LDSP H3309 · Mocca', thickness: 18, color: 'Mocca', decor: 'H3309', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-9' },
-    { id: 'm09', kind: 'sheet', type: 'plywood', name: 'Fanera oq qayin · 12 mm', thickness: 12, color: 'Oq qayin', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-10' },
-    { id: 'm10', kind: 'sheet', type: 'mdf', name: 'MDF 8 mm · texnik', thickness: 8, color: 'Texnik', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'inactive', sw: 'sw-5' },
+    { id: 'm01', kind: 'sheet', type: 'dsp', name: 'LDSP H1334 ST9 · Dub Sonoma · 2750×1830', thickness: 18, color: 'Dub Sonoma', decor: 'H1334', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-1' },
+    { id: 'm02', kind: 'sheet', type: 'dsp', name: 'LDSP K001 PW · Belarus dub · 2750×1830', thickness: 16, color: 'Dub Belarus', decor: 'K001', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-2' },
+    { id: 'm03', kind: 'sheet', type: 'dsp', name: "LDSP 8198 · Ladzio yong'oq · 2750×1830", thickness: 18, color: "Yong'oq", decor: '8198', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-3' },
+    { id: 'm04', kind: 'sheet', type: 'dsp', name: 'LDSP 0011 PR · Oq baxmal · 2750×1830', thickness: 18, color: 'Oq', decor: '0011', sheetLen: 2750, sheetWid: 1830, grain: false, status: 'active', sw: 'sw-4' },
+    // same spec (MDF 16 mm · Qum) carried in two sheet sizes — two separate catalog materials
+    { id: 'm05', kind: 'sheet', type: 'mdf', name: 'MDF 16 mm · qum rang · 2800×2070', thickness: 16, color: 'Qum', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-5' },
+    { id: 'm11', kind: 'sheet', type: 'mdf', name: 'MDF 16 mm · qum rang · 2750×1830', thickness: 16, color: 'Qum', sheetLen: 2750, sheetWid: 1830, grain: false, status: 'active', sw: 'sw-5' },
+    { id: 'm06', kind: 'sheet', type: 'plywood', name: 'Fanera berioz · 8 mm · 2440×1220', thickness: 8, color: 'Berioz', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-6' },
+    { id: 'm07', kind: 'sheet', type: 'mdf', name: 'MDF 19 mm · oq glyans · 2800×2070', thickness: 19, color: 'Oq glyans', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'active', sw: 'sw-4' },
+    { id: 'm08', kind: 'sheet', type: 'dsp', name: 'LDSP H3309 · Mocca · 2750×1830', thickness: 18, color: 'Mocca', decor: 'H3309', sheetLen: 2750, sheetWid: 1830, grain: true, status: 'active', sw: 'sw-9' },
+    { id: 'm09', kind: 'sheet', type: 'plywood', name: 'Fanera oq qayin · 12 mm · 2440×1220', thickness: 12, color: 'Oq qayin', sheetLen: 2440, sheetWid: 1220, grain: false, status: 'active', sw: 'sw-10' },
+    { id: 'm10', kind: 'sheet', type: 'mdf', name: 'MDF 8 mm · texnik · 2800×2070', thickness: 8, color: 'Texnik', sheetLen: 2800, sheetWid: 2070, grain: false, status: 'inactive', sw: 'sw-5' },
     // edge band
     { id: 'eb04', kind: 'edge', name: 'Krom PVC 0.4 mm · Dub Sonoma', thickness: 0.4, color: 'Dub Sonoma', decor: 'H1334', status: 'active', sw: 'sw-1' },
     { id: 'eb20', kind: 'edge', name: 'Krom PVC 2.0 mm · Dub Sonoma', thickness: 2.0, color: 'Dub Sonoma', decor: 'H1334', status: 'active', sw: 'sw-1' },
@@ -54,6 +56,7 @@ window.SEED = (() => {
     { branchId: 'yunusobod', matId: 'm03', priceTiyin: 42500000, minStock: 15, onHand: 61, status: 'active' },
     { branchId: 'yunusobod', matId: 'm04', priceTiyin: 32000000, minStock: 30, onHand: 12, status: 'active' }, // low
     { branchId: 'yunusobod', matId: 'm05', priceTiyin: 29500000, minStock: 25, onHand: 84, status: 'active' },
+    { branchId: 'yunusobod', matId: 'm11', priceTiyin: 28500000, minStock: 20, onHand: 47, status: 'active' }, // same decor as m05, smaller sheet
     { branchId: 'yunusobod', matId: 'm06', priceTiyin: 24000000, minStock: 10, onHand: 42, status: 'active' },
     { branchId: 'yunusobod', matId: 'm08', priceTiyin: 44500000, minStock: 15, onHand: 38, status: 'active' },
     { branchId: 'yunusobod', matId: 'eb04', priceTiyin: 320000, minStock: 200, onHand: 1840, status: 'active' }, // per metre

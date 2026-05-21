@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-22
 order: 80
 ---
 
@@ -93,7 +93,9 @@ stateDiagram-v2
   qila olmaydi. **Non-grained material** uchun algorithm part'larni rotate qilishda erkin. Agar
   grained material'dagi part o'zining forced orientation'ida sig'masa, run `impossible_grain`
   bilan fail bo'ladi. User'dan hech qachon part'da grain set qilish so'ralmaydi.
-- **One catalog material → one standard sheet size.** Custom sheet size'lar — future.
+- **One catalog material → one standard sheet size.** Bir xil spec boshqa size'da — alohida
+  catalog material (size uning identity'si va nomining bir qismi); per-run custom sheet
+  size'lar — future.
 - **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = sheet − 2× edge
   trim).
 - **Edge-banding length shu yerda hisoblanadi.** Banding thickness'i bor har bir part edge
@@ -157,7 +159,7 @@ Parts table:
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Material** | searchable dropdown of the platform catalog (by name / thickness / colour); shows the picked material's short label (e.g. `DSP 18mm Bel`) with an inline source chip: `From shop` ↔ `I'll bring it` |
+| **Material** | searchable dropdown of the platform catalog (by name / thickness / colour / size); shows the picked material's short label (e.g. `DSP 18mm Bel 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it` |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen material |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
@@ -204,7 +206,7 @@ Success'da panel uchta region bilan view'ga scroll qiladi:
      row bo'yicha **Use this one** button bo'lgan expander.
 
 2. **Sheet layout visualiser.**
-   - Material tab strip (`DSP 18mm Bel · 3 sheets` · `MDF 16mm · 1 sheet`). Material
+   - Material tab strip (`DSP 18mm Bel 2750×1830 · 3 sheets` · `MDF 16mm 2800×2070 · 1 sheet`). Material
      ichida sheet tab'lar (`Sheet 1 / 2 / 3`).
    - Active sheet interactive SVG sifatida render bo'ladi (mobile'da pan / zoom). Placement'ga
      hover qilish uni side legend'da highlight qiladi (part #, dimensions, quantity index, rotation
