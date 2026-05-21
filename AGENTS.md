@@ -1,15 +1,13 @@
 # Mebel Pro
 
-WE ARE CURRENTLY AT THE STAGE OF DEVELOPING BUSINESS LOGIC,
-THE BEST USER EXPERIENCE, AND PROTOTYPING.
-CONSIDER THIS WHEN MAKING DECISIONS, GIVING OPTIONS, AND ASKING QUESTIONS.
-DON'T BE AFRAID TO MAKE FUNDAMENTAL CHANGES IF NECESSARY.
-WE TREAT THE PROTOTYPE (IN THE FORM OF HTML FILES, IN `web/prototypes/`)
-AS A SERIOUS, CONFIDENT STARTING POINT — NOT A DRAFT THAT CAN BE THROWN AWAY.
-WE TREAT DOCUMENTATION AS THE SOURCE OF TRUTH. ALWAYS KEEP DOCUMENTATION
-UP TO DATE, FOLLOWING THE docs-management SKILL GUIDELINES.
-IF WHAT USER ASK AND WHAT THE DOCS SAY DO NOT AGREE, TELL TO USER
-THE CONFLICT POINTS AND CONSOLIDATE THEM TOGETHER.
+The project's current stage and the engineering posture it licenses — today, pre-production:
+which trade-offs (backward compatibility, migration discipline, deprecation) are cheap versus
+real — is canon, in [`docs/architecture.md`](docs/architecture.md)'s _Current stage_ section.
+Read it before any "should I keep this compatible / migrate / preserve" call.
+
+Documentation is the source of truth. Always keep it up to date as you work, following the
+**docs-management** skill. If what the user asks and what the docs say disagree, tell the user
+the conflict points and consolidate them together.
 
 ## Documentation language — English canon, Uzbek mirror
 

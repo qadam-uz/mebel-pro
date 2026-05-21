@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 70
 ---
 
@@ -30,6 +30,18 @@ boʻlsa boʻladi); regulatory yoki audit-grade kafolatlar (audit log foydali,
 tamper-evident emas); v1 da real-money movement (gateway yoʻq, auto-refund yoʻq, settlement
 yoʻq); offline operation; ogʻir analytics / BI (dashboard'lar — operational-DB
 aggregate'lar).
+
+## Current stage
+
+**Pre-production prototyping** — `web/prototypes/` dagi prototype'ga qarab business logic va
+UX'ni shakllantirish. Hech narsa real user'lar uchun deploy qilinmagan: production data yoʻq,
+API'ning external consumer'i yoʻq, ishlab turishini saqlash kerak boʻlgan installed client yoʻq.
+Shu sababli bugungi shakl'ni oʻzgartirish arzon, va biz bu erkinlikni sarflaymiz: corrective
+migration'lar ustiga uyish oʻrniga mavjud migration'larni joyida edit qilib history'ni toza
+saqlaymiz, schema va contract'larni backward-compat shim'siz oʻzgartiramiz va deprecation cycle
+oʻtkazish oʻrniga delete-and-replace qilamiz. Guardrail'lar hamon amal qiladi — docs source of
+truth boʻlib qoladi, security default'lar locked boʻlib qoladi, check gate'lar ishlaydi. Bu
+posture birinchi real workshop saqlashga arzigulik data bilan onboard qilinganda oʻzgaradi.
 
 ## Topology
 

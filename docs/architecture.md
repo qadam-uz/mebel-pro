@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-22
 order: 70
 ---
 
@@ -19,7 +19,7 @@ high-traffic, not regulated — but it moves money on one axis, so that axis get
 | Axis                | Where we are                                                                                                                                                                                            | Consequence                                                                                                                                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Scale**           | Tens of workshops · low hundreds of branches · low thousands of clients · low tens of thousands of orders/year. Flat-to-modest growth. Read-heavy. Hottest op: cutting (≤ 100 parts, synchronous, 5 s). | One Postgres, one FastAPI process (replicas if needed). No sharding, no cache layer until something is _measured_ slow.                                                                                                |
-| **Criticality**     | Money (recorded income / expenses) and real stock movement back the orders. A wrong balance or a lost stock decrement is real harm.                                                                     | Integer-tiyin money (never float); atomic stock decrement / restore; append-only audit; idempotent seams; money tracked, not moved (recorded by hand in v1, no order-held payments).                                    |
+| **Criticality**     | Money (recorded income / expenses) and real stock movement back the orders. A wrong balance or a lost stock decrement is real harm.                                                                     | Integer-tiyin money (never float); atomic stock decrement / restore; append-only audit; idempotent seams; money tracked, not moved (recorded by hand in v1, no order-held payments).                                   |
 | **Security**        | Public on the internet. Holds personal data, staff credentials, workshop payment-gateway credentials. Worth attacking.                                                                                  | Hard authn/authz on every request; opaque DB-backed sessions with instant revocation; password hashing + lockout; payment credentials owner-only; multi-tenant isolation at the service layer on every read and write. |
 | **Latency**         | Back-office-ish — "a second or two" is fine. The one visible expensive op is cutting (5 s budget, synchronous; bigger jobs rejected, not queued in v1).                                                 | No async/queue on the hot path; cutting runs in-process within budget; background jobs on an in-process scheduler.                                                                                                     |
 | **Lifespan × team** | Years; moderate change; ~2-person team.                                                                                                                                                                 | Modular monolith, boring tech (FastAPI · SQLAlchemy · Postgres · Vue · Tailwind), structure two people can operate at 3 a.m.                                                                                           |
@@ -28,6 +28,17 @@ high-traffic, not regulated — but it moves money on one axis, so that axis get
 needed); regulatory or audit-grade guarantees (the audit log is useful, not tamper-evident);
 real-money movement in v1 (no gateway, no auto-refund, no settlement); offline operation; heavy
 analytics / BI (dashboards are operational-DB aggregates).
+
+## Current stage
+
+**Pre-production prototyping** — shaping business logic and UX against the prototype in
+`web/prototypes/`. Nothing is deployed for real users: no production data, no external API
+consumer, no installed client to keep working. So changing today's shape is cheap, and we spend
+that freedom: edit existing migrations in place to keep the history clean rather than stacking
+corrective ones, change schemas and contracts without backward-compat shims, and
+delete-and-replace instead of running deprecation cycles. The guardrails still hold — docs stay
+the source of truth, security defaults stay locked, the check gates run. This posture flips once
+the first real workshop is onboarded with data worth keeping.
 
 ## Topology
 
