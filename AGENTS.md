@@ -1,10 +1,5 @@
 # Mebel Pro
 
-The project's current stage and the engineering posture it licenses — today, pre-production:
-which trade-offs (backward compatibility, migration discipline, deprecation) are cheap versus
-real — is canon, in [`docs/architecture.md`](docs/architecture.md)'s _Current stage_ section.
-Read it before any "should I keep this compatible / migrate / preserve" call.
-
 Documentation is the source of truth. Always keep it up to date as you work, following the
 **docs-management** skill. If what the user asks and what the docs say disagree, tell the user
 the conflict points and consolidate them together.

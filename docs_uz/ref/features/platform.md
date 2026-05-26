@@ -2,15 +2,57 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-25
 order: 70
 ---
 
 # Platform operations
 
-Superadmin app'ning ops burchagi: scheduled background job'lar, application-error monitor va
-platform-user registry. Workshop provisioning va block / unblock
-[`access-management.md`](access-management.md)'da yashaydi.
+Superadmin app'ning ops burchagi: platform material catalog'i (manufacturer'lar +
+material'lar), scheduled background job'lar, application-error monitor va platform-user
+registry. Workshop provisioning va block / unblock
+[`access-management.md`](access-management.md)'da yashaydi; workshop'lar consume
+qiladigan catalog mexanikasi [`catalog-inventory.md`](catalog-inventory.md)'da — bu
+doc ular uchun **platform tomonidagi admin yuzalar**'ga egalik qiladi.
+
+## Platform catalog admin
+
+Har bir workshop tanlaydigan platform-curated catalog. Operator'lar bu yerda end-to-end
+boshqaradigan ikkita registry: **Manufacturers** va **Materials**. Toʻliq operation
+qoidalari (create, activate / deactivate, master edit mavjud order'larga hech qachon
+yetib bormaslik snapshot kafolati) [`catalog-inventory.md`](catalog-inventory.md)'da
+yashaydi; bu section ular uchun **superadmin app**'ning yuzalariga egalik qiladi.
+
+- **Manufacturers** — Kronospan, Egger, Rehau va hokazo. Material'ning identity'si
+  uning manufacturer'ini oʻz ichiga oladi, shuning uchun bu yerda yangi brand qoʻshish
+  u yetkazib beradigan material'larni qoʻshishdan oldin.
+- **Materials** — `panel` va `edge` master record'lar, har biri oʻz manufacturer'ini
+  olib yuradi.
+
+Operator'lar per-branch price'larni yoki stock'ni tahrirlamaydi — bu workshop
+hududi.
+
+### UX (superadmin app'ida **Catalog** section ostida)
+
+- **Manufacturers** (`/admin/catalog/manufacturers`) — jadval: name, country,
+  material'lar count, status, action menu. **+ Manufacturer** → dialog (name,
+  ixtiyoriy country, ixtiyoriy note). Row action'lar: Edit · Activate / Deactivate.
+  Delete yoʻq. Filter chip'lar: status, country. Empty: "No manufacturers yet — add
+  one before adding materials."
+- **Materials** (`/admin/catalog/materials`) — jadval: image, kind, manufacturer
+  chip, type/thickness, colour/decor, panel size (panel'lar uchun), status, action
+  menu. Filter chip'lar: kind (`panel` / `edge`), manufacturer (multi-select), type,
+  thickness, status. **+ Material** → kind-specific form (inline-add bilan
+  manufacturer picker → bu sahifani tark etmasdan Manufacturers dialog'ini ochadi;
+  kind boʻyicha spec field'lari). Row action'lar: Edit · Activate / Deactivate ·
+  Image upload. Delete yoʻq. Empty: "No materials yet — add manufacturers, then
+  materials."
+
+State'lar: loading skeleton'lar, empty, `trace_id` bilan error; manufacturer'lar
+uchun inline-add jarayondagi material form'ini saqlab qoladi. Accessibility: status
+chip colour + text bilan keladi; destructive activation toggle'lar tasdiqlaydi va
+oqibatni nomlaydi ("Existing branch selections of this material will be hidden from
+clients.").
 
 ## Background jobs
 
@@ -71,6 +113,8 @@ keyinchalik in-app creation yo'l bo'ladi.
   va OpenAPI reference'lar). Bular edge'da HTTP-Basic-gated, **app session'dan alohida
   sign-in** — link yangi tab'da ochiladi va shunday belgilanganki ikkinchi prompt syurpriz
   bo'lmaydi.
+
+**Catalog** section ostida — yuqoridagi Manufacturers va Materials yuzalari.
 
 **Platform** section ostida:
 

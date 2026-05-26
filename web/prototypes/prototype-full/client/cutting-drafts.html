@@ -106,7 +106,7 @@ function renderDrafts() {
     const matLabels = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean);
     const matLabel = matLabels.slice(0, 2).join(' + ') + (matLabels.length > 2 ? ` +${matLabels.length - 2}` : '');
     const algo = SEED.lookup.chosenAlgo(c);
-    const sheets = algo ? Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0) : 0;
+    const panels = algo ? Object.values(algo.panelsByMat).reduce((a,b)=>a+b,0) : 0;
     const totalQty = c.partList.reduce((a,p) => a + (p.qty || 0), 0);
     return `
       <article class="draft-card" data-id="${c.id}">
@@ -114,7 +114,7 @@ function renderDrafts() {
           <div class="nm">${c.id} · ${matLabel || 'Material tanlanmagan'}</div>
           <div class="stats">
             <span><b>${totalQty}</b> qism</span>
-            <span><b>${sheets || '—'}</b> list</span>
+            <span><b>${panels || '—'}</b> panel</span>
             ${algo ? `<span><b>${algo.wastePct}%</b> chiqim</span>` : ''}
             <span style="color:var(--ink-6)">${c.when} · tahrirlangan</span>
           </div>

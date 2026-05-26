@@ -69,21 +69,21 @@ if (!o) {
   const cuttingInvalidated = cutting && cutting.status === 'invalidated';
 
   // Read-only cutting-result figures (PU4a) — what the worker confirms, never
-  // re-types: sheets from the chosen algorithm, cut count derived from the
-  // parts, edge metres by thickness from the algorithm.
-  const algoSheets = algo ? Object.values(algo.sheetsByMat || {}).reduce((a, b) => a + b, 0) : 0;
+  // re-types: panels from the chosen algorithm, cut count derived from the
+  // parts, edge metres by edge material from the algorithm.
+  const algoPanels = algo ? Object.values(algo.panelsByMat || {}).reduce((a, b) => a + b, 0) : 0;
   const cutCount = cutting ? (cutting.partList || []).reduce((a, p) => a + (p.qty || 0), 0) : 0;
-  const edgeByThick = algo ? (algo.edgeLen || {}) : {};
+  const edgeByMat = algo ? (algo.edgeLenByMat || {}) : {};
 
   // projected low-stock warning (unchanged behaviour).
   let lowWarn = '';
   if (cutting && ['confirmed','cutting'].includes(o.state) && algo) {
     const shorts = [];
-    for (const matId of Object.keys(algo.sheetsByMat || {})) {
+    for (const matId of Object.keys(algo.panelsByMat || {})) {
       const bm = SEED.lookup.branchMatFor(o.branchId, matId);
       const m = SEED.lookup.matById(matId);
-      if (bm && (bm.onHand - algo.sheetsByMat[matId]) <= bm.minStock) {
-        shorts.push(`${m?.name || matId} → ${bm.onHand - algo.sheetsByMat[matId]} / min ${bm.minStock}`);
+      if (bm && (bm.onHand - algo.panelsByMat[matId]) <= bm.minStock) {
+        shorts.push(`${m?.name || matId} → ${bm.onHand - algo.panelsByMat[matId]} / min ${bm.minStock}`);
       }
     }
     if (shorts.length) lowWarn = `<div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Kesishdan keyin past zaxira: <b>${shorts.join(' · ')}</b></div></div>`;
@@ -98,11 +98,23 @@ if (!o) {
 
   const partRows = cutting && cutting.partList ? cutting.partList.map(p => {
     const m = SEED.lookup.matById(p.matId);
-    return `<div class="row-item"><div><div class="nm">${m?.name || p.matId} · ${p.l}×${p.w}</div><small style="color:var(--ink-6)">${p.source === 'own' ? "mijoz materiali" : 'ustaxona materiali'}</small></div><div class="meta">${p.qty} dona</div></div>`;
+    const sideLabels = ['t','b','l','r'].map(side => {
+      const e = p.edges && p.edges[side];
+      if (!e) return null;
+      const em = SEED.lookup.matById(e.matId);
+      const t = em?.thickness ?? '';
+      return `${side.toUpperCase()}: ${t} mm${e.source === 'own' ? ' (mijoz)' : ''}`;
+    }).filter(Boolean);
+    const edgeLine = sideLabels.length ? `<br><small style="color:var(--ink-6)">Krom · ${sideLabels.join(' · ')}</small>` : '';
+    return `<div class="row-item"><div><div class="nm">${m?.name || p.matId} · ${p.l}×${p.w}</div><small style="color:var(--ink-6)">${p.source === 'own' ? "mijoz paneli" : 'ustaxona paneli'}</small>${edgeLine}</div><div class="meta">${p.qty} dona</div></div>`;
   }).join('') : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`;
 
-  const edgeRows = banded ? Object.entries(edgeByThick).map(([t, m]) =>
-    `<div class="row-item"><div><div class="nm">Krom ${t} mm</div></div><div class="meta">${m} m</div></div>`).join('') : '';
+  const edgeRows = banded ? Object.entries(edgeByMat).map(([edgeMatId, m]) => {
+    const em = SEED.lookup.matById(edgeMatId);
+    const mfr = em ? SEED.lookup.manufacturerName(em) : '';
+    const label = em ? `${mfr ? mfr + ' · ' : ''}Krom ${em.thickness} mm ${em.color}` : `Krom · ${edgeMatId}`;
+    return `<div class="row-item"><div><div class="nm">${label}</div></div><div class="meta">${m} m</div></div>`;
+  }).join('') : '';
 
   // CR7 + OQ2: a read-only settlement summary at ANY status, only for a
   // viewer with view_finance_reports / manage_finance on the order's branch
@@ -169,7 +181,7 @@ if (!o) {
                 <div><div class="nm">Kesuvchi</div><small style="color:var(--ink-6)">${o.cutter ? 'Bajardi · ' + (o.cutCompletedAt || '') : (o.assignedCutter ? 'tayinlangan' : 'tayinlanmagan')}</small></div>
                 <div class="meta">${o.cutter ? SEED.lookup.userById(o.cutter)?.name : (o.assignedCutter ? SEED.lookup.userById(o.assignedCutter)?.name : '—')}</div>
               </div>
-              ${o.cutter ? `<div class="row-item"><div><div class="nm">Kesilgan</div></div><div class="meta">${o.cutCount || 0} ta · ${Object.values(o.sheetsUsed || {}).reduce((a,b)=>a+b,0)} list</div></div>` : ''}
+              ${o.cutter ? `<div class="row-item"><div><div class="nm">Kesilgan</div></div><div class="meta">${o.cutCount || 0} ta · ${Object.values(o.panelsUsed || {}).reduce((a,b)=>a+b,0)} panel</div></div>` : ''}
               ${banded ? `<div class="row-item">
                 <div><div class="nm">Krom yopishtiruvchi</div><small style="color:var(--ink-6)">${o.edger ? 'Bajardi · ' + (o.edgeCompletedAt || '') : (o.assignedEdger ? 'tayinlangan' : 'tayinlanmagan')}</small></div>
                 <div class="meta">${o.edger ? SEED.lookup.userById(o.edger)?.name : (o.assignedEdger ? SEED.lookup.userById(o.assignedEdger)?.name : '—')}</div>
@@ -193,7 +205,7 @@ if (!o) {
             <div class="card-h"><h2>Chizma rejasi</h2></div>
             <div class="card-b">
               ${cuttingInvalidated ? `<div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Bu chizma natijasi <b>invalidated</b> — chizma boshqa joyda qayta hisoblangan. Buyurtmaga bog'langan natija o'zgarmagan. <a href="#" onclick="toast('Joriy natijaga o\\'tildi (demo)')" style="color:inherit;text-decoration:underline">Joriy natijani ko'rish</a></div></div>` : ''}
-              ${cutting ? `<div class="row-item"><div><div class="nm">${cutting.parts} ta qism · ${cutting.sheets} list</div><small style="color:var(--ink-6)">qoldiq ${cutting.wastePct}% · ${cutting.algoVer || ''}</small></div><div class="meta">${cutting.cutLen} m kesim</div></div>` : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`}
+              ${cutting ? `<div class="row-item"><div><div class="nm">${cutting.parts} ta qism · ${cutting.panels} panel</div><small style="color:var(--ink-6)">qoldiq ${cutting.wastePct}% · ${cutting.algoVer || ''}</small></div><div class="meta">${cutting.cutLen} m kesim</div></div>` : `<p class="muted" style="font-size:13px;margin:14px 0">Chizma biriktirilmagan.</p>`}
               <div class="sheet" style="border:0;padding:0;margin-top:12px">
                 <svg viewBox="0 0 550 366" role="img" aria-label="Chizma rejasi (namuna)">
                   <rect x="0" y="0" width="550" height="366" fill="#F2EEE6"/>
@@ -219,7 +231,7 @@ if (!o) {
               <ol class="tl">
                 <li class="step done"><span class="when">${o.placedAt}</span>Mijoz yaratdi · <span class="who">${cl?.name || ''}</span></li>
                 ${o.confirmedAt ? `<li class="step done"><span class="when">${o.confirmedAt}</span>Tasdiqlandi · <span class="who">${SEED.lookup.userById(o.confirmedBy)?.name || ''}</span></li>` : ''}
-                ${o.cutCompletedAt ? `<li class="step done"><span class="when">${o.cutCompletedAt}</span>Kesish tugadi · <span class="who">${SEED.lookup.userById(o.cutter)?.name || ''}</span> · ${Object.values(o.sheetsUsed || {}).reduce((a,b)=>a+b,0)} list</li>` : ''}
+                ${o.cutCompletedAt ? `<li class="step done"><span class="when">${o.cutCompletedAt}</span>Kesish tugadi · <span class="who">${SEED.lookup.userById(o.cutter)?.name || ''}</span> · ${Object.values(o.panelsUsed || {}).reduce((a,b)=>a+b,0)} panel</li>` : ''}
                 ${o.edgeCompletedAt ? `<li class="step done"><span class="when">${o.edgeCompletedAt}</span>Krom tugadi · <span class="who">${SEED.lookup.userById(o.edger)?.name || ''}</span></li>` : ''}
                 ${o.pickedUpAt ? `<li class="step done"><span class="when">${o.pickedUpAt}</span>Mijoz olib ketdi · tugallandi</li>` : ''}
                 ${o.cancelledAt ? `<li class="step bad"><span class="when">${o.cancelledAt}</span>Bekor qilindi · <span class="who">${SEED.lookup.userById(o.cancelledBy)?.name || o.cancelledBy || ''}</span> · ${o.cancelReason || ''}</li>` : ''}
@@ -389,18 +401,21 @@ if (o) {
 
   const cutting = SEED.lookup.cuttingById(o.cuttingId);
   const algo = cutting ? SEED.lookup.chosenAlgo(cutting) : null;
-  const sheets = algo ? Object.values(algo.sheetsByMat || {}).reduce((a, b) => a + b, 0) : 0;
+  const panels = algo ? Object.values(algo.panelsByMat || {}).reduce((a, b) => a + b, 0) : 0;
   const cuts = cutting ? (cutting.partList || []).reduce((a, p) => a + (p.qty || 0), 0) : 0;
   const cf = document.getElementById('cut-figures');
   if (cf) cf.innerHTML = `
-    <div class="ro-figure"><span>Ishlatilgan list</span><span class="v">${sheets} list</span></div>
+    <div class="ro-figure"><span>Ishlatilgan panel</span><span class="v">${panels} panel</span></div>
     <div class="ro-figure"><span>Qism soni (kesim)</span><span class="v">${cuts} ta</span></div>`;
 
-  const edgeByThick = algo ? (algo.edgeLen || {}) : {};
+  const edgeByMatModal = algo ? (algo.edgeLenByMat || {}) : {};
   const bf = document.getElementById('band-figures');
   if (bf) {
-    const rows = Object.entries(edgeByThick).map(([t, m]) =>
-      `<div class="ro-figure"><span>Krom ${t} mm</span><span class="v">${m} m</span></div>`).join('');
+    const rows = Object.entries(edgeByMatModal).map(([edgeMatId, m]) => {
+      const em = SEED.lookup.matById(edgeMatId);
+      const label = em ? `Krom ${em.thickness} mm ${em.color}` : `Krom · ${edgeMatId}`;
+      return `<div class="ro-figure"><span>${label}</span><span class="v">${m} m</span></div>`;
+    }).join('');
     bf.innerHTML = rows || `<div class="ro-figure"><span>Krom</span><span class="v">—</span></div>`;
   }
 }

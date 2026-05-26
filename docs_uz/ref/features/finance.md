@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-25
 order: 55
 ---
 
@@ -18,7 +18,7 @@ o'zi qiladi.
 ## Problem
 
 Bugun money — bu papkadagi receipt'lar va daftar. Shop oy oxiridagi net'ini soatlab
-arifmetikasiz bilmaydi, va "Asror 23 sheet kesdi, uning rate'iga ko'paytir" qog'ozda
+arifmetikasiz bilmaydi, va "Asror 23 panel kesdi, uning rate'iga ko'paytir" qog'ozda
 qilinadi. v1 loop'ni eng kichik mumkin bo'lgan ledger bilan yopadi: income in, expenses
 out, accountant pay'ni hisoblashga muhtoj raw production count'lar — va revenue, expenses,
 net'ni bog'lab beradigan bitta report. System ataylab salary'larni **compute qilmaydi**;
@@ -85,8 +85,9 @@ book qiladi.
 
 | Column | Source |
 |---|---|
-| Sheets cut · cut count | Σ `sheets_used_snapshot` / `cut_count_snapshot` over orders where the user is `cutter_user_id` and `cut_completed_at` is in the period |
-| Orders banded · metres of banding (by thickness) | count + Σ `edge_length_snapshot` over orders where the user is `edger_user_id` and `edge_completed_at` is in the period |
+| Panels cut · cut count | Σ `panels_used_snapshot` / `cut_count_snapshot` over orders where the user is `cutter_user_id` and `cut_completed_at` is in the period |
+| Orders banded · metres of banding | count + Σ `edge_length_snapshot` over orders where the user is `edger_user_id` and `edge_completed_at` is in the period |
+| Metres of banding broken down | grouped by **edge material** (and rolled up by thickness too, since thickness is a property of the material — read from the material at report time) |
 
 Credit completion stamp bo'yicha sanaladi, shuning uchun order qachon collect qilinganidan
 qat'i nazar ish bajarilgan period'ga tushadi. Reverted job ([`orders.md`](orders.md)) o'z
@@ -122,8 +123,8 @@ Workshop app'da top-level **Finance** nav item (`manage_finance` yoki
   form (category, branch, amount, date, vendor, description, receipt). Row actions: Edit ·
   Void (reason). Delete yo'q.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` yoki
-  `manage_finance`) — period + branch picker; per worker table (sheets, cuts, orders banded,
-  metres by thickness); o'sha worker uchun `category = salary` ga pre-set Expense form ochadigan
+  `manage_finance`) — period + branch picker; per worker table (panels, cuts, orders banded,
+  metres by edge material with a thickness rollup); o'sha worker uchun `category = salary` ga pre-set Expense form ochadigan
   "record salary expense" shortcut (accountant amount'ni to'ldiradi). Empty:
   "No production in this period."
 

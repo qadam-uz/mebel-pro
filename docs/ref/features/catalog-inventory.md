@@ -2,34 +2,57 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 50
 ---
 
 # Catalog & inventory
 
-The platform material catalog, what each branch carries and prices, the warehouse, and the
-suppliers stock comes from. **Materials** are platform-wide master records of two kinds —
-**sheets** and **edges**; a workshop only *selects* which it carries. **Stock** is moved in
-by the warehouseman and **auto-decremented by the order state machine** as production
-completes — there is no reservation. The order ↔ stock contract is owned by
-[`orders.md`](orders.md) → *The stock seam*; this doc is the warehouse mechanics behind it.
+The platform material catalog, the manufacturers behind it, what each branch carries and
+prices, the warehouse, and the suppliers stock comes from. **Materials** are platform-wide
+master records of two kinds — **panels** and **edges**; a workshop only *selects* which it
+carries. **Stock** is moved in by the warehouseman and **auto-decremented by the order
+state machine** as production completes — there is no reservation. The order ↔ stock
+contract is owned by [`orders.md`](orders.md) → *The stock seam*; this doc is the warehouse
+mechanics behind it.
 
-## Materials (platform master catalog)
+## Manufacturers (platform master list)
 
-Materials live at the platform level. Workshops do not define materials; they pick from this
-catalog. Two **kinds** in v1:
-
-| Kind | What it is | Measured in | Has |
-|---|---|---|---|
-| `sheet` | a cuttable board (DSP / MDF / plywood / …) | sheets | type, thickness, colour / decor, sheet length × width (`length ≥ width` = grain direction), grain yes/no, image |
-| `edge` | edge-banding tape applied to a panel's sides | metres | thickness, colour / decor, image |
+Who makes a material — Kronospan, Egger, Rehau, and so on. A separate platform-scoped
+list: a material's identity includes its manufacturer (Egger H1334 18 mm and Kronospan
+H1334 18 mm are two catalog rows, two stock items, two prices). Curated by platform
+operators.
 
 **Operations (platform operator):**
 
-- **Create / edit a material** — `kind` + the fields for that kind. One master record per
-  (spec, sheet size) — the same spec in two sheet sizes is two materials, each naming its
-  size. No price at this level — price is per-branch.
+- **Create / edit a manufacturer** — `name` (unique, case-insensitive), optional
+  `country` and `note`.
+- **Activate / deactivate** at the platform level. `inactive` is invisible to new
+  material creates and to branch material-selection pickers; existing materials of an
+  inactive manufacturer keep referencing it (history preserved). No delete.
+- **List / get** — operators see all; workshop users and clients see only the
+  manufacturers attached to the materials they can already see, surfaced as a filter
+  chip.
+
+Creating a manufacturer is a side-trip from the material-create form (inline-add), the
+same shape as suppliers' inline-add from stock-in.
+
+## Materials (platform master catalog)
+
+Materials live at the platform level. Workshops do not define materials; they pick from
+this catalog. Two **kinds** in v1:
+
+| Kind | What it is | Measured in | Has |
+|---|---|---|---|
+| `panel` | a cuttable board (DSP / MDF / plywood / …) | panels | manufacturer, type, thickness, colour / decor, panel length × width (`length ≥ width` = grain direction), grain yes/no, image |
+| `edge` | edge-banding tape applied to a panel's sides | metres | manufacturer, thickness, colour / decor, image |
+
+**Operations (platform operator):**
+
+- **Create / edit a material** — `kind` + `manufacturer_id` + the fields for that kind.
+  One master record per (spec, panel size, manufacturer) — the same spec in two panel
+  sizes is two materials, and the same spec from two manufacturers is two more; each
+  names its specifics. No price at this level — price is per-branch.
 - **Activate / deactivate** at the platform level. `inactive` is invisible to new branch
   selections and to clients; existing branch selections keep referencing the master
   (history preserved). No delete.
@@ -42,133 +65,156 @@ A platform-level edit never touches existing orders (snapshots —
 ## Branch material selection
 
 A branch carries a subset of the catalog. The `(branch, material)` selection holds the
-branch's stock unit price, its min-stock threshold, and the client-visibility flag. Adding a
-material creates the branch's stock item for it (zero on hand).
+branch's price (per panel for a `panel`, per metre for an `edge`), its min-stock
+threshold, and the client-visibility flag. Adding a material creates the branch's stock
+item for it (zero on hand).
 
 **Operations (owner, or `manage_catalog` on the branch):**
 
-- **Add a material** — pick a platform-`active` material; set the per-unit price (per sheet
-  for a `sheet`, per metre for an `edge`) and `min_stock` (≥ 0).
+- **Add a material** — pick a platform-`active` material (manufacturer + kind filter +
+  search); set the per-unit price and `min_stock` (≥ 0).
 - **Edit price or min-stock** — never touches existing orders (snapshots).
-- **Activate / deactivate** at the branch level. `inactive` is invisible to clients and not
-  selectable in a new cutting; stock and history stay. No delete.
+- **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
+  not selectable in a new cutting; stock and history stay. No delete.
 
-Clients see a material only when it is `active` at **both** the platform and branch level.
+Clients see a material only when it is `active` at **both** the platform and branch
+level.
 
 ## Branch pricing
 
-One pricing row per branch, created with the branch. It — **not** the per-metre edge
-material price — is what an order is priced from; the order snapshots it at creation
-([`orders.md`](orders.md) → *Pricing*).
+One pricing row per branch, created with the branch. Order pricing reads it at creation
+and snapshots the values onto the order; later changes don't reach existing orders.
 
-- `cutting_model` (`per_sheet` / `per_cut`) + `cutting_rate_tiyin`.
-- `edge_banding_rates` — an all-in rate per banding thickness (e.g. `0.4`, `2.0`). This is
-  the **price** of banding; the `edge` material it consumes is tracked separately as stock
-  (its per-metre selection price is a cost reference, not used in v1 order pricing).
+- `cutting_rate_tiyin` — the labour rate charged per cut panel (no per-cut model in v1;
+  the only model is per panel).
+- `edge_banding_rate_tiyin` — the labour rate per metre of tape applied. One rate,
+  thickness-independent in v1.
+- Edge **material** cost is separate — it's the per-metre `price_tiyin` of each
+  [Branch material](#branch-material-selection) `edge` selection (raw material). Order
+  total = material + labour, summed per metre per `shop` side.
 
-**Owner only** (not delegable in v1). A part using a banding thickness with no rate makes
-order pricing fail (`missing_edge_rate`) — the owner adds the rate.
+**Owner only** (not delegable in v1). A part using an edge material the branch doesn't
+carry makes order pricing fail (`branch_does_not_carry_edge`) — the owner adds the edge
+to the branch's selection.
 
 ## Suppliers
 
-Who the workshop buys material from. Lightweight and **created on demand**: when recording a
-stock-in the warehouseman picks an existing supplier or adds one inline (name, optional
-phone / note). Workshop-scoped, never deleted (deactivated if unused). No purchase-order or
-accounts-payable flow in v1 — the *money* for a purchase is a separate
-[`finance.md`](finance.md) expense the accountant records; the supplier here only labels
-where stock came from.
+Who the workshop buys material from. Lightweight and **created on demand**: when
+recording a stock-in the warehouseman picks an existing supplier or adds one inline
+(name, optional phone / note). Workshop-scoped, never deleted (deactivated if unused).
+Supplier ≠ manufacturer: the supplier is the workshop's buying counterparty, the
+manufacturer is who made the material — a supplier can carry many manufacturers' tape,
+and vice versa.
+
+No purchase-order or accounts-payable flow in v1 — the *money* for a purchase is a
+separate [`finance.md`](finance.md) expense the accountant records; the supplier here
+only labels where stock came from.
 
 ## Inventory
 
-A branch holds one stock item per material it carries — a single `on_hand` balance in the
-material's unit (sheets or metres) and a `min_stock` threshold. **No `reserved`, no
-`available`, no reservation** — the order never holds stock; it only decrements it.
+A branch holds one stock item per material it carries — a single `on_hand` balance in
+the material's unit (panels or metres) and a `min_stock` threshold. **No `reserved`,
+no `available`, no reservation** — the order never holds stock; it only decrements it.
 
 **Operations:**
 
 - **Stock-in** (owner, or `manage_inventory` on the branch) — material (must be in the
-  branch's selection), positive quantity, a supplier (existing or added inline), optional
-  receipt file. `on_hand += qty`.
-- **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't go
-  below 0. Used for stock-takes and write-offs (including material a cancelled-mid-production
-  order physically consumed).
+  branch's selection), positive quantity, a supplier (existing or added inline),
+  optional receipt file. `on_hand += qty`.
+- **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't
+  go below 0. Used for stock-takes and write-offs (including material a
+  cancelled-mid-production order physically consumed).
 - **Consume / restore** (system) — driven entirely by the order state machine.
 
-**The order seam.** Per [`orders.md`](orders.md): `shop` sheet items are **consumed** when
-the order's **Cutting done** is marked; `shop` edge material is **consumed** when **Banding
-done** is marked; an operator **revert** of either step **restores** exactly what it
-consumed. `own`-source items never touch stock.
+**The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed**
+when the order's **Cutting done** is marked; `shop` edge metres are **consumed**, per
+edge material, when **Banding done** is marked. A revert re-increments exactly what
+its step decremented. `own`-source panels and `own`-source edge sides never touch
+stock.
 
-**Projected balance & the verify warning.** There is no reservation, so a meaningful "will
-we have enough?" needs the demand already in flight. For a material at a branch:
+**Projected balance & the verify warning.** There is no reservation, so a meaningful
+"will we have enough?" needs the demand already in flight. For a material at a branch:
 
-> projected = `on_hand` − Σ (that material's demand from active orders ahead that have not
-> yet decremented it)
+> projected = `on_hand` − Σ (that material's demand from active orders ahead that have
+> not yet decremented it)
 
-— sheets are still owed by orders in `confirmed`/`cutting`; edge metres by orders in
-`confirmed`/`cutting`/`edge_banding`. When an operator verifies an order
-([`orders.md`](orders.md)), a `shop` material whose projected balance won't cover this order
-raises a **warning** so they can prompt the warehouseman — it **never blocks** approval
-(some workshops buy per order).
+— panels are still owed by orders in `confirmed`/`cutting`; edge metres (per edge
+material) by orders in `confirmed`/`cutting`/`edge_banding`. When an operator verifies
+an order ([`orders.md`](orders.md)), a `shop` material whose projected balance won't
+cover this order raises a **warning** so they can prompt the warehouseman — it
+**never blocks** approval (some workshops buy per order).
 
-**Low-stock.** When `on_hand ≤ min_stock` after any change, a notification fires to the
-branch's `manage_inventory` grantees and the owner; the daily summary repeats it.
+**Low-stock.** When `on_hand ≤ min_stock` after any change, a notification fires to
+the branch's `manage_inventory` grantees and the owner; the daily summary repeats it.
 
 ## UX (workshop app)
 
 Under a branch's tabs (and owner-wide views with a branch filter):
 
-- **Materials** (`manage_catalog`) — table from the master (image, kind, type/thickness,
-  colour/decor, sheet size for sheets, the branch's unit price, status). **+ Material** →
-  catalog picker (kind + search) → per-branch form (price, min-stock). Row: Edit ·
-  Activate / Deactivate. No Delete.
-- **Pricing** (owner only) — cutting model + rate; an edge-banding-rate grid (thickness |
-  rate per metre, add/remove). Save + unsaved-changes guard; "pricing not set yet" empty
-  state on a new branch.
-- **Stock** (`manage_inventory`) — table: material (name + image), on-hand, min-stock,
-  unit, last updated; low-stock rows highlighted (chip + colour). Per-row **Record
-  stock-in** → modal (qty, supplier picker with inline add, receipt upload). Inline
-  min-stock. **Adjust** → modal (signed delta + mandatory reason). **Transactions** — full
-  log: type (`stock_in` / `consume` / `restore` / `adjust`), signed quantity, balance-after,
-  order link (for consume/restore), supplier (for stock_in), actor, note, date; read-only.
-- **Suppliers** (`manage_inventory`) — simple list (name, phone, note, active); add / edit /
-  deactivate. Mostly reached inline from stock-in.
+- **Materials** (`manage_catalog`) — table from the master (image, kind, manufacturer,
+  type/thickness, colour/decor, panel size for panels, the branch's unit price,
+  status). Filter chips: kind, manufacturer, type. **+ Material** → catalog picker
+  (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
+  Edit · Activate / Deactivate. No Delete.
+- **Pricing** (owner only) — two fields: cutting rate (`cutting_rate_tiyin`, per panel)
+  and edge-banding labour rate (`edge_banding_rate_tiyin`, per metre, all thicknesses).
+  Save + unsaved-changes guard; "pricing not set yet" empty state on a new branch. The
+  raw edge **material** price lives on each Branch material `edge` selection — not here.
+- **Stock** (`manage_inventory`) — table: material (name + image + manufacturer
+  chip), on-hand, min-stock, unit, last updated; low-stock rows highlighted (chip +
+  colour). Per-row **Record stock-in** → modal (qty, supplier picker with inline add,
+  receipt upload). Inline min-stock. **Adjust** → modal (signed delta + mandatory
+  reason). **Transactions** — full log: type (`stock_in` / `consume` / `restore` /
+  `adjust`), signed quantity, balance-after, order link (for consume/restore),
+  supplier (for stock_in), actor, note, date; read-only.
+- **Suppliers** (`manage_inventory`) — simple list (name, phone, note, active);
+  add / edit / deactivate. Mostly reached inline from stock-in.
 
-In the **client app** cutting wizard's material step: the branch's active `sheet` selection
-as a searchable grid (name, type, thickness, colour, sheet size, grain, image, **and the
-branch's price per sheet** only when the item's source is `shop`); single-select. Edge
-banding is chosen per side as a thickness in the wizard ([`cutting.md`](cutting.md)); the
-matching `edge` material and its stock are resolved server-side.
+In the **client app** cutting wizard's material steps: the branch's active `panel`
+selection as a searchable grid with manufacturer / type / thickness chips (name,
+manufacturer, type, thickness, colour, panel size, grain, image, **and the branch's
+price per panel** only when the picked source is `shop`); single-select. Edge banding
+is chosen per side as a catalog **edge** material in the wizard
+([`cutting.md`](cutting.md)); when the side's source is `shop`, the order snapshots
+the branch's per-metre **material** price on that edge plus the branch's per-metre
+**banding labour** rate.
 
-States: loading (skeletons); empty (no selection yet → "add materials to this branch");
-error (`trace_id`). Accessibility: low-stock is chip + colour, not colour alone; modals
-manage focus; owner-only controls are visibly gated for non-owners.
+States: loading (skeletons); empty (no selection yet → "add materials to this
+branch"); error (`trace_id`). Accessibility: low-stock is chip + colour, not colour
+alone; modals manage focus; owner-only controls are visibly gated for non-owners.
 
 ## Edge cases
 
-- **Platform deactivates a material branches carry** — existing selections keep referencing
-  it (history preserved); hidden from clients; no new branch can add it; stock untouched.
-- **Branch deactivates a material still platform-active** — hidden from clients at that
-  branch; stock/history stay; other branches unaffected.
-- **Material referenced by old orders, then deactivated** — orders unaffected (snapshots).
-- **Sheet width entered larger than length** — rejected at platform creation (long side is
-  the grain direction). Not applicable to `edge` materials.
-- **`shop` material short when an operator verifies an order** — a **warning**, never a
-  block; the operator prompts the warehouseman ([`orders.md`](orders.md)).
+- **Platform deactivates a manufacturer** — existing materials keep referencing it
+  (history preserved); the manufacturer disappears from the new-material picker; no
+  branch can add a new material under that manufacturer; stock untouched.
+- **Platform deactivates a material branches carry** — existing selections keep
+  referencing it (history preserved); hidden from clients; no new branch can add it;
+  stock untouched.
+- **Branch deactivates a material still platform-active** — hidden from clients at
+  that branch; stock/history stay; other branches unaffected.
+- **Material referenced by old orders, then deactivated** — orders unaffected
+  (snapshots).
+- **Panel width entered larger than length** — rejected at platform creation (long
+  side is the grain direction). Not applicable to `edge` materials.
+- **`shop` material short when an operator verifies an order** — a **warning**,
+  never a block; the operator prompts the warehouseman ([`orders.md`](orders.md)).
 - **Order cancelled mid-production after material was consumed** — stock is **not**
-  auto-restored (it was physically cut); the warehouseman records an `adjust` write-off if
-  the count needs correcting.
-- **Operator reverts a completed job** — the system `restore`s exactly the quantity that
-  step consumed.
+  auto-restored (it was physically cut); the warehouseman records an `adjust`
+  write-off if the count needs correcting.
+- **Operator reverts a completed job** — the system `restore`s exactly the quantity
+  that step consumed; for edges, one restore per edge material the step had
+  consumed.
 - **Adjust below 0** — rejected.
-- **Stock-in for a branch-deactivated material** — allowed (the selection still exists); it
-  just won't be offered to clients until reactivated.
-- **`own`-source order** — no inventory interaction at all.
-- **Add a supplier inline that already exists by name** — the picker prefers the existing
-  one; near-duplicates are a manual cleanup, not enforced in v1.
+- **Stock-in for a branch-deactivated material** — allowed (the selection still
+  exists); it just won't be offered to clients until reactivated.
+- **`own`-source order** — no inventory interaction at all; an order with only
+  `own` panels and `own` edges skips the seam entirely.
+- **Add a supplier inline that already exists by name** — the picker prefers the
+  existing one; near-duplicates are a manual cleanup, not enforced in v1.
 
 ## Next
 
-- [`orders.md`](orders.md) — the state machine that consumes / restores stock and the
-  pricing snapshot rule.
+- [`orders.md`](orders.md) — the state machine that consumes / restores stock and
+  the pricing snapshot rule.
 - [`finance.md`](finance.md) — the expense side of buying material from a supplier.

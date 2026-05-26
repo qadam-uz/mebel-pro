@@ -44,23 +44,17 @@ Yak: 10:00-16:00</textarea>
 <div class="modal" id="m-pricing">
   <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi chizma va krom narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi xizmat narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
     <div class="field">
-      <label>Chizma modeli</label>
-      <div class="opt-row">
-        <div class="opt on" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
-          <span class="rd"></span>
-          <div class="info"><div class="nm">List bo'yicha</div><div class="ds">Har bir ishlatilgan list uchun fiksimsiz narx.</div></div>
-        </div>
-        <div class="opt" onclick="this.parentNode.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));this.classList.add('on')">
-          <span class="rd"></span>
-          <div class="info"><div class="nm">Chizma soni bo'yicha</div><div class="ds">Har bir chizma uchun fiksimsiz narx.</div></div>
-        </div>
-      </div>
+      <label>Kesish narxi (so'm / panel)</label>
+      <input value="100 000" />
+      <div class="hint" style="font-size:11.5px;color:var(--ink-6);margin-top:4px">Har bir kesilgan panel uchun.</div>
     </div>
-    <div class="field"><label>Chizma narxi (so'm / list)</label><input value="100 000" /></div>
-    <div class="field"><label>Krom narxi · 0.4 mm (so'm / metr)</label><input value="2 500" /></div>
-    <div class="field"><label>Krom narxi · 2.0 mm (so'm / metr)</label><input value="3 000" /></div>
+    <div class="field">
+      <label>Krom yopishtirish narxi (so'm / metr)</label>
+      <input value="3 000" />
+      <div class="hint" style="font-size:11.5px;color:var(--ink-6);margin-top:4px">Ish haqi — har bir yopishtirilgan metr uchun (qalinlikdan qat'i nazar). Krom material'ining narxi alohida — katalogdan.</div>
+    </div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Narxlar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
@@ -145,7 +139,7 @@ if (!ownerOnly()) {
       <div class="card"><div class="card-h"><h2>Filial materiallari</h2><a class="more" href="catalog.html">to'liq katalog <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
-            <thead><tr><th>Material</th><th class="right">Narx / list</th><th class="right">Mavjud</th><th>Holat</th></tr></thead>
+            <thead><tr><th>Material</th><th class="right">Narx / birlik</th><th class="right">Mavjud</th><th>Holat</th></tr></thead>
             <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td><div style="display:flex;gap:11px;align-items:center"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.thickness} mm</small></div></div></td><td class="amt">${fmtTiyin(bm.priceTiyin)}</td><td class="amt ${bm.onHand <= bm.minStock ? 'warn-text' : ''}">${bm.onHand}</td><td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Inactive'}</span></td></tr>`; }).join('')}</tbody>
           </table>
         </div>
@@ -167,11 +161,10 @@ if (!ownerOnly()) {
       <div class="card">
         <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')"><i class="ic" data-icon="edit"></i> Tahrirlash</button></div>
         <div class="card-b" style="padding-top: 0">
-          <div class="row-item"><div><div class="nm">Chizma modeli</div></div><div class="meta">List bo'yicha</div></div>
-          <div class="row-item"><div><div class="nm">Chizma narxi</div></div><div class="meta">100 000 so'm / list</div></div>
-          <div class="row-item"><div><div class="nm">Krom 0.4 mm</div></div><div class="meta">2 500 so'm / metr</div></div>
-          <div class="row-item"><div><div class="nm">Krom 2.0 mm</div></div><div class="meta">3 000 so'm / metr</div></div>
+          <div class="row-item"><div><div class="nm">Kesish narxi</div><small style="color:var(--ink-6)">har bir kesilgan panel uchun</small></div><div class="meta">100 000 so'm / panel</div></div>
+          <div class="row-item"><div><div class="nm">Krom yopishtirish narxi</div><small style="color:var(--ink-6)">ish haqi · har bir metr uchun (qalinlikdan qat'i nazar)</small></div><div class="meta">3 000 so'm / metr</div></div>
         </div>
+        <p class="muted" style="font-size:12px;margin:14px 22px 18px">Krom material'ining xom narxi (metr uchun) <a href="catalog.html" style="color:inherit;text-decoration:underline">Material katalogi</a>'da belgilanadi. Buyurtmada krom uchun mijoz to'laydigan summa = material narxi + bu yerdagi ish haqi.</p>
       </div>
     </section>
 

@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-05-25
 order: 55
 ---
 
@@ -18,7 +18,7 @@ system provides.
 ## Problem
 
 Today money is receipts in a folder and a notebook. The shop doesn't know its net at
-month-end without hours of arithmetic, and "Asror cut 23 sheets, multiply by his rate" is
+month-end without hours of arithmetic, and "Asror cut 23 panels, multiply by his rate" is
 done on paper. v1 closes the loop with the smallest possible ledger: income in, expenses
 out, the raw production counts an accountant needs to compute pay — and one report that ties
 revenue, expenses, and net together. The system deliberately does **not** compute salaries;
@@ -81,12 +81,13 @@ A report over a **period** and **branch(es)**, grouped by workshop user:
 
 | Column | Source |
 |---|---|
-| Sheets cut · cut count | Σ `sheets_used_snapshot` / `cut_count_snapshot` over orders where the user is `cutter_user_id` and `cut_completed_at` is in the period |
-| Orders banded · metres of banding (by thickness) | count + Σ `edge_length_snapshot` over orders where the user is `edger_user_id` and `edge_completed_at` is in the period |
+| Panels cut · cut count | Σ `panels_used_snapshot` / `cut_count_snapshot` over orders where the user is `cutter_user_id` and `cut_completed_at` is in the period |
+| Orders banded · metres of banding | count + Σ `edge_length_snapshot` over orders where the user is `edger_user_id` and `edge_completed_at` is in the period |
+| Metres of banding broken down | grouped by **edge material** (and rolled up by thickness too, since thickness is a property of the material — read from the material at report time) |
 
 Credit is dated by the completion stamp, so it falls in the period the work was done
-regardless of when the order was collected. A job reverted ([`orders.md`](orders.md)) clears
-its stamp, so reverted work doesn't appear. Read-only; `view_finance_reports` (or
+regardless of when the order was collected. A job reverted ([`orders.md`](orders.md))
+clears its stamp, so reverted work doesn't appear. Read-only; `view_finance_reports` (or
 `manage_finance`).
 
 ## Finance reports
@@ -118,10 +119,10 @@ A top-level **Finance** nav item in the workshop app (visible to anyone with
   form (category, branch, amount, date, vendor, description, receipt). Row actions: Edit ·
   Void (reason). No Delete.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
-  `manage_finance`) — period + branch picker; table per worker (sheets, cuts, orders banded,
-  metres by thickness); a "record salary expense" shortcut that opens the Expense form
-  pre-set to `category = salary` for that worker (the accountant fills the amount). Empty:
-  "No production in this period."
+  `manage_finance`) — period + branch picker; table per worker (panels, cuts, orders
+  banded, metres by edge material, with a thickness rollup); a "record salary expense"
+  shortcut that opens the Expense form pre-set to `category = salary` for that worker
+  (the accountant fills the amount). Empty: "No production in this period."
 
 States: dashboards, lists, and detail all have loading / empty / error; mutating actions
 confirm; mandatory reasons block submit until filled; receipt upload uses the shared

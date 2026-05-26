@@ -2,183 +2,231 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 50
 ---
 
 # Catalog & inventory
 
-Platform material catalog, har bir branch nima saqlaydi va qanday narxlaydi, warehouse, va
-stock qaysi supplier'lardan keladi. **Materials** — bu ikki kind'dagi platform-wide master
-record'lar: **sheets** va **edges**; workshop faqat qaysisini saqlashini *select* qiladi.
-**Stock** warehouseman tomonidan kiritiladi va production yakunlanishi bilan **order state
-machine tomonidan auto-decrement** qilinadi — reservation yo'q. Order ↔ stock contract
-[`orders.md`](orders.md) → *The stock seam* tomonidan owned; bu doc uning ortidagi warehouse
-mexanikasi.
+Platform material catalog'i, ortidagi manufacturer'lar, har bir branch nima olib yurishi va
+pricing'i, ombor va stock keladigan supplier'lar. **Material'lar** platform-wide master
+record'lar ikki kind'da — **panel'lar** va **edge'lar**; workshop faqat qaysi birini olib
+yurishini *tanlaydi*. **Stock** warehouseman tomonidan kiritiladi va production tugashi
+bilan **order state machine tomonidan avto-decrement qilinadi** — reservation yoʻq.
+Order ↔ stock kontrakti [`orders.md`](orders.md) → *The stock seam*'ga tegishli; bu doc
+uning ortidagi warehouse mexanikasi.
+
+## Manufacturers (platform master list)
+
+Material'ni kim ishlab chiqargani — Kronospan, Egger, Rehau va hokazo. Alohida
+platform-scoped list: material'ning identity'si manufacturer'ni oʻz ichiga oladi
+(Egger H1334 18 mm va Kronospan H1334 18 mm — ikkita catalog row, ikkita stock item,
+ikkita price). Platform operator'lar tomonidan curate qilinadi.
+
+**Operation'lar (platform operator):**
+
+- **Create / edit a manufacturer** — `name` (unique, case-insensitive), ixtiyoriy
+  `country` va `note`.
+- **Activate / deactivate** platform level'da. `inactive` yangi material yaratishlarga va
+  branch material-selection picker'lariga koʻrinmaydi; inactive manufacturer'ning mavjud
+  material'lari unga reference qilishda davom etadi (history saqlanadi). Delete yoʻq.
+- **List / get** — operator'lar barchasini koʻradi; workshop user'lar va client'lar faqat
+  oʻzlari koʻra olayotgan material'larga biriktirilgan manufacturer'larni filter chip
+  sifatida koʻradi.
+
+Manufacturer yaratish material-create form'idan side-trip (inline-add), supplier'ning
+stock-in'dan inline-add'i bilan bir xil shape'da.
 
 ## Materials (platform master catalog)
 
-Materials platform level'da yashaydi. Workshop'lar materials'ni define qilmaydi; ular bu
-catalog'dan tanlaydi. v1'da ikki **kind**:
+Material'lar platform level'da yashaydi. Workshop'lar material'larni belgilamaydi; ular
+shu catalog'dan tanlaydi. v1'da ikki **kind**:
 
 | Kind | What it is | Measured in | Has |
 |---|---|---|---|
-| `sheet` | a cuttable board (DSP / MDF / plywood / …) | sheets | type, thickness, colour / decor, sheet length × width (`length ≥ width` = grain direction), grain yes/no, image |
-| `edge` | edge-banding tape applied to a panel's sides | metres | thickness, colour / decor, image |
+| `panel` | a cuttable board (DSP / MDF / plywood / …) | panels | manufacturer, type, thickness, colour / decor, panel length × width (`length ≥ width` = grain direction), grain yes/no, image |
+| `edge` | edge-banding tape applied to a panel's sides | metres | manufacturer, thickness, colour / decor, image |
 
-**Operations (platform operator):**
+**Operation'lar (platform operator):**
 
-- **Create / edit a material** — `kind` + o'sha kind uchun field'lar. (spec, sheet size)'ga
-  bitta master record — bir xil spec ikki sheet size'da ikkita material, har biri o'z size'ini
-  nomida ko'rsatadi. Bu level'da narx yo'q — narx per-branch.
-- **Activate / deactivate** platform level'da. `inactive` yangi branch selection'lar va
-  client'lar uchun ko'rinmaydi; mavjud branch selection'lar master'ga reference qilishni
-  davom ettiradi (history saqlanadi). Delete yo'q.
-- **List / get** — operator'lar hammasini ko'radi; workshop user'lar "add to branch
-  selection" picker orqali active subset'ni ko'radi; client'lar faqat o'z branch'i nima
-  saqlaganini ko'radi.
+- **Create / edit a material** — `kind` + `manufacturer_id` + oʻsha kind uchun
+  field'lar. Har bir (spec, panel size, manufacturer) uchun bittadan master record —
+  ikki panel size'dagi bir xil spec ikki material, ikki manufacturer'dan bir xil spec
+  yana ikkitasi; har biri oʻz specific'larini nomida koʻrsatadi. Bu level'da price yoʻq
+  — price per-branch.
+- **Activate / deactivate** platform level'da. `inactive` yangi branch tanlovlariga va
+  client'larga koʻrinmaydi; mavjud branch tanlovlari master'ga reference qilishda davom
+  etadi (history saqlanadi). Delete yoʻq.
+- **List / get** — operator'lar barchasini koʻradi; workshop user'lar "add to branch
+  selection" picker orqali active subset'ni koʻradi; client'lar faqat oʻz branch'i
+  olib yurganini koʻradi.
 
-Platform-level edit hech qachon mavjud order'larga tegmaydi (snapshots —
+Platform level'idagi edit mavjud order'larga hech qachon tegmaydi (snapshot'lar —
 [`architecture.md`](../../architecture.md#data-model-invariants)).
 
 ## Branch material selection
 
-Branch catalog'ning bir subset'ini saqlaydi. `(branch, material)` selection branch'ning
-stock unit price'ini, uning min-stock threshold'ini va client-visibility flag'ini ushlab
-turadi. Material qo'shish o'sha branch uchun stock item yaratadi (zero on hand).
+Branch catalog'ning subset'ini olib yuradi. `(branch, material)` selection branch'ning
+price'ini (`panel` uchun per panel, `edge` uchun per metr), min-stock threshold'ini va
+client-visibility flag'ini ushlab turadi. Material qoʻshish branch'ning shu material
+uchun stock item'ini yaratadi (on-hand nol).
 
-**Operations (owner, yoki branch'da `manage_catalog`):**
+**Operation'lar (owner yoki branch'da `manage_catalog`):**
 
-- **Add a material** — platform-`active` material'ni tanlang; per-unit price'ni (`sheet`
-  uchun per sheet, `edge` uchun per metre) va `min_stock`'ni (≥ 0) belgilang.
-- **Edit price or min-stock** — hech qachon mavjud order'larga tegmaydi (snapshots).
-- **Activate / deactivate** branch level'da. `inactive` client'larga ko'rinmaydi va yangi
-  cutting'da selectable emas; stock va history qoladi. Delete yo'q.
+- **Add a material** — platform-`active` material'ni tanlash (manufacturer + kind
+  filter + search); per-unit price va `min_stock` (≥ 0)'ni set qilish.
+- **Edit price or min-stock** — mavjud order'larga hech qachon tegmaydi (snapshot'lar).
+- **Activate / deactivate** branch level'da. `inactive` client'larga koʻrinmaydi va
+  yangi cutting'da tanlab boʻlmaydi; stock va history qoladi. Delete yoʻq.
 
-Client material'ni faqat u platform va branch level'da **ikkalasida** ham `active` bo'lganda
-ko'radi.
+Client material'ni faqat platform level'da **ham** branch level'da **ham** `active`
+boʻlganda koʻradi.
 
 ## Branch pricing
 
-Branch'ga bitta pricing row, branch bilan birga yaratiladi. Order aynan shundan narxlanadi —
-per-metre edge material price'idan **emas**; order uni creation'da snapshot qiladi
-([`orders.md`](orders.md) → *Pricing*).
+Branch uchun bitta pricing row, branch bilan birga yaratiladi. Order pricing creation'da
+uni oʻqiydi va qiymatlarni order'ga snapshot qiladi; keyingi oʻzgarishlar mavjud
+order'larga yetib bormaydi.
 
-- `cutting_model` (`per_sheet` / `per_cut`) + `cutting_rate_tiyin`.
-- `edge_banding_rates` — har bir banding thickness uchun all-in rate (masalan, `0.4`, `2.0`).
-  Bu banding'ning **price**'i; u consume qiladigan `edge` material alohida stock sifatida
-  track qilinadi (uning per-metre selection price'i cost reference, v1 order pricing'da
-  ishlatilmaydi).
+- `cutting_rate_tiyin` — har bir kesilgan panel uchun ish haqi (v1'da per-cut model yoʻq;
+  yagona model per panel).
+- `edge_banding_rate_tiyin` — har bir yopishtirilgan metr uchun ish haqi. v1'da bitta rate,
+  thickness'ga bogʻliq emas.
+- Edge **material** narxi alohida — har bir
+  [Branch material](#branch-material-selection) `edge` selection'idagi per-metre `price_tiyin`
+  (xom material narxi). Order total = material + ish haqi, har bir `shop` side metr boʻyicha.
 
-**Owner only** (v1'da delegable emas). Rate'i yo'q banding thickness'ni ishlatuvchi part
-order pricing'ni fail qiladi (`missing_edge_rate`) — owner rate'ni qo'shadi.
+**Faqat owner** (v1'da delegate qilib boʻlmaydi). Branch olib yurmaydigan edge
+material'ni ishlatadigan part order pricing'ini fail qiladi
+(`branch_does_not_carry_edge`) — owner edge'ni branch'ning selection'iga qoʻshadi.
 
 ## Suppliers
 
-Workshop material'ni kimdan sotib oladi. Yengil va **on demand yaratiladi**: stock-in'ni
-record qilayotganda warehouseman mavjud supplier'ni tanlaydi yoki inline bittasini qo'shadi
-(name, optional phone / note). Workshop-scoped, hech qachon delete qilinmaydi (ishlatilmasa
-deactivate qilinadi). v1'da purchase-order yoki accounts-payable flow yo'q — purchase uchun
-*money* alohida [`finance.md`](finance.md) expense bo'lib, uni accountant record qiladi; bu
-yerdagi supplier faqat stock qayerdan kelganini label qiladi.
+Workshop material'ni kimdan sotib oladi. Yengil va **kerak boʻlganda yaratiladi**:
+stock-in yozayotganda warehouseman mavjud supplier'ni tanlaydi yoki inline qoʻshadi
+(name, ixtiyoriy phone / note). Workshop-scoped, hech qachon oʻchirilmaydi
+(ishlatilmasa deactivate qilinadi). Supplier ≠ manufacturer: supplier — workshop'ning
+xarid kontragenti, manufacturer — material'ni kim ishlab chiqargani — bitta supplier
+koʻp manufacturer'ning tape'ini olib yurishi mumkin va aksincha.
+
+v1'da purchase-order yoki accounts-payable flow yoʻq — xarid uchun *pul* alohida
+accountant yozadigan [`finance.md`](finance.md) expense; bu yerda supplier faqat
+stock qaerdan kelganini belgilaydi.
 
 ## Inventory
 
-Branch o'zi saqlaydigan har bir material uchun bitta stock item ushlab turadi — material'ning
-unit'idagi (sheets yoki metres) yagona `on_hand` balans va `min_stock` threshold. **`reserved`
-yo'q, `available` yo'q, reservation yo'q** — order hech qachon stock ushlamaydi; u faqat uni
-decrement qiladi.
+Branch olib yurgan har bir material uchun bitta stock item ushlab turadi —
+material'ning unit'idagi (panel'lar yoki metr'lar) bitta `on_hand` balance va bitta
+`min_stock` threshold. **`reserved` yoʻq, `available` yoʻq, reservation yoʻq** —
+order stock ushlab turmaydi; uni faqat decrement qiladi.
 
-**Operations:**
+**Operation'lar:**
 
-- **Stock-in** (owner, yoki branch'da `manage_inventory`) — material (branch'ning
-  selection'ida bo'lishi shart), positive quantity, supplier (mavjud yoki inline qo'shilgan),
-  optional receipt file. `on_hand += qty`.
-- **Adjust** (xuddi shu caller) — **mandatory note** bilan signed delta; `on_hand` 0'dan
-  pasaymasligi mumkin emas. Stock-take va write-off uchun ishlatiladi (jumladan
-  cancelled-mid-production order fizik consume qilgan material).
-- **Consume / restore** (system) — to'liq order state machine tomonidan haydaladi.
+- **Stock-in** (owner yoki branch'da `manage_inventory`) — material (branch'ning
+  selection'ida boʻlishi kerak), musbat quantity, supplier (mavjud yoki inline
+  qoʻshilgan), ixtiyoriy receipt file. `on_hand += qty`.
+- **Adjust** (xuddi shu caller) — **majburiy note** bilan signed delta; `on_hand` 0'dan
+  past tushishi mumkin emas. Stock-take va write-off (jumladan, cancelled-mid-production
+  order fizik ravishda consume qilgan material) uchun ishlatiladi.
+- **Consume / restore** (system) — toʻliq order state machine tomonidan boshqariladi.
 
-**The order seam.** [`orders.md`](orders.md) bo'yicha: `shop` sheet item'lar order'ning
-**Cutting done** marked bo'lganda **consume** qilinadi; `shop` edge material **Banding done**
-marked bo'lganda **consume** qilinadi; operator'ning har ikkala step'dan birini **revert**
-qilishi aynan u consume qilgan narsani **restore** qiladi. `own`-source item'lar hech qachon
-stock'ga tegmaydi.
+**Order seam.** [`orders.md`](orders.md) boʻyicha: `shop` panel item'lar order'ning
+**Cutting done**'i belgilanganda **consume** qilinadi; `shop` edge metr'lar har bir
+edge material uchun **Banding done** belgilanganda **consume** qilinadi. Revert
+oʻzining step'i decrement qilganini aniq qayta increment qiladi. `own`-source panel'lar
+va `own`-source edge side'lar stock'ga hech qachon tegmaydi.
 
-**Projected balance & the verify warning.** Reservation yo'q, shuning uchun ma'noli "yetarli
-bo'ladimi?" allaqachon in flight'dagi demand'ni talab qiladi. Branch'dagi material uchun:
+**Projected balance & verify warning.** Reservation yoʻq, shuning uchun "bizda yetarli
+boʻladimi?"ning haqiqiy maʼnosi allaqachon flight'dagi demand'ga muhtoj. Branch'da bir
+material uchun:
 
-> projected = `on_hand` − Σ (oldindagi active order'lardan o'sha material'ning hali uni
-> decrement qilmagan demand'i)
+> projected = `on_hand` − Σ (oldida hali decrement qilmagan active order'lardan
+> oʻsha material'ning demand'i)
 
-— sheets'lar hali `confirmed`/`cutting`'dagi order'lar tomonidan qarzdor; edge metres'lar
-`confirmed`/`cutting`/`edge_banding`'dagi order'lar tomonidan. Operator order'ni verify
-qilganda ([`orders.md`](orders.md)), projected balance'i bu order'ni qoplamaydigan `shop`
-material **warning** ko'taradi, shunda ular warehouseman'ni prompt qila olishadi — bu hech
-qachon approval'ni **block qilmaydi** (ba'zi workshop'lar per order sotib oladi).
+— panel'lar hali ham `confirmed`/`cutting`'dagi order'lar tomonidan qarzdor; edge
+metr'lar (har bir edge material uchun) `confirmed`/`cutting`/`edge_banding`'dagi
+order'lar tomonidan. Operator order'ni verify qilganda ([`orders.md`](orders.md)),
+projected balance bu order'ni qoplay olmaydigan `shop` material warehouseman'ga
+ogohlantirish berishi uchun **warning** koʻtaradi — approval'ni **hech qachon
+bloklamaydi** (baʼzi workshop'lar per order xarid qiladi).
 
-**Low-stock.** Har qanday o'zgarishdan keyin `on_hand ≤ min_stock` bo'lsa, branch'ning
-`manage_inventory` grantee'lariga va owner'ga notification fire qiladi; daily summary uni
-takrorlaydi.
+**Low-stock.** Har qanday oʻzgarishdan keyin `on_hand ≤ min_stock` boʻlsa,
+branch'ning `manage_inventory` grantee'lariga va owner'ga notification ketadi;
+kunlik summary buni takrorlaydi.
 
 ## UX (workshop app)
 
-Branch tab'lari ostida (va branch filter'li owner-wide view'larda):
+Branch tab'lari ostida (va branch filter bilan owner-wide view'lar):
 
-- **Materials** (`manage_catalog`) — master'dan table (image, kind, type/thickness,
-  colour/decor, sheets uchun sheet size, branch'ning unit price'i, status). **+ Material** →
-  catalog picker (kind + search) → per-branch form (price, min-stock). Row: Edit ·
-  Activate / Deactivate. Delete yo'q.
-- **Pricing** (owner only) — cutting model + rate; edge-banding-rate grid (thickness |
-  rate per metre, add/remove). Save + unsaved-changes guard; yangi branch'da "pricing not set
-  yet" empty state.
-- **Stock** (`manage_inventory`) — table: material (name + image), on-hand, min-stock,
-  unit, last updated; low-stock row'lar highlight qilingan (chip + colour). Per-row **Record
-  stock-in** → modal (qty, inline add'li supplier picker, receipt upload). Inline
-  min-stock. **Adjust** → modal (signed delta + mandatory reason). **Transactions** — to'liq
-  log: type (`stock_in` / `consume` / `restore` / `adjust`), signed quantity, balance-after,
-  order link (consume/restore uchun), supplier (stock_in uchun), actor, note, date; read-only.
-- **Suppliers** (`manage_inventory`) — oddiy list (name, phone, note, active); add / edit /
-  deactivate. Asosan stock-in'dan inline yetib boriladi.
+- **Materials** (`manage_catalog`) — master'dan jadval (image, kind, manufacturer,
+  type/thickness, colour/decor, `panel` uchun panel size, branch'ning unit price,
+  status). Filter chip'lar: kind, manufacturer, type. **+ Material** → catalog picker
+  (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
+  Edit · Activate / Deactivate. Delete yoʻq.
+- **Pricing** (faqat owner) — ikkita field: cutting rate (`cutting_rate_tiyin`, per panel)
+  va krom yopishtirish ish haqi (`edge_banding_rate_tiyin`, per metre, barcha thickness'lar
+  uchun). Save + unsaved-changes guard; yangi branch'da "pricing not set yet" empty state.
+  Edge'ning **xom material** narxi alohida — har bir Branch material `edge` selection'ida
+  yashaydi, bu yerda emas.
+- **Stock** (`manage_inventory`) — jadval: material (name + image + manufacturer
+  chip), on-hand, min-stock, unit, last updated; low-stock row'lar highlighted
+  (chip + colour). Per-row **Record stock-in** → modal (qty, inline add bilan
+  supplier picker, receipt upload). Inline min-stock. **Adjust** → modal (signed
+  delta + majburiy reason). **Transactions** — toʻliq log: type
+  (`stock_in` / `consume` / `restore` / `adjust`), signed quantity, balance-after,
+  order link (consume/restore uchun), supplier (stock_in uchun), actor, note, date;
+  read-only.
+- **Suppliers** (`manage_inventory`) — oddiy list (name, phone, note, active);
+  add / edit / deactivate. Asosan stock-in'dan inline yetib kelinadi.
 
-**Client app** cutting wizard'ning material step'ida: branch'ning active `sheet` selection'i
-searchable grid sifatida (name, type, thickness, colour, sheet size, grain, image, **va
-branch'ning per sheet price'i** faqat item'ning source'i `shop` bo'lganda); single-select.
-Edge banding wizard'da har bir side uchun thickness sifatida tanlanadi
-([`cutting.md`](cutting.md)); mos `edge` material va uning stock'i server-side resolve
-qilinadi.
+**Client app**'da cutting wizard'ning material step'larida: branch'ning active `panel`
+selection'i manufacturer / type / thickness chip'lari bilan searchable grid sifatida
+(name, manufacturer, type, thickness, colour, panel size, grain, image, **va**
+**branch'ning per panel price'i** faqat tanlangan source `shop` boʻlganda);
+single-select. Edge banding wizard'da per side catalog **edge** material sifatida
+tanlanadi ([`cutting.md`](cutting.md)'ga qarang); side'ning source'i `shop` boʻlganda
+order branch'ning oʻsha edge'dagi per-metre **material** narxini va branch'ning
+per-metre **krom yopishtirish ish haqi** rate'ini snapshot qiladi.
 
-States: loading (skeletons); empty (hali selection yo'q → "add materials to this branch");
-error (`trace_id`). Accessibility: low-stock chip + colour, faqat colour emas; modal'lar
-focus'ni manage qiladi; owner-only control'lar non-owner'lar uchun ko'rinarli gate qilingan.
+State'lar: loading (skeleton'lar); empty (hali tanlov yoʻq → "add materials to this
+branch"); error (`trace_id`). Accessibility: low-stock chip + colour, faqat colour
+emas; modal'lar focus boshqaradi; owner-only kontrol'lar non-owner'lar uchun
+koʻrinarli gate qilinadi.
 
 ## Edge cases
 
-- **Platform deactivates a material branches carry** — mavjud selection'lar unga reference
-  qilishni davom ettiradi (history saqlanadi); client'lardan yashirilgan; yangi branch uni
-  qo'sha olmaydi; stock tegilmagan.
-- **Branch deactivates a material still platform-active** — o'sha branch'da client'lardan
-  yashirilgan; stock/history qoladi; boshqa branch'lar ta'sirlanmagan.
-- **Material referenced by old orders, then deactivated** — order'lar ta'sirlanmagan
-  (snapshots).
-- **Sheet width entered larger than length** — platform creation'da reject qilinadi (uzun
-  tomon grain direction). `edge` material'larga taalluqli emas.
-- **`shop` material short when an operator verifies an order** — **warning**, hech qachon
-  block emas; operator warehouseman'ni prompt qiladi ([`orders.md`](orders.md)).
-- **Order cancelled mid-production after material was consumed** — stock **auto-restore
-  qilinmaydi** (u fizik kesilgan edi); count tuzatilishi kerak bo'lsa warehouseman `adjust`
-  write-off'ni record qiladi.
-- **Operator reverts a completed job** — system o'sha step consume qilgan quantity'ni aynan
-  `restore` qiladi.
-- **Adjust below 0** — reject qilinadi.
-- **Stock-in for a branch-deactivated material** — ruxsat etiladi (selection hali mavjud);
-  u reactivate qilingunicha client'larga taklif qilinmaydi xolos.
-- **`own`-source order** — umuman inventory interaction yo'q.
-- **Add a supplier inline that already exists by name** — picker mavjudini afzal ko'radi;
-  near-duplicate'lar manual cleanup, v1'da enforce qilinmagan.
+- **Platform manufacturer'ni deactivate qiladi** — mavjud material'lar unga reference
+  qilishda davom etadi (history saqlanadi); manufacturer new-material picker'dan
+  yoʻqoladi; hech bir branch oʻsha manufacturer ostida yangi material qoʻsha olmaydi;
+  stock tegilmaydi.
+- **Platform branch'lar olib yurgan material'ni deactivate qiladi** — mavjud tanlovlar
+  unga reference qilishda davom etadi (history saqlanadi); client'lardan
+  yashiriladi; hech bir yangi branch uni qoʻsha olmaydi; stock tegilmaydi.
+- **Branch hali ham platform-active material'ni deactivate qiladi** — oʻsha branch'da
+  client'lardan yashiriladi; stock/history qoladi; boshqa branch'lar taʼsirlanmaydi.
+- **Eski order'lar tomonidan reference qilingan material keyin deactivate qilinadi**
+  — order'lar taʼsirlanmaydi (snapshot'lar).
+- **Panel width length'dan katta kiritildi** — platform creation'da rad etiladi
+  (uzun tomon grain direction). `edge` material'larga tegishli emas.
+- **Operator order'ni verify qilganda `shop` material kam** — **warning**, hech
+  qachon block emas; operator warehouseman'ga ogohlantiradi
+  ([`orders.md`](orders.md)).
+- **Order material consume qilingandan keyin mid-production cancel qilindi** — stock
+  **avto-restore qilinmaydi** (u fizik ravishda kesilgan); agar count'ni
+  toʻgʻrilash kerak boʻlsa warehouseman `adjust` write-off yozadi.
+- **Operator tugatilgan job'ni revert qiladi** — system shu step consume qilgan
+  miqdorni aniq `restore` qiladi; edge'lar uchun, step consume qilgan har bir edge
+  material uchun bittadan restore.
+- **Adjust 0'dan past** — rad etiladi.
+- **Branch-deactivated material uchun stock-in** — ruxsat etiladi (selection hali
+  ham mavjud); shunchaki reaktivatsiyaga qadar client'larga taklif qilinmaydi.
+- **`own`-source order** — umuman inventory interaction yoʻq; faqat `own` panel va
+  `own` edge'larga ega order seam'ni butunlay oʻtkazib yuboradi.
+- **Inline supplier qoʻshish, allaqachon nomi boʻyicha mavjud** — picker mavjudini
+  afzal koʻradi; near-duplicate'lar qoʻlda tozalanadi, v1'da enforce qilinmaydi.
 
 ## Next
 
-- [`orders.md`](orders.md) — stock'ni consume / restore qiluvchi state machine va pricing
-  snapshot rule.
-- [`finance.md`](finance.md) — supplier'dan material sotib olishning expense tomoni.
+- [`orders.md`](orders.md) — the state machine that consumes / restores stock and
+  the pricing snapshot rule.
+- [`finance.md`](finance.md) — the expense side of buying material from a supplier.

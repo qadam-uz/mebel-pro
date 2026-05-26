@@ -261,7 +261,7 @@ function renderBranchStep() {
           <div class="br-total">${fmtTiyin(pr.subtotal)}</div>
         </div>
         <div class="price-lines">
-          <div class="ln"><span>Chizma xizmati (${pr.totalSheets} list × ${fmtTiyin(SEED.branchPricing[b.id].perSheetTiyin)})</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+          <div class="ln"><span>Chizma xizmati (${pr.totalPanels} panel × ${fmtTiyin(SEED.branchPricing[b.id].cuttingRateTiyin)})</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
           <div class="ln"><span>Materiallar (ustaxonadan)</span><span class="v">${fmtTiyin(pr.materials)}</span></div>
           ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>` : ''}
           <div class="ln" style="border-top:1px solid var(--line);padding-top:6px;margin-top:6px"><span><b>Jami</b></span><span class="v"><b>${fmtTiyin(pr.subtotal)}</b></span></div>
@@ -356,13 +356,20 @@ function renderReview() {
   `;
   const matLines = pr.matLines.map(ml => {
     const mat = SEED.lookup.matById(ml.matId);
-    return `<div class="ln"><span>· ${mat?.name.split('·')[0].trim() || ml.matId} (${ml.sheets} list × ${fmtTiyin(ml.unit)})</span><span class="v">${fmtTiyin(ml.total)}</span></div>`;
+    return `<div class="ln"><span>· ${mat?.name.split('·')[0].trim() || ml.matId} (${ml.panels} panel × ${fmtTiyin(ml.unit)})</span><span class="v">${fmtTiyin(ml.total)}</span></div>`;
   }).join('');
-  const edgeLines = pr.edgeLines.filter(e => e.total > 0).map(e => `<div class="ln"><span>· Krom ${e.thick}mm × ${e.len_m.toFixed(1)} m</span><span class="v">${fmtTiyin(e.total)}</span></div>`).join('');
+  const edgeLines = pr.edgeLines.filter(e => e.total > 0).map(e => {
+    const em = SEED.lookup.matById(e.matId);
+    const label = em ? `${em.thickness}mm ${em.color}` : e.matId;
+    return `<div class="ln"><span>· Krom material ${label} × ${e.len_m.toFixed(1)} m</span><span class="v">${fmtTiyin(e.total)}</span></div>`;
+  }).join('');
+  const edgeServiceLine = pr.edgeServiceFee > 0
+    ? `<div class="ln"><span>· Krom yopishtirish ish haqi (${pr.totalShopMetres.toFixed(1)} m × ${fmtTiyin(pr.edgeServiceRate)})</span><span class="v">${fmtTiyin(pr.edgeServiceFee)}</span></div>`
+    : '';
   document.getElementById('breakdown').innerHTML = `
-    <div class="ln"><span>Chizma xizmati (${pr.totalSheets} list)</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
-    ${pr.materials > 0 ? `<div class="ln"><span>Materiallar</span><span class="v">${fmtTiyin(pr.materials)}</span></div>${matLines}` : ''}
-    ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>${edgeLines}` : ''}
+    <div class="ln"><span>Kesish xizmati (${pr.totalPanels} panel)</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+    ${pr.materials > 0 ? `<div class="ln"><span>Panel materiallar</span><span class="v">${fmtTiyin(pr.materials)}</span></div>${matLines}` : ''}
+    ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>${edgeLines}${edgeServiceLine}` : ''}
     <div class="ln tot"><span>Jami</span><span class="v">${fmtTiyin(total)}</span></div>
   `;
 }
@@ -370,7 +377,7 @@ function renderReview() {
 /* ============ Summary aside ============ */
 function renderSummary() {
   const algo = SEED.lookup.chosenAlgo(cutting);
-  const totalSheets = algo ? Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0) : 0;
+  const totalPanels = algo ? Object.values(algo.panelsByMat).reduce((a,b)=>a+b,0) : 0;
   const totalQty = cutting.partList.reduce((a,p)=>a+(p.qty||0),0);
   const matIds = [...new Set(cutting.partList.map(p => p.matId).filter(Boolean))];
   const matLabel = matIds.map(id => SEED.lookup.matById(id)?.name.split('·')[0].trim() || id).filter(Boolean).join(' · ');
@@ -378,7 +385,7 @@ function renderSummary() {
   let html = `
     <div class="sm-row"><span>Chizma</span><span class="v">${cutting.id}</span></div>
     <div class="sm-row"><span>Qismlar</span><span class="v">${totalQty}</span></div>
-    <div class="sm-row"><span>Listlar</span><span class="v">${totalSheets}</span></div>
+    <div class="sm-row"><span>Panellar</span><span class="v">${totalPanels}</span></div>
     <div class="sm-row"><span>Materiallar</span><span class="v" style="font:500 11.5px var(--f-mono);text-align:right;max-width:160px">${matLabel}</span></div>
     ${algo ? `<div class="sm-row"><span>Chiqim</span><span class="v">${algo.wastePct}%</span></div>` : ''}
   `;

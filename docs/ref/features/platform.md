@@ -2,15 +2,51 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-25
 order: 70
 ---
 
 # Platform operations
 
-The superadmin app's ops corner: scheduled background jobs, the application-error monitor, and
-the platform-user registry. Workshop provisioning and block / unblock live in
-[`access-management.md`](access-management.md).
+The superadmin app's ops corner: the platform material catalog (manufacturers + materials),
+scheduled background jobs, the application-error monitor, and the platform-user registry.
+Workshop provisioning and block / unblock live in
+[`access-management.md`](access-management.md); the catalog mechanics workshops consume
+sit in [`catalog-inventory.md`](catalog-inventory.md) — this doc owns the **platform-side
+admin surfaces** for them.
+
+## Platform catalog admin
+
+The platform-curated catalog every workshop picks from. Two registries operators manage
+end-to-end here: **Manufacturers** and **Materials**. The full operation rules (create,
+activate / deactivate, the snapshot guarantee that a master edit never reaches existing
+orders) live in [`catalog-inventory.md`](catalog-inventory.md); this section owns the
+**superadmin app's** surfaces for them.
+
+- **Manufacturers** — Kronospan, Egger, Rehau, and so on. A material's identity includes
+  its manufacturer, so adding a new brand here precedes adding the materials it supplies.
+- **Materials** — `panel` and `edge` master records, each carrying its manufacturer.
+
+Operators do not edit per-branch prices or stock — that's workshop territory.
+
+### UX (under a **Catalog** section in the superadmin app)
+
+- **Manufacturers** (`/admin/catalog/manufacturers`) — table: name, country, materials
+  count, status, action menu. **+ Manufacturer** → dialog (name, optional country,
+  optional note). Row actions: Edit · Activate / Deactivate. No Delete. Filter chips:
+  status, country. Empty: "No manufacturers yet — add one before adding materials."
+- **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
+  type/thickness, colour/decor, panel size (for panels), status, action menu. Filter
+  chips: kind (`panel` / `edge`), manufacturer (multi-select), type, thickness, status.
+  **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
+  Manufacturers dialog without leaving this page; spec fields per the kind). Row
+  actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
+  yet — add manufacturers, then materials."
+
+States: loading skeletons, empty, error with `trace_id`; the inline-add for
+manufacturers preserves the in-progress material form. Accessibility: status chip pairs
+colour + text; destructive activation toggles confirm and name the consequence
+("Existing branch selections of this material will be hidden from clients.").
 
 ## Background jobs
 
@@ -69,6 +105,8 @@ in-app creation is the path.
   live docs site and the OpenAPI references). These are HTTP-Basic-gated at the edge, a
   **sign-in separate from the app session** — the link opens in a new tab and is labelled
   so the second prompt isn't a surprise.
+
+Under a **Catalog** section, the Manufacturers and Materials surfaces above.
 
 Under a **Platform** section:
 
