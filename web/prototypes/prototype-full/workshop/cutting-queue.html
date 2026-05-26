@@ -56,7 +56,7 @@ document.getElementById('active-count').textContent = active.length;
 
 function partsLine(o) {
   const c = SEED.lookup.cuttingById(o.cuttingId);
-  return c ? `${c.parts} qism · ${c.sheets} list` : 'chizma yo\'q';
+  return c ? `${c.parts} qism · ${c.panels} panel` : 'chizma yo\'q';
 }
 
 document.getElementById('queue').innerHTML = queue.length === 0

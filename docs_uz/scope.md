@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-25
 order: 20
 ---
 
@@ -27,8 +27,8 @@ substitution.
   order'lar tomonidan avtomatik boshqariladigan reservation'lar va consumption'lar; low-stock
   surfacing.
 - **Optimized cutting** — bir nechta cutting-optimization algoritmlari parallel run boʻladi;
-  platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni nomlaydi**. Output har bir sheet
-  boʻyicha layout, sheet count, waste, cut va edge-banding length va print-ready cutting map'ni
+  platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni nomlaydi**. Output har bir panel
+  boʻyicha layout, panel count, waste, cut va edge-banding length va print-ready cutting map'ni
   oʻz ichiga oladi.
 - **Orders** — finalized cutting result'dan client tomonidan joylashtirilgan order'lar, **frozen
   pricing** va kichik production workflow (verify → cut → band → ready → collected, pickup-only),
@@ -64,7 +64,7 @@ substitution.
 - **Operator browsing of workshop orders** — platform operator provision qiladi, block qiladi va
   monitor qiladi; v1 da cross-workshop order view yoʻq va operator'lar order kontentini oʻqimaydi.
 - **Advanced cutting** — alternative result'lar, juda katta job'lar uchun async mode, manual layout
-  edit'lar, bir nechta sheet size, 3D nesting, CNC path'lar.
+  edit'lar, bir nechta panel size, 3D nesting, CNC path'lar.
 - **Advanced orders** — batching, reorder, template'lar, partial fulfilment, post-completion
   complaint'lar, client rating'lari.
 - **Multi-currency** — faqat local currency.

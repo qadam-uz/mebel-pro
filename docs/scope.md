@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-25
 order: 20
 ---
 
@@ -26,7 +26,7 @@ that's a considered substitution.
   reservations and consumptions driven automatically by orders; low-stock surfacing.
 - **Optimized cutting** — multiple cutting-optimization algorithms run in parallel; the
   platform returns the best result and **names the winning algorithm**. Output includes the
-  per-sheet layout, sheet count, waste, cut and edge-banding length, and a print-ready cutting
+  per-panel layout, panel count, waste, cut and edge-banding length, and a print-ready cutting
   map.
 - **Orders** — client-placed orders from a finalized cutting result, with **frozen pricing**
   and a small production workflow (verify → cut → band → ready → collected, pickup-only),
@@ -62,7 +62,7 @@ that's a considered substitution.
 - **Operator browsing of workshop orders** — the platform operator provisions, blocks, and
   monitors; v1 has no cross-workshop order view and operators don't read order contents.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
-  edits, multiple sheet sizes, 3D nesting, CNC paths.
+  edits, multiple panel sizes, 3D nesting, CNC paths.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion
   complaints, client ratings.
 - **Multi-currency** — local currency only.

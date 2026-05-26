@@ -2,7 +2,7 @@
 title: Getting started
 status: stable
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-25
 order: 1
 ---
 
@@ -17,7 +17,7 @@ raqamlashtiradi va oʻsha workshop'ning mijozlari oldiga self-serve cutting-and-
 
 ## Who it's for
 
-- **Furniture workshops** (tenant'lar) — sheet material'ni (DSP, MDF, plywood) mijoz oʻlchamlariga
+- **Furniture workshops** (tenant'lar) — panel material'ni (DSP, MDF, plywood) mijoz oʻlchamlariga
   kesadigan, bitta yoki bir nechta branch'li small-to-mid shop'lar. Bugun ular order'larni telefon va
   qogʻoz orqali qabul qiladi, cutting'ni qoʻlda yoki desktop tool bilan optimize qiladi va stock'ni
   daftarda kuzatadi.

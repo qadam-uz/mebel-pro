@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 10
 ---
 
@@ -96,6 +96,7 @@ branch per order. Uses the client app.
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; **unique, required** — the verified identity and natural key |
 | `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
+| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The client sets and clears it from their profile. |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
@@ -107,7 +108,12 @@ A client cannot exist without a phone that has been verified via the
 successful verification of a new number.
 
 Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; blocking deletes its sessions;
-created only by a successful first verification (never by an operator or another principal).
+created only by a successful first verification (never by an operator or another principal);
+`preferred_branch_id`, when set, references a branch the client may see (any workshop's
+`active` or `temporarily_closed` branch); the field is **not** scope-enforced (a branch
+later going `inactive` doesn't clear it — the cutting wizard surfaces the situation as the
+same recovery affordances as a no-longer-carried material; see
+[`cutting.md`](../features/cutting.md)).
 
 ## Phone verification challenge
 

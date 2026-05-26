@@ -2,48 +2,73 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 25
 ---
 
 # Catalog
 
-Platform'ning material catalog'i, har bir branch'ning undan tanlovi va har bir branch'ning
-pricing'i. Material'lar **platform-wide master record'lar** — platform operator'lar
-tomonidan bir marta belgilanadi; har bir branch qaysi birini olib yurishini tanlaydi va
-oʻzining price'ini belgilaydi. Branch pricing (cutting model + edge-banding rate'lari) har
-bir order'ning price'ini boshqaradi. Snapshot semantics (price oʻzgarishi mavjud order'ga
-hech qachon yetib bormaydi) [`architecture.md`](../../architecture.md) → *Data model
-invariants*'da yotadi.
+Platform'ning material catalog'i, catalog ortidagi manufacturer'lar, har bir branch'ning
+undan tanlovi va har bir branch'ning pricing'i. Material'lar **platform-wide master
+record'lar** — platform operator'lar tomonidan bir marta belgilanadi; har bir branch qaysi
+birini olib yurishini tanlaydi va oʻzining price'ini belgilaydi. Branch pricing ikkita
+xizmat rate'ini olib yuradi (panel kesish uchun + metr krom yopishtirish ish haqi); branch'ning
+har bir edge selection'idagi per-metre price esa oʻsha tape uchun **xom material** narxi.
+Order pricing buni birlashtiradi: krom narxi = material + ish haqi, har bir metr uchun.
+Snapshot semantics (price oʻzgarishi mavjud order'ga hech qachon yetib bormaydi)
+[`architecture.md`](../../architecture.md) → *Data model invariants*'da yotadi.
 
-## Material
+## Manufacturer
 
-Platform master record (har bir spec va sheet size uchun bittadan), v1'da ikki **kind**'da: `sheet`
-(kesiladigan board, sheet boʻyicha stock qilinadi va price beriladi) yoki `edge`
-(edge-banding tape, metr boʻyicha stock qilinadi va oʻlchanadi). Client cutting boshlaganda
-sheet'ni va har bir side uchun edge thickness'ni tanlaydi; optimizer sheet'ning size va
-grain'ini oʻqiydi; order material'ning detail'larini va branch'ning price'ini snapshot
-qiladi.
+Material'ni kim ishlab chiqargani — Kronospan, Egger, Rehau va hokazo. Platform-scoped master
+record: bir xil spec'dagi ikki material agar manufacturer'lari boshqacha boʻlsa, ikkita
+alohida catalog row sanaladi (identity manufacturer'ni oʻz ichiga oladi). Material-create
+form'idan platform operator'lar tomonidan kerak boʻlganda yaratiladi.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `kind` | enum | `sheet` / `edge` |
-| `type` | enum? | `sheet` only: `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
-| `name` | text | required, includes the sheet size, e.g. "Kronospan DSP White 18mm · 2750×1830" |
-| `thickness_mm` | numeric | required (sheets e.g. 8/16/18; edges e.g. 0.4/2.0) |
+| `name` | text | required; unique (case-insensitive) |
+| `country` | text? | optional — disambiguates similarly-named brands |
+| `note` | text? | optional — short free-text |
+| `status` | enum | `active` / `inactive` (soft delete only) |
+| `created_at` / `updated_at` | timestamp | |
+
+Invariant'lar: `name` unique; faqat platform operator yaratadi va tahrirlaydi; `inactive`
+yangi material yaratishlarga va branch material-selection picker'lariga koʻrinmaydi;
+`inactive` manufacturer'ning mavjud material'lari unga reference qilishda davom etadi
+(history saqlanadi); hech qachon oʻchirilmaydi.
+
+## Material
+
+Platform master record (har bir spec, panel size mavjud boʻlganda va **manufacturer** uchun
+bittadan), v1'da ikki **kind**'da: `panel` (kesiladigan board, panel boʻyicha stock qilinadi
+va price beriladi) yoki `edge` (edge-banding tape, metr boʻyicha stock qilinadi va
+oʻlchanadi). Client cutting boshlaganda panel'ni va har bir side uchun edge material'ni
+tanlaydi; optimizer panel'ning size va grain'ini oʻqiydi; order material'ning detail'larini
+va branch'ning price'ini snapshot qiladi.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `kind` | enum | `panel` / `edge` |
+| `manufacturer_id` | UUID | required; references a platform [Manufacturer](#manufacturer) |
+| `type` | enum? | `panel` only: `dsp` / `mdf` / `plywood` / `natural_wood` / `other` |
+| `name` | text | required; spec + size, e.g. "DSP H1334 ST9 · Dub Sonoma · 18 mm · 2750×1830" — manufacturer rendered separately, not embedded in the name |
+| `thickness_mm` | numeric | required (panels e.g. 8/16/18; edges e.g. 0.4/2.0) |
 | `color` / `decor_code` | text / text? | required / optional |
-| `sheet_length_mm` / `sheet_width_mm` | int? | **`sheet` only**, required there; `length ≥ width` (long side = grain direction); null for `edge` |
-| `grain_direction` | bool? | **`sheet` only**; `true` if the board has a grain; null for `edge` |
+| `panel_length_mm` / `panel_width_mm` | int? | **`panel` only**, required there; `length ≥ width` (long side = grain direction); null for `edge` |
+| `grain_direction` | bool? | **`panel` only**; `true` if the board has a grain; null for `edge` |
 | `image_file_id` | UUID? | → [file](support.md#file) — sample image |
 | `status` | enum | `active` / `inactive` (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 
-Invariant'lar: `sheet` material'larda `type`, sheet size (`length ≥ width`) va grain bor;
-`edge` material'larda bularning hech biri yoʻq va metrda oʻlchanadi; har bir `sheet`
-material uchun bitta standart sheet size (v1) — material'ning identity'si uning spec'i **va**
-oʻsha size'i, shuning uchun bir xil spec ikki sheet size'da saqlansa ikkita alohida material
-boʻladi, har biri oʻz size'ini nomida koʻrsatadi; faqat platform operator yaratadi va
+Invariant'lar: `panel` material'larda `type`, panel size (`length ≥ width`) va grain bor;
+`edge` material'larda bularning hech biri yoʻq va metrda oʻlchanadi; har bir `panel`
+material uchun bitta standart panel size (v1) — material'ning identity'si uning spec'i, oʻsha
+size'i **va manufacturer'i**, shuning uchun bir xil spec ikki manufacturer'da saqlansa
+ikkita catalog row boʻladi va bir xil spec ikki panel size'da saqlansa yana ikkita boʻladi,
+har biri oʻz specific'larini nomida koʻrsatadi; faqat platform operator yaratadi va
 tahrirlaydi (platform user'lar toʻliq platform scope'ga ega; workshop tomonidagi hech bir
 permission grant buni bermaydi); `inactive` yangi branch tanlovlariga va client'larga
 koʻrinmaydi; `inactive` master'ning mavjud branch tanlovlari unga reference qilishda davom
@@ -63,41 +88,45 @@ yaratiladi.
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; references a platform [Material](#material) |
-| `price_tiyin` | bigint | per stock unit (per **sheet** for a `sheet`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
+| `price_tiyin` | bigint | per stock unit (per **panel** for a `panel`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
 | `min_stock` | int | low-stock threshold for the branch's stock item; ≥ 0 |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 
-Order pricing `sheet`'ning `price_tiyin`'idan (`shop` part'lar uchun) va cutting hamda edge
-banding uchun branch'ning [Branch pricing](#branch-pricing)'idan foydalanadi. `edge`
-material'ning `price_tiyin`'i **faqat cost reference** — banding `edge_banding_rates`'dan
-price qilinadi, per-metre material price'idan emas (v1).
+Order pricing `price_tiyin`'ni **ikkala** kind uchun ham oʻqiydi: `shop` panel part'lar uchun
+`panel`'ning per-panel price'i va har bir `shop` edge metr uchun `edge`'ning per-metre
+price'i. Per-metre edge price oʻsha tape uchun **xom material narxi** — **krom
+yopishtirish ish haqi** esa [Branch pricing](#branch-pricing)'dagi alohida per-metre rate,
+materialga qoʻshilib hisoblanadi. Cutting service ham xuddi shu Branch pricing'dagi
+per-panel rate.
 
 Invariant'lar: `(branch_id, material_id)` unique; price integer tiyin (hech qachon float
 emas); price'ni tahrirlash mavjud order'larga hech qachon taʼsir qilmaydi (snapshot'lar);
-branch'da workshop owner yoki `manage_catalog` grantee tomonidan yaratiladi va
-tahrirlanadi; tanlov yaratilganda reference qilingan Material platform level'da `active`
-boʻlishi kerak (mavjud tanlovlar keyingi platform deactivation'idan keyin ham omon
-qoladi); `inactive` shu branch'da xarid qilayotgan client'larga koʻrinmaydi va yangi
-cutting'da tanlab boʻlmaydi; client branch'da material'ni faqat master Material **ham**
-Branch material **ham** `active` boʻlganda koʻradi; hech qachon oʻchirilmaydi.
+branch'da workshop owner yoki `manage_catalog` grantee tomonidan yaratiladi va tahrirlanadi;
+tanlov yaratilganda reference qilingan Material platform level'da `active` boʻlishi kerak
+(mavjud tanlovlar keyingi platform deactivation'idan keyin ham omon qoladi); `inactive` shu
+branch'da xarid qilayotgan client'larga koʻrinmaydi va yangi cutting'da tanlab boʻlmaydi;
+client branch'da material'ni faqat master Material **ham** Branch material **ham** `active`
+boʻlganda koʻradi; hech qachon oʻchirilmaydi.
 
 ## Branch pricing
 
-Branch'ning cutting service va edge banding uchun pricing configuration'i. Har bir branch
-uchun bittadan. Order pricing uni order creation / re-pricing vaqtida oʻqiydi va
-qiymatlarni order'ga snapshot qiladi; keyingi oʻzgarishlar mavjud order'larga yetib
-bormaydi.
+Branch'ning xizmat rate'lari: panel kesish uchun bitta rate va metr krom yopishtirish uchun
+bitta rate (qalinlikdan qatʼi nazar). Har bir branch uchun bittadan row. Order pricing
+uni order creation vaqtida oʻqiydi va qiymatlarni order'ga snapshot qiladi; keyingi
+oʻzgarishlar mavjud order'larga yetib bormaydi. Edge **material** narxi alohida — har bir
+[Branch material](#branch-material) `edge` selection'idagi per-metre `price_tiyin`'da
+yashaydi.
 
 | Field | Type | Notes |
 |---|---|---|
 | `branch_id` | UUID | PK; 1:1 with branch |
-| `cutting_model` | enum | `per_sheet` or `per_cut` |
-| `cutting_rate_tiyin` | bigint | the rate per the chosen model, ≥ 0 |
-| `edge_banding_rates` | json | map `thickness_mm → rate_tiyin per metre`, e.g. `{ "0.4": 300000, "2.0": 500000 }` |
+| `cutting_rate_tiyin` | bigint | the rate per panel cut, ≥ 0 |
+| `edge_banding_rate_tiyin` | bigint | the labour rate per metre of tape applied, ≥ 0 (one rate; thickness is the material's property and doesn't change the rate in v1) |
 | `updated_at` | timestamp | |
 | `updated_by_user_id` | UUID | → workshop user with `is_owner` |
 
-Invariant'lar: har bir branch uchun aniq bitta row (DB PK); rate'lar integer tiyin; rate'i
-yoʻq banding thickness'ni ishlatadigan part order pricing'ni fail qiladi (operational gap;
-owner uni qoʻshadi); faqat workshop owner tahrirlaydi (v1'da delegate qilib boʻlmaydi).
+Invariant'lar: har bir branch uchun aniq bitta row (DB PK); rate'lar integer tiyin; faqat
+workshop owner tahrirlaydi (v1'da delegate qilib boʻlmaydi). Branch olib yurmaydigan edge
+material'ni ishlatadigan part order pricing'ni fail qiladi (operational gap; owner edge'ni
+branch'ning selection'iga qoʻshadi).

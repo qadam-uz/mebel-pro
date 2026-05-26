@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-20
+updated: 2026-05-25
 order: 30
 ---
 
@@ -16,7 +16,7 @@ suppliers stock arrives from. There is **no reservation** in v1: the order state
 ## Stock item
 
 A branch's balance for one material — a single on-hand quantity in the material's unit
-(sheets for a `sheet` material, metres for an `edge`) and a low-stock threshold. One per
+(panels for a `panel` material, metres for an `edge`) and a low-stock threshold. One per
 material per branch.
 
 | Field | Type | Notes |
@@ -44,6 +44,11 @@ branch's `manage_inventory` grantees and the owner. The verify-time "projected b
 warning ([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time
 computation, not a stored field.
 
+Edge `consume` / `restore` is keyed by **edge material id** (not by thickness): an
+`edge_banding → ready` transition fires one `consume` per `shop` edge material that the
+order's `edge_length_snapshot` carries, each for the metres of that exact material. A
+revert fires one `restore` per material, mirroring the consume.
+
 ## Stock transaction
 
 One audit row for one change to a stock item. Append-only.
@@ -69,7 +74,10 @@ carry an `order_id` and no `actor_user_id`; `stock_in` carries a `supplier_id` a
 
 Where a branch's stock came from — a lightweight, workshop-scoped label, created on demand
 from the stock-in form. No purchase-order or payables flow in v1; the money for a purchase
-is a separate [`finance.md`](../features/finance.md) expense.
+is a separate [`finance.md`](../features/finance.md) expense. A supplier is the workshop's
+buying counterparty; the material's **manufacturer** ([`catalog.md`](catalog.md)) is who
+made it — distinct concepts (a single supplier may carry materials from several
+manufacturers, and vice versa).
 
 | Field | Type | Notes |
 |---|---|---|

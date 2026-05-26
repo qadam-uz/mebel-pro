@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 20
 ---
 
@@ -162,7 +162,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 |---|---|
 | `view_dashboard` | see the branch's dashboard / KPIs / order summary |
 | `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
-| `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements sheet stock) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock). Cannot edit, verify, cancel, or revert an order. |
+| `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
 | `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. |
 | `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |

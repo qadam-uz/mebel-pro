@@ -54,9 +54,9 @@
     <div class="field"><label>Platforma katalogidan tanlash</label>
       <select id="m-pick" onchange="syncUnit()"></select>
     </div>
-    <p class="muted" style="font-size:12px;margin:-6px 0 12px">List materiallar — narx <b>list</b> uchun; krom — narx <b>metr</b> uchun.</p>
+    <p class="muted" style="font-size:12px;margin:-6px 0 12px">Panel material'lar — narx <b>panel</b> uchun; krom — narx <b>metr</b> uchun (xom material narxi; krom yopishtirish ish haqi alohida — filial narx sozlamalarida).</p>
     <div class="field-row">
-      <div class="field"><label id="add-price-lbl">Narx (so'm / list)</label><input type="text" placeholder="410 000" /></div>
+      <div class="field"><label id="add-price-lbl">Narx (so'm / panel)</label><input type="text" placeholder="410 000" /></div>
       <div class="field"><label>Min zaxira</label><input type="number" value="20" /></div>
     </div>
   </div>
@@ -103,13 +103,14 @@ if (!canCat || CAT_BR.length === 0) {
 })();
 
 function matMeta(m) {
-  if (m.kind === 'edge') return `krom · ${m.thickness} mm · ${m.color}`;
-  return `${m.type?.toUpperCase() || 'list'} · ${m.thickness} mm · ${m.color} · ${m.sheetLen}×${m.sheetWid}${m.grain ? ' · tola yo\'nalishli' : ''}`;
+  const mfr = SEED.lookup.manufacturerName(m);
+  if (m.kind === 'edge') return `${mfr ? mfr + ' · ' : ''}krom · ${m.thickness} mm · ${m.color}`;
+  return `${mfr ? mfr + ' · ' : ''}${m.type?.toUpperCase() || 'panel'} · ${m.thickness} mm · ${m.color} · ${m.panelLen}×${m.panelWid}${m.grain ? ' · tola yo\'nalishli' : ''}`;
 }
 function kindPill(m) {
   return m.kind === 'edge'
     ? '<span class="pill p-eb" style="font-size:9.5px">Krom (metr)</span>'
-    : '<span class="pill p-cut" style="font-size:9.5px">List</span>';
+    : '<span class="pill p-cut" style="font-size:9.5px">Panel</span>';
 }
 
 function render() {
@@ -123,7 +124,7 @@ function render() {
   tb.innerHTML = rows.map(bm => {
     const m = SEED.lookup.matById(bm.matId);
     const b = SEED.lookup.branchById(bm.branchId);
-    const priceUnit = m.kind === 'edge' ? '/ metr' : '/ list';
+    const priceUnit = m.kind === 'edge' ? '/ metr' : '/ panel';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${matMeta(m)}</small></div></div></td>
       <td>${kindPill(m)}</td>
@@ -147,12 +148,12 @@ render();
 
 const sel = document.getElementById('m-pick');
 sel.innerHTML = SEED.materials.filter(m => m.status === 'active')
-  .map(m => `<option data-kind="${m.kind}">${m.name} · ${m.kind === 'edge' ? m.thickness + ' mm krom' : m.thickness + ' mm list'}</option>`).join('');
+  .map(m => `<option data-kind="${m.kind}">${m.name} · ${m.kind === 'edge' ? m.thickness + ' mm krom' : m.thickness + ' mm panel'}</option>`).join('');
 
 window.syncUnit = () => {
   const opt = sel.options[sel.selectedIndex];
   const isEdge = opt?.dataset.kind === 'edge';
-  document.getElementById('add-price-lbl').textContent = isEdge ? 'Narx (so\'m / metr)' : 'Narx (so\'m / list)';
+  document.getElementById('add-price-lbl').textContent = isEdge ? 'Narx (so\'m / metr)' : 'Narx (so\'m / panel)';
 };
 syncUnit();
 </script>

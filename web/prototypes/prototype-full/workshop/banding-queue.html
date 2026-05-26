@@ -47,8 +47,12 @@ document.getElementById('queue-count').textContent = queue.length;
 
 function edgeLine(o) {
   const c = SEED.lookup.cuttingById(o.cuttingId);
-  const el = c ? (SEED.lookup.chosenAlgo(c)?.edgeLen || {}) : {};
-  const parts = Object.entries(el).map(([t, m]) => `${t} mm: ${m} m`);
+  const el = c ? (SEED.lookup.chosenAlgo(c)?.edgeLenByMat || {}) : {};
+  const parts = Object.entries(el).map(([edgeMatId, m]) => {
+    const em = SEED.lookup.matById(edgeMatId);
+    const label = em ? `${em.thickness} mm ${em.color}` : edgeMatId;
+    return `${label}: ${m} m`;
+  });
   return parts.length ? parts.join(' · ') : 'krom rejasi';
 }
 

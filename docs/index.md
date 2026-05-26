@@ -2,7 +2,7 @@
 title: Getting started
 status: stable
 owner: shape
-updated: 2026-05-13
+updated: 2026-05-25
 order: 1
 ---
 
@@ -18,7 +18,7 @@ puts a self-serve cutting-and-ordering surface in front of that workshop's custo
 ## Who it's for
 
 - **Furniture workshops** (the tenants) — small-to-mid shops with one or more branches that cut
-  sheet material (DSP, MDF, plywood) to customer dimensions. Today they take orders by phone and
+  panel material (DSP, MDF, plywood) to customer dimensions. Today they take orders by phone and
   paper, optimize cutting by hand or with a desktop tool, and track stock in a notebook.
 - **Their customers** (clients) — people and small businesses who need panels cut. Today they
   describe parts over the phone; they can't see the cutting plan, the waste, or the price until the

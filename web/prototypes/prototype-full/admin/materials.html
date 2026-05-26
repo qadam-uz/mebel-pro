@@ -30,9 +30,10 @@
       <div class="input"><input id="q" placeholder="Material nomi..." oninput="render()" /></div>
       <div class="chips" id="kind-chips">
         <button class="chip on" data-k="all">Hammasi</button>
-        <button class="chip" data-k="sheet">List</button>
+        <button class="chip" data-k="panel">Panel</button>
         <button class="chip" data-k="edge">Krom lentasi</button>
       </div>
+      <div class="chips" id="mfr-chips" style="margin-top:6px"></div>
       <div class="chips" id="st-chips">
         <button class="chip on" data-s="all">Hammasi</button>
         <button class="chip" data-s="active">Faol</button>
@@ -50,14 +51,19 @@
   <div class="modal-b">
     <div class="field"><label>Material turi (kind)</label>
       <select id="f-kind" onchange="syncKind()">
-        <option value="sheet">List (LDSP / MDF / fanera · m²)</option>
+        <option value="panel">Panel (LDSP / MDF / fanera · panel)</option>
         <option value="edge">Krom lentasi (PVC tasma · metr)</option>
       </select>
       <div class="hint" id="kind-locked" hidden>Mavjud materialning kind'i o'zgartirilmaydi.</div>
     </div>
 
+    <div class="field">
+      <label>Manufacturer</label>
+      <select id="f-mfr"></select>
+    </div>
+
     <div class="field" id="f-type-wrap">
-      <label>List turi (type)</label>
+      <label>Panel turi (type)</label>
       <select id="f-type"><option value="dsp">LDSP</option><option value="mdf">MDF</option><option value="plywood">Fanera</option><option value="natural_wood">Tabiiy yog'och</option><option value="other">Boshqa</option></select>
     </div>
 
@@ -69,16 +75,16 @@
     </div>
     <div class="field"><label>Decor kodi (ixtiyoriy)</label><input id="f-decor" placeholder="H1334" /></div>
 
-    <div id="f-sheet-only">
+    <div id="f-panel-only">
       <div class="field-row">
-        <div class="field"><label>List uzunligi (mm) · uzun tomon = tola</label><input type="number" id="f-len" value="2750" oninput="checkDims()" /></div>
-        <div class="field"><label>List kengligi (mm)</label><input type="number" id="f-wid" value="1830" oninput="checkDims()" /></div>
+        <div class="field"><label>Panel uzunligi (mm) · uzun tomon = tola</label><input type="number" id="f-len" value="2750" oninput="checkDims()" /></div>
+        <div class="field"><label>Panel kengligi (mm)</label><input type="number" id="f-wid" value="1830" oninput="checkDims()" /></div>
       </div>
       <div class="field err" id="dim-err" hidden>Uzunlik kenglikdan kichik bo'lishi mumkin emas — uzun tomon tola yo'nalishi (length ≥ width).</div>
       <div class="field"><label>Tola yo'nalishi (grain)</label><select id="f-grain"><option value="true">Bor (uzun tomon bo'ylab)</option><option value="false">Yo'q (har tomonga aylantirsa bo'ladi)</option></select></div>
     </div>
 
-    <div class="banner info" id="f-edge-note" hidden><div class="ic">i</div><div class="grow">Krom lentasi metrda o'lchanadi · list o'lchami, tola va list turi yo'q. Tipik qalinlik: 0.4 yoki 2.0 mm.</div></div>
+    <div class="banner info" id="f-edge-note" hidden><div class="ic">i</div><div class="grow">Krom lentasi metrda o'lchanadi · panel o'lchami, tola va panel turi yo'q. Tipik qalinlik: 0.4 yoki 2.0 mm.</div></div>
 
     <div class="field"><label>Rasm (ixtiyoriy)</label><input type="file" accept="image/*" /></div>
   </div>
@@ -93,13 +99,21 @@ renderAdminShell();
 
 const body = document.getElementById('page-body');
 const state = demoState();
-let kFilter = 'all', sFilter = 'all', editing = null;
+let kFilter = 'all', sFilter = 'all', mFilter = 'all', editing = null;
 
 const branchesCount = m => SEED.branchMaterials.filter(bm => bm.matId === m.id).length;
 
+function renderMfrChips() {
+  const wrap = document.getElementById('mfr-chips');
+  wrap.innerHTML = `<button class="chip ${mFilter === 'all' ? 'on' : ''}" data-m="all">Manufacturer · hammasi</button>` +
+    SEED.manufacturers.filter(x => x.status === 'active').map(x =>
+      `<button class="chip ${mFilter === x.id ? 'on' : ''}" data-m="${x.id}">${x.name}</button>`).join('');
+}
+
 function render() {
+  renderMfrChips();
   if (state === 'loading') {
-    body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Material</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>List o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead><tbody>${skRows(9, 6)}</tbody></table></div>`;
+    body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Material</th><th>Manufacturer</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>Panel o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead><tbody>${skRows(10, 6)}</tbody></table></div>`;
     return;
   }
   if (state === 'error') { body.innerHTML = errState('Material katalogini yuklab bo\'lmadi.', 'tr-4c91b2'); return; }
@@ -108,20 +122,23 @@ function render() {
   const rows = SEED.materials.filter(m =>
     (kFilter === 'all' || m.kind === kFilter) &&
     (sFilter === 'all' || m.status === sFilter) &&
+    (mFilter === 'all' || m.manufacturerId === mFilter) &&
     (!q || m.name.toLowerCase().includes(q)));
 
   if (!rows.length) { body.innerHTML = emptyState('⊞', 'Material topilmadi', 'Filtr yoki qidiruvni o\'zgartiring.'); return; }
 
   body.innerHTML = `<div class="card"><table class="tbl">
-    <thead><tr><th>Material</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>List o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead>
+    <thead><tr><th>Material</th><th>Manufacturer</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>Panel o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead>
     <tbody>${rows.map(m => {
       const isEdge = m.kind === 'edge';
+      const mfr = SEED.lookup.manufacturerName(m);
       return `<tr>
         <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${m.decor ? m.decor + ' · ' : ''}${m.color}</small></div></div></td>
-        <td>${isEdge ? '<span class="pill p-conf"><span class="pd"></span>Krom lentasi</span>' : '<span class="pill p-ok"><span class="pd"></span>List</span>'}</td>
+        <td>${mfr || '—'}</td>
+        <td>${isEdge ? '<span class="pill p-conf"><span class="pd"></span>Krom lentasi</span>' : '<span class="pill p-ok"><span class="pd"></span>Panel</span>'}</td>
         <td>${isEdge ? '<small style="color:var(--ink-6)">metr · PVC tasma</small>' : (m.type || '').toUpperCase()}</td>
         <td class="num">${m.thickness} mm</td>
-        <td class="num">${isEdge ? '—' : m.sheetLen + ' × ' + m.sheetWid}</td>
+        <td class="num">${isEdge ? '—' : m.panelLen + ' × ' + m.panelWid}</td>
         <td>${isEdge ? '—' : (m.grain ? 'Ha' : '—')}</td>
         <td class="amt">${branchesCount(m)}</td>
         <td>${m.status === 'active' ? '<span class="pill p-ok"><span class="pd"></span>Faol</span>' : '<span class="pill p-dn"><span class="pd"></span>Faol emas</span>'}</td>
@@ -151,11 +168,22 @@ document.getElementById('st-chips').addEventListener('click', e => {
   document.querySelectorAll('#st-chips .chip').forEach(c => c.classList.remove('on'));
   b.classList.add('on'); sFilter = b.dataset.s; render();
 });
+document.getElementById('mfr-chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  document.querySelectorAll('#mfr-chips .chip').forEach(c => c.classList.remove('on'));
+  b.classList.add('on'); mFilter = b.dataset.m; render();
+});
+
+function fillMfrSelect() {
+  const sel = document.getElementById('f-mfr');
+  sel.innerHTML = SEED.manufacturers.filter(x => x.status === 'active').map(x =>
+    `<option value="${x.id}">${x.name}${x.country ? ' · ' + x.country : ''}</option>`).join('');
+}
 
 function syncKind() {
   const isEdge = document.getElementById('f-kind').value === 'edge';
   document.getElementById('f-type-wrap').hidden = isEdge;
-  document.getElementById('f-sheet-only').hidden = isEdge;
+  document.getElementById('f-panel-only').hidden = isEdge;
   document.getElementById('f-edge-note').hidden = !isEdge;
   if (!editing) document.getElementById('f-thick').value = isEdge ? '0.4' : '18';
   document.getElementById('f-name').placeholder = isEdge ? 'Krom PVC 0.4 mm · Dub Sonoma' : 'LDSP H1334 ST9 · Dub Sonoma';
@@ -171,6 +199,7 @@ function checkDims() {
 
 function openMat(matId) {
   editing = matId ? SEED.lookup.matById(matId) : null;
+  fillMfrSelect();
   const kindSel = document.getElementById('f-kind');
   if (editing) {
     document.getElementById('mat-title').textContent = 'Material tahrirlash';
@@ -178,18 +207,19 @@ function openMat(matId) {
     kindSel.value = editing.kind;
     kindSel.disabled = true;                       // kind disabled on edit (PU13)
     document.getElementById('kind-locked').hidden = false;
+    document.getElementById('f-mfr').value = editing.manufacturerId || '';
     document.getElementById('f-name').value = editing.name || '';
     document.getElementById('f-thick').value = editing.thickness ?? '';
     document.getElementById('f-color').value = editing.color || '';
     document.getElementById('f-decor').value = editing.decor || '';
     document.getElementById('f-type').value = editing.type || 'dsp';
-    document.getElementById('f-len').value = editing.sheetLen ?? 2750;
-    document.getElementById('f-wid').value = editing.sheetWid ?? 1830;
+    document.getElementById('f-len').value = editing.panelLen ?? 2750;
+    document.getElementById('f-wid').value = editing.panelWid ?? 1830;
     document.getElementById('f-grain').value = String(!!editing.grain);
   } else {
     document.getElementById('mat-title').textContent = 'Yangi material';
     document.getElementById('mat-save').textContent = 'Yaratish';
-    kindSel.value = 'sheet';
+    kindSel.value = 'panel';
     kindSel.disabled = false;
     document.getElementById('kind-locked').hidden = true;
     ['f-name', 'f-color', 'f-decor'].forEach(i => document.getElementById(i).value = '');
@@ -203,7 +233,7 @@ function openMat(matId) {
 
 function saveMat() {
   const isEdge = document.getElementById('f-kind').value === 'edge';
-  if (!isEdge && !checkDims()) { toast('List o\'lchami noto\'g\'ri (length ≥ width)', 'warn'); return; }
+  if (!isEdge && !checkDims()) { toast('Panel o\'lchami noto\'g\'ri (length ≥ width)', 'warn'); return; }
   const name = document.getElementById('f-name').value || (editing ? editing.name : 'Material');
   closeModal('m-mat');
   toast(editing ? `${name} saqlandi` : `${name} yaratildi`);

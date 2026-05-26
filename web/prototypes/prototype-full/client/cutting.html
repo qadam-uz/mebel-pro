@@ -40,9 +40,12 @@
   .part-row input.num { padding: 7px 8px; border: 1px solid var(--line); border-radius: 5px; font: 500 13px var(--f-mono); background: var(--elev); color: var(--ink-12); width: 100%; box-sizing: border-box; }
   .part-row input.num:focus { outline: 0; border-color: var(--ink-12); }
   .part-row input.num.bad { border-color: var(--danger); background: rgba(180,38,38,.05); }
-  .part-row .edges-btn { padding: 6px 8px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 600 11px var(--f-mono); cursor: pointer; color: var(--ink-12); display: flex; gap: 4px; justify-content: center; }
-  .part-row .edges-btn .e { padding: 1px 4px; border-radius: 3px; background: var(--elev); border: 1px solid var(--line); min-width: 22px; }
-  .part-row .edges-btn .e.has { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .part-row .edges-btn { display: flex; align-items: center; justify-content: center; padding: 4px 6px; border: 1px solid var(--line); background: var(--sunk); border-radius: 6px; cursor: pointer; transition: border-color .12s, background .12s; }
+  .part-row .edges-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .part-row .edges-btn .edge-svg { width: 76px; height: 48px; display: block; }
+  .part-row .edges-btn .edge-svg .frame { fill: none; stroke: var(--ink-6); stroke-width: 0.5; stroke-dasharray: 1 2; opacity: 0.45; }
+  .part-row .edges-btn .edge-svg .side { stroke: var(--accent); stroke-linecap: round; fill: none; }
+  .part-row .edges-btn .edge-svg .lbl { font: 700 6.5px var(--f-mono); fill: var(--accent); letter-spacing: -.02em; }
   .part-row .grain-ic { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-8); background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; }
   .part-row .grain-ic .arr { font: 700 11px var(--f-mono); color: var(--ink-12); }
   @media (max-width: 760px) {
@@ -70,21 +73,109 @@
   .mat-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
   .mat-opt .by-n { font: 500 11px var(--f-ui); color: var(--ink-6); padding: 2px 8px; background: var(--sunk); border-radius: 999px; }
 
-  /* Edges popover (modal-ish) */
-  .edges-pop .presets { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  .edges-pop .presets button { padding: 7px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: 500 12px var(--f-ui); color: var(--ink-12); }
-  .edges-pop .presets button:hover { background: var(--elev); border-color: var(--ink-10); }
+  /* Edges popover — Layer 1 (collapsed) and Layer 2 (customise per side) */
+  .edges-pop { display: flex; flex-direction: column; gap: 14px; }
+  .edges-pop h4 { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin: 0 0 8px; }
+
+  /* Layer 1 presets — radio rows */
+  .ep-presets { display: flex; flex-direction: column; gap: 8px; }
+  .ep-preset { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; }
+  .ep-preset:hover:not([disabled]) { border-color: var(--ink-10); background: var(--sunk); }
+  .ep-preset[disabled] { opacity: .65; cursor: not-allowed; }
+  .ep-preset.on { border-color: var(--accent); background: var(--accent-soft); }
+  .ep-preset .rad { width: 18px; height: 18px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--elev); display: inline-block; position: relative; flex-shrink: 0; }
+  .ep-preset.on .rad { border-color: var(--accent); }
+  .ep-preset.on .rad::after { content: ''; position: absolute; inset: 3px; border-radius: 999px; background: var(--accent); }
+  .ep-preset .lab .nm { font: 600 13.5px var(--f-ui); color: var(--ink-12); line-height: 1.3; }
+  .ep-preset .lab .meta { font: 500 12px var(--f-ui); color: var(--ink-6); margin-top: 3px; line-height: 1.4; }
+  .ep-preset .lab .meta.warn { color: #b87024; }
+  .ep-preset .sw { width: 24px; height: 24px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); flex-shrink: 0; }
+
+  /* Layer 1 own toggle + disclosure */
+  .ep-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; font: 500 13px var(--f-ui); color: var(--ink-12); cursor: pointer; }
+  .ep-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .ep-toggle .hint { font: 400 11.5px var(--f-ui); color: var(--ink-6); margin-left: auto; }
+
+  .ep-disclose { background: transparent; border: 0; padding: 8px 4px; cursor: pointer; font: 600 13px var(--f-ui); color: var(--ink-10); display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+  .ep-disclose:hover { color: var(--ink-12); }
+  .ep-disclose svg { transition: transform .15s; }
+  .ep-disclose.open svg { transform: rotate(180deg); }
+
+  /* Layer 2 — customise per side */
+  .ep-quick { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 4px; }
+  .ep-quick button { padding: 6px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font: 500 12px var(--f-ui); color: var(--ink-10); }
+  .ep-quick button:hover { border-color: var(--ink-10); color: var(--ink-12); }
+  .ep-quick button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
   .edge-diagram { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 4px; }
   .edge-diagram .mid { display: flex; align-items: stretch; gap: 6px; }
   .edge-diagram .panel { width: 168px; height: 104px; border-radius: 4px; background: repeating-linear-gradient(45deg, var(--sunk), var(--sunk) 7px, var(--elev) 7px, var(--elev) 14px); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font: 600 12px var(--f-ui); color: var(--ink-7); }
-  .edge-btn { background: var(--sunk); border: 1px dashed var(--line-strong); color: var(--ink-7); cursor: pointer; border-radius: 5px; font: 600 12px var(--f-mono); display: flex; align-items: center; justify-content: center; transition: all .12s; padding: 0; }
+  .edge-btn { background: var(--sunk); border: 1px dashed var(--line-strong); color: var(--ink-7); cursor: pointer; border-radius: 5px; font: 600 11px var(--f-mono); display: flex; align-items: center; justify-content: center; transition: all .12s; padding: 4px; line-height: 1.2; text-align: center; }
   .edge-btn:hover { border-color: var(--ink-10); color: var(--ink-12); }
-  .edge-btn.set { background: var(--accent); border-style: solid; border-color: var(--accent); color: #fff; }
-  .edge-btn.h { width: 168px; height: 30px; }
-  .edge-btn.v { width: 56px; }
+  .edge-btn.set { background: var(--accent-soft); border-style: solid; border-color: var(--accent); color: var(--accent-h); }
+  .edge-btn.set.own { background: rgba(15,118,110,.16); border-color: var(--accent); color: var(--accent-h); }
+  .edge-btn.h { width: 168px; height: 32px; }
+  .edge-btn.v { width: 64px; }
   .edge-diagram .lbl { font: 500 10px var(--f-ui); text-transform: uppercase; letter-spacing: .05em; color: var(--ink-6); }
-  .edge-hint { text-align: center; font: 500 12px var(--f-ui); color: var(--ink-6); margin: 12px 0 2px; }
-  .edges-pop .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); margin-top: 14px; justify-content: center; }
+
+  /* Side list (TOP/BOTTOM/LEFT/RIGHT rows) */
+  .ep-sides { display: flex; flex-direction: column; gap: 8px; }
+  .ep-side { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; }
+  .ep-side .side-lbl { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); }
+  .ep-side .cur { min-width: 0; }
+  .ep-side .cur .nm { font: 500 13px var(--f-ui); color: var(--ink-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ep-side .cur .nm.none { color: var(--ink-6); font-weight: 500; }
+  .ep-side .cur .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ep-side .src-chip { padding: 2px 7px; font: 600 9.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-8); }
+  .ep-side .src-chip.own { background: rgba(15,118,110,.08); border-color: rgba(15,118,110,.3); color: var(--accent); }
+  .ep-side .edit-btn { padding: 6px 12px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--ink-12); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .ep-side .edit-btn:hover { border-color: var(--ink-10); }
+
+  .ep-bottom { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px dashed var(--line); }
+  .ep-bottom .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); cursor: pointer; }
+  .ep-bottom .ck input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .ep-bottom .ck.disabled { color: var(--ink-6); cursor: not-allowed; }
+  .ep-bottom .ck-hint { font: 400 11.5px var(--f-ui); color: var(--ink-6); margin-left: 24px; line-height: 1.4; }
+
+  /* Layer 3 — per-side sub-picker */
+  .esp-section { margin-bottom: 16px; }
+  .esp-section:last-child { margin-bottom: 0; }
+  .esp-list { display: flex; flex-direction: column; gap: 6px; }
+  .esp-opt { display: grid; grid-template-columns: 22px 24px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-align: left; }
+  .esp-opt:hover { background: var(--sunk); border-color: var(--ink-10); }
+  .esp-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+  .esp-opt .rad { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--elev); display: inline-block; position: relative; flex-shrink: 0; }
+  .esp-opt.on .rad { border-color: var(--accent); }
+  .esp-opt.on .rad::after { content: ''; position: absolute; inset: 2px; border-radius: 999px; background: var(--accent); }
+  .esp-opt .sw { width: 22px; height: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); flex-shrink: 0; }
+  .esp-opt .lab { min-width: 0; }
+  .esp-opt .lab .nm { font: 500 13px var(--f-ui); color: var(--ink-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esp-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .esp-opt .thk { font: 600 11px var(--f-mono); padding: 2px 8px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-10); }
+  .esp-opt.on .thk { background: var(--elev); border-color: var(--accent); color: var(--accent-h); }
+
+  .esp-source { display: flex; gap: 8px; flex-wrap: wrap; }
+  .esp-source label { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: 500 13px var(--f-ui); color: var(--ink-12); }
+  .esp-source label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .esp-source label input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .esp-source label .hint { font: 400 11px var(--f-ui); color: var(--ink-6); display: block; margin-top: 2px; }
+
+  .esp-disclose { background: transparent; border: 0; padding: 6px 0; cursor: pointer; font: 600 12.5px var(--f-ui); color: var(--ink-10); display: inline-flex; align-items: center; gap: 6px; }
+  .esp-disclose:hover { color: var(--ink-12); }
+  .esp-disclose svg { transition: transform .15s; }
+  .esp-disclose.open svg { transform: rotate(180deg); }
+
+  .esp-all { display: none; margin-top: 8px; }
+  .esp-all.open { display: block; }
+  .esp-all .esp-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .esp-all .esp-chips .chip { padding: 4px 10px; font-size: 11.5px; }
+  .esp-all .esp-list { max-height: 280px; overflow-y: auto; padding: 2px; }
+
+  .esp-back { background: transparent; border: 0; cursor: pointer; padding: 6px 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); display: inline-flex; align-items: center; gap: 4px; margin-right: auto; }
+  .esp-back:hover { color: var(--ink-12); }
+  .esp-no-match { padding: 12px; background: var(--sunk); border: 1px dashed var(--line); border-radius: 6px; font: 500 12.5px var(--f-ui); color: var(--ink-6); text-align: center; }
+
+  .esp-branch-note { margin-top: 6px; padding: 6px 10px; background: var(--warn-soft); border: 1px solid var(--warn-tint); border-radius: 4px; font: 500 11.5px var(--f-ui); color: var(--ink-12); line-height: 1.4; }
 
   /* branches indicator */
   .br-strip { margin-top: 14px; padding: 12px 16px; background: var(--sunk); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; font: 500 13px var(--f-ui); color: var(--ink-10); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
@@ -150,6 +241,59 @@
 
   .result-actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
   .stale-msg { padding: 12px 16px; background: rgba(184,112,36,.07); border: 1px solid rgba(184,112,36,.25); border-radius: 6px; font: 500 13px var(--f-ui); color: #855218; margin-bottom: 14px; }
+
+  /* Branch pre-filter strip (top of editor) */
+  .pref-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; background: var(--sunk); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; margin: 14px 0 4px; font: 500 13px var(--f-ui); color: var(--ink-10); }
+  .pref-strip .ic { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; background: var(--elev); color: var(--accent); flex-shrink: 0; }
+  .pref-strip .lab { flex: 1; min-width: 0; }
+  .pref-strip .lab b { color: var(--ink-12); font-weight: 600; }
+  .pref-strip .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pref-strip .btn-sm { padding: 5px 10px; border: 1px solid var(--line); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--ink-12); cursor: pointer; }
+  .pref-strip .btn-sm:hover:not([disabled]) { border-color: var(--ink-10); background: var(--sunk); }
+  .pref-strip .btn-sm[disabled] { opacity: .55; cursor: not-allowed; }
+  .pref-strip .btn-sm.danger { color: var(--danger); border-color: var(--danger-tint); }
+  .pref-strip .btn-sm.danger:hover:not([disabled]) { background: var(--danger-soft); border-color: var(--danger); }
+
+  /* Recovery banner (above parts) */
+  .miss-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--warn-soft); border: 1px solid var(--warn-tint); border-radius: 6px; margin: 10px 0 4px; font: 500 13px var(--f-ui); color: var(--ink-12); line-height: 1.45; }
+  .miss-banner .ic { width: 24px; height: 24px; border-radius: 4px; background: var(--warn); color: #fff; display: grid; place-items: center; flex-shrink: 0; font-weight: 700; }
+  .miss-banner .grow { flex: 1; min-width: 0; }
+  .miss-banner .actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .miss-banner .btn-sm { padding: 5px 10px; border: 1px solid var(--warn-tint); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--warn); cursor: pointer; }
+  .miss-banner .btn-sm:hover:not([disabled]) { background: var(--warn-tint); }
+  .miss-banner .btn-sm[disabled] { opacity: .55; cursor: not-allowed; }
+  .miss-banner .x { background: transparent; border: 0; cursor: pointer; color: var(--ink-6); font: 600 16px var(--f-ui); padding: 0 4px; line-height: 1; flex-shrink: 0; }
+  .miss-banner .x:hover { color: var(--ink-12); }
+
+  /* Per-row recovery notice */
+  .row-miss { grid-column: 1 / -1; margin-top: 6px; padding: 8px 10px; background: var(--warn-soft); border: 1px solid var(--warn-tint); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--ink-12); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row-miss .ic { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 3px; background: var(--warn); color: #fff; font-weight: 700; flex-shrink: 0; }
+  .row-miss .msg { flex: 1; min-width: 180px; line-height: 1.4; }
+  .row-miss .msg b { font-weight: 600; }
+  .row-miss .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row-miss .btn-sm { padding: 4px 9px; border: 1px solid var(--warn-tint); background: var(--elev); border-radius: 4px; font: 500 11.5px var(--f-ui); color: var(--warn); cursor: pointer; white-space: nowrap; }
+  .row-miss .btn-sm:hover:not([disabled]) { background: var(--warn-tint); }
+  .row-miss .btn-sm[disabled] { opacity: .55; cursor: not-allowed; }
+
+  /* Branch picker modal */
+  .br-pick-group { margin-bottom: 14px; }
+  .br-pick-group:last-child { margin-bottom: 0; }
+  .br-pick-group .ws-name { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); padding: 0 4px 8px; }
+  .br-pick-list { display: grid; gap: 8px; }
+  .br-pick-opt { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 14px; border: 1px solid var(--line); background: var(--elev); border-radius: 6px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; }
+  .br-pick-opt:hover:not([disabled]) { border-color: var(--accent); background: var(--accent-soft); }
+  .br-pick-opt[disabled] { opacity: .65; cursor: not-allowed; }
+  .br-pick-opt .nm { font: 600 14px var(--f-ui); color: var(--ink-12); }
+  .br-pick-opt .meta { font: 500 12px var(--f-ui); color: var(--ink-8); }
+  .br-pick-opt .addr { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; grid-column: 1 / -1; }
+  .br-pick-opt .pill { padding: 2px 8px; font: 600 10px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; border-radius: 999px; align-self: start; }
+  .br-pick-opt .pill.active { background: var(--accent-soft); color: var(--accent-h); }
+  .br-pick-opt .pill.tc { background: var(--warn-tint); color: var(--warn); }
+
+  /* Clear-all button */
+  .clear-all-btn { padding: 6px 12px; border: 1px solid var(--danger-tint); background: var(--elev); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--danger); cursor: pointer; }
+  .clear-all-btn:hover:not([disabled]) { background: var(--danger-soft); border-color: var(--danger); }
+  .clear-all-btn[disabled] { opacity: .55; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -171,9 +315,13 @@
     <button class="seg-btn" type="button" disabled onclick="toast(&quot;Fayldan yuklash keyinroq qo'shiladi&quot;)">Fayldan yuklash <span class="soon">tez orada</span></button>
   </div>
 
+  <div id="pref-strip"></div>
+  <div id="miss-banner"></div>
+
   <section class="card editor">
     <div class="editor-hd">
       <h2>Qismlar <span class="meta" id="parts-count">0</span></h2>
+      <div id="clear-all-wrap"></div>
     </div>
     <div class="parts-grid" id="parts"></div>
     <div style="padding: 10px 16px 16px">
@@ -230,39 +378,111 @@
 <!-- Material picker modal -->
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-mat">
-  <div class="modal-h"><h3>Material tanlang</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-h"><h3>Panel tanlang</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <input class="mat-search" id="mat-search" placeholder="Material nomi yoki qalinlik..." oninput="renderMatList()" />
+    <input class="mat-search" id="mat-search" placeholder="Panel nomi yoki qalinlik..." oninput="renderMatList()" />
+    <div class="chips" id="mat-mfr-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>
     <div class="mat-list" id="mat-list"></div>
   </div>
 </div>
 
-<!-- Edges popover modal -->
+<!-- Branch picker modal -->
+<div class="modal" id="m-branch">
+  <div class="modal-h"><h3>Ustaxonani tanlang</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-b">
+    <p style="margin:0 0 12px;color:var(--ink-6);font:500 12.5px var(--f-ui);line-height:1.45">Material katalogi tanlangan filial bo'yicha oldindan filtrlanadi. Tanlash qismlar ro'yxatiga ta'sir qilmaydi.</p>
+    <div id="br-pick-body"></div>
+  </div>
+  <div class="modal-f">
+    <button class="btn btn-outline" data-close-modal>Bekor qilish</button>
+  </div>
+</div>
+
+<!-- Edges picker modal — three layers: Layer 1 (collapsed presets) + Layer 2 (customise per side) -->
 <div class="modal" id="m-edges">
-  <div class="modal-h"><h3>Krom yopishtirish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-h"><h3 id="ep-title">Krom yopishtirish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b edges-pop">
-    <div class="presets">
-      <button type="button" onclick="presetEdges(null)">Hech qaysi</button>
-      <button type="button" onclick="presetEdges(0.4)">Hammasiga 0.4 mm</button>
-      <button type="button" onclick="presetEdges(2.0)">Hammasiga 2.0 mm</button>
+    <!-- Layer 1: collapsed view -->
+    <div id="ep-layer1">
+      <div class="ep-presets" id="ep-presets"></div>
+      <label class="ep-toggle" id="ep-own-row">
+        <input type="checkbox" id="ep-own" />
+        <span>O'zim krom tasmasini olib kelaman</span>
+        <span class="hint">Barcha tomonlarga qo'llanadi</span>
+      </label>
+      <button class="ep-disclose" type="button" id="ep-disclose-btn" onclick="toggleEdgeExpanded()">
+        <span id="ep-disclose-label">Tomon bo'yicha sozlash</span>
+        <i class="ic" data-icon="chevron-down"></i>
+      </button>
     </div>
-    <div class="edge-diagram">
-      <span class="lbl">Yuqori</span>
-      <button class="edge-btn h" type="button" data-side="t" onclick="cycleEdge('t')">Yo'q</button>
-      <div class="mid">
-        <button class="edge-btn v" type="button" data-side="l" onclick="cycleEdge('l')">Yo'q</button>
-        <div class="panel">Qism</div>
-        <button class="edge-btn v" type="button" data-side="r" onclick="cycleEdge('r')">Yo'q</button>
+
+    <!-- Layer 2: customise per side (hidden by default) -->
+    <div id="ep-layer2" class="hide">
+      <div class="ep-quick" id="ep-quick"></div>
+      <div class="edge-diagram" id="ep-diagram">
+        <span class="lbl">Yuqori</span>
+        <button class="edge-btn h" type="button" data-side="t" onclick="openSidePicker('t')">—</button>
+        <div class="mid">
+          <button class="edge-btn v" type="button" data-side="l" onclick="openSidePicker('l')">—</button>
+          <div class="panel">Qism</div>
+          <button class="edge-btn v" type="button" data-side="r" onclick="openSidePicker('r')">—</button>
+        </div>
+        <button class="edge-btn h" type="button" data-side="b" onclick="openSidePicker('b')">—</button>
+        <span class="lbl">Pastki</span>
       </div>
-      <button class="edge-btn h" type="button" data-side="b" onclick="cycleEdge('b')">Yo'q</button>
-      <span class="lbl">Pastki</span>
+      <div class="ep-sides" id="ep-sides"></div>
     </div>
-    <div class="edge-hint">Tomonni bosing: Yo'q → 0.4 mm → 2.0 mm</div>
-    <label class="ck"><input type="checkbox" id="e-all" /> Barcha qismlarga shu sozlash qo'llanilsin</label>
+
+    <div class="ep-bottom">
+      <label class="ck" id="ep-all-row">
+        <input type="checkbox" id="ep-all" />
+        <span>Barcha qismlarga shu sozlash qo'llanilsin</span>
+      </label>
+      <div class="ck-hint hide" id="ep-all-hint">Tomon bo'yicha sozlashda har bir qator alohida — barcha qismlarga qo'llash mavjud emas.</div>
+    </div>
   </div>
   <div class="modal-f">
     <button class="btn btn-outline" data-close-modal>Bekor qilish</button>
     <button class="btn btn-acc" type="button" onclick="applyEdges()">Qo'llash</button>
+  </div>
+</div>
+
+<!-- Per-side sub-picker modal — opens over m-edges -->
+<div class="modal" id="m-edge-side">
+  <div class="modal-h">
+    <h3 id="esp-title">Tomon</h3>
+    <button class="x" type="button" onclick="closeSidePicker()"><i class="ic" data-icon="x"></i></button>
+  </div>
+  <div class="modal-b">
+    <div class="esp-section" id="esp-recommended"></div>
+    <div class="esp-section">
+      <button class="esp-disclose" type="button" id="esp-all-btn" onclick="toggleAllEdges()">
+        <span>Barcha krom'lar</span>
+        <i class="ic" data-icon="chevron-down"></i>
+      </button>
+      <div class="esp-all" id="esp-all-wrap">
+        <div class="esp-chips" id="esp-mfr-chips"></div>
+        <div class="esp-list" id="esp-all-list"></div>
+      </div>
+    </div>
+    <div class="esp-section">
+      <h4>Manba</h4>
+      <div class="esp-source">
+        <label>
+          <input type="radio" name="esp-source" value="shop" id="esp-src-shop" />
+          <span>Ustaxonadan<span class="hint">Krom narxiga ulanadi</span></span>
+        </label>
+        <label>
+          <input type="radio" name="esp-source" value="own" id="esp-src-own" />
+          <span>O'zim olib kelaman<span class="hint">Faqat yopishtirish xizmati</span></span>
+        </label>
+      </div>
+    </div>
+    <div class="esp-branch-note hide" id="esp-branch-note"></div>
+  </div>
+  <div class="modal-f">
+    <button class="esp-back" type="button" onclick="closeSidePicker()"><i class="ic" data-icon="arrow-left"></i> Orqaga</button>
+    <button class="btn btn-acc" type="button" id="esp-apply-btn" onclick="applySidePicker()">Qo'llash</button>
   </div>
 </div>
 
@@ -279,8 +499,8 @@
 
    Limits (PU9 — from cutting.md):
      Part min  50×50 mm inclusive
-     Part max  sheet − 2×10mm trim (per the part's material)
-     ≤100 parts total · ≤20 sheets/material/result · ≤50 open drafts
+     Part max  panel − 2×10mm trim (per the part's material)
+     ≤100 parts total · ≤20 panels/material/result · ≤50 open drafts
    ============================================================ */
 const params = new URLSearchParams(location.search);
 const rawId = params.get('id');
@@ -327,8 +547,8 @@ let activeSheet = 1;
    ============================================================ */
 function partMaxFor(matId) {
   const m = matId ? SEED.lookup.matById(matId) : null;
-  if (!m || m.kind !== 'sheet') return null;
-  return { l: m.sheetLen - 2 * LIM.EDGE_TRIM, w: m.sheetWid - 2 * LIM.EDGE_TRIM };
+  if (!m || m.kind !== 'panel') return null;
+  return { l: m.panelLen - 2 * LIM.EDGE_TRIM, w: m.panelWid - 2 * LIM.EDGE_TRIM };
 }
 
 // Validate one part. inclusive 50×50 minimum (fixes the off-by-one that
@@ -342,9 +562,9 @@ function validatePart(p) {
     return { ok: false, code: 'part_too_small', msg: `Qism juda kichik — eng kami ${LIM.PART_MIN}×${LIM.PART_MIN} mm` };
   const max = partMaxFor(p.matId);
   if (max && (p.l > max.l || p.w > max.w))
-    return { ok: false, code: 'part_too_large', msg: `Qism listga sig'maydi — eng kattasi ${max.l}×${max.w} mm (${mat.name.split('·')[0].trim()})` };
+    return { ok: false, code: 'part_too_large', msg: `Qism panelga sig'maydi — eng kattasi ${max.l}×${max.w} mm (${mat.name.split('·')[0].trim()})` };
   // grain: a grained material can't rotate; if the part is wider than the
-  // sheet's grain-aligned dimension allows in its forced orientation → fail.
+  // panel's grain-aligned dimension allows in its forced orientation → fail.
   if (mat.grain && max && p.w > max.w && p.l > max.w)
     return { ok: false, code: 'impossible_grain', msg: 'Tolali materialda bu qism aylantirilmasdan sig\'maydi' };
   if (p.qty > LIM.MAX_PARTS) return { ok: false, code: 'too_many_parts', msg: 'Bitta qatorda soni juda ko\'p' };
@@ -368,6 +588,74 @@ function validateDraft() {
 }
 
 /* ============================================================
+   Edge cell — rectangle visualisation
+
+   Encoding:
+     no line on a side = no banding there
+     thin line (1.2px) = 0.4 mm
+     thick line (3px)  = 2.0 mm
+     solid             = shop
+     dashed            = own (client brings the tape)
+     numeral on a side = the picked edge's thickness in mm
+
+   Full per-side material details show in the cell's title tooltip.
+   ============================================================ */
+function edgeCellSvg(edges) {
+  const W = 76, H = 48;
+  const x1 = 14, x2 = W - 14, y1 = 13, y2 = H - 13;
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+
+  const sideLine = (side, sx1, sy1, sx2, sy2) => {
+    const e = edges[side];
+    if (!e) return '';
+    const em = SEED.lookup.matById(e.matId);
+    const thick = em?.thickness ?? 0.4;
+    const sw = thick >= 2 ? 3 : 1.2;
+    const dash = e.source === 'own' ? ' stroke-dasharray="3 2"' : '';
+    return `<line class="side" x1="${sx1}" y1="${sy1}" x2="${sx2}" y2="${sy2}" stroke-width="${sw}"${dash} />`;
+  };
+
+  const sideLabel = (side) => {
+    const e = edges[side];
+    if (!e) return '';
+    const em = SEED.lookup.matById(e.matId);
+    const t = String(em?.thickness ?? '?');
+    let x, y;
+    if (side === 't') { x = cx; y = 7; }
+    else if (side === 'b') { x = cx; y = H - 3; }
+    else if (side === 'l') { x = 6;     y = cy + 0.5; }
+    else if (side === 'r') { x = W - 6; y = cy + 0.5; }
+    return `<text class="lbl" x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${t}</text>`;
+  };
+
+  return `<svg viewBox="0 0 ${W} ${H}" class="edge-svg" aria-hidden="true">` +
+    `<rect class="frame" x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" />` +
+    sideLine('t', x1, y1, x2, y1) +
+    sideLine('b', x1, y2, x2, y2) +
+    sideLine('l', x1, y1, x1, y2) +
+    sideLine('r', x2, y1, x2, y2) +
+    sideLabel('t') +
+    sideLabel('b') +
+    sideLabel('l') +
+    sideLabel('r') +
+    `</svg>`;
+}
+
+function edgeCellTooltip(edges) {
+  const sides = [['t','Yuqori'], ['b','Pastki'], ['l','Chap'], ['r','O\'ng']];
+  const lines = sides.map(([k, label]) => {
+    const e = edges[k];
+    if (!e) return `${label}: —`;
+    const em = SEED.lookup.matById(e.matId);
+    const nm = em ? `${em.thickness} mm ${em.color}` : '?';
+    const src = e.source === 'own' ? " (o'zim)" : '';
+    return `${label}: ${nm}${src}`;
+  });
+  return 'Krom yopishtirish — tahrirlash uchun bosing\n' + lines.join(' · ');
+}
+
+
+/* ============================================================
    Render: parts list
    ============================================================ */
 function partRowHtml(p, idx) {
@@ -379,7 +667,11 @@ function partRowHtml(p, idx) {
   const srcCls = p.source === 'own' ? 'own' : '';
 
   const edges = p.edges || { t: null, b: null, l: null, r: null };
-  const ec = (v) => v ? `<span class="e has">${v}</span>` : '<span class="e">–</span>';
+  // Edge cell: small rectangle with thickness numerals on each banded side.
+  // Line weight = thickness; solid = shop; dashed = own. Picker on tap; full
+  // per-side detail on hover via the title attribute.
+  const edgeRect = edgeCellSvg(edges);
+  const edgeTitle = edgeCellTooltip(edges);
 
   // per-row inline validation marks
   const v = validatePart(p);
@@ -388,6 +680,24 @@ function partRowHtml(p, idx) {
   const wBad = !v.ok && (v.code === 'part_too_small' || v.code === 'part_too_large' || v.code === 'impossible_grain') && (p.w != null) && (p.w < LIM.PART_MIN || (max && p.w > max.w));
   const rowErr = (!v.ok && v.code !== 'incomplete' && v.code !== 'no_material')
     ? `<div class="row-err" style="grid-column:1/-1;font:500 11.5px var(--f-ui);color:var(--danger);padding:2px 4px 0">${v.msg}</div>` : '';
+
+  // Per-row missing-at-branch warning + recovery affordances
+  const miss = rowMissingAtBranch(p);
+  let rowMiss = '';
+  if (miss) {
+    const b = SEED.lookup.branchById(draft.preferredBranchId);
+    const bname = b ? b.name : '';
+    const dis = readOnly ? 'disabled' : '';
+    rowMiss = `
+      <div class="row-miss">
+        <span class="ic">!</span>
+        <span class="msg"><b>${bname}</b> ustaxonasida yo'q: ${miss.names.join(', ')}.</span>
+        <span class="actions">
+          <button class="btn-sm" type="button" data-action="recover-own" data-ref="${p.ref}" ${dis}>O'zim olib kelaman</button>
+          <button class="btn-sm" type="button" data-action="recover-pick" data-ref="${p.ref}" ${dis}>Boshqa material tanlash</button>
+        </span>
+      </div>`;
+  }
 
   return `
     <div class="part-row" data-ref="${p.ref}">
@@ -402,8 +712,8 @@ function partRowHtml(p, idx) {
       <input class="num ${lBad ? 'bad' : ''}" type="number" placeholder="Uzun." min="50" data-ref="${p.ref}" data-field="l" value="${p.l ?? ''}" oninput="onPartInput(event)" aria-label="Uzunligi (mm)" />
       <input class="num ${wBad ? 'bad' : ''}" type="number" placeholder="En" min="50" data-ref="${p.ref}" data-field="w" value="${p.w ?? ''}" oninput="onPartInput(event)" aria-label="Eni (mm)" />
       <input class="num" type="number" placeholder="Soni" min="1" data-ref="${p.ref}" data-field="qty" value="${p.qty ?? 1}" oninput="onPartInput(event)" aria-label="Soni" />
-      <button class="edges-btn" type="button" data-action="edit-edges" data-ref="${p.ref}" title="Krom yopishtirish">
-        ${ec(edges.t)}${ec(edges.b)}${ec(edges.l)}${ec(edges.r)}
+      <button class="edges-btn" type="button" data-action="edit-edges" data-ref="${p.ref}" title="${edgeTitle}">
+        ${edgeRect}
       </button>
       <div class="menu-wrap">
         <button class="menu-btn" type="button" data-menu-toggle aria-label="Yana">⋯</button>
@@ -413,6 +723,7 @@ function partRowHtml(p, idx) {
         </div>
       </div>
       ${rowErr}
+      ${rowMiss}
     </div>`;
 }
 
@@ -454,6 +765,12 @@ function swatchColor(swId) {
 
 function renderBranchStrip() {
   const strip = document.getElementById('br-strip');
+  // When a pre-filter branch is set, the bottom indicator is hidden — the
+  // top pre-filter strip + recovery affordances carry that role instead.
+  if (draft.preferredBranchId) {
+    strip.innerHTML = '';
+    return;
+  }
   const shopParts = draft.partList.filter(p => p.source === 'shop' && p.matId);
   if (shopParts.length === 0) {
     strip.innerHTML = `<div class="br-strip"><span class="ic"><i data-icon="check"></i></span><span>Hamma qismlar o'zingizniki — istalgan ishlayotgan ustaxona qabul qiladi.</span></div>`;
@@ -484,7 +801,233 @@ function renderBranchStrip() {
     </div>`;
 }
 
+/* ============================================================
+   Branch pre-filter — top of the editor
+   ============================================================ */
+// In-memory only — re-shows on each page load by design.
+let missBannerDismissed = false;
+
+// Per-row "missing at pre-filter branch" computation.
+//   returns { panel: bool, sides: ['t','b','l','r' subset], names: [matName,…] }
+//   when preferredBranchId is null OR nothing is missing, returns null.
+function rowMissingAtBranch(p) {
+  const bid = draft.preferredBranchId;
+  if (!bid) return null;
+  const carried = new Set(SEED.lookup.materialsAtBranch(bid));
+  const out = { panel: false, sides: [], matIds: new Set() };
+  if (p.source === 'shop' && p.matId && !carried.has(p.matId)) {
+    out.panel = true;
+    out.matIds.add(p.matId);
+  }
+  for (const side of ['t','b','l','r']) {
+    const e = p.edges && p.edges[side];
+    if (e && e.source === 'shop' && e.matId && !carried.has(e.matId)) {
+      out.sides.push(side);
+      out.matIds.add(e.matId);
+    }
+  }
+  if (!out.panel && out.sides.length === 0) return null;
+  const names = [...out.matIds].map(id => {
+    const m = SEED.lookup.matById(id);
+    return m ? m.name.split('·')[0].trim() : id;
+  });
+  return { ...out, names };
+}
+
+function renderPrefStrip() {
+  const wrap = document.getElementById('pref-strip');
+  if (!wrap) return;
+  const bid = draft.preferredBranchId;
+  const dis = readOnly ? 'disabled' : '';
+  if (!bid) {
+    wrap.innerHTML = `
+      <div class="pref-strip">
+        <span class="ic"><i data-icon="store"></i></span>
+        <span class="lab">Katalog: <b>barcha ustaxonalar</b></span>
+        <span class="actions">
+          <button class="btn-sm" type="button" onclick="openBranchPicker()" ${dis}>Ustaxonani tanlash</button>
+        </span>
+      </div>`;
+    return;
+  }
+  const b = SEED.lookup.branchById(bid);
+  // For the prototype the active branches all belong to ws-01 (Furniture House).
+  // Pick the workshop by matching this branch to any workshop that has it active.
+  const ws = SEED.workshops.find(w => w.id === 'ws-01') || SEED.workshops[0];
+  const wsName = ws ? ws.name : '';
+  const label = b
+    ? `Katalog: <b>${b.city} · ${b.name}</b>${wsName ? ` · ${wsName}` : ''}`
+    : `Katalog: <b>${bid}</b>`;
+  wrap.innerHTML = `
+    <div class="pref-strip">
+      <span class="ic"><i data-icon="store"></i></span>
+      <span class="lab">${label}</span>
+      <span class="actions">
+        <button class="btn-sm" type="button" onclick="openBranchPicker()" ${dis}>O'zgartirish</button>
+        <button class="btn-sm danger" type="button" onclick="clearPreferredBranch()" ${dis}>Tozalash</button>
+      </span>
+    </div>`;
+}
+
+function renderMissBanner() {
+  const wrap = document.getElementById('miss-banner');
+  if (!wrap) return;
+  const bid = draft.preferredBranchId;
+  if (!bid || missBannerDismissed) { wrap.innerHTML = ''; return; }
+  const affected = draft.partList.filter(p => rowMissingAtBranch(p) !== null);
+  if (affected.length === 0) { wrap.innerHTML = ''; return; }
+  const b = SEED.lookup.branchById(bid);
+  const bname = b ? b.name : bid;
+  const dis = readOnly ? 'disabled' : '';
+  wrap.innerHTML = `
+    <div class="miss-banner">
+      <span class="ic">!</span>
+      <div class="grow">
+        <div><b>${affected.length} ta qism</b> ${bname} ustaxonasida mavjud bo'lmagan materialdan foydalanadi. Materialni o'zingiznikidan tanlang, materialni almashtiring, yoki buyurtmani boshqa ustaxonaga joylashtiring.</div>
+        <div class="actions">
+          <button class="btn-sm" type="button" onclick="clearPreferredBranch()" ${dis}>Pre-filter'ni tozalash</button>
+        </div>
+      </div>
+      <button class="x" type="button" onclick="dismissMissBanner()" aria-label="Yopish">×</button>
+    </div>`;
+}
+
+function dismissMissBanner() {
+  missBannerDismissed = true;
+  renderMissBanner();
+}
+
+function renderClearAllBtn() {
+  const wrap = document.getElementById('clear-all-wrap');
+  if (!wrap) return;
+  if (readOnly || draft.partList.length <= 1) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `<button class="clear-all-btn" type="button" onclick="clearAllParts()" title="Barcha qismlarni o'chirish">Hammasini o'chirish</button>`;
+}
+
+/* ============================================================
+   Branch picker modal
+   ============================================================ */
+function openBranchPicker() {
+  if (readOnly) return;
+  renderBranchPickerList();
+  openModal('m-branch');
+}
+
+function renderBranchPickerList() {
+  const body = document.getElementById('br-pick-body');
+  if (!body) return;
+  // Group branches by workshop. In v1 SEED.branches doesn't carry a workshopId;
+  // for the prototype every active/temporarily_closed branch is under ws-01.
+  const groups = SEED.workshops.map(ws => {
+    const wsBranches = SEED.branches.filter(b =>
+      (b.status === 'active' || b.status === 'temporarily_closed') &&
+      (ws.id === 'ws-01') // prototype: all branches belong to Furniture House
+    );
+    return { ws, branches: wsBranches };
+  }).filter(g => g.branches.length > 0);
+
+  body.innerHTML = groups.map(g => `
+    <div class="br-pick-group">
+      <div class="ws-name">${g.ws.name}</div>
+      <div class="br-pick-list">
+        ${g.branches.map(b => {
+          const cur = b.id === draft.preferredBranchId;
+          const isClosed = b.status === 'temporarily_closed';
+          const pill = isClosed
+            ? `<span class="pill tc">Vaqtincha yopiq</span>`
+            : `<span class="pill active">Faol</span>`;
+          return `
+            <button class="br-pick-opt" type="button" data-bid="${b.id}"${cur ? ' style="border-color:var(--accent);background:var(--accent-soft)"' : ''}>
+              <div>
+                <div class="nm">${b.city} · ${b.name}</div>
+                <div class="meta">${b.hours || ''}${cur ? ' · hozir tanlangan' : ''}</div>
+              </div>
+              ${pill}
+              <div class="addr">${b.addr || ''}</div>
+            </button>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+
+  body.querySelectorAll('.br-pick-opt').forEach(el => {
+    el.addEventListener('click', () => pickBranch(el.dataset.bid));
+  });
+}
+
+function pickBranch(branchId) {
+  draft.preferredBranchId = branchId;
+  // A different branch may newly surface missing materials — re-show the banner.
+  missBannerDismissed = false;
+  closeModal('m-branch');
+  markStale();
+  renderAll();
+}
+
+function clearPreferredBranch() {
+  draft.preferredBranchId = null;
+  missBannerDismissed = false;
+  markStale();
+  renderAll();
+}
+
+/* ============================================================
+   Per-row recovery affordances
+   ============================================================ */
+function recoverOwnForRow(ref) {
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  const miss = rowMissingAtBranch(p);
+  if (!miss) return;
+  if (miss.panel) p.source = 'own';
+  miss.sides.forEach(side => {
+    if (p.edges && p.edges[side]) p.edges[side] = { ...p.edges[side], source: 'own' };
+  });
+  markStale();
+  renderAll();
+}
+
+function recoverPickForRow(ref) {
+  const p = draft.partList.find(x => x.ref === ref);
+  if (!p) return;
+  const miss = rowMissingAtBranch(p);
+  if (!miss) return;
+  // Panel-missing is the more impactful one; prefer the panel picker.
+  if (miss.panel) {
+    openMatPicker(ref);
+  } else if (miss.sides.length > 0) {
+    openEdgesPopover(ref);
+  }
+}
+
+/* ============================================================
+   Clear all parts — deliberate, separate action
+   ============================================================ */
+function clearAllParts() {
+  if (readOnly) return;
+  if (draft.partList.length <= 1) return;
+  const n = draft.partList.length;
+  const fresh = () => ({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges: { t: null, b: null, l: null, r: null } });
+  const run = () => {
+    draft.partList = [fresh()];
+    markStale();
+    renderAll();
+  };
+  if (typeof window.confirmAction === 'function') {
+    window.confirmAction({
+      title: 'Hammasini o\'chirish',
+      msg: `${n} ta qismni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`,
+      danger: true,
+      okText: 'O\'chirish'
+    }, run);
+  } else if (window.confirm(`${n} ta qismni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`)) {
+    run();
+  }
+}
+
 function renderAll() {
+  renderPrefStrip();
+  renderMissBanner();
+  renderClearAllBtn();
   renderParts();
   renderBranchStrip();
 }
@@ -493,6 +1036,7 @@ function renderAll() {
    Edit operations
    ============================================================ */
 function addPart() {
+  // edges per side: null OR { matId, source } — new rows start with no banding
   const edges = { t: null, b: null, l: null, r: null };
   draft.partList.push({ ref: 'p' + Math.random().toString(36).slice(2,8), matId: null, source: 'shop', l: null, w: null, qty: 1, edges });
   markStale();
@@ -551,6 +1095,8 @@ document.getElementById('parts').addEventListener('click', ev => {
   else if (action === 'edit-edges') openEdgesPopover(ref);
   else if (action === 'duplicate') duplicatePart(ref);
   else if (action === 'delete') deletePart(ref);
+  else if (action === 'recover-own') recoverOwnForRow(ref);
+  else if (action === 'recover-pick') recoverPickForRow(ref);
 });
 
 function toggleSource(ref) {
@@ -564,16 +1110,35 @@ function toggleSource(ref) {
 /* ============================================================
    Material picker modal
    ============================================================ */
+let matMfrFilter = 'all';
+
+function renderMatMfrChips() {
+  const wrap = document.getElementById('mat-mfr-chips');
+  // only manufacturers that have at least one active panel material
+  const usedMfrs = new Set(SEED.materials.filter(m => m.kind === 'panel' && m.status === 'active').map(m => m.manufacturerId));
+  const mfrs = SEED.manufacturers.filter(x => x.status === 'active' && usedMfrs.has(x.id));
+  wrap.innerHTML = `<button class="chip ${matMfrFilter === 'all' ? 'on' : ''}" type="button" data-mfr="all">Hammasi</button>` +
+    mfrs.map(x => `<button class="chip ${matMfrFilter === x.id ? 'on' : ''}" type="button" data-mfr="${x.id}">${x.name}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(b => {
+    b.addEventListener('click', () => { matMfrFilter = b.dataset.mfr; renderMatMfrChips(); renderMatList(); });
+  });
+}
+
 function openMatPicker(ref) {
   pickingPartRef = ref;
   document.getElementById('mat-search').value = '';
+  matMfrFilter = 'all';
+  renderMatMfrChips();
   renderMatList();
   openModal('m-mat');
 }
 
 function renderMatList() {
   const q = document.getElementById('mat-search').value.trim().toLowerCase();
-  const list = SEED.materials.filter(m => m.status === 'active').filter(m => !q || (m.name + m.thickness + m.color + (m.decor||'')).toLowerCase().includes(q));
+  // Panel-kind only here (edges are picked from the edges popover's sub-picker).
+  const list = SEED.materials.filter(m => m.kind === 'panel' && m.status === 'active')
+    .filter(m => matMfrFilter === 'all' || m.manufacturerId === matMfrFilter)
+    .filter(m => !q || (m.name + m.thickness + m.color + (m.decor||'') + (SEED.lookup.manufacturerName(m) || '')).toLowerCase().includes(q));
   const wrap = document.getElementById('mat-list');
   if (list.length === 0) {
     wrap.innerHTML = '<div class="empty"><p>Mos material topilmadi</p></div>';
@@ -581,12 +1146,14 @@ function renderMatList() {
   }
   wrap.innerHTML = list.map(m => {
     const carriedBy = SEED.branchMaterials.filter(bm => bm.matId === m.id && bm.status === 'active').length;
+    const mfr = SEED.lookup.manufacturerName(m);
+    const dims = m.kind === 'edge' ? `${m.thickness}mm · krom (metr)` : `${m.thickness}mm · ${m.panelLen}×${m.panelWid}${m.grain ? ' · tola bor' : ''}`;
     return `
       <div class="mat-opt" data-mat="${m.id}">
         <span class="sw" style="background:${swatchColor(m.sw)}"></span>
         <div class="lab">
           <div class="nm">${m.name}</div>
-          <div class="meta">${m.thickness}mm · ${m.sheetLen}×${m.sheetWid}${m.grain ? ' · tola bor' : ''}</div>
+          <div class="meta">${mfr ? mfr + ' · ' : ''}${dims}</div>
         </div>
         <span class="by-n">${carriedBy} ustaxonada</span>
       </div>`;
@@ -605,52 +1172,512 @@ function renderMatList() {
 }
 
 /* ============================================================
-   Edges popover
+   Edge picker — three-layer design (2026-05-25 redesign)
+
+   Data shape (per part): edges = { t, b, l, r } where each side is
+     null OR { matId, source }. matId references a catalog 'edge' material;
+     source ∈ 'shop' | 'own'. Thickness/colour/decor are properties of
+     the edge material, not of the side.
+
+   Layer 1 (collapsed): three presets — None / Match 0.4 / Match 2.0 —
+     plus an "I'll bring my own" toggle and an "Apply to ALL" checkbox.
+   Layer 2 (expanded): per-side list + diagram; preset chips at the top.
+   Layer 3 (m-edge-side modal): recommended + browse-all + source.
    ============================================================ */
-const EDGE_CYCLE = [null, 0.4, 2.0];
+
+const SIDE_LABELS = { t: 'Yuqori', b: 'Pastki', l: 'Chap', r: "O'ng" };
+const SIDE_LABELS_FULL = { t: 'Yuqori qirg\'oq', b: 'Pastki qirg\'oq', l: 'Chap qirg\'oq', r: "O'ng qirg'oq" };
+
+// Editing state for the currently open picker
 let edgeState = { t: null, b: null, l: null, r: null };
+let edgeOwn = false;
+let edgeExpanded = false;          // Layer-2 visible?
+let editingSide = null;             // which side Layer 3 is editing
+let sidePickerState = null;         // { matId, source } draft inside Layer 3
+let espShowAll = false;             // disclosure state for "Browse all edges"
+let espMfrFilter = 'all';            // manufacturer chip filter inside "Browse all"
 
-function renderEdgeDiagram() {
-  ['t','b','l','r'].forEach(side => {
-    const btn = document.querySelector(`#m-edges .edge-btn[data-side="${side}"]`);
-    if (!btn) return;
-    const v = edgeState[side];
-    btn.textContent = v ? v.toFixed(1) : "Yo'q";
-    btn.classList.toggle('set', !!v);
-  });
+/* Recommendation rule:
+   1) edges whose decor_code matches the panel's decor (strongest match)
+   2) failing that, edges whose color matches the panel's color
+   3) otherwise — nothing.
+   `thicknessFilter`, when provided, narrows further. */
+function recommendedEdgesForPanel(panelMatId, { thickness = null, limit = null } = {}) {
+  const panel = panelMatId ? SEED.lookup.matById(panelMatId) : null;
+  if (!panel) return [];
+  let edges = SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active');
+  if (thickness != null) edges = edges.filter(e => e.thickness === thickness);
+  if (!edges.length) return [];
+  let matches = [];
+  if (panel.decor) matches = matches.concat(edges.filter(e => e.decor && e.decor === panel.decor));
+  // Fallback: color match (only if there were no decor matches)
+  if (matches.length === 0 && panel.color) {
+    matches = edges.filter(e => e.color === panel.color);
+  }
+  // De-duplicate, preserve insertion order
+  const seen = new Set();
+  const out = [];
+  for (const e of matches) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+  return limit ? out.slice(0, limit) : out;
 }
 
-function cycleEdge(side) {
-  const i = EDGE_CYCLE.findIndex(x => x === edgeState[side]);
-  edgeState[side] = EDGE_CYCLE[(i + 1) % EDGE_CYCLE.length];
-  renderEdgeDiagram();
+// The single best matching-decor edge at a given thickness — or null.
+function bestMatchingEdge(panelMatId, thickness) {
+  const list = recommendedEdgesForPanel(panelMatId, { thickness });
+  return list[0] || null;
 }
 
-function openEdgesPopover(ref) {
+// Format short label like "Rehau · H1334 Dub Sonoma" or "Rehau 0.4"
+function edgeShortLabel(edgeMat, { withThickness = false } = {}) {
+  if (!edgeMat) return '—';
+  const mfr = SEED.lookup.manufacturerName(edgeMat) || '';
+  const decorOrColor = edgeMat.decor ? `${edgeMat.decor} ${edgeMat.color || ''}`.trim() : (edgeMat.color || '');
+  const thk = withThickness && edgeMat.thickness != null ? ` · ${edgeMat.thickness} mm` : '';
+  return `${mfr ? mfr + ' · ' : ''}${decorOrColor}${thk}`.trim();
+}
+
+function edgeTinyLabel(edgeMat) {
+  // used inside the small edge buttons on the diagram
+  if (!edgeMat) return '—';
+  const mfr = SEED.lookup.manufacturerName(edgeMat) || '';
+  return mfr ? `${mfr.split(' ')[0]} ${edgeMat.thickness}` : `${edgeMat.thickness} mm`;
+}
+
+/* Detect which Layer-1 preset (if any) the current state corresponds to.
+   Returns 'none' | 'match-0.4' | 'match-2.0' | null. */
+function detectPreset(panelMatId, state) {
+  const sides = ['t','b','l','r'];
+  const allNull = sides.every(s => !state[s]);
+  if (allNull) return 'none';
+  if (!panelMatId) return null;
+  const allSet = sides.every(s => state[s]);
+  if (!allSet) return null;
+  // every side same thickness AND matches the best matching-decor edge for that thickness
+  const firstMat = SEED.lookup.matById(state.t.matId);
+  if (!firstMat) return null;
+  const thick = firstMat.thickness;
+  if (thick !== 0.4 && thick !== 2.0) return null;
+  const best = bestMatchingEdge(panelMatId, thick);
+  if (!best) return null;
+  for (const s of sides) {
+    const em = SEED.lookup.matById(state[s].matId);
+    if (!em || em.id !== best.id) return null;
+  }
+  return thick === 0.4 ? 'match-0.4' : 'match-2.0';
+}
+
+/* Whether the row's edges have ANY asymmetric per-side configuration
+   (different matIds across non-null sides OR a mix of shop/own sources).
+   Used to confirm before "Apply to ALL" rule-overwrites other rows. */
+function hasAsymmetricEdges(p) {
+  const sides = ['t','b','l','r'];
+  const set = sides.filter(s => p.edges && p.edges[s]).map(s => p.edges[s]);
+  if (set.length === 0 || set.length === 4) {
+    if (set.length === 0) return false;
+    // All four sides set — asymmetric if matIds differ or sources differ
+    const firstMat = set[0].matId, firstSrc = set[0].source;
+    return set.some(e => e.matId !== firstMat || e.source !== firstSrc);
+  }
+  // Mix of null and set sides — asymmetric by definition
+  return true;
+}
+
+function openEdgePicker(ref) {
   editingEdgesRef = ref;
   const p = draft.partList.find(x => x.ref === ref);
   if (!p) return;
-  edgeState = { t: p.edges.t ?? null, b: p.edges.b ?? null, l: p.edges.l ?? null, r: p.edges.r ?? null };
-  document.getElementById('e-all').checked = false;
-  renderEdgeDiagram();
+  edgeState = {
+    t: p.edges.t ? { ...p.edges.t } : null,
+    b: p.edges.b ? { ...p.edges.b } : null,
+    l: p.edges.l ? { ...p.edges.l } : null,
+    r: p.edges.r ? { ...p.edges.r } : null
+  };
+  // own toggle reflects current sides: ON only when every banded side is 'own'
+  const banded = ['t','b','l','r'].map(s => edgeState[s]).filter(Boolean);
+  edgeOwn = banded.length > 0 && banded.every(e => e.source === 'own');
+
+  // Initial preset detection chooses layer 1 or 2
+  const preset = detectPreset(p.matId, edgeState);
+  edgeExpanded = (preset === null);
+
+  // Reset apply-all and disclosure UI
+  const allBox = document.getElementById('ep-all');
+  if (allBox) allBox.checked = false;
+  const ownBox = document.getElementById('ep-own');
+  if (ownBox) ownBox.checked = edgeOwn;
+
+  // Title with part index
+  const idx = draft.partList.indexOf(p);
+  const title = document.getElementById('ep-title');
+  if (title) title.textContent = `Krom yopishtirish — qism #${idx + 1}`;
+
+  renderEdgePicker();
   openModal('m-edges');
 }
 
-function presetEdges(v) {
-  const val = v ? +v : null;
-  edgeState = { t: val, b: val, l: val, r: val };
-  renderEdgeDiagram();
+// Back-compat alias used by some delegated handlers / recovery affordances
+function openEdgesPopover(ref) { return openEdgePicker(ref); }
+
+function renderEdgePicker() {
+  const p = draft.partList.find(x => x.ref === editingEdgesRef);
+  if (!p) return;
+
+  // Layer 1 vs Layer 2 visibility
+  document.getElementById('ep-layer1').classList.toggle('hide', edgeExpanded);
+  document.getElementById('ep-layer2').classList.toggle('hide', !edgeExpanded);
+  const discBtn = document.getElementById('ep-disclose-btn');
+  const discLab = document.getElementById('ep-disclose-label');
+  if (discBtn && discLab) {
+    discBtn.classList.toggle('open', edgeExpanded);
+    discLab.textContent = edgeExpanded ? "Yig'ish" : "Tomon bo'yicha sozlash";
+  }
+
+  // Apply-to-ALL: disable in expanded mode (per-side state is row-specific)
+  const allBox = document.getElementById('ep-all');
+  const allRow = document.getElementById('ep-all-row');
+  const allHint = document.getElementById('ep-all-hint');
+  if (allBox) {
+    allBox.disabled = edgeExpanded;
+    if (edgeExpanded) allBox.checked = false;
+  }
+  if (allRow) allRow.classList.toggle('disabled', edgeExpanded);
+  if (allHint) allHint.classList.toggle('hide', !edgeExpanded);
+
+  if (edgeExpanded) renderEdgeLayer2(p);
+  else renderEdgeLayer1(p);
 }
 
-function applyEdges() {
-  const edges = { t: edgeState.t, b: edgeState.b, l: edgeState.l, r: edgeState.r };
-  const all = document.getElementById('e-all').checked;
-  if (all) {
-    draft.partList.forEach(p => p.edges = { ...edges });
-  } else {
-    const p = draft.partList.find(x => x.ref === editingEdgesRef);
-    if (p) p.edges = edges;
+/* ---- Layer 1: collapsed preset rows ---- */
+function renderEdgeLayer1(p) {
+  const wrap = document.getElementById('ep-presets');
+  const preset = detectPreset(p.matId, edgeState);
+  const noPanel = !p.matId;
+  const match04 = p.matId ? bestMatchingEdge(p.matId, 0.4) : null;
+  const match20 = p.matId ? bestMatchingEdge(p.matId, 2.0) : null;
+
+  // None row
+  const noneRow = `
+    <button class="ep-preset ${preset === 'none' ? 'on' : ''}" type="button" data-preset="none">
+      <span class="rad"></span>
+      <span class="lab">
+        <span class="nm">Hech qaysi</span>
+        <span class="meta">Barcha tomonlardan krom olib tashlanadi</span>
+      </span>
+      <span></span>
+    </button>`;
+
+  const renderMatchRow = (thick, key, match) => {
+    const swatch = match ? `<span class="sw" style="background:${swatchColor(match.sw)}"></span>` : '<span class="sw" style="background:var(--sunk);border:1px dashed var(--line)"></span>';
+    let metaLine, disabled = false;
+    if (noPanel) {
+      metaLine = `<span class="meta warn">Avval panel material'ini tanlang</span>`;
+      disabled = true;
+    } else if (!match) {
+      metaLine = `<span class="meta warn">Catalog'da mos krom topilmadi — <em>Tomon bo'yicha sozlash</em>'da boshqasini tanlang</span>`;
+      disabled = true;
+    } else {
+      metaLine = `<span class="meta">${edgeShortLabel(match)}</span>`;
+    }
+    return `
+      <button class="ep-preset ${preset === key ? 'on' : ''}" type="button" data-preset="${key}" ${disabled ? 'disabled' : ''}>
+        <span class="rad"></span>
+        <span class="lab">
+          <span class="nm">Panel decor'iga mos · ${thick} mm</span>
+          ${metaLine}
+        </span>
+        ${swatch}
+      </button>`;
+  };
+
+  wrap.innerHTML = noneRow + renderMatchRow(0.4, 'match-0.4', match04) + renderMatchRow(2.0, 'match-2.0', match20);
+  wrap.querySelectorAll('.ep-preset').forEach(b => {
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      applyPreset(b.dataset.preset);
+    });
+  });
+
+  // own toggle stays in sync
+  const ownBox = document.getElementById('ep-own');
+  if (ownBox) {
+    ownBox.checked = edgeOwn;
+    ownBox.onchange = () => {
+      edgeOwn = !!ownBox.checked;
+      ['t','b','l','r'].forEach(s => {
+        if (edgeState[s]) edgeState[s] = { ...edgeState[s], source: edgeOwn ? 'own' : 'shop' };
+      });
+      renderEdgePicker();
+    };
   }
+}
+
+function applyPreset(key) {
+  const p = draft.partList.find(x => x.ref === editingEdgesRef);
+  if (!p) return;
+  if (key === 'none') {
+    edgeState = { t: null, b: null, l: null, r: null };
+  } else if (key === 'match-0.4' || key === 'match-2.0') {
+    const thick = key === 'match-0.4' ? 0.4 : 2.0;
+    const em = bestMatchingEdge(p.matId, thick);
+    const make = () => em ? { matId: em.id, source: edgeOwn ? 'own' : 'shop' } : null;
+    edgeState = { t: make(), b: make(), l: make(), r: make() };
+  }
+  renderEdgePicker();
+}
+
+function toggleEdgeExpanded() {
+  edgeExpanded = !edgeExpanded;
+  renderEdgePicker();
+}
+
+/* ---- Layer 2: customise per side ---- */
+function renderEdgeLayer2(p) {
+  // Quick preset chips (one-tap fix back to a collapsed-mode state)
+  const preset = detectPreset(p.matId, edgeState);
+  const match04 = p.matId ? bestMatchingEdge(p.matId, 0.4) : null;
+  const match20 = p.matId ? bestMatchingEdge(p.matId, 2.0) : null;
+  const quick = document.getElementById('ep-quick');
+  quick.innerHTML = `
+    <button type="button" class="${preset === 'none' ? 'on' : ''}" data-preset="none">Hech qaysi</button>
+    <button type="button" class="${preset === 'match-0.4' ? 'on' : ''}" data-preset="match-0.4" ${match04 ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}>Mos 0.4</button>
+    <button type="button" class="${preset === 'match-2.0' ? 'on' : ''}" data-preset="match-2.0" ${match20 ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}>Mos 2.0</button>
+  `;
+  quick.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      applyPreset(b.dataset.preset);
+    });
+  });
+
+  // Diagram buttons reflect each side
+  ['t','b','l','r'].forEach(side => {
+    const btn = document.querySelector(`#ep-diagram .edge-btn[data-side="${side}"]`);
+    if (!btn) return;
+    const e = edgeState[side];
+    if (!e) {
+      btn.textContent = '—';
+      btn.classList.remove('set');
+      btn.classList.remove('own');
+    } else {
+      const em = SEED.lookup.matById(e.matId);
+      btn.innerHTML = `<span>${edgeTinyLabel(em)}</span>`;
+      btn.classList.add('set');
+      btn.classList.toggle('own', e.source === 'own');
+    }
+  });
+
+  // Side rows
+  const sides = ['t','b','l','r'];
+  const html = sides.map(side => {
+    const e = edgeState[side];
+    const em = e ? SEED.lookup.matById(e.matId) : null;
+    const nm = em ? edgeShortLabel(em) : '<span class="none">—</span>';
+    const thk = em ? `${em.thickness} mm` : '';
+    const srcClass = e && e.source === 'own' ? 'own' : '';
+    const srcLabel = e ? (e.source === 'own' ? "O'zim olib kelaman" : 'Ustaxonadan') : '';
+    return `
+      <div class="ep-side">
+        <span class="side-lbl">${SIDE_LABELS[side]}</span>
+        <div class="cur">
+          <div class="nm">${nm}</div>
+          ${e ? `<div class="meta"><span>${thk}</span><span class="src-chip ${srcClass}">${srcLabel}</span></div>` : ''}
+        </div>
+        <button class="edit-btn" type="button" data-side="${side}">Tahrirlash <i class="ic" data-icon="chevron-right"></i></button>
+      </div>`;
+  }).join('');
+  const sidesWrap = document.getElementById('ep-sides');
+  sidesWrap.innerHTML = html;
+  sidesWrap.querySelectorAll('.edit-btn').forEach(b => {
+    b.addEventListener('click', () => openSidePicker(b.dataset.side));
+  });
+  // Fill any pending data-icon nodes inside the freshly rendered layer
+  if (typeof window.renderIcons === 'function') window.renderIcons(sidesWrap);
+}
+
+/* ---- Layer 3: per-side sub-picker ---- */
+function openSidePicker(side) {
+  editingSide = side;
+  const p = draft.partList.find(x => x.ref === editingEdgesRef);
+  if (!p) return;
+  // Seed the side state from the current edgeState; if null, default to shop/no-mat
+  const e = edgeState[side];
+  sidePickerState = e ? { ...e } : { matId: null, source: 'shop' };
+  espShowAll = false;
+  espMfrFilter = 'all';
+
+  document.getElementById('esp-title').textContent = SIDE_LABELS_FULL[side];
+  document.getElementById('esp-apply-btn').textContent = `${SIDE_LABELS[side]}'ga qo'llash`;
+  document.getElementById('esp-all-wrap').classList.remove('open');
+  document.getElementById('esp-all-btn').classList.remove('open');
+
+  // Source radios
+  const shopR = document.getElementById('esp-src-shop');
+  const ownR = document.getElementById('esp-src-own');
+  if (shopR) shopR.checked = sidePickerState.source !== 'own';
+  if (ownR) ownR.checked = sidePickerState.source === 'own';
+  shopR.onchange = () => { sidePickerState.source = 'shop'; renderBranchNote(p); };
+  ownR.onchange = () => { sidePickerState.source = 'own'; renderBranchNote(p); };
+
+  renderRecommended(p);
+  renderAllEdges(p);
+  renderBranchNote(p);
+
+  openModal('m-edge-side');
+}
+
+function closeSidePicker() {
+  // Closing without applying — just hide this modal; m-edges stays under it.
+  document.getElementById('m-edge-side')?.classList.remove('on');
+  // Don't drop the scrim — m-edges is still open beneath.
+  if (!document.querySelector('.modal.on')) {
+    document.getElementById('scrim')?.classList.remove('on');
+  }
+}
+
+function applySidePicker() {
+  if (!editingSide) return;
+  edgeState[editingSide] = sidePickerState && sidePickerState.matId
+    ? { matId: sidePickerState.matId, source: sidePickerState.source || 'shop' }
+    : null;
+  // Recompute the global own toggle based on the new state
+  const banded = ['t','b','l','r'].map(s => edgeState[s]).filter(Boolean);
+  edgeOwn = banded.length > 0 && banded.every(e => e.source === 'own');
+  closeSidePicker();
+  renderEdgePicker();
+}
+
+function renderRecommended(p) {
+  const wrap = document.getElementById('esp-recommended');
+  if (!p.matId) {
+    wrap.innerHTML = `<h4>Tavsiya etilgan</h4><div class="esp-no-match">Avval panel material'ini tanlang.</div>`;
+    return;
+  }
+  const recs = recommendedEdgesForPanel(p.matId, { limit: 5 });
+  if (recs.length === 0) {
+    wrap.innerHTML = `<h4>Tavsiya etilgan</h4><div class="esp-no-match">Panel decor'iga mos krom topilmadi — quyidagi <em>Barcha krom'lar</em> ro'yxatidan tanlang.</div>`;
+    return;
+  }
+  wrap.innerHTML = `<h4>Tavsiya etilgan (panel decor'iga mos)</h4><div class="esp-list">${recs.map(em => edgeOptHtml(em)).join('')}</div>`;
+  wrap.querySelectorAll('.esp-opt').forEach(el => {
+    el.addEventListener('click', () => pickEdgeInSidePicker(el.dataset.mat, p));
+  });
+}
+
+function renderAllEdges(p) {
+  const all = SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active');
+  const usedMfrs = new Set(all.map(m => m.manufacturerId));
+  const mfrs = SEED.manufacturers.filter(x => x.status === 'active' && usedMfrs.has(x.id));
+  const chips = `<button class="chip ${espMfrFilter === 'all' ? 'on' : ''}" type="button" data-mfr="all">Hammasi</button>` +
+    mfrs.map(x => `<button class="chip ${espMfrFilter === x.id ? 'on' : ''}" type="button" data-mfr="${x.id}">${x.name}</button>`).join('');
+  document.getElementById('esp-mfr-chips').innerHTML = chips;
+  document.getElementById('esp-mfr-chips').querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => { espMfrFilter = c.dataset.mfr; renderAllEdges(p); });
+  });
+  const filtered = all.filter(m => espMfrFilter === 'all' || m.manufacturerId === espMfrFilter);
+  const list = document.getElementById('esp-all-list');
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="esp-no-match">Mos krom topilmadi.</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(em => edgeOptHtml(em)).join('');
+  list.querySelectorAll('.esp-opt').forEach(el => {
+    el.addEventListener('click', () => pickEdgeInSidePicker(el.dataset.mat, p));
+  });
+}
+
+function edgeOptHtml(em) {
+  const selected = sidePickerState && sidePickerState.matId === em.id;
+  const mfr = SEED.lookup.manufacturerName(em) || '';
+  const decorOrColor = em.decor ? `${em.decor} ${em.color || ''}`.trim() : (em.color || '');
+  return `
+    <button class="esp-opt ${selected ? 'on' : ''}" type="button" data-mat="${em.id}">
+      <span class="rad"></span>
+      <span class="sw" style="background:${swatchColor(em.sw)}"></span>
+      <span class="lab">
+        <span class="nm">${mfr ? mfr + ' · ' : ''}${decorOrColor}</span>
+        <span class="meta">${em.name}</span>
+      </span>
+      <span class="thk">${em.thickness} mm</span>
+    </button>`;
+}
+
+function pickEdgeInSidePicker(matId, p) {
+  sidePickerState = { matId, source: sidePickerState?.source || (edgeOwn ? 'own' : 'shop') };
+  // Re-render lists so the checked row updates
+  renderRecommended(p);
+  renderAllEdges(p);
+  renderBranchNote(p);
+}
+
+function toggleAllEdges() {
+  espShowAll = !espShowAll;
+  document.getElementById('esp-all-wrap').classList.toggle('open', espShowAll);
+  document.getElementById('esp-all-btn').classList.toggle('open', espShowAll);
+}
+
+function renderBranchNote(p) {
+  const wrap = document.getElementById('esp-branch-note');
+  if (!wrap) return;
+  const bid = draft.preferredBranchId;
+  if (!bid || !sidePickerState?.matId || sidePickerState.source === 'own') {
+    wrap.classList.add('hide'); wrap.innerHTML = ''; return;
+  }
+  const carried = new Set(SEED.lookup.materialsAtBranch(bid));
+  if (carried.has(sidePickerState.matId)) {
+    wrap.classList.add('hide'); wrap.innerHTML = ''; return;
+  }
+  const b = SEED.lookup.branchById(bid);
+  const bname = b ? b.name : bid;
+  wrap.classList.remove('hide');
+  wrap.innerHTML = `<b>${bname}</b> ustaxonasida bu krom hozir mavjud emas — buyurtma berishda o'zingiznikidan tanlang yoki boshqa filialni tanlang.`;
+}
+
+/* ---- Apply (final action) ---- */
+function applyEdges() {
+  const edges = {
+    t: edgeState.t ? { ...edgeState.t } : null,
+    b: edgeState.b ? { ...edgeState.b } : null,
+    l: edgeState.l ? { ...edgeState.l } : null,
+    r: edgeState.r ? { ...edgeState.r } : null
+  };
+  const allBox = document.getElementById('ep-all');
+  const all = allBox && allBox.checked && !allBox.disabled;
+  const sourceRow = draft.partList.find(x => x.ref === editingEdgesRef);
+  if (!sourceRow) { closeModal('m-edges'); return; }
+
+  if (all) {
+    // Confirm step when other rows have asymmetric per-side state that we're about to overwrite.
+    const others = draft.partList.filter(p => p.ref !== sourceRow.ref);
+    const willOverwrite = others.filter(p => hasAsymmetricEdges(p));
+    if (willOverwrite.length > 0) {
+      const ok = window.confirm(`Bu ${willOverwrite.length} ta qatordagi krom sozlamalarini almashtiradi — davom etamizmi?`);
+      if (!ok) return;
+    }
+
+    // Apply the RULE per row. If every side in source is null → "None" preset (clear all).
+    const sides = ['t','b','l','r'];
+    const sourceAllNull = sides.every(s => !edges[s]);
+
+    draft.partList.forEach(p => {
+      if (sourceAllNull) {
+        p.edges = { t: null, b: null, l: null, r: null };
+        return;
+      }
+      const next = { t: null, b: null, l: null, r: null };
+      sides.forEach(side => {
+        const e = edges[side];
+        if (!e) return;
+        const thick = SEED.lookup.matById(e.matId)?.thickness;
+        const em = bestMatchingEdge(p.matId, thick);
+        // If this row has no matching-decor edge at that thickness, leave the side null.
+        if (em) next[side] = { matId: em.id, source: e.source };
+      });
+      p.edges = next;
+    });
+  } else {
+    sourceRow.edges = edges;
+  }
+
   closeModal('m-edges');
   markStale();
   renderAll();
@@ -702,12 +1729,12 @@ function runOptimizer() {
     let algos = (draft.algorithms && draft.algorithms.length)
       ? draft.algorithms : synthAlgorithms(validParts);
 
-    // sheet cap per material → too_many_sheets_needed (split the job)
+    // panel cap per material → too_many_panels_needed (split the job)
     const chosen = algos.find(a => a.chosen) || algos[0];
-    const over = Object.entries(chosen.sheetsByMat).find(([, n]) => n > LIM.MAX_SHEETS_PER_MAT);
+    const over = Object.entries(chosen.panelsByMat).find(([, n]) => n > LIM.MAX_SHEETS_PER_MAT);
     if (over) {
       const mn = SEED.lookup.matById(over[0])?.name.split('·')[0].trim() || over[0];
-      showRunFailure('too_many_sheets_needed', `${mn} uchun ${over[1]} list kerak — bitta natijada ${LIM.MAX_SHEETS_PER_MAT} listdan oshmasligi kerak. Buyurtmani bo'ling.`);
+      showRunFailure('too_many_panels_needed', `${mn} uchun ${over[1]} panel kerak — bitta natijada ${LIM.MAX_SHEETS_PER_MAT} paneldan oshmasligi kerak. Buyurtmani bo'ling.`);
       syncOptimiseState();
       return;
     }
@@ -724,32 +1751,31 @@ function runOptimizer() {
 }
 
 function synthAlgorithms(parts) {
-  // very rough demo: compute sheetsByMat from total area
-  const sheetsByMat = {};
+  // very rough demo: compute panelsByMat from total area
+  const panelsByMat = {};
   for (const p of parts) {
     const mat = SEED.lookup.matById(p.matId);
     if (!mat) continue;
     const area = (p.l * p.w * p.qty);
-    const sheetArea = (mat.sheetLen - 20) * (mat.sheetWid - 20);
-    sheetsByMat[p.matId] = (sheetsByMat[p.matId] || 0) + Math.max(1, Math.ceil(area / sheetArea * 1.15));
+    const panelArea = (mat.panelLen - 20) * (mat.panelWid - 20);
+    panelsByMat[p.matId] = (panelsByMat[p.matId] || 0) + Math.max(1, Math.ceil(area / panelArea * 1.15));
   }
-  const totalSheets = Object.values(sheetsByMat).reduce((a,b)=>a+b,0);
   const cutLen = Math.round(parts.reduce((s,p) => s + (p.l + p.w) * 2 * p.qty / 1000, 0) * 10) / 10;
-  const edgeLen = { 0.4: 0, 2.0: 0 };
+  // edge length now rolled up by edge MATERIAL (not thickness).
+  const edgeLenByMat = {};
   for (const p of parts) {
-    const factor = (p.edges.t ? p.l : 0) + (p.edges.b ? p.l : 0) + (p.edges.l ? p.w : 0) + (p.edges.r ? p.w : 0);
     for (const side of ['t','b','l','r']) {
-      if (p.edges[side]) {
-        const len = (side === 't' || side === 'b' ? p.l : p.w) * p.qty / 1000;
-        edgeLen[p.edges[side]] = (edgeLen[p.edges[side]] || 0) + len;
-      }
+      const e = p.edges && p.edges[side];
+      if (!e || !e.matId) continue;
+      const len = (side === 't' || side === 'b' ? p.l : p.w) * p.qty / 1000;
+      edgeLenByMat[e.matId] = (edgeLenByMat[e.matId] || 0) + len;
     }
   }
-  for (const k in edgeLen) edgeLen[k] = Math.round(edgeLen[k] * 10) / 10;
+  for (const k in edgeLenByMat) edgeLenByMat[k] = Math.round(edgeLenByMat[k] * 10) / 10;
   return [
-    { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct:  9.8, cutLen, edgeLen, sheetsByMat: {...sheetsByMat} },
-    { name: 'best-fit-2d',    ver: '1.0', chosen: false, wastePct: 11.2, cutLen: cutLen * 0.94, edgeLen, sheetsByMat: {...sheetsByMat} },
-    { name: 'shelf-pack',     ver: '1.0', chosen: false, wastePct: 18.4, cutLen: cutLen * 0.86, edgeLen, sheetsByMat: Object.fromEntries(Object.entries(sheetsByMat).map(([k,v]) => [k, v + 1])) }
+    { name: 'ffd-guillotine', ver: '1.0', chosen: true,  wastePct:  9.8, cutLen, edgeLenByMat: {...edgeLenByMat}, panelsByMat: {...panelsByMat} },
+    { name: 'best-fit-2d',    ver: '1.0', chosen: false, wastePct: 11.2, cutLen: cutLen * 0.94, edgeLenByMat: {...edgeLenByMat}, panelsByMat: {...panelsByMat} },
+    { name: 'shelf-pack',     ver: '1.0', chosen: false, wastePct: 18.4, cutLen: cutLen * 0.86, edgeLenByMat: {...edgeLenByMat}, panelsByMat: Object.fromEntries(Object.entries(panelsByMat).map(([k,v]) => [k, v + 1])) }
   ];
 }
 
@@ -758,12 +1784,16 @@ function renderResult() {
   if (!algo) return;
 
   // headline metrics
-  const totalSheets = Object.values(algo.sheetsByMat).reduce((a,b)=>a+b,0);
-  const sheetsPerMat = Object.entries(algo.sheetsByMat).map(([m,n]) => {
+  const totalPanels = Object.values(algo.panelsByMat).reduce((a,b)=>a+b,0);
+  const panelsPerMat = Object.entries(algo.panelsByMat).map(([m,n]) => {
     const mat = SEED.lookup.matById(m);
     return `${mat?.name.split('·')[0].trim() || m}: ${n}`;
   }).join(' · ');
-  const edgeBits = Object.entries(algo.edgeLen).filter(([,v])=>v>0).map(([k,v])=>`${k}: ${v} m`).join(' · ') || '—';
+  const edgeBits = Object.entries(algo.edgeLenByMat).filter(([,v])=>v>0).map(([edgeMatId,v]) => {
+    const em = SEED.lookup.matById(edgeMatId);
+    const label = em ? `${em.thickness}mm ${em.color}` : edgeMatId;
+    return `${label}: ${v} m`;
+  }).join(' · ') || '—';
   // Parts placed: only valid parts are placed; any invalid part is "not fit".
   const partsTotal = draft.partList.reduce((a,p) => a + (p.qty || 0), 0);
   const unfit = draft.partList.filter(p => !validatePart(p).ok);
@@ -779,13 +1809,13 @@ function renderResult() {
       <div class="sub">materiallar bo'yicha o'rtacha</div>
     </div>
     <div class="metric">
-      <div class="lab">Listlar</div>
-      <div class="v">${totalSheets}</div>
-      <div class="sub">${sheetsPerMat}</div>
+      <div class="lab">Panellar</div>
+      <div class="v">${totalPanels}</div>
+      <div class="sub">${panelsPerMat}</div>
     </div>
     <div class="metric">
       <div class="lab">Krom uzunligi</div>
-      <div class="v">${(Object.values(algo.edgeLen).reduce((a,b)=>a+b,0)).toFixed(1)} m</div>
+      <div class="v">${(Object.values(algo.edgeLenByMat).reduce((a,b)=>a+b,0)).toFixed(1)} m</div>
       <div class="sub">${edgeBits}</div>
     </div>
     <div class="metric ${allFit ? 'ok' : 'warn'}">
@@ -796,15 +1826,15 @@ function renderResult() {
 
   // current algo summary
   document.getElementById('cur-algo').textContent = algo.name;
-  document.getElementById('cur-algo-meta').textContent = `chiqim ${algo.wastePct}% · ${totalSheets} list · ${algo.cutLen} m kesish`;
+  document.getElementById('cur-algo-meta').textContent = `chiqim ${algo.wastePct}% · ${totalPanels} panel · ${algo.cutLen} m kesish`;
 
   // algorithm comparison table
   document.getElementById('algos-tbody').innerHTML = draft.algorithms.map(a => {
-    const ts = Object.values(a.sheetsByMat).reduce((x,y)=>x+y,0);
+    const tp = Object.values(a.panelsByMat).reduce((x,y)=>x+y,0);
     return `<tr class="${a.chosen ? 'chosen' : ''}" data-algo="${a.name}">
       <td>${a.name} ${a.chosen ? '<span class="badge">tanlandi</span>' : ''}</td>
       <td>${a.wastePct}%</td>
-      <td>${ts}</td>
+      <td>${tp}</td>
       <td>${a.cutLen.toFixed ? a.cutLen.toFixed(1) : a.cutLen} m</td>
       <td>${a.chosen ? '' : `<button class="use" type="button" data-pick="${a.name}">Tanlash</button>`}</td>
     </tr>`;
@@ -821,21 +1851,21 @@ function renderResult() {
   });
 
   // material tabs
-  const materials = Object.keys(algo.sheetsByMat);
+  const materials = Object.keys(algo.panelsByMat);
   if (!activeMatTab || !materials.includes(activeMatTab)) activeMatTab = materials[0];
   document.getElementById('mat-tabs').innerHTML = materials.map(m => {
     const mat = SEED.lookup.matById(m);
     const nm = mat ? mat.name.split('·')[0].trim() : m;
-    return `<button class="${m === activeMatTab ? 'on' : ''}" type="button" data-mat="${m}">${nm}<span class="ct">${algo.sheetsByMat[m]} list</span></button>`;
+    return `<button class="${m === activeMatTab ? 'on' : ''}" type="button" data-mat="${m}">${nm}<span class="ct">${algo.panelsByMat[m]} panel</span></button>`;
   }).join('');
   document.querySelectorAll('#mat-tabs button').forEach(b => {
     b.addEventListener('click', () => { activeMatTab = b.dataset.mat; activeSheet = 1; renderResult(); });
   });
 
-  // sheet tabs
-  const sheetCount = algo.sheetsByMat[activeMatTab];
-  document.getElementById('sheet-tabs').innerHTML = Array.from({ length: sheetCount }, (_, i) => i + 1)
-    .map(n => `<button class="${n === activeSheet ? 'on' : ''}" type="button" data-sheet="${n}">List ${n}</button>`).join('');
+  // panel tabs
+  const panelCount = algo.panelsByMat[activeMatTab];
+  document.getElementById('sheet-tabs').innerHTML = Array.from({ length: panelCount }, (_, i) => i + 1)
+    .map(n => `<button class="${n === activeSheet ? 'on' : ''}" type="button" data-sheet="${n}">Panel ${n}</button>`).join('');
   document.querySelectorAll('#sheet-tabs button').forEach(b => {
     b.addEventListener('click', () => { activeSheet = +b.dataset.sheet; renderResult(); });
   });
@@ -875,21 +1905,21 @@ function placeOrderFromCutting() {
 function renderSheetSvg(algo) {
   const mat = SEED.lookup.matById(activeMatTab);
   if (!mat) return;
-  // build a deterministic-ish layout for the parts of this material on this sheet
+  // build a deterministic-ish layout for the parts of this material on this panel
   const matParts = draft.partList.filter(p => p.matId === activeMatTab && p.l && p.w && p.qty);
-  const sheetsForMat = algo.sheetsByMat[activeMatTab] || 1;
-  // distribute parts across sheets simplistically (round robin)
+  const panelsForMat = algo.panelsByMat[activeMatTab] || 1;
+  // distribute parts across panels simplistically (round robin)
   const sheetPlacements = []; // for activeSheet
   let totalUnits = 0;
   matParts.forEach((p, idx) => {
     for (let q = 1; q <= p.qty; q++) {
-      const sheetIdx = (totalUnits % sheetsForMat) + 1;
+      const sheetIdx = (totalUnits % panelsForMat) + 1;
       if (sheetIdx === activeSheet) sheetPlacements.push({ p, q, idx });
       totalUnits++;
     }
   });
 
-  const W = mat.sheetLen, H = mat.sheetWid;
+  const W = mat.panelLen, H = mat.panelWid;
   const trim = 10;
   const usable = { x: trim, y: trim, w: W - 2*trim, h: H - 2*trim };
   // shelf-pack into the usable area
@@ -916,7 +1946,7 @@ function renderSheetSvg(algo) {
   const svgW = 800, svgH = Math.round(svgW * H / W);
   const sc = svgW / W;
   let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="xMidYMid meet">`;
-  // sheet outline
+  // panel outline
   svg += `<rect x="0" y="0" width="${svgW}" height="${svgH}" fill="#fff8ee" stroke="#caa97a" stroke-width="2"/>`;
   // usable area dashed
   svg += `<rect x="${trim*sc}" y="${trim*sc}" width="${(W-2*trim)*sc}" height="${(H-2*trim)*sc}" fill="none" stroke="#caa97a" stroke-width="1" stroke-dasharray="4 4"/>`;
@@ -937,12 +1967,12 @@ function renderSheetSvg(algo) {
     const c = partColor(idx);
     return `<li><span class="sw" style="background:${c}"></span>#${idx + 1} · ${p.l}×${p.w} · ${p.qty} dona${p.source === 'own' ? ' · o\'zim' : ''}</li>`;
   }).join('');
-  document.getElementById('sheet-legend').innerHTML = `<h4>${mat.name.split('·')[0].trim()} · List ${activeSheet}</h4><ul>${legendItems}</ul>`;
+  document.getElementById('sheet-legend').innerHTML = `<h4>${mat.name.split('·')[0].trim()} · Panel ${activeSheet}</h4><ul>${legendItems}</ul>`;
 
   document.getElementById('sheet-info').innerHTML = `
-    <span>List o'lchami: <b>${W} × ${H} mm</b></span>
+    <span>Panel o'lchami: <b>${W} × ${H} mm</b></span>
     <span title="Arra tig'i har bir kesimda yo'qotadigan eni">Arra kengligi: <b>4 mm</b></span>
-    <span title="List chetidan qirqib tashlanadigan ishlatilmaydigan zona">Chekka qirqim: <b>10 mm</b></span>`;
+    <span title="Panel chetidan qirqib tashlanadigan ishlatilmaydigan zona">Chekka qirqim: <b>10 mm</b></span>`;
 }
 
 function lockEditing() {

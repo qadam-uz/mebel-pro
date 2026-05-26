@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-05-25
 order: 50
 ---
 
@@ -18,7 +18,8 @@ finance context ([`finance.md`](finance.md)); the order holds **no payment rows*
 A client's request for panels cut to size at a branch — the header that owns the items, the
 status history, the production stamps, and a frozen price snapshot. Created only by a client,
 from a cutting draft with a chosen algorithm result. v1 is pickup-only; the order references
-its confirmed cutting result. Material source is **per item** — see [Order item](#order-item).
+its confirmed cutting result. Material source is **per item** for the panel and **per side**
+for each edge — see [Order item](#order-item).
 
 **Identity & lifecycle**
 
@@ -39,7 +40,9 @@ post-placement modification, so it is never re-priced)
 
 | Field | Type | Notes |
 |---|---|---|
-| `subtotal_cutting_tiyin` / `subtotal_materials_tiyin` / `subtotal_edge_banding_tiyin` | bigint | snapshot subtotals (materials = 0 unless `shop`); each ≥ 0 |
+| `subtotal_cutting_tiyin` | bigint | snapshot subtotal — `Σ panels × cutting_rate_tiyin` at this branch; ≥ 0 |
+| `subtotal_materials_tiyin` | bigint | snapshot subtotal — `shop`-source panel cost; ≥ 0 |
+| `subtotal_edge_banding_tiyin` | bigint | snapshot subtotal — `shop`-source edge cost; ≥ 0 |
 | `discount_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; ≤ pre-discount total |
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
 | `total_tiyin` | bigint | `cutting + materials + edge banding − discount`; ≥ 0 |
@@ -55,10 +58,10 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 | `assigned_edger_user_id` | UUID? | operator assigns | set when the order has banded parts; holds `process_production` on the branch |
 | `cutter_user_id` | UUID? | `cutting → next` | the user credited (assignee, or the on-behalf "who did this work?" pick) |
 | `cut_completed_at` | timestamp? | `cutting → next` | |
-| `sheets_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |
+| `panels_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |
 | `edger_user_id` | UUID? | `edge_banding → ready` | the user credited; null when the order had no banded parts |
 | `edge_completed_at` | timestamp? | `edge_banding → ready` | |
-| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "0.4": 12500, "2.0": 4800 }` metres of banding by thickness |
+| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — metres of banding by edge material (only `shop` metres). Thickness is derived from each material at report read time. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
 Invariants: created only by a client, from a cutting draft with a `chosen` result (which
@@ -68,36 +71,40 @@ re-pricing — there is no modification); status transitions follow the state ma
 concurrent transitions serialize by `version`; `cutter_user_id` / `edger_user_id` reference
 workshop users who hold `process_production` on `branch_id`; production stamps are set in the
 same atomic transaction as their transition and **cleared by a revert** of that step; stock
-is auto-decremented per `shop` item by the inventory module (sheets at `cutting →` next,
-edges at `edge_banding → ready`) — the order holds no stock balance; `completed` and
-`cancelled` are terminal; an order is never deleted (it goes `cancelled`).
+is auto-decremented per `shop` source by the inventory module (panels at `cutting →` next,
+edges at `edge_banding → ready`, per edge material) — the order holds no stock balance;
+`completed` and `cancelled` are terminal; an order is never deleted (it goes `cancelled`).
 
 ## Order item
 
-One part line of an order — a panel of given dimensions and quantity, optional edge banding,
-plus a frozen snapshot of the material it's cut from and the prices used. Items mirror the
-parts the client entered into the cutting wizard for that order.
+One part line of an order — a panel of given dimensions and quantity, optional edge banding
+**per side**, plus frozen snapshots of the panel and each side's edge (the snapshots are
+authoritative for the order) and the prices used. Items mirror the parts the client entered
+into the cutting wizard for that order.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `order_id` | UUID | required |
-| `material_id` | UUID | logical reference (the snapshot is authoritative for the order) |
-| `material_source` | enum | `shop` / `own` — per-item; an order can mix sources |
-| `material_snapshot` | json | `{ name, type, thickness_mm, color, decor_code, sheet_length_mm, sheet_width_mm, price_tiyin }` as of order creation |
+| `material_id` | UUID | logical reference to the panel material (the snapshot is authoritative for the order) |
+| `material_source` | enum | `shop` / `own` — for the panel; per-item; an order can mix |
+| `material_snapshot` | json | `{ name, type, thickness_mm, color, decor_code, manufacturer_name, panel_length_mm, panel_width_mm, price_tiyin }` as of order creation |
 | `part_ref` | text | the part's id (matches the cutting result's parts snapshot / placements) |
 | `length_mm` / `width_mm` | int | within material / cutting bounds |
 | `quantity` | int | ≥ 1 |
-| `edge_top_mm` / `edge_bottom_mm` / `edge_left_mm` / `edge_right_mm` | numeric? | edge-banding thickness per side, or null |
+| `edge_top` / `edge_bottom` / `edge_left` / `edge_right` | json? | per side: either null (no banding) or `{ material_id, source, snapshot: { name, manufacturer_name, thickness_mm, color, decor_code, price_tiyin } }` |
 | `unit_cutting_price_tiyin` | bigint | snapshot, ≥ 0 |
-| `unit_material_price_tiyin` | bigint | snapshot; 0 when `material_source = own`; ≥ 0 |
-| `edge_cost_tiyin` | bigint | snapshot for this line; ≥ 0 |
+| `unit_material_price_tiyin` | bigint | snapshot; 0 when panel `material_source = own`; ≥ 0 |
+| `edge_cost_tiyin` | bigint | snapshot for this line — sum across the four sides of `shop` edge cost; 0 when every banded side is `own`; ≥ 0 |
 | `line_total_tiyin` | bigint | `(unit_cutting + unit_material) × quantity + edge_cost`; ≥ 0 |
 
 Invariants: snapshot fields are never updated to reflect later catalog changes; `part_ref`
-corresponds to a part in the order's cutting result; grain is a property of the item's
-material (read from `material_snapshot`); parts on a grained material aren't rotated at
-cutting time. There is no modify path — items are created with the order and never replaced.
+corresponds to a part in the order's cutting result; the panel `material_id` is a `panel`-kind
+material; each side's edge `material_id` (when set) is an `edge`-kind material; grain is a
+property of the panel's material (read from `material_snapshot`); parts on a grained material
+aren't rotated at cutting time; per-side `source` is independent and may differ across sides
+of the same item. There is no modify path — items are created with the order and never
+replaced.
 
 ## Order status event
 

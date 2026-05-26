@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-22
+updated: 2026-05-25
 order: 10
 ---
 
@@ -99,6 +99,7 @@ marta verify qilinganda oʻzini self-register qiladi (faqat name); platform'ga g
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; **unique, required** — verified identity va natural key |
 | `name` | text | required; client'ning oʻz display name'i, registration'da yoziladi (1–80 belgi); workshop unga shunday murojaat qiladi |
+| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The client sets and clears it from their profile. |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
@@ -110,7 +111,12 @@ boʻla olmaydi; row faqat yangi raqamning birinchi muvaffaqiyatli verification'i
 
 Invariant'lar: `phone` unique (DB) va `+998XXXXXXXXX` shaklida; block qilish uning session'larini
 oʻchiradi; faqat muvaffaqiyatli birinchi verification orqali yaratiladi (hech qachon operator yoki
-boshqa principal tomonidan emas).
+boshqa principal tomonidan emas); `preferred_branch_id` set boʻlganda, client koʻra oladigan
+branch'ga reference qiladi (har qanday workshop'ning `active` yoki `temporarily_closed`
+branch'i); field **scope-enforced emas** (keyinroq branch `inactive` boʻlsa uni
+tozalamaydi — cutting wizard vaziyatni uzilib-qolgan material kabi recovery
+affordance'lari bilan koʻrsatadi;
+[`cutting.md`](../features/cutting.md)'ga qarang).
 
 ## Phone verification challenge
 

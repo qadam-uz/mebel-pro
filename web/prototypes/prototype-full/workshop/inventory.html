@@ -130,7 +130,7 @@
 <script>
 renderWorkshopShell();
 
-const unit = m => m.kind === 'edge' ? 'm' : 'list';
+const unit = m => m.kind === 'edge' ? 'm' : 'panel';
 
 // CR4: only branches the user can scope to (manage_inventory / owner).
 const MY_BR = myBranches().filter(id => isOwner() || can('manage_inventory', id));
@@ -195,7 +195,10 @@ window.renderStock = () => {
     const m = SEED.lookup.matById(bm.matId);
     const br = SEED.lookup.branchById(bm.branchId);
     const low = bm.onHand <= bm.minStock;
-    const dims = m.kind === 'edge' ? `${m.thickness} mm · krom (metr)` : `${m.thickness} mm · ${m.sheetLen}×${m.sheetWid}`;
+    const mfr = SEED.lookup.manufacturerName(m);
+    const dims = m.kind === 'edge'
+      ? `${mfr ? mfr + ' · ' : ''}${m.thickness} mm · krom (metr)`
+      : `${mfr ? mfr + ' · ' : ''}${m.thickness} mm · ${m.panelLen}×${m.panelWid}`;
     return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · tranzaksiyalar tabida')">
       <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${dims}</small></div></div></td>
       <td>${br.name}</td>
@@ -237,18 +240,21 @@ window.openAdjust = (branchId, matId) => {
 function buildTransactions() {
   const tx = [];
   // consume rows: every order whose Cutting done was stamped consumed its
-  // shop sheets (one row per material). Banding done consumed edge metres.
+  // shop panels (one row per material). Banding done consumed edge metres
+  // per edge material (one row per edge material).
   SEED.orders.forEach(o => {
     if (!MY_BR.includes(o.branchId)) return;
-    if (o.cutCompletedAt && o.sheetsUsed) {
-      Object.entries(o.sheetsUsed).forEach(([matId, qty]) => {
+    if (o.cutCompletedAt && o.panelsUsed) {
+      Object.entries(o.panelsUsed).forEach(([matId, qty]) => {
         const m = SEED.lookup.matById(matId);
         tx.push({ t: o.cutCompletedAt, type: 'consume', matName: m?.name || matId, branchId: o.branchId, qty: -qty, order: o.id, actor: 'System · order' });
       });
     }
-    if (o.edgeCompletedAt && o.edgeLengthByThickness) {
-      const total = Object.values(o.edgeLengthByThickness).reduce((a, b) => a + b, 0) / 1000;
-      tx.push({ t: o.edgeCompletedAt, type: 'consume', matName: 'Krom (PVC)', branchId: o.branchId, qty: -Math.round(total * 10) / 10, order: o.id, actor: 'System · order' });
+    if (o.edgeCompletedAt && o.edgeLengthByMaterial) {
+      Object.entries(o.edgeLengthByMaterial).forEach(([edgeMatId, metres]) => {
+        const em = SEED.lookup.matById(edgeMatId);
+        tx.push({ t: o.edgeCompletedAt, type: 'consume', matName: em?.name || `Krom · ${edgeMatId}`, branchId: o.branchId, qty: -Math.round(metres * 10) / 10, order: o.id, actor: 'System · order' });
+      });
     }
   });
   // stock-in rows from the action log (inventory.stock_in).
