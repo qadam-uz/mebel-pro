@@ -296,6 +296,14 @@ main.shell-main { display: flex; flex-direction: column; min-width: 0; }
 .tbl .amt { text-align: right; font-family: var(--f-mono); font-weight: 600; color: var(--ink-12); white-space: nowrap; }
 .tbl .menu-cell { width: 30px; text-align: center; }
 
+/* Tables get horizontal scroll on narrow viewports so columns stay readable rather than the whole page scrolling. */
+@media (max-width: 720px) {
+  .card:has(> .tbl), .card:has(> table.tbl), .card-b:has(> .tbl), .card-b:has(> table.tbl) {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .tbl { min-width: 640px; }
+}
+
 /* FILTER STRIP */
 .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
 .filters .input, .filters select, .filters .chip-group { display: inline-flex; }
@@ -543,7 +551,7 @@ textarea { resize: vertical; min-height: 80px; }
 .drawer.on { transform: translateX(0); }
 
 /* BOARD (orders kanban) */
-.board { display: grid; grid-template-columns: repeat(7, minmax(220px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 10px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 10px; }
 .board-col { background: var(--sunk); border-radius: var(--r-lg); padding: 10px; min-height: 200px; }
 .board-col h4 { font: 700 11.5px/1 var(--f-ui); text-transform: uppercase; letter-spacing: .07em; color: var(--ink-8); margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .board-col h4 .ct { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-6); padding: 1px 6px; background: var(--elev); border-radius: 999px; }

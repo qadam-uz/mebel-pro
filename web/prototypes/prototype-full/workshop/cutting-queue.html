@@ -72,7 +72,7 @@ document.getElementById('queue').innerHTML = queue.length === 0
         <span class="assigned-tag">Sizga</span>
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'${o.id} · ishlatilgan listlar yoziladi, material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'${o.id} · ishlatilgan panellar yoziladi, material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Tafsilotlar</a>
       </div>
     </div>`;
@@ -91,7 +91,7 @@ document.getElementById('active').innerHTML = active.length === 0
         <span class="pill p-cut"><span class="pd"></span>Kesilmoqda</span>
       </div>
       <div class="act">
-        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'Ishlatilgan listlar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
+        <button class="btn btn-acc" type="button" onclick="confirmAction({title:'Kesish tugadi',msg:'Ishlatilgan panellar yoziladi va material stockdan chiqariladi.'},()=>{toast('Kesish tugadi · ${o.id}');setTimeout(()=>location.reload(),700)})"><i class="ic" data-icon="check"></i> Kesish tugadi</button>
         <a class="btn btn-outline" href="order-detail.html?id=${o.id}">Chizmani ko'rish</a>
       </div>
     </div>`;
