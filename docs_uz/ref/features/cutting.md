@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 80
 ---
 
@@ -61,7 +61,7 @@ Har bir algorithm result yozadi: `algorithm_name`, `algorithm_version`, per-mate
 panel'lar va ularning placement'lari, weighted `waste_percentage`,
 `panels_used_by_material`, `total_cut_length_mm`, `total_edge_length_mm`,
 `edge_length_by_material` (har bir edge material uchun metr, faqat `shop`-source metr'lar
-stock decrement uchun hisoblanadi; `own` metr'lar cutting plan uchun alohida kuzatiladi).
+order'ning billed va consumed total'lariga kiradi; `own` metr'lar cutting plan uchun alohida kuzatiladi).
 
 ### Lifecycle
 
@@ -130,8 +130,12 @@ stateDiagram-v2
   mumkin area = panel − 2× edge trim).
 - **Edge-banding length shu yerda hisoblanadi.** Banding material'i set qilingan har bir
   part edge uchun, edge length part'ning length (top/bottom) yoki width (left/right).
-  Total'lar **edge material boʻyicha** roll-up qilinadi (`edge_length_by_material`).
-  Order'ning pricing'i shuni oʻqiydi.
+  Total'lar **edge material boʻyicha** roll-up qilinadi (`edge_length_by_material`) — bu **geometric banded length**. Order aslida **bill
+  qiladigan va consume qiladigan** metr'lar har bir banded side uchun fixed trim overhang
+  qoʻshadi (master'lar tape'ni uzunroq yopishtiradi, soʻng tekis qirqadi) — bu har bir
+  branch'da bir xil system constant — shuning uchun **consumed** figura geometry + oʻsha
+  trim; qoida uchun [`orders.md`](orders.md#pricing)'ga qarang. Optimiser geometry'ni
+  beradi, va overhang constant boʻlgani uchun consumed metr'lar branch'siz ham maʼlum.
 - **Cutting vaqtida stock check yoʻq.** Optimiser faqat "X material uchun N panel kerak"
   va "Y edge material uchun L metr kerak" deydi. Stock hech qachon gate emas: operator
   order verification'da non-blocking low-stock warning koʻradi va inventory module
@@ -311,10 +315,15 @@ Success'da, panel uchta region bilan view'ga scroll qiladi:
 1. **Headline metrics.**
    - Weighted **waste %** (barcha panel material'lar boʻyicha).
    - **Panels used** total va per-material breakdown.
-   - **Edge tape** total length, metr'ga ega har bir edge material'ni list qiluvchi
-     breakdown bilan (masalan, `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`).
-     Baʼzi side'lar `own` boʻlsa, breakdown har bir material uchun shop va own metr'larni
-     ajratadi.
+   - **Edge tape** total length — **consumed** metr'lar (geometric banding + master'lar
+     qoldiradigan va bill qiladigan standart ~3 sm/side trim), metr'ga ega har bir edge
+     material'ni list qiluvchi breakdown bilan (masalan, `Rehau H1334 0.4 — 8.4 m ·
+     Rehau H1334 2.0 — 3.2 m`). Baʼzi side'lar `own` boʻlsa, breakdown har bir material
+     uchun shop va own metr'larni ajratadi. Qisqa note figura standart per-side trim'ni
+     oʻz ichiga olishini tushuntiradi — client'ga bu **Stanok haqqi** deb koʻrsatiladi
+     (canon term: *trim overhang*): u client bill qilinadigan va stock consume qiladigan
+     narsa ([`orders.md`](orders.md#pricing)); trim fixed constant boʻlgani uchun bu
+     haqiqiy figura, branch kerak emas.
    - **Cut length total** (m), informational.
    - **Parts placed** count, masalan, `24 / 24` ✓ (agar baʼzilari sigʻmasa per-part
      list bilan qizil).

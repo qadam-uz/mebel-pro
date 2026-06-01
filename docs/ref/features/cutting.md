@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 80
 ---
 
@@ -56,7 +56,7 @@ A draft owns:
 Each algorithm result records: `algorithm_name`, `algorithm_version`, per-material panels
 and their placements, weighted `waste_percentage`, `panels_used_by_material`,
 `total_cut_length_mm`, `total_edge_length_mm`, `edge_length_by_material` (metres per edge
-material, only the `shop`-source metres count for stock decrement; `own` metres are tracked
+material, only the `shop`-source metres feed the order's billed and consumed totals; `own` metres are tracked
 separately for the cutting plan).
 
 ### Lifecycle
@@ -123,7 +123,12 @@ stateDiagram-v2
   trim).
 - **Edge-banding length is computed here.** For each part edge with a banding material set,
   the edge length is the part's length (top/bottom) or width (left/right). Totals roll up
-  **by edge material** (`edge_length_by_material`). The order's pricing reads this.
+  **by edge material** (`edge_length_by_material`) — this is the **geometric banded length**.
+  The metres an order actually **bills and consumes** add a fixed per-side trim overhang
+  (masters glue tape long, then trim it flush) — a system constant, the same at every branch
+  — so the **consumed** figure is geometry + that trim; see [`orders.md`](orders.md#pricing)
+  for the rule. The optimiser emits the geometry, and because the overhang is constant the
+  consumed metres are known without a branch.
 - **No stock check at cutting time.** The optimiser says only "N panels needed of material
   X" and "L metres needed of edge material Y." Stock is never a gate: the operator sees a
   non-blocking low-stock warning at order verification and the inventory module
@@ -292,9 +297,15 @@ On success, the panel scrolls into view with three regions:
 1. **Headline metrics.**
    - Weighted **waste %** (across all panel materials).
    - **Panels used** total and per-material breakdown.
-   - **Edge tape** total length, with a breakdown listing each edge material that has
-     metres (e.g. `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`). When some sides
-     are `own`, the breakdown splits shop and own metres per material.
+   - **Edge tape** total length — the **consumed** metres (geometric banding + the standard
+     ~3 cm/side trim masters leave and bill), with a breakdown listing each edge material
+     that has metres (e.g. `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`). When some
+     sides are `own`, the breakdown splits shop and own metres per material. A short note
+     explains the figure includes the standard per-side trim — surfaced to the client as
+     **Stanok haqqi** (Uzbek, lit. "the machine's allowance"; the canon term is *trim
+     overhang*) — what the client is billed for and what consumes stock
+     ([`orders.md`](orders.md#pricing)); because the trim is a fixed constant this is the
+     real figure, no branch needed.
    - **Cut length total** (m), informational.
    - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
    - The chosen **algorithm** name plus a **Compare algorithms** link → expander with one

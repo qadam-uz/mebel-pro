@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 50
 ---
 
@@ -122,15 +122,18 @@ no `available`, no reservation** — the order never holds stock; it only decrem
   branch's selection), positive quantity, a supplier (existing or added inline),
   optional receipt file. `on_hand += qty`.
 - **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't
-  go below 0. Used for stock-takes and write-offs (including material a
-  cancelled-mid-production order physically consumed).
+  go below 0. The single tool for stock-takes and **waste write-offs** of every kind
+  — damage and accidents, a master's production error, an edge-roll remnant too short
+  to band, or material a cancelled-mid-production order physically consumed. Waste is
+  recorded as a quantity correction, not classified by cause (cause analytics is
+  deferred).
 - **Consume / restore** (system) — driven entirely by the order state machine.
 
 **The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed**
-when the order's **Cutting done** is marked; `shop` edge metres are **consumed**, per
-edge material, when **Banding done** is marked. A revert re-increments exactly what
-its step decremented. `own`-source panels and `own`-source edge sides never touch
-stock.
+when the order's **Cutting done** is marked; `shop` edge **consumed metres** (geometric
+banded length + the standard per-side trim overhang) are decremented, per
+edge material, when **Banding done** is marked. A revert re-increments exactly what its
+step decremented. `own`-source panels and `own`-source edge sides never touch stock.
 
 **Projected balance & the verify warning.** There is no reservation, so a meaningful
 "will we have enough?" needs the demand already in flight. For a material at a branch:
@@ -156,10 +159,14 @@ Under a branch's tabs (and owner-wide views with a branch filter):
   status). Filter chips: kind, manufacturer, type. **+ Material** → catalog picker
   (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
   Edit · Activate / Deactivate. No Delete.
-- **Pricing** (owner only) — two fields: cutting rate (`cutting_rate_tiyin`, per panel)
-  and edge-banding labour rate (`edge_banding_rate_tiyin`, per metre, all thicknesses).
-  Save + unsaved-changes guard; "pricing not set yet" empty state on a new branch. The
-  raw edge **material** price lives on each Branch material `edge` selection — not here.
+- **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
+  — the cutting rate (`cutting_rate_tiyin`, per panel) and the edge-banding labour rate
+  (`edge_banding_rate_tiyin`, per metre, all thicknesses); it's the home future branch
+  settings land in. Edits the branch's [Branch pricing](#branch-pricing) row. Save +
+  unsaved-changes guard; "not set yet" empty state on a new branch (the rates start unset).
+  The raw edge **material** price lives on each Branch material `edge` selection — not here;
+  the edge **trim overhang** is a fixed system constant ([`orders.md`](orders.md#pricing)),
+  not a branch setting.
 - **Stock** (`manage_inventory`) — table: material (name + image + manufacturer
   chip), on-hand, min-stock, unit, last updated; low-stock rows highlighted (chip +
   colour). Per-row **Record stock-in** → modal (qty, supplier picker with inline add,
@@ -202,6 +209,11 @@ alone; modals manage focus; owner-only controls are visibly gated for non-owners
 - **Order cancelled mid-production after material was consumed** — stock is **not**
   auto-restored (it was physically cut); the warehouseman records an `adjust`
   write-off if the count needs correcting.
+- **Edge-roll remnant too short to band a side** — it can't be joined to the next
+  roll (the seam would show), so the master discards it and records an `adjust`
+  write-off. Unlike the per-side trim overhang ([`orders.md`](orders.md#pricing)),
+  which the client pays, a remnant is unattributable to any single order and is
+  **absorbed by the workshop** — never billed.
 - **Operator reverts a completed job** — the system `restore`s exactly the quantity
   that step consumed; for edges, one restore per edge material the step had
   consumed.

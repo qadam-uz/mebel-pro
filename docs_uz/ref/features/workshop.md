@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-05-29
 order: 40
 ---
 
@@ -80,10 +80,10 @@ Read operation'lar uchun visibility:
   working-hours grid (per weekday open / close, "closed this day" toggle bilan), status.
 - **Branch detail** (`/workshop/branches/:id`) — header (name, address, status, action set:
   change status · edit). Tabs: **Overview** (status, active-orders count, revenue 30d,
-  low-stock count) · **Materials** · **Stock** · **Pricing** · **Staff** (bu yerda read-only;
+  low-stock count) · **Materials** · **Stock** · **Settings** · **Staff** (bu yerda read-only;
   bu branch'ni `home_branch` qilgan har kimni plus unda grant'i bor har kimni ko'rsatadi;
   [`access-management.md`](access-management.md)'da managed) · **Orders**. Materials,
-  Stock, va Pricing tab'lari [`catalog-inventory.md`](catalog-inventory.md) tomonidan owned;
+  Stock, va Settings tab'lari [`catalog-inventory.md`](catalog-inventory.md) tomonidan owned;
   Orders [`orders.md`](orders.md) tomonidan.
 - `temporarily_closed` branch reason bilan banner ko'rsatadi; `inactive` branch inactive
   banner ko'rsatadi.

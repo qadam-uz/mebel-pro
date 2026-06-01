@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 30
 ---
 
@@ -151,9 +151,10 @@ Toʻliq shu state machine tomonidan boshqariladi; mexanika
   order'larning demand'i), shunda u warehouseman'ga ogohlantirishi mumkin. Bu warning,
   gate emas.
 - **Job tugashida avto-decrement.** `shop` panel'lar **Cutting done** belgilanganda
-  decrement qilinadi; har bir `shop` edge material'ning metr'lari **Banding done**
+  decrement qilinadi; har bir `shop` edge material'ning **consumed metr'lari** **Banding done**
   belgilanganda decrement qilinadi (order'ning `edge_length_snapshot`'i shop metr'lar
-  bilan olib yurgan har bir edge material uchun bittadan inventory transaction).
+  bilan olib yurgan har bir edge material uchun bittadan inventory transaction — bular
+  **consumed** metr'lar, *Pricing*'ga qarang).
   Revert oʻzining step'i decrement qilganini aniq qayta increment qiladi.
 - **`own` part'lar va `own` edge side'lar stock'ga hech qachon tegmaydi.** `shop` panel
   va `shop` edge side yoʻq order bu seam'ni butunlay oʻtkazib yuboradi.
@@ -199,11 +200,27 @@ price qilish yoʻq — modification yoʻq).
 |---|---|---|
 | Cutting service | always | the branch's `cutting_rate_tiyin` × the chosen result's total panels — one rate, applied per panel cut (v1's only model) |
 | Panel materials | parts with `material_source = shop` | Σ (the branch's per-panel price × panels attributable to that material's `shop` parts) |
-| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (metres of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
-| Edge banding labour | when any `shop` side has banding | total `shop` metres of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
+| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
+| Edge banding labour | when any `shop` side has banding | total `shop` **consumed metres** of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
 | Discount | when a `manage_orders` user adds one | percent or fixed sum; subtracted; **reason + the user id recorded** (audited); no enforced cap in v1 — the reason + audit are the control |
 
 **Total = cutting + panel materials + edge materials + edge banding labour − discount.**
+
+**Consumed metres.** Banded side koʻrinadigan edge'idan koʻproq tape yeydi: master uni
+uzunroq yopishtiradi va keyin tekis qirqadi — har bir side uchun ~3 sm (har bir uchida 15 mm).
+Shuning uchun edge metr'lar — edge-material price, banding labour, client'ning tape total'i
+**va** stock decrement ortidagi yagona figura — geometric emas, **consumed**:
+
+> consumed metres (per edge material) = the cutting result's geometric `edge_length_by_material`
+> + a fixed **30 mm trim overhang** × the order's banded `shop` sides for that material
+
+30 mm overhang — **har bir branch'da bir xil system constant** (har bir banded side uchun
+3 sm workshop standarti, shuning uchun branch'da sozlanmaydi). Banded-side count order'ning
+oʻz per-side edge pick'laridan keladi; `own` side'lar na bill qilinadi na decrement qilinadi,
+shuning uchun yigʻindiga kirmaydi. Overhang constant boʻlgani uchun consumed figura **cutting
+result**'dan boshlab maʼlum — branch tanlangandan keyingina emas — shu sababli client wizard'da
+([`cutting.md`](cutting.md)) haqiqiy metr'larni koʻradi; faqat *price* branch'ning rate'larini
+kutadi. Bitta figura — downstream'da alohida geometric-vs-consumed column'lar yoʻq.
 
 **Operational setup gap'lar baland tovushda fail boʻladi.** Agar branch'ning cutting
 rate'i set qilinmagan boʻlsa, banded part'lar bor lekin edge-banding ish haqi rate'i
@@ -226,7 +243,7 @@ orders**). Branch placement'da, aniq cutting'ga qarshi tanlanadi — draft'ning
   order with this cutting** tugmasidan ochiladi. Draft hali ham chosen result bilan
   `draft` ekanini pre-check qiladi (boʻlmasa toast bilan redirect). Ikki ekran, har
   birida sticky summary card (parts, har bir material uchun panel'lar, har bir
-  material uchun edge metr, waste %, branch tanlangandan keyin total):
+  material uchun edge metr — **consumed**, standart trim allaqachon qoʻshilgan — waste %, branch tanlangandan keyin total):
 
   1. **Branch pick.** Cutting'ning material set'ini fulfil qila oladigan active
      branch'lar (har bir `shop` panel va har bir `shop` edge side'ning material'i).

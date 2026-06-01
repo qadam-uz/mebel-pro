@@ -324,6 +324,13 @@ window.SEED = (() => {
     yangiyol:  { cuttingRateTiyin:  9000000, edgeBandingRateTiyin: 270000 }
   };
 
+  // Edge-banding trim overhang per banded side (mm) — a FIXED SYSTEM CONSTANT,
+  // the same at every branch (3 cm per side = 15 mm trimmed off each end is the
+  // workshop standard). Masters glue tape long, then trim it flush; this is
+  // folded into the consumed edge metres an order bills + decrements. Not a
+  // branch setting.
+  const EDGE_TRIM_OVERHANG_MM = 30;
+
   // ----- Orders -----
   // v1 order: pickup-only, no money on the order (frozen price snapshot only),
   // production stamps set at transitions.
@@ -683,9 +690,11 @@ window.SEED = (() => {
     //   panels (materials) = Σ over each panel matId in algo.panelsByMat:
     //                         shopRatio_for_that_mat × panels × branchMat.priceTiyin
     //   edge MATERIALS = Σ over each edge matId in algo.edgeLenByMat:
-    //                     shopMetres × branchMat(edge).priceTiyin  (raw material)
-    //   edge SERVICE   = totalShopMetres × pricing.edgeBandingRateTiyin
+    //                     consumedMetres × branchMat(edge).priceTiyin  (raw material)
+    //   edge SERVICE   = totalConsumedMetres × pricing.edgeBandingRateTiyin
     //                    (one labour rate per metre, all thicknesses)
+    //   consumedMetres = geometric shop metres + EDGE_TRIM_OVERHANG_MM/1000 ×
+    //                    banded shop sides (fixed trim overhang masters cut off)
     pricingAt: (branchId, cutting) => {
       const pricing = branchPricing[branchId];
       const algo = lookup.chosenAlgo(cutting);
@@ -715,21 +724,25 @@ window.SEED = (() => {
       let edgeMaterialsFee = 0;
       let totalShopMetres = 0;
       const edgeLines = [];
+      const overhangM = EDGE_TRIM_OVERHANG_MM / 1000; // fixed trim overhang per banded shop side, in metres
       for (const edgeMatId of Object.keys(algo.edgeLenByMat || {})) {
         const totalLen = algo.edgeLenByMat[edgeMatId];
         // shop ratio across all sides that reference this edge material
-        let shopSides = 0, allSides = 0;
+        let shopSides = 0, allSides = 0, shopSideUnits = 0;
         for (const p of (cutting.partList || [])) {
           for (const side of ['t','b','l','r']) {
             const e = p.edges && p.edges[side];
             if (e && e.matId === edgeMatId) {
               allSides += 1;
-              if (e.source === 'shop') shopSides += 1;
+              if (e.source === 'shop') { shopSides += 1; shopSideUnits += (p.qty || 1); }
             }
           }
         }
         const shopRatio = allSides > 0 ? shopSides / allSides : 0;
-        const shopLen = totalLen * shopRatio;
+        // Consumed = geometric shop metres + trim overhang per banded shop side
+        // (× qty). The master glues tape long and trims it flush; the offcut is
+        // still consumed and billed. One figure → drives material + labour + stock.
+        const shopLen = (totalLen * shopRatio) + (overhangM * shopSideUnits);
         totalShopMetres += shopLen;
         const bm = branchMaterials.find(m => m.branchId === branchId && m.matId === edgeMatId);
         const unit = bm ? bm.priceTiyin : 0;
@@ -753,7 +766,7 @@ window.SEED = (() => {
   };
 
   return {
-    branches, manufacturers, materials, branchMaterials, branchPricing, suppliers,
+    branches, manufacturers, materials, branchMaterials, branchPricing, EDGE_TRIM_OVERHANG_MM, suppliers,
     users, clients, cuttings, orders,
     incomes, expenses, workerProduction, permissions,
     workshops, platformUsers, jobs, errors,

@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 30
 ---
 
@@ -141,9 +141,10 @@ Driven entirely by this state machine; the mechanics live in
   of active orders ahead), so they can prompt the warehouseman. It is a warning, not a
   gate.
 - **Auto-decrement at job completion.** `shop` panels decrement when **Cutting done** is
-  marked; each `shop` edge material's metres decrement when **Banding done** is marked
-  (one inventory transaction per edge material the order's `edge_length_snapshot` carries
-  with shop metres). A revert re-increments exactly what its step decremented.
+  marked; each `shop` edge material's **consumed metres** decrement when **Banding done** is
+  marked (one inventory transaction per edge material the order's `edge_length_snapshot`
+  carries with shop metres — these are **consumed** metres, see *Pricing*). A
+  revert re-increments exactly what its step decremented.
 - **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
   and no `shop` edge sides skips this seam entirely.
 - **After decrement, material is spent.** Cancelling an order whose panels/edges were
@@ -187,11 +188,27 @@ modification).
 |---|---|---|
 | Cutting service | always | the branch's `cutting_rate_tiyin` × the chosen result's total panels — one rate, applied per panel cut (v1's only model) |
 | Panel materials | parts with `material_source = shop` | Σ (the branch's per-panel price × panels attributable to that material's `shop` parts) |
-| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (metres of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
-| Edge banding labour | when any `shop` side has banding | total `shop` metres of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
+| Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
+| Edge banding labour | when any `shop` side has banding | total `shop` **consumed metres** of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
 | Discount | when a `manage_orders` user adds one | percent or fixed sum; subtracted; **reason + the user id recorded** (audited); no enforced cap in v1 — the reason + audit are the control |
 
 **Total = cutting + panel materials + edge materials + edge banding labour − discount.**
+
+**Consumed metres.** A banded side eats more tape than its visible edge: the master glues
+it long and trims it flush after — ~3 cm per side (15 mm at each end). So edge metres — the
+single figure behind the edge-material price, the banding labour, the client's tape total,
+**and** the stock decrement — are **consumed**, not geometric:
+
+> consumed metres (per edge material) = the cutting result's geometric `edge_length_by_material`
+> + a fixed **30 mm trim overhang** × the order's banded `shop` sides for that material
+
+The 30 mm overhang is a **system constant — the same at every branch** (3 cm per banded side
+is the workshop standard, so it is not branch-configurable). The banded-side count comes from
+the order's own per-side edge picks; `own` sides are neither billed nor decremented, so they
+don't enter the sum. Because the overhang is constant, the consumed figure is known from the
+**cutting result** onward — not just once a branch is chosen — so the client sees real metres
+in the wizard ([`cutting.md`](cutting.md)); only the *price* waits on the branch's rates. One
+figure — no separate geometric-vs-consumed columns downstream.
 
 **Operational setup gaps fail loudly.** If the branch has no cutting rate set, or has banded
 parts but no edge-banding labour rate set, or doesn't carry an edge material a part uses,
@@ -212,8 +229,8 @@ draft's `preferred_branch_id` if set.
 - **Order create wizard** (`/c/orders/new/:draftId`) — opens from the cutting result's
   **Place order with this cutting** button. Pre-checks the draft is still `draft` with a
   chosen result (else redirect with a toast). Two screens, a sticky summary card on each
-  (parts, panels per material, edge metres per material, waste %, total once a branch is
-  picked):
+  (parts, panels per material, edge metres per material — **consumed**, the standard trim
+  already folded in — waste %, total once a branch is picked):
 
   1. **Branch pick.** Active branches that can fulfil the cutting's material set (every
      `shop` panel and every `shop` edge side's material). A fully-`own` cutting accepts

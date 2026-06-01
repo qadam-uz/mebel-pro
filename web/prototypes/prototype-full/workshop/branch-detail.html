@@ -42,9 +42,10 @@ Yak: 10:00-16:00</textarea>
 </div>
 
 <div class="modal" id="m-pricing">
-  <div class="modal-h"><h3>Filial narx sozlamalari</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-h"><h3>Filial sozlamalari</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialdagi xizmat narxlari. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialning sozlamalari — bir joyda. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-6);margin:2px 0 10px">Narxlar</div>
     <div class="field">
       <label>Kesish narxi (so'm / panel)</label>
       <input value="100 000" />
@@ -56,7 +57,7 @@ Yak: 10:00-16:00</textarea>
       <div class="hint" style="font-size:11.5px;color:var(--ink-6);margin-top:4px">Ish haqi — har bir yopishtirilgan metr uchun (qalinlikdan qat'i nazar). Krom material'ining narxi alohida — katalogdan.</div>
     </div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Narxlar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Sozlamalar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -94,7 +95,7 @@ if (!ownerOnly()) {
         </div>
       </div>
       <div class="tools">
-        <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-pricing')">% Narx sozlamalari</button>
+        <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-pricing')"><i class="ic" data-icon="settings"></i> Sozlamalar</button>
         <button class="btn btn-outline" type="button" onclick="openModal('m-edit')"><i class="ic" data-icon="edit"></i> Tahrirlash</button>
         <div class="menu-wrap">
           <button class="btn btn-outline" type="button" data-menu-toggle>Holat: ${b.status === 'active' ? 'Faol' : b.status === 'temporarily_closed' ? 'Vaqtincha yopiq' : 'Faol emas'} ${window.icon('chevron-down',{size:13})}</button>
@@ -119,7 +120,7 @@ if (!ownerOnly()) {
       <button class="tab on" data-target="t-over" onclick="switchTab('br','t-over')">Umumiy</button>
       <button class="tab" data-target="t-mats" onclick="switchTab('br','t-mats')">Materiallar (${bmats.length})</button>
       <button class="tab" data-target="t-stock" onclick="switchTab('br','t-stock')">Ombor</button>
-      <button class="tab" data-target="t-pricing" onclick="switchTab('br','t-pricing')">Narx</button>
+      <button class="tab" data-target="t-pricing" onclick="switchTab('br','t-pricing')">Sozlamalar</button>
       <button class="tab" data-target="t-staff" onclick="switchTab('br','t-staff')">Xodimlar (${staffHere.length})</button>
       <button class="tab" data-target="t-orders" onclick="switchTab('br','t-orders')">Buyurtmalar (${ordersHere.length})</button>
     </div>
@@ -159,7 +160,7 @@ if (!ownerOnly()) {
 
     <section id="t-pricing" data-panel-group="br" hidden>
       <div class="card">
-        <div class="card-h"><h2>Joriy narx sozlamalari</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')"><i class="ic" data-icon="edit"></i> Tahrirlash</button></div>
+        <div class="card-h"><h2>Joriy sozlamalar</h2><button class="btn btn-acc btn-sm" type="button" onclick="openModal('m-pricing')"><i class="ic" data-icon="edit"></i> Tahrirlash</button></div>
         <div class="card-b" style="padding-top: 0">
           <div class="row-item"><div><div class="nm">Kesish narxi</div><small style="color:var(--ink-6)">har bir kesilgan panel uchun</small></div><div class="meta">100 000 so'm / panel</div></div>
           <div class="row-item"><div><div class="nm">Krom yopishtirish narxi</div><small style="color:var(--ink-6)">ish haqi · har bir metr uchun (qalinlikdan qat'i nazar)</small></div><div class="meta">3 000 so'm / metr</div></div>

@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-05-29
 order: 40
 ---
 
@@ -76,10 +76,10 @@ Visibility for read operations:
   working-hours grid (per weekday open / close, with a "closed this day" toggle), status.
 - **Branch detail** (`/workshop/branches/:id`) — header (name, address, status, action set:
   change status · edit). Tabs: **Overview** (status, active-orders count, revenue 30d,
-  low-stock count) · **Materials** · **Stock** · **Pricing** · **Staff** (read-only here;
+  low-stock count) · **Materials** · **Stock** · **Settings** · **Staff** (read-only here;
   shows everyone with this branch as their `home_branch` plus everyone with a grant on it;
   managed in [`access-management.md`](access-management.md)) · **Orders**. The Materials,
-  Stock, and Pricing tabs are owned by [`catalog-inventory.md`](catalog-inventory.md);
+  Stock, and Settings tabs are owned by [`catalog-inventory.md`](catalog-inventory.md);
   Orders by [`orders.md`](orders.md).
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.

@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-01
 order: 50
 ---
 
@@ -126,13 +126,17 @@ order stock ushlab turmaydi; uni faqat decrement qiladi.
   selection'ida boʻlishi kerak), musbat quantity, supplier (mavjud yoki inline
   qoʻshilgan), ixtiyoriy receipt file. `on_hand += qty`.
 - **Adjust** (xuddi shu caller) — **majburiy note** bilan signed delta; `on_hand` 0'dan
-  past tushishi mumkin emas. Stock-take va write-off (jumladan, cancelled-mid-production
-  order fizik ravishda consume qilgan material) uchun ishlatiladi.
+  past tushishi mumkin emas. Stock-take va har qanday **waste write-off** uchun yagona
+  vosita — shikast va accident'lar, master'ning production error'i, side'ni band qilishga
+  juda qisqa qolgan edge-roll remnant, yoki cancelled-mid-production order fizik ravishda
+  consume qilgan material. Waste quantity correction sifatida yoziladi, cause boʻyicha
+  klassifikatsiya qilinmaydi (cause analytics keyinga qoldirilgan).
 - **Consume / restore** (system) — toʻliq order state machine tomonidan boshqariladi.
 
 **Order seam.** [`orders.md`](orders.md) boʻyicha: `shop` panel item'lar order'ning
-**Cutting done**'i belgilanganda **consume** qilinadi; `shop` edge metr'lar har bir
-edge material uchun **Banding done** belgilanganda **consume** qilinadi. Revert
+**Cutting done**'i belgilanganda **consume** qilinadi; `shop` edge **consumed metr'lar**
+(geometric banded length + standart per-side trim overhang) har bir
+edge material uchun **Banding done** belgilanganda decrement qilinadi. Revert
 oʻzining step'i decrement qilganini aniq qayta increment qiladi. `own`-source panel'lar
 va `own`-source edge side'lar stock'ga hech qachon tegmaydi.
 
@@ -163,11 +167,14 @@ Branch tab'lari ostida (va branch filter bilan owner-wide view'lar):
   status). Filter chip'lar: kind, manufacturer, type. **+ Material** → catalog picker
   (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
   Edit · Activate / Deactivate. Delete yoʻq.
-- **Pricing** (faqat owner) — ikkita field: cutting rate (`cutting_rate_tiyin`, per panel)
-  va krom yopishtirish ish haqi (`edge_banding_rate_tiyin`, per metre, barcha thickness'lar
-  uchun). Save + unsaved-changes guard; yangi branch'da "pricing not set yet" empty state.
-  Edge'ning **xom material** narxi alohida — har bir Branch material `edge` selection'ida
-  yashaydi, bu yerda emas.
+- **Settings** (faqat owner) — branch'ning sozlamalari bir joyda. Bugun u **Prices**'ni
+  ushlaydi — cutting rate (`cutting_rate_tiyin`, per panel) va krom yopishtirish ish haqi
+  (`edge_banding_rate_tiyin`, per metre, barcha thickness'lar uchun); kelajakdagi branch
+  sozlamalari shu yerga tushadi. Branch'ning [Branch pricing](#branch-pricing) row'ini
+  tahrirlaydi. Save + unsaved-changes guard; yangi branch'da "not set yet" empty state
+  (rate'lar set qilinmagan holda boshlanadi). Edge'ning **xom material** narxi alohida — har
+  bir Branch material `edge` selection'ida yashaydi, bu yerda emas; edge **trim overhang**
+  esa fixed system constant ([`orders.md`](orders.md#pricing)), branch sozlamasi emas.
 - **Stock** (`manage_inventory`) — jadval: material (name + image + manufacturer
   chip), on-hand, min-stock, unit, last updated; low-stock row'lar highlighted
   (chip + colour). Per-row **Record stock-in** → modal (qty, inline add bilan
@@ -214,6 +221,11 @@ koʻrinarli gate qilinadi.
 - **Order material consume qilingandan keyin mid-production cancel qilindi** — stock
   **avto-restore qilinmaydi** (u fizik ravishda kesilgan); agar count'ni
   toʻgʻrilash kerak boʻlsa warehouseman `adjust` write-off yozadi.
+- **Side'ni band qilishga edge-roll remnant juda qisqa** — uni keyingi roll'ga ulab
+  boʻlmaydi (seam koʻrinib qoladi), shuning uchun master uni tashlaydi va `adjust`
+  write-off yozadi. Client toʻlaydigan per-side trim overhang'dan
+  ([`orders.md`](orders.md#pricing)) farqli oʻlaroq, remnant bironta order'ga
+  attributable emas va workshop tomonidan **absorb qilinadi** — hech qachon billed emas.
 - **Operator tugatilgan job'ni revert qiladi** — system shu step consume qilgan
   miqdorni aniq `restore` qiladi; edge'lar uchun, step consume qilgan har bir edge
   material uchun bittadan restore.

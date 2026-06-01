@@ -344,6 +344,10 @@
 
     <div class="metrics-strip" id="metrics"></div>
 
+    <p id="edge-trim-note" hidden style="margin:-4px 0 16px;padding:10px 12px;background:var(--elev);border:1px solid var(--line);border-radius:8px;font:400 12px var(--f-ui);color:var(--ink-6);line-height:1.5">
+      <b style="color:var(--ink-12)">Stanok haqqi</b> — ustalar har bir kromlanadigan tomonni ~3 sm ortig'i bilan yopishtirib (har uchidan 15 mm), keyin tekis kesadi. Shu ortiqcha krom yuqoridagi <b>Krom uzunligi</b>ga kirib ketadi — siz to'laydigan va ombordan yechiladigan metr. Narx faqat filial tanlangach ko'rinadi.
+    </p>
+
     <div class="algos" id="algos">
       <div class="algos-hd">
         <span>Algoritm: <b id="cur-algo">—</b> · <span id="cur-algo-meta">—</span></span>
@@ -1789,10 +1793,26 @@ function renderResult() {
     const mat = SEED.lookup.matById(m);
     return `${mat?.name.split('·')[0].trim() || m}: ${n}`;
   }).join(' · ');
-  const edgeBits = Object.entries(algo.edgeLenByMat).filter(([,v])=>v>0).map(([edgeMatId,v]) => {
+  // Consumed edge metres = geometric + the fixed per-side trim overhang (a system
+  // constant, the same at every branch). The overhang lands on every banded
+  // side-unit (× qty). Shown directly here — no branch needed.
+  const OVERHANG_M = (SEED.EDGE_TRIM_OVERHANG_MM || 30) / 1000;
+  const bandedSideUnits = {};
+  for (const p of draft.partList) {
+    for (const side of ['t','b','l','r']) {
+      const e = p.edges && p.edges[side];
+      if (e && e.matId) bandedSideUnits[e.matId] = (bandedSideUnits[e.matId] || 0) + (p.qty || 1);
+    }
+  }
+  const consumedByMat = {};
+  for (const [id, v] of Object.entries(algo.edgeLenByMat)) {
+    consumedByMat[id] = v + OVERHANG_M * (bandedSideUnits[id] || 0);
+  }
+  const consumedTotal = Object.values(consumedByMat).reduce((a,b)=>a+b,0);
+  const edgeBits = Object.entries(consumedByMat).filter(([,v])=>v>0).map(([edgeMatId,v]) => {
     const em = SEED.lookup.matById(edgeMatId);
     const label = em ? `${em.thickness}mm ${em.color}` : edgeMatId;
-    return `${label}: ${v} m`;
+    return `${label}: ${v.toFixed(1)} m`;
   }).join(' · ') || '—';
   // Parts placed: only valid parts are placed; any invalid part is "not fit".
   const partsTotal = draft.partList.reduce((a,p) => a + (p.qty || 0), 0);
@@ -1815,7 +1835,7 @@ function renderResult() {
     </div>
     <div class="metric">
       <div class="lab">Krom uzunligi</div>
-      <div class="v">${(Object.values(algo.edgeLenByMat).reduce((a,b)=>a+b,0)).toFixed(1)} m</div>
+      <div class="v">${consumedTotal.toFixed(1)} m</div>
       <div class="sub">${edgeBits}</div>
     </div>
     <div class="metric ${allFit ? 'ok' : 'warn'}">
@@ -1823,6 +1843,13 @@ function renderResult() {
       <div class="v">${placed} / ${partsTotal} ${allFit ? '✓' : '✕'}</div>
       <div class="sub">${allFit ? `${algo.cutLen} m kesish` : `Sig'magan: ${unfitList}`}</div>
     </div>`;
+
+  // Trim-overhang transparency: the metres above are already CONSUMED (geometric +
+  // the fixed per-side trim overhang, a system constant) — the real figure, no branch
+  // needed. The note just explains why it's a touch more than the bare cut length.
+  const hasEdge = Object.values(algo.edgeLenByMat).some(v => v > 0);
+  const trimNote = document.getElementById('edge-trim-note');
+  if (trimNote) trimNote.hidden = !hasEdge;
 
   // current algo summary
   document.getElementById('cur-algo').textContent = algo.name;
