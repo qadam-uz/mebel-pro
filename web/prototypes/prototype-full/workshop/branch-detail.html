@@ -44,7 +44,7 @@ Yak: 10:00-16:00</textarea>
 <div class="modal" id="m-pricing">
   <div class="modal-h"><h3>Filial sozlamalari</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialning sozlamalari — bir joyda. Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <p class="muted" style="font-size:13px;margin:0 0 14px">Bu filialning sozlamalari — bir joyda. Eski buyurtmalardagi narx o'zgarmaydi.</p>
     <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-6);margin:2px 0 10px">Narxlar</div>
     <div class="field">
       <label>Kesish narxi (so'm / panel)</label>
@@ -54,7 +54,7 @@ Yak: 10:00-16:00</textarea>
     <div class="field">
       <label>Krom yopishtirish narxi (so'm / metr)</label>
       <input value="3 000" />
-      <div class="hint" style="font-size:11.5px;color:var(--ink-6);margin-top:4px">Ish haqi — har bir yopishtirilgan metr uchun (qalinlikdan qat'i nazar). Krom material'ining narxi alohida — katalogdan.</div>
+      <div class="hint" style="font-size:11.5px;color:var(--ink-6);margin-top:4px">Ish haqi — har bir yopishtirilgan metr uchun (qalinlikdan qat'i nazar). Krom materiali narxi alohida — katalogda.</div>
     </div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-pricing');toast('Sozlamalar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
@@ -151,7 +151,7 @@ if (!ownerOnly()) {
       <div class="card"><div class="card-h"><h2>Joriy ombor</h2><a class="more" href="inventory.html">to'liq ko'rinish <i class="ic" data-icon="arrow-right"></i></a></div>
         <div class="card-b" style="padding: 0 22px 18px">
           <table class="tbl">
-            <thead><tr><th>Material</th><th class="right">Mavjud (on_hand)</th><th class="right">Min</th></tr></thead>
+            <thead><tr><th>Material</th><th class="right">Mavjud</th><th class="right">Min</th></tr></thead>
             <tbody>${bmats.map(bm => { const m = SEED.lookup.matById(bm.matId); return `<tr><td class="nm">${m.name}</td><td class="amt ${bm.onHand <= bm.minStock ? 'warn-text' : ''}">${bm.onHand}</td><td class="amt muted">${bm.minStock}</td></tr>`; }).join('')}</tbody>
           </table>
         </div>
@@ -165,7 +165,7 @@ if (!ownerOnly()) {
           <div class="row-item"><div><div class="nm">Kesish narxi</div><small style="color:var(--ink-6)">har bir kesilgan panel uchun</small></div><div class="meta">100 000 so'm / panel</div></div>
           <div class="row-item"><div><div class="nm">Krom yopishtirish narxi</div><small style="color:var(--ink-6)">ish haqi · har bir metr uchun (qalinlikdan qat'i nazar)</small></div><div class="meta">3 000 so'm / metr</div></div>
         </div>
-        <p class="muted" style="font-size:12px;margin:14px 22px 18px">Krom material'ining xom narxi (metr uchun) <a href="catalog.html" style="color:inherit;text-decoration:underline">Material katalogi</a>'da belgilanadi. Buyurtmada krom uchun mijoz to'laydigan summa = material narxi + bu yerdagi ish haqi.</p>
+        <p class="muted" style="font-size:12px;margin:14px 22px 18px">Krom materialining xom narxi (metr uchun) <a href="catalog.html" style="color:inherit;text-decoration:underline">Material katalogi</a>da belgilanadi. Buyurtmada mijoz to'laydigan summa = material narxi + shu yerdagi ish haqi.</p>
       </div>
     </section>
 
@@ -212,19 +212,19 @@ function statusMenu(b) {
 
 window.setBranchStatus = (bid, target, openCount) => {
   if (target === 'active') {
-    confirmAction({ title: 'Filialni faollashtirish', msg: 'Filial yana buyurtma qabul qiladi. Xodimlar grantlari avtomatik tiklanadi.', okText: 'Faollashtirish' },
+    confirmAction({ title: 'Filialni faollashtirish', msg: 'Filial yana buyurtma qabul qiladi. Xodimlar ruxsatlari avtomatik tiklanadi.', okText: 'Faollashtirish' },
       () => { toast('Filial faollashtirildi'); setTimeout(() => location.reload(), 700); });
     return;
   }
   if (target === 'temporarily_closed') {
-    confirmAction({ title: 'Vaqtincha yopish', msg: 'Mijoz filialni ko\'radi lekin buyurtma bera olmaydi. Sabab kiriting (closed_reason).', reasonField: true, reasonLabel: 'Yopilish sababi', okText: 'Yopish', danger: true },
+    confirmAction({ title: 'Vaqtincha yopish', msg: 'Mijoz filialni ko\'radi, lekin buyurtma bera olmaydi. Sabab kiriting.', reasonField: true, reasonLabel: 'Yopilish sababi', okText: 'Yopish', danger: true },
       () => { toast('Filial vaqtincha yopildi'); setTimeout(() => location.reload(), 700); });
     return;
   }
   // → inactive
   const warn = openCount > 0
-    ? `Diqqat: bu filialda <b>${openCount} ta ochiq buyurtma</b> bor — ular odatdagidek yakunlanadi. Filial yangi buyurtma qabul qilmaydi. Xodim grantlari tiklanmaguncha inert bo'ladi.`
-    : 'Filial yangi buyurtma qabul qilmaydi. Xodim grantlari filial qayta faollashtirilmaguncha inert bo\'ladi.';
+    ? `Diqqat: bu filialda <b>${openCount} ta ochiq buyurtma</b> bor — ular odatdagidek yakunlanadi. Filial yangi buyurtma qabul qilmaydi, xodim ruxsatlari esa filial qayta ochilmaguncha ishlamaydi.`
+    : 'Filial yangi buyurtma qabul qilmaydi. Xodim ruxsatlari filial qayta ochilmaguncha ishlamaydi.';
   confirmAction({ title: 'Filialni faol emas qilish', msg: warn, reasonField: true, reasonLabel: 'Sabab', okText: 'Faol emas qilish', danger: true },
     () => { toast('Filial faol emas qilindi'); setTimeout(() => location.reload(), 700); });
 };

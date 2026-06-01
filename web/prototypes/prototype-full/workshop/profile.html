@@ -85,7 +85,7 @@ document.getElementById('pr-info').innerHTML = `
   <div class="row-item"><div><div class="nm">Login</div></div><div class="meta">${me.login || '—'}</div></div>
   <div class="row-item"><div><div class="nm">Telefon</div></div><div class="meta">${me.phone || '—'}</div></div>
   <div class="row-item"><div><div class="nm">Asosiy filial</div></div><div class="meta">${SEED.lookup.branchById(me.homeBranchId)?.name || '—'}</div></div>
-  <div class="row-item"><div><div class="nm">Egasi (is_owner)</div></div><div class="meta">${me.isOwner ? '<span class="pill p-ok"><span class="pd"></span>Ha · barcha ruxsatlar</span>' : '<span class="pill p-dn"><span class="pd"></span>Yo\'q</span>'}</div></div>
+  <div class="row-item"><div><div class="nm">Egasi</div></div><div class="meta">${me.isOwner ? '<span class="pill p-ok"><span class="pd"></span>Ha · barcha ruxsatlar</span>' : '<span class="pill p-dn"><span class="pd"></span>Yo\'q</span>'}</div></div>
   <div class="row-item"><div><div class="nm">Ustaxona</div></div><div class="meta">Furniture House</div></div>`;
 
 const gEl = document.getElementById('pr-grants');

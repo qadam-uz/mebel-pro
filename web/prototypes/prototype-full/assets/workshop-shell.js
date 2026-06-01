@@ -276,7 +276,7 @@ window.renderWorkshopShell = (active = '') => {
       <div class="menu" style="min-width:248px">
         <div style="font:700 10px var(--f-ui);text-transform:uppercase;letter-spacing:.1em;color:var(--ink-6);padding:8px 12px 4px">Demo · qaysi xodim sifatida</div>
         ${users.map(u => {
-          const sum = u.isOwner ? 'Egasi · barcha' : (Object.keys(u.grants || {}).length ? `${Object.keys(u.grants).length} grant` : 'ruxsatsiz');
+          const sum = u.isOwner ? 'Egasi · barcha' : (Object.keys(u.grants || {}).length ? `${Object.keys(u.grants).length} ruxsat` : 'ruxsatsiz');
           const blk = u.status === 'blocked' ? ' · bloklangan' : '';
           return `<button class="mi" onclick="switchMe('${u.id}')"${u.id === meId ? ' style="background:var(--accent-tint);color:var(--accent-h)"' : ''}>
             <span style="flex:1">${u.name}<small style="display:block;color:var(--ink-6);font:400 11px var(--f-mono)">${sum}${blk}</small></span>

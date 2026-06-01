@@ -19,7 +19,7 @@
     <div class="page-head">
       <div>
         <h1>Ombor</h1>
-        <p class="sub">Filiallarda mavjud panellar va edge materiallari.</p>
+        <p class="sub">Filiallarda mavjud panellar va krom materiallari.</p>
       </div>
       <div class="tools">
         <button class="btn btn-outline btn-sm" type="button" onclick="openModal('m-adjust')">± Tuzatish</button>
@@ -43,7 +43,7 @@
       <div class="card">
         <table class="tbl">
           <thead>
-            <tr><th>Material</th><th>Filial</th><th class="right">Mavjud (on_hand)</th><th class="right">Min</th><th>Holat</th><th></th></tr>
+            <tr><th>Material</th><th>Filial</th><th class="right">Mavjud</th><th class="right">Min</th><th>Holat</th><th></th></tr>
           </thead>
           <tbody id="stock-body"></tbody>
         </table>
@@ -78,7 +78,7 @@
 
 <div id="scrim" class="scrim"></div>
 <div class="modal" id="m-stockin">
-  <div class="modal-h"><h3>Kirim yozish (stock_in)</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-h"><h3>Kirim yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Filial</label><select id="si-branch" onchange="fillMatSelect('mat-select', this.value)"></select></div>
     <div class="field"><label>Material</label><select id="mat-select"></select></div>
@@ -103,15 +103,15 @@
 </div>
 
 <div class="modal" id="m-adjust">
-  <div class="modal-h"><h3>Stock tuzatish (adjust)</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
+  <div class="modal-h"><h3>Zaxira tuzatish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
     <div class="field"><label>Filial</label><select id="adj-branch" onchange="fillMatSelect('adj-mat', this.value)"></select></div>
     <div class="field"><label>Material</label><select id="adj-mat"></select></div>
-    <div class="field"><label>Imzo (signed delta · "+10" yoki "−3")</label><input value="-3" /></div>
+    <div class="field"><label>O'zgarish (+10 yoki −3)</label><input value="-3" /></div>
     <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Yorilgan partiya"></textarea></div>
   </div>
-  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-adjust');toast('Stock tuzatildi')">Tasdiqlash</button></div>
+  <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-adjust');toast('Zaxira tuzatildi')">Tasdiqlash</button></div>
 </div>
 
 <div class="modal" id="m-supplier">
@@ -188,7 +188,7 @@ window.renderStock = () => {
     return true;
   });
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6">${stEmpty('Bu filialda material tanlanmagan', 'Bu filialga material qo\'shing.')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6">${stEmpty('Bu filialga material qo\'shilmagan', 'Katalogdan material qo\'shing.')}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(bm => {
@@ -199,7 +199,7 @@ window.renderStock = () => {
     const dims = m.kind === 'edge'
       ? `${mfr ? mfr + ' · ' : ''}${m.thickness} mm · krom (metr)`
       : `${mfr ? mfr + ' · ' : ''}${m.thickness} mm · ${m.panelLen}×${m.panelWid}`;
-    return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · tranzaksiyalar tabida')">
+    return `<tr class="clickable" onclick="toast('${m.name} — ${br.name} · tranzaksiyalar bo\\'limida')">
       <td><div style="display:flex;align-items:center;gap:11px"><div class="sw ${m.sw}"></div><div><div class="nm">${m.name}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${dims}</small></div></div></td>
       <td>${br.name}</td>
       <td class="amt" style="${low ? 'color:var(--warn)' : 'color:var(--ink-12)'}">${bm.onHand} <small>${unit(m)}</small></td>

@@ -141,7 +141,7 @@ function render() {
     document.getElementById('board-view').hidden = false;
     document.getElementById('board').innerHTML = stEmpty(
       'Filial biriktirilmagan — ustaxona egasiga murojaat qiling',
-      'Sizga hali hech qaysi filial biriktirilmagan, shuning uchun buyurtmalar ko\'rinmaydi.');
+      'Filial biriktirilgach, buyurtmalar shu yerda ko\'rinadi.');
     return;
   }
   // PU11 demo states.
@@ -176,7 +176,7 @@ function cardActions(o) {
     items.push(`<button class="mi" onclick="ev();confirmAction({title:'Kesuvchi tayinlash',msg:'${o.id} kesuvchiga tayinlanadi (→ Kesilmoqda).'},()=>toast('Kesuvchi tayinlandi · ${o.id}'))">Kesuvchi tayinlash</button>`);
     items.push(`<button class="mi danger" onclick="ev();confirmAction({title:'Bekor qilish',msg:'Sabab kiriting.',reasonField:true,danger:true,okText:'Bekor qilish'},()=>toast('Bekor qilindi · ${o.id}'))">Bekor qilish</button>`);
   } else if (o.state === 'cutting') {
-    items.push(`<button class="mi" onclick="ev();confirmAction({title:'Kesish tugadi',msg:'Material stockdan chiqariladi.'},()=>toast('Kesish tugadi · ${o.id}'))">Kesish tugadi</button>`);
+    items.push(`<button class="mi" onclick="ev();confirmAction({title:'Kesish tugadi',msg:'Material ombordan chiqariladi.'},()=>toast('Kesish tugadi · ${o.id}'))">Kesish tugadi</button>`);
     items.push(`<button class="mi danger" onclick="ev();confirmAction({title:'Tasdiqlanganga qaytarish',msg:'Sabab kiriting.',reasonField:true,danger:true,okText:'Qaytarish'},()=>toast('Qaytarildi · ${o.id}'))">Tasdiqlanganga qaytarish</button>`);
   } else if (o.state === 'edge_banding') {
     items.push(`<button class="mi" onclick="ev();confirmAction({title:'Krom tugadi',msg:'${o.id} tayyor holatga o\\'tadi.'},()=>toast('Krom tugadi · ${o.id}'))">Krom tugadi</button>`);
@@ -201,7 +201,7 @@ function renderBoard(orders) {
   const board = document.getElementById('board');
   if (orders.length === 0) {
     board.innerHTML = stEmpty("Filial(lar)ingizda buyurtma yo'q",
-      'Filterga yoki sizning filial(lar)ingizga mos buyurtma topilmadi.');
+      'Tanlangan filtrga mos buyurtma yo\'q.');
     return;
   }
   board.innerHTML = COLS.map(c => {
@@ -235,7 +235,7 @@ function renderBoard(orders) {
 
 function renderTable(orders) {
   const tb = document.getElementById('tbody');
-  if (orders.length === 0) { tb.innerHTML = `<tr><td colspan="8">${stEmpty("Filial(lar)ingizda buyurtma yo'q", 'Filterga yoki sizning filial(lar)ingizga mos buyurtma topilmadi.')}</td></tr>`; return; }
+  if (orders.length === 0) { tb.innerHTML = `<tr><td colspan="8">${stEmpty("Filial(lar)ingizda buyurtma yo'q", 'Tanlangan filtrga mos buyurtma yo\'q.')}</td></tr>`; return; }
   tb.innerHTML = orders.map(o => {
     const cl = SEED.lookup.clientById(o.clientId);
     const br = SEED.lookup.branchById(o.branchId);

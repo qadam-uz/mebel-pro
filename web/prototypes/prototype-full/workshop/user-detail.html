@@ -90,7 +90,7 @@ if (!ownerOnly()) {
 
     <section id="t-perms" data-panel-group="us" hidden>
       <div class="card">
-        <div class="card-h"><h2>Ruxsatlar matritsasi</h2>${!u.isOwner ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Ruxsatlar saqlandi — keyingi sorovdan kuchga kiradi')"><i class="ic" data-icon="save"></i> Saqlash</button>` : ''}</div>
+        <div class="card-h"><h2>Ruxsatlar matritsasi</h2>${!u.isOwner ? `<button class="btn btn-acc btn-sm" type="button" onclick="toast('Ruxsatlar saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button>` : ''}</div>
         <div class="card-b">
           ${u.isOwner ? `<div class="banner info"><div class="ic">i</div><div class="grow">Egasi avtomatik tarzda barcha filialda barcha ruxsatga ega.</div></div>` : ''}
           <div style="overflow-x: auto">

@@ -62,10 +62,10 @@
       <div class="field"><label>Login</label><input placeholder="asror" /></div>
       <div class="field"><label>Asosiy filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
     </div>
-    <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va yaratishdan keyin 1 marta ko'rsatiladi.</div></div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va faqat 1 marta ko'rsatiladi.</div></div>
 
     <h4 style="font:600 12px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:18px 0 10px">Boshlang'ich ruxsatlar (ixtiyoriy)</h4>
-    <p class="muted" style="font-size:12.5px;margin:0 0 12px">Yaratishdan keyin "ruxsatlar" tabidan ham o'zgartirish mumkin.</p>
+    <p class="muted" style="font-size:12.5px;margin:0 0 12px">Yaratishdan keyin "Ruxsatlar" bo'limidan ham o'zgartirish mumkin.</p>
     <table class="matrix">
       <thead><tr><th class="permission">Ruxsat</th><th>Yunusobod</th><th>Chilonzor</th><th>Yangiyo'l</th></tr></thead>
       <tbody id="new-perms"></tbody>
@@ -106,7 +106,7 @@ function render() {
   });
   document.getElementById('body').innerHTML = rows.map(u => {
     const grantCount = u.isOwner ? '<span style="color:var(--accent);font-weight:600">egasi · barcha</span>' :
-      Object.values(u.grants || {}).reduce((s, branches) => s + branches.length, 0) + ' ta grant';
+      Object.values(u.grants || {}).reduce((s, branches) => s + branches.length, 0) + ' ta ruxsat';
     return `<tr class="clickable" onclick="location.href='user-detail.html?id=${u.id}'">
       <td><div style="display:flex;gap:11px;align-items:center"><div style="width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font:700 12px/30px var(--f-ui);text-align:center;flex:none">${u.initials}</div><div><div class="nm">${u.name}${u.isOwner ? ' <span class="pill p-cut" style="font-size:9.5px;margin-left:4px">Egasi</span>' : ''}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${u.phone}</small></div></div></td>
       <td class="num">${u.login}</td>

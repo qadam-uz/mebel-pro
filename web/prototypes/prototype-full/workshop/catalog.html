@@ -31,7 +31,7 @@
       <div class="chips">
         <button class="chip on">Hammasi</button>
         <button class="chip">Faol</button>
-        <button class="chip">Inactive</button>
+        <button class="chip">Faol emas</button>
       </div>
     </div>
 
@@ -54,7 +54,7 @@
     <div class="field"><label>Platforma katalogidan tanlash</label>
       <select id="m-pick" onchange="syncUnit()"></select>
     </div>
-    <p class="muted" style="font-size:12px;margin:-6px 0 12px">Panel material'lar — narx <b>panel</b> uchun; krom — narx <b>metr</b> uchun (xom material narxi; krom yopishtirish ish haqi alohida — filial narx sozlamalarida).</p>
+    <p class="muted" style="font-size:12px;margin:-6px 0 12px">Panel materiallar — narx <b>panel</b> uchun, krom — <b>metr</b> uchun. Bu xom material narxi; krom yopishtirish ish haqi alohida (filial sozlamalarida).</p>
     <div class="field-row">
       <div class="field"><label id="add-price-lbl">Narx (so'm / panel)</label><input type="text" placeholder="410 000" /></div>
       <div class="field"><label>Min zaxira</label><input type="number" value="20" /></div>
@@ -70,7 +70,7 @@
       <div class="field"><label>Narx (so'm)</label><input type="text" value="410 000" /></div>
       <div class="field"><label>Min zaxira</label><input type="number" value="20" /></div>
     </div>
-    <p class="muted" style="font-size:12.5px;margin:0">Eski buyurtmalardagi narx o'zgarmaydi (snapshot).</p>
+    <p class="muted" style="font-size:12.5px;margin:0">Eski buyurtmalardagi narx o'zgarmaydi.</p>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-edit');toast('Saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
@@ -91,7 +91,7 @@ if (!canCat || CAT_BR.length === 0) {
   document.querySelector('.card')?.remove();
   const box = document.createElement('div');
   box.innerHTML = stEmpty('Material katalogiga ruxsatingiz yo\'q',
-    'Bu sahifa manage_catalog ruxsatiga ega xodimlarga ochiq — ustaxona egasiga murojaat qiling.');
+    'Ustaxona egasiga murojaat qiling.');
   document.querySelector('.page').appendChild(box.firstElementChild);
   throw 'halt-cat';
 }
@@ -131,7 +131,7 @@ function render() {
       <td>${b.name}</td>
       <td class="amt">${fmtTiyin(bm.priceTiyin)} <small>${priceUnit}</small></td>
       <td class="amt">${bm.minStock}</td>
-      <td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Inactive'}</span></td>
+      <td><span class="pill ${bm.status === 'active' ? 'p-ok' : 'p-dn'}"><span class="pd"></span>${bm.status === 'active' ? 'Faol' : 'Faol emas'}</span></td>
       <td>
         <div class="menu-wrap">
           <button class="menu-btn" data-menu-toggle>⋯</button>

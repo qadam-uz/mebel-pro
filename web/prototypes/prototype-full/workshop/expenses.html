@@ -36,7 +36,7 @@
     <section id="t-expense" data-panel-group="fx">
       <div class="filters">
         <select>
-          <option>Bu oy</option><option>Oxirgi 30 kun</option><option>YTD</option>
+          <option>Bu oy</option><option>Oxirgi 30 kun</option><option>Yil boshidan</option>
         </select>
         <select>
           <option>Hamma kategoriyalar</option>
@@ -61,7 +61,7 @@
 
     <section id="t-income" data-panel-group="fx" hidden>
       <div class="filters">
-        <select><option>Bu oy</option><option>Oxirgi 30 kun</option><option>YTD</option></select>
+        <select><option>Bu oy</option><option>Oxirgi 30 kun</option><option>Yil boshidan</option></select>
         <select><option>Hamma turlar</option><option>Buyurtma to'lovi</option><option>Boshqa</option></select>
         <select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></select>
         <div class="chips">
@@ -93,7 +93,7 @@
         <option value="marketing">Marketing</option><option value="taxes_and_fees">Soliqlar</option>
         <option value="salary">Maosh</option><option value="other">Boshqalar</option>
       </select></div>
-      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Ustaxona-keng (HQ)</option></select></div>
+      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Ustaxona-keng</option></select></div>
     </div>
     <div class="field"><label>Tavsif</label><input placeholder="Masalan: Bahodir T. · 13–15 may · 19 panel" /></div>
     <div class="field-row">
@@ -124,7 +124,7 @@
       <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
       <div class="field"><label>Qabul sanasi</label><input type="date" value="2026-05-16" /></div>
     </div>
-    <div class="field"><label>Izoh (ixtiyoriy)</label><input placeholder="kassa raqami yoki bank reference" /></div>
+    <div class="field"><label>Izoh (ixtiyoriy)</label><input placeholder="kassa raqami yoki bank o'tkazma raqami" /></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('m-income');toast('Tushum yozildi')">Yozish</button></div>
 </div>
@@ -148,7 +148,7 @@ if (!canView || FIN_BR.length === 0) {
   document.querySelectorAll('.page section').forEach(n => n.remove());
   const box = document.createElement('div');
   box.innerHTML = stEmpty('Moliya bo\'limiga ruxsatingiz yo\'q',
-    'Bu sahifa manage_finance yoki view_finance_reports ruxsatiga ega xodimlarga ochiq — ustaxona egasiga murojaat qiling.');
+    'Ustaxona egasiga murojaat qiling.');
   document.querySelector('.page').appendChild(box.firstElementChild);
   throw 'halt-fx';
 }
