@@ -97,11 +97,12 @@ stateDiagram-v2
   thickness'ni, kerf-relevant data'ni va grain rule'ni taʼminlaydi. Non-catalog
   material'lar v1'dan tashqarida.
 - **Edge tape ham catalog material.** Part'ning har bir side'i yo `null` (banding yoʻq) yo
-  `(edge material, source)`. Picker UX panel decor'iga mos keladigan edge'larni birinchi
-  koʻrsatadi shunda umumiy holat ("panel decor'iga 0.4 mm'da mos kel") bitta tap boʻladi
-  (*UX*'ga qarang). Panel'lar kabi, edge'lar ham `shop` (workshop yetkazib beradi) yoki
-  `own` (client oʻz spool'ini olib keladi) boʻlishi mumkin; side'ning source'i bir xil
-  part'dagi panel'ning source'iga ham, boshqa side'larning source'iga ham bogʻliq emas.
+  `(edge material, source)`. Picker UX decor-matching edge'larni bitta material list
+  tepasiga pin qiladi, shuning uchun umumiy holat ("panel decor'iga 0.4 mm'da mos kel")
+  rest of catalog yashirilmasdan single tap boʻladi (*UX*'ga qarang). Panel'lar kabi,
+  edge'lar ham `shop` (workshop yetkazib beradi) yoki `own` (client oʻz spool'ini olib
+  keladi) boʻlishi mumkin; side'ning source'i bir xil part'dagi panel'ning source'iga ham,
+  boshqa side'larning source'iga ham bogʻliq emas.
 
 ### The optimiser
 
@@ -230,47 +231,30 @@ oʻzida** paydo boʻladi — control emas, passive cue.
 
 **Edge picker** (Edges cell'idan ochiladi — desktop'da popover, mobile'da bottom sheet):
 
-- **Collapsed view (default)** — uchta preset row:
-  - **None** — barcha side'larni tozalaydi.
-  - **Match panel — 0.4 mm** — avto-aniqlangan mos keladigan edge (bir xil `decor_code`
-    yoki, agar yoʻq boʻlsa, bir xil `color`) 0.4 mm'da. Tanlangan edge'ning nomi bilan
-    labelled; mos kelmasa *"No matching edge in catalog — Customise per side"* note
-    bilan greyed; row'da hali panel yoʻq boʻlsa *"Pick a panel material first"* note
-    bilan greyed.
-  - **Match panel — 2.0 mm** — xuddi shunday, 2.0 mm'da.
-  - Preset'lar ostida: **"I'll bring my own edge tape"** toggle (barcha toʻrt banded
-    side'ning source'ini bir vaqtning oʻzida flip qiladi; default off — `shop`).
-  - **Customise per side** disclosure → expanded view.
-  - Mavjud **Apply edges to ALL parts in this list** checkbox.
-
-- **Expanded view (Customise per side)** — preset'lar tepada strip sifatida koʻrinib
-  turadi (bitta tap orqali override). Pastda: toʻrt side'i labelled interactive panel
-  diagram va har bir side uchun row (TOP / BOTTOM / LEFT / RIGHT). Har bir row joriy
-  side'ning edge material'ini + source chip'ini koʻrsatadi; side'ni tap qilish
-  (diagram'da yoki uning row'ida) **per-side sub-picker**'ni ochadi.
-
-- **Per-side sub-picker** — user'ni edge-picker context'ida ushlab turish uchun
-  oʻlchamlangan (mobile'da picker ustida slide qiladi):
-  - **Recommended** — panel'ning `decor_code` / `color`'iga mos keladigan manufacturer'lar
-    boʻyicha turli thickness'dagi 3–5 ta eng yuqori edge. Preset tomonidan tanlangan
-    edge belgilangan.
-  - **Browse all edges** — toʻliq edge catalog modal'ini ochadi (panel catalog bilan bir
-    xil component, manufacturer / thickness filter'lari bilan).
-  - **Source** — radio: workshop supplies (`shop`) / I'll bring my own (`own`). Default:
-    shop. Har bir side uchun mustaqil.
-  - **Apply to <side>** — primary action; sub-picker'ni yopadi, yangilangan row bilan
-    per-side view'ga qaytadi.
-
-- **Apply edges to ALL parts** — belgilangan boʻlganda, picker'ni confirm qilish har bir
-  mavjud row'ga yozadi:
-  - **Match-panel preset**'idan → **qoidani** qoʻllaydi (har bir row tanlangan
-    thickness'da oʻzining panel decor'iga mos keladi). White-MDF row source row
-    ishlatgan H1334 Dub Sonoma'ni emas, White-decor edge'ni oladi.
-  - **None**'dan → barcha row'larni tozalaydi.
-  - **Customise per side** rejimida → disabled (per-side state row-specific).
-  - Boshqa row'larda allaqachon asimmetrik per-side state'ni qoplab yuboradigan
-    boʻlsa, confirm step natijani nomlaydi ("This will replace edges on N other parts —
-    continue?").
+- **One surface, no modes.** Picker avval ikki savolni beradi: qaysi sides edge banding
+  oladi va qaysi tape ishlatiladi. Alohida "match panel" section, "browse other
+  materials" section, "customise per side" button yoki standalone "apply to all" button
+  yoʻq.
+- **Side choice tepada turadi.** Quick patterns common shapes'ni yopadi: **None**, **All
+  sides**, **Top + bottom**, **Left + right**. Patterns ostidagi interactive panel diagram
+  client'ga picker'dan chiqmasdan individual sides'ni toggle qilishga beradi. Hech qanday
+  side tanlanmaganida tape tanlash uni four sides'ga qoʻllaydi; sides tanlangandan keyin
+  tape tanlash faqat oʻsha sides'ga qoʻllaydi.
+- **Material choice bitta ranked list.** Panel bilan bir xil `decor_code`'dagi edges
+  **Recommended** marker bilan birinchi pin qilinadi; same-`color` matches keyin keladi;
+  boshqa active edge materials shu list'da davom etadi. Search va thickness chips shu bitta
+  list'ni filter qiladi. Panel tanlanmagan boʻlsa, picker matching panel tanlangandan keyin
+  chiqishini aytadi, lekin catalog search'ni baribir ochiq qoldiradi.
+- **Source default holatda quiet.** `shop` default. Segmented source control (`Workshop
+  supplies` / `I'll bring it`) currently banded sides'ga qoʻllanadi; mixed per-side source
+  diagram orqali mumkin boʻlib qoladi, lekin separate step sifatida koʻrsatilmaydi.
+- **Apply v1'da faqat this row'ga yozadi.** Footer'da faqat **Cancel** va **Apply** bor.
+  **Apply** selected side pattern, tape va source'ni picker'ni ochgan **Edges** cell'ning
+  row'iga saqlaydi; sibling rows'ni hech qachon tahrirlamaydi. **Same panel material** yoki
+  **All rows** kabi bulk helpers v1'dan tashqarida, chunki ular kichik mobile form'ga
+  propagation va overwrite decisions qoʻshadi. Bulk edge editing keyin qaytsa, picker ichida
+  default control emas, explicit list-level action yoki row apply'dan keyingi follow-up
+  confirmation boʻlishi kerak.
 
 Per-row inline validation; optimiser'ni bloklaydigan biror narsa boʻlsa, jadval ostida
 bitta roll-up xabar.
@@ -290,8 +274,8 @@ U oʻz oʻrnida, editable holatda qoladi, quyidagilar bilan:
     uchun, oʻsha side'ning source'ini) `own`'ga flip qiladi. Endi branch uni olib
     yurishi kerak emas.
   - **Pick a different material** — picker'ni yangi branch'ga pre-filter qilingan
-    holatda ochadi (panel cell'da panel swap; edge picker'ning per-side sub-picker'i
-    ichida edge swap, u yerda ham xuddi shu inline note paydo boʻladi).
+    holatda ochadi (panel cell'da panel swap; edge picker ichida affected side allaqachon
+    active boʻlgan edge swap, u yerda ham xuddi shu inline note paydo boʻladi).
 - Row'ning mavjud **⋯ → Delete row** menu'si hali ham ishlaydi; olib tashlash opt-in va
   hech qachon avtomatik emas.
 
@@ -405,8 +389,8 @@ boʻlsa), tab buni flag qiladi va joriy result'ga link qoʻyadi.
   ularning PDF'lari qayta generate qilinmaydi.
 - **Workshop in-flight draft'da per-side preference sifatida set qilingan edge
   material'ni deactivate qiladi** — deactivated panel bilan bir xil handling: keyingi
-  ochilishda row flag qilinadi, edge side per-side sub-picker'da bitta tap "pick
-  replacement" affordance bilan tozalanadi.
+  ochilishda row flag qilinadi, edge side shu side active boʻlgan edge picker'ni ochadigan
+  bitta tap "pick replacement" affordance bilan tozalanadi.
 
 ## Next
 

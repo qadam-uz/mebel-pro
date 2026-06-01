@@ -73,39 +73,17 @@
   .mat-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
   .mat-opt .by-n { font: 500 11px var(--f-ui); color: var(--ink-6); padding: 2px 8px; background: var(--sunk); border-radius: 999px; }
 
-  /* Edges popover — Layer 1 (collapsed) and Layer 2 (customise per side) */
+  /* Edges picker — one surface */
   .edges-pop { display: flex; flex-direction: column; gap: 14px; }
   .edges-pop h4 { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin: 0 0 8px; }
-
-  /* Layer 1 presets — radio rows */
-  .ep-presets { display: flex; flex-direction: column; gap: 8px; }
-  .ep-preset { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; }
-  .ep-preset:hover:not([disabled]) { border-color: var(--ink-10); background: var(--sunk); }
-  .ep-preset[disabled] { opacity: .65; cursor: not-allowed; }
-  .ep-preset.on { border-color: var(--accent); background: var(--accent-soft); }
-  .ep-preset .rad { width: 18px; height: 18px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--elev); display: inline-block; position: relative; flex-shrink: 0; }
-  .ep-preset.on .rad { border-color: var(--accent); }
-  .ep-preset.on .rad::after { content: ''; position: absolute; inset: 3px; border-radius: 999px; background: var(--accent); }
-  .ep-preset .lab .nm { font: 600 13.5px var(--f-ui); color: var(--ink-12); line-height: 1.3; }
-  .ep-preset .lab .meta { font: 500 12px var(--f-ui); color: var(--ink-6); margin-top: 3px; line-height: 1.4; }
-  .ep-preset .lab .meta.warn { color: #b87024; }
-  .ep-preset .sw { width: 24px; height: 24px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); flex-shrink: 0; }
-
-  /* Layer 1 own toggle + disclosure */
-  .ep-toggle { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; font: 500 13px var(--f-ui); color: var(--ink-12); cursor: pointer; }
-  .ep-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-  .ep-toggle .hint { font: 400 11.5px var(--f-ui); color: var(--ink-6); margin-left: auto; }
-
-  .ep-disclose { background: transparent; border: 0; padding: 8px 4px; cursor: pointer; font: 600 13px var(--f-ui); color: var(--ink-10); display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
-  .ep-disclose:hover { color: var(--ink-12); }
-  .ep-disclose svg { transition: transform .15s; }
-  .ep-disclose.open svg { transform: rotate(180deg); }
-
-  /* Layer 2 — customise per side */
-  .ep-quick { display: flex; gap: 8px; flex-wrap: wrap; padding-bottom: 4px; }
-  .ep-quick button { padding: 6px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font: 500 12px var(--f-ui); color: var(--ink-10); }
-  .ep-quick button:hover { border-color: var(--ink-10); color: var(--ink-12); }
-  .ep-quick button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ep-help { margin: 0; padding: 10px 12px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; font: 500 12.5px/1.45 var(--f-ui); color: var(--ink-8); }
+  .ep-patterns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ep-pattern { min-height: 46px; padding: 9px 11px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; text-align: left; transition: border-color .12s, background .12s; }
+  .ep-pattern:hover:not([disabled]) { border-color: var(--ink-10); background: var(--sunk); }
+  .ep-pattern[disabled] { opacity: .58; cursor: not-allowed; }
+  .ep-pattern.on { border-color: var(--accent); background: var(--accent-soft); }
+  .ep-pattern .nm { display: block; font: 600 13px var(--f-ui); color: var(--ink-12); line-height: 1.2; }
+  .ep-pattern .meta { display: block; margin-top: 2px; font: 500 11.5px var(--f-ui); color: var(--ink-6); line-height: 1.3; }
 
   .edge-diagram { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 4px; }
   .edge-diagram .mid { display: flex; align-items: stretch; gap: 6px; }
@@ -117,65 +95,40 @@
   .edge-btn.h { width: 168px; height: 32px; }
   .edge-btn.v { width: 64px; }
   .edge-diagram .lbl { font: 500 10px var(--f-ui); text-transform: uppercase; letter-spacing: .05em; color: var(--ink-6); }
-
-  /* Side list (TOP/BOTTOM/LEFT/RIGHT rows) */
-  .ep-sides { display: flex; flex-direction: column; gap: 8px; }
-  .ep-side { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; }
-  .ep-side .side-lbl { font: 600 11px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); }
-  .ep-side .cur { min-width: 0; }
-  .ep-side .cur .nm { font: 500 13px var(--f-ui); color: var(--ink-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ep-side .cur .nm.none { color: var(--ink-6); font-weight: 500; }
-  .ep-side .cur .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .ep-side .src-chip { padding: 2px 7px; font: 600 9.5px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-8); }
-  .ep-side .src-chip.own { background: rgba(15,118,110,.08); border-color: rgba(15,118,110,.3); color: var(--accent); }
-  .ep-side .edit-btn { padding: 6px 12px; border: 1px solid var(--line); background: var(--sunk); border-radius: 5px; font: 500 12px var(--f-ui); color: var(--ink-12); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
-  .ep-side .edit-btn:hover { border-color: var(--ink-10); }
-
-  .ep-bottom { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; border-top: 1px dashed var(--line); }
-  .ep-bottom .ck { display: flex; align-items: center; gap: 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); cursor: pointer; }
-  .ep-bottom .ck input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-  .ep-bottom .ck.disabled { color: var(--ink-6); cursor: not-allowed; }
-  .ep-bottom .ck-hint { font: 400 11.5px var(--f-ui); color: var(--ink-6); margin-left: 24px; line-height: 1.4; }
-
-  /* Layer 3 — per-side sub-picker */
-  .esp-section { margin-bottom: 16px; }
-  .esp-section:last-child { margin-bottom: 0; }
-  .esp-list { display: flex; flex-direction: column; gap: 6px; }
-  .esp-opt { display: grid; grid-template-columns: 22px 24px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-align: left; }
-  .esp-opt:hover { background: var(--sunk); border-color: var(--ink-10); }
-  .esp-opt.on { border-color: var(--accent); background: var(--accent-soft); }
-  .esp-opt .rad { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--elev); display: inline-block; position: relative; flex-shrink: 0; }
-  .esp-opt.on .rad { border-color: var(--accent); }
-  .esp-opt.on .rad::after { content: ''; position: absolute; inset: 2px; border-radius: 999px; background: var(--accent); }
-  .esp-opt .sw { width: 22px; height: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); flex-shrink: 0; }
-  .esp-opt .lab { min-width: 0; }
-  .esp-opt .lab .nm { font: 500 13px var(--f-ui); color: var(--ink-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .esp-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
-  .esp-opt .thk { font: 600 11px var(--f-mono); padding: 2px 8px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-10); }
-  .esp-opt.on .thk { background: var(--elev); border-color: var(--accent); color: var(--accent-h); }
-
-  .esp-source { display: flex; gap: 8px; flex-wrap: wrap; }
-  .esp-source label { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: 500 13px var(--f-ui); color: var(--ink-12); }
-  .esp-source label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-  .esp-source label input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-  .esp-source label .hint { font: 400 11px var(--f-ui); color: var(--ink-6); display: block; margin-top: 2px; }
-
-  .esp-disclose { background: transparent; border: 0; padding: 6px 0; cursor: pointer; font: 600 12.5px var(--f-ui); color: var(--ink-10); display: inline-flex; align-items: center; gap: 6px; }
-  .esp-disclose:hover { color: var(--ink-12); }
-  .esp-disclose svg { transition: transform .15s; }
-  .esp-disclose.open svg { transform: rotate(180deg); }
-
-  .esp-all { display: none; margin-top: 8px; }
-  .esp-all.open { display: block; }
-  .esp-all .esp-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-  .esp-all .esp-chips .chip { padding: 4px 10px; font-size: 11.5px; }
-  .esp-all .esp-list { max-height: 280px; overflow-y: auto; padding: 2px; }
-
-  .esp-back { background: transparent; border: 0; cursor: pointer; padding: 6px 8px; font: 500 12.5px var(--f-ui); color: var(--ink-8); display: inline-flex; align-items: center; gap: 4px; margin-right: auto; }
-  .esp-back:hover { color: var(--ink-12); }
-  .esp-no-match { padding: 12px; background: var(--sunk); border: 1px dashed var(--line); border-radius: 6px; font: 500 12.5px var(--f-ui); color: var(--ink-6); text-align: center; }
-
-  .esp-branch-note { margin-top: 6px; padding: 6px 10px; background: var(--warn-soft); border: 1px solid var(--warn-tint); border-radius: 4px; font: 500 11.5px var(--f-ui); color: var(--ink-12); line-height: 1.4; }
+  .ep-source { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ep-source button { min-height: 46px; padding: 9px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; text-align: left; color: var(--ink-12); }
+  .ep-source button:hover { border-color: var(--ink-10); background: var(--sunk); }
+  .ep-source button.on { border-color: var(--accent); background: var(--accent-soft); }
+  .ep-source .nm { display: block; font: 600 13px var(--f-ui); }
+  .ep-source .meta { display: block; margin-top: 2px; font: 500 11.5px var(--f-ui); color: var(--ink-6); }
+  .ep-tools { display: grid; gap: 8px; }
+  .ep-search { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--sunk); font: 500 13px var(--f-ui); color: var(--ink-12); }
+  .ep-search:focus { outline: 0; border-color: var(--ink-12); }
+  .ep-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ep-chip { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--elev); cursor: pointer; font: 600 11.5px var(--f-ui); color: var(--ink-8); }
+  .ep-chip:hover { border-color: var(--ink-10); color: var(--ink-12); }
+  .ep-chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-h); }
+  .ep-edge-list { display: grid; gap: 6px; max-height: 300px; overflow-y: auto; padding: 2px; }
+  .ep-edge-opt { display: grid; grid-template-columns: 22px 24px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--elev); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; text-align: left; }
+  .ep-edge-opt:hover { background: var(--sunk); border-color: var(--ink-10); }
+  .ep-edge-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+  .ep-edge-opt .rad { width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--elev); display: inline-block; position: relative; flex-shrink: 0; }
+  .ep-edge-opt.on .rad { border-color: var(--accent); }
+  .ep-edge-opt.on .rad::after { content: ''; position: absolute; inset: 2px; border-radius: 999px; background: var(--accent); }
+  .ep-edge-opt .sw { width: 22px; height: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); flex-shrink: 0; }
+  .ep-edge-opt .lab { min-width: 0; }
+  .ep-edge-opt .lab .nm { font: 500 13px var(--f-ui); color: var(--ink-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ep-edge-opt .lab .meta { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
+  .ep-edge-opt .thk { font: 600 11px var(--f-mono); padding: 2px 8px; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; color: var(--ink-10); white-space: nowrap; }
+  .ep-edge-opt .fav { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-h); font: 700 9px var(--f-ui); text-transform: uppercase; letter-spacing: .04em; }
+  .ep-edge-opt.on .thk { background: var(--elev); border-color: var(--accent); color: var(--accent-h); }
+  .ep-empty { padding: 12px; background: var(--sunk); border: 1px dashed var(--line); border-radius: 7px; font: 500 12.5px var(--f-ui); color: var(--ink-6); text-align: center; }
+  .ep-branch-note { padding: 8px 10px; background: var(--warn-soft); border: 1px solid var(--warn-tint); border-radius: 6px; font: 500 11.5px var(--f-ui); color: var(--ink-12); line-height: 1.4; }
+  @media (max-width: 520px) {
+    .ep-patterns, .ep-source { grid-template-columns: 1fr; }
+    .ep-edge-opt { grid-template-columns: 18px 22px minmax(0, 1fr); }
+    .ep-edge-opt .thk { grid-column: 3; justify-self: start; }
+  }
 
   /* branches indicator */
   .br-strip { margin-top: 14px; padding: 12px 16px; background: var(--sunk); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; font: 500 13px var(--f-ui); color: var(--ink-10); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
@@ -402,91 +355,43 @@
   </div>
 </div>
 
-<!-- Edges picker modal — three layers: Layer 1 (collapsed presets) + Layer 2 (customise per side) -->
+<!-- Edges picker modal -->
 <div class="modal" id="m-edges">
   <div class="modal-h"><h3 id="ep-title">Krom yopishtirish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b edges-pop">
-    <!-- Layer 1: collapsed view -->
-    <div id="ep-layer1">
-      <div class="ep-presets" id="ep-presets"></div>
-      <label class="ep-toggle" id="ep-own-row">
-        <input type="checkbox" id="ep-own" />
-        <span>O'zim krom tasmasini olib kelaman</span>
-        <span class="hint">Barcha tomonlarga qo'llanadi</span>
-      </label>
-      <button class="ep-disclose" type="button" id="ep-disclose-btn" onclick="toggleEdgeExpanded()">
-        <span id="ep-disclose-label">Tomon bo'yicha sozlash</span>
-        <i class="ic" data-icon="chevron-down"></i>
+    <p class="ep-help" id="ep-help"></p>
+    <div class="ep-patterns" id="ep-patterns"></div>
+    <div class="edge-diagram" id="ep-diagram">
+      <span class="lbl">Yuqori</span>
+      <button class="edge-btn h" type="button" data-side="t" onclick="toggleEdgeSide('t')" aria-pressed="false">—</button>
+      <div class="mid">
+        <button class="edge-btn v" type="button" data-side="l" onclick="toggleEdgeSide('l')" aria-pressed="false">—</button>
+        <div class="panel">Qism</div>
+        <button class="edge-btn v" type="button" data-side="r" onclick="toggleEdgeSide('r')" aria-pressed="false">—</button>
+      </div>
+      <button class="edge-btn h" type="button" data-side="b" onclick="toggleEdgeSide('b')" aria-pressed="false">—</button>
+      <span class="lbl">Pastki</span>
+    </div>
+    <div class="ep-source" id="ep-source">
+      <button type="button" id="ep-src-shop" onclick="setEdgeSource('shop')" aria-pressed="true">
+        <span class="nm">Ustaxonadan</span>
+        <span class="meta">Krom narxga qo'shiladi</span>
+      </button>
+      <button type="button" id="ep-src-own" onclick="setEdgeSource('own')" aria-pressed="false">
+        <span class="nm">O'zim olib kelaman</span>
+        <span class="meta">Faqat yopishtirish xizmati</span>
       </button>
     </div>
-
-    <!-- Layer 2: customise per side (hidden by default) -->
-    <div id="ep-layer2" class="hide">
-      <div class="ep-quick" id="ep-quick"></div>
-      <div class="edge-diagram" id="ep-diagram">
-        <span class="lbl">Yuqori</span>
-        <button class="edge-btn h" type="button" data-side="t" onclick="openSidePicker('t')">—</button>
-        <div class="mid">
-          <button class="edge-btn v" type="button" data-side="l" onclick="openSidePicker('l')">—</button>
-          <div class="panel">Qism</div>
-          <button class="edge-btn v" type="button" data-side="r" onclick="openSidePicker('r')">—</button>
-        </div>
-        <button class="edge-btn h" type="button" data-side="b" onclick="openSidePicker('b')">—</button>
-        <span class="lbl">Pastki</span>
-      </div>
-      <div class="ep-sides" id="ep-sides"></div>
-    </div>
-
-    <div class="ep-bottom">
-      <label class="ck" id="ep-all-row">
-        <input type="checkbox" id="ep-all" />
-        <span>Barcha qismlarga shu sozlash qo'llanilsin</span>
-      </label>
-      <div class="ck-hint hide" id="ep-all-hint">Tomon bo'yicha sozlashda har bir qator alohida — barcha qismlarga qo'llash mavjud emas.</div>
+    <div class="ep-tools">
+      <input class="ep-search" id="ep-search" placeholder="Krom nomi, decor yoki rang..." />
+      <div class="ep-chips" id="ep-thickness-chips"></div>
+      <div class="ep-edge-list" id="ep-edge-list"></div>
+      <div class="ep-branch-note hide" id="ep-branch-note"></div>
     </div>
   </div>
   <div class="modal-f">
     <button class="btn btn-outline" data-close-modal>Bekor qilish</button>
     <button class="btn btn-acc" type="button" onclick="applyEdges()">Qo'llash</button>
-  </div>
-</div>
-
-<!-- Per-side sub-picker modal — opens over m-edges -->
-<div class="modal" id="m-edge-side">
-  <div class="modal-h">
-    <h3 id="esp-title">Tomon</h3>
-    <button class="x" type="button" onclick="closeSidePicker()"><i class="ic" data-icon="x"></i></button>
-  </div>
-  <div class="modal-b">
-    <div class="esp-section" id="esp-recommended"></div>
-    <div class="esp-section">
-      <button class="esp-disclose" type="button" id="esp-all-btn" onclick="toggleAllEdges()">
-        <span>Barcha krom'lar</span>
-        <i class="ic" data-icon="chevron-down"></i>
-      </button>
-      <div class="esp-all" id="esp-all-wrap">
-        <div class="esp-chips" id="esp-mfr-chips"></div>
-        <div class="esp-list" id="esp-all-list"></div>
-      </div>
-    </div>
-    <div class="esp-section">
-      <h4>Manba</h4>
-      <div class="esp-source">
-        <label>
-          <input type="radio" name="esp-source" value="shop" id="esp-src-shop" />
-          <span>Ustaxonadan<span class="hint">Krom narxiga ulanadi</span></span>
-        </label>
-        <label>
-          <input type="radio" name="esp-source" value="own" id="esp-src-own" />
-          <span>O'zim olib kelaman<span class="hint">Faqat yopishtirish xizmati</span></span>
-        </label>
-      </div>
-    </div>
-    <div class="esp-branch-note hide" id="esp-branch-note"></div>
-  </div>
-  <div class="modal-f">
-    <button class="esp-back" type="button" onclick="closeSidePicker()"><i class="ic" data-icon="arrow-left"></i> Orqaga</button>
-    <button class="btn btn-acc" type="button" id="esp-apply-btn" onclick="applySidePicker()">Qo'llash</button>
   </div>
 </div>
 
@@ -1139,7 +1044,7 @@ function openMatPicker(ref) {
 
 function renderMatList() {
   const q = document.getElementById('mat-search').value.trim().toLowerCase();
-  // Panel-kind only here (edges are picked from the edges popover's sub-picker).
+  // Panel-kind only here; edge tape is picked in the edge modal.
   const list = SEED.materials.filter(m => m.kind === 'panel' && m.status === 'active')
     .filter(m => matMfrFilter === 'all' || m.manufacturerId === matMfrFilter)
     .filter(m => !q || (m.name + m.thickness + m.color + (m.decor||'') + (SEED.lookup.manufacturerName(m) || '')).toLowerCase().includes(q));
@@ -1176,62 +1081,82 @@ function renderMatList() {
 }
 
 /* ============================================================
-   Edge picker — three-layer design (2026-05-25 redesign)
+   Edge picker — one surface for side pattern + ranked material list.
 
-   Data shape (per part): edges = { t, b, l, r } where each side is
-     null OR { matId, source }. matId references a catalog 'edge' material;
-     source ∈ 'shop' | 'own'. Thickness/colour/decor are properties of
-     the edge material, not of the side.
-
-   Layer 1 (collapsed): three presets — None / Match 0.4 / Match 2.0 —
-     plus an "I'll bring my own" toggle and an "Apply to ALL" checkbox.
-   Layer 2 (expanded): per-side list + diagram; preset chips at the top.
-   Layer 3 (m-edge-side modal): recommended + browse-all + source.
+   Data shape stays per side: edges = { t, b, l, r } where each side is
+     null OR { matId, source }. The UI keeps matching edges as pinned
+     recommendations inside the same catalog list instead of separate modes.
    ============================================================ */
 
+const SIDES = ['t', 'b', 'l', 'r'];
 const SIDE_LABELS = { t: 'Yuqori', b: 'Pastki', l: 'Chap', r: "O'ng" };
-const SIDE_LABELS_FULL = { t: 'Yuqori qirg\'oq', b: 'Pastki qirg\'oq', l: 'Chap qirg\'oq', r: "O'ng qirg'oq" };
+const SIDE_PATTERNS = [
+  { key: 'none', label: 'Hech qaysi', hint: 'Krom olib tashlanadi', sides: [] },
+  { key: 'all', label: 'Hamma tomon', hint: 'Ko‘p ishlatiladi', sides: SIDES },
+  { key: 'tb', label: 'Yuqori + pastki', hint: 'Uzun tomonlar', sides: ['t', 'b'] },
+  { key: 'lr', label: "Chap + o'ng", hint: 'Yon tomonlar', sides: ['l', 'r'] }
+];
 
-// Editing state for the currently open picker
 let edgeState = { t: null, b: null, l: null, r: null };
-let edgeOwn = false;
-let edgeExpanded = false;          // Layer-2 visible?
-let editingSide = null;             // which side Layer 3 is editing
-let sidePickerState = null;         // { matId, source } draft inside Layer 3
-let espShowAll = false;             // disclosure state for "Browse all edges"
-let espMfrFilter = 'all';            // manufacturer chip filter inside "Browse all"
+let edgeSource = 'shop';
+let edgeSearch = '';
+let edgeThicknessFilter = 'all';
 
-/* Recommendation rule:
-   1) edges whose decor_code matches the panel's decor (strongest match)
-   2) failing that, edges whose color matches the panel's color
-   3) otherwise — nothing.
-   `thicknessFilter`, when provided, narrows further. */
-function recommendedEdgesForPanel(panelMatId, { thickness = null, limit = null } = {}) {
-  const panel = panelMatId ? SEED.lookup.matById(panelMatId) : null;
-  if (!panel) return [];
-  let edges = SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active');
-  if (thickness != null) edges = edges.filter(e => e.thickness === thickness);
-  if (!edges.length) return [];
-  let matches = [];
-  if (panel.decor) matches = matches.concat(edges.filter(e => e.decor && e.decor === panel.decor));
-  // Fallback: color match (only if there were no decor matches)
-  if (matches.length === 0 && panel.color) {
-    matches = edges.filter(e => e.color === panel.color);
-  }
-  // De-duplicate, preserve insertion order
-  const seen = new Set();
-  const out = [];
-  for (const e of matches) { if (!seen.has(e.id)) { seen.add(e.id); out.push(e); } }
-  return limit ? out.slice(0, limit) : out;
+function cloneEdgeState(state) {
+  return {
+    t: state.t ? { ...state.t } : null,
+    b: state.b ? { ...state.b } : null,
+    l: state.l ? { ...state.l } : null,
+    r: state.r ? { ...state.r } : null
+  };
 }
 
-// The single best matching-decor edge at a given thickness — or null.
+function bandedSides(state = edgeState) {
+  return SIDES.filter(side => state[side]);
+}
+
+function sameSideSet(a, b) {
+  return a.length === b.length && a.every(side => b.includes(side));
+}
+
+function activePatternKey() {
+  const active = bandedSides();
+  const match = SIDE_PATTERNS.find(pattern => sameSideSet(active, pattern.sides));
+  return match ? match.key : null;
+}
+
+function edgeRankForPanel(panelMatId, edgeMat) {
+  const panel = panelMatId ? SEED.lookup.matById(panelMatId) : null;
+  if (!panel || !edgeMat) return 2;
+  if (panel.decor && edgeMat.decor && panel.decor === edgeMat.decor) return 0;
+  if (panel.color && edgeMat.color && panel.color === edgeMat.color) return 1;
+  return 2;
+}
+
+function rankedEdgesForPanel(panelMatId) {
+  return SEED.materials
+    .filter(m => m.kind === 'edge' && m.status === 'active')
+    .map(edge => ({ edge, rank: edgeRankForPanel(panelMatId, edge) }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (a.edge.thickness !== b.edge.thickness) return a.edge.thickness - b.edge.thickness;
+      const am = SEED.lookup.manufacturerName(a.edge) || '';
+      const bm = SEED.lookup.manufacturerName(b.edge) || '';
+      return (am + a.edge.name).localeCompare(bm + b.edge.name);
+    });
+}
+
+function recommendedEdgesForPanel(panelMatId, { thickness = null, limit = null } = {}) {
+  let matches = rankedEdgesForPanel(panelMatId).filter(x => x.rank < 2).map(x => x.edge);
+  if (thickness != null) matches = matches.filter(e => e.thickness === thickness);
+  return limit ? matches.slice(0, limit) : matches;
+}
+
 function bestMatchingEdge(panelMatId, thickness) {
   const list = recommendedEdgesForPanel(panelMatId, { thickness });
   return list[0] || null;
 }
 
-// Format short label like "Rehau · H1334 Dub Sonoma" or "Rehau 0.4"
 function edgeShortLabel(edgeMat, { withThickness = false } = {}) {
   if (!edgeMat) return '—';
   const mfr = SEED.lookup.manufacturerName(edgeMat) || '';
@@ -1241,76 +1166,32 @@ function edgeShortLabel(edgeMat, { withThickness = false } = {}) {
 }
 
 function edgeTinyLabel(edgeMat) {
-  // used inside the small edge buttons on the diagram
   if (!edgeMat) return '—';
   const mfr = SEED.lookup.manufacturerName(edgeMat) || '';
   return mfr ? `${mfr.split(' ')[0]} ${edgeMat.thickness}` : `${edgeMat.thickness} mm`;
 }
 
-/* Detect which Layer-1 preset (if any) the current state corresponds to.
-   Returns 'none' | 'match-0.4' | 'match-2.0' | null. */
-function detectPreset(panelMatId, state) {
-  const sides = ['t','b','l','r'];
-  const allNull = sides.every(s => !state[s]);
-  if (allNull) return 'none';
-  if (!panelMatId) return null;
-  const allSet = sides.every(s => state[s]);
-  if (!allSet) return null;
-  // every side same thickness AND matches the best matching-decor edge for that thickness
-  const firstMat = SEED.lookup.matById(state.t.matId);
-  if (!firstMat) return null;
-  const thick = firstMat.thickness;
-  if (thick !== 0.4 && thick !== 2.0) return null;
-  const best = bestMatchingEdge(panelMatId, thick);
-  if (!best) return null;
-  for (const s of sides) {
-    const em = SEED.lookup.matById(state[s].matId);
-    if (!em || em.id !== best.id) return null;
-  }
-  return thick === 0.4 ? 'match-0.4' : 'match-2.0';
+function currentEdgeMatId() {
+  const first = bandedSides().map(side => edgeState[side]).find(Boolean);
+  return first ? first.matId : null;
 }
 
-/* Whether the row's edges have ANY asymmetric per-side configuration
-   (different matIds across non-null sides OR a mix of shop/own sources).
-   Used to confirm before "Apply to ALL" rule-overwrites other rows. */
-function hasAsymmetricEdges(p) {
-  const sides = ['t','b','l','r'];
-  const set = sides.filter(s => p.edges && p.edges[s]).map(s => p.edges[s]);
-  if (set.length === 0 || set.length === 4) {
-    if (set.length === 0) return false;
-    // All four sides set — asymmetric if matIds differ or sources differ
-    const firstMat = set[0].matId, firstSrc = set[0].source;
-    return set.some(e => e.matId !== firstMat || e.source !== firstSrc);
-  }
-  // Mix of null and set sides — asymmetric by definition
-  return true;
+function fallbackEdgeFor(p) {
+  const current = currentEdgeMatId();
+  if (current) return SEED.lookup.matById(current);
+  return bestMatchingEdge(p.matId, 0.4) || rankedEdgesForPanel(p.matId)[0]?.edge || null;
 }
 
 function openEdgePicker(ref) {
   editingEdgesRef = ref;
   const p = draft.partList.find(x => x.ref === ref);
   if (!p) return;
-  edgeState = {
-    t: p.edges.t ? { ...p.edges.t } : null,
-    b: p.edges.b ? { ...p.edges.b } : null,
-    l: p.edges.l ? { ...p.edges.l } : null,
-    r: p.edges.r ? { ...p.edges.r } : null
-  };
-  // own toggle reflects current sides: ON only when every banded side is 'own'
-  const banded = ['t','b','l','r'].map(s => edgeState[s]).filter(Boolean);
-  edgeOwn = banded.length > 0 && banded.every(e => e.source === 'own');
+  edgeState = cloneEdgeState(p.edges || {});
+  const set = bandedSides();
+  edgeSource = set.length && set.every(side => edgeState[side].source === 'own') ? 'own' : 'shop';
+  edgeSearch = '';
+  edgeThicknessFilter = 'all';
 
-  // Initial preset detection chooses layer 1 or 2
-  const preset = detectPreset(p.matId, edgeState);
-  edgeExpanded = (preset === null);
-
-  // Reset apply-all and disclosure UI
-  const allBox = document.getElementById('ep-all');
-  if (allBox) allBox.checked = false;
-  const ownBox = document.getElementById('ep-own');
-  if (ownBox) ownBox.checked = edgeOwn;
-
-  // Title with part index
   const idx = draft.partList.indexOf(p);
   const title = document.getElementById('ep-title');
   if (title) title.textContent = `Krom yopishtirish — qism #${idx + 1}`;
@@ -1319,369 +1200,231 @@ function openEdgePicker(ref) {
   openModal('m-edges');
 }
 
-// Back-compat alias used by some delegated handlers / recovery affordances
 function openEdgesPopover(ref) { return openEdgePicker(ref); }
 
 function renderEdgePicker() {
   const p = draft.partList.find(x => x.ref === editingEdgesRef);
   if (!p) return;
-
-  // Layer 1 vs Layer 2 visibility
-  document.getElementById('ep-layer1').classList.toggle('hide', edgeExpanded);
-  document.getElementById('ep-layer2').classList.toggle('hide', !edgeExpanded);
-  const discBtn = document.getElementById('ep-disclose-btn');
-  const discLab = document.getElementById('ep-disclose-label');
-  if (discBtn && discLab) {
-    discBtn.classList.toggle('open', edgeExpanded);
-    discLab.textContent = edgeExpanded ? "Yig'ish" : "Tomon bo'yicha sozlash";
-  }
-
-  // Apply-to-ALL: disable in expanded mode (per-side state is row-specific)
-  const allBox = document.getElementById('ep-all');
-  const allRow = document.getElementById('ep-all-row');
-  const allHint = document.getElementById('ep-all-hint');
-  if (allBox) {
-    allBox.disabled = edgeExpanded;
-    if (edgeExpanded) allBox.checked = false;
-  }
-  if (allRow) allRow.classList.toggle('disabled', edgeExpanded);
-  if (allHint) allHint.classList.toggle('hide', !edgeExpanded);
-
-  if (edgeExpanded) renderEdgeLayer2(p);
-  else renderEdgeLayer1(p);
+  renderEdgeHelp(p);
+  renderEdgePatterns(p);
+  renderEdgeDiagram();
+  renderEdgeSource();
+  renderEdgeTools(p);
 }
 
-/* ---- Layer 1: collapsed preset rows ---- */
-function renderEdgeLayer1(p) {
-  const wrap = document.getElementById('ep-presets');
-  const preset = detectPreset(p.matId, edgeState);
-  const noPanel = !p.matId;
-  const match04 = p.matId ? bestMatchingEdge(p.matId, 0.4) : null;
-  const match20 = p.matId ? bestMatchingEdge(p.matId, 2.0) : null;
+function renderEdgeHelp(p) {
+  const help = document.getElementById('ep-help');
+  if (!help) return;
+  if (!p.matId) {
+    help.textContent = "Panel tanlansa, mos kromlar yuqoriga chiqadi. Hozir catalog'dan qidirib tanlash mumkin.";
+    return;
+  }
+  const recs = recommendedEdgesForPanel(p.matId, { limit: 1 });
+  help.textContent = recs.length
+    ? 'Mos kromlar tavsiya sifatida yuqorida turadi; kerak bo‘lsa shu listdan boshqa materialni tanlang.'
+    : "Bu panel uchun mos krom topilmadi; shu listdan rang yoki qalinlik bo'yicha tanlang.";
+}
 
-  // None row
-  const noneRow = `
-    <button class="ep-preset ${preset === 'none' ? 'on' : ''}" type="button" data-preset="none">
-      <span class="rad"></span>
-      <span class="lab">
-        <span class="nm">Hech qaysi</span>
-        <span class="meta">Barcha tomonlardan krom olib tashlanadi</span>
-      </span>
-      <span></span>
-    </button>`;
-
-  const renderMatchRow = (thick, key, match) => {
-    const swatch = match ? `<span class="sw" style="background:${swatchColor(match.sw)}"></span>` : '<span class="sw" style="background:var(--sunk);border:1px dashed var(--line)"></span>';
-    let metaLine, disabled = false;
-    if (noPanel) {
-      metaLine = `<span class="meta warn">Avval panel material'ini tanlang</span>`;
-      disabled = true;
-    } else if (!match) {
-      metaLine = `<span class="meta warn">Catalog'da mos krom topilmadi — <em>Tomon bo'yicha sozlash</em>'da boshqasini tanlang</span>`;
-      disabled = true;
-    } else {
-      metaLine = `<span class="meta">${edgeShortLabel(match)}</span>`;
-    }
+function renderEdgePatterns(p) {
+  const wrap = document.getElementById('ep-patterns');
+  const current = activePatternKey();
+  const fallback = fallbackEdgeFor(p);
+  wrap.innerHTML = SIDE_PATTERNS.map(pattern => {
+    const disabled = pattern.key !== 'none' && !fallback;
     return `
-      <button class="ep-preset ${preset === key ? 'on' : ''}" type="button" data-preset="${key}" ${disabled ? 'disabled' : ''}>
-        <span class="rad"></span>
-        <span class="lab">
-          <span class="nm">Panel decor'iga mos · ${thick} mm</span>
-          ${metaLine}
-        </span>
-        ${swatch}
+      <button class="ep-pattern ${current === pattern.key ? 'on' : ''}" type="button" data-pattern="${pattern.key}" ${disabled ? 'disabled' : ''}>
+        <span class="nm">${pattern.label}</span>
+        <span class="meta">${pattern.hint}</span>
       </button>`;
-  };
-
-  wrap.innerHTML = noneRow + renderMatchRow(0.4, 'match-0.4', match04) + renderMatchRow(2.0, 'match-2.0', match20);
-  wrap.querySelectorAll('.ep-preset').forEach(b => {
-    b.addEventListener('click', () => {
-      if (b.disabled) return;
-      applyPreset(b.dataset.preset);
+  }).join('');
+  wrap.querySelectorAll('.ep-pattern').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      applySidePattern(btn.dataset.pattern);
     });
   });
-
-  // own toggle stays in sync
-  const ownBox = document.getElementById('ep-own');
-  if (ownBox) {
-    ownBox.checked = edgeOwn;
-    ownBox.onchange = () => {
-      edgeOwn = !!ownBox.checked;
-      ['t','b','l','r'].forEach(s => {
-        if (edgeState[s]) edgeState[s] = { ...edgeState[s], source: edgeOwn ? 'own' : 'shop' };
-      });
-      renderEdgePicker();
-    };
-  }
 }
 
-function applyPreset(key) {
+function applySidePattern(key) {
   const p = draft.partList.find(x => x.ref === editingEdgesRef);
   if (!p) return;
+  const pattern = SIDE_PATTERNS.find(x => x.key === key);
+  if (!pattern) return;
   if (key === 'none') {
     edgeState = { t: null, b: null, l: null, r: null };
-  } else if (key === 'match-0.4' || key === 'match-2.0') {
-    const thick = key === 'match-0.4' ? 0.4 : 2.0;
-    const em = bestMatchingEdge(p.matId, thick);
-    const make = () => em ? { matId: em.id, source: edgeOwn ? 'own' : 'shop' } : null;
-    edgeState = { t: make(), b: make(), l: make(), r: make() };
+    renderEdgePicker();
+    return;
+  }
+  const fallback = fallbackEdgeFor(p);
+  if (!fallback) {
+    toast('Avval krom materialini tanlang', 'warn');
+    return;
+  }
+  const next = { t: null, b: null, l: null, r: null };
+  pattern.sides.forEach(side => { next[side] = { matId: fallback.id, source: edgeSource }; });
+  edgeState = next;
+  renderEdgePicker();
+}
+
+function toggleEdgeSide(side) {
+  const p = draft.partList.find(x => x.ref === editingEdgesRef);
+  if (!p || !SIDES.includes(side)) return;
+  if (edgeState[side]) {
+    edgeState[side] = null;
+  } else {
+    const fallback = fallbackEdgeFor(p);
+    if (!fallback) {
+      toast('Avval krom materialini tanlang', 'warn');
+      return;
+    }
+    edgeState[side] = { matId: fallback.id, source: edgeSource };
   }
   renderEdgePicker();
 }
 
-function toggleEdgeExpanded() {
-  edgeExpanded = !edgeExpanded;
-  renderEdgePicker();
-}
-
-/* ---- Layer 2: customise per side ---- */
-function renderEdgeLayer2(p) {
-  // Quick preset chips (one-tap fix back to a collapsed-mode state)
-  const preset = detectPreset(p.matId, edgeState);
-  const match04 = p.matId ? bestMatchingEdge(p.matId, 0.4) : null;
-  const match20 = p.matId ? bestMatchingEdge(p.matId, 2.0) : null;
-  const quick = document.getElementById('ep-quick');
-  quick.innerHTML = `
-    <button type="button" class="${preset === 'none' ? 'on' : ''}" data-preset="none">Hech qaysi</button>
-    <button type="button" class="${preset === 'match-0.4' ? 'on' : ''}" data-preset="match-0.4" ${match04 ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}>Mos 0.4</button>
-    <button type="button" class="${preset === 'match-2.0' ? 'on' : ''}" data-preset="match-2.0" ${match20 ? '' : 'disabled style="opacity:.55;cursor:not-allowed"'}>Mos 2.0</button>
-  `;
-  quick.querySelectorAll('button').forEach(b => {
-    b.addEventListener('click', () => {
-      if (b.disabled) return;
-      applyPreset(b.dataset.preset);
-    });
-  });
-
-  // Diagram buttons reflect each side
-  ['t','b','l','r'].forEach(side => {
+function renderEdgeDiagram() {
+  SIDES.forEach(side => {
     const btn = document.querySelector(`#ep-diagram .edge-btn[data-side="${side}"]`);
     if (!btn) return;
-    const e = edgeState[side];
-    if (!e) {
+    const edge = edgeState[side];
+    btn.setAttribute('aria-pressed', edge ? 'true' : 'false');
+    if (!edge) {
       btn.textContent = '—';
-      btn.classList.remove('set');
-      btn.classList.remove('own');
-    } else {
-      const em = SEED.lookup.matById(e.matId);
-      btn.innerHTML = `<span>${edgeTinyLabel(em)}</span>`;
-      btn.classList.add('set');
-      btn.classList.toggle('own', e.source === 'own');
+      btn.classList.remove('set', 'own');
+      return;
     }
+    const edgeMat = SEED.lookup.matById(edge.matId);
+    btn.innerHTML = `<span>${edgeTinyLabel(edgeMat)}</span>`;
+    btn.classList.add('set');
+    btn.classList.toggle('own', edge.source === 'own');
   });
+}
 
-  // Side rows
-  const sides = ['t','b','l','r'];
-  const html = sides.map(side => {
-    const e = edgeState[side];
-    const em = e ? SEED.lookup.matById(e.matId) : null;
-    const nm = em ? edgeShortLabel(em) : '<span class="none">—</span>';
-    const thk = em ? `${em.thickness} mm` : '';
-    const srcClass = e && e.source === 'own' ? 'own' : '';
-    const srcLabel = e ? (e.source === 'own' ? "O'zim olib kelaman" : 'Ustaxonadan') : '';
-    return `
-      <div class="ep-side">
-        <span class="side-lbl">${SIDE_LABELS[side]}</span>
-        <div class="cur">
-          <div class="nm">${nm}</div>
-          ${e ? `<div class="meta"><span>${thk}</span><span class="src-chip ${srcClass}">${srcLabel}</span></div>` : ''}
-        </div>
-        <button class="edit-btn" type="button" data-side="${side}">Tahrirlash <i class="ic" data-icon="chevron-right"></i></button>
-      </div>`;
-  }).join('');
-  const sidesWrap = document.getElementById('ep-sides');
-  sidesWrap.innerHTML = html;
-  sidesWrap.querySelectorAll('.edit-btn').forEach(b => {
-    b.addEventListener('click', () => openSidePicker(b.dataset.side));
+function setEdgeSource(source) {
+  edgeSource = source === 'own' ? 'own' : 'shop';
+  SIDES.forEach(side => {
+    if (edgeState[side]) edgeState[side] = { ...edgeState[side], source: edgeSource };
   });
-  // Fill any pending data-icon nodes inside the freshly rendered layer
-  if (typeof window.renderIcons === 'function') window.renderIcons(sidesWrap);
-}
-
-/* ---- Layer 3: per-side sub-picker ---- */
-function openSidePicker(side) {
-  editingSide = side;
-  const p = draft.partList.find(x => x.ref === editingEdgesRef);
-  if (!p) return;
-  // Seed the side state from the current edgeState; if null, default to shop/no-mat
-  const e = edgeState[side];
-  sidePickerState = e ? { ...e } : { matId: null, source: 'shop' };
-  espShowAll = false;
-  espMfrFilter = 'all';
-
-  document.getElementById('esp-title').textContent = SIDE_LABELS_FULL[side];
-  document.getElementById('esp-apply-btn').textContent = `${SIDE_LABELS[side]}'ga qo'llash`;
-  document.getElementById('esp-all-wrap').classList.remove('open');
-  document.getElementById('esp-all-btn').classList.remove('open');
-
-  // Source radios
-  const shopR = document.getElementById('esp-src-shop');
-  const ownR = document.getElementById('esp-src-own');
-  if (shopR) shopR.checked = sidePickerState.source !== 'own';
-  if (ownR) ownR.checked = sidePickerState.source === 'own';
-  shopR.onchange = () => { sidePickerState.source = 'shop'; renderBranchNote(p); };
-  ownR.onchange = () => { sidePickerState.source = 'own'; renderBranchNote(p); };
-
-  renderRecommended(p);
-  renderAllEdges(p);
-  renderBranchNote(p);
-
-  openModal('m-edge-side');
-}
-
-function closeSidePicker() {
-  // Closing without applying — just hide this modal; m-edges stays under it.
-  document.getElementById('m-edge-side')?.classList.remove('on');
-  // Don't drop the scrim — m-edges is still open beneath.
-  if (!document.querySelector('.modal.on')) {
-    document.getElementById('scrim')?.classList.remove('on');
-  }
-}
-
-function applySidePicker() {
-  if (!editingSide) return;
-  edgeState[editingSide] = sidePickerState && sidePickerState.matId
-    ? { matId: sidePickerState.matId, source: sidePickerState.source || 'shop' }
-    : null;
-  // Recompute the global own toggle based on the new state
-  const banded = ['t','b','l','r'].map(s => edgeState[s]).filter(Boolean);
-  edgeOwn = banded.length > 0 && banded.every(e => e.source === 'own');
-  closeSidePicker();
   renderEdgePicker();
 }
 
-function renderRecommended(p) {
-  const wrap = document.getElementById('esp-recommended');
-  if (!p.matId) {
-    wrap.innerHTML = `<h4>Tavsiya etilgan</h4><div class="esp-no-match">Avval panel material'ini tanlang.</div>`;
-    return;
+function renderEdgeSource() {
+  const shop = document.getElementById('ep-src-shop');
+  const own = document.getElementById('ep-src-own');
+  if (!shop || !own) return;
+  shop.classList.toggle('on', edgeSource === 'shop');
+  own.classList.toggle('on', edgeSource === 'own');
+  shop.setAttribute('aria-pressed', edgeSource === 'shop' ? 'true' : 'false');
+  own.setAttribute('aria-pressed', edgeSource === 'own' ? 'true' : 'false');
+}
+
+function renderEdgeTools(p) {
+  const search = document.getElementById('ep-search');
+  if (search) {
+    if (document.activeElement !== search) search.value = edgeSearch;
+    search.oninput = () => {
+      edgeSearch = search.value;
+      renderEdgeMaterialList(p);
+    };
   }
-  const recs = recommendedEdgesForPanel(p.matId, { limit: 5 });
-  if (recs.length === 0) {
-    wrap.innerHTML = `<h4>Tavsiya etilgan</h4><div class="esp-no-match">Panel decor'iga mos krom topilmadi — quyidagi <em>Barcha krom'lar</em> ro'yxatidan tanlang.</div>`;
-    return;
-  }
-  wrap.innerHTML = `<h4>Tavsiya etilgan (panel decor'iga mos)</h4><div class="esp-list">${recs.map(em => edgeOptHtml(em)).join('')}</div>`;
-  wrap.querySelectorAll('.esp-opt').forEach(el => {
-    el.addEventListener('click', () => pickEdgeInSidePicker(el.dataset.mat, p));
+  renderThicknessChips(p);
+  renderEdgeMaterialList(p);
+  renderBranchNote();
+}
+
+function renderThicknessChips(p) {
+  const wrap = document.getElementById('ep-thickness-chips');
+  const values = ['all', ...new Set(SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active').map(m => m.thickness))];
+  wrap.innerHTML = values.map(v => {
+    const label = v === 'all' ? 'Hamma qalinlik' : `${v} mm`;
+    return `<button class="ep-chip ${edgeThicknessFilter === String(v) ? 'on' : ''}" type="button" data-thickness="${v}">${label}</button>`;
+  }).join('');
+  wrap.querySelectorAll('.ep-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      edgeThicknessFilter = String(btn.dataset.thickness);
+      renderThicknessChips(p);
+      renderEdgeMaterialList(p);
+    });
   });
 }
 
-function renderAllEdges(p) {
-  const all = SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active');
-  const usedMfrs = new Set(all.map(m => m.manufacturerId));
-  const mfrs = SEED.manufacturers.filter(x => x.status === 'active' && usedMfrs.has(x.id));
-  const chips = `<button class="chip ${espMfrFilter === 'all' ? 'on' : ''}" type="button" data-mfr="all">Hammasi</button>` +
-    mfrs.map(x => `<button class="chip ${espMfrFilter === x.id ? 'on' : ''}" type="button" data-mfr="${x.id}">${x.name}</button>`).join('');
-  document.getElementById('esp-mfr-chips').innerHTML = chips;
-  document.getElementById('esp-mfr-chips').querySelectorAll('.chip').forEach(c => {
-    c.addEventListener('click', () => { espMfrFilter = c.dataset.mfr; renderAllEdges(p); });
-  });
-  const filtered = all.filter(m => espMfrFilter === 'all' || m.manufacturerId === espMfrFilter);
-  const list = document.getElementById('esp-all-list');
-  if (filtered.length === 0) {
-    list.innerHTML = `<div class="esp-no-match">Mos krom topilmadi.</div>`;
+function renderEdgeMaterialList(p) {
+  const wrap = document.getElementById('ep-edge-list');
+  const q = edgeSearch.trim().toLowerCase();
+  let options = rankedEdgesForPanel(p.matId);
+  if (edgeThicknessFilter !== 'all') {
+    const th = Number(edgeThicknessFilter);
+    options = options.filter(x => x.edge.thickness === th);
+  }
+  if (q) {
+    options = options.filter(({ edge }) => {
+      const mfr = SEED.lookup.manufacturerName(edge) || '';
+      return `${edge.name} ${edge.decor || ''} ${edge.color || ''} ${mfr}`.toLowerCase().includes(q);
+    });
+  }
+  if (!options.length) {
+    wrap.innerHTML = `<div class="ep-empty">Mos krom topilmadi. Qidiruv yoki qalinlikni o'zgartiring.</div>`;
     return;
   }
-  list.innerHTML = filtered.map(em => edgeOptHtml(em)).join('');
-  list.querySelectorAll('.esp-opt').forEach(el => {
-    el.addEventListener('click', () => pickEdgeInSidePicker(el.dataset.mat, p));
+  const activeSides = bandedSides();
+  wrap.innerHTML = options.map(({ edge, rank }) => {
+    const mfr = SEED.lookup.manufacturerName(edge) || '';
+    const decorOrColor = edge.decor ? `${edge.decor} ${edge.color || ''}`.trim() : (edge.color || '');
+    const selected = activeSides.length > 0 && activeSides.every(side => edgeState[side]?.matId === edge.id);
+    const fav = rank < 2 ? '<span class="fav">Mos</span>' : '';
+    return `
+      <button class="ep-edge-opt ${selected ? 'on' : ''}" type="button" data-mat="${edge.id}">
+        <span class="rad"></span>
+        <span class="sw" style="background:${swatchColor(edge.sw)}"></span>
+        <span class="lab">
+          <span class="nm">${mfr ? mfr + ' · ' : ''}${decorOrColor}${fav}</span>
+          <span class="meta">${edge.name}</span>
+        </span>
+        <span class="thk">${edge.thickness} mm</span>
+      </button>`;
+  }).join('');
+  wrap.querySelectorAll('.ep-edge-opt').forEach(btn => {
+    btn.addEventListener('click', () => selectEdgeMaterial(btn.dataset.mat));
   });
 }
 
-function edgeOptHtml(em) {
-  const selected = sidePickerState && sidePickerState.matId === em.id;
-  const mfr = SEED.lookup.manufacturerName(em) || '';
-  const decorOrColor = em.decor ? `${em.decor} ${em.color || ''}`.trim() : (em.color || '');
-  return `
-    <button class="esp-opt ${selected ? 'on' : ''}" type="button" data-mat="${em.id}">
-      <span class="rad"></span>
-      <span class="sw" style="background:${swatchColor(em.sw)}"></span>
-      <span class="lab">
-        <span class="nm">${mfr ? mfr + ' · ' : ''}${decorOrColor}</span>
-        <span class="meta">${em.name}</span>
-      </span>
-      <span class="thk">${em.thickness} mm</span>
-    </button>`;
+function selectEdgeMaterial(matId) {
+  const targets = bandedSides();
+  const sides = targets.length ? targets : SIDES;
+  sides.forEach(side => {
+    edgeState[side] = { matId, source: edgeSource };
+  });
+  renderEdgePicker();
 }
 
-function pickEdgeInSidePicker(matId, p) {
-  sidePickerState = { matId, source: sidePickerState?.source || (edgeOwn ? 'own' : 'shop') };
-  // Re-render lists so the checked row updates
-  renderRecommended(p);
-  renderAllEdges(p);
-  renderBranchNote(p);
-}
-
-function toggleAllEdges() {
-  espShowAll = !espShowAll;
-  document.getElementById('esp-all-wrap').classList.toggle('open', espShowAll);
-  document.getElementById('esp-all-btn').classList.toggle('open', espShowAll);
-}
-
-function renderBranchNote(p) {
-  const wrap = document.getElementById('esp-branch-note');
+function renderBranchNote() {
+  const wrap = document.getElementById('ep-branch-note');
   if (!wrap) return;
   const bid = draft.preferredBranchId;
-  if (!bid || !sidePickerState?.matId || sidePickerState.source === 'own') {
+  if (!bid) {
     wrap.classList.add('hide'); wrap.innerHTML = ''; return;
   }
   const carried = new Set(SEED.lookup.materialsAtBranch(bid));
-  if (carried.has(sidePickerState.matId)) {
+  const missing = [];
+  SIDES.forEach(side => {
+    const edge = edgeState[side];
+    if (!edge || edge.source === 'own' || carried.has(edge.matId)) return;
+    const edgeMat = SEED.lookup.matById(edge.matId);
+    if (edgeMat && !missing.some(x => x.id === edgeMat.id)) missing.push(edgeMat);
+  });
+  if (!missing.length) {
     wrap.classList.add('hide'); wrap.innerHTML = ''; return;
   }
-  const b = SEED.lookup.branchById(bid);
-  const bname = b ? b.name : bid;
+  const branch = SEED.lookup.branchById(bid);
+  const names = missing.map(m => edgeShortLabel(m, { withThickness: true })).join(' · ');
   wrap.classList.remove('hide');
-  wrap.innerHTML = `<b>${bname}</b> ustaxonasida bu krom hozir mavjud emas — buyurtma berishda o'zingiznikidan tanlang yoki boshqa filialni tanlang.`;
+  wrap.innerHTML = `<b>${branch?.name || bid}</b> filialida ${names} hozir mavjud emas — manbani <b>O'zim olib kelaman</b> qiling yoki boshqa filialni tanlang.`;
 }
 
-/* ---- Apply (final action) ---- */
 function applyEdges() {
-  const edges = {
-    t: edgeState.t ? { ...edgeState.t } : null,
-    b: edgeState.b ? { ...edgeState.b } : null,
-    l: edgeState.l ? { ...edgeState.l } : null,
-    r: edgeState.r ? { ...edgeState.r } : null
-  };
-  const allBox = document.getElementById('ep-all');
-  const all = allBox && allBox.checked && !allBox.disabled;
   const sourceRow = draft.partList.find(x => x.ref === editingEdgesRef);
   if (!sourceRow) { closeModal('m-edges'); return; }
-
-  if (all) {
-    // Confirm step when other rows have asymmetric per-side state that we're about to overwrite.
-    const others = draft.partList.filter(p => p.ref !== sourceRow.ref);
-    const willOverwrite = others.filter(p => hasAsymmetricEdges(p));
-    if (willOverwrite.length > 0) {
-      const ok = window.confirm(`Bu ${willOverwrite.length} ta qatordagi krom sozlamalarini almashtiradi — davom etamizmi?`);
-      if (!ok) return;
-    }
-
-    // Apply the RULE per row. If every side in source is null → "None" preset (clear all).
-    const sides = ['t','b','l','r'];
-    const sourceAllNull = sides.every(s => !edges[s]);
-
-    draft.partList.forEach(p => {
-      if (sourceAllNull) {
-        p.edges = { t: null, b: null, l: null, r: null };
-        return;
-      }
-      const next = { t: null, b: null, l: null, r: null };
-      sides.forEach(side => {
-        const e = edges[side];
-        if (!e) return;
-        const thick = SEED.lookup.matById(e.matId)?.thickness;
-        const em = bestMatchingEdge(p.matId, thick);
-        // If this row has no matching-decor edge at that thickness, leave the side null.
-        if (em) next[side] = { matId: em.id, source: e.source };
-      });
-      p.edges = next;
-    });
-  } else {
-    sourceRow.edges = edges;
-  }
-
+  sourceRow.edges = cloneEdgeState(edgeState);
   closeModal('m-edges');
   markStale();
   renderAll();

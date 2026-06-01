@@ -93,11 +93,11 @@ stateDiagram-v2
   thickness, kerf-relevant data, and the grain rule. Non-catalog materials are out of
   scope for v1.
 - **Edge tape is a catalog material too.** Each side of a part is either `null` (no banding)
-  or `(edge material, source)`. The picker UX surfaces decor-matching edges first so the
-  common case ("match the panel decor in 0.4 mm") is a single tap (see *UX*). Like panels,
-  edges can be `shop` (workshop supplies) or `own` (client brings their own spool); a
-  side's source is independent of the panel's source on the same part and of other sides'
-  sources.
+  or `(edge material, source)`. The picker UX pins decor-matching edges at the top of one
+  material list so the common case ("match the panel decor in 0.4 mm") is a single tap
+  without hiding the rest of the catalog (see *UX*). Like panels, edges can be `shop`
+  (workshop supplies) or `own` (client brings their own spool); a side's source is
+  independent of the panel's source on the same part and of other sides' sources.
 
 ### The optimiser
 
@@ -216,45 +216,31 @@ panel has grain — a passive cue, not a control.
 
 **Edge picker** (opens from the Edges cell — popover on desktop, bottom sheet on mobile):
 
-- **Collapsed view (default)** — three preset rows:
-  - **None** — clears all sides.
-  - **Match panel — 0.4 mm** — auto-detected matching edge (same `decor_code` or, failing
-    that, same `color`) at 0.4 mm. Labelled with the picked edge's name; greyed with a
-    *"No matching edge in catalog — Customise per side"* note when no match exists; greyed
-    with *"Pick a panel material first"* when the row has no panel yet.
-  - **Match panel — 2.0 mm** — same, in 2.0 mm.
-  - Below the presets: an **"I'll bring my own edge tape"** toggle (flips the source for
-    all four banded sides at once; default off — `shop`).
-  - A **Customise per side** disclosure → expanded view.
-  - The existing **Apply edges to ALL parts in this list** checkbox.
-
-- **Expanded view (Customise per side)** — the presets stay visible as a strip at the top
-  (one-tap override). Below: an interactive panel diagram with the four sides labelled, and
-  a row per side (TOP / BOTTOM / LEFT / RIGHT). Each row shows the current side's edge
-  material + source chip; tapping a side (on the diagram or its row) opens the **per-side
-  sub-picker**.
-
-- **Per-side sub-picker** — sized to keep the user inside the edge-picker context (slides
-  over the picker on mobile):
-  - **Recommended** — top 3–5 edges sharing the panel's `decor_code` / `color`, across
-    manufacturers, at varying thicknesses. The chosen-by-the-preset edge is checked.
-  - **Browse all edges** — opens the full edge catalog modal (same component as the panel
-    catalog, with the manufacturer / thickness filters).
-  - **Source** — radio: workshop supplies (`shop`) / I'll bring my own (`own`). Default:
-    shop. Independent per side.
-  - **Apply to <side>** — primary action; closes the sub-picker, returns to the per-side
-    view with the row updated.
-
-- **Apply edges to ALL parts** — when checked, confirming the picker writes to every
-  existing row:
-  - From a **Match-panel preset** → applies the **rule** (each row matches its own panel's
-    decor at the chosen thickness). A White-MDF row gets a White-decor edge, not the
-    H1334 Dub Sonoma the source row used.
-  - From **None** → clears all rows.
-  - In **Customise per side** mode → disabled (per-side state is row-specific).
-  - When the action would overwrite asymmetric per-side state already on other rows, a
-    confirm step names the consequence ("This will replace edges on N other parts —
-    continue?").
+- **One surface, no modes.** The picker asks two questions first: which sides need edge
+  banding, and which tape should be used. There is no separate "match panel" section,
+  "browse other materials" section, "customise per side" button, or standalone "apply to
+  all" button.
+- **Side choice sits at the top.** Quick patterns cover the common shapes: **None**, **All
+  sides**, **Top + bottom**, **Left + right**. An interactive panel diagram below the
+  patterns lets the client toggle individual sides without leaving the picker. Choosing a
+  tape with no side selected applies it to all four sides; choosing a tape after sides are
+  selected applies it only to those sides.
+- **Material choice is one ranked list.** Edges with the same `decor_code` as the panel
+  are pinned first with a **Recommended** marker; same-`color` matches follow; all other
+  active edge materials continue in the same list. Search and thickness chips filter this
+  one list. If no panel is selected, the picker says that matching will appear after the
+  panel is picked but still allows catalog search.
+- **Source is quiet by default.** `shop` is the default. A segmented source control
+  (`Workshop supplies` / `I'll bring it`) applies to the currently banded sides; mixed
+  per-side source remains possible through the diagram but is not presented as a separate
+  step.
+- **Apply writes only this row in v1.** The footer has only **Cancel** and **Apply**.
+  **Apply** saves the selected side pattern, tape, and source to the row whose **Edges**
+  cell opened the picker; it never edits sibling rows. Bulk helpers such as **Same panel
+  material** or **All rows** are out of scope for v1 because they add propagation and
+  overwrite decisions to a small mobile form. If bulk edge editing returns later, it should
+  be an explicit list-level action or a follow-up confirmation after row apply, not a
+  default control in the picker.
 
 Per-row inline validation; a single roll-up message below the table when something blocks
 the optimiser.
@@ -272,8 +258,8 @@ with:
   - **I'll bring my own** — flips the row's panel source (or for an affected edge side,
     that side's source) to `own`. The branch no longer needs to carry it.
   - **Pick a different material** — opens the picker pre-filtered to the new branch (panel
-    swap on the panel cell; edge swap inside the edge picker's per-side sub-picker, where
-    the same inline note also appears).
+    swap on the panel cell; edge swap inside the edge picker with the affected side
+    already active and the same inline note visible).
 - The row's existing **⋯ → Delete row** menu still works; removal is opt-in and never
   automatic.
 
@@ -379,7 +365,8 @@ links to the current result.
   they were, stamped with the old algorithm version; their PDFs are not regenerated.
 - **A workshop deactivates an edge material that's set as a per-side preference on an
   in-flight draft** — same handling as a deactivated panel: row flagged on next open, edge
-  side cleared with a one-tap "pick replacement" affordance in the per-side sub-picker.
+  side cleared with a one-tap "pick replacement" affordance that opens the edge picker with
+  that side active.
 
 ## Next
 
