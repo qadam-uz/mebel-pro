@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 80
 ---
 
@@ -204,7 +204,7 @@ The parts table:
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size; sortable by relevance / decor / manufacturer. Filter chips above: `Manufacturer` (multi-select), `Type` (`dsp` / `mdf` / `plywood` / …), `Thickness`. When `preferred_branch_id` is set, the picker is pre-filtered to that branch's selection by default; a toggle "Show all catalog" widens it. Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it` |
+| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size; sortable by relevance / decor / manufacturer. Dropdown filters above: `Manufacturer` (multi-select), `Type` (`dsp` / `mdf` / `plywood` / …), `Thickness`. When `preferred_branch_id` is set, the picker is pre-filtered to that branch's selection by default; a toggle "Show all catalog" widens it. Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it` |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
@@ -227,9 +227,9 @@ panel has grain — a passive cue, not a control.
   selected applies it only to those sides.
 - **Material choice is one ranked list.** Edges with the same `decor_code` as the panel
   are pinned first with a **Recommended** marker; same-`color` matches follow; all other
-  active edge materials continue in the same list. Search and thickness chips filter this
-  one list. If no panel is selected, the picker says that matching will appear after the
-  panel is picked but still allows catalog search.
+  active edge materials continue in the same list. Search and a thickness dropdown filter
+  this one list. If no panel is selected, the picker says that matching will appear after
+  the panel is picked but still allows catalog search.
 - **Source is quiet by default.** `shop` is the default. A segmented source control
   (`Workshop supplies` / `I'll bring it`) applies to the currently banded sides; mixed
   per-side source remains possible through the diagram but is not presented as a separate
@@ -283,15 +283,14 @@ On success, the panel scrolls into view with three regions:
 1. **Headline metrics.**
    - Weighted **waste %** (across all panel materials).
    - **Panels used** total and per-material breakdown.
-   - **Edge tape** total length — the **consumed** metres (geometric banding + the standard
-     ~3 cm/side trim masters leave and bill), with a breakdown listing each edge material
+   - **Edge tape** total length — the **consumed** metres (geometric banding + the fixed
+     30 mm trim overhang per banded side), with a breakdown listing each edge material
      that has metres (e.g. `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`). When some
-     sides are `own`, the breakdown splits shop and own metres per material. A short note
-     explains the figure includes the standard per-side trim — surfaced to the client as
-     **Stanok haqqi** (Uzbek, lit. "the machine's allowance"; the canon term is *trim
-     overhang*) — what the client is billed for and what consumes stock
-     ([`orders.md`](orders.md#pricing)); because the trim is a fixed constant this is the
-     real figure, no branch needed.
+     sides are `own`, the breakdown splits shop and own metres per material. The metric
+     carries a compact split such as `edge sides 12.8 m + trim overhang 0.6 m`; no long
+     explanatory message is shown in the flow. Because the trim overhang is a fixed system constant,
+     this is the real figure from the cutting result onward; only price waits on the
+     branch's rates ([`orders.md`](orders.md#pricing)).
    - **Cut length total** (m), informational.
    - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
    - The chosen **algorithm** name plus a **Compare algorithms** link → expander with one

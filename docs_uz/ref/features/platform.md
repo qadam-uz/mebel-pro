@@ -34,15 +34,17 @@ Operators per-branch prices yoki stock edit qilmaydi — bu workshop territory.
 
 - **Manufacturers** (`/admin/catalog/manufacturers`) — table: name, country, materials
   count, status, action menu. **+ Manufacturer** → dialog (name, optional country,
-  optional note). Row actions: Edit · Activate / Deactivate. No Delete. Filter chips:
-  status, country. Empty: "No manufacturers yet — add one before adding materials."
+  optional note). Row actions: Edit · Activate / Deactivate. No Delete. Filters:
+  status dropdown, country dropdown. Empty: "No manufacturers yet — add one before
+  adding materials."
 - **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
-  type/thickness, colour/decor, panel size (for panels), status, action menu. Filter chips:
-  kind (`panel` / `edge`), manufacturer (multi-select), type, thickness, status.
-  **+ Material** → kind-specific form (manufacturer picker with inline-add → bu pagedan
-  chiqmasdan Manufacturers dialogni ochadi; spec fields per the kind). Row actions:
-  Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials yet — add
-  manufacturers, then materials."
+  type/thickness, colour/decor, panel size (for panels), status, action menu. Filters:
+  kind dropdown (`panel` / `edge`), manufacturer dropdown (multi-select), type dropdown,
+  thickness dropdown, status dropdown.
+  **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
+  Manufacturers dialog without leaving this page; spec fields per the kind). Row
+  actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
+  yet — add manufacturers, then materials."
 
 States: loading skeletons, empty, error with `trace_id`; manufacturers inline-add
 in-progress material formni preserve qiladi. Accessibility: status chip colour + textni pair

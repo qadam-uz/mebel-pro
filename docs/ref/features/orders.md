@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 30
 ---
 
@@ -257,7 +257,7 @@ draft's `preferred_branch_id` if set.
   success → `/c/orders/:id` with a banner: *"Order placed — the workshop will review and
   call you."*
 
-- **My orders** (`/c/orders`) — filter chips (All / Active / Completed / Cancelled),
+- **My orders** (`/c/orders`) — status dropdown (All / Active / Completed / Cancelled),
   search by order number, cards (order #, branch, date, status badge, the **frozen
   total** — shown from placement, never "price after confirm" since pricing is frozen at
   creation — primary action "Track", which opens the order detail). Empty: "No orders
@@ -285,7 +285,7 @@ Permission names below are the per-branch grants from
     assigned cutter / edger chip when set. **No drag between status columns** — status
     changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: status chips, search, date range,
+    total, items, created, action menu. Filters: status dropdown, search, date range,
     branch. Empty: "No orders in your branch(es)." Zero branches: "No branches assigned
     — ask your workshop owner."
 - **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client

@@ -36,8 +36,8 @@
     <section id="t-stock" data-panel-group="inv">
       <div class="filters">
         <div class="input"><input id="m-search" placeholder="Material qidirish..." oninput="renderStock()" /></div>
-        <select id="br-filter" onchange="onBranchChange()"></select>
-        <button class="chip ghost" id="low-only" onclick="this.classList.toggle('on');renderStock()">Faqat past zaxiralar</button>
+        <mp-select id="br-filter" onchange="onBranchChange()"></mp-select>
+        <label class="filter-check"><input type="checkbox" id="low-only" onchange="renderStock()" /> Faqat past zaxiralar</label>
       </div>
 
       <div class="card">
@@ -80,13 +80,13 @@
 <div class="modal" id="m-stockin">
   <div class="modal-h"><h3>Kirim yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <div class="field"><label>Filial</label><select id="si-branch" onchange="fillMatSelect('mat-select', this.value)"></select></div>
-    <div class="field"><label>Material</label><select id="mat-select"></select></div>
+    <div class="field"><label>Filial</label><mp-select id="si-branch" onchange="fillMatSelect('mat-select', this.value)"></mp-select></div>
+    <div class="field"><label>Material</label><mp-select id="mat-select"></mp-select></div>
     <div class="field"><label>Miqdor</label><input type="number" value="20" min="1" /></div>
     <div class="field">
       <label>Yetkazib beruvchi</label>
       <div style="display:flex;gap:8px">
-        <select id="sup-select" style="flex:1"></select>
+        <mp-select id="sup-select" style="flex:1"></mp-select>
         <button class="btn btn-outline btn-sm" type="button" onclick="document.getElementById('new-sup-wrap').hidden=!document.getElementById('new-sup-wrap').hidden"><i class="ic" data-icon="plus"></i> Yangi</button>
       </div>
     </div>
@@ -106,8 +106,8 @@
   <div class="modal-h"><h3>Zaxira tuzatish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner warn"><div class="ic"><i data-icon="alert"></i></div><div class="grow">Tuzatish 0 dan past tushmaydi. Sabab kerak.</div></div>
-    <div class="field"><label>Filial</label><select id="adj-branch" onchange="fillMatSelect('adj-mat', this.value)"></select></div>
-    <div class="field"><label>Material</label><select id="adj-mat"></select></div>
+    <div class="field"><label>Filial</label><mp-select id="adj-branch" onchange="fillMatSelect('adj-mat', this.value)"></mp-select></div>
+    <div class="field"><label>Material</label><mp-select id="adj-mat"></mp-select></div>
     <div class="field"><label>O'zgarish (+10 yoki −3)</label><input value="-3" /></div>
     <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Yorilgan partiya"></textarea></div>
   </div>
@@ -178,7 +178,7 @@ window.renderStock = () => {
 
   const scope = currentBranchScope();
   const q = (document.getElementById('m-search').value || '').trim().toLowerCase();
-  const lowOnly = document.getElementById('low-only').classList.contains('on');
+  const lowOnly = document.getElementById('low-only').checked;
   const rows = SEED.branchMaterials.filter(bm => {
     if (!scope.includes(bm.branchId)) return false;
     if (bm.status !== 'active') return false;

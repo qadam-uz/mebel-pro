@@ -353,7 +353,7 @@ function revert(title) {
   <div class="modal-h"><h3>Chegirma qo'shish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
-      <div class="field"><label>Turi</label><select><option value="pct">% Foiz</option><option value="abs">Fiks summa</option></select></div>
+      <div class="field"><label>Turi</label><mp-select><option value="pct">% Foiz</option><option value="abs">Fiks summa</option></mp-select></div>
       <div class="field"><label>Qiymat</label><input type="number" value="5" /></div>
     </div>
     <div class="field"><label>Sabab *</label><textarea rows="2" placeholder="Sababsiz chegirma berilmaydi"></textarea></div>
@@ -365,7 +365,7 @@ function revert(title) {
   <div class="modal-h"><h3>Kesuvchi tayinlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <p class="muted" style="font-size:13px;margin:0 0 14px">Tayinlangach buyurtma "Kesilmoqda" holatiga o'tadi va kesuvchi navbatida ko'rinadi. Ro'yxatda shu filialdagi kesuvchilar ko'rinadi.</p>
-    <div class="field"><label>Kesuvchi</label><select id="cutter-pick"></select></div>
+    <div class="field"><label>Kesuvchi</label><mp-select id="cutter-pick"></mp-select></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-cutter');toast('Kesuvchi tayinlandi · Kesilmoqda');setTimeout(()=>location.reload(),700)">Tayinlash</button></div>
 </div>
@@ -373,7 +373,7 @@ function revert(title) {
 <div class="modal" id="assign-edger">
   <div class="modal-h"><h3>Krom yopishtiruvchi tayinlash</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <div class="field"><label>Krom yopishtiruvchi</label><select id="edger-pick"></select></div>
+    <div class="field"><label>Krom yopishtiruvchi</label><mp-select id="edger-pick"></mp-select></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('assign-edger');toast('Krom yopishtiruvchi tayinlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>
 </div>
@@ -382,7 +382,7 @@ function revert(title) {
   <div class="modal-h"><h3>Kesish tugadi</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner info"><div class="ic">i</div><div class="grow">Quyidagi raqamlar chizma natijasidan olinadi — qo'lda kiritilmaydi. Material ombordan avtomatik chiqariladi.</div></div>
-    <div class="field"><label>Kim bajardi?</label><select id="cut-who"></select></div>
+    <div class="field"><label>Kim bajardi?</label><mp-select id="cut-who"></mp-select></div>
     <div id="cut-figures"></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('cut-done');toast('Kesish tugadi');setTimeout(()=>location.reload(),700)">Tasdiqlash</button></div>
@@ -392,7 +392,7 @@ function revert(title) {
   <div class="modal-h"><h3>Krom tugadi</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="banner info"><div class="ic">i</div><div class="grow">Krom uzunligi chizma natijasidan olinadi — qo'lda kiritilmaydi. Buyurtma "Tayyor" holatiga o'tadi.</div></div>
-    <div class="field"><label>Kim bajardi?</label><select id="band-who"></select></div>
+    <div class="field"><label>Kim bajardi?</label><mp-select id="band-who"></mp-select></div>
     <div id="band-figures"></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal>Bekor</button><button class="btn btn-acc" onclick="closeModal('band-done');toast('Krom tugadi · Tayyor');setTimeout(()=>location.reload(),700)">Tasdiqlash</button></div>

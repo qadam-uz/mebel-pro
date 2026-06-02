@@ -28,11 +28,12 @@
 
     <div class="filters" id="filters" hidden>
       <div class="input"><input id="q" placeholder="Ustaxona nomi yoki egasi..." oninput="render()" /></div>
-      <div class="chips" id="status-chips">
-        <button class="chip on" data-st="all">Hammasi</button>
-        <button class="chip" data-st="active">Faol</button>
-        <button class="chip" data-st="blocked">Bloklangan</button>
-      </div>
+      <label class="filter-label" for="status-filter">Holat</label>
+      <mp-select id="status-filter" onchange="stFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="blocked">Bloklangan</option>
+      </mp-select>
     </div>
 
     <div id="page-body"></div>
@@ -121,15 +122,6 @@ function render() {
         </td>
       </tr>`).join('')}</tbody></table></div>`;
 }
-
-document.getElementById('status-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip');
-  if (!b) return;
-  document.querySelectorAll('#status-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on');
-  stFilter = b.dataset.st;
-  render();
-});
 
 function createWorkshop() {
   const wn = document.getElementById('w-name').value || 'Yangi ustaxona';

@@ -2,6 +2,12 @@
 workfile.*
 tmp/
 
+# Dev workflow — gitignored per-run scratch + worktrees.
+# The playbooks under .workflows/playbooks/ stay committed (canon).
+.worktrees/
+.workflows/plan.md
+.workflows/progress.md
+
 # Claude machine-local files
 # ...
 

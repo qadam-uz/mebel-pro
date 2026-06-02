@@ -28,17 +28,18 @@
 
     <div class="filters">
       <div class="input"><input id="search" placeholder="Ism yoki login..." oninput="render()" /></div>
-      <select id="br-filter" onchange="render()">
+      <mp-select id="br-filter" onchange="render()">
         <option value="all">Barcha filiallar</option>
         <option value="yunusobod">Yunusobod</option>
         <option value="chilonzor">Chilonzor</option>
         <option value="yangiyol">Yangiyo'l</option>
-      </select>
-      <div class="chips">
-        <button class="chip on" data-st="all" onclick="setStatus('all')">Hammasi</button>
-        <button class="chip" data-st="active" onclick="setStatus('active')">Faol</button>
-        <button class="chip" data-st="blocked" onclick="setStatus('blocked')">Bloklangan</button>
-      </div>
+      </mp-select>
+      <label class="filter-label" for="status-filter">Holat</label>
+      <mp-select id="status-filter" onchange="setStatus(this.value)">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="blocked">Bloklangan</option>
+      </mp-select>
     </div>
 
     <div class="card">
@@ -60,7 +61,7 @@
     </div>
     <div class="field-row">
       <div class="field"><label>Login</label><input placeholder="asror" /></div>
-      <div class="field"><label>Asosiy filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+      <div class="field"><label>Asosiy filial</label><mp-select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></mp-select></div>
     </div>
     <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va faqat 1 marta ko'rsatiladi. Xodim kirgandan keyin parolni yangilash haqida ogohlantirish ko'radi.</div></div>
 
@@ -93,7 +94,12 @@ if (OWNER) document.getElementById('new-perms').innerHTML = SEED.permissions.map
   `<tr><td class="permission">${p.label}</td><td><input type="checkbox" /></td><td><input type="checkbox" /></td><td><input type="checkbox" /></td></tr>`).join('');
 
 let statusF = 'all';
-function setStatus(s) { statusF = s; document.querySelectorAll('[data-st]').forEach(b => b.classList.toggle('on', b.dataset.st === s)); render(); }
+function setStatus(s) {
+  statusF = s;
+  const sel = document.getElementById('status-filter');
+  if (sel) sel.value = s;
+  render();
+}
 
 function render() {
   const q = document.getElementById('search').value.trim().toLowerCase();

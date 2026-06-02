@@ -48,11 +48,12 @@
   </div>
 
   <div class="filters" style="margin-bottom: 14px">
-    <div class="chips">
-      <button class="chip on" data-filter="all" onclick="setFilter('all')">Hammasi</button>
-      <button class="chip" data-filter="unread" onclick="setFilter('unread')">O'qilmagan</button>
-      <button class="chip" data-filter="read" onclick="setFilter('read')">O'qilgan</button>
-    </div>
+    <label class="filter-label" for="read-filter">Holat</label>
+    <mp-select id="read-filter" onchange="setFilter(this.value)">
+      <option value="all">Hammasi</option>
+      <option value="unread">O'qilmagan</option>
+      <option value="read">O'qilgan</option>
+    </mp-select>
   </div>
 
   <div id="notes" style="max-width: 760px"></div>
@@ -68,7 +69,8 @@ const forced = new URLSearchParams(location.search).get('state');
 
 function setFilter(f) {
   filter = f;
-  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === f));
+  const sel = document.getElementById('read-filter');
+  if (sel) sel.value = f;
   render();
 }
 

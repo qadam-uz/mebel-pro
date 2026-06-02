@@ -27,11 +27,11 @@
     </div>
 
     <div class="filters" id="filters" hidden>
-      <select id="f-ws" onchange="render()"><option value="all">Barcha ustaxonalar</option></select>
-      <select id="f-mod" onchange="render()">
+      <mp-select id="f-ws" onchange="render()"><option value="all">Barcha ustaxonalar</option></mp-select>
+      <mp-select id="f-mod" onchange="render()">
         <option value="all">Hamma modullar</option>
         <option>orders</option><option>inventory</option><option>identity</option><option>finance</option><option>workshop</option>
-      </select>
+      </mp-select>
       <div class="input"><input id="q" placeholder="Obyekt ID..." oninput="render()" /></div>
     </div>
 

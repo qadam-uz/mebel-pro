@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 50
 ---
 
@@ -31,8 +31,8 @@ ikkita price). Platform operator'lar tomonidan curate qilinadi.
   branch material-selection picker'lariga koʻrinmaydi; inactive manufacturer'ning mavjud
   material'lari unga reference qilishda davom etadi (history saqlanadi). Delete yoʻq.
 - **List / get** — operator'lar barchasini koʻradi; workshop user'lar va client'lar faqat
-  oʻzlari koʻra olayotgan material'larga biriktirilgan manufacturer'larni filter chip
-  sifatida koʻradi.
+  oʻzlari koʻra olayotgan material'larga biriktirilgan manufacturer'larni dropdown
+  filter sifatida koʻradi.
 
 Manufacturer yaratish material-create form'idan side-trip (inline-add), supplier'ning
 stock-in'dan inline-add'i bilan bir xil shape'da.
@@ -162,11 +162,11 @@ kunlik summary buni takrorlaydi.
 
 Branch tab'lari ostida (va branch filter bilan owner-wide view'lar):
 
-- **Materials** (`manage_catalog`) — master'dan jadval (image, kind, manufacturer,
-  type/thickness, colour/decor, `panel` uchun panel size, branch'ning unit price,
-  status). Filter chip'lar: kind, manufacturer, type. **+ Material** → catalog picker
+- **Materials** (`manage_catalog`) — master'dan table (image, kind, manufacturer,
+  type/thickness, colour/decor, panels uchun panel size, branch unit price,
+  status). Filters: kind dropdown, manufacturer dropdown, type dropdown. **+ Material** → catalog picker
   (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
-  Edit · Activate / Deactivate. Delete yoʻq.
+  Edit · Activate / Deactivate. No Delete.
 - **Settings** (faqat owner) — branch'ning sozlamalari bir joyda. Bugun u **Prices**'ni
   ushlaydi — cutting rate (`cutting_rate_tiyin`, per panel) va krom yopishtirish ish haqi
   (`edge_banding_rate_tiyin`, per metre, barcha thickness'lar uchun); kelajakdagi branch
@@ -187,7 +187,7 @@ Branch tab'lari ostida (va branch filter bilan owner-wide view'lar):
   add / edit / deactivate. Asosan stock-in'dan inline yetib kelinadi.
 
 **Client app**'da cutting wizard'ning material step'larida: branch'ning active `panel`
-selection'i manufacturer / type / thickness chip'lari bilan searchable grid sifatida
+selection as a searchable grid with manufacturer / type / thickness dropdown filters (name,
 (name, manufacturer, type, thickness, colour, panel size, grain, image, **va**
 **branch'ning per panel price'i** faqat tanlangan source `shop` boʻlganda);
 single-select. Edge banding wizard'da per side catalog **edge** material sifatida

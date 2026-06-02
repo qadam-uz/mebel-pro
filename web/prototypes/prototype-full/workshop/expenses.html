@@ -35,21 +35,17 @@
 
     <section id="t-expense" data-panel-group="fx">
       <div class="filters">
-        <select>
+        <mp-select>
           <option>Bu oy</option><option>Oxirgi 30 kun</option><option>Yil boshidan</option>
-        </select>
-        <select>
+        </mp-select>
+        <mp-select>
           <option>Hamma kategoriyalar</option>
           <option>Ijara</option><option>Kommunal</option><option>Xom ashyo</option>
           <option>Aksessuar</option><option>Transport</option><option>Texnika</option>
           <option>Marketing</option><option>Soliqlar</option><option>Maosh</option><option>Boshqalar</option>
-        </select>
-        <select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></select>
-        <div class="chips">
-          <button class="chip on">Yozilgan</button>
-          <button class="chip">Bekor qilingan</button>
-          <button class="chip">Hammasi</button>
-        </div>
+        </mp-select>
+        <mp-select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></mp-select>
+        <mp-select aria-label="Holat filtri"><option>Yozilgan</option><option>Bekor qilingan</option><option>Hammasi</option></mp-select>
       </div>
       <div class="card">
         <table class="tbl">
@@ -61,14 +57,10 @@
 
     <section id="t-income" data-panel-group="fx" hidden>
       <div class="filters">
-        <select><option>Bu oy</option><option>Oxirgi 30 kun</option><option>Yil boshidan</option></select>
-        <select><option>Hamma turlar</option><option>Buyurtma to'lovi</option><option>Boshqa</option></select>
-        <select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></select>
-        <div class="chips">
-          <button class="chip on">Yozilgan</button>
-          <button class="chip">Bekor qilingan</button>
-          <button class="chip">Hammasi</button>
-        </div>
+        <mp-select><option>Bu oy</option><option>Oxirgi 30 kun</option><option>Yil boshidan</option></mp-select>
+        <mp-select><option>Hamma turlar</option><option>Buyurtma to'lovi</option><option>Boshqa</option></mp-select>
+        <mp-select><option>Hamma filiallar</option><option>Yunusobod</option><option>Chilonzor</option></mp-select>
+        <mp-select aria-label="Holat filtri"><option>Yozilgan</option><option>Bekor qilingan</option><option>Hammasi</option></mp-select>
       </div>
       <div class="card">
         <table class="tbl">
@@ -86,14 +78,14 @@
   <div class="modal-h"><h3>Xarajat yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field-row">
-      <div class="field"><label>Kategoriya</label><select>
+      <div class="field"><label>Kategoriya</label><mp-select>
         <option value="rent">Ijara</option><option value="utilities">Kommunal</option>
         <option value="raw_materials">Xom ashyo</option><option value="supplies">Aksessuar</option>
         <option value="transport">Transport</option><option value="equipment">Texnika</option>
         <option value="marketing">Marketing</option><option value="taxes_and_fees">Soliqlar</option>
         <option value="salary">Maosh</option><option value="other">Boshqalar</option>
-      </select></div>
-      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Ustaxona-keng</option></select></div>
+      </mp-select></div>
+      <div class="field"><label>Filial</label><mp-select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option><option>Ustaxona-keng</option></mp-select></div>
     </div>
     <div class="field"><label>Tavsif</label><input placeholder="Masalan: Bahodir T. · 13–15 may · 19 panel" /></div>
     <div class="field-row">
@@ -110,18 +102,18 @@
   <div class="modal-h"><h3>Tushum yozish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Turi</label>
-      <select id="inc-type" onchange="document.getElementById('inc-order-wrap').style.display = this.value === 'order_payment' ? 'block' : 'none'">
+      <mp-select id="inc-type" onchange="document.getElementById('inc-order-wrap').style.display = this.value === 'order_payment' ? 'block' : 'none'">
         <option value="order_payment">Buyurtma to'lovi</option>
         <option value="other">Boshqa tushum</option>
-      </select>
+      </mp-select>
     </div>
-    <div class="field" id="inc-order-wrap"><label>Buyurtma</label><select id="inc-order"></select></div>
+    <div class="field" id="inc-order-wrap"><label>Buyurtma</label><mp-select id="inc-order"></mp-select></div>
     <div class="field-row">
       <div class="field"><label>Summa (to'liq yoki qisman)</label><input value="3 142 000" /></div>
-      <div class="field"><label>Usul</label><select><option value="cash">Naqd</option><option value="bank_transfer">Bank o'tkazma</option><option value="other">Boshqa</option></select></div>
+      <div class="field"><label>Usul</label><mp-select><option value="cash">Naqd</option><option value="bank_transfer">Bank o'tkazma</option><option value="other">Boshqa</option></mp-select></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+      <div class="field"><label>Filial</label><mp-select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></mp-select></div>
       <div class="field"><label>Qabul sanasi</label><input type="date" value="2026-05-16" /></div>
     </div>
     <div class="field"><label>Izoh (ixtiyoriy)</label><input placeholder="kassa raqami yoki bank o'tkazma raqami" /></div>

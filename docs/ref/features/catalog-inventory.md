@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 50
 ---
 
@@ -31,8 +31,8 @@ operators.
   material creates and to branch material-selection pickers; existing materials of an
   inactive manufacturer keep referencing it (history preserved). No delete.
 - **List / get** — operators see all; workshop users and clients see only the
-  manufacturers attached to the materials they can already see, surfaced as a filter
-  chip.
+  manufacturers attached to the materials they can already see, surfaced as a dropdown
+  filter.
 
 Creating a manufacturer is a side-trip from the material-create form (inline-add), the
 same shape as suppliers' inline-add from stock-in.
@@ -156,7 +156,7 @@ Under a branch's tabs (and owner-wide views with a branch filter):
 
 - **Materials** (`manage_catalog`) — table from the master (image, kind, manufacturer,
   type/thickness, colour/decor, panel size for panels, the branch's unit price,
-  status). Filter chips: kind, manufacturer, type. **+ Material** → catalog picker
+  status). Filters: kind dropdown, manufacturer dropdown, type dropdown. **+ Material** → catalog picker
   (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
   Edit · Activate / Deactivate. No Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
@@ -178,7 +178,7 @@ Under a branch's tabs (and owner-wide views with a branch filter):
   add / edit / deactivate. Mostly reached inline from stock-in.
 
 In the **client app** cutting wizard's material steps: the branch's active `panel`
-selection as a searchable grid with manufacturer / type / thickness chips (name,
+selection as a searchable grid with manufacturer / type / thickness dropdown filters (name,
 manufacturer, type, thickness, colour, panel size, grain, image, **and the branch's
 price per panel** only when the picked source is `shop`); single-select. Edge banding
 is chosen per side as a catalog **edge** material in the wizard

@@ -29,28 +29,29 @@
     </div>
 
     <div id="ord-filters" class="filters">
-      <div class="chips">
-        <button class="chip on" data-state="all" onclick="setStateFilter('all')">Hammasi</button>
-        <button class="chip" data-state="active" onclick="setStateFilter('active')">Faol</button>
-        <button class="chip" data-state="new" onclick="setStateFilter('new')">Yangi</button>
-        <button class="chip" data-state="confirmed" onclick="setStateFilter('confirmed')">Tasdiqlangan</button>
-        <button class="chip" data-state="cutting" onclick="setStateFilter('cutting')">Kesilmoqda</button>
-        <button class="chip" data-state="edge_banding" onclick="setStateFilter('edge_banding')">Kromda</button>
-        <button class="chip" data-state="ready" onclick="setStateFilter('ready')">Tayyor</button>
-        <button class="chip" data-state="completed" onclick="setStateFilter('completed')">Tugatilgan</button>
-        <button class="chip" data-state="cancelled" onclick="setStateFilter('cancelled')">Bekor qilingan</button>
-      </div>
+      <label class="filter-label" for="state-filter">Holat</label>
+      <mp-select id="state-filter" onchange="setStateFilter(this.value)">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="new">Yangi</option>
+        <option value="confirmed">Tasdiqlangan</option>
+        <option value="cutting">Kesilmoqda</option>
+        <option value="edge_banding">Kromda</option>
+        <option value="ready">Tayyor</option>
+        <option value="completed">Tugatilgan</option>
+        <option value="cancelled">Bekor qilingan</option>
+      </mp-select>
       <label class="filter-label" for="search">Qidirish</label>
       <div class="input">
         <input id="search" aria-label="Buyurtma ID yoki mijoz nomi" placeholder="ID yoki mijoz nomi..." oninput="render()" />
       </div>
-      <select id="date-filter" aria-label="Sana filtri" onchange="render()">
+      <mp-select id="date-filter" aria-label="Sana filtri" onchange="render()">
         <option value="all">Barcha sanalar</option>
         <option value="today">Bugun</option>
         <option value="week">Oxirgi 7 kun</option>
         <option value="month">May oyi</option>
-      </select>
-      <select id="branch-filter" aria-label="Filial filtri" onchange="render()"></select>
+      </mp-select>
+      <mp-select id="branch-filter" aria-label="Filial filtri" onchange="render()"></mp-select>
     </div>
 
     <!-- BOARD -->
@@ -120,7 +121,8 @@ function setMode(m) {
 }
 function setStateFilter(s) {
   stateFilter = s;
-  document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('on', b.dataset.state === s));
+  const sel = document.getElementById('state-filter');
+  if (sel) sel.value = s;
   if (TERMINAL.includes(s) && mode === 'board') {
     mode = 'table';
     toast('Terminal holatlar jadval rejimida ochildi');

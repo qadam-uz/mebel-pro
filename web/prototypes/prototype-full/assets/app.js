@@ -34,7 +34,7 @@ window.toast = (msg, kind = 'ok') => {
 // ---------- Modal ----------
 const _focusableSel = [
   'a[href]', 'area[href]', 'button:not([disabled])', 'input:not([disabled])',
-  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
+  'mp-select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
 ].join(',');
 const _activeModal = () => [...document.querySelectorAll('.modal.on')].at(-1);
 const _modalFocusables = modal =>
@@ -54,7 +54,7 @@ window.openModal = (id) => {
   requestAnimationFrame(() => {
     const fieldFirst = [
       'input:not([disabled]):not([type="hidden"])',
-      'select:not([disabled])',
+      'mp-select:not([disabled])',
       'textarea:not([disabled])',
       'button:not([disabled]):not(.x):not([data-close-modal])'
     ].join(',');
@@ -62,6 +62,291 @@ window.openModal = (id) => {
     target.focus?.({ preventScroll: true });
   });
 };
+
+// ---------- Mebel Pro select primitive ----------
+// Native browser selects are not used in the prototype UI. <mp-select> keeps
+// the same value/options contract page scripts expect, but renders a branded,
+// keyboard-operable dropdown with a body-level popover so forms inside modals
+// are not clipped.
+(() => {
+  if (customElements.get('mp-select')) return;
+
+  let openSelect = null;
+  let idSeq = 0;
+  const chevronSvg = () => window.icon
+    ? window.icon('chevron-down', { size: 15 })
+    : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+
+  class MPSelect extends HTMLElement {
+    constructor() {
+      super();
+      this._value = '';
+      this._activeIndex = -1;
+      this._listId = `mp-select-list-${++idSeq}`;
+      this._shadow = this.attachShadow({ mode: 'open' });
+      this._shadow.innerHTML = `
+        <style>
+          :host { display:inline-flex; min-width:0; width:var(--mp-select-width, auto); vertical-align:middle; }
+          :host([hidden]) { display:none !important; }
+          .trigger {
+            width:100%;
+            min-width:var(--mp-select-min-width, 0);
+            min-height:var(--mp-select-height, 40px);
+            display:inline-flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            padding:var(--mp-select-padding, 9px 12px);
+            border:1px solid var(--line-strong);
+            border-radius:var(--mp-select-radius, var(--r-sm));
+            background:var(--elev);
+            color:var(--ink-12);
+            box-shadow:var(--mp-select-shadow, var(--sh-1));
+            font:var(--mp-select-font, 500 13.5px/1.25 var(--f-ui));
+            text-align:left;
+            cursor:pointer;
+            transition:background .14s ease, border-color .14s ease, box-shadow .14s ease, transform .08s ease;
+          }
+          .trigger:hover { background:#F8FAFC; border-color:var(--ink-7); box-shadow:var(--sh-2); }
+          .trigger:focus-visible { outline:0; border-color:var(--accent); box-shadow:var(--ring); }
+          :host([open]) .trigger { border-color:var(--accent); box-shadow:var(--ring); }
+          :host([disabled]) .trigger { opacity:.55; cursor:not-allowed; background:var(--sunk); box-shadow:none; }
+          .label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+          .chev { flex:none; color:var(--ink-6); display:grid; place-items:center; transition:transform .16s ease, color .14s ease; }
+          :host([open]) .chev { transform:rotate(180deg); color:var(--accent); }
+        </style>
+        <button class="trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+          <span class="label"></span>
+          <span class="chev">${chevronSvg()}</span>
+        </button>`;
+      this._button = this._shadow.querySelector('.trigger');
+      this._label = this._shadow.querySelector('.label');
+      this._button.onclick = e => {
+        e.stopPropagation();
+        this.toggle();
+      };
+      this._button.onkeydown = e => this._onTriggerKey(e);
+      this._onHostClick = e => {
+        if (e.composedPath().includes(this._button)) return;
+        this.toggle();
+      };
+      this.onclick = this._onHostClick;
+      this._observer = new MutationObserver(() => this._syncOptions());
+    }
+
+    connectedCallback() {
+      this.setAttribute('role', 'group');
+      this._observer.observe(this, { childList: true, subtree: true, attributes: true, attributeFilter: ['value', 'selected', 'disabled', 'aria-label', 'aria-labelledby', 'placeholder'] });
+      this._syncOptions();
+    }
+
+    disconnectedCallback() {
+      this.closeDropdown();
+      this._observer.disconnect();
+    }
+
+    get options() {
+      return Array.from(this.querySelectorAll('option'));
+    }
+
+    get selectedIndex() {
+      const current = this.value;
+      return this.options.findIndex(o => o.value === current);
+    }
+
+    set selectedIndex(idx) {
+      const opt = this.options[idx];
+      if (opt) this.value = opt.value;
+    }
+
+    get value() {
+      const opts = this.options;
+      if (opts.some(o => o.value === this._value)) return this._value || '';
+      const selected = opts.find(o => o.hasAttribute('selected')) || opts[0];
+      return selected?.value || '';
+    }
+
+    set value(next) {
+      this._value = String(next ?? '');
+      this._value = this.value;
+      this._markLightSelection();
+      this._renderValue();
+      if (this.hasAttribute('open')) this._renderPopover();
+    }
+
+    get disabled() {
+      return this.hasAttribute('disabled');
+    }
+
+    set disabled(next) {
+      this.toggleAttribute('disabled', !!next);
+    }
+
+    focus(opts) {
+      this._button.focus(opts);
+    }
+
+    toggle() {
+      if (this.disabled) return;
+      this.hasAttribute('open') ? this.closeDropdown() : this.openDropdown();
+    }
+
+    openDropdown() {
+      if (this.disabled) return;
+      if (openSelect && openSelect !== this) openSelect.closeDropdown();
+      openSelect = this;
+      this.setAttribute('open', '');
+      this._button.setAttribute('aria-expanded', 'true');
+      this._button.setAttribute('aria-controls', this._listId);
+      this._activeIndex = Math.max(0, this.selectedIndex);
+      this._renderPopover();
+      this._positionPopover();
+      window.addEventListener('resize', this._boundPosition ||= (() => this._positionPopover()), true);
+      window.addEventListener('scroll', this._boundPosition, true);
+    }
+
+    closeDropdown({ returnFocus = false } = {}) {
+      this.removeAttribute('open');
+      this._button?.setAttribute('aria-expanded', 'false');
+      document.getElementById(this._listId)?.remove();
+      window.removeEventListener('resize', this._boundPosition, true);
+      window.removeEventListener('scroll', this._boundPosition, true);
+      if (openSelect === this) openSelect = null;
+      if (returnFocus) this.focus({ preventScroll: true });
+    }
+
+    _syncOptions() {
+      this._value = this.value;
+      this._markLightSelection();
+      this._renderValue();
+      if (this.hasAttribute('open')) this._renderPopover();
+    }
+
+    _markLightSelection() {
+      const current = this.value;
+      this.options.forEach(o => {
+        const on = o.value === current;
+        o.selected = on;
+        o.toggleAttribute('selected', on);
+      });
+    }
+
+    _renderValue() {
+      const current = this.value;
+      const opt = this.options.find(o => o.value === current);
+      this._label.textContent = opt?.textContent?.trim() || this.getAttribute('placeholder') || 'Tanlang';
+      this._button.disabled = this.disabled;
+      const name = this.getAttribute('aria-label') || this.getAttribute('aria-labelledby');
+      if (!name) {
+        const label = this.id ? document.querySelector(`label[for="${this.id}"]`) : null;
+        const aria = label?.textContent?.trim() || this._label.textContent;
+        if (aria) this._button.setAttribute('aria-label', aria);
+      }
+    }
+
+    _renderPopover() {
+      const opts = this.options;
+      let pop = document.getElementById(this._listId);
+      if (!pop) {
+        pop = document.createElement('div');
+        pop.id = this._listId;
+        pop.className = 'mp-select-popover';
+        pop.setAttribute('role', 'listbox');
+        pop.addEventListener('keydown', e => this._onPopoverKey(e));
+        document.body.appendChild(pop);
+      }
+      pop.innerHTML = opts.length ? opts.map((o, i) => `
+        <button class="mp-select-option${i === this._activeIndex ? ' is-active' : ''}" type="button" role="option" data-i="${i}" aria-selected="${o.value === this._value ? 'true' : 'false'}">
+          <span>${o.textContent?.trim() || o.value}</span>
+          ${o.value === this.value ? `<span class="ck">${window.icon ? window.icon('check', { size: 14 }) : '✓'}</span>` : ''}
+        </button>`).join('') : '<div class="mp-select-empty">Variant yo\'q</div>';
+      pop.querySelectorAll('.mp-select-option').forEach(btn => {
+        btn.addEventListener('click', () => this._choose(Number(btn.dataset.i)));
+      });
+      const active = pop.querySelector('.is-active');
+      active?.scrollIntoView({ block: 'nearest' });
+      this._positionPopover();
+    }
+
+    _positionPopover() {
+      const pop = document.getElementById(this._listId);
+      if (!pop || !this.isConnected) return;
+      const r = this.getBoundingClientRect();
+      const gap = 6;
+      const vw = document.documentElement.clientWidth;
+      const vh = document.documentElement.clientHeight;
+      const width = Math.max(r.width, Number(this.getAttribute('data-popover-min-width')) || 180);
+      pop.style.minWidth = `${width}px`;
+      pop.style.maxWidth = `${Math.min(360, vw - 16)}px`;
+      const h = Math.min(pop.scrollHeight, 320);
+      const below = vh - r.bottom;
+      const openUp = below < h + gap && r.top > below;
+      pop.style.left = `${Math.min(Math.max(8, r.left), vw - width - 8)}px`;
+      pop.style.top = `${openUp ? Math.max(8, r.top - h - gap) : Math.min(vh - h - 8, r.bottom + gap)}px`;
+      pop.style.maxHeight = `${Math.min(320, openUp ? r.top - 16 : vh - r.bottom - 16)}px`;
+    }
+
+    _choose(idx) {
+      const opt = this.options[idx];
+      if (!opt || opt.disabled) return;
+      const prev = this.value;
+      this.value = opt.value;
+      this.closeDropdown({ returnFocus: true });
+      if (prev !== this.value) {
+        this.dispatchEvent(new Event('input', { bubbles: true }));
+        this.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    _move(delta) {
+      const opts = this.options;
+      if (!opts.length) return;
+      let idx = this._activeIndex < 0 ? this.selectedIndex : this._activeIndex;
+      idx = Math.max(0, Math.min(opts.length - 1, idx + delta));
+      this._activeIndex = idx;
+      this._renderPopover();
+    }
+
+    _onTriggerKey(e) {
+      if (['ArrowDown', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault();
+        if (!this.hasAttribute('open')) this.openDropdown();
+        this._move(e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.toggle();
+      } else if (e.key === 'Escape') {
+        this.closeDropdown();
+      }
+    }
+
+    _onPopoverKey(e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this._move(e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this._choose(this._activeIndex);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.closeDropdown({ returnFocus: true });
+      }
+    }
+  }
+
+  customElements.define('mp-select', MPSelect);
+
+  document.addEventListener('click', e => {
+    if (!openSelect) return;
+    const pop = document.getElementById(openSelect._listId);
+    if (openSelect.contains(e.target) || pop?.contains(e.target)) return;
+    openSelect.closeDropdown();
+  }, true);
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Tab' && openSelect) openSelect.closeDropdown();
+  }, true);
+})();
 window.closeModal = (id) => {
   const modals = id ? [document.getElementById(id)].filter(Boolean) : [...document.querySelectorAll('.modal.on')];
   modals.forEach(modal => {
@@ -408,7 +693,7 @@ window.labelPrototypeControls = (root = document) => {
     const text = (el.getAttribute('placeholder') || '').replace(/[.…]+$/g, '').trim();
     if (text) el.setAttribute('aria-label', text);
   });
-  root.querySelectorAll('select').forEach(el => {
+  root.querySelectorAll('mp-select').forEach(el => {
     if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return;
     if (el.id && document.querySelector(`label[for="${el.id}"]`)) return;
     const opt = el.options?.[0]?.textContent?.trim();
@@ -422,7 +707,7 @@ window.makeClickableTargetsAccessible = (root = document) => {
     '.ord-card[onclick]', '.prod-cell[onclick]', 'article[onclick]', 'div[onclick]'
   ].join(',');
   root.querySelectorAll(sel).forEach(el => {
-    if (el.matches('button,a,input,select,textarea') || el.dataset.a11yClick === '1') return;
+    if (el.matches('button,a,input,mp-select,textarea') || el.dataset.a11yClick === '1') return;
     el.dataset.a11yClick = '1';
     if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
     if (!el.hasAttribute('role')) {

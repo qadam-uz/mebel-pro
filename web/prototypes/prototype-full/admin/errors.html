@@ -24,17 +24,17 @@
     </div>
 
     <div class="filters" id="filters" hidden>
-      <select id="f-mod" onchange="render()"><option value="all">Hamma modullar</option><option>orders</option><option>inventory</option><option>cutting</option><option>identity</option></select>
-      <select id="f-thr" onchange="render()">
+      <mp-select id="f-mod" onchange="render()"><option value="all">Hamma modullar</option><option>orders</option><option>inventory</option><option>cutting</option><option>identity</option></mp-select>
+      <mp-select id="f-thr" onchange="render()">
         <option value="0">Har qanday count</option>
         <option value="3">24 soat ≥ 3</option>
         <option value="10">24 soat ≥ 10</option>
-      </select>
-      <div class="chips" id="r-chips">
-        <button class="chip on" data-r="all">Hammasi</button>
-        <button class="chip" data-r="open">Ochiq</button>
-        <button class="chip" data-r="resolved">Tasdiqlangan</button>
-      </div>
+      </mp-select>
+      <mp-select id="f-resolved" onchange="rFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="open">Ochiq</option>
+        <option value="resolved">Tasdiqlangan</option>
+      </mp-select>
     </div>
 
     <div id="page-body"></div>
@@ -151,12 +151,6 @@ function showErr(code) {
   rb.onclick = () => { closeModal('m-detail'); setTimeout(() => toggleResolve(code), 50); };
   openModal('m-detail');
 }
-
-document.getElementById('r-chips').addEventListener('click', ev => {
-  const b = ev.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('#r-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on'); rFilter = b.dataset.r; render();
-});
 
 render();
 if (preselect && errByCode[preselect]) setTimeout(() => showErr(preselect), 200);

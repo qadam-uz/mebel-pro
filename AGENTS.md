@@ -80,8 +80,21 @@ CI (`.github/workflows/ci.yml`) mirrors these gates and auto-deploys to the VPS 
 
 ## Development workflow
 
-Feature work follows: **brainstorm → write docs (on a feature branch) → human review of docs → break into a plan → execute → review/fix → verify → human verify.**
-Use subagents with session fork mode for long running jobs to keep main conversation clean and focused.
+Every task is **triaged** into one of two flows before any work starts. The
+router lives here (always loaded); the step-by-step procedures live in
+`.workflows/playbooks/` and you **MUST read the matching playbook and follow it
+exactly** before acting.
+
+| Task                                                                                                                                                       | Flow                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Trivial** — a localized, low-risk change with no design decisions: typo, copy, comment, config nudge, an obvious one-line fix, a dependency bump          | [`.workflows/playbooks/trivial.md`](.workflows/playbooks/trivial.md) |
+| **Complex** — everything else: anything needing a decision, touching >1 module, adding surface (API / schema / entity / feature), or where the "how" isn't obvious | [`.workflows/playbooks/complex.md`](.workflows/playbooks/complex.md) |
+
+- **When in doubt, go complex.** There is no middle tier — medium work runs the full pipeline.
+- **Promotion:** if a trivial task reveals a decision, a missing acceptance criterion, a missing/contested requirement, or cross-cutting changes → **stop, switch to complex, restart at its Plan stage.** Never finish a complex task on the trivial flow.
+- Worktrees (`.worktrees/`) and per-run scratch (`.workflows/plan.md`, `.workflows/progress.md`) are gitignored; the playbooks under `.workflows/playbooks/` are committed canon.
+
+Use subagents for long-running or fan-out work to keep the main conversation focused.
 
 ### Skills are NON-NEGOTIABLE
 

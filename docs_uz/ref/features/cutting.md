@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 80
 ---
 
@@ -219,7 +219,7 @@ Parts table:
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Panel** | platform catalog'ning searchable dropdown'i (`panel` kind); har bir result manufacturer + decor / color + thickness + size'ni koʻrsatadi; relevance / decor / manufacturer boʻyicha sortable. Tepada filter chip'lar: `Manufacturer` (multi-select), `Type` (`dsp` / `mdf` / `plywood` / …), `Thickness`. `preferred_branch_id` set boʻlganda, picker default'da shu branch'ning selection'iga pre-filter qilinadi; "Show all catalog" toggle uni kengaytiradi. Tanlangan row tanlangan panel'ning qisqa label'ini koʻrsatadi (masalan, `Egger DSP H1334 18 mm · 2750×1830`) inline source chip bilan: `From shop` ↔ `I'll bring it` |
+| **Panel** | platform catalog (`panel` kind) uchun searchable dropdown; har result manufacturer + decor / colour + thickness + size ko'rsatadi; relevance / decor / manufacturer bo'yicha sort qilinadi. Yuqoridagi dropdown filters: `Manufacturer` (multi-select), `Type` (`dsp` / `mdf` / `plywood` / …), `Thickness`. `preferred_branch_id` set bo'lsa, picker defaultda shu branch selection'iga pre-filtered bo'ladi; `Show all catalog` toggle uni kengaytiradi. Selected row picked panel short label'ini ko'rsatadi (masalan, `Egger DSP H1334 18 mm · 2750×1830`) va inline source chip beradi: `From shop` ↔ `I'll bring it` |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
@@ -240,11 +240,11 @@ oʻzida** paydo boʻladi — control emas, passive cue.
   client'ga picker'dan chiqmasdan individual sides'ni toggle qilishga beradi. Hech qanday
   side tanlanmaganida tape tanlash uni four sides'ga qoʻllaydi; sides tanlangandan keyin
   tape tanlash faqat oʻsha sides'ga qoʻllaydi.
-- **Material choice bitta ranked list.** Panel bilan bir xil `decor_code`'dagi edges
-  **Recommended** marker bilan birinchi pin qilinadi; same-`color` matches keyin keladi;
-  boshqa active edge materials shu list'da davom etadi. Search va thickness chips shu bitta
-  list'ni filter qiladi. Panel tanlanmagan boʻlsa, picker matching panel tanlangandan keyin
-  chiqishini aytadi, lekin catalog search'ni baribir ochiq qoldiradi.
+- **Material choice is one ranked list.** Panel bilan bir xil `decor_code`ga ega edges
+  birinchi pinned bo'ladi va **Recommended** marker oladi; same-`color` matches undan
+  keyin keladi; qolgan barcha active edge materials shu bitta listda davom etadi. Search
+  va thickness dropdown shu listni filter qiladi. Panel tanlanmagan bo'lsa, picker matching
+  panel tanlangandan keyin chiqishini aytadi, lekin catalog search'ni baribir ruxsat qiladi.
 - **Source default holatda quiet.** `shop` default. Segmented source control (`Workshop
   supplies` / `I'll bring it`) currently banded sides'ga qoʻllanadi; mixed per-side source
   diagram orqali mumkin boʻlib qoladi, lekin separate step sifatida koʻrsatilmaydi.
@@ -299,15 +299,14 @@ Success'da, panel uchta region bilan view'ga scroll qiladi:
 1. **Headline metrics.**
    - Weighted **waste %** (barcha panel material'lar boʻyicha).
    - **Panels used** total va per-material breakdown.
-   - **Edge tape** total length — **consumed** metr'lar (geometric banding + master'lar
-     qoldiradigan va bill qiladigan standart ~3 sm/side trim), metr'ga ega har bir edge
-     material'ni list qiluvchi breakdown bilan (masalan, `Rehau H1334 0.4 — 8.4 m ·
-     Rehau H1334 2.0 — 3.2 m`). Baʼzi side'lar `own` boʻlsa, breakdown har bir material
-     uchun shop va own metr'larni ajratadi. Qisqa note figura standart per-side trim'ni
-     oʻz ichiga olishini tushuntiradi — client'ga bu **Stanok haqqi** deb koʻrsatiladi
-     (canon term: *trim overhang*): u client bill qilinadigan va stock consume qiladigan
-     narsa ([`orders.md`](orders.md#pricing)); trim fixed constant boʻlgani uchun bu
-     haqiqiy figura, branch kerak emas.
+   - **Edge tape** total length — **consumed** metres (geometric banding + har banded side
+     uchun fixed 30 mm trim overhang), metres bor har bir edge material bo'yicha breakdown
+     bilan (masalan, `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`). Ba'zi
+     sides `own` bo'lsa, breakdown shop va own metres'ni material bo'yicha split qiladi.
+     Metric compact split ko'rsatadi, masalan `edge sides 12.8 m + trim overhang 0.6 m`;
+     flow ichida uzun explanation message ko'rsatilmaydi. Trim overhang fixed system constant
+     bo'lgani uchun bu cutting result'dan boshlab real figure; faqat price branch rates'ni
+     kutadi ([`orders.md`](orders.md#pricing)).
    - **Cut length total** (m), informational.
    - **Parts placed** count, masalan, `24 / 24` ✓ (agar baʼzilari sigʻmasa per-part
      list bilan qizil).

@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 30
 ---
 
@@ -272,11 +272,11 @@ orders**). Branch placement'da, aniq cutting'ga qarshi tanlanadi — draft'ning
   → `/c/orders/:id` banner bilan: *"Order placed — the workshop will review and call
   you."*
 
-- **My orders** (`/c/orders`) — filter chip'lari (All / Active / Completed /
-  Cancelled), order number boʻyicha search, card'lar (order #, branch, date, status
-  badge, **frozen total** — placement'dan koʻrsatiladi, hech qachon "price after
-  confirm" emas chunki pricing creation'da muzlatiladi — primary action "Track" order
-  detail'ni ochadi). Empty: "No orders yet — start from a cutting."
+- **My orders** (`/c/orders`) — status dropdown (All / Active / Completed / Cancelled),
+  order number bo'yicha search, cards (order #, branch, date, status badge, **frozen
+  total** — placement'dan ko'rsatiladi, hech qachon "price after confirm" emas, chunki pricing
+  creation'da frozen — primary action "Track", order detail'ni ochadi). Empty: "No orders
+  yet — start from a cutting."
 - **Order detail** (`/c/orders/:id`) — header (order #, branch, status badge,
   vaqtlar). Client-facing status **besh phase**: Placed → **Confirmed** → **In
   production** → **Ready** → Done — `cutting`/`edge_banding`'ni "In production"'ga
@@ -302,7 +302,7 @@ hammasini ushlab turishi mumkin.
     oʻrtasida drag yoʻq** — status oʻzgarishlari card'ning action menu orqali
     boradi.
   - **Table** — sortable; ustunlar: order #, branch (multi-branch boʻlsa), client,
-    status, total, items, created, action menu. Filterlar: status chip'lar, search,
+    total, items, created, action menu. Filters: status dropdown, search, date range,
     date range, branch. Empty: "No orders in your branch(es)." Zero branches: "No
     branches assigned — ask your workshop owner."
 - **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client

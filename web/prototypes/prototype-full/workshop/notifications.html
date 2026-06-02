@@ -37,13 +37,14 @@
     </div>
 
     <div class="filters">
-      <div class="chips">
-        <button class="chip on" data-f="all" onclick="setF('all')">Hammasi</button>
-        <button class="chip" data-f="unread" onclick="setF('unread')">O'qilmagan</button>
-        <button class="chip" data-f="order" onclick="setF('order')">Buyurtmalar</button>
-        <button class="chip" data-f="inventory" onclick="setF('inventory')">Ombor</button>
-        <button class="chip" data-f="finance" onclick="setF('finance')">Moliya</button>
-      </div>
+      <label class="filter-label" for="kind-filter">Tur</label>
+      <mp-select id="kind-filter" onchange="setF(this.value)">
+        <option value="all">Hammasi</option>
+        <option value="unread">O'qilmagan</option>
+        <option value="order">Buyurtmalar</option>
+        <option value="inventory">Ombor</option>
+        <option value="finance">Moliya</option>
+      </mp-select>
     </div>
 
     <div id="list" style="max-width: 800px"></div>
@@ -57,7 +58,12 @@
 renderWorkshopShell();
 
 let filter = 'all';
-function setF(f) { filter = f; document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === f)); render(); }
+function setF(f) {
+  filter = f;
+  const sel = document.getElementById('kind-filter');
+  if (sel) sel.value = f;
+  render();
+}
 function markAll() { markAllNotifsRead(); toast('Hammasi o\'qildi'); render(); }
 
 function render() {

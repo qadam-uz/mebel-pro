@@ -29,17 +29,20 @@
     <div class="filters">
       <label class="filter-label" for="q">Qidirish</label>
       <div class="input"><input id="q" aria-label="Material nomi" placeholder="Material nomi..." oninput="render()" /></div>
-      <div class="chips" id="kind-chips">
-        <button class="chip on" data-k="all">Hammasi</button>
-        <button class="chip" data-k="panel">Panel</button>
-        <button class="chip" data-k="edge">Krom lentasi</button>
-      </div>
-      <div class="chips" id="mfr-chips" style="margin-top:6px"></div>
-      <div class="chips" id="st-chips">
-        <button class="chip on" data-s="all">Hammasi</button>
-        <button class="chip" data-s="active">Faol</button>
-        <button class="chip" data-s="inactive">Faol emas</button>
-      </div>
+      <label class="filter-label" for="kind-filter">Tur</label>
+      <mp-select id="kind-filter" onchange="kFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="panel">Panel</option>
+        <option value="edge">Krom lentasi</option>
+      </mp-select>
+      <label class="filter-label" for="mfr-filter">Manufacturer</label>
+      <mp-select id="mfr-filter" onchange="mFilter = this.value; render()"></mp-select>
+      <label class="filter-label" for="status-filter">Holat</label>
+      <mp-select id="status-filter" onchange="sFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="inactive">Faol emas</option>
+      </mp-select>
     </div>
 
     <div id="page-body"></div>
@@ -51,17 +54,17 @@
   <div class="modal-h"><h3 id="mat-title">Yangi material</h3><button class="x" data-close-modal="m-mat"><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <div class="field"><label>Material turi (kind)</label>
-      <select id="f-kind" onchange="syncKind()">
+      <mp-select id="f-kind" onchange="syncKind()">
         <option value="panel">Panel (LDSP / MDF / fanera · panel)</option>
         <option value="edge">Krom lentasi (PVC tasma · metr)</option>
-      </select>
+      </mp-select>
       <div class="hint" id="kind-locked" hidden>Mavjud materialning kind'i o'zgartirilmaydi.</div>
     </div>
 
     <div class="field">
       <label for="f-mfr">Manufacturer</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="f-mfr"></select>
+        <mp-select id="f-mfr"></mp-select>
         <button class="btn btn-outline btn-sm" type="button" onclick="openInlineMfr()"><i class="ic" data-icon="plus"></i> Manufacturer</button>
       </div>
       <div class="hint">Yangi manufacturer qo'shilsa, material formasi yopilmaydi.</div>
@@ -69,7 +72,7 @@
 
     <div class="field" id="f-type-wrap">
       <label>Panel turi (type)</label>
-      <select id="f-type"><option value="dsp">LDSP</option><option value="mdf">MDF</option><option value="plywood">Fanera</option><option value="natural_wood">Tabiiy yog'och</option><option value="other">Boshqa</option></select>
+      <mp-select id="f-type"><option value="dsp">LDSP</option><option value="mdf">MDF</option><option value="plywood">Fanera</option><option value="natural_wood">Tabiiy yog'och</option><option value="other">Boshqa</option></mp-select>
     </div>
 
     <div class="field"><label>Nom</label><input id="f-name" placeholder="LDSP H1334 ST9 · Dub Sonoma" /></div>
@@ -86,7 +89,7 @@
         <div class="field"><label>Panel kengligi (mm)</label><input type="number" id="f-wid" value="1830" oninput="checkDims()" /></div>
       </div>
       <div class="field err" id="dim-err" hidden>Uzunlik kenglikdan kichik bo'lishi mumkin emas — uzun tomon tola yo'nalishi (length ≥ width).</div>
-      <div class="field"><label>Tola yo'nalishi (grain)</label><select id="f-grain"><option value="true">Bor (uzun tomon bo'ylab)</option><option value="false">Yo'q (har tomonga aylantirsa bo'ladi)</option></select></div>
+      <div class="field"><label>Tola yo'nalishi (grain)</label><mp-select id="f-grain"><option value="true">Bor (uzun tomon bo'ylab)</option><option value="false">Yo'q (har tomonga aylantirsa bo'ladi)</option></mp-select></div>
     </div>
 
     <div class="banner info" id="f-edge-note" hidden><div class="ic">i</div><div class="grow">Krom lentasi metrda o'lchanadi · panel o'lchami, tola va panel turi yo'q. Tipik qalinlik: 0.4 yoki 2.0 mm.</div></div>
@@ -121,15 +124,17 @@ let kFilter = 'all', sFilter = 'all', mFilter = 'all', editing = null;
 
 const branchesCount = m => SEED.branchMaterials.filter(bm => bm.matId === m.id).length;
 
-function renderMfrChips() {
-  const wrap = document.getElementById('mfr-chips');
-  wrap.innerHTML = `<button class="chip ${mFilter === 'all' ? 'on' : ''}" data-m="all">Manufacturer · hammasi</button>` +
+function renderMfrFilter() {
+  const sel = document.getElementById('mfr-filter');
+  const current = mFilter;
+  sel.innerHTML = `<option value="all">Manufacturer · hammasi</option>` +
     SEED.manufacturers.filter(x => x.status === 'active').map(x =>
-      `<button class="chip ${mFilter === x.id ? 'on' : ''}" data-m="${x.id}">${x.name}</button>`).join('');
+      `<option value="${x.id}">${x.name}</option>`).join('');
+  sel.value = current;
 }
 
 function render() {
-  renderMfrChips();
+  renderMfrFilter();
   if (state === 'loading') {
     body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Material</th><th>Manufacturer</th><th>Tur</th><th>Turi / o'lcham</th><th>Qalinligi</th><th>Panel o'lchami</th><th>Tola</th><th class="right">Ustaxonalar</th><th>Holat</th><th></th></tr></thead><tbody>${skRows(10, 6)}</tbody></table></div>`;
     return;
@@ -176,22 +181,6 @@ function render() {
       </tr>`; }).join('')}</tbody></table></div>`;
 }
 
-document.getElementById('kind-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('#kind-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on'); kFilter = b.dataset.k; render();
-});
-document.getElementById('st-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('#st-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on'); sFilter = b.dataset.s; render();
-});
-document.getElementById('mfr-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('#mfr-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on'); mFilter = b.dataset.m; render();
-});
-
 function fillMfrSelect(selectedId = null) {
   const sel = document.getElementById('f-mfr');
   sel.innerHTML = SEED.manufacturers.filter(x => x.status === 'active').map(x =>
@@ -219,7 +208,7 @@ function saveInlineMfr() {
   });
   closeModal('m-inline-mfr');
   fillMfrSelect(id);
-  renderMfrChips();
+  renderMfrFilter();
   toast('Manufacturer yaratildi · ' + name);
 }
 

@@ -27,12 +27,12 @@
     </div>
 
     <div class="filters">
-      <select id="br-filter" onchange="render()"></select>
-      <div class="chips">
-        <button class="chip on">Hammasi</button>
-        <button class="chip">Faol</button>
-        <button class="chip">Faol emas</button>
-      </div>
+      <mp-select id="br-filter" onchange="render()"></mp-select>
+      <mp-select id="status-filter" onchange="render()">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="inactive">Faol emas</option>
+      </mp-select>
     </div>
 
     <div class="card">
@@ -50,9 +50,9 @@
 <div class="modal" id="m-add">
   <div class="modal-h"><h3>Filialga material qo'shish</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
-    <div class="field"><label>Filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
+    <div class="field"><label>Filial</label><mp-select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></mp-select></div>
     <div class="field"><label>Platforma katalogidan tanlash</label>
-      <select id="m-pick" onchange="syncUnit()"></select>
+      <mp-select id="m-pick" onchange="syncUnit()"></mp-select>
     </div>
     <p class="muted" style="font-size:12px;margin:-6px 0 12px">Panel materiallar — narx <b>panel</b> uchun, krom — <b>metr</b> uchun. Bu xom material narxi; krom yopishtirish ish haqi alohida (filial sozlamalarida).</p>
     <div class="field-row">
@@ -119,7 +119,10 @@ function render() {
   if (ds === 'loading') { tb.innerHTML = skRows(7, 6); return; }
   if (ds === 'error') { tb.innerHTML = `<tr><td colspan="7">${stError()}</td></tr>`; return; }
   const br = document.getElementById('br-filter').value;
-  const rows = SEED.branchMaterials.filter(bm => (!br || br === 'all' ? CAT_BR.includes(bm.branchId) : bm.branchId === br));
+  const st = document.getElementById('status-filter').value;
+  const rows = SEED.branchMaterials.filter(bm =>
+    (!br || br === 'all' ? CAT_BR.includes(bm.branchId) : bm.branchId === br) &&
+    (st === 'all' || bm.status === st));
   if (rows.length === 0) { tb.innerHTML = `<tr><td colspan="7">${stEmpty('Bu filialga material qo\'shilmagan', 'Platforma katalogidan material qo\'shing.')}</td></tr>`; return; }
   tb.innerHTML = rows.map(bm => {
     const m = SEED.lookup.matById(bm.matId);

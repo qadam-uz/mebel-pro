@@ -36,11 +36,12 @@
     </div>
 
     <div class="filters" id="filters" hidden>
-      <div class="chips" id="rd-chips">
-        <button class="chip on" data-r="all">Hammasi</button>
-        <button class="chip" data-r="unread">O'qilmagan</button>
-        <button class="chip" data-r="read">O'qilgan</button>
-      </div>
+      <label class="filter-label" for="read-filter">Holat</label>
+      <mp-select id="read-filter" onchange="rFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="unread">O'qilmagan</option>
+        <option value="read">O'qilgan</option>
+      </mp-select>
     </div>
 
     <div id="page-body" style="max-width:800px"></div>
@@ -84,12 +85,6 @@ function render() {
       <div class="t">${n.t}</div>
     </a>`).join('');
 }
-
-document.getElementById('rd-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  document.querySelectorAll('#rd-chips .chip').forEach(c => c.classList.remove('on'));
-  b.classList.add('on'); rFilter = b.dataset.r; render();
-});
 
 document.getElementById('mark-all').addEventListener('click', () => {
   notes = notes.map(n => ({ ...n, read: true }));

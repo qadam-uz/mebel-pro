@@ -66,6 +66,7 @@
   .mat-list { max-height: 60vh; overflow-y: auto; padding: 4px 0; }
   .mat-search { width: 100%; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); font: 500 13px var(--f-ui); color: var(--ink-12); margin-bottom: 10px; }
   .mat-search:focus { outline: 0; border-color: var(--ink-12); }
+  .picker-select { width: 100%; margin: 8px 0 10px; --mp-select-width: 100%; --mp-select-height: 40px; --mp-select-radius: 6px; --mp-select-padding: 9px 12px; --mp-select-font: 600 13px/1.25 var(--f-ui); --mp-select-shadow: none; }
   .mat-opt { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 6px; cursor: pointer; }
   .mat-opt:hover { background: var(--sunk); }
   .mat-opt .sw { width: 36px; height: 36px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
@@ -297,10 +298,6 @@
 
     <div class="metrics-strip" id="metrics"></div>
 
-    <p id="edge-trim-note" hidden style="margin:-4px 0 16px;padding:10px 12px;background:var(--elev);border:1px solid var(--line);border-radius:8px;font:400 12px var(--f-ui);color:var(--ink-6);line-height:1.5">
-      <b style="color:var(--ink-12)">Stanok haqqi</b> — ustalar har bir kromlanadigan tomonni ~3 sm ortig'i bilan yopishtirib (har uchidan 15 mm), keyin tekis kesadi. Shu ortiqcha krom yuqoridagi <b>Krom uzunligi</b>ga kirib ketadi — siz to'laydigan va ombordan yechiladigan metr. Narx faqat filial tanlangach ko'rinadi.
-    </p>
-
     <div class="algos" id="algos">
       <div class="algos-hd">
         <span>Algoritm: <b id="cur-algo">—</b> · <span id="cur-algo-meta">—</span></span>
@@ -338,7 +335,7 @@
   <div class="modal-h"><h3>Panel tanlang</h3><button class="x" data-close-modal><i class="ic" data-icon="x"></i> </button></div>
   <div class="modal-b">
     <input class="mat-search" id="mat-search" placeholder="Panel nomi yoki qalinlik..." oninput="renderMatList()" />
-    <div class="chips" id="mat-mfr-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0"></div>
+    <mp-select class="picker-select" id="mat-mfr-filter" onchange="setMatMfrFilter(this.value)"></mp-select>
     <div class="mat-list" id="mat-list"></div>
   </div>
 </div>
@@ -384,7 +381,7 @@
     </div>
     <div class="ep-tools">
       <input class="ep-search" id="ep-search" placeholder="Krom nomi, decor yoki rang..." />
-      <div class="ep-chips" id="ep-thickness-chips"></div>
+      <mp-select class="picker-select" id="ep-thickness-filter" onchange="setEdgeThicknessFilter(this.value)"></mp-select>
       <div class="ep-edge-list" id="ep-edge-list"></div>
       <div class="ep-branch-note hide" id="ep-branch-note"></div>
     </div>
@@ -1021,23 +1018,26 @@ function toggleSource(ref) {
    ============================================================ */
 let matMfrFilter = 'all';
 
-function renderMatMfrChips() {
-  const wrap = document.getElementById('mat-mfr-chips');
+function renderMatMfrFilter() {
+  const sel = document.getElementById('mat-mfr-filter');
   // only manufacturers that have at least one active panel material
   const usedMfrs = new Set(SEED.materials.filter(m => m.kind === 'panel' && m.status === 'active').map(m => m.manufacturerId));
   const mfrs = SEED.manufacturers.filter(x => x.status === 'active' && usedMfrs.has(x.id));
-  wrap.innerHTML = `<button class="chip ${matMfrFilter === 'all' ? 'on' : ''}" type="button" data-mfr="all">Hammasi</button>` +
-    mfrs.map(x => `<button class="chip ${matMfrFilter === x.id ? 'on' : ''}" type="button" data-mfr="${x.id}">${x.name}</button>`).join('');
-  wrap.querySelectorAll('.chip').forEach(b => {
-    b.addEventListener('click', () => { matMfrFilter = b.dataset.mfr; renderMatMfrChips(); renderMatList(); });
-  });
+  sel.innerHTML = `<option value="all">Manufacturer · hammasi</option>` +
+    mfrs.map(x => `<option value="${x.id}">${x.name}</option>`).join('');
+  sel.value = matMfrFilter;
+}
+
+function setMatMfrFilter(value) {
+  matMfrFilter = value;
+  renderMatList();
 }
 
 function openMatPicker(ref) {
   pickingPartRef = ref;
   document.getElementById('mat-search').value = '';
   matMfrFilter = 'all';
-  renderMatMfrChips();
+  renderMatMfrFilter();
   renderMatList();
   openModal('m-mat');
 }
@@ -1327,25 +1327,25 @@ function renderEdgeTools(p) {
       renderEdgeMaterialList(p);
     };
   }
-  renderThicknessChips(p);
+  renderThicknessFilter();
   renderEdgeMaterialList(p);
   renderBranchNote();
 }
 
-function renderThicknessChips(p) {
-  const wrap = document.getElementById('ep-thickness-chips');
+function renderThicknessFilter() {
+  const sel = document.getElementById('ep-thickness-filter');
   const values = ['all', ...new Set(SEED.materials.filter(m => m.kind === 'edge' && m.status === 'active').map(m => m.thickness))];
-  wrap.innerHTML = values.map(v => {
+  sel.innerHTML = values.map(v => {
     const label = v === 'all' ? 'Hamma qalinlik' : `${v} mm`;
-    return `<button class="ep-chip ${edgeThicknessFilter === String(v) ? 'on' : ''}" type="button" data-thickness="${v}">${label}</button>`;
+    return `<option value="${v}">${label}</option>`;
   }).join('');
-  wrap.querySelectorAll('.ep-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      edgeThicknessFilter = String(btn.dataset.thickness);
-      renderThicknessChips(p);
-      renderEdgeMaterialList(p);
-    });
-  });
+  sel.value = edgeThicknessFilter;
+}
+
+function setEdgeThicknessFilter(value) {
+  edgeThicknessFilter = value;
+  const p = draft.partList.find(x => x.ref === editingEdgesRef);
+  renderEdgeMaterialList(p);
 }
 
 function renderEdgeMaterialList(p) {
@@ -1551,12 +1551,17 @@ function renderResult() {
   for (const [id, v] of Object.entries(algo.edgeLenByMat)) {
     consumedByMat[id] = v + OVERHANG_M * (bandedSideUnits[id] || 0);
   }
+  const geometricTotal = Object.values(algo.edgeLenByMat).reduce((a,b)=>a+b,0);
+  const trimOverhangTotal = Object.values(bandedSideUnits).reduce((a,b)=>a + b * OVERHANG_M,0);
   const consumedTotal = Object.values(consumedByMat).reduce((a,b)=>a+b,0);
   const edgeBits = Object.entries(consumedByMat).filter(([,v])=>v>0).map(([edgeMatId,v]) => {
     const em = SEED.lookup.matById(edgeMatId);
     const label = em ? `${em.thickness}mm ${em.color}` : edgeMatId;
     return `${label}: ${v.toFixed(1)} m`;
   }).join(' · ') || '—';
+  const edgeSplit = consumedTotal > 0
+    ? `krom tomonlari ${geometricTotal.toFixed(1)} m + stanok haqqi ${trimOverhangTotal.toFixed(1)} m · ${edgeBits}`
+    : "krom tanlanmagan";
   // Parts placed: only valid parts are placed; any invalid part is "not fit".
   const partsTotal = draft.partList.reduce((a,p) => a + (p.qty || 0), 0);
   const unfit = draft.partList.filter(p => !validatePart(p).ok);
@@ -1579,20 +1584,13 @@ function renderResult() {
     <div class="metric">
       <div class="lab">Krom uzunligi</div>
       <div class="v">${consumedTotal.toFixed(1)} m</div>
-      <div class="sub">${edgeBits}</div>
+      <div class="sub">${edgeSplit}</div>
     </div>
     <div class="metric ${allFit ? 'ok' : 'warn'}">
       <div class="lab">Qismlar</div>
       <div class="v">${placed} / ${partsTotal} ${allFit ? '✓' : '✕'}</div>
       <div class="sub">${allFit ? `${algo.cutLen} m kesish` : `Sig'magan: ${unfitList}`}</div>
     </div>`;
-
-  // Trim-overhang transparency: the metres above are already CONSUMED (geometric +
-  // the fixed per-side trim overhang, a system constant) — the real figure, no branch
-  // needed. The note just explains why it's a touch more than the bare cut length.
-  const hasEdge = Object.values(algo.edgeLenByMat).some(v => v > 0);
-  const trimNote = document.getElementById('edge-trim-note');
-  if (trimNote) trimNote.hidden = !hasEdge;
 
   // current algo summary
   document.getElementById('cur-algo').textContent = algo.name;

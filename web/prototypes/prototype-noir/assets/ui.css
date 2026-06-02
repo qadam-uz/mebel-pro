@@ -185,8 +185,9 @@ td.amt{text-align:right;font:600 13px var(--m)}
 .chip:hover{color:var(--ink);border-color:var(--line-2)}
 .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .inp{flex:1;min-width:170px}
-.inp input,select{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:500 13px var(--f)}
-select{cursor:pointer}
+.inp input,.fake-select{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font:500 13px var(--f)}
+.fake-select{width:auto;min-width:160px;display:inline-flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.fake-select svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--ink-3)}
 input::placeholder{color:var(--ink-4)}
 
 /* ---- chart ---- */

@@ -80,7 +80,7 @@ if (!ownerOnly()) {
           <div class="field-row">
             <div class="field"><label>Login</label><input value="${u.login}" /></div>
             <div class="field"><label>Asosiy filial</label>
-              <select>${branches.map(b => `<option ${u.homeBranchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}</select>
+              <mp-select>${branches.map(b => `<option ${u.homeBranchId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}</mp-select>
             </div>
           </div>
           <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Saqlandi')"><i class="ic" data-icon="save"></i> Saqlash</button></div>

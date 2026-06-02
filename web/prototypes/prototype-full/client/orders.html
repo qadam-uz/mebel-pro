@@ -43,12 +43,14 @@
   </div>
 
   <div class="filters">
-    <div class="chips">
-      <button class="chip on" data-filter="all" onclick="setFilter('all')">Hammasi</button>
-      <button class="chip" data-filter="active" onclick="setFilter('active')">Faol</button>
-      <button class="chip" data-filter="completed" onclick="setFilter('completed')">Tugatilgan</button>
-      <button class="chip" data-filter="cancelled" onclick="setFilter('cancelled')">Bekor qilingan</button>
-    </div>
+    <label class="filter-label" for="status-filter">Holat</label>
+    <mp-select id="status-filter" onchange="setFilter(this.value)">
+      <option value="all">Hammasi</option>
+      <option value="active">Faol</option>
+      <option value="completed">Tugatilgan</option>
+      <option value="cancelled">Bekor qilingan</option>
+    </mp-select>
+    <label class="filter-label" for="search">Qidirish</label>
     <div class="input">
       <input id="search" placeholder="Buyurtma raqami..." oninput="render()" />
     </div>
@@ -70,7 +72,8 @@ let dataEmpty = false;
 
 function setFilter(f) {
   filter = f;
-  document.querySelectorAll('[data-filter]').forEach(b => b.classList.toggle('on', b.dataset.filter === f));
+  const sel = document.getElementById('status-filter');
+  if (sel) sel.value = f;
   render();
 }
 

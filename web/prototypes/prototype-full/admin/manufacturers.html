@@ -29,12 +29,14 @@
     <div class="filters">
       <label class="filter-label" for="q">Qidirish</label>
       <div class="input"><input id="q" aria-label="Manufacturer nomi" placeholder="Manufacturer nomi..." oninput="render()" /></div>
-      <div class="chips" id="country-chips"></div>
-      <div class="chips" id="st-chips">
-        <button class="chip on" data-s="all">Hammasi</button>
-        <button class="chip" data-s="active">Faol</button>
-        <button class="chip" data-s="inactive">Faol emas</button>
-      </div>
+      <label class="filter-label" for="country-filter">Country</label>
+      <mp-select id="country-filter" onchange="cFilter = this.value; render()"></mp-select>
+      <label class="filter-label" for="status-filter">Holat</label>
+      <mp-select id="status-filter" onchange="sFilter = this.value; render()">
+        <option value="all">Hammasi</option>
+        <option value="active">Faol</option>
+        <option value="inactive">Faol emas</option>
+      </mp-select>
     </div>
 
     <div id="page-body"></div>
@@ -80,14 +82,16 @@ function countries() {
   return [...new Set(SEED.manufacturers.map(m => m.country).filter(Boolean))].sort();
 }
 
-function renderCountryChips() {
-  const wrap = document.getElementById('country-chips');
-  wrap.innerHTML = `<button class="chip ${cFilter === 'all' ? 'on' : ''}" data-c="all">Country · hammasi</button>` +
-    countries().map(c => `<button class="chip ${cFilter === c ? 'on' : ''}" data-c="${c}">${c}</button>`).join('');
+function renderCountryFilter() {
+  const sel = document.getElementById('country-filter');
+  const current = cFilter;
+  sel.innerHTML = `<option value="all">Country · hammasi</option>` +
+    countries().map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.value = current;
 }
 
 function render() {
-  renderCountryChips();
+  renderCountryFilter();
   if (state === 'loading') {
     body.innerHTML = `<div class="card"><table class="tbl"><thead><tr><th>Manufacturer</th><th>Country</th><th class="right">Materiallar</th><th>Holat</th><th>Izoh</th><th></th></tr></thead><tbody>${skRows(6, 5)}</tbody></table></div>`;
     return;
@@ -130,19 +134,6 @@ function render() {
       </td>
     </tr>`).join('')}</tbody></table></div>`;
 }
-
-document.getElementById('country-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  cFilter = b.dataset.c;
-  document.querySelectorAll('#country-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.c === cFilter));
-  render();
-});
-document.getElementById('st-chips').addEventListener('click', e => {
-  const b = e.target.closest('.chip'); if (!b) return;
-  sFilter = b.dataset.s;
-  document.querySelectorAll('#st-chips .chip').forEach(c => c.classList.toggle('on', c.dataset.s === sFilter));
-  render();
-});
 
 function openMfr(id) {
   editing = id ? SEED.manufacturers.find(m => m.id === id) : null;
