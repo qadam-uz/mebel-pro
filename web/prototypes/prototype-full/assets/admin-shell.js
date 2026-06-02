@@ -27,6 +27,7 @@ window.renderAdminShell = () => {
   const notes = window.adminNotifications();
   const unread = notes.filter(n => !n.read).length;
   const badge = unread > 9 ? '9+' : String(unread);
+  const currentOperator = (window.SEED?.platformUsers || []).find(u => u.id === 'p01') || {};
 
   const sidebar = `
   <aside class="sb">
@@ -114,6 +115,7 @@ window.renderAdminShell = () => {
   document.body.insertAdjacentHTML('afterbegin', `<div class="app">${sidebar}<main class="shell-main">${topbar}<div id="page-shell"></div></main></div>`);
   const page = document.body.querySelector('main.page-content');
   if (page) document.getElementById('page-shell').appendChild(page);
+  window.renderPasswordResetWarning?.('admin', 'profile.html?tab=password', currentOperator);
   autoMarkNav();
 
   // Bell dropdown — keyboard-operable, badge updates on mark-all-read.

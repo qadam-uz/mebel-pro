@@ -51,7 +51,7 @@
           <div class="field"><label>Joriy parol</label><input type="password" /></div>
           <div class="field"><label>Yangi parol</label><input type="password" /><span class="hint">Kamida 8 belgi · katta + kichik + raqam</span></div>
           <div class="field"><label>Yangi parolni qaytaring</label><input type="password" /></div>
-          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Parol o\'zgartirildi')">O'zgartirish</button></div>
+          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="clearPasswordResetRequired('workshop');toast('Parol o\'zgartirildi')">O'zgartirish</button></div>
         </div>
       </div>
     </section>
@@ -100,6 +100,10 @@ if (me.isOwner) {
     const permLabel = k => (SEED.permissions.find(p => p.key === k)?.label) || k;
     gEl.innerHTML = keys.map(k => `<div class="row-item"><div><div class="nm">${permLabel(k)}</div><small style="color:var(--ink-6);font:400 11px var(--f-mono)">${k}</small></div><div class="meta">${grants[k].map(b => SEED.lookup.branchById(b)?.name || b).join(', ')}</div></div>`).join('');
   }
+}
+
+if (new URLSearchParams(location.search).get('tab') === 'password') {
+  switchTab('pr', 't-password');
 }
 </script>
 </body>

@@ -40,7 +40,8 @@
 <script src="../assets/app.js"></script>
 <script>
 // Demo lockout: 5 consecutive bad attempts → 15-minute lockout, surfaced as
-// an absolute "HH:MM da qayta urinib ko'ring" retry time (IN2).
+// an absolute "HH:MM da qayta urinib ko'ring" retry time (IN2). Type "temp"
+// as password to enter with a non-blocking password-reset warning.
 let attempts = 0;
 
 function showLockout() {
@@ -53,9 +54,15 @@ function showLockout() {
 
 function login(e) {
   e.preventDefault();
-  // Demo: the seeded creds (hasan / ••••••••) succeed; type anything else to
-  // exercise the lockout after 5 tries.
+  // Demo: the seeded creds (hasan / ••••••••) succeed; "temp" succeeds with
+  // a reset warning; type anything else to exercise lockout after 5 tries.
   const pw = e.target.querySelector('input[type="password"]').value;
+  if (pw.toLowerCase() === 'temp') {
+    try { sessionStorage.setItem('mp.workshop.password-reset-required', '1'); } catch (_) {}
+    toast('Vaqtinchalik parol qabul qilindi · boshqaruv kabineti ochilmoqda...', 'warn');
+    setTimeout(() => location.href = 'dashboard.html?reset=1', 700);
+    return;
+  }
   if (pw === '••••••••') {
     toast('Kirildi · boshqaruv kabineti ochilmoqda...');
     setTimeout(() => location.href = 'dashboard.html', 700);

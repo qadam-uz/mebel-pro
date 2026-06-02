@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 20
 ---
 
@@ -20,9 +20,10 @@ is incorrect" — no account-existence oracle. **Five consecutive bad attempts �
 lockout** (`locked_until`); a correct password resets the counter. Passwords are argon2 /
 bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one digit.
 
-`force_password_change` (set on creation, on a higher-principal password reset, and after a
-forced rotation) gates the user — every operation except change-password / logout / get-me
-returns `password_change_required` until the user changes it.
+`password_reset_required` (set on creation, on a higher-principal password reset, and after
+a security rotation) is advisory. It is returned from `get-me` and the workshop /
+superadmin app shell shows a persistent warning until the user changes their password. It
+does **not** gate the rest of the app; only blocking the user or workshop denies access.
 
 **Platform users are seeded by a backend CLI command.** They're the top of the hierarchy, with
 no higher principal to create them; in-app creation is allowed once at least one platform
@@ -49,17 +50,18 @@ Revoking = deleting the row.
 
 A user can sign in, sign out, refresh their access token (the refresh path re-checks the
 user, and for workshop users the workshop, is still active), change their own password
-(revokes all *other* sessions; clears `force_password_change`), list their sessions and
+(revokes all *other* sessions; clears `password_reset_required`), list their sessions and
 revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant set,
-`force_password_change`).
+`password_reset_required`).
 
 ### UX
 
 - **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — login +
   password fields; generic error on failure; a lockout banner ("try again at HH:MM") when
   `locked_until` came back.
-- **Force-password-change screen** — shown on first login (or after a reset); strength meter
-  (≥ 8 chars, upper + lower + digit); blocks the rest of the app until set.
+- **Password-reset warning** — shown in the workshop / superadmin app shell when
+  `password_reset_required = true`; it is persistent, non-blocking, and links to the profile
+  password tab. The warning disappears only after a successful password change.
 - **Self profile** (`/workshop/profile`, `/admin/profile`) — Profile (read-only fields),
   Change password (strength meter), Sessions list (current marker, "revoke" per row, "log out
   everywhere").
@@ -127,9 +129,9 @@ A platform operator provisions a workshop atomically with its first user:
 - **Create a workshop and its owner — atomically.** Input: workshop fields + the owner's
   `full_name`, `login`, `phone`, plus an auto-generated temp password (manual override). The
   same transaction creates the `workshop` row and a `workshop_user` row with `is_owner = true`
-  and `force_password_change = true` — **never one without the other**. Returns the summary
-  and the temp password **once**. The owner cannot be created, demoted, or deleted by anyone
-  except a platform operator; exactly one owner per workshop.
+  and `password_reset_required = true`. Returns the summary and the temp password **once**.
+  The owner cannot be created, demoted, or deleted by anyone except a platform operator;
+  exactly one owner per workshop.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
@@ -147,7 +149,8 @@ need, it must be specified here first — it is deliberately absent in v1.
 
 - **Create-workshop dialog** — workshop fields + owner fields, temp password (auto-generated,
   copy button, manual toggle). On success: read-only confirmation showing the owner login +
-  temp password with "share this with the owner — shown once" + copy button.
+  temp password with "share this with the owner — shown once" + copy button; the owner sees
+  the non-blocking password-reset warning after sign-in.
 - **Block** (in the workshop detail) — mandatory reason; warning that staff sessions are
   revoked and open orders freeze; destructive-styled.
 
@@ -196,7 +199,7 @@ that **cannot be delegated to staff in v1**:
 
 ### Operations (owner)
 
-- **Create a workshop user** — `full_name`, `phone`, `login`, `force_password_change = true`,
+- **Create a workshop user** — `full_name`, `phone`, `login`, `password_reset_required = true`,
   temp password (auto / manual), a `home_branch_id` (the branch the user works at — gates
   cutter / edger assignment to an order at that branch; for office staff who span branches,
   set the branch they sit at), and **an optional initial set of `(permission, branch)`
@@ -206,7 +209,7 @@ that **cannot be delegated to staff in v1**:
 - **Set grants** — replaces the user's `permission_grant` rows atomically; each
   `(permission, branch)` is validated against the catalog and the workshop's branches. **The
   new grants take effect on the user's next request** — no session revoke.
-- **Reset password** — a temp password + `force_password_change`; revokes the user's
+- **Reset password** — a temp password + `password_reset_required = true`; revokes the user's
   sessions.
 - **Block / unblock** — blocking revokes sessions immediately; unblocking does not restore
   them.

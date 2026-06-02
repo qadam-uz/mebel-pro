@@ -2,291 +2,293 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 20
 ---
 
 # Identity & access
 
-[`access-patterns.md`](../../access-patterns.md)'ning mexanikasi — har bir principal qanday
-sign in qiladi, session'lar qanday ishlaydi, workshop'lar qanday provision qilinadi, staff va
-ularning grant'lari qanday boshqariladi va surface'lar uchta app'da qanday ko'rinadi.
+[`access-patterns.md`](../../access-patterns.md) mexanikasi — har bir principal qanday sign
+in qiladi, sessions qanday ishlaydi, workshops qanday provision qilinadi, staff va ularning
+grants qanday boshqariladi, va uch appdagi surfaces qanday ko'rinadi.
 
 ## Workshop & platform user sign-in
 
-Login + password. Login case-insensitive; per workshop (workshop user'lar) yoki
-platform-wide (platform user'lar) unique. Bad pair'dagi error **generic** "login or password
-is incorrect" — account-existence oracle yo'q. **Ketma-ket besh bad attempt → 15-minutlik
-lockout** (`locked_until`); to'g'ri password counter'ni reset qiladi. Password'lar at rest argon2 /
-bcrypt-hashed; complexity ≥ 8 char kamida bitta upper, bitta lower, bitta digit bilan.
+Login + password. Login case-insensitive; workshop users uchun bir workshop ichida unique,
+platform users uchun platform-wide unique. Yomon pairdagi error **generic**: "login or
+password is incorrect" — account-existence oracle yo'q. **Ketma-ket besh noto'g'ri urinish
+→ 15-minute lockout** (`locked_until`); to'g'ri password counter ni reset qiladi. Passwords
+argon2 / bcrypt bilan hash qilinadi; complexity ≥ 8 chars, kamida one upper, one lower, one
+digit.
 
-`force_password_change` (creation'da, higher-principal password reset'da va forced rotation'dan
-keyin set qilinadi) user'ni gate qiladi — change-password / logout / get-me'dan boshqa
-har bir operation user uni o'zgartirgunga qadar `password_change_required` qaytaradi.
+`password_reset_required` (creation, higher-principal password reset, yoki security
+rotationdan keyin set qilinadi) advisory flag. U `get-me`dan qaytadi va workshop /
+superadmin app shell password o'zgartirilguncha persistent warning ko'rsatadi. Bu flag
+appning qolgan qismini gate qilmaydi; access faqat user yoki workshop block qilinganda
+rad etiladi.
 
-**Platform user'lar backend CLI command bilan seed qilinadi.** Ular hierarchy'ning eng
-tepasida, ularni yaratadigan higher principal yo'q; in-app creation kamida bitta platform
-user mavjud bo'lganda ruxsat etiladi ([`platform.md`](platform.md)).
+**Platform users are seeded by a backend CLI command.** Ular hierarchy tepasida, shuning
+uchun ularni yaratadigan higher principal yo'q; kamida bitta platform user paydo bo'lgach
+in-app creation ruxsat etiladi ([`platform.md`](platform.md)).
 
 ### Sessions
 
-DB'da saqlangan opaque token'lar, hashed (SHA-256) — JWT emas. Access TTL **24 h**; refresh TTL
-**7 d**; **per principal ko'pi bilan 5 concurrent session** (6-chi login eng eskisini evict
-qiladi). Revoking = row'ni o'chirish.
+Opaque tokens DBda hash qilingan (SHA-256) holda saqlanadi — JWT emas. Access TTL **24 h**;
+refresh TTL **7 d**; har principal uchun **ko'pi bilan 5 concurrent sessions** (6-login
+eng eskisini evict qiladi). Revoking = row delete.
 
 | Trigger | Effect |
 |---|---|
-| logout (this session) | delete this session |
-| "log out everywhere" | delete all the user's sessions |
-| change own password | delete all *other* sessions; keep the current |
-| reset password (higher principal) | delete all the user's sessions |
-| block user | delete all the user's sessions |
-| block workshop | delete the workshop's owner + staff sessions (clients unaffected) |
-| 5-session cap exceeded | evict the oldest |
-| token expiry | inert; a periodic job prunes the row |
+| logout (this session) | this session delete qilinadi |
+| "log out everywhere" | userning barcha sessions delete qilinadi |
+| change own password | barcha *other* sessions delete qilinadi; current session qoladi |
+| reset password (higher principal) | userning barcha sessions delete qilinadi |
+| block user | userning barcha sessions delete qilinadi |
+| block workshop | workshopning owner + staff sessions delete qilinadi (clients unaffected) |
+| 5-session cap exceeded | oldest evict qilinadi |
+| token expiry | inert; periodic job rowni prune qiladi |
 
 ### Operations
 
-User sign in, sign out, o'z access token'ini refresh qila oladi (refresh path user'ni, va
-workshop user'lar uchun workshop'ni, hali active ekanini re-check qiladi), o'z password'ini
-o'zgartira oladi (barcha *boshqa* session'larni revoke qiladi; `force_password_change`'ni
-clear qiladi), o'z session'larini list qilib bittasini yoki hammasini revoke qila oladi va
-o'z `me`'sini fetch qila oladi (principal type, id'lar, `is_owner`, grant set,
-`force_password_change`).
+User sign in, sign out, access token refresh (refresh path user, va workshop users uchun
+workshop hali active ekanini qayta tekshiradi), own password change (barcha *other*
+sessions revoke qiladi; `password_reset_required`ni clear qiladi), sessions list, bir yoki
+barchasini revoke qilish, va `me` fetch qilish (principal type, ids, `is_owner`, grant set,
+`password_reset_required`) imkoniyatiga ega.
 
 ### UX
 
 - **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — login +
-  password field'lar; failure'da generic error; `locked_until` qaytganda lockout banner
-  ("try again at HH:MM").
-- **Force-password-change screen** — birinchi login'da (yoki reset'dan keyin) ko'rsatiladi; strength meter
-  (≥ 8 char, upper + lower + digit); set qilingunga qadar app'ning qolganini block qiladi.
-- **Self profile** (`/workshop/profile`, `/admin/profile`) — Profile (read-only field'lar),
-  Change password (strength meter), Sessions list (current marker, row bo'yicha "revoke", "log out
-  everywhere").
+  password fields; failureda generic error; `locked_until` qaytganda lockout banner ("try
+  again at HH:MM").
+- **Password-reset warning** — workshop / superadmin app shell ichida
+  `password_reset_required = true` bo'lsa ko'rsatiladi; persistent, non-blocking va profile
+  password tabiga link qiladi. Warning faqat successful password changedan keyin yo'qoladi.
+- **Self profile** (`/workshop/profile`, `/admin/profile`) — Profile (read-only fields),
+  Change password (strength meter), Sessions list (current marker, "revoke" per row,
+  "log out everywhere").
 
 ## Client sign-in (phone + Telegram OTP)
 
-Client **Telegram orqali yuborilgan one-time code bilan tasdiqlangan phone number** orqali sign
-in qiladi — password yoʻq, widget yoʻq, app-switch yoʻq. Phone — bu identity; flow bitta uzluksiz
-path boʻlib, raqam yangi boʻlgandagina registration'ga branch qiladi. Uchta qadam:
+Client **Telegram orqali yuborilgan one-time code bilan verified phone number** orqali sign
+in qiladi — password yo'q, widget yo'q, app-switch yo'q. Phone identity; flow bitta
+continuous path bo'lib, faqat number new bo'lganda registrationga branch qiladi. Uch step:
 
-1. **Code soʻrash.** Client `+998XXXXXXXXX` phone yuboradi. System
-   [verification challenge](../entities/identity.md#phone-verification-challenge) issue qiladi va
-   oʻsha raqamga **Telegram orqali** (Telegram Gateway orqali) 6 xonali code yuboradi. Malformed
-   raqam `invalid_phone`; Telegram'da reachable boʻlmagan raqam `phone_unreachable_on_telegram`
-   (v1'da **SMS fallback yoʻq** — client'da oʻsha raqamda Telegram boʻlishi shart); resend
-   cooldown (60 s) yoki per-phone / per-IP send rate limit'dan oshish `code_send_rate_limited`.
-2. **Code'ni verify qilish.** Client phone + code yuboradi. Notoʻgʻri code `invalid_code`
-   (challenge omon qoladi, attempt counter oshadi); 5-chi notoʻgʻri attempt challenge'ni burn
-   qiladi (`too_many_attempts`, yangi code soʻrash kerak); 5-minutlik TTL'dan oʻtgan code
+1. **Request a code.** Client `+998XXXXXXXXX` phone submit qiladi. System
+   [verification challenge](../entities/identity.md#phone-verification-challenge) chiqaradi
+   va 6-digit codeni shu raqamga **Telegram** orqali yuboradi (Telegram Gateway). Malformed
+   number `invalid_phone`; Telegramda reachable bo'lmagan number
+   `phone_unreachable_on_telegram` (v1da **SMS fallback yo'q** — client shu raqamda
+   Telegramga ega bo'lishi kerak); resend cooldown (60 s) yoki per-phone / per-IP send rate
+   limit oshsa `code_send_rate_limited`.
+2. **Verify the code.** Client phone + code submit qiladi. Wrong code `invalid_code`
+   (challenge saqlanadi, attempt counter bump); 5-wrong attempt challenge ni burn qiladi
+   (`too_many_attempts`, yangi code request kerak); 5-minute TTLdan o'tgan code
    `code_expired`.
-3. **Sign in yoki register.** Toʻgʻri code'da:
-   - **Phone topildi, `active`** → sign in.
-   - **Phone topildi, `blocked`** → `account_blocked`.
-   - **Phone topilmadi** → response `is_new = true` olib keladi; client `name` beradi (1–80 belgi;
-     boʻsh boʻlsa `name_required`) va system client'ni yaratadi (`status = active`) hamda sign in
-     qiladi.
+3. **Log in or register.** Correct codeda:
+   - **Phone found, `active`** → log in.
+   - **Phone found, `blocked`** → `account_blocked`.
+   - **Phone not found** → response `is_new = true` olib keladi; client `name` beradi
+     (1-80 chars; blank bo'lsa `name_required`) va system clientni create qiladi
+     (`status = active`) va log in qiladi.
 
-Verification'dan *oldin* account-existence oracle yoʻq — sign-in-vs-register branch faqat toʻgʻri
-code'dan keyin oshkor boʻladi. Success'da session yaratiladi; self-service session management
-workshop / platform user'lar bilan bir xil.
+Verificationdan oldin account-existence oracle yo'q — login-vs-register branch faqat
+correct codedan keyin ochiladi. Successda session created; self-service session management
+workshop / platform users bilan bir xil.
 
 ### Dev & local sign-in
 
-Local, CI va E2E run'larda Telegram Gateway ham, real phone ham yoʻq, shuning uchun code aslida
-yuborib boʻlmaydi. Buni bitta setting — **`otp_dev_codes`**, fixed code'lar ro'yxati — qoplaydi:
-u **non-empty** boʻlganda send qadami no-op boʻladi (Gateway call yoʻq) va verification **har
-qanday** phone uchun ro'yxatdagi **har qanday** code'ni qabul qiladi, shunda developer istalgan
-raqam bilan, masalan `000000`, sign in qiladi. U **empty** boʻlganda — default, va **production'da
-majburiy** — real flow ishlaydi: Telegram orqali yetkaziladigan bitta random per-challenge code.
-Bitta field, ikkita emas: code'lar mavjudligining oʻzi *on-switch*, alohida enable flag yoʻq;
-production'da non-empty `otp_dev_codes` — boot-time misconfiguration.
+Local, CI va E2E runsda Telegram Gateway va real phone yo'q, shuning uchun code real
+yuborilmaydi. Bitta setting — **`otp_dev_codes`**, fixed codes list — buni qoplaydi: u
+**non-empty** bo'lsa, send step no-op (Gateway call yo'q) va verification listdagi **any**
+codeni **any** phone uchun qabul qiladi, shuning uchun developer istalgan numberga, masalan
+`000000` bilan sign in qiladi. U **empty** bo'lsa — default va **productionda mandatory** —
+real flow ishlaydi: per-challenge random code Telegram orqali delivered. Bitta field, ikkita
+emas: codes mavjudligi on-switch, alohida enable flag yo'q; productionda non-empty
+`otp_dev_codes` boot-time misconfiguration.
 
 ### UX
 
-Bitta sign-in card (client app `/auth/login`) qadamlarni joyida almashtiradi — oldinga yoki
-orqaga oʻtganda client allaqachon yozgan phone hech qachon yoʻqolmaydi:
+Bitta sign-in card (client app `/auth/login`) step by step joyida yuradi — oldinga yoki
+orqaga yurganda client typed phone yo'qolmaydi:
 
-- **Phone qadami** — `+998` bilan prefilled bitta phone field, primary **Send code**. Error'lar
-  inline: `invalid_phone`, `phone_unreachable_on_telegram` ("Bu raqamni Telegram'da topa olmadik —
-  sign-in uchun shu raqamda Telegram kerak"), `code_send_rate_limited` ("N s dan keyin urinib
-  koʻring").
-- **Code qadami** — 6 xonali code input, masked target phone, phone qadamiga qaytaruvchi **Edit**
-  affordance, va cooldown oʻtguncha live countdown bilan disabled boʻlgan **Resend**. Error'lar:
-  `invalid_code` (qolgan attempt'lar bilan), `code_expired` va `too_many_attempts` (ikkalasi ham
-  client'ni resend / yangi code soʻrashga qaytaradi).
-- **Name qadami** — faqat verification `is_new = true` qaytarganda koʻrsatiladi: bitta `name`
-  field, primary **Continue**; qaytuvchi client'lar toʻgʻridan-toʻgʻri app'ga oʻtadi.
-- **Client profile** (`/c/profile`) — `name` editable (u client tomonidan kiritiladi, sync emas);
-  `phone` read-only (uni oʻzgartirish re-verification'ni anglatadi — v1'da out of scope); current
-  marker bilan sessions list; "log out" / "log out everywhere".
+- **Phone step** — `+998` prefilled bitta phone field, primary **Send code**. Inline errors:
+  `invalid_phone`, `phone_unreachable_on_telegram` ("We couldn't reach this number on
+  Telegram — sign-in needs Telegram on this number"), `code_send_rate_limited` ("Try again
+  in N s").
+- **Code step** — 6-digit code input, masked target phone, phone stepga qaytadigan **Edit**
+  affordance, va cooldown tugaguncha disabled live countdownli **Resend**. Errors:
+  `invalid_code` (attempts remaining bilan), `code_expired` va `too_many_attempts`
+  (ikkalasi clientni resend / request a new codega qaytaradi).
+- **Name step** — verification `is_new = true` qaytarganda **only** ko'rsatiladi: bitta
+  `name` field, primary **Continue**; returning clients to'g'ri appga kiradi.
+- **Client profile** (`/c/profile`) — `name` editable (client-entered, synced emas);
+  `phone` read-only (change qilish re-verification degani — v1 out of scope); sessions list
+  current marker bilan; "log out" / "log out everywhere".
 
 ## Workshop provisioning (superadmin app)
 
-Platform operator workshop'ni uning first user'i bilan atomik provision qiladi:
+Platform operator workshopni first useri bilan atomically provision qiladi:
 
-- **Workshop va uning owner'ini yaratish — atomik.** Input: workshop field'lar + owner'ning
-  `full_name`, `login`, `phone`, plus auto-generated temp password (manual override). Bir xil
-  transaction `workshop` row va `is_owner = true` hamda `force_password_change = true` bo'lgan
-  `workshop_user` row yaratadi — **hech qachon biri ikkinchisisiz**. Summary va temp password'ni
-  **bir marta** qaytaradi. Owner'ni platform operator'dan boshqa hech kim yarata, demote yoki
-  delete qila olmaydi; per workshop aniq bitta owner.
-- **Workshop'ni block / unblock qilish.** Block qilish owner'ning + staff'ning session'larini
-  darhol revoke qiladi; ularning keyingi login'i rejected. Client'lar ta'sirlanmaydi. Open
-  order'lar **freeze** bo'ladi — staff act qila olmaydi, chunki ular log in qila olmaydi; avtomatik
-  transition yo'q. Unblock qilish session'larni **tiklamaydi** — user'lar qayta log in qiladi.
+- **Create a workshop and its owner — atomically.** Input: workshop fields + owner
+  `full_name`, `login`, `phone`, plus auto-generated temp password (manual override). Same
+  transaction `workshop` row va `workshop_user` row yaratadi: `is_owner = true`,
+  `password_reset_required = true`. Summary va temp password **once** qaytadi. Ownerni
+  platform operatordan boshqa hech kim create, demote yoki delete qila olmaydi; har workshopda
+  exactly one owner.
+- **Block / unblock the workshop.** Blocking owner + staff sessions immediately revoke
+  qiladi; next login rejected. Clients unaffected. Open orders **freeze** — staff login qila
+  olmagani uchun act qila olmaydi; automatic transitions yo'q. Unblocking sessionsni restore
+  qilmaydi — users qaytadan log in qiladi.
 
-Operator'ning **yagona** workshop write action'lari: provision (workshop + first owner,
-atomik), block va unblock. Operator workshop profile'ni yoki owner'ning identity field'larini
-(name / phone / login) **edit qilmaydi** — bu owner hududi va unga operator path yo'q.
-Workshop *editing* (profile, settings, payment channels) [`workshop.md`](workshop.md)'da;
-owner-identity edit'lar owner self-service / owner-managed, operator-managed emas. Agar
-operator orqali owner'ning phone'ini tuzatish hech qachon real ehtiyojga aylansa, u avval
-shu yerda specify qilinishi kerak — u v1'da ataylab yo'q.
+Operatorning **only** workshop write actions: provision (workshop + first owner, atomic),
+block, unblock. Operator workshop profile yoki owner identity fields (name / phone / login)
+edit qilmaydi — bu owner territory va operator path yo'q. Workshop *editing* (profile,
+settings, payment channels) [`workshop.md`](workshop.md) ichida; owner-identity edits owner
+self-service / owner-managed, operator-managed emas. Agar owner's phone ni operator orqali
+correct qilish real need bo'lsa, avval shu yerda specified bo'lishi kerak — v1da deliberate
+absent.
 
 ### UX
 
-- **Create-workshop dialog** — workshop field'lar + owner field'lar, temp password (auto-generated,
-  copy button, manual toggle). Success'da: owner login + temp password'ni "share this with the
-  owner — shown once" + copy button bilan ko'rsatuvchi read-only confirmation.
-- **Block** (workshop detail'da) — mandatory reason; staff session'lar revoke qilinishi va
-  open order'lar freeze bo'lishi haqida warning; destructive-styled.
+- **Create-workshop dialog** — workshop fields + owner fields, temp password
+  (auto-generated, copy button, manual toggle). Successda read-only confirmation owner login
+  + temp passwordni "share this with the owner — shown once" + copy button bilan ko'rsatadi;
+  owner sign-indan keyin non-blocking password-reset warning ko'radi.
+- **Block** (workshop detailda) — mandatory reason; staff sessions revoked va open orders
+  freeze bo'lishi haqida warning; destructive-styled.
 
 ## Workshop user management (workshop app)
 
-Har bir staff user `(permission, branch)` grant'lar setiga ega. Owner har bir branch'da har
-bir permission'ni implicitly ushlab turadi, plus owner-only carve-out'lar.
+Har staff user `(permission, branch)` grants setiga ega. Owner har branchda har permissionga
+implicitly ega, plus owner-only carve-outs.
 
 ### Permission catalog
 
 | Permission | Grants on the granted branch |
 |---|---|
-| `view_dashboard` | see the branch's dashboard / KPIs / order summary |
-| `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
-| `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
-| `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
-| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. |
-| `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |
-| `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports. |
+| `view_dashboard` | branch dashboard / KPIs / order summary ko'rish |
+| `manage_orders` | order workflow office side — verify / approve (`new -> confirmed`), cutter / edger assign va re-assign, discounts apply, absent worker nomidan production job complete qilish, mistake bo'lsa **revert** one step, va pre-`completed` orderni reason bilan cancel qilish. O'zi production work qila olmaydi, agar `process_production` ham bo'lmasa. [`orders.md`](orders.md)ga qarang. |
+| `process_production` | **cutter & edger workspaces** — ushbu userga assigned orders ko'rish, cutting planni read-only ko'rish, **Cutting done** belgilash (→ `edge_banding` yoki `ready`; cutter snapshot stamp, `shop` panels stock decrement) va **Banding done** belgilash (→ `ready`; edge snapshot stamp, `shop` sides uchun edge material stock decrement). Edit, verify, cancel, yoki revert qila olmaydi. |
+| `manage_catalog` | branch material selection — platform catalogdan add, per-unit price va min-stock set, activate / deactivate. (Master materials platform-side.) |
+| `manage_inventory` | stock-in (supplierdan; suppliers on demand add qilinadi), adjust, stock va transactions view. |
+| `manage_finance` | money ledger — income (including order payments) va expenses (including `salary`) record / edit / void. [`finance.md`](finance.md)ga qarang. |
+| `view_finance_reports` | finance dashboards, finance reports, worker-production reports read-only access. |
 
-`process_delivery` v1'dan **gated out** — v1 pickup-only
-([`scope.md`](../../scope.md)), shuning uchun driver workspace yo'q va grant catalog'da
-emas; u delivery qaytganda qaytadi.
+`process_delivery` **v1dan gated out** — v1 pickup-only ([`scope.md`](../../scope.md)),
+shuning uchun driver workspace yo'q va grant catalogda emas; delivery qaytsa u ham qaytadi.
 
-Zero grant'li staff user log in qila oladi, lekin actionable hech narsa ko'rmaydi. Grant'lar
-user'da yashaydi, branch'da emas: branch'ning status'ini o'zgartirish grant'larga tegmaydi;
-`inactive` branch'dagi grant inert va reactivation'da yana live bo'ladi.
+Zero grantsli staff user log in qila oladi, lekin actionable hech narsa ko'rmaydi. Grants
+userda yashaydi, branchda emas: branch status change grantsga tegmaydi; `inactive` branchdagi
+grant inert bo'ladi va reactivationda yana live bo'ladi.
 
-**Worker'lar — workshop user'lar.** "cutter" yoki "edge bander" — bu shunchaki order'ning
-branch'ida `process_production` ushlab turgan workshop user — **alohida `worker` entity yo'q**
-va **role yo'q**: capability — grant set, va bir kishi `manage_orders` *va*
-`process_production` *va* `manage_finance` ushlab turib butun flow'ni yolg'iz boshqarishi
-mumkin. System hech qanday pay rate saqlamaydi; worker'ga qancha to'lash — bu accountant'ning
-user haqiqatda qilgan ishdan manual hisob-kitobi, order'ning production stamp'laridan o'qiladi
-(qarang [`finance.md`](finance.md) va [`orders.md`](orders.md)).
+**Workers are workshop users.** "cutter" yoki "edge bander" bu order branchida
+`process_production` ushlagan workshop user xolos — separate `worker` entity yo'q va
+**role** yo'q: capability grant set, bir odam `manage_orders` *and* `process_production`
+*and* `manage_finance` ushlab butun flow ni yolg'iz yurita oladi. System pay rates
+saqlamaydi; worker qancha paid bo'lishi accountantning manual calculationi, order
+production stampsdan o'qiladigan work asosida (see [`finance.md`](finance.md) and
+[`orders.md`](orders.md)).
 
 ### Owner-only powers
 
-Owner (`is_owner`) har bir branch'da har bir permission'ni implicitly ushlab turadi, plus
-v1'da **staff'ga delegate qilib bo'lmaydigan** quyidagi power'lar:
+Owner (`is_owner`) har branchda har permissionga implicitly ega, plus v1da staffga delegate
+qilinmaydigan powers:
 
-- Staff yaratish va ularning permission'larini grant / revoke qilish.
-- Branch yaratish va edit qilish; branch status'ini o'zgartirish; branch pricing set qilish.
-- Workshop settings'ni edit qilish (profile).
-- Workshop-wide report'larni ko'rish.
+- Staff create qilish va permissions grant / revoke qilish.
+- Branches create va edit qilish; branch status change; branch pricing set.
+- Workshop settings (profile) edit.
+- Workshop-wide reports view.
 
 ### Operations (owner)
 
-- **Workshop user yaratish** — `full_name`, `phone`, `login`, `force_password_change = true`,
-  temp password (auto / manual), `home_branch_id` (user ishlaydigan branch — o'sha branch'da
-  order'ga cutter / edger assignment'ni gate qiladi; branch'lar bo'ylab span qiladigan office
-  staff uchun ular o'tiradigan branch'ni set qiling) va **optional initial `(permission, branch)`
-  grant'lar seti**. Bitta atomic operation'da yaratiladi; user'ni va temp password'ni
-  **bir marta** qaytaradi.
-- **Profile field'larni edit qilish** — `full_name`, `phone`, `home_branch_id`.
-- **Grant'larni set qilish** — user'ning `permission_grant` row'larini atomik almashtiradi;
-  har bir `(permission, branch)` catalog'ga va workshop'ning branch'lariga qarshi validate
-  qilinadi. **Yangi grant'lar user'ning keyingi request'ida effect oladi** — session revoke yo'q.
-- **Password reset** — temp password + `force_password_change`; user'ning session'larini revoke qiladi.
-- **Block / unblock** — block qilish session'larni darhol revoke qiladi; unblock qilish ularni tiklamaydi.
-- **List / get** — owner uchun workshop'ning user'lari.
+- **Create a workshop user** — `full_name`, `phone`, `login`,
+  `password_reset_required = true`, temp password (auto / manual), `home_branch_id`
+  (user ishlaydigan branch — orderdagi cutter / edger assignmentni shu branchga gate qiladi;
+  branches bo'ylab ishlaydigan office staff uchun o'tirgan branchni set qiling), va
+  **optional initial `(permission, branch)` grants**. Bitta atomic operationda created;
+  user va temp password **once** qaytadi.
+- **Edit profile fields** — `full_name`, `phone`, `home_branch_id`.
+- **Set grants** — user's `permission_grant` rows atomically replace qilinadi; har
+  `(permission, branch)` catalog va workshop branchesga qarshi validate qilinadi. **New
+  grants userning next requestida take effect qiladi** — session revoke yo'q.
+- **Reset password** — temp password + `password_reset_required = true`; user's sessions
+  revoke qilinadi.
+- **Block / unblock** — blocking sessions immediately revoke qiladi; unblocking ularni
+  restore qilmaydi.
+- **List / get** — owner uchun workshop users.
 
 ### UX
 
 **Settings → Users** ostida (owner-only nav item):
 
 - **Users list** (`/workshop/settings/users`) — table: name, login, phone, home branch,
-  granted-branches count, status, last login, action menu. Filter'lar: home branch, status.
+  granted-branches count, status, last login, action menu. Filters: home branch, status.
   **+ User**. Empty: "No staff yet — add one to delegate work."
-- **Create-user dialog** — profile field'lar (incl. home branch) + temp password (auto / manual,
-  copy) + initial grants matrix (permission row × branch column, workshop ichida).
-  Success'da: read-only "share login + temp password — shown once" confirmation copy bilan.
-- **User detail** (`/workshop/settings/users/:id`) — header (name, status badge, home branch,
-  last login); tab'lar:
-  - **Profile** (edit) — profile field'lar incl. home branch.
-  - **Permissions** — grants matrix; toggling explicit Save va unsaved-changes guard bilan
-    atomik saqlaydi.
-  - **Sessions** — current marker bilan list; bittasini / hammasini revoke.
-- Row / detail action'lar: Edit · Reset password (→ one-time-secret confirmation) · Block /
-  Unblock (block session'lar revoke qilinishini ogohlantiradi) · Revoke sessions.
+- **Create-user dialog** — profile fields (incl. home branch) + temp password (auto /
+  manual, copy) + initial grants matrix (permission rows × branch columns, workshop ichida).
+  Successda read-only "share login + temp password — shown once" confirmation with copy.
+- **User detail** (`/workshop/settings/users/:id`) — header (name, status badge, home
+  branch, last login); tabs:
+  - **Profile** (edit) — profile fields incl. home branch.
+  - **Permissions** — grants matrix; toggling explicit Save bilan atomically saqlanadi va
+    unsaved-changes guard bor.
+  - **Sessions** — list with current marker; revoke one / all.
+- Row / detail actions: Edit · Reset password (→ one-time-secret confirmation) · Block /
+  Unblock (block warns sessions are revoked) · Revoke sessions.
 
 ## Branch context (workshop app)
 
-Staff user bir nechta branch'da grant ushlab turishi mumkin. Workshop app **branch picker**
-ishlatadi — top bar'dagi current branch context'ni belgilovchi chip ("Branch: Yunusobod ▼").
-Har bir branch-scoped screen (orders, inventory, dashboard, catalog selection, workers)
-undan o'qiydi.
+Staff user multiple branchesda grants ushlashi mumkin. Workshop app **branch picker** ishlatadi
+— top bardagi chip ("Branch: Yunusobod ▼") current branch contextni belgilaydi. Har
+branch-scoped screen (orders, inventory, dashboard, catalog selection, workers) undan o'qiydi.
 
 Rules:
 
-- Picker user'ning biror grant'i bor branch'larni taklif qiladi — yoki **barcha branch'larni**, agar `is_owner`.
-- Birinchi login'da: agar user'ning aniq bitta accessible branch'i bo'lsa auto-select;
-  aks holda prompt.
-- Selection per session persist qiladi (local storage); session revoke yoki re-login uni reset qiladi.
-- Picker UI hech qachon user'ga scope qila olmaydigan branch tanlashga ruxsat bermaydi.
-  Server baribir unga ishonmaydi — har bir request hali ham target'ning branch'ini nomlaydi,
-  grant set'ga qarshi tekshiriladi.
+- Picker user grant olgan branchesni taklif qiladi — yoki `is_owner` bo'lsa **all branches**.
+- First login: user exactly one accessible branchga ega bo'lsa auto-select; aks holda prompt.
+- Selection per session persisted (local storage); session revoke yoki re-login reset qiladi.
+- Picker UI user scope qila olmaydigan branchni tanlatmaydi. Server baribir unga ishonmaydi
+  — har request target branchni names qiladi, grant setga qarshi check qilinadi.
 
 ## How a request is authorized
 
-1. Auth middleware bearer token'ni **principal context**'ga aylantiradi: type, workshop
-   id, `is_owner`, grant set.
-2. Operation **target'ning branch'ini stored data'dan** aniqlaydi — hech qachon
-   client-supplied branch id'dan emas.
-3. Agar `is_owner` bo'lsa, yoki `(required_permission, target_branch)` grant set'da bo'lsa
-   allow; owner-only operation'lar uchun, faqat `is_owner` bo'lsa allow. Aks holda → `forbidden`.
+1. Auth middleware bearer tokenni **principal context**ga aylantiradi: type, workshop id,
+   `is_owner`, grant set.
+2. Operation **target's branch from stored data** aniqlaydi — hech qachon client-supplied
+   branch iddan emas.
+3. `is_owner` bo'lsa, yoki `(required_permission, target_branch)` grant setda bo'lsa allow;
+   owner-only operations uchun faqat `is_owner`. Aks holda → `forbidden`.
 
 ## Edge cases
 
-- **Create-workshop workshop row'dan keyin lekin owner row'dan oldin fail bo'ladi** — butun
-  operation roll back bo'ladi (atomik).
-- **Owner login boshqa workshop'dagi mavjud owner login bilan to'qnashadi** — fine (login'lar
-  per workshop unique, globally emas).
-- **Bir xil workshop ichida login collision** — rejected.
-- **Staff mid-action paytida workshop'ni block qilish** — ularning keyingi request'i 401;
-  platform operator incident response uchun workshop'ning data'sini hali ham o'qiy oladi.
-- **Staff member'ning yagona granted branch'i `inactive` bo'ladi** — u reactivate qilinmaguncha
-  yoki ularga boshqasi grant qilinmaguncha ular amalda actionable screen'larsiz qoladi; branch
-  picker inactive entry'ni yashiradi.
-- **Zero grant'li staff user** — log in qila oladi; har bir workshop screen empty / hidden.
-- **Owner non-home branch'da cutter / edger** — allowed: `is_owner` har bir branch'da
-  `process_production` ushlab turadi va non-owner staff'ni bog'laydigan
-  `home_branch_id = order.branch_id` assignment check'dan **exempt** (qarang
+- **Create-workshop fails after the workshop row but before the owner row** — whole operation
+  roll back (atomic).
+- **Owner login collides** with an existing owner login in another workshop — fine (logins
+  per workshop unique, global emas).
+- **Login collision within the same workshop** — rejected.
+- **Block a workshop while staff are mid-action** — next request 401; platform operator
+  incident response uchun workshop data read qila oladi.
+- **A staff member's only granted branch goes `inactive`** — reactivated yoki boshqa branch
+  grant qilinguncha actionable screens yo'q; branch picker inactive entryni hide qiladi.
+- **Staff user with zero grants** — log in qila oladi; har workshop screen empty / hidden.
+- **Owner as cutter / edger on a non-home branch** — allowed: `is_owner` har branchda
+  `process_production` ushlaydi va non-owner staffni bog'laydigan
+  `home_branch_id = order.branch_id` assignment checkdan **exempt** (see
   [`orders.md`](orders.md)).
-- **Keyinroq `inactive` bo'ladigan branch'dagi grant** — inert; branch picker'dan
-  yo'qoladi; reactivate qilish grant'ni yana live qiladi.
-- **Owner o'zini block qiladi** — disallowed (workshop'da active owner bo'lishi kerak).
-- **Client'ning raqami Telegram'da yoʻq** — `phone_unreachable_on_telegram`; sign-in card sign-in
-  uchun shu raqamda Telegram kerakligini tushuntiradi (v1'da SMS fallback yoʻq).
-- **Client code'ni notoʻgʻri yozadi** — `invalid_code`, qolgan attempt'lar bilan; 5-chi notoʻgʻri
-  attempt challenge'ni burn qiladi (`too_many_attempts`) va 5-minutlik TTL'dan oʻtgan code
-  `code_expired` — ikkalasi ham client'ni yangi code soʻrashga qaytaradi.
-- **Code juda tez-tez soʻraladi** — `code_send_rate_limited`; resend control 60 s cooldown
-  oʻtguncha countdown bilan disabled qoladi.
+- **Grant on a branch that later goes `inactive`** — inert; branch pickerdan yo'qoladi;
+  reactivating grantni yana live qiladi.
+- **Owner blocks themselves** — disallowed (workshop active ownerga ega bo'lishi shart).
+- **Client's number isn't on Telegram** — `phone_unreachable_on_telegram`; sign-in card sign
+  in shu numberdagi Telegramni talab qilishini tushuntiradi (v1da SMS fallback yo'q).
+- **Client mistypes the code** — `invalid_code` attempts remaining bilan; 5th wrong attempt
+  challenge burn qiladi (`too_many_attempts`) va 5-minute TTLdan o'tgan code
+  `code_expired` — ikkalasi clientni fresh code request qilishga qaytaradi.
+- **Code requested too often** — `code_send_rate_limited`; resend control 60 s cooldown
+  tugaguncha countdown bilan disabled qoladi.
 
 ## Next
 
-- [`workshop.md`](workshop.md) — branch'lar, workshop settings va audit.
-- [`finance.md`](finance.md) — income, expense'lar va accountant bu yerda access grant
-  qilingan worker'larga to'lash uchun ishlatadigan worker-production report'lar.
+- [`workshop.md`](workshop.md) — branches, workshop settings, and audit.
+- [`finance.md`](finance.md) — income, expenses, and the worker-production reports the
+  accountant uses to pay the workers granted access here.

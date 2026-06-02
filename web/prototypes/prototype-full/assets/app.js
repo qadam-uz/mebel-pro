@@ -219,6 +219,37 @@ window.showSecret = (opts) => {
   modal.querySelector('.x').focus();
 };
 
+// ---------- Password reset warning (non-blocking) ----------
+window.passwordResetRequired = (scope, principal = {}) => {
+  const key = `mp.${scope}.password-reset-required`;
+  const qp = new URLSearchParams(location.search);
+  const fromQuery = qp.get('reset') === '1' || qp.get('password_reset_required') === '1';
+  if (fromQuery) {
+    try { sessionStorage.setItem(key, '1'); } catch (_) {}
+  }
+  let fromSession = false;
+  try { fromSession = sessionStorage.getItem(key) === '1'; } catch (_) {}
+  return !!principal.passwordResetRequired || fromQuery || fromSession;
+};
+
+window.clearPasswordResetRequired = (scope) => {
+  try { sessionStorage.removeItem(`mp.${scope}.password-reset-required`); } catch (_) {}
+  document.getElementById(`pw-reset-warning-${scope}`)?.remove();
+};
+
+window.renderPasswordResetWarning = (scope, profileHref, principal = {}) => {
+  if (!window.passwordResetRequired(scope, principal)) return;
+  if (document.getElementById(`pw-reset-warning-${scope}`)) return;
+  const html = `
+    <div class="banner warn" id="pw-reset-warning-${scope}" role="status">
+      <div class="ic">${window.icon ? window.icon('alert', { size: 14 }) : '!'}</div>
+      <div class="grow">Vaqtinchalik parol ishlatyapsiz. Ishni davom ettirishingiz mumkin, lekin parolni profil orqali yangilang.</div>
+      <a class="btn btn-outline btn-sm" href="${profileHref}">Parolni o'zgartirish</a>
+    </div>`;
+  const mount = document.querySelector('main.page-content .page') || document.getElementById('page-shell');
+  mount?.insertAdjacentHTML('afterbegin', html);
+};
+
 // ---------- Password strength (≥8, upper + lower + digit) ----------
 window.pwStrength = (v) => {
   v = v || '';

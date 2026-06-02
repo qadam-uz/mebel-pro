@@ -57,7 +57,7 @@
           <button class="btn btn-outline btn-sm" type="button" onclick="navigator.clipboard?.writeText(document.getElementById('op-pass').value).then(()=>toast('Nusxalandi'))">Nusxa</button>
         </div>
       </div>
-      <div class="banner info"><div class="ic">i</div><div class="grow">Parol yaratilgandan keyin bir marta ko'rsatiladi (force_password_change yoqilgan).</div></div>
+      <div class="banner info"><div class="ic">i</div><div class="grow">Parol yaratilgandan keyin bir marta ko'rsatiladi. Operator kirgandan keyin parolni yangilash haqida ogohlantirish ko'radi.</div></div>
     </div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal="m-op">Bekor</button><button class="btn btn-acc" type="button" id="op-save" onclick="saveOp()">Yaratish</button></div>
@@ -164,7 +164,7 @@ function saveOp() {
     title: `${name} yaratildi`,
     note: 'Login va vaqtinchalik parol faqat bir marta ko\'rsatiladi.',
     rows: [{ k: 'Login', v: login }, { k: 'Vaqtinchalik parol', v: pass }],
-    hint: 'Operator birinchi kirishda yangi parol o\'rnatadi.'
+    hint: 'Operator ishni davom ettira oladi; app shell parolni profil orqali yangilashni eslatadi.'
   }), 240);
 }
 
@@ -172,7 +172,7 @@ function resetPw(uId) {
   const u = SEED.platformUsers.find(x => x.id === uId);
   confirmAction({
     title: 'Parolni qaytarish',
-    msg: `${u.name} ning barcha sessiyalari yopiladi va force_password_change yoqiladi.`,
+    msg: `${u.name} ning barcha sessiyalari yopiladi va password_reset_required yoqiladi.`,
     okText: 'Qaytarish'
   }, () => {
     const np = genTempPassword();
@@ -180,7 +180,7 @@ function resetPw(uId) {
       title: `${u.name} · parol qaytarildi`,
       note: 'Yangi vaqtinchalik parol faqat bir marta ko\'rsatiladi.',
       rows: [{ k: 'Login', v: u.login }, { k: 'Yangi vaqtinchalik parol', v: np }],
-      hint: 'Operator keyingi kirishda yangi parol o\'rnatadi.'
+      hint: 'Operator keyingi kirishda ogohlantirish ko\'radi, lekin app bloklanmaydi.'
     });
   });
 }

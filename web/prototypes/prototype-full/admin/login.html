@@ -38,52 +38,18 @@
       5 ta noto'g'ri urinishdan keyin 15 daqiqaga bloklanadi.
     </div>
   </div>
-
-  <!-- ===== Force password change (first login / after a reset) ===== -->
-  <div class="auth-card" id="card-fpc" hidden>
-    <span class="brand">
-      <span class="mk">M</span>
-      <span style="font-family:var(--f-display);font-size:19px;font-weight:600">Mebel Pro<small style="display:block;font-family:var(--f-ui);font-size:11px;color:var(--ink-6);font-weight:500;letter-spacing:.04em;text-transform:uppercase">Superadmin</small></span>
-    </span>
-    <h1>Yangi parol o'rnating</h1>
-    <p class="sub">Hisobingiz vaqtinchalik parol bilan yaratilgan. Davom etishdan oldin doimiy parol o'rnating.</p>
-
-    <form onsubmit="doFpc(event)" novalidate>
-      <div class="field">
-        <label>Yangi parol</label>
-        <input id="fpc-new" type="password" autocomplete="new-password" oninput="onPwInput()" required />
-        <div class="pw-meter" id="pw-meter"><i></i><i></i><i></i><i></i></div>
-        <div class="pw-reqs" id="pw-reqs">
-          <span data-r="len">kamida 8 belgi</span>
-          <span data-r="hasU">1 bosh harf</span>
-          <span data-r="hasL">1 kichik harf</span>
-          <span data-r="hasD">1 raqam</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Parolni tasdiqlang</label>
-        <input id="fpc-confirm" type="password" autocomplete="new-password" required />
-        <div class="err" id="fpc-err" hidden>Parollar mos kelmadi.</div>
-      </div>
-      <button class="btn btn-primary btn-block btn-lg" type="submit" id="fpc-btn" disabled><i class="ic" data-icon="save"></i> Saqlash va davom etish</button>
-    </form>
-    <div class="meta">Bu ekran parol o'rnatilmaguncha panelni bloklaydi.</div>
-  </div>
 </div>
 
 <script src="../assets/app.js"></script>
 <script>
-// Demo: ?fpc=1 jumps straight to force-password-change; ?locked=1 shows lockout.
+// Demo: ?locked=1 shows lockout. Empty/"temp" password logs in with a
+// non-blocking password-reset warning in the app shell.
 const qp = new URLSearchParams(location.search);
 let attempts = 0;
 let lockedUntil = null;
 
-if (qp.get('fpc') === '1') { show('card-fpc'); }
 if (qp.get('locked') === '1') { lock(); }
 
-function show(id) {
-  document.querySelectorAll('.auth-card').forEach(c => c.hidden = c.id !== id);
-}
 function lock() {
   const until = new Date(Date.now() + 15 * 60 * 1000);
   lockedUntil = until;
@@ -98,11 +64,12 @@ function doLogin(e) {
   e.preventDefault();
   if (lockedUntil && lockedUntil > new Date()) return;
   const pass = document.getElementById('lg-pass').value;
-  // Demo auth: empty/"temp" → first-login force-change; "wrong" → generic error.
+  // Demo auth: empty/"temp" → password-reset warning; "wrong" → generic error.
   if (!pass || pass.toLowerCase() === 'temp') {
     document.getElementById('login-err').hidden = true;
     toast('Vaqtinchalik parol qabul qilindi');
-    setTimeout(() => show('card-fpc'), 500);
+    try { sessionStorage.setItem('mp.admin.password-reset-required', '1'); } catch (_) {}
+    setTimeout(() => location.href = 'dashboard.html?reset=1', 500);
     return;
   }
   if (pass.toLowerCase() === 'wrong') {
@@ -113,27 +80,6 @@ function doLogin(e) {
   }
   document.getElementById('login-err').hidden = true;
   toast('Kirildi');
-  setTimeout(() => location.href = 'dashboard.html', 600);
-}
-function onPwInput() {
-  const v = document.getElementById('fpc-new').value;
-  const s = pwStrength(v);
-  const m = document.getElementById('pw-meter');
-  m.className = 'pw-meter s' + s.score;
-  ['len', 'hasU', 'hasL', 'hasD'].forEach(k => {
-    document.querySelector(`#pw-reqs span[data-r="${k}"]`).classList.toggle('ok', !!s[k]);
-  });
-  document.getElementById('fpc-btn').disabled = !s.ok;
-}
-function doFpc(e) {
-  e.preventDefault();
-  const a = document.getElementById('fpc-new').value;
-  const b = document.getElementById('fpc-confirm').value;
-  const err = document.getElementById('fpc-err');
-  if (!pwStrength(a).ok) return;
-  if (a !== b) { err.hidden = false; return; }
-  err.hidden = true;
-  toast('Parol o\'rnatildi');
   setTimeout(() => location.href = 'dashboard.html', 600);
 }
 </script>

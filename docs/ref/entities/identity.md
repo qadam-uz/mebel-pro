@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 10
 ---
 
@@ -23,7 +23,7 @@ model — full platform scope. Uses the superadmin app.
 | `password_hash` | text | argon2/bcrypt; never plaintext |
 | `full_name` / `phone` | text | required; phone `+998XXXXXXXXX` |
 | `status` | enum | `active` / `blocked` (soft delete only) |
-| `force_password_change` | bool | default `true` on creation |
+| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
 | `failed_login_count` / `locked_until` | int / timestamp? | brute-force counter; resets on success |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
@@ -48,7 +48,7 @@ grant. Uses the workshop app.
 | `is_owner` | bool | **exactly one `true` per workshop** |
 | `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (a **non-owner** order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`; the **owner is exempt** — `is_owner` holds `process_production` on every branch and may be assigned regardless of `home_branch_id`); for owner / office staff who span branches, set the branch they sit at |
 | `status` | enum | `active` / `blocked` |
-| `force_password_change` | bool | default `true` on creation |
+| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
 | `failed_login_count` / `locked_until` | int / timestamp? | |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
@@ -102,7 +102,8 @@ branch per order. Uses the client app.
 
 The phone is the only verified fact; `name` is self-entered and editable by the client (no
 external source of truth — nothing is synced from Telegram, which is only the delivery channel
-for the login code). No password, no forced-change / lockout (auth integrity is the OTP check).
+for the login code). No password, no password-reset warning / lockout (auth integrity is the
+OTP check).
 A client cannot exist without a phone that has been verified via the
 [code challenge](#phone-verification-challenge); the row is created only on the first
 successful verification of a new number.

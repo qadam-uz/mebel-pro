@@ -317,6 +317,7 @@ window.renderWorkshopShell = (active = '') => {
   document.body.insertAdjacentHTML('afterbegin', `<div class="app">${sidebar}<main class="shell-main">${topbar}<div id="page-shell"></div></main></div>`);
   const page = document.body.querySelector('main.page-content');
   if (page) document.getElementById('page-shell').appendChild(page);
+  window.renderPasswordResetWarning?.('workshop', 'profile.html?tab=password', me);
   autoMarkNav();
 
   // Fill the notification dropdown + badge (PU10).

@@ -62,7 +62,7 @@
       <div class="field"><label>Login</label><input placeholder="asror" /></div>
       <div class="field"><label>Asosiy filial</label><select><option>Yunusobod</option><option>Chilonzor</option><option>Yangiyo'l</option></select></div>
     </div>
-    <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va faqat 1 marta ko'rsatiladi.</div></div>
+    <div class="banner info"><div class="ic">i</div><div class="grow">Vaqtinchalik parol avtomatik yaratiladi va faqat 1 marta ko'rsatiladi. Xodim kirgandan keyin parolni yangilash haqida ogohlantirish ko'radi.</div></div>
 
     <h4 style="font:600 12px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-6);margin:18px 0 10px">Boshlang'ich ruxsatlar (ixtiyoriy)</h4>
     <p class="muted" style="font-size:12.5px;margin:0 0 12px">Yaratishdan keyin "Ruxsatlar" bo'limidan ham o'zgartirish mumkin.</p>
@@ -119,7 +119,7 @@ function render() {
           <button class="menu-btn" data-menu-toggle>⋯</button>
           <div class="menu">
             <a class="mi" href="user-detail.html?id=${u.id}">Tahrir</a>
-            <button class="mi" onclick="confirmAction({title:'Parolni qaytarish',msg:'Yangi vaqtinchalik parol yaratiladi.',okText:'Qaytarish'},()=>toast('Yangi parol: TempPass2026Reset!'))">Parol qaytarish</button>
+            <button class="mi" onclick="resetUserPw('${u.id}')">Parol qaytarish</button>
             <div class="sep"></div>
             ${u.status === 'active' && !u.isOwner ? `<button class="mi danger" onclick="confirmAction({title:'Xodimni bloklash',msg:'Sessiyalari yopiladi, kirishni cheklaydi.',okText:'Bloklash',danger:true},()=>toast('Bloklandi'))">Bloklash</button>` :
               u.isOwner ? `<button class="mi" disabled style="opacity:.4;cursor:not-allowed">Egasi bloklanmaydi</button>` :
@@ -131,6 +131,20 @@ function render() {
   }).join('');
 }
 if (OWNER) render();
+
+function resetUserPw(uId) {
+  const u = SEED.users.find(x => x.id === uId);
+  confirmAction({
+    title: 'Parolni qaytarish',
+    msg: `${u.name} ning sessiyalari yopiladi va password_reset_required yoqiladi.`,
+    okText: 'Qaytarish'
+  }, () => showSecret({
+    title: `${u.name} · parol qaytarildi`,
+    note: 'Yangi vaqtinchalik parol faqat bir marta ko\'rsatiladi.',
+    rows: [{ k: 'Login', v: u.login }, { k: 'Yangi vaqtinchalik parol', v: genTempPassword() }],
+    hint: 'Xodim keyingi kirishda ogohlantirish ko\'radi, lekin app bloklanmaydi.'
+  }));
+}
 </script>
 </body>
 </html>

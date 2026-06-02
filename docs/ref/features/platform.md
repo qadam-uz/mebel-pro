@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 70
 ---
 
@@ -86,7 +86,7 @@ edge.
 Operators can list, create, reset the password of, block, and unblock platform users. The
 shape mirrors workshop-user management but **without a permission model** — every platform
 user holds full platform scope. Creation hands back a temp password to share once (with
-`force_password_change` set, see [`access-management.md`](access-management.md)).
+`password_reset_required` set, see [`access-management.md`](access-management.md)).
 
 A platform operator cannot block themselves, and the last active platform operator cannot be
 blocked — there must always be at least one.

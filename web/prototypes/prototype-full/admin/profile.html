@@ -52,7 +52,7 @@
           <div class="field"><label>Joriy parol</label><input type="password" /></div>
           <div class="field"><label>Yangi parol</label><input type="password" /></div>
           <div class="field"><label>Tasdiqlash</label><input type="password" /></div>
-          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="toast('Parol o\'zgartirildi')">O'zgartirish</button></div>
+          <div class="flex-end"><button class="btn btn-acc" type="button" onclick="clearPasswordResetRequired('admin');toast('Parol o\'zgartirildi')">O'zgartirish</button></div>
         </div>
       </div>
     </section>
@@ -71,6 +71,11 @@
 <script src="../assets/app.js"></script>
 <script src="../assets/data.js"></script>
 <script src="../assets/admin-shell.js"></script>
-<script>renderAdminShell();</script>
+<script>
+renderAdminShell();
+if (new URLSearchParams(location.search).get('tab') === 'password') {
+  switchTab('pr', 't-password');
+}
+</script>
 </body>
 </html>
