@@ -4,6 +4,9 @@ import { defineConfig, devices } from '@playwright/test'
 // when unset, Playwright boots the local dev stack via `webServer` below.
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
 const useLocalServers = !process.env.E2E_BASE_URL
+const E2E_DATABASE_URL = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
+const composeCommand = 'docker compose --env-file ../deploy/.env.dev.example -f ../deploy/compose.yaml'
+const backendEnv = `ENV=test OTP_DEV_CODES='["000000"]' DATABASE_URL=${E2E_DATABASE_URL}`
 
 export default defineConfig({
   testDir: './tests',
@@ -26,15 +29,17 @@ export default defineConfig({
     // { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
 
-  // Boot the dev stack for local runs. The backend needs uv + a reachable
-  // Postgres (see deploy/compose.yaml); start it yourself if these aren't set up.
+  // Boot the dev stack for local runs: data services first, then migrated
+  // backend, then Vite. The Docker data services are required because the
+  // backend readiness and file-storage contract depend on real Postgres/MinIO.
   webServer: useLocalServers
     ? [
         {
-          command: 'uv --directory ../backend run fastapi dev app/main.py --port 8000',
+          command:
+            `${composeCommand} up -d --wait postgres minio && ${composeCommand} run --rm createbuckets && ${composeCommand} exec -T postgres psql -U mebel -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS mebel_e2e WITH (FORCE);" -c "CREATE DATABASE mebel_e2e;" && ${backendEnv} uv --directory ../backend run alembic upgrade head && ${backendEnv} uv --directory ../backend run fastapi dev app/main.py --port 8000`,
           url: 'http://localhost:8000/api/v1/healthz',
           reuseExistingServer: !process.env.CI,
-          timeout: 60_000,
+          timeout: 90_000,
         },
         {
           command: 'pnpm --dir ../web dev',

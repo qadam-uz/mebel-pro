@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import PostgresDsn, computed_field
+from pydantic import PostgresDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/app/core/config.py → parents[2] == backend/ ; its parent == repo root.
@@ -52,9 +52,13 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT_URL: str = "http://localhost:9000"
     MINIO_REGION: str = "us-east-1"
     MINIO_ACCESS_KEY_ID: str = "mebel"
-    MINIO_SECRET_ACCESS_KEY: str = "mebel"  # noqa: S105 — dev default; override in prod
+    MINIO_SECRET_ACCESS_KEY: str = "mebel-secret"  # noqa: S105 — dev default; override in prod
     MINIO_BUCKET: str = "mebel"
     MINIO_USE_SSL: bool = False
+
+    # Client phone-OTP dev sign-in. Empty means the real Telegram flow is required.
+    # A non-empty list is a local/CI bypass and is rejected in production.
+    OTP_DEV_CODES: list[str] = []
 
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
@@ -82,6 +86,13 @@ class Settings(BaseSettings):
                 path=self.POSTGRES_DB,
             )
         )
+
+    @model_validator(mode="after")
+    def validate_security_defaults(self) -> "Settings":
+        if self.ENV == "prod" and self.OTP_DEV_CODES:
+            msg = "OTP_DEV_CODES must be empty in production"
+            raise ValueError(msg)
+        return self
 
 
 @lru_cache

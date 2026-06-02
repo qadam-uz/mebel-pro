@@ -50,6 +50,7 @@ services:
       DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
+      OTP_DEV_CODES: ${OTP_DEV_CODES:-[]}
     volumes:
       # Live docs site reads these on every request — no build step. The
       # repo is present on the host (the deploy pulls it). docs_uz/ is the
