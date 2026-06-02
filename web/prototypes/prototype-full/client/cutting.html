@@ -152,7 +152,7 @@
   .metric .lab { font: 600 10.5px var(--f-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-6); margin-bottom: 4px; }
   .metric .v { font: 600 22px var(--f-display); color: var(--ink-12); letter-spacing: -.015em; }
   .metric .sub { font: 400 11.5px var(--f-mono); color: var(--ink-6); margin-top: 2px; }
-  .metric.ok .v { color: #2d6045; }
+  .metric.ok .v { color: var(--success); }
   .metric.warn .v { color: #b87024; }
 
   /* Algorithm comparison */
@@ -308,7 +308,7 @@
       </div>
       <div class="algos-list">
         <table>
-          <thead><tr><th>Algoritm</th><th>Chiqim</th><th>Listlar</th><th>Kesish uzunligi</th><th></th></tr></thead>
+          <thead><tr><th>Algoritm</th><th>Chiqim</th><th>Panellar</th><th>Kesish uzunligi</th><th></th></tr></thead>
           <tbody id="algos-tbody"></tbody>
         </table>
       </div>
@@ -1221,8 +1221,8 @@ function renderEdgeHelp(p) {
   }
   const recs = recommendedEdgesForPanel(p.matId, { limit: 1 });
   help.textContent = recs.length
-    ? 'Mos kromlar tavsiya sifatida yuqorida turadi; kerak bo‘lsa shu listdan boshqa materialni tanlang.'
-    : "Bu panel uchun mos krom topilmadi; shu listdan rang yoki qalinlik bo'yicha tanlang.";
+    ? "Mos kromlar tavsiya sifatida yuqorida turadi; kerak bo'lsa shu ro'yxatdan boshqa materialni tanlang."
+    : "Bu panel uchun mos krom topilmadi; shu ro'yxatdan rang yoki qalinlik bo'yicha tanlang.";
 }
 
 function renderEdgePatterns(p) {
@@ -1469,7 +1469,7 @@ function runOptimizer() {
   }
   // simulate running (5s hard cap → optimization_timeout)
   const btn = document.getElementById('optimize-btn');
-  btn.disabled = true; btn.textContent = '⏳ Hisoblanmoqda...';
+  btn.disabled = true; btn.innerHTML = `${window.icon('activity', { size: 15 })} Hisoblanmoqda...`;
   setTimeout(() => {
     btn.innerHTML = window.icon('play',{size:13}) + ' Qayta ishga tushirish';
     // if the draft already has seed algorithms, use them; otherwise synthesize
@@ -1710,7 +1710,7 @@ function renderSheetSvg(algo) {
     cx += pl + 4; rowH = Math.max(rowH, pw);
   }
 
-  const palette = ['#0F766E','#7e6f53','#2d6045','#664a2d','#b87024','#4a5b3f','#856a48','#5a4438'];
+  const palette = ['var(--accent)', 'var(--ink-8)', 'var(--success)', 'var(--warn)', 'var(--danger)', 'var(--olive)', 'var(--info)', 'var(--deep-3)'];
   const partColor = (idx) => palette[idx % palette.length];
 
   const svgW = 800, svgH = Math.round(svgW * H / W);

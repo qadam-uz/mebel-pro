@@ -46,6 +46,14 @@
     return SEED.branches.filter(b => ids.has(b.id)).map(b => b.id);
   };
 
+  window.operationalBranchIds = () => {
+    if (!window.SEED) return [];
+    const ids = new Set(window.myBranches());
+    return SEED.branches
+      .filter(b => ids.has(b.id) && b.status !== 'inactive')
+      .map(b => b.id);
+  };
+
   // ownerOnly() — render a denied panel and return false when a non-owner
   // reaches an owner-only screen. Returns true when the owner may proceed.
   window.ownerOnly = (mountSelector = '#wrap, .page > div:last-child, .page') => {
@@ -239,8 +247,9 @@ window.renderWorkshopShell = (active = '') => {
     </div>
   </aside>`;
 
-  // Branch picker offers only myBranches() (all, for the owner).
-  const myBr = window.myBranches();
+  // Branch picker offers only operational branches; inactive branch grants are
+  // inert and should not be selectable from daily-use screens.
+  const myBr = window.operationalBranchIds();
   const brOptions = (window.SEED ? SEED.branches : []).filter(b => myBr.includes(b.id));
   const allLabel = window.isOwner() ? 'Hamma filiallar' : (brOptions.length > 1 ? 'Mening filiallarim' : '');
   const showAll = brOptions.length !== 1;
@@ -292,7 +301,7 @@ window.renderWorkshopShell = (active = '') => {
     ${branchPicker}
     <div class="tb-search">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
-      <input id="tb-search" placeholder="Buyurtma, mijoz, xodim yoki material..." onkeydown="if(event.key==='Enter'){toast('Qidiruv: '+this.value)}" />
+      <input id="tb-search" aria-label="Global qidiruv" placeholder="Buyurtma, mijoz, xodim yoki material..." onkeydown="if(event.key==='Enter'){toast('Qidiruv: '+this.value)}" />
       <span class="kbd">⌘ K</span>
     </div>
     <div class="tb-actions">
@@ -305,7 +314,7 @@ window.renderWorkshopShell = (active = '') => {
         <div class="menu notif-menu" style="min-width:340px;right:0;padding:0" role="menu" aria-label="Bildirishnomalar">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)">
             <b style="font:700 13px var(--f-ui)">Bildirishnomalar</b>
-            <button class="btn btn-ghost btn-sm" type="button" onclick="event.stopPropagation();markAllNotifsRead()">Hammasini o'qildi</button>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="event.stopPropagation();markAllNotifsRead()">Hammasini o'qilgan deb belgilash</button>
           </div>
           <div id="notif-dd-list" style="max-height:360px;overflow-y:auto"></div>
           <a class="mi" href="notifications.html" style="justify-content:center;border-top:1px solid var(--line);border-radius:0;font-weight:600;padding:11px">Hammasini ko'rish ${window.icon('arrow-right', { size: 13 })}</a>

@@ -39,16 +39,14 @@
       <h1>Ustaxonalar</h1>
       <p class="sub">Faol ustaxonalar va ularda mavjud materiallar.</p>
     </div>
-    <div class="tools">
-      <a class="btn btn-acc" href="cutting.html?id=new"><i class="ic" data-icon="plus"></i> Yangi chizma</a>
-    </div>
   </div>
 
   <div class="info-banner">
     Bu ro'yxat shunchaki ma'lumot uchun. Buyurtma uchun chizmadan boshlang.
   </div>
 
-  <input class="search-input" placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..." oninput="filterBranches(this.value)" />
+  <label class="filter-label" for="branch-search" style="display:inline-block;margin-bottom:8px">Qidirish</label><br>
+  <input class="search-input" id="branch-search" aria-label="Ustaxona yoki shahar nomi" placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..." oninput="filterBranches(this.value)" />
 
   <div id="br-list"></div>
 </main>
@@ -81,7 +79,7 @@ function render() {
           ${closed ? `<div class="meta" style="color:var(--warn);margin-top:6px">${window.icon('alert',{size:12})} ${b.closedReason || 'Vaqtincha yopiq'}</div>` : ''}
         </div>
         <div>
-          ${closed ? `<span class="badge" style="background:var(--warn-tint);color:var(--warn)">Vaqtincha yopiq</span>` : `<span class="badge" style="background:rgba(45,96,69,.1);color:#2d6045">Faol</span>`}
+          ${closed ? `<span class="badge" style="background:var(--warn-tint);color:var(--warn)">Vaqtincha yopiq</span>` : `<span class="badge" style="background:var(--success-tint);color:var(--success)">Faol</span>`}
         </div>
       </article>`;
   }).join('');

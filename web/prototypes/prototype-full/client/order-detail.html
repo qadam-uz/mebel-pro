@@ -98,13 +98,18 @@ function renderOrder(o) {
   const cuttingInvalidated = cutting && cutting.status === 'invalidated';
   const fin = SEED.lookup.orderFinance(o);
   const financeOpen = ['ready', 'completed'].includes(o.state);
+  const edgeSplit = SEED.lookup.orderEdgePriceSplit(o);
 
   // Frozen price breakdown — always shown on Overview from placement on.
   const itemsRows = [
-    { lbl: 'Chizma xizmati', val: fmtTiyin(o.subtotalCuttingTiyin) },
+    { lbl: 'Kesish xizmati', val: fmtTiyin(o.subtotalCuttingTiyin) },
     { lbl: 'Material', val: fmtTiyin(o.subtotalMaterialsTiyin) }
   ];
-  if (o.subtotalEdgeBandingTiyin) itemsRows.push({ lbl: 'Krom yopishtirish', val: fmtTiyin(o.subtotalEdgeBandingTiyin) });
+  if (edgeSplit.total) {
+    itemsRows.push({ lbl: 'Krom', val: fmtTiyin(edgeSplit.total) });
+    itemsRows.push({ lbl: '· Krom materiali', val: fmtTiyin(edgeSplit.materials) });
+    itemsRows.push({ lbl: '· Krom yopishtirish xizmati', val: fmtTiyin(edgeSplit.service) });
+  }
   if (o.discountTiyin) itemsRows.push({ lbl: `Chegirma${o.discountReason ? ' · ' + o.discountReason : ''}`, val: '− ' + fmtTiyin(o.discountTiyin) });
 
   wrap.innerHTML = `
@@ -145,9 +150,11 @@ function renderOrder(o) {
           <div class="card">
             <div class="card-h"><h2>Buyurtma tarkibi</h2></div>
             <div class="card-b" style="padding-top: 0">
-              <div class="row-item"><div><div class="nm">Chizma</div><small style="color:var(--ink-6)">${o.cuttingId}</small></div><div class="meta">${fmtTiyin(o.subtotalCuttingTiyin)}</div></div>
+              <div class="row-item"><div><div class="nm">Kesish xizmati</div><small style="color:var(--ink-6)">chizma ${o.cuttingId}</small></div><div class="meta">${fmtTiyin(o.subtotalCuttingTiyin)}</div></div>
               <div class="row-item"><div><div class="nm">Material</div><small style="color:var(--ink-6)">ustaxona materiali</small></div><div class="meta">${fmtTiyin(o.subtotalMaterialsTiyin)}</div></div>
-              ${o.subtotalEdgeBandingTiyin ? `<div class="row-item"><div><div class="nm">Krom yopishtirish</div></div><div class="meta">${fmtTiyin(o.subtotalEdgeBandingTiyin)}</div></div>` : ''}
+              ${edgeSplit.total ? `<div class="row-item"><div><div class="nm">Krom</div><small style="color:var(--ink-6)">${edgeSplit.metres ? edgeSplit.metres.toFixed(1) + ' m · ' : ''}material + xizmat</small></div><div class="meta">${fmtTiyin(edgeSplit.total)}</div></div>
+              <div class="row-item"><div><div class="nm">Krom materiali</div><small style="color:var(--ink-6)">xom ashyo · lenta narxi</small></div><div class="meta">${fmtTiyin(edgeSplit.materials)}</div></div>
+              <div class="row-item"><div><div class="nm">Krom yopishtirish xizmati</div><small style="color:var(--ink-6)">ish haqi · metr bo'yicha</small></div><div class="meta">${fmtTiyin(edgeSplit.service)}</div></div>` : ''}
               ${o.discountTiyin ? `<div class="row-item"><div><div class="nm">Chegirma</div><small style="color:var(--ink-6)">${o.discountReason || ''}</small></div><div class="meta success-text">− ${fmtTiyin(o.discountTiyin)}</div></div>` : ''}
             </div>
           </div>
@@ -192,7 +199,7 @@ function renderOrder(o) {
             </div>
             <div class="card-b" style="padding-top: 0">
               <p class="muted" style="font-size:13px;margin:0 0 14px">Chizma · ${o.cuttingId}${banded ? ' · krom yopishtirish bor' : ''}</p>
-              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlanmoqda')">⬇ Chizmani PDF olish</button>
+              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF tayyorlanmoqda')"><i class="ic" data-icon="download"></i> Chizmani PDF olish</button>
             </div>
           </div>
         </section>

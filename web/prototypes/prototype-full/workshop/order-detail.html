@@ -67,6 +67,7 @@ if (!o) {
   const algo = cutting ? SEED.lookup.chosenAlgo(cutting) : null;
   const fin = SEED.lookup.orderFinance(o);
   const cuttingInvalidated = cutting && cutting.status === 'invalidated';
+  const edgeSplit = SEED.lookup.orderEdgePriceSplit(o);
 
   // Read-only cutting-result figures (PU4a) — what the worker confirms, never
   // re-types: panels from the chosen algorithm, cut count derived from the
@@ -91,9 +92,13 @@ if (!o) {
 
   const itemsRows = [
     { lbl: 'Kesish xizmati', val: fmtTiyin(o.subtotalCuttingTiyin) },
-    { lbl: 'Material', val: fmtTiyin(o.subtotalMaterialsTiyin) },
-    { lbl: 'Krom yopishtirish', val: fmtTiyin(o.subtotalEdgeBandingTiyin) }
+    { lbl: 'Material', val: fmtTiyin(o.subtotalMaterialsTiyin) }
   ];
+  if (edgeSplit.total) {
+    itemsRows.push({ lbl: 'Krom', val: fmtTiyin(edgeSplit.total) });
+    itemsRows.push({ lbl: '· Krom materiali', val: fmtTiyin(edgeSplit.materials) });
+    itemsRows.push({ lbl: '· Krom yopishtirish xizmati', val: fmtTiyin(edgeSplit.service) });
+  }
   if (o.discountTiyin) itemsRows.push({ lbl: 'Chegirma' + (o.discountReason ? ` · ${o.discountReason}` : ''), val: '− ' + fmtTiyin(o.discountTiyin) });
 
   const partRows = cutting && cutting.partList ? cutting.partList.map(p => {
@@ -166,7 +171,9 @@ if (!o) {
             <div class="card-b" style="padding-top: 0">
               <div class="row-item"><div><div class="nm">Kesish xizmati</div></div><div class="meta">${fmtTiyin(o.subtotalCuttingTiyin)}</div></div>
               <div class="row-item"><div><div class="nm">Material</div></div><div class="meta">${fmtTiyin(o.subtotalMaterialsTiyin)}</div></div>
-              <div class="row-item"><div><div class="nm">Krom yopishtirish</div></div><div class="meta">${fmtTiyin(o.subtotalEdgeBandingTiyin)}</div></div>
+              ${edgeSplit.total ? `<div class="row-item"><div><div class="nm">Krom</div><small style="color:var(--ink-6)">${edgeSplit.metres ? edgeSplit.metres.toFixed(1) + ' m · ' : ''}material + xizmat</small></div><div class="meta">${fmtTiyin(edgeSplit.total)}</div></div>
+              <div class="row-item"><div><div class="nm">Krom materiali</div><small style="color:var(--ink-6)">xom ashyo · lenta narxi</small></div><div class="meta">${fmtTiyin(edgeSplit.materials)}</div></div>
+              <div class="row-item"><div><div class="nm">Krom yopishtirish xizmati</div><small style="color:var(--ink-6)">ish haqi · metr bo'yicha</small></div><div class="meta">${fmtTiyin(edgeSplit.service)}</div></div>` : `<div class="row-item"><div><div class="nm">Krom</div><small style="color:var(--ink-6)">bu buyurtmada krom yo'q</small></div><div class="meta muted">—</div></div>`}
               ${o.discountTiyin ? `<div class="row-item"><div><div class="nm">Chegirma</div><small style="color:var(--ink-6)">${o.discountReason || ''}</small></div><div class="meta">− ${fmtTiyin(o.discountTiyin)}</div></div>` : ''}
               <div class="row-item" style="font-weight:600"><div><div class="nm">Jami</div></div><div class="meta">${fmtTiyin(o.totalTiyin)}</div></div>
             </div>
@@ -219,7 +226,7 @@ if (!o) {
                 </svg>
               </div>
               <p class="muted" style="font-size:11.5px;margin:8px 0 0">Namuna ko'rinish — to'liq reja PDF da.</p>
-              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px">⬇ Chizma (PDF)</button>
+              <button class="btn btn-outline btn-block" type="button" onclick="toast('PDF yuklanmoqda')" style="margin-top:12px"><i class="ic" data-icon="download"></i> Chizma (PDF)</button>
             </div>
           </div>
         </section>
@@ -321,7 +328,7 @@ function detailActions(o) {
       a.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder()">Bekor qilish</button>`);
     }
   } else if (o.state === 'completed') {
-    a.push(`<button class="btn btn-outline btn-sm" onclick="toast('PDF yuklanmoqda')">⬇ PDF</button>`);
+    a.push(`<button class="btn btn-outline btn-sm" onclick="toast('PDF yuklanmoqda')"><i class="ic" data-icon="download"></i> PDF</button>`);
   } else if (o.state === 'cancelled') {
     a.push(`<span class="muted" style="font-size:13px">Faqat o'qish uchun.</span>`);
   }

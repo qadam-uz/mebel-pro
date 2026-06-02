@@ -38,17 +38,19 @@
         <button class="chip" data-state="edge_banding" onclick="setStateFilter('edge_banding')">Kromda</button>
         <button class="chip" data-state="ready" onclick="setStateFilter('ready')">Tayyor</button>
         <button class="chip" data-state="completed" onclick="setStateFilter('completed')">Tugatilgan</button>
+        <button class="chip" data-state="cancelled" onclick="setStateFilter('cancelled')">Bekor qilingan</button>
       </div>
+      <label class="filter-label" for="search">Qidirish</label>
       <div class="input">
-        <input id="search" placeholder="ID yoki mijoz nomi..." oninput="render()" />
+        <input id="search" aria-label="Buyurtma ID yoki mijoz nomi" placeholder="ID yoki mijoz nomi..." oninput="render()" />
       </div>
-      <select id="date-filter" onchange="render()">
+      <select id="date-filter" aria-label="Sana filtri" onchange="render()">
         <option value="all">Barcha sanalar</option>
         <option value="today">Bugun</option>
         <option value="week">Oxirgi 7 kun</option>
         <option value="month">May oyi</option>
       </select>
-      <select id="branch-filter" onchange="render()"></select>
+      <select id="branch-filter" aria-label="Filial filtri" onchange="render()"></select>
     </div>
 
     <!-- BOARD -->
@@ -81,9 +83,12 @@ renderWorkshopShell();
 let mode = 'board', stateFilter = 'all';
 // v1 board: linear pickup-only flow, no payment / delivery columns.
 const COLS = ['new', 'confirmed', 'cutting', 'edge_banding', 'ready'];
+const TERMINAL = ['completed', 'cancelled'];
 
 // CR4: branches the user can see; whether they can act vs. only view.
-const MY_BR = myBranches();
+const MY_BR = typeof operationalBranchIds === 'function'
+  ? operationalBranchIds()
+  : myBranches().filter(id => SEED.lookup.branchById(id)?.status !== 'inactive');
 const canActOn = bid => isOwner() || can('manage_orders', bid);
 
 // Populate the branch filter from MY_BR only (never offer a branch the user
@@ -97,8 +102,32 @@ const canActOn = bid => isOwner() || can('manage_orders', bid);
 
 const NO_BRANCHES = MY_BR.length === 0;
 
-function setMode(m) { mode = m; document.getElementById('board-view').hidden = m !== 'board'; document.getElementById('table-view').hidden = m !== 'table'; document.getElementById('mode-board').classList.toggle('on', m === 'board'); document.getElementById('mode-table').classList.toggle('on', m === 'table'); render(); }
-function setStateFilter(s) { stateFilter = s; document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('on', b.dataset.state === s)); render(); }
+function syncModeUi() {
+  document.getElementById('board-view').hidden = mode !== 'board';
+  document.getElementById('table-view').hidden = mode !== 'table';
+  document.getElementById('mode-board').classList.toggle('on', mode === 'board');
+  document.getElementById('mode-table').classList.toggle('on', mode === 'table');
+}
+function setMode(m) {
+  if (m === 'board' && TERMINAL.includes(stateFilter)) {
+    toast('Tugatilgan va bekor qilingan buyurtmalar jadvalda ko\'rsatiladi', 'warn');
+    mode = 'table';
+  } else {
+    mode = m;
+  }
+  syncModeUi();
+  render();
+}
+function setStateFilter(s) {
+  stateFilter = s;
+  document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('on', b.dataset.state === s));
+  if (TERMINAL.includes(s) && mode === 'board') {
+    mode = 'table';
+    toast('Terminal holatlar jadval rejimida ochildi');
+  }
+  syncModeUi();
+  render();
+}
 
 function matchDate(o, f) {
   if (f === 'all') return true;
@@ -204,8 +233,14 @@ function renderBoard(orders) {
       'Tanlangan filtrga mos buyurtma yo\'q.');
     return;
   }
+  const activeOrders = orders.filter(o => COLS.includes(o.state));
+  if (activeOrders.length === 0) {
+    board.innerHTML = stEmpty('Bu filtrda faol taxta kartalari yo\'q',
+      'Tugatilgan yoki bekor qilingan buyurtmalarni jadval rejimida ko\'ring.');
+    return;
+  }
   board.innerHTML = COLS.map(c => {
-    const cards = orders.filter(o => o.state === c).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    const cards = activeOrders.filter(o => o.state === c).sort((a, b) => (b.priority || 0) - (a.priority || 0));
     return `<div class="board-col">
       <h4>${SEED.STATE_LABELS[c]} <span class="ct">${cards.length}</span></h4>
       ${cards.map(o => {
@@ -222,7 +257,7 @@ function renderBoard(orders) {
           </div>
           <div class="meta" style="margin-top:6px">
             <div class="menu-wrap" style="margin-left:auto">
-              <button class="btn btn-outline btn-sm" type="button" data-menu-toggle>Holat ⋯</button>
+              <button class="btn btn-outline btn-sm" type="button" data-menu-toggle aria-label="${o.id} holat amallari">Holat <i data-icon="more-horizontal"></i></button>
               <div class="menu">${cardActions(o)}</div>
             </div>
           </div>
@@ -249,7 +284,7 @@ function renderTable(orders) {
       <td style="font-size:11.5px;color:var(--ink-6);font-family:var(--f-mono)">${o.placedAt}</td>
       <td onclick="event.stopPropagation()">
         <div class="menu-wrap">
-          <button class="menu-btn" type="button" data-menu-toggle>⋯</button>
+          <button class="menu-btn" type="button" data-menu-toggle aria-label="${o.id} amallari"><i data-icon="more-horizontal"></i></button>
           <div class="menu">${cardActions(o)}</div>
         </div>
       </td>

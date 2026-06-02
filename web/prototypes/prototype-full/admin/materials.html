@@ -27,7 +27,8 @@
     </div>
 
     <div class="filters">
-      <div class="input"><input id="q" placeholder="Material nomi..." oninput="render()" /></div>
+      <label class="filter-label" for="q">Qidirish</label>
+      <div class="input"><input id="q" aria-label="Material nomi" placeholder="Material nomi..." oninput="render()" /></div>
       <div class="chips" id="kind-chips">
         <button class="chip on" data-k="all">Hammasi</button>
         <button class="chip" data-k="panel">Panel</button>
@@ -58,8 +59,12 @@
     </div>
 
     <div class="field">
-      <label>Manufacturer</label>
-      <select id="f-mfr"></select>
+      <label for="f-mfr">Manufacturer</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="f-mfr"></select>
+        <button class="btn btn-outline btn-sm" type="button" onclick="openInlineMfr()"><i class="ic" data-icon="plus"></i> Manufacturer</button>
+      </div>
+      <div class="hint">Yangi manufacturer qo'shilsa, material formasi yopilmaydi.</div>
     </div>
 
     <div class="field" id="f-type-wrap">
@@ -89,6 +94,19 @@
     <div class="field"><label>Rasm (ixtiyoriy)</label><input type="file" accept="image/*" /></div>
   </div>
   <div class="modal-f"><button class="btn btn-outline" data-close-modal="m-mat">Bekor</button><button class="btn btn-acc" type="button" id="mat-save" onclick="saveMat()">Yaratish</button></div>
+</div>
+
+<div class="modal" id="m-inline-mfr" aria-labelledby="inline-mfr-title">
+  <div class="modal-h"><h3 id="inline-mfr-title">Yangi manufacturer</h3><button class="x" data-close-modal="m-inline-mfr" aria-label="Yopish"><i class="ic" data-icon="x"></i></button></div>
+  <div class="modal-b">
+    <div class="field"><label for="im-name">Nomi</label><input id="im-name" placeholder="Egger" data-initial-focus /></div>
+    <div class="field"><label for="im-country">Country</label><input id="im-country" placeholder="Austria" /></div>
+    <div class="field"><label for="im-note">Izoh (ixtiyoriy)</label><textarea id="im-note" rows="3" placeholder="LDSP · asosiy brand"></textarea></div>
+  </div>
+  <div class="modal-f">
+    <button class="btn btn-outline" data-close-modal="m-inline-mfr">Bekor</button>
+    <button class="btn btn-acc" type="button" onclick="saveInlineMfr()">Yaratish</button>
+  </div>
 </div>
 
 <script src="../assets/app.js"></script>
@@ -174,10 +192,35 @@ document.getElementById('mfr-chips').addEventListener('click', e => {
   b.classList.add('on'); mFilter = b.dataset.m; render();
 });
 
-function fillMfrSelect() {
+function fillMfrSelect(selectedId = null) {
   const sel = document.getElementById('f-mfr');
   sel.innerHTML = SEED.manufacturers.filter(x => x.status === 'active').map(x =>
     `<option value="${x.id}">${x.name}${x.country ? ' · ' + x.country : ''}</option>`).join('');
+  if (selectedId) sel.value = selectedId;
+}
+
+function openInlineMfr() {
+  document.getElementById('im-name').value = '';
+  document.getElementById('im-country').value = '';
+  document.getElementById('im-note').value = '';
+  openModal('m-inline-mfr');
+}
+
+function saveInlineMfr() {
+  const name = document.getElementById('im-name').value.trim();
+  if (!name) { toast('Manufacturer nomi kerak', 'warn'); document.getElementById('im-name').focus(); return; }
+  const id = 'mfr-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).slice(2, 5);
+  SEED.manufacturers.push({
+    id,
+    name,
+    country: document.getElementById('im-country').value.trim(),
+    note: document.getElementById('im-note').value.trim(),
+    status: 'active'
+  });
+  closeModal('m-inline-mfr');
+  fillMfrSelect(id);
+  renderMfrChips();
+  toast('Manufacturer yaratildi · ' + name);
 }
 
 function syncKind() {
@@ -207,7 +250,7 @@ function openMat(matId) {
     kindSel.value = editing.kind;
     kindSel.disabled = true;                       // kind disabled on edit (PU13)
     document.getElementById('kind-locked').hidden = false;
-    document.getElementById('f-mfr').value = editing.manufacturerId || '';
+    fillMfrSelect(editing.manufacturerId || null);
     document.getElementById('f-name').value = editing.name || '';
     document.getElementById('f-thick').value = editing.thickness ?? '';
     document.getElementById('f-color').value = editing.color || '';

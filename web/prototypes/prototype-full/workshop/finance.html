@@ -94,7 +94,7 @@
           <div class="card-b" style="padding: 0 22px 18px">
             <p class="muted" style="font-size:12.5px;margin:14px 0">Buyurtma bosqichlaridan olinadi. Hisobchi maoshni qo'lda hisoblab, xarajat sifatida yozadi.</p>
             <table class="tbl">
-              <thead><tr><th>Xodim</th><th>Davr</th><th class="right">List</th><th class="right">Krom (m)</th><th></th></tr></thead>
+              <thead><tr><th>Xodim</th><th>Davr</th><th class="right">Panel</th><th class="right">Krom (m)</th><th></th></tr></thead>
               <tbody id="prod-body"></tbody>
             </table>
           </div>
@@ -186,7 +186,7 @@ document.getElementById('prod-body').innerHTML = prodRows.length ? prodRows.map(
   return `<tr>
     <td class="nm">${u?.name || w.userId}</td>
     <td><small style="color:var(--ink-6)">${w.period}</small></td>
-    <td class="amt">${w.sheetsCut} (${w.cutCount} kesim)</td>
+    <td class="amt">${w.panelsCut} (${w.cutCount} kesim)</td>
     <td class="amt">${w.metresBanded} (${w.ordersBanded} buyurtma)</td>
     <td><button class="btn btn-outline btn-sm" type="button" onclick="location.href='expenses.html'">Maosh yozish</button></td>
   </tr>`;

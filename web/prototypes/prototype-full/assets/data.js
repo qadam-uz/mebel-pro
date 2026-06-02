@@ -640,6 +640,28 @@ window.SEED = (() => {
       return { total: order.totalTiyin, paid, balance: Math.max(0, order.totalTiyin - paid) };
     },
 
+    // Frozen order rows keep one edge subtotal, but the UI still exposes the
+    // two sources behind it: raw edge material and edge-banding labour.
+    orderEdgePriceSplit: order => {
+      const total = order?.subtotalEdgeBandingTiyin || 0;
+      if (!total) return { total: 0, materials: 0, service: 0, metres: 0 };
+      const cutting = lookup.cuttingById(order.cuttingId);
+      const pr = cutting ? lookup.pricingAt(order.branchId, cutting) : null;
+      const recalculated = (pr?.edgeMaterialsFee || 0) + (pr?.edgeServiceFee || 0);
+      if (!pr || !recalculated) {
+        const materials = Math.round(total * 0.45);
+        return { total, materials, service: total - materials, metres: 0 };
+      }
+      const scale = total / recalculated;
+      const materials = Math.round(pr.edgeMaterialsFee * scale);
+      return {
+        total,
+        materials,
+        service: total - materials,
+        metres: pr.totalShopMetres || 0
+      };
+    },
+
     // materials this branch currently carries (active per-branch material rows)
     materialsAtBranch: branchId =>
       branchMaterials.filter(bm => bm.branchId === branchId && bm.status === 'active').map(bm => bm.matId),

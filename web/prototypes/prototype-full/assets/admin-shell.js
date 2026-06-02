@@ -50,6 +50,7 @@ window.renderAdminShell = () => {
       </div>
       <div class="sb-grp">
         <div class="lbl">Katalog</div>
+        <a class="sb-it" data-href="manufacturers.html" href="manufacturers.html"><span class="ic">${window.icon('factory')}</span> Manufacturerlar <span class="ct">${(SEED.manufacturers || []).length}</span></a>
         <a class="sb-it" data-href="materials.html" href="materials.html"><span class="ic">${window.icon('package')}</span> Materiallar <span class="ct">${(SEED.materials || []).length}</span></a>
       </div>
       <div class="sb-grp">
@@ -64,8 +65,15 @@ window.renderAdminShell = () => {
       </div>
       <div class="sb-grp">
         <div class="lbl">Ma'lumotnoma</div>
-        <a class="sb-it" href="/docs" target="_blank" rel="noopener"><span class="ic">${window.icon('book')}</span> Hujjatlar &amp; API <span class="ct" title="Alohida kirish — chetda HTTP-Basic" style="display:inline-flex;align-items:center">${window.icon('external-link', { size: 11 })}</span></a>
-        <div style="font-size:10.5px;color:var(--ink-6);padding:2px 10px 4px;line-height:1.4">/docs · /api-docs · /api-redoc — <b style="color:var(--ink-4)">alohida kirish</b> (chetda HTTP-Basic, yangi oynada)</div>
+        <div class="menu-wrap" style="display:block">
+          <button class="sb-it" type="button" data-menu-toggle aria-label="Hujjatlar va API havolalari"><span class="ic">${window.icon('book')}</span> Hujjatlar &amp; API <span class="ct" title="Alohida kirish — chetda HTTP-Basic" style="display:inline-flex;align-items:center">${window.icon('external-link', { size: 11 })}</span></button>
+          <div class="menu" role="menu" style="left:10px;right:auto;top:calc(100% + 2px);min-width:210px">
+            <a class="mi" href="/docs" target="_blank" rel="noopener">${window.icon('book', { size: 15 })} Docs</a>
+            <a class="mi" href="/api-docs" target="_blank" rel="noopener">${window.icon('file', { size: 15 })} API docs</a>
+            <a class="mi" href="/api-redoc" target="_blank" rel="noopener">${window.icon('file', { size: 15 })} ReDoc</a>
+          </div>
+        </div>
+        <div style="font-size:10.5px;color:var(--ink-6);padding:2px 10px 4px;line-height:1.4">Alohida kirish: chetda HTTP-Basic, yangi oynada.</div>
       </div>
     </nav>
     <div class="sb-foot">
@@ -93,7 +101,7 @@ window.renderAdminShell = () => {
     <button class="mobile-nav-btn" type="button" onclick="toggleDrawer()" aria-label="Menu">${window.icon('menu', { size: 16 })} Menu</button>
     <div class="tb-search">
       ${window.icon('search', { size: 15, cls: 'tb-search-i' })}
-      <input id="tb-search" placeholder="Ustaxona, mijoz, buyurtma yoki xatolik kodi..." />
+      <input id="tb-search" aria-label="Global qidiruv" placeholder="Ustaxona, mijoz, buyurtma yoki xatolik kodi..." />
       <span class="kbd">⌘ K</span>
     </div>
     <div class="tb-actions">
@@ -103,7 +111,7 @@ window.renderAdminShell = () => {
           <span class="badge" id="bell-badge" data-count="${unread}">${badge}</span>
         </button>
         <div class="menu nd-menu" id="bell-menu" role="menu" aria-label="Bildirishnomalar">
-          <div class="nd-head"><b>Bildirishnomalar</b><button class="nd-mark" type="button" id="bell-mark">Hammasini o'qilgan</button></div>
+          <div class="nd-head"><b>Bildirishnomalar</b><button class="nd-mark" type="button" id="bell-mark">Hammasini o'qilgan deb belgilash</button></div>
           <div class="nd-body" id="bell-body">${noteList}</div>
           <a class="nd-all" href="notifications.html">Hammasini ko'rish ${window.icon('arrow-right', { size: 13 })}</a>
         </div>

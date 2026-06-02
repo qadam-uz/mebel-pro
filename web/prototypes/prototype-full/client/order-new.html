@@ -59,7 +59,7 @@
   .field .helper { font: 500 11.5px var(--f-mono); color: var(--ink-6); margin-top: 4px; }
   .field .helper a { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
-  .share-note { display: flex; gap: 10px; padding: 12px 14px; background: rgba(45,96,69,.06); border: 1px solid rgba(45,96,69,.18); border-radius: 6px; font: 500 12.5px/1.4 var(--f-ui); color: #2d6045; margin-bottom: 14px; }
+  .share-note { display: flex; gap: 10px; padding: 12px 14px; background: var(--success-soft); border: 1px solid var(--success-tint); border-radius: 6px; font: 500 12.5px/1.4 var(--f-ui); color: var(--success); margin-bottom: 14px; }
   .share-note .ic { font: 700 13px var(--f-mono); }
 
   .opt-row { display: flex; gap: 10px; align-items: center; padding: 12px 14px; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
@@ -261,7 +261,7 @@ function renderBranchStep() {
           <div class="br-total">${fmtTiyin(pr.subtotal)}</div>
         </div>
         <div class="price-lines">
-          <div class="ln"><span>Chizma xizmati (${pr.totalPanels} panel × ${fmtTiyin(SEED.branchPricing[b.id].cuttingRateTiyin)})</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+          <div class="ln"><span>Kesish xizmati (${pr.totalPanels} panel × ${fmtTiyin(SEED.branchPricing[b.id].cuttingRateTiyin)})</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
           <div class="ln"><span>Materiallar (ustaxonadan)</span><span class="v">${fmtTiyin(pr.materials)}</span></div>
           ${pr.edgeFee > 0 ? `<div class="ln"><span>Krom yopishtirish</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>` : ''}
           <div class="ln" style="border-top:1px solid var(--line);padding-top:6px;margin-top:6px"><span><b>Jami</b></span><span class="v"><b>${fmtTiyin(pr.subtotal)}</b></span></div>
@@ -396,7 +396,7 @@ function renderSummary() {
     html += `
       <div class="sm-section">
         <h4>${br.city} · ${br.name}</h4>
-        <div class="sm-row"><span>Chizma xizmati</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
+        <div class="sm-row"><span>Kesish xizmati</span><span class="v">${fmtTiyin(pr.cuttingFee)}</span></div>
         <div class="sm-row"><span>Materiallar</span><span class="v">${fmtTiyin(pr.materials)}</span></div>
         <div class="sm-row"><span>Krom</span><span class="v">${fmtTiyin(pr.edgeFee)}</span></div>
         <div class="total-row"><span>Jami</span><span class="v">${fmtTiyin(total)}</span></div>

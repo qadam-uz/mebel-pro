@@ -122,7 +122,7 @@ window.renderClientHeader = (active = '') => {
           <div class="cl-bell-dd" id="cl-bell-dd" role="menu" aria-label="Bildirishnomalar">
             <div class="cl-bell-hd">
               <span>Bildirishnomalar</span>
-              <button type="button" class="cl-bell-mark" onclick="bellMarkAllRead(event)">Hammasini o'qildi</button>
+              <button type="button" class="cl-bell-mark" onclick="bellMarkAllRead(event)">Hammasini o'qilgan deb belgilash</button>
             </div>
             <div class="cl-bell-list" id="cl-bell-list"></div>
             <div class="cl-bell-foot">

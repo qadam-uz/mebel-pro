@@ -32,14 +32,50 @@ window.toast = (msg, kind = 'ok') => {
 };
 
 // ---------- Modal ----------
+const _focusableSel = [
+  'a[href]', 'area[href]', 'button:not([disabled])', 'input:not([disabled])',
+  'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
+].join(',');
+const _activeModal = () => [...document.querySelectorAll('.modal.on')].at(-1);
+const _modalFocusables = modal =>
+  [...modal.querySelectorAll(_focusableSel)].filter(el =>
+    !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+
 window.openModal = (id) => {
-  document.getElementById(id)?.classList.add('on');
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modal._returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!modal.hasAttribute('role')) modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  if (!modal.hasAttribute('tabindex')) modal.setAttribute('tabindex', '-1');
+  modal.classList.add('on');
   document.getElementById('scrim')?.classList.add('on');
+  document.body.classList.add('modal-open');
+  requestAnimationFrame(() => {
+    const fieldFirst = [
+      'input:not([disabled]):not([type="hidden"])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      'button:not([disabled]):not(.x):not([data-close-modal])'
+    ].join(',');
+    const target = modal.querySelector('[data-initial-focus]') || modal.querySelector(fieldFirst) || _modalFocusables(modal)[0] || modal;
+    target.focus?.({ preventScroll: true });
+  });
 };
 window.closeModal = (id) => {
-  if (id) document.getElementById(id)?.classList.remove('on');
-  else document.querySelectorAll('.modal.on').forEach(m => m.classList.remove('on'));
-  document.getElementById('scrim')?.classList.remove('on');
+  const modals = id ? [document.getElementById(id)].filter(Boolean) : [...document.querySelectorAll('.modal.on')];
+  modals.forEach(modal => {
+    modal.classList.remove('on');
+    const returnFocus = modal._returnFocus;
+    if (modal.dataset.removeOnClose === 'true') setTimeout(() => modal.remove(), 220);
+    if (returnFocus && document.contains(returnFocus)) {
+      setTimeout(() => returnFocus.focus?.({ preventScroll: true }), 0);
+    }
+  });
+  if (!document.querySelector('.modal.on')) {
+    document.getElementById('scrim')?.classList.remove('on');
+    document.body.classList.remove('modal-open');
+  }
 };
 
 // Wire up generic close behaviour
@@ -64,13 +100,25 @@ document.addEventListener('click', e => {
     const menu = wrap?.querySelector('.menu');
     if (!menu) return;
     const wasOpen = menu.classList.contains('on');
-    document.querySelectorAll('.menu.on').forEach(m => m.classList.remove('on'));
-    if (!wasOpen) menu.classList.add('on');
+    document.querySelectorAll('.menu.on').forEach(m => {
+      m.classList.remove('on');
+      m.closest('.menu-wrap')?.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
+    });
+    if (!wasOpen) {
+      menu.classList.add('on');
+      trigger.setAttribute('aria-expanded', 'true');
+      trigger.setAttribute('aria-haspopup', 'true');
+    } else {
+      trigger.setAttribute('aria-expanded', 'false');
+    }
     return;
   }
   // outside click closes
   if (!e.target.closest('.menu')) {
-    document.querySelectorAll('.menu.on').forEach(m => m.classList.remove('on'));
+    document.querySelectorAll('.menu.on').forEach(m => {
+      m.classList.remove('on');
+      m.closest('.menu-wrap')?.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
+    });
   }
 }, true);
 
@@ -126,18 +174,18 @@ window.switchTab = (id, targetId) => {
 window.confirmAction = (opts, onConfirm) => {
   const o = typeof opts === 'string' ? { msg: opts } : opts || {};
   const html = `
-    <div class="modal on" id="confirm-modal" role="dialog" aria-modal="true">
+    <div class="modal" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" data-remove-on-close="true">
       <div class="modal-h">
-        <h3>${o.title || 'Tasdiqlash'}</h3>
+        <h3 id="confirm-title">${o.title || 'Tasdiqlash'}</h3>
         <button class="x" type="button" data-close-modal="confirm-modal" aria-label="Yopish">✕</button>
       </div>
       <div class="modal-b">
         <p style="margin:0;color:var(--ink-8);font-size:14px;line-height:1.5">${o.msg || 'Davom etishni xohlaysizmi?'}</p>
-        ${o.reasonField ? `<div class="field" style="margin-top:14px"><label>${o.reasonLabel || 'Sabab'} *</label><textarea id="confirm-reason" rows="3" placeholder="Sababni yozing..."></textarea></div>` : ''}
+        ${o.reasonField ? `<div class="field" style="margin-top:14px"><label for="confirm-reason">${o.reasonLabel || 'Sabab'} *</label><textarea id="confirm-reason" rows="3" placeholder="Sababni yozing..." data-initial-focus></textarea></div>` : ''}
       </div>
       <div class="modal-f">
         <button class="btn btn-outline" type="button" data-close-modal="confirm-modal">Bekor qilish</button>
-        <button class="btn ${o.danger ? 'btn-danger' : 'btn-acc'}" type="button" id="confirm-ok">${o.okText || 'Davom etish'}</button>
+        <button class="btn ${o.danger ? 'btn-danger' : 'btn-acc'}" type="button" id="confirm-ok"${o.reasonField ? '' : ' data-initial-focus'}>${o.okText || 'Davom etish'}</button>
       </div>
     </div>`;
   let scrim = document.getElementById('scrim');
@@ -147,19 +195,19 @@ window.confirmAction = (opts, onConfirm) => {
     scrim.className = 'scrim';
     document.body.appendChild(scrim);
   }
-  scrim.classList.add('on');
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
   const modal = wrap.firstElementChild;
   document.body.appendChild(modal);
+  openModal('confirm-modal');
   modal.querySelector('#confirm-ok').onclick = () => {
     const reason = modal.querySelector('#confirm-reason')?.value?.trim();
     if (o.reasonField && !reason) {
       toast('Sabab kiritilishi shart', 'warn');
+      modal.querySelector('#confirm-reason')?.focus();
       return;
     }
     closeModal('confirm-modal');
-    setTimeout(() => modal.remove(), 220);
     onConfirm && onConfirm(reason);
   };
 };
@@ -176,7 +224,7 @@ window.showSecret = (opts) => {
       <button class="btn btn-outline btn-sm" type="button" data-copy="${String(r.v).replace(/"/g, '&quot;')}">Nusxa</button>
     </div>`).join('');
   const html = `
-    <div class="modal on" id="secret-modal" role="dialog" aria-modal="true" aria-labelledby="secret-title">
+    <div class="modal" id="secret-modal" role="dialog" aria-modal="true" aria-labelledby="secret-title" data-remove-on-close="true">
       <div class="modal-h">
         <h3 id="secret-title">${o.title || 'Maxfiy ma\'lumot'}</h3>
         <button class="x" type="button" data-close-modal="secret-modal" aria-label="Yopish">✕</button>
@@ -188,7 +236,7 @@ window.showSecret = (opts) => {
       </div>
       <div class="modal-f">
         <button class="btn btn-outline btn-sm" type="button" id="secret-copy-all">Hammasini nusxalash</button>
-        <button class="btn btn-acc" type="button" data-close-modal="secret-modal">Yopdim · saqladim</button>
+        <button class="btn btn-acc" type="button" data-close-modal="secret-modal" data-initial-focus>Yopdim · saqladim</button>
       </div>
     </div>`;
   let scrim = document.getElementById('scrim');
@@ -198,7 +246,6 @@ window.showSecret = (opts) => {
     scrim.className = 'scrim';
     document.body.appendChild(scrim);
   }
-  scrim.classList.add('on');
   const wrap = document.createElement('div');
   wrap.innerHTML = html;
   const modal = wrap.firstElementChild;
@@ -212,11 +259,10 @@ window.showSecret = (opts) => {
   modal.addEventListener('click', e => {
     if (e.target.matches('[data-close-modal]')) {
       closeModal('secret-modal');
-      setTimeout(() => modal.remove(), 220);
       o.onClose && o.onClose();
     }
   });
-  modal.querySelector('.x').focus();
+  openModal('secret-modal');
 };
 
 // ---------- Password reset warning (non-blocking) ----------
@@ -344,11 +390,99 @@ window.autoMarkNav = () => {
 };
 document.addEventListener('DOMContentLoaded', autoMarkNav);
 
+// ---------- Static prototype accessibility helpers ----------
+window.wrapTables = (root = document) => {
+  root.querySelectorAll('table.tbl').forEach(tbl => {
+    if (tbl.closest('.table-wrap')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    tbl.parentNode.insertBefore(wrap, tbl);
+    wrap.appendChild(tbl);
+  });
+};
+
+window.labelPrototypeControls = (root = document) => {
+  root.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(el => {
+    if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return;
+    if (el.id && document.querySelector(`label[for="${el.id}"]`)) return;
+    const text = (el.getAttribute('placeholder') || '').replace(/[.…]+$/g, '').trim();
+    if (text) el.setAttribute('aria-label', text);
+  });
+  root.querySelectorAll('select').forEach(el => {
+    if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return;
+    if (el.id && document.querySelector(`label[for="${el.id}"]`)) return;
+    const opt = el.options?.[0]?.textContent?.trim();
+    if (opt) el.setAttribute('aria-label', opt);
+  });
+};
+
+window.makeClickableTargetsAccessible = (root = document) => {
+  const sel = [
+    'tr.clickable', '.row-item.clickable', '.kpi[onclick]', '.board-card[onclick]',
+    '.ord-card[onclick]', '.prod-cell[onclick]', 'article[onclick]', 'div[onclick]'
+  ].join(',');
+  root.querySelectorAll(sel).forEach(el => {
+    if (el.matches('button,a,input,select,textarea') || el.dataset.a11yClick === '1') return;
+    el.dataset.a11yClick = '1';
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    if (!el.hasAttribute('role')) {
+      const onclick = el.getAttribute('onclick') || '';
+      el.setAttribute('role', onclick.includes('location.href') ? 'link' : 'button');
+    }
+    if (!el.getAttribute('aria-label')) {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text) el.setAttribute('aria-label', text.slice(0, 140));
+    }
+    el.addEventListener('keydown', e => {
+      if (e.target !== el) return;
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      el.click();
+    });
+  });
+};
+
+window.normalizeMenuButtons = (root = document) => {
+  root.querySelectorAll('.menu-btn[data-menu-toggle], button[data-menu-toggle]').forEach(btn => {
+    if (!btn.getAttribute('aria-label')) btn.setAttribute('aria-label', 'Amallar');
+    if (btn.dataset.menuIconDone === '1') return;
+    const raw = (btn.textContent || '').trim();
+    if (raw === '⋯' || raw === '...') {
+      btn.innerHTML = window.icon('more-horizontal', { size: 16 });
+      btn.dataset.menuIconDone = '1';
+    }
+  });
+};
+
+window.enhancePrototypeDom = (root = document) => {
+  window.wrapTables(root);
+  window.labelPrototypeControls(root);
+  window.makeClickableTargetsAccessible(root);
+  window.normalizeMenuButtons(root);
+};
+document.addEventListener('DOMContentLoaded', () => window.enhancePrototypeDom());
+
 // ---------- ESC closes any open modal / menu / drawer ----------
 document.addEventListener('keydown', e => {
+  const modal = _activeModal();
+  if (modal && e.key === 'Tab') {
+    const items = _modalFocusables(modal);
+    if (!items.length) { e.preventDefault(); modal.focus(); return; }
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
   if (e.key === 'Escape') {
-    document.querySelectorAll('.menu.on').forEach(m => m.classList.remove('on'));
-    closeModal();
+    document.querySelectorAll('.menu.on').forEach(m => {
+      m.classList.remove('on');
+      m.closest('.menu-wrap')?.querySelector('[data-menu-toggle]')?.setAttribute('aria-expanded', 'false');
+    });
+    if (modal) closeModal(modal.id);
     const d = document.getElementById('mob-drawer');
     if (d?.classList.contains('on')) toggleDrawer();
   }
@@ -458,7 +592,11 @@ document.addEventListener('DOMContentLoaded', () => window.renderIcons());
   const obs = new MutationObserver(() => {
     if (queued) return;
     queued = true;
-    requestAnimationFrame(() => { queued = false; window.renderIcons(); });
+    requestAnimationFrame(() => {
+      queued = false;
+      window.renderIcons();
+      window.enhancePrototypeDom?.();
+    });
   });
   const start = () => obs.observe(document.body, { childList: true, subtree: true });
   if (document.body) start();
