@@ -47,7 +47,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID:-mebel}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY:-mebel}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY:-mebel-secret}
     volumes:
       - minio-data:/data
     healthcheck:
@@ -67,7 +67,7 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY_ID:-mebel} ${MINIO_SECRET_ACCESS_KEY:-mebel} &&
+      mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY_ID:-mebel} ${MINIO_SECRET_ACCESS_KEY:-mebel-secret} &&
       mc mb --ignore-existing local/${MINIO_BUCKET:-mebel}
       "
     restart: "no"
@@ -93,7 +93,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-mebel}
       MINIO_ENDPOINT_URL: http://minio:9000
       MINIO_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY_ID:-mebel}
-      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY:-mebel}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY:-mebel-secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
       MINIO_USE_SSL: "false"
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:5173"]}
@@ -101,8 +101,9 @@ services:
       DOCS_UZ_DIR: /docs_uz
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
+      OTP_DEV_CODES: ${OTP_DEV_CODES:-["000000"]}
     # `fastapi dev` = uvicorn with autoreload.
-    command: ["fastapi", "dev", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]
     volumes:
       - ../backend:/app
       - backend-venv:/app/.venv

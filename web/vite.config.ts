@@ -5,22 +5,43 @@ import tailwindcss from '@tailwindcss/vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { defineConfig } from 'vite'
 
+function roleHistoryFallback() {
+  const prefixes = ['/client', '/workshop', '/admin']
+  return {
+    name: 'role-history-fallback',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use((req, _res, next) => {
+        const rawUrl = req.url ?? ''
+        const [pathname, query] = rawUrl.split('?')
+        const prefix = prefixes.find(
+          (candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`),
+        )
+        const lastSegment = pathname.split('/').at(-1) ?? ''
+        if (prefix && !lastSegment.includes('.')) {
+          req.url = `${prefix}/index.html${query ? `?${query}` : ''}`
+        }
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), vueDevTools(), tailwindcss()],
+  plugins: [roleHistoryFallback(), vue(), vueDevTools(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   build: {
-    // Multi-page: the Vue SPA entry (index.html → src/main.ts) plus the
-    // standalone static SEO landing (web/landing/index.html — plain HTML, no
-    // Vue), served at the apex per docs/architecture.md.
+    // Multi-page: standalone landing plus the three role SPAs.
     rollupOptions: {
       input: {
-        app: fileURLToPath(new URL('./index.html', import.meta.url)),
         landing: fileURLToPath(new URL('./landing/index.html', import.meta.url)),
+        client: fileURLToPath(new URL('./client/index.html', import.meta.url)),
+        workshop: fileURLToPath(new URL('./workshop/index.html', import.meta.url)),
+        admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
       },
     },
   },
@@ -29,6 +50,22 @@ export default defineConfig({
     proxy: {
       // Dev: forward API calls to the FastAPI backend.
       '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/docs': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/docs-uz': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api-docs': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api-redoc': {
         target: 'http://localhost:8000',
         changeOrigin: true,
       },

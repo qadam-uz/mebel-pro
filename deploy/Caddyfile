@@ -19,10 +19,8 @@
 #
 # Local stack testing: set BASE_DOMAIN=lvh.me (resolves *.lvh.me → 127.0.0.1)
 # and accept Caddy's internal-CA cert; or add the four hosts to /etc/hosts.
-# ACME_EMAIL (optional) is registered with the ACME CA for expiry notices.
-{
-	email {$ACME_EMAIL:}
-}
+# ACME_EMAIL is accepted by Compose for future notification wiring. Caddy does
+# not require an email address for ACME, and an empty email directive is invalid.
 
 (common) {
 	encode zstd gzip
@@ -34,39 +32,62 @@
 	}
 }
 
-# Apex: the static SEO landing only. The `web` image builds both the Vue
-# client SPA (dist/index.html) and the standalone landing
-# (dist/landing/index.html); nginx serves index.html at `/`, so the apex
-# rewrites the bare path to the landing. The landing's own static refs
-# (/favicon.*, /site.webmanifest, fingerprinted /assets/*) live at the web
-# root and pass through untouched.
+# Apex: the static SEO landing only. Role apps are served only on their
+# documented subdomains; apex app/prototype paths intentionally 404.
 {$BASE_DOMAIN} {
 	import common
 
-	@root path /
-	rewrite @root /landing/index.html
+	handle / {
+		rewrite * /landing/index.html
+		reverse_proxy web:80
+	}
 
-	reverse_proxy web:80
+	@landing_public path /landing/* /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
+	handle @landing_public {
+		reverse_proxy web:80
+	}
+
+	handle {
+		respond "Not found" 404
+	}
 }
 
 # Client SPA + same-origin API.
 app.{$BASE_DOMAIN} {
 	import common
 
-	@api path /api/*
-	reverse_proxy @api backend:8000
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
 
-	reverse_proxy web:80
+	@client_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
+	handle @client_public {
+		reverse_proxy web:80
+	}
+
+	handle {
+		rewrite * /client/index.html
+		reverse_proxy web:80
+	}
 }
 
 # Workshop SPA + same-origin API.
 workshop.{$BASE_DOMAIN} {
 	import common
 
-	@api path /api/*
-	reverse_proxy @api backend:8000
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
 
-	reverse_proxy web:80
+	@workshop_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
+	handle @workshop_public {
+		reverse_proxy web:80
+	}
+
+	handle {
+		rewrite * /workshop/index.html
+		reverse_proxy web:80
+	}
 }
 
 # Superadmin SPA + same-origin API + the live docs site + OpenAPI UIs.
@@ -74,11 +95,21 @@ admin.{$BASE_DOMAIN} {
 	import common
 
 	@backend path /api/* /docs /docs/* /docs-uz /docs-uz/* /api-docs /api-docs/* /api-redoc /api-redoc/*
-	reverse_proxy @backend backend:8000
+	handle @backend {
+		reverse_proxy backend:8000
+	}
 
 	# TEMPORARY: /prototypes (static design gallery) needs no rule of its own —
 	# it falls through to the `web` container below, which serves it from
 	# baked-in static files. Remove the prototypes once a design system is
 	# committed to web/DESIGN.md (see web/Dockerfile + web/nginx.conf).
-	reverse_proxy web:80
+	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-* /prototypes /prototypes/*
+	handle @admin_public {
+		reverse_proxy web:80
+	}
+
+	handle {
+		rewrite * /admin/index.html
+		reverse_proxy web:80
+	}
 }

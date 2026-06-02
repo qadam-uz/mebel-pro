@@ -1,15 +1,27 @@
 """FastAPI application factory and entrypoint."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import cast
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.errors import (
+    APIError,
+    api_error_handler,
+    http_error_handler,
+    unexpected_error_handler,
+    validation_error_handler,
+)
+from app.core.logging import configure_logging
+from app.core.trace import trace_middleware
 from app.docs_site import require_docs_auth
 from app.docs_site import routers as docs_routers
 
@@ -17,6 +29,7 @@ from app.docs_site import routers as docs_routers
 # the docs site at /api-docs and /api-redoc (`/docs` is the docs site). All
 # three are HTTP-Basic-guarded with the same credentials as /docs.
 OPENAPI_URL = f"{settings.API_V1_PREFIX}/openapi.json"
+ExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]]
 
 
 @asynccontextmanager
@@ -26,6 +39,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     app = FastAPI(
         title=settings.PROJECT_NAME,
         debug=settings.DEBUG,
@@ -45,6 +59,15 @@ def create_app() -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    app.middleware("http")(trace_middleware)
+    app.add_exception_handler(APIError, cast(ExceptionHandler, api_error_handler))
+    app.add_exception_handler(
+        RequestValidationError,
+        cast(ExceptionHandler, validation_error_handler),
+    )
+    app.add_exception_handler(StarletteHTTPException, cast(ExceptionHandler, http_error_handler))
+    app.add_exception_handler(Exception, unexpected_error_handler)
 
     _register_openapi_routes(app)
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
