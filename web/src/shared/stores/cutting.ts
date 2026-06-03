@@ -1,0 +1,389 @@
+import { ref } from 'vue'
+import { defineStore } from 'pinia'
+
+import { ApiError, api, apiTraceId } from '@/shared/api/client'
+import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
+import { useAuthStore } from '@/shared/stores/auth'
+
+export type MaterialSource = 'shop' | 'own'
+export type CuttingResultStatus = 'candidate' | 'confirmed' | 'invalidated'
+
+export interface CuttingEdgeBand {
+  material_id: string
+  source: MaterialSource
+}
+
+export interface CuttingPart {
+  part_ref: string
+  material_id: string
+  material_source: MaterialSource
+  length_mm: number
+  width_mm: number
+  quantity: number
+  edge_top: CuttingEdgeBand | null
+  edge_bottom: CuttingEdgeBand | null
+  edge_left: CuttingEdgeBand | null
+  edge_right: CuttingEdgeBand | null
+}
+
+export interface CuttingPlacement {
+  id: string
+  part_ref: string
+  part_quantity_index: number
+  x_mm: number
+  y_mm: number
+  length_mm: number
+  width_mm: number
+  rotated: boolean
+}
+
+export interface CuttingPanel {
+  id: string
+  material_id: string
+  panel_index: number
+  waste_area_mm2: number
+  placements: CuttingPlacement[]
+}
+
+export interface CuttingResult {
+  id: string
+  draft_id: string | null
+  algorithm_name: string
+  algorithm_version: string
+  status: CuttingResultStatus
+  kerf_mm: number
+  edge_trim_mm: number
+  panels_used_by_material: Record<string, number>
+  waste_percentage: string
+  total_cut_length_mm: number
+  total_edge_length_mm: number
+  edge_length_by_material: Record<string, number>
+  parts_snapshot: CuttingPart[]
+  material_snapshots: Record<string, Record<string, unknown>>
+  edge_length_shop_by_material: Record<string, number>
+  edge_length_own_by_material: Record<string, number>
+  edge_consumed_shop_by_material: Record<string, number>
+  edge_consumed_own_by_material: Record<string, number>
+  edge_banded_sides_by_material: Record<string, { shop: number; own: number }>
+  order_id: string | null
+  created_at: string
+  confirmed_at: string | null
+  invalidated_at: string | null
+  panels: CuttingPanel[]
+}
+
+export interface CuttingDraft {
+  id: string
+  client_id: string
+  preferred_branch_id: string | null
+  parts_snapshot: CuttingPart[]
+  chosen_result_id: string | null
+  created_at: string
+  updated_at: string
+  results: CuttingResult[]
+}
+
+export interface ClientCatalogMaterialOption {
+  id: string
+  kind: MaterialKind
+  manufacturer_id: string
+  manufacturer_name: string
+  type: PanelMaterialType | null
+  name: string
+  thickness_mm: string
+  color: string
+  decor_code: string | null
+  panel_length_mm: number | null
+  panel_width_mm: number | null
+  grain_direction: boolean | null
+  image_file_id: string | null
+  branch_carried: boolean
+  price_tiyin: number | null
+  display_unit: string
+}
+
+export interface ClientBranchOption {
+  branch_id: string
+  workshop_id: string
+  workshop_name: string
+  branch_name: string
+  status: 'active' | 'temporarily_closed'
+  closed_reason: string | null
+}
+
+export interface WorkshopCuttingPlanSummary {
+  id: string
+  order_id: string
+  order_number: string
+  client_id: string
+  branch_id: string
+  algorithm_name: string
+  waste_percentage: string
+  panels_used_by_material: Record<string, number>
+  total_cut_length_mm: number
+  total_edge_length_mm: number
+  confirmed_at: string | null
+}
+
+export interface WorkshopCuttingPlanDetail extends WorkshopCuttingPlanSummary {
+  result: CuttingResult
+}
+
+function withQuery(path: string, params: Record<string, string | boolean | null | undefined>) {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
+export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
+  if (!material) return 'No material'
+  const size =
+    material.kind === 'panel'
+      ? `${material.panel_length_mm ?? '-'}x${material.panel_width_mm ?? '-'}`
+      : `${material.thickness_mm} mm edge`
+  return `${material.manufacturer_name} ${material.name} · ${size}`
+}
+
+export function metres(mm: number) {
+  return `${(mm / 1000).toFixed(2)} m`
+}
+
+export const useCuttingStore = defineStore('cutting', () => {
+  const drafts = ref<CuttingDraft[]>([])
+  const currentDraft = ref<CuttingDraft | null>(null)
+  const branchOptions = ref<ClientBranchOption[]>([])
+  const panelOptions = ref<ClientCatalogMaterialOption[]>([])
+  const edgeOptions = ref<ClientCatalogMaterialOption[]>([])
+  const workshopPlans = ref<WorkshopCuttingPlanSummary[]>([])
+  const currentWorkshopPlan = ref<WorkshopCuttingPlanDetail | null>(null)
+  const loading = ref(false)
+  const saving = ref(false)
+  const optimizing = ref(false)
+  const materialsLoading = ref(false)
+  const workshopLoading = ref(false)
+  const error = ref<string | null>(null)
+  const traceId = ref<string | null>(null)
+  const auth = useAuthStore()
+
+  function authInit() {
+    return { accessToken: auth.accessToken }
+  }
+
+  function captureError(errorValue: unknown, fallback: string) {
+    error.value =
+      errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : fallback
+    traceId.value = apiTraceId(errorValue)
+  }
+
+  async function loadDrafts() {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      drafts.value = await api.get<CuttingDraft[]>('/client/cutting-drafts', authInit())
+    } catch (errorValue) {
+      captureError(errorValue, 'cutting_drafts_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function createDraft() {
+    saving.value = true
+    try {
+      const draft = await api.post<CuttingDraft>('/client/cutting-drafts', undefined, authInit())
+      drafts.value = [draft, ...drafts.value]
+      currentDraft.value = draft
+      return draft
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function loadDraft(id: string) {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    currentDraft.value = null
+    try {
+      currentDraft.value = await api.get<CuttingDraft>(`/client/cutting-drafts/${id}`, authInit())
+    } catch (errorValue) {
+      captureError(errorValue, 'cutting_draft_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function updateDraft(
+    id: string,
+    payload: { preferred_branch_id?: string | null; parts_snapshot?: CuttingPart[] },
+  ) {
+    saving.value = true
+    try {
+      const draft = await api.patch<CuttingDraft>(
+        `/client/cutting-drafts/${id}`,
+        payload,
+        authInit(),
+      )
+      currentDraft.value = draft
+      drafts.value = [draft, ...drafts.value.filter((item) => item.id !== draft.id)]
+      return draft
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function deleteDraft(id: string) {
+    await api.del(`/client/cutting-drafts/${id}`, authInit())
+    drafts.value = drafts.value.filter((draft) => draft.id !== id)
+    if (currentDraft.value?.id === id) currentDraft.value = null
+  }
+
+  async function optimizeDraft(id: string) {
+    optimizing.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      const draft = await api.post<CuttingDraft>(
+        `/client/cutting-drafts/${id}/optimize`,
+        undefined,
+        authInit(),
+      )
+      currentDraft.value = draft
+      drafts.value = [draft, ...drafts.value.filter((item) => item.id !== draft.id)]
+      return draft
+    } catch (errorValue) {
+      captureError(errorValue, 'cutting_optimize_failed')
+      throw errorValue
+    } finally {
+      optimizing.value = false
+    }
+  }
+
+  async function chooseResult(draftId: string, resultId: string) {
+    const draft = await api.post<CuttingDraft>(
+      `/client/cutting-drafts/${draftId}/chosen-result`,
+      { result_id: resultId },
+      authInit(),
+    )
+    currentDraft.value = draft
+    drafts.value = [draft, ...drafts.value.filter((item) => item.id !== draft.id)]
+    return draft
+  }
+
+  async function loadBranchOptions(search?: string) {
+    branchOptions.value = await api.get<ClientBranchOption[]>(
+      withQuery('/client/branch-options', { search }),
+      authInit(),
+    )
+  }
+
+  async function loadMaterials(params: {
+    kind: MaterialKind
+    branchId?: string | null
+    search?: string
+    carriedOnly?: boolean
+  }) {
+    materialsLoading.value = true
+    try {
+      const materials = await api.get<ClientCatalogMaterialOption[]>(
+        withQuery('/client/catalog/materials', {
+          kind: params.kind,
+          branch_id: params.branchId,
+          search: params.search,
+          carried_only: params.carriedOnly ?? false,
+        }),
+        authInit(),
+      )
+      if (params.kind === 'panel') panelOptions.value = materials
+      else edgeOptions.value = materials
+      return materials
+    } finally {
+      materialsLoading.value = false
+    }
+  }
+
+  async function downloadClientPdf(resultId: string) {
+    await downloadPdf(`/client/cutting-results/${resultId}/pdf`, `cutting-${resultId}.pdf`)
+  }
+
+  async function loadWorkshopPlans() {
+    workshopLoading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      workshopPlans.value = await api.get<WorkshopCuttingPlanSummary[]>(
+        '/workshop/cutting-plans',
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureError(errorValue, 'workshop_cutting_plans_load_failed')
+    } finally {
+      workshopLoading.value = false
+    }
+  }
+
+  async function loadWorkshopPlan(id: string) {
+    workshopLoading.value = true
+    error.value = null
+    traceId.value = null
+    currentWorkshopPlan.value = null
+    try {
+      currentWorkshopPlan.value = await api.get<WorkshopCuttingPlanDetail>(
+        `/workshop/cutting-plans/${id}`,
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureError(errorValue, 'workshop_cutting_plan_load_failed')
+    } finally {
+      workshopLoading.value = false
+    }
+  }
+
+  async function downloadWorkshopPdf(resultId: string) {
+    await downloadPdf(`/workshop/cutting-plans/${resultId}/pdf`, `cutting-${resultId}.pdf`)
+  }
+
+  async function downloadPdf(path: string, filename: string) {
+    const blob = await api.blob(path, authInit())
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return {
+    drafts,
+    currentDraft,
+    branchOptions,
+    panelOptions,
+    edgeOptions,
+    workshopPlans,
+    currentWorkshopPlan,
+    loading,
+    saving,
+    optimizing,
+    materialsLoading,
+    workshopLoading,
+    error,
+    traceId,
+    loadDrafts,
+    createDraft,
+    loadDraft,
+    updateDraft,
+    deleteDraft,
+    optimizeDraft,
+    chooseResult,
+    loadBranchOptions,
+    loadMaterials,
+    downloadClientPdf,
+    loadWorkshopPlans,
+    loadWorkshopPlan,
+    downloadWorkshopPdf,
+  }
+})

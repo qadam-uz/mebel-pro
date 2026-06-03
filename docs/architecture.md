@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 70
 ---
 
@@ -73,8 +73,9 @@ Each SPA stays same-origin with its API (no CORS).
 - **One FastAPI process** — Python 3.12, async end-to-end (asyncio + asyncpg + SQLAlchemy 2.0,
   Alembic, pydantic-settings). Also renders `docs/` as a live site.
 - **One PostgreSQL** — shared by all modules; each module owns its tables.
-- **One MinIO / S3** — material images, logos, refund / delivery receipts, cutting PDFs. The
-  `files` module owns it; others attach/detach by id.
+- **One MinIO / S3** — material images, logos, and receipt attachments. The `files` module owns
+  stored files; others attach/detach by id. Cutting PDFs are generated on demand from immutable
+  cutting-result rows, not stored as file records in v1.
 - **In-process scheduler** — prune expired sessions, daily low-stock summary.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
 - **One external integration** — Telegram Gateway, used only to deliver client sign-in OTP codes.

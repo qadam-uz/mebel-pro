@@ -38,6 +38,7 @@ describe('role route matrix', () => {
       '/c',
       '/c/profile',
       '/c/cutting/drafts',
+      '/c/cutting/:id',
       '/c/branches',
       '/:pathMatch(.*)*',
     ])
@@ -49,6 +50,8 @@ describe('role route matrix', () => {
       '/workshop/settings/users',
       '/workshop/branches',
       '/workshop/branches/:branch_id',
+      '/workshop/cutting-plans',
+      '/workshop/cutting-plans/:result_id',
       '/workshop/settings/users/:user_id',
       '/:pathMatch(.*)*',
     ])

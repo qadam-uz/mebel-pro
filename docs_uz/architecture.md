@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 70
 ---
 
@@ -78,8 +78,10 @@ Har bir SPA oʻz API'si bilan same-origin qoladi (CORS yoʻq).
   qiladi.
 - **One PostgreSQL** — barcha modullar tomonidan share qilinadi; har bir modul oʻz table'lariga
   egalik qiladi.
-- **One MinIO / S3** — material image'lari, logo'lar, refund / delivery receipt'lari,
-  cutting PDF'lari. `files` moduli unga egalik qiladi; boshqalari id boʻyicha attach/detach qiladi.
+- **One MinIO / S3** — material image'lari, logo'lar va receipt attachment'lari. `files` moduli
+  stored file'larga egalik qiladi; boshqalari id boʻyicha attach/detach qiladi. Cutting PDF'lari
+  immutable cutting-result row'laridan on demand generate qilinadi, v1 da file record sifatida
+  saqlanmaydi.
 - **In-process scheduler** — expired session'larni prune qilish, kunlik low-stock summary.
 - **Three SPAs + a static landing.** API `/api` ostida same-origin.
 - **One external integration** — Telegram Gateway, faqat client sign-in OTP code'larini deliver qilish uchun.

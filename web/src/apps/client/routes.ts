@@ -14,7 +14,7 @@ export const clientRoutes: RouteRecordRaw[] = [
   {
     path: '/c',
     name: 'client-home',
-    component: () => import('@/shared/views/DashboardView.vue'),
+    component: () => import('@/shared/views/ClientHomeView.vue'),
   },
   {
     path: '/c/profile',
@@ -25,6 +25,11 @@ export const clientRoutes: RouteRecordRaw[] = [
     path: '/c/cutting/drafts',
     name: 'client-cutting-drafts',
     component: () => import('@/shared/views/DraftsView.vue'),
+  },
+  {
+    path: '/c/cutting/:id',
+    name: 'client-cutting-editor',
+    component: () => import('@/shared/views/ClientCuttingEditorView.vue'),
   },
   {
     path: '/c/branches',

@@ -45,9 +45,10 @@ class Settings(BaseSettings):
     DOCS_AUTH_PASSWORD: str = "docs"  # noqa: S105 — dev default; override in prod
 
     # --- Object storage (MinIO) --------------------------------------------
-    # The `files` module stores material images, workshop logos, receipts, and
-    # cutting PDFs in MinIO. In dev/Compose this is the bundled MinIO container;
-    # in prod it's the shared MinIO on the VPS's `infra-net` Docker network.
+    # The `files` module stores material images, workshop logos, and receipts in
+    # MinIO. Cutting PDFs are generated on demand from immutable cutting results.
+    # In dev/Compose this is the bundled MinIO container; in prod it's the shared
+    # MinIO on the VPS's `infra-net` Docker network.
     # The protocol is S3-compatible, so any boto3-style client works.
     MINIO_ENDPOINT_URL: str = "http://localhost:9000"
     MINIO_REGION: str = "us-east-1"

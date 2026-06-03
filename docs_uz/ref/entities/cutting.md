@@ -58,7 +58,12 @@ tegmaydi.
 | `panels_used_by_material` | json | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material) |
 | `waste_percentage` | numeric | 0.0–1.0; weighted across all panel materials in the result |
 | `total_cut_length_mm` / `total_edge_length_mm` | int | feed pricing metrics |
-| `edge_length_by_material` | json | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material geometric length in integer millimetres; UI/pricing metres sifatida koʻrsatadi, va faqat `shop`-source edge length stock decrement'ga kiradi; see [`sales.md`](sales.md). Thickness is derived from the material at read time. |
+| `edge_length_by_material` | json | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material geometric length integer millimetre'da; UI/pricing metre sifatida koʻrsatadi. |
+| `parts_snapshot` | json | optimise vaqtida draft'dan copy qilingan source parts, shuning uchun result order placement'da draft oʻchirilgandan keyin ham render qilinadi |
+| `material_snapshots` | json | result reference qiladigan har bir panel/edge material uchun optimise vaqtida copy qilingan material display/spec fact'lari; catalog edit'laridan keyin label va PDF uchun ishlatiladi |
+| `edge_length_shop_by_material` / `edge_length_own_by_material` | json | source-split geometric edge length, edge material id boʻyicha keyed, integer millimetre'da |
+| `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json | source-split edge consumption, edge material id boʻyicha keyed, integer millimetre'da; har bir banded side uchun fixed 30 mm overhang'ni qoʻshadi |
+| `edge_banded_sides_by_material` | json | `{ "<edge-material_id>": { "shop": 4, "own": 2 } }` — consumption va Phase 5 stock math'ni feed qiladigan source-split banded side count |
 | `order_id` | UUID? | the order it's bound to, once `confirmed` |
 | `created_at` / `confirmed_at` / `invalidated_at` | timestamps | as the lifecycle moves |
 
@@ -70,7 +75,9 @@ call'da, ular tanlanmagan order placement'da yoki draft bilan birga oʻchiriladi
 
 Invariant'lar: yaratilgandan keyin **immutable** — faqat `status`, `order_id`,
 `confirmed_at`, `invalidated_at` va `draft_id` (confirm'da clear qilinadi) oʻzgaradi;
-layout, metric va per-panel row'lar hech qachon oʻzgarmaydi. `confirmed` / `invalidated`
+layout, metric, snapshot va per-panel row'lar hech qachon oʻzgarmaydi. Result draft
+oʻchirilgandan yoki catalog display fact'lari oʻzgargandan keyin confirmed plan'ni render
+qilish uchun yetarli source/material snapshot'larni olib yuradi. `confirmed` / `invalidated`
 result'ning `order_id`'i null emas; `candidate`'ning `draft_id`'i null emas.
 `panels_used_by_material`'dagi har bir material uchun count ≤ 20; result manba parts
 list'idagi har bir part-instance'ni qoplaydigan placement'lar bilan keladi. `candidate`

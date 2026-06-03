@@ -37,6 +37,16 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopBranchDetailView.vue'),
   },
   {
+    path: '/workshop/cutting-plans',
+    name: 'workshop-cutting-plans',
+    component: () => import('@/shared/views/WorkshopCuttingPlansView.vue'),
+  },
+  {
+    path: '/workshop/cutting-plans/:result_id',
+    name: 'workshop-cutting-plan-detail',
+    component: () => import('@/shared/views/WorkshopCuttingPlanDetailView.vue'),
+  },
+  {
     path: '/workshop/settings/users/:user_id',
     name: 'workshop-user-detail',
     component: () => import('@/shared/views/WorkshopUserDetailView.vue'),
