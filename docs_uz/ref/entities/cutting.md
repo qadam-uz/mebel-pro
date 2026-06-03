@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-03
 order: 40
 ---
 
@@ -58,7 +58,7 @@ tegmaydi.
 | `panels_used_by_material` | json | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material) |
 | `waste_percentage` | numeric | 0.0–1.0; weighted across all panel materials in the result |
 | `total_cut_length_mm` / `total_edge_length_mm` | int | feed pricing metrics |
-| `edge_length_by_material` | json | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material pricing input (only `shop`-source edge metres count toward stock decrement; see [`sales.md`](sales.md)). Thickness is derived from the material at read time. |
+| `edge_length_by_material` | json | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material geometric length in integer millimetres; UI/pricing metres sifatida koʻrsatadi, va faqat `shop`-source edge length stock decrement'ga kiradi; see [`sales.md`](sales.md). Thickness is derived from the material at read time. |
 | `order_id` | UUID? | the order it's bound to, once `confirmed` |
 | `created_at` / `confirmed_at` / `invalidated_at` | timestamps | as the lifecycle moves |
 

@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 80
 ---
 
@@ -55,9 +55,9 @@ A draft owns:
 
 Each algorithm result records: `algorithm_name`, `algorithm_version`, per-material panels
 and their placements, weighted `waste_percentage`, `panels_used_by_material`,
-`total_cut_length_mm`, `total_edge_length_mm`, `edge_length_by_material` (metres per edge
-material, only the `shop`-source metres feed the order's billed and consumed totals; `own` metres are tracked
-separately for the cutting plan).
+`total_cut_length_mm`, `total_edge_length_mm`, `edge_length_by_material` (integer millimetres
+per edge material; UI/pricing displays metres; only the `shop`-source length feeds the order's
+billed and consumed totals; `own` length is tracked separately for the cutting plan).
 
 ### Lifecycle
 
@@ -123,7 +123,8 @@ stateDiagram-v2
   trim).
 - **Edge-banding length is computed here.** For each part edge with a banding material set,
   the edge length is the part's length (top/bottom) or width (left/right). Totals roll up
-  **by edge material** (`edge_length_by_material`) — this is the **geometric banded length**.
+  **by edge material** (`edge_length_by_material`, integer millimetres) — this is the
+  **geometric banded length**.
   The metres an order actually **bills and consumes** add a fixed per-side trim overhang
   (masters glue tape long, then trim it flush) — a system constant, the same at every branch
   — so the **consumed** figure is geometry + that trim; see [`orders.md`](orders.md#pricing)

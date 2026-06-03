@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 30
 ---
 
@@ -39,10 +39,11 @@ Set at creation:
 - **Material source — per-item for panels, per-side for edges.** Each part is `shop` (the
   workshop supplies the panel; inventory auto-decrements for it) or `own` (the client
   brings the panel; cutting service only, no stock movement for that panel). Each banded
-  edge side is independently `shop` (workshop supplies that tape; inventory
-  auto-decrements its metres) or `own` (client brings the tape; no stock movement for
-  that side). An order can mix sources at every level; a fully-`own` order touches no
-  stock and can be placed at any active branch with a saw.
+  edge side is independently `shop` (workshop supplies that tape; inventory decrements
+  consumed length as integer millimetres internally, shown and priced as metres) or `own`
+  (client brings the tape; no stock movement for that side). An order can mix sources at
+  every level; a fully-`own` order touches no stock and can be placed at any active branch
+  with a saw.
 - **Handover — pickup only.** The client collects at the branch. Delivery is out of v1
   ([`scope.md`](../../scope.md)).
 
@@ -141,9 +142,9 @@ Driven entirely by this state machine; the mechanics live in
   of active orders ahead), so they can prompt the warehouseman. It is a warning, not a
   gate.
 - **Auto-decrement at job completion.** `shop` panels decrement when **Cutting done** is
-  marked; each `shop` edge material's **consumed metres** decrement when **Banding done** is
+  marked; each `shop` edge material's **consumed length** decrements when **Banding done** is
   marked (one inventory transaction per edge material the order's `edge_length_snapshot`
-  carries with shop metres — these are **consumed** metres, see *Pricing*). A
+  carries with shop millimetres — these are **consumed** metres when displayed/priced, see *Pricing*). A
   revert re-increments exactly what its step decremented.
 - **`own` parts and `own` edge sides never touch stock.** An order with no `shop` panels
   and no `shop` edge sides skips this seam entirely.

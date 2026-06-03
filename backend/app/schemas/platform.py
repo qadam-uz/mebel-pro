@@ -5,10 +5,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 
 from app.models.enums import BranchStatus, Currency, UserStatus, WorkshopStatus
 from app.schemas.common import APIModel
+from app.schemas.workshop import WorkingHours, validate_working_hours
 
 
 class WorkshopInput(BaseModel):
@@ -25,7 +26,12 @@ class FirstBranchInput(BaseModel):
     phone: str
     latitude: Decimal
     longitude: Decimal
-    working_hours: dict[str, Any] = Field(default_factory=dict)
+    working_hours: WorkingHours
+
+    @field_validator("working_hours")
+    @classmethod
+    def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
+        return validate_working_hours(value)
 
 
 class OwnerInput(BaseModel):

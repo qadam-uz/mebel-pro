@@ -27,6 +27,11 @@ export const adminRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/AdminWorkshopsView.vue'),
   },
   {
+    path: '/admin/catalog',
+    name: 'admin-catalog',
+    component: () => import('@/shared/views/AdminCatalogView.vue'),
+  },
+  {
     path: '/admin/workshops/:workshop_id',
     name: 'admin-workshop-detail',
     component: () => import('@/shared/views/AdminWorkshopDetailView.vue'),

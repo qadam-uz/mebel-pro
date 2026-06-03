@@ -10,6 +10,18 @@ from app.models.identity import PlatformUser, WorkshopUser
 from app.models.workshop import Branch, Workshop
 
 
+def default_working_hours() -> dict[str, dict[str, str | None]]:
+    return {
+        "monday": {"open": "09:00", "close": "18:00"},
+        "tuesday": {"open": "09:00", "close": "18:00"},
+        "wednesday": {"open": "09:00", "close": "18:00"},
+        "thursday": {"open": "09:00", "close": "18:00"},
+        "friday": {"open": "09:00", "close": "18:00"},
+        "saturday": {"open": "10:00", "close": "16:00"},
+        "sunday": {"open": None, "close": None},
+    }
+
+
 async def seed_platform_user(
     db: AsyncSession,
     *,
@@ -50,7 +62,7 @@ async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, 
         phone="+998902222222",
         latitude=Decimal("41.365"),
         longitude=Decimal("69.285"),
-        working_hours={},
+        working_hours=default_working_hours(),
     )
     db.add(branch)
     await db.flush()

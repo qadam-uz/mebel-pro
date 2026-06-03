@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 80
 ---
 
@@ -60,8 +60,9 @@ Draft ushlab turadi:
 Har bir algorithm result yozadi: `algorithm_name`, `algorithm_version`, per-material
 panel'lar va ularning placement'lari, weighted `waste_percentage`,
 `panels_used_by_material`, `total_cut_length_mm`, `total_edge_length_mm`,
-`edge_length_by_material` (har bir edge material uchun metr, faqat `shop`-source metr'lar
-order'ning billed va consumed total'lariga kiradi; `own` metr'lar cutting plan uchun alohida kuzatiladi).
+`edge_length_by_material` (har bir edge material uchun integer millimetres; UI/pricing metres
+sifatida ko'rsatadi; faqat `shop`-source length order'ning billed va consumed total'lariga kiradi;
+`own` length cutting plan uchun alohida kuzatiladi).
 
 ### Lifecycle
 
@@ -131,8 +132,9 @@ stateDiagram-v2
   mumkin area = panel − 2× edge trim).
 - **Edge-banding length shu yerda hisoblanadi.** Banding material'i set qilingan har bir
   part edge uchun, edge length part'ning length (top/bottom) yoki width (left/right).
-  Total'lar **edge material boʻyicha** roll-up qilinadi (`edge_length_by_material`) — bu **geometric banded length**. Order aslida **bill
-  qiladigan va consume qiladigan** metr'lar har bir banded side uchun fixed trim overhang
+  Total'lar **edge material boʻyicha** roll-up qilinadi (`edge_length_by_material`, integer
+  millimetres) — bu **geometric banded length**. Order aslida **bill qiladigan va consume qiladigan**
+  metr'lar har bir banded side uchun fixed trim overhang
   qoʻshadi (master'lar tape'ni uzunroq yopishtiradi, soʻng tekis qirqadi) — bu har bir
   branch'da bir xil system constant — shuning uchun **consumed** figura geometry + oʻsha
   trim; qoida uchun [`orders.md`](orders.md#pricing)'ga qarang. Optimiser geometry'ni
