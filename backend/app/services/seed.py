@@ -15,12 +15,14 @@ async def seed_platform_user(
     *,
     login: str = "admin",
     password: str = "Admin123",  # noqa: S107 - deterministic dev/test seed only.
+    password_reset_required: bool = True,
 ) -> PlatformUser:
     user = PlatformUser(
         login=login,
         password_hash=hash_password(password),
         full_name="Platform Admin",
         phone="+998901234567",
+        password_reset_required=password_reset_required,
     )
     db.add(user)
     await db.flush()
@@ -30,10 +32,12 @@ async def seed_platform_user(
 async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, WorkshopUser]:
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
+    suffix = workshop_id.hex[:8]
     workshop = Workshop(
         id=workshop_id,
         owner_user_id=owner_id,
         name="Demo Workshop",
+        code=f"demo-{suffix}",
         phone="+998901111111",
         address="Tashkent",
     )

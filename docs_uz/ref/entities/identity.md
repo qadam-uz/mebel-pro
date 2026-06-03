@@ -14,7 +14,7 @@ ichida; bu page data shapeni egallaydi.
 ## Platform user
 
 Platform-operating teamdagi person ("superadmin"). Workshopga bound emas; permission model
-yo'q — full platform scope. Superadmin app ishlatadi.
+yo'q — platform-ops scope. Superadmin app ishlatadi.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -23,20 +23,21 @@ yo'q — full platform scope. Superadmin app ishlatadi.
 | `password_hash` | text | argon2/bcrypt; never plaintext |
 | `full_name` / `phone` | text | required; phone `+998XXXXXXXXX` |
 | `status` | enum | `active` / `blocked` (soft delete only) |
-| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
+| `password_reset_required` | bool | default `true` on creation; password change bo'lmaguncha non-account routes'ni gate qiladi |
 | `failed_login_count` / `locked_until` | int / timestamp? | brute-force counter; resets on success |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
 
 Invariants: `login` unique (DB); blocking deletes its sessions; complexity ≥ 8 chars (upper +
-lower + digit); created only by another platform user.
+lower + digit); bootstrap creation CLI-only; another platform user orqali in-app creation
+platform-user registry tomonidan owned.
 
 ## Workshop user
 
 Workshop personi — **including its owner**, plus office staff, cutters, edge banders,
-accountants. Login + password bilan log in qiladi. Exactly one workshopga belongs.
-**Separate "worker" entity va fixed role yo'q** — capability owner flag (everything) yoki
-branch-scoped [permission grants](#permission-grant) setidir, va bir person every grant
+accountants. Workshop code + login + password bilan log in qiladi. Exactly one workshopga
+belongs. **Separate "worker" entity va fixed role yo'q** — capability owner flag (everything)
+yoki branch-scoped [permission grants](#permission-grant) setidir, va bir person every grant
 ushlashi mumkin. Workshop app ishlatadi.
 
 | Field | Type | Notes |
@@ -48,7 +49,7 @@ ushlashi mumkin. Workshop app ishlatadi.
 | `is_owner` | bool | **exactly one `true` per workshop** |
 | `home_branch_id` | UUID | user ishlaydigan branch; cutter / edger assignment uchun load-bearing (a **non-owner** order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`; the **owner is exempt** — `is_owner` holds `process_production` on every branch and may be assigned regardless of `home_branch_id`); owner / office staff branches bo'ylab ishlasa, o'tirgan branchni set qiling |
 | `status` | enum | `active` / `blocked` |
-| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
+| `password_reset_required` | bool | default `true` on creation; password change bo'lmaguncha non-account routes'ni gate qiladi |
 | `failed_login_count` / `locked_until` | int / timestamp? | |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
@@ -57,18 +58,17 @@ v1da **compensation policy yo'q**: system pay rates saqlamaydi va salary compute
 Worker pay accountantning worker-production reportsdan qiladigan manual calculationi,
 `salary` expense sifatida booked ([`finance.md`](../features/finance.md)).
 
-Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop;
-`home_branch_id` same workshopga belongs; user blocking yoki workshop blocking sessionsni
-delete qiladi; zero grantsli staff log in qila oladi, lekin actionable screens yo'q; only
-platform operator ownershipni boshqa userga move qila oladi.
+Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop; sign-in
+loginni tekshirishdan oldin workshopni `workshop.code` bo'yicha resolve qiladi;
+`home_branch_id` same workshopga belongs; user blocking yoki workshop blocking sessionsni delete
+qiladi; zero grantsli staff log in qila oladi, lekin actionable screens yo'q; only platform
+operator ownershipni boshqa userga move qila oladi.
 
 ## Permission grant
 
 One row that grants a (non-owner) workshop user one coarse permission, scoped to one branch.
-v1 catalog: `view_dashboard`, `manage_orders`, `process_production`, `manage_catalog`,
-`manage_inventory`, `manage_finance`, `view_finance_reports` (`process_delivery` delivery
-bilan v1dan gated out). Har bir grant nimani beradi va qaysilari owner-only ekanini
-[`../features/access-management.md`](../features/access-management.md) ko'rsatadi.
+Permission catalog va owner-only carve-outs
+[`../features/access-management.md`](../features/access-management.md) tomonidan owned.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -123,16 +123,20 @@ hamda brand-new numbers uchun mavjud bo'ladi.
 |---|---|---|
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; code yuborilgan number |
-| `code_hash` | text | SHA-256 of the 6-digit code; plaintext never stored |
+| `request_ip` | text | per-IP send limiting uchun normalized client IP |
+| `code_hash` | text | `OTP_CODE_PEPPER` bilan 6-digit code'ning HMAC-SHA-256 qiymati; plaintext never stored |
 | `expires_at` | timestamp | now + 5 min at issue |
 | `attempt_count` | int | wrong-code counter; burned at 5 |
 | `consumed_at` | timestamp? | correct code accepted bo'lganda set; single-use |
 | `created_at` | timestamp | |
 
-Invariants: code 6 digits, hashed at rest, single-use, 5-minute TTL; challenge burn bo'lishidan
-oldin ≤ 5 verify attempts; per-phone resend cooldown (60 s) va per-phone / per-IP send rate
-limit; row short-lived va periodic session/expiry job prune qiladi. Delivery **Telegram-only**
-— Telegramda reachable bo'lmagan number sign in qila olmaydi (v1da SMS fallback yo'q).
+Invariants: code 6 digits, server-side pepper bilan HMAC-hashed at rest, single-use, 5-minute
+TTL; challenge burn bo'lishidan oldin ≤ 5 verify attempts; per-phone resend cooldown (60 s),
+per-phone send limit (5 / hour), va per-IP send limit (30 / hour). `request_ip` direct/dev
+traffic'da socket peer, yoki immediate peer trusted bo'lsa trusted Caddy `X-Forwarded-For` client
+IP; untrusted forwarded headers ignored. Row short-lived va periodic session/expiry job prune
+qiladi. Delivery **Telegram-only** — Telegramda reachable bo'lmagan number sign in qila olmaydi
+(v1da SMS fallback yo'q).
 
 ## Session
 

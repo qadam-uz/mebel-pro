@@ -118,7 +118,9 @@ async def principal_from_session(
         return AuthenticatedPrincipal(
             principal_type=session.principal_type,
             principal_id=platform_user.id,
+            session_id=session.id,
             trace_id=trace_id,
+            password_reset_required=platform_user.password_reset_required,
         )
     if session.principal_type is AuthenticatedPrincipalType.CLIENT:
         client = await db.get(Client, session.principal_id)
@@ -127,6 +129,7 @@ async def principal_from_session(
         return AuthenticatedPrincipal(
             principal_type=session.principal_type,
             principal_id=client.id,
+            session_id=session.id,
             trace_id=trace_id,
         )
     workshop_user = await db.get(WorkshopUser, session.principal_id)
@@ -139,8 +142,10 @@ async def principal_from_session(
     return AuthenticatedPrincipal(
         principal_type=session.principal_type,
         principal_id=workshop_user.id,
+        session_id=session.id,
         workshop_id=workshop_user.workshop_id,
         is_owner=workshop_user.is_owner,
+        password_reset_required=workshop_user.password_reset_required,
         grants=grants,
         trace_id=trace_id,
     )

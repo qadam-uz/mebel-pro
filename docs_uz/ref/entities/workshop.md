@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-06-02
 order: 20
 ---
 
@@ -23,6 +23,7 @@ va settings bundle'ga ega. Platform operator tomonidan provision qilinadi.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
+| `code` | text | human-readable login namespace; unique, case-insensitive |
 | `name` | text | required |
 | `logo_file_id` | UUID? | → [file](support.md#file) |
 | `phone` | text | `+998XXXXXXXXX` |
@@ -43,9 +44,9 @@ ular delivery va gateway bilan qaytadi.
 
 Block cascade'lari: owner'ning + staff'ning session'lari darhol revoke qilinadi; ochiq
 order'lar muzlaydi (automatic transition yoʻq); client'larga taʼsir qilmaydi. Unblock
-session'larni restore qilmaydi. Invariant'lar: har bir workshop uchun aniq bitta
-`is_owner = true` workshop user (DB/service); `owner_user_id` shu user'ga reference qiladi;
-hech qachon oʻchirilmaydi.
+session'larni restore qilmaydi. Invariant'lar: `code` case-insensitive unique va provisioningdan
+keyin immutable; har bir workshop uchun aniq bitta `is_owner = true` workshop user (DB/service);
+`owner_user_id` shu user'ga reference qiladi; hech qachon oʻchirilmaydi.
 
 ## Branch
 

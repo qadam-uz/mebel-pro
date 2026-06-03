@@ -100,8 +100,8 @@ export const workshopConfig: RoleConfig = {
   notFoundHomeLabel: 'Go to workshop home',
   dashboardTitle: 'Workshop dashboard',
   dashboardSubtitle: 'Branch context, access states, and production entry points for operators.',
-  primaryActionLabel: 'View profile',
-  primaryActionTo: '/workshop/profile',
+  primaryActionLabel: 'Manage users',
+  primaryActionTo: '/workshop/settings/users',
   dropdownLabel: 'Branch',
   dropdownOptions: [
     { value: 'yunusobod', label: 'Yunusobod', meta: 'open branch', status: 'active' },
@@ -110,6 +110,7 @@ export const workshopConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Dashboard', to: '/workshop' },
+    { label: 'Users', to: '/workshop/settings/users' },
     { label: 'Profile', to: '/workshop/profile' },
   ],
   states: [
@@ -136,8 +137,8 @@ export const adminConfig: RoleConfig = {
   notFoundHomeLabel: 'Go to admin home',
   dashboardTitle: 'Platform console',
   dashboardSubtitle: 'Operations for workshops, jobs, errors, docs, and API surfaces.',
-  primaryActionLabel: 'Open API docs',
-  primaryActionTo: '/api-docs',
+  primaryActionLabel: 'Manage workshops',
+  primaryActionTo: '/admin/workshops',
   dropdownLabel: 'Monitor',
   dropdownOptions: [
     { value: 'platform', label: 'Platform health', meta: 'ready', status: 'active' },
@@ -146,6 +147,7 @@ export const adminConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Dashboard', to: '/admin' },
+    { label: 'Workshops', to: '/admin/workshops' },
     { label: 'Profile', to: '/admin/profile' },
     { label: 'Docs', to: '/docs' },
     { label: 'API', to: '/api-docs' },

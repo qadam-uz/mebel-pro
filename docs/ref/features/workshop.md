@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-29
+updated: 2026-06-02
 order: 40
 ---
 
@@ -19,8 +19,8 @@ income, expenses, and the worker-production reports live in [`finance.md`](finan
 
 The workshop's mutable profile:
 
-- **Profile** — name, logo, phone, address. Editable by the workshop's owner (and by a
-  platform operator for incident response).
+- **Profile** — name, logo, phone, address. Editable by the workshop's owner. Platform
+  operators can view the profile for incident response, but v1 gives them no edit path.
 - **Currency** — UZS, fixed in v1; named here for future-proofing.
 
 Delivery zones, advance %, and payment channels are **not in v1** — v1 is pickup-only and an
@@ -34,7 +34,7 @@ editing settings.
 - **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge,
   created, branches count, orders-30d count. Status filter; name search;
   **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet."
-- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (edit),
+- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (read-only),
   **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze).
 
@@ -49,7 +49,7 @@ A workshop owns one or more branches. Each branch has a physical address, workin
 manually-entered `(lat, lng)`, and a `status` — semantics in
 [`access-patterns.md`](../../access-patterns.md#tenancy).
 
-**Operations (owner only):**
+After platform provisioning creates the first branch, branch operations are **owner only**:
 
 - **Create / edit a branch** — name, address, phone, lat / lng, per-weekday working hours.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the

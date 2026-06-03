@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 20
 ---
 
@@ -18,8 +18,8 @@ that's a considered substitution.
 ## In scope
 
 - **Identity & access** — platform operators provision workshops; owners manage staff with
-  per-branch permissions; clients self-register via social login. Tenant-isolated, revocable,
-  brute-force-protected.
+  per-branch permissions; clients self-register with phone + Telegram OTP. Tenant-isolated,
+  revocable, brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments;

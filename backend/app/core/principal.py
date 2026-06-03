@@ -16,9 +16,11 @@ class PermissionGrantKey:
 class AuthenticatedPrincipal:
     principal_type: AuthenticatedPrincipalType
     principal_id: uuid.UUID
+    session_id: uuid.UUID
     trace_id: str
     workshop_id: uuid.UUID | None = None
     is_owner: bool = False
+    password_reset_required: bool = False
     grants: frozenset[PermissionGrantKey] = frozenset()
 
 

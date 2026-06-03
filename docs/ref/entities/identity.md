@@ -14,7 +14,7 @@ The auth subjects and the session record. Rules are in
 ## Platform user
 
 A person on the platform-operating team ("superadmin"). Not bound to any workshop; no permission
-model — full platform scope. Uses the superadmin app.
+model — platform-ops scope. Uses the superadmin app.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -23,21 +23,22 @@ model — full platform scope. Uses the superadmin app.
 | `password_hash` | text | argon2/bcrypt; never plaintext |
 | `full_name` / `phone` | text | required; phone `+998XXXXXXXXX` |
 | `status` | enum | `active` / `blocked` (soft delete only) |
-| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
+| `password_reset_required` | bool | default `true` on creation; gates non-account routes until password change |
 | `failed_login_count` / `locked_until` | int / timestamp? | brute-force counter; resets on success |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
 
 Invariants: `login` unique (DB); blocking deletes its sessions; complexity ≥ 8 chars (upper +
-lower + digit); created only by another platform user.
+lower + digit); bootstrap creation is CLI-only; in-app creation by another platform user is owned
+by the platform-user registry.
 
 ## Workshop user
 
 A workshop's person — **including its owner**, plus office staff, cutters, edge banders,
-accountants. Logs in with login + password. Belongs to exactly one workshop. **There is no
-separate "worker" entity and no fixed role** — capability is the owner flag (everything) or
-a set of branch-scoped [permission grants](#permission-grant), and one person may hold every
-grant. Uses the workshop app.
+accountants. Logs in with workshop code + login + password. Belongs to exactly one workshop.
+**There is no separate "worker" entity and no fixed role** — capability is the owner flag
+(everything) or a set of branch-scoped [permission grants](#permission-grant), and one person may
+hold every grant. Uses the workshop app.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -48,7 +49,7 @@ grant. Uses the workshop app.
 | `is_owner` | bool | **exactly one `true` per workshop** |
 | `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (a **non-owner** order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`; the **owner is exempt** — `is_owner` holds `process_production` on every branch and may be assigned regardless of `home_branch_id`); for owner / office staff who span branches, set the branch they sit at |
 | `status` | enum | `active` / `blocked` |
-| `password_reset_required` | bool | default `true` on creation; cleared by changing password |
+| `password_reset_required` | bool | default `true` on creation; gates non-account routes until password change |
 | `failed_login_count` / `locked_until` | int / timestamp? | |
 | `last_login_at` | timestamp? | |
 | `created_at` / `updated_at` | timestamp | |
@@ -57,19 +58,17 @@ There is **no compensation policy** in v1: the system stores no pay rates and co
 salary. A worker's pay is the accountant's manual calculation from the worker-production
 reports, booked as a `salary` expense ([`finance.md`](../features/finance.md)).
 
-Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop;
-`home_branch_id` belongs to the same workshop; blocking the user, or blocking its workshop,
-deletes its sessions; staff with zero grants can log in but has no actionable screens; only a
-platform operator may move ownership to another user.
+Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop; sign-in
+resolves the workshop by `workshop.code` before checking the login; `home_branch_id` belongs to
+the same workshop; blocking the user, or blocking its workshop, deletes its sessions; staff with
+zero grants can log in but has no actionable screens; only a platform operator may move ownership
+to another user.
 
 ## Permission grant
 
 One row that grants a (non-owner) workshop user one coarse permission, scoped to one branch.
-The v1 catalog: `view_dashboard`, `manage_orders`, `process_production`, `manage_catalog`,
-`manage_inventory`, `manage_finance`, `view_finance_reports` (`process_delivery` is gated
-out of v1 with delivery). See
-[`../features/access-management.md`](../features/access-management.md) for what each one
-grants and which are owner-only.
+The permission catalog and owner-only carve-outs are owned by
+[`../features/access-management.md`](../features/access-management.md).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -126,16 +125,20 @@ returning and brand-new numbers.
 |---|---|---|
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; the number the code was sent to |
-| `code_hash` | text | SHA-256 of the 6-digit code; plaintext never stored |
+| `request_ip` | text | normalized client IP used for per-IP send limiting |
+| `code_hash` | text | HMAC-SHA-256 of the 6-digit code using `OTP_CODE_PEPPER`; plaintext never stored |
 | `expires_at` | timestamp | now + 5 min at issue |
 | `attempt_count` | int | wrong-code counter; burned at 5 |
 | `consumed_at` | timestamp? | set when a correct code is accepted; single-use |
 | `created_at` | timestamp | |
 
-Invariants: code is 6 digits, hashed at rest, single-use, 5-minute TTL; ≤ 5 verify attempts
-before the challenge is burned; per-phone resend cooldown (60 s) and a per-phone / per-IP send
-rate limit; the row is short-lived and pruned by the periodic session/expiry job. Delivery is
-**Telegram-only** — a number not reachable on Telegram cannot sign in (no SMS fallback in v1).
+Invariants: code is 6 digits, HMAC-hashed at rest with a server-side pepper, single-use,
+5-minute TTL; ≤ 5 verify attempts before the challenge is burned; per-phone resend cooldown
+(60 s), per-phone send limit (5 / hour), and per-IP send limit (30 / hour). `request_ip` is the
+socket peer in direct/dev traffic, or the trusted Caddy `X-Forwarded-For` client IP when the
+immediate peer is trusted; untrusted forwarded headers are ignored. The row is short-lived and
+pruned by the periodic session/expiry job. Delivery is **Telegram-only** — a number not reachable
+on Telegram cannot sign in (no SMS fallback in v1).
 
 ## Session
 

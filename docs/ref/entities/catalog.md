@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 25
 ---
 
@@ -65,7 +65,7 @@ materials have none of these and are measured in metres; one standard panel size
 material (v1) — a material's identity is its spec, that size, **and its manufacturer**, so the
 same spec in two manufacturers is two catalog rows and the same spec in two panel sizes is two
 more, each naming its specifics; created and edited only by a platform operator (platform
-users have full platform scope; no workshop-side permission grants this); `inactive` invisible
+users have platform-ops scope for this; no workshop-side permission grants it); `inactive` invisible
 to new branch selections and to clients; existing branch selections of an `inactive` master
 keep referencing it (history preserved); never deleted; editing a master never affects
 existing orders (snapshots).

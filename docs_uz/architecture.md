@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-05-22
+updated: 2026-06-02
 order: 70
 ---
 
@@ -21,7 +21,7 @@ uchun shu oʻq real rigor oladi.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Scale**           | Tens of workshops · low hundreds of branches · low thousands of clients · low tens of thousands of orders/year. Flat-to-modest growth. Read-heavy. Hottest op: cutting (≤ 100 parts, synchronous, 5 s). | One Postgres, one FastAPI process (replicas if needed). No sharding, no cache layer until something is _measured_ slow.                                                                                                |
 | **Criticality**     | Money (recorded income / expenses) and real stock movement back the orders. A wrong balance or a lost stock decrement is real harm.                                                                     | Integer-tiyin money (never float); atomic stock decrement / restore; append-only audit; idempotent seams; money tracked, not moved (recorded by hand in v1, no order-held payments).                                    |
-| **Security**        | Public on the internet. Holds personal data, staff credentials, workshop payment-gateway credentials. Worth attacking.                                                                                  | Hard authn/authz on every request; opaque DB-backed sessions with instant revocation; password hashing + lockout; payment credentials owner-only; multi-tenant isolation at the service layer on every read and write. |
+| **Security**        | Public on the internet. Holds personal data, staff credentials, and operational business records. Worth attacking.                                                                                      | Hard authn/authz on every request; opaque DB-backed sessions with instant revocation; password hashing + lockout; least-privilege admin scope; multi-tenant isolation at the service layer on every read and write.   |
 | **Latency**         | Back-office-ish — "a second or two" is fine. The one visible expensive op is cutting (5 s budget, synchronous; bigger jobs rejected, not queued in v1).                                                 | No async/queue on the hot path; cutting runs in-process within budget; background jobs on an in-process scheduler.                                                                                                     |
 | **Lifespan × team** | Years; moderate change; ~2-person team.                                                                                                                                                                 | Modular monolith, boring tech (FastAPI · SQLAlchemy · Postgres · Vue · Tailwind), structure two people can operate at 3 a.m.                                                                                           |
 
@@ -52,13 +52,13 @@ flowchart TD
     App["<b>FastAPI app</b> (1 process)<br/>modular monolith · in-process scheduler<br/>+ live docs site (/docs)"]
     DB[("PostgreSQL<br/>single DB")]
     Files[("MinIO / S3<br/>file store")]
-    TG([Telegram Login OAuth<br/>client auth only])
+    TG([Telegram Gateway<br/>client OTP delivery only])
 
     Net ==>|HTTPS| Edge
     Edge ==> App
     App ==> DB
     App ==> Files
-    App -.->|OAuth| TG
+    App -.->|send verification code| TG
 ```
 
 Caddy (`deploy/Caddyfile` dagi config) yagona apex (`BASE_DOMAIN`, masalan
@@ -82,14 +82,14 @@ Har bir SPA oʻz API'si bilan same-origin qoladi (CORS yoʻq).
   cutting PDF'lari. `files` moduli unga egalik qiladi; boshqalari id boʻyicha attach/detach qiladi.
 - **In-process scheduler** — expired session'larni prune qilish, kunlik low-stock summary.
 - **Three SPAs + a static landing.** API `/api` ostida same-origin.
-- **One external integration** — Telegram Login (OAuth), faqat client auth.
+- **One external integration** — Telegram Gateway, faqat client sign-in OTP code'larini deliver qilish uchun.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
   (prod'da yagona published service — HTTPS + Let's Encrypt). `main` ga push.
 
 ## Three SPAs + a static landing
 
 `/` da static SEO landing sahifasi (oddiy HTML, indexable) plus **three SPAs** quruvchi Vue 3 /
-Vite repo, har biri oʻz entry'si, auth surface va route set: **client** (Telegram-auth
+Vite repo, har biri oʻz entry'si, auth surface va route set: **client** (Telegram OTP-auth
 mijozlar — cut, order, track), **workshop** (workshop owner va staff — har bir ekran
 permission-gated), **superadmin** (platform operator'lar — provisioning, block'lar, jobs console,
 error monitor). Uch auditoriya zoʻrgʻa overlap qiladi va marketing sahifasi indexable boʻlishi
