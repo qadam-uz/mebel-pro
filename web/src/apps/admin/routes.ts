@@ -22,6 +22,16 @@ export const adminRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/ProfileView.vue'),
   },
   {
+    path: '/admin/workshops',
+    name: 'admin-workshops',
+    component: () => import('@/shared/views/AdminWorkshopsView.vue'),
+  },
+  {
+    path: '/admin/workshops/:workshop_id',
+    name: 'admin-workshop-detail',
+    component: () => import('@/shared/views/AdminWorkshopDetailView.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'admin-not-found',
     component: () => import('@/shared/views/RoleNotFoundView.vue'),

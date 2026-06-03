@@ -14,28 +14,38 @@ grants qanday boshqariladi, va uch appdagi surfaces qanday ko'rinadi.
 
 ## Workshop & platform user sign-in
 
-Login + password. Login case-insensitive; workshop users uchun bir workshop ichida unique,
-platform users uchun platform-wide unique. Yomon pairdagi error **generic**: "login or
-password is incorrect" — account-existence oracle yo'q. **Ketma-ket besh noto'g'ri urinish
+Platform users login + password bilan sign in qiladi. Workshop users workshop `code` + login +
+password bilan sign in qiladi; code tenant namespaceni tanlaydi, chunki workshop-user login
+case-insensitive va faqat shu workshop ichida unique. Yomon pairdagi error **generic**: "login
+or password is incorrect" — account-existence oracle yo'q. **Ketma-ket besh noto'g'ri urinish
 → 15-minute lockout** (`locked_until`); to'g'ri password counter ni reset qiladi. Passwords
-argon2 / bcrypt bilan hash qilinadi; complexity ≥ 8 chars, kamida one upper, one lower, one
-digit.
+argon2 / bcrypt bilan hash qilinadi; complexity ≥ 8 chars, kamida one upper, one lower, one digit.
+
+`account_locked` va `account_blocked` faqat submitted credential pair boshqacha holda valid
+bo'lgandan keyin qaytadi. Unknown workshop code, unknown login, wrong password, locked account
+uchun wrong password, va blocked account uchun wrong password hammasi bir xil generic credential
+error qaytaradi.
 
 `password_reset_required` (creation, higher-principal password reset, yoki security
-rotationdan keyin set qilinadi) advisory flag. U `get-me`dan qaytadi va workshop /
-superadmin app shell password o'zgartirilguncha persistent warning ko'rsatadi. Bu flag
-appning qolgan qismini gate qilmaydi; access faqat user yoki workshop block qilinganda
-rad etiladi.
+rotationdan keyin set qilinadi) account gate. U `get-me`dan qaytadi va workshop /
+superadmin app shell password o'zgartirilguncha blocking account banner ko'rsatadi. Flag true
+bo'lganda user faqat `me`, profile/password, sessions, logout va logout-everywhere surfaces'dan
+foydalana oladi; branch-scoped, platform-ops va workshop-management routes password change flagni
+clear qilmaguncha forbidden.
 
-**Platform users are seeded by a backend CLI command.** Ular hierarchy tepasida, shuning
-uchun ularni yaratadigan higher principal yo'q; kamida bitta platform user paydo bo'lgach
-in-app creation ruxsat etiladi ([`platform.md`](platform.md)).
+**Platform users are seeded by a backend CLI command for bootstrap.** In-app platform-user registry
+[`platform.md`](platform.md) tomonidan owned va bu identity slice'dan tashqarida.
 
 ### Sessions
 
 Opaque tokens DBda hash qilingan (SHA-256) holda saqlanadi — JWT emas. Access TTL **24 h**;
 refresh TTL **7 d**; har principal uchun **ko'pi bilan 5 concurrent sessions** (6-login
 eng eskisini evict qiladi). Revoking = row delete.
+
+Browser client'lar access tokenni faqat memory'da saqlaydi. Refresh token httpOnly, Secure,
+SameSite cookie sifatida relevant app/API surface'ga scoped holda issued qilinadi; frontend
+JavaScript'ga hech qachon exposed emas. Page reload authni shu cookie orqali refresh chaqirib
+restore qiladi.
 
 | Trigger | Effect |
 |---|---|
@@ -58,12 +68,14 @@ barchasini revoke qilish, va `me` fetch qilish (principal type, ids, `is_owner`,
 
 ### UX
 
-- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — login +
-  password fields; failureda generic error; `locked_until` qaytganda lockout banner ("try
-  again at HH:MM").
-- **Password-reset warning** — workshop / superadmin app shell ichida
-  `password_reset_required = true` bo'lsa ko'rsatiladi; persistent, non-blocking va profile
-  password tabiga link qiladi. Warning faqat successful password changedan keyin yo'qoladi.
+- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — workshop
+  users workshop code + login + password fields ko'radi; platform users login + password fields
+  ko'radi. Failure bir xil generic error ishlatadi; lockout banner ("try again at HH:MM") faqat
+  credentials boshqacha holda valid va account locked bo'lganda chiqadi.
+- **Password-reset gate** — workshop / superadmin app shell ichida
+  `password_reset_required = true` bo'lsa ko'rsatiladi; persistent, non-account routes uchun
+  blocking va profile password tabiga link qiladi. Gate faqat successful password changedan keyin
+  yo'qoladi.
 - **Self profile** (`/workshop/profile`, `/admin/profile`) — Profile (read-only fields),
   Change password (strength meter), Sessions list (current marker, "revoke" per row,
   "log out everywhere").
@@ -79,8 +91,8 @@ continuous path bo'lib, faqat number new bo'lganda registrationga branch qiladi.
    va 6-digit codeni shu raqamga **Telegram** orqali yuboradi (Telegram Gateway). Malformed
    number `invalid_phone`; Telegramda reachable bo'lmagan number
    `phone_unreachable_on_telegram` (v1da **SMS fallback yo'q** — client shu raqamda
-   Telegramga ega bo'lishi kerak); resend cooldown (60 s) yoki per-phone / per-IP send rate
-   limit oshsa `code_send_rate_limited`.
+   Telegramga ega bo'lishi kerak); resend cooldown (60 s), per-phone rate limit (5 sends / hour)
+   yoki per-IP rate limit (30 sends / hour) oshsa `code_send_rate_limited`.
 2. **Verify the code.** Client phone + code submit qiladi. Wrong code `invalid_code`
    (challenge saqlanadi, attempt counter bump); 5-wrong attempt challenge ni burn qiladi
    (`too_many_attempts`, yangi code request kerak); 5-minute TTLdan o'tgan code
@@ -123,40 +135,55 @@ orqaga yurganda client typed phone yo'qolmaydi:
 - **Name step** — verification `is_new = true` qaytarganda **only** ko'rsatiladi: bitta
   `name` field, primary **Continue**; returning clients to'g'ri appga kiradi.
 - **Client profile** (`/c/profile`) — `name` editable (client-entered, synced emas);
-  `phone` read-only (change qilish re-verification degani — v1 out of scope); sessions list
-  current marker bilan; "log out" / "log out everywhere".
+  `phone` read-only (change qilish re-verification degani — v1 out of scope); client ko'ra
+  oladigan branch'lar (`active` va `temporarily_closed`) bilan cheklangan searchable workshop +
+  branch options'li preferred branch selector, plus clear action; sessions list current marker
+  bilan; "log out" / "log out everywhere".
 
 ## Workshop provisioning (superadmin app)
 
-Platform operator workshopni first useri bilan atomically provision qiladi:
+Platform operator workshopni first user va first branch bilan atomically provision qiladi:
 
-- **Create a workshop and its owner — atomically.** Input: workshop fields + owner
+- **Create a workshop, first branch, and owner — atomically.** Input: workshop fields + first
+  branch fields (`name`, `address`, `phone`, `latitude`, `longitude`, `working_hours`) + owner
   `full_name`, `login`, `phone`, plus auto-generated temp password (manual override). Same
-  transaction `workshop` row va `workshop_user` row yaratadi: `is_owner = true`,
-  `password_reset_required = true`. Summary va temp password **once** qaytadi. Ownerni
-  platform operatordan boshqa hech kim create, demote yoki delete qila olmaydi; har workshopda
-  exactly one owner.
+  transaction `workshop` row, empty `branch_pricing` bilan `active` first `branch` row va
+  `workshop_user` row yaratadi: `is_owner = true`, `home_branch_id = first_branch.id`,
+  `password_reset_required = true`. Summary va temp password **once** qaytadi. Workshop fields
+  generated `code` va manual override'ni o'z ichiga oladi; returned summary workshop code va owner
+  login'ni o'z ichiga oladi. Faqat temp password secret va shown once. Ownerni platform operatordan
+  boshqa hech kim create, demote yoki delete qila olmaydi; har workshopda exactly one owner.
 - **Block / unblock the workshop.** Blocking owner + staff sessions immediately revoke
   qiladi; next login rejected. Clients unaffected. Open orders **freeze** — staff login qila
   olmagani uchun act qila olmaydi; automatic transitions yo'q. Unblocking sessionsni restore
   qilmaydi — users qaytadan log in qiladi.
 
-Operatorning **only** workshop write actions: provision (workshop + first owner, atomic),
-block, unblock. Operator workshop profile yoki owner identity fields (name / phone / login)
+Operatorning **only** workshop write actions: provision (workshop + first branch + first owner,
+atomic), block, unblock. Operator workshop profile yoki owner identity fields (name / phone / login)
 edit qilmaydi — bu owner territory va operator path yo'q. Workshop *editing* (profile,
-settings, payment channels) [`workshop.md`](workshop.md) ichida; owner-identity edits owner
+settings) [`workshop.md`](workshop.md) ichida; owner-identity edits owner
 self-service / owner-managed, operator-managed emas. Agar owner's phone ni operator orqali
 correct qilish real need bo'lsa, avval shu yerda specified bo'lishi kerak — v1da deliberate
 absent.
 
 ### UX
 
-- **Create-workshop dialog** — workshop fields + owner fields, temp password
-  (auto-generated, copy button, manual toggle). Successda read-only confirmation owner login
-  + temp passwordni "share this with the owner — shown once" + copy button bilan ko'rsatadi;
-  owner sign-indan keyin non-blocking password-reset warning ko'radi.
+- **Create-workshop dialog** — workshop fields + first branch fields + owner fields, temp password
+  (auto-generated, copy button, manual toggle). Successda read-only confirmation workshop code +
+  owner login + temp passwordni "share this with the owner — temp password shown once" + copy
+  button bilan ko'rsatadi; owner sign-indan keyin password-reset gate ko'radi va branch
+  context'da first branch available holatda kiradi. Code field workshop namedan
+  auto-generate bo'ladi va savegacha editable turadi.
 - **Block** (workshop detailda) — mandatory reason; staff sessions revoked va open orders
   freeze bo'lishi haqida warning; destructive-styled.
+
+Provisioning, create-user, reset-password va block dialog'lar focusni dialog ichiga ko'chiradi,
+ochiq turganda focusni trap qiladi, va close bo'lganda focusni triggerga qaytaradi.
+One-time-secret confirmation copy buttonni expose qiladi va operator/owner confirmationni
+yopmaguncha secret visible qoladi. Action menu'lar keyboard-operable. Destructive action'lar
+focusni confirmation'ning primary decisioniga ko'chiradi. Grants matrix row/column bo'yicha
+keyboard-operable, explicit Save'ga ega, va unsaved changes save, cancel yoki confirmed
+navigationgacha saqlanadi.
 
 ## Workshop user management (workshop app)
 
@@ -168,7 +195,7 @@ implicitly ega, plus owner-only carve-outs.
 | Permission | Grants on the granted branch |
 |---|---|
 | `view_dashboard` | branch dashboard / KPIs / order summary ko'rish |
-| `manage_orders` | order workflow office side — verify / approve (`new -> confirmed`), cutter / edger assign va re-assign, discounts apply, absent worker nomidan production job complete qilish, mistake bo'lsa **revert** one step, va pre-`completed` orderni reason bilan cancel qilish. O'zi production work qila olmaydi, agar `process_production` ham bo'lmasa. [`orders.md`](orders.md)ga qarang. |
+| `manage_orders` | order workflow office side — verify / approve (`new → confirmed`), cutter / edger assign va re-assign, discounts apply, absent worker nomidan production job complete qilish, mistake bo'lsa **revert** one step, va pre-`completed` orderni reason bilan cancel qilish. O'zi production work qila olmaydi, agar `process_production` ham bo'lmasa. [`orders.md`](orders.md)ga qarang. |
 | `process_production` | **cutter & edger workspaces** — ushbu userga assigned orders ko'rish, cutting planni read-only ko'rish, **Cutting done** belgilash (→ `edge_banding` yoki `ready`; cutter snapshot stamp, `shop` panels stock decrement) va **Banding done** belgilash (→ `ready`; edge snapshot stamp, `shop` sides uchun edge material stock decrement). Edit, verify, cancel, yoki revert qila olmaydi. |
 | `manage_catalog` | branch material selection — platform catalogdan add, per-unit price va min-stock set, activate / deactivate. (Master materials platform-side.) |
 | `manage_inventory` | stock-in (supplierdan; suppliers on demand add qilinadi), adjust, stock va transactions view. |
@@ -248,15 +275,21 @@ Rules:
 - Picker user grant olgan branchesni taklif qiladi — yoki `is_owner` bo'lsa **all branches**.
 - First login: user exactly one accessible branchga ega bo'lsa auto-select; aks holda prompt.
 - Selection per session persisted (local storage); session revoke yoki re-login reset qiladi.
-- Picker UI user scope qila olmaydigan branchni tanlatmaydi. Server baribir unga ishonmaydi
-  — har request target branchni names qiladi, grant setga qarshi check qilinadi.
+- Picker UI user scope qila olmaydigan branchni tanlatmaydi. Server baribir unga ishonmaydi:
+  create/list operations branch id submit qilishi mumkin, service uni grant setga qarshi validate
+  qiladi; existing record operations target branchni stored datadan derive qiladi.
+
+Zero-grant staff account controls'ni saqlab qoladi: profile, password-reset gate, sessions,
+logout va logout-everywhere. Branch-scoped navigation va work screen'lar owner kamida bitta
+active branch permission grant qilmaguncha hidden / empty qoladi.
 
 ## How a request is authorized
 
 1. Auth middleware bearer tokenni **principal context**ga aylantiradi: type, workshop id,
    `is_owner`, grant set.
-2. Operation **target's branch from stored data** aniqlaydi — hech qachon client-supplied
-   branch iddan emas.
+2. Operation **target branch**ni aniqlaydi. Create/list operations submitted branch idni stored
+   branch/workshop dataga qarshi validate qilgandan keyin ishlatishi mumkin; existing record
+   operations branchni stored recorddan derive qiladi, client-supplied replacementdan emas.
 3. `is_owner` bo'lsa, yoki `(required_permission, target_branch)` grant setda bo'lsa allow;
    owner-only operations uchun faqat `is_owner`. Aks holda → `forbidden`.
 
@@ -271,7 +304,8 @@ Rules:
   incident response uchun workshop data read qila oladi.
 - **A staff member's only granted branch goes `inactive`** — reactivated yoki boshqa branch
   grant qilinguncha actionable screens yo'q; branch picker inactive entryni hide qiladi.
-- **Staff user with zero grants** — log in qila oladi; har workshop screen empty / hidden.
+- **Staff user with zero grants** — log in qila oladi; account controls available qoladi,
+  branch-scoped screens esa empty / hidden.
 - **Owner as cutter / edger on a non-home branch** — allowed: `is_owner` har branchda
   `process_production` ushlaydi va non-owner staffni bog'laydigan
   `home_branch_id = order.branch_id` assignment checkdan **exempt** (see

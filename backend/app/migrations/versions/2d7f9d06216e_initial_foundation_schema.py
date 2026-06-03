@@ -58,6 +58,12 @@ def _create_functional_indexes() -> None:
         unique=True,
     )
     op.create_index(
+        "uq_workshops_code_ci",
+        "workshops",
+        [sa.text("lower(code)")],
+        unique=True,
+    )
+    op.create_index(
         "uq_workshop_users_workshop_login_ci",
         "workshop_users",
         ["workshop_id", sa.text("lower(login)")],
@@ -117,6 +123,7 @@ def _drop_deferred_foreign_keys() -> None:
 
 def _drop_functional_indexes() -> None:
     op.drop_index("uq_workshop_users_workshop_login_ci", table_name="workshop_users")
+    op.drop_index("uq_workshops_code_ci", table_name="workshops")
     op.drop_index("uq_platform_users_login_ci", table_name="platform_users")
     op.drop_index("uq_manufacturers_name_ci", table_name="manufacturers")
 
@@ -268,6 +275,7 @@ def upgrade() -> None:
         "phone_verification_challenges",
         sa.Column("phone", sa.String(), nullable=False),
         sa.Column("code_hash", sa.String(), nullable=False),
+        sa.Column("request_ip", sa.String(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("attempt_count", sa.Integer(), nullable=False),
         sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
@@ -282,6 +290,12 @@ def upgrade() -> None:
         op.f("ix_phone_verification_challenges_phone"),
         "phone_verification_challenges",
         ["phone"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_phone_verification_challenges_request_ip"),
+        "phone_verification_challenges",
+        ["request_ip"],
         unique=False,
     )
     op.create_table(
@@ -473,6 +487,7 @@ def upgrade() -> None:
     op.create_table(
         "workshops",
         sa.Column("name", sa.String(), nullable=False),
+        sa.Column("code", sa.String(), nullable=False),
         sa.Column("logo_file_id", sa.Uuid(), nullable=True),
         sa.Column("phone", sa.String(), nullable=False),
         sa.Column("address", sa.String(), nullable=True),
@@ -1608,6 +1623,10 @@ def downgrade() -> None:
     op.drop_index("ix_sessions_principal", table_name="sessions")
     op.drop_table("sessions")
     op.drop_table("platform_users")
+    op.drop_index(
+        op.f("ix_phone_verification_challenges_request_ip"),
+        table_name="phone_verification_challenges",
+    )
     op.drop_index(
         op.f("ix_phone_verification_challenges_phone"), table_name="phone_verification_challenges"
     )

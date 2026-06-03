@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-05-29
+updated: 2026-06-02
 order: 40
 ---
 
@@ -20,8 +20,9 @@ yashaydi.
 
 Workshop'ning mutable profile'i:
 
-- **Profile** — name, logo, phone, address. Workshop'ning owner'i (va incident response
-  uchun platform operator) tomonidan editable.
+- **Profile** — name, logo, phone, address. Workshop'ning owner'i tomonidan editable. Platform
+  operator'lar incident response uchun profile'ni view qila oladi, lekin v1 ularga edit path
+  bermaydi.
 - **Currency** — UZS, v1'da fixed; future-proofing uchun shu yerda nomlangan.
 
 Delivery zones, advance %, va payment channel'lar **v1'da emas** — v1 pickup-only va order
@@ -36,7 +37,7 @@ settings'ni edit qilish.
 - **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge,
   created, branches count, orders-30d count. Status filter; name search;
   **+ Workshop** (provisioning access-management'da). Empty: "No workshops yet."
-- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (edit),
+- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (read-only),
   **Branches** (read-only list), **Block** (mandatory reason bilan block / unblock;
   destructive-styled; staff sessions revoke qilinishi va open order'lar freeze bo'lishi haqida
   ogohlantiradi).
@@ -52,7 +53,7 @@ Workshop bir yoki bir nechta branch'ga ega. Har bir branch'ning physical address
 hours'i, qo'lda kiritilgan `(lat, lng)`'i, va `status`'i bor — semantika
 [`access-patterns.md`](../../access-patterns.md#tenancy)'da.
 
-**Operations (owner only):**
+Platform provisioning first branch'ni yaratgandan keyin branch operations **owner only**:
 
 - **Create / edit a branch** — name, address, phone, lat / lng, per-weekday working hours.
   Branch yaratish bo'sh `branch_pricing` row ham yaratadi; stock item'lar branch'ning

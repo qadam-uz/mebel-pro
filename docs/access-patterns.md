@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-05-22
+updated: 2026-06-02
 order: 50
 ---
 
@@ -52,16 +52,18 @@ Three principal types — three auth surfaces, one per front-end app. They don't
 
 | Principal                              | Auth                                  | Bound to             | Capability                                                                     | App            |
 | -------------------------------------- | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------ | -------------- |
-| **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | full platform scope                                                            | superadmin app |
-| **Workshop user — owner** (`is_owner`) | login + password                      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
-| **Workshop user — staff**              | login + password                      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
+| **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | platform-ops scope                                                             | superadmin app |
+| **Workshop user — owner** (`is_owner`) | workshop code + login + password      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
+| **Workshop user — staff**              | workshop code + login + password      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
 | **Client**                             | phone + Telegram OTP; no password     | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
 
 ## The model
 
-- **Workshop & platform users** sign in with login + password. Owners are created by a
-  platform operator during workshop provisioning; platform users are seeded via a backend CLI
-  (they're at the top of the hierarchy, so no higher principal exists to create them in-app).
+- **Workshop users** sign in with workshop `code` + login + password. The code selects the
+  tenant namespace; login is unique only inside that workshop. Owners are created by a platform
+  operator during workshop provisioning.
+- **Platform users** sign in with login + password and are seeded via a backend CLI (they're at
+  the top of the hierarchy, so no higher principal exists to create them in-app).
 - **Clients** sign in with a **phone number verified by a one-time code sent over Telegram** —
   no password, no fallback path. The phone is the identity; they self-register (name only) the
   first time a new number is verified.
@@ -88,18 +90,19 @@ The tenant is the **workshop**. One database, one app, many workshops.
 
       W["<b>Workshop</b><br/><i>(tenant)</i>"]
       WU["workshop user<br/>1 owner · N staff"]
+      PG["permission grant<br/>branch-scoped"]
       B["branch · 1..N"]
       BMS["branch material<br/>selection"]
       SI["stock item"]
       BP["branch pricing"]
-      Wk["worker"]
 
       W --> WU
       W --> B
+      WU --> PG
+      PG --> B
       B --> BMS
       B --> SI
       B --> BP
-      B --> Wk
 
       BMS -.->|picks from| M
       Cl -.->|places order at| B
@@ -113,7 +116,7 @@ One owner per workshop (exactly); a workshop user belongs to one workshop.
 
   | Principal         | Read/write scope                                                                           |
   | ----------------- | ------------------------------------------------------------------------------------------ |
-  | Platform operator | all workshops, all branches                                                                |
+  | Platform operator | platform-ops surfaces across workshops; no workshop order-content or profile-edit scope     |
   | Workshop owner    | own workshop; all its branches                                                             |
   | Workshop staff    | own workshop; only branches they hold a relevant grant on                                  |
   | Client            | own orders / cutting drafts; browse active (+ temporarily-closed) branches of any workshop |

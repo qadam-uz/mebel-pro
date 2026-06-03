@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-05-22
+updated: 2026-06-02
 order: 50
 ---
 
@@ -56,17 +56,19 @@ bir-biriga overlap qilmaydi.
 
 | Principal                              | Auth                                  | Bound to             | Capability                                                                     | App            |
 | -------------------------------------- | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------ | -------------- |
-| **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | full platform scope                                                            | superadmin app |
-| **Workshop user — owner** (`is_owner`) | login + password                      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
-| **Workshop user — staff**              | login + password                      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
+| **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | platform-ops scope                                                             | superadmin app |
+| **Workshop user — owner** (`is_owner`) | workshop code + login + password      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
+| **Workshop user — staff**              | workshop code + login + password      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
 | **Client**                             | phone + Telegram OTP; no password     | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
 
 ## The model
 
-- **Workshop va platform user'lar** login + password bilan kiradi. Owner'lar workshop
-  provisioning chogʻida platform operator tomonidan yaratiladi; platform user'lar backend CLI
-  orqali seed qilinadi (ular hierarchy'ning tepasida, shuning uchun ularni in-app yaratish uchun
-  yuqoriroq principal mavjud emas).
+- **Workshop user'lar** workshop `code` + login + password bilan kiradi. Code tenant namespaceni
+  tanlaydi; login faqat shu workshop ichida unique. Owner'lar workshop provisioning chogʻida
+  platform operator tomonidan yaratiladi.
+- **Platform user'lar** login + password bilan kiradi va backend CLI orqali seed qilinadi (ular
+  hierarchy'ning tepasida, shuning uchun ularni in-app yaratish uchun yuqoriroq principal mavjud
+  emas).
 - **Client'lar Telegram orqali yuborilgan one-time code bilan tasdiqlangan phone number bilan
   kiradi** — password yoʻq, fallback path yoʻq. Phone — bu identity; ular yangi raqam birinchi
   marta verify qilinganda oʻzini oʻzi self-register qiladi (faqat name).
@@ -94,18 +96,19 @@ Tenant — **workshop**. Bitta database, bitta app, koʻp workshop.
 
       W["<b>Workshop</b><br/><i>(tenant)</i>"]
       WU["workshop user<br/>1 owner · N staff"]
+      PG["permission grant<br/>branch-scoped"]
       B["branch · 1..N"]
       BMS["branch material<br/>selection"]
       SI["stock item"]
       BP["branch pricing"]
-      Wk["worker"]
 
       W --> WU
       W --> B
+      WU --> PG
+      PG --> B
       B --> BMS
       B --> SI
       B --> BP
-      B --> Wk
 
       BMS -.->|picks from| M
       Cl -.->|places order at| B
@@ -122,7 +125,7 @@ branch tanlaydi.
 
   | Principal         | Read/write scope                                                                           |
   | ----------------- | ------------------------------------------------------------------------------------------ |
-  | Platform operator | all workshops, all branches                                                                |
+  | Platform operator | workshops bo'ylab platform-ops surfaces; workshop order-content yoki profile-edit scope yo'q |
   | Workshop owner    | own workshop; all its branches                                                             |
   | Workshop staff    | own workshop; only branches they hold a relevant grant on                                  |
   | Client            | own orders / cutting drafts; browse active (+ temporarily-closed) branches of any workshop |

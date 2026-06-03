@@ -63,6 +63,22 @@ async def get_current_principal(
 Principal = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
 
 
+async def get_account_ready_principal(principal: Principal) -> AuthenticatedPrincipal:
+    if principal.password_reset_required:
+        raise APIError(
+            "password_reset_required",
+            "Password change required",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    return principal
+
+
+AccountReadyPrincipal = Annotated[
+    AuthenticatedPrincipal,
+    Depends(get_account_ready_principal),
+]
+
+
 def has_permission(
     principal: AuthenticatedPrincipal,
     permission: Permission,

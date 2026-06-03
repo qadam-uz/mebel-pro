@@ -21,7 +21,13 @@ const popoverStyle = ref<Record<string, string>>({})
 const listboxId = `mp-listbox-${Math.random().toString(36).slice(2)}`
 
 const selected = computed(
-  () => props.options.find((option) => option.value === props.modelValue) ?? props.options[0],
+  () =>
+    props.options.find((option) => option.value === props.modelValue) ?? {
+      value: '',
+      label: 'No context',
+      meta: 'empty',
+      status: 'pending' as const,
+    },
 )
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
@@ -56,6 +62,7 @@ function closeList({ returnFocus = false } = {}) {
 }
 
 function choose(option: DropdownOption) {
+  if (!option.value) return
   emit('update:modelValue', option.value)
   closeList({ returnFocus: true })
 }
@@ -74,7 +81,8 @@ function onButtonKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     if (open.value) {
-      choose(props.options[activeIndex.value])
+      const option = props.options[activeIndex.value]
+      if (option) choose(option)
     } else {
       void openList()
     }

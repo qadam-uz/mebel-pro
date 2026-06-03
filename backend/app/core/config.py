@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # Client phone-OTP dev sign-in. Empty means the real Telegram flow is required.
     # A non-empty list is a local/CI bypass and is rejected in production.
     OTP_DEV_CODES: list[str] = []
+    OTP_CODE_PEPPER: str = "{{change-me}}"
+    TELEGRAM_GATEWAY_ACCESS_TOKEN: str = "{{change-me}}"  # noqa: S105 - secret placeholder.
+    TELEGRAM_GATEWAY_API_BASE_URL: str = "https://gatewayapi.telegram.org"
+    TELEGRAM_GATEWAY_TIMEOUT_SECONDS: float = 5.0
+
+    # Only trust X-Forwarded-For when the immediate peer is in one of these
+    # CIDRs. Keep prod narrow and add the Caddy peer/network explicitly.
+    TRUSTED_PROXY_CIDRS: list[str] = ["127.0.0.1/32", "::1/128"]
 
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
@@ -91,6 +99,12 @@ class Settings(BaseSettings):
     def validate_security_defaults(self) -> "Settings":
         if self.ENV == "prod" and self.OTP_DEV_CODES:
             msg = "OTP_DEV_CODES must be empty in production"
+            raise ValueError(msg)
+        if self.ENV == "prod" and self.TELEGRAM_GATEWAY_ACCESS_TOKEN in {"", "{{change-me}}"}:
+            msg = "TELEGRAM_GATEWAY_ACCESS_TOKEN must be set in production"
+            raise ValueError(msg)
+        if self.ENV == "prod" and self.OTP_CODE_PEPPER in {"", "{{change-me}}"}:
+            msg = "OTP_CODE_PEPPER must be set in production"
             raise ValueError(msg)
         return self
 

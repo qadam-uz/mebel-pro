@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-06-01
+updated: 2026-06-02
 order: 25
 ---
 
@@ -69,7 +69,7 @@ material uchun bitta standart panel size (v1) — material'ning identity'si unin
 size'i **va manufacturer'i**, shuning uchun bir xil spec ikki manufacturer'da saqlansa
 ikkita catalog row boʻladi va bir xil spec ikki panel size'da saqlansa yana ikkita boʻladi,
 har biri oʻz specific'larini nomida koʻrsatadi; faqat platform operator yaratadi va
-tahrirlaydi (platform user'lar toʻliq platform scope'ga ega; workshop tomonidagi hech bir
+tahrirlaydi (platform user'lar bu uchun platform-ops scope'ga ega; workshop tomonidagi hech bir
 permission grant buni bermaydi); `inactive` yangi branch tanlovlariga va client'larga
 koʻrinmaydi; `inactive` master'ning mavjud branch tanlovlari unga reference qilishda davom
 etadi (history saqlanadi); hech qachon oʻchirilmaydi; master'ni tahrirlash mavjud

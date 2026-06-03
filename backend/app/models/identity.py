@@ -129,6 +129,7 @@ class PhoneVerificationChallenge(UUIDPrimaryKey, Base):
 
     phone: Mapped[str] = mapped_column(nullable=False, index=True)
     code_hash: Mapped[str] = mapped_column(nullable=False)
+    request_ip: Mapped[str] = mapped_column(nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(nullable=False)
     attempt_count: Mapped[int] = mapped_column(default=0, nullable=False)
     consumed_at: Mapped[datetime | None]

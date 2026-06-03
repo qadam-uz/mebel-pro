@@ -89,7 +89,8 @@ check uchun) unauthenticated; docs site (`/docs`) edge orqali HTTP-Basic-gated.
 
 Operators platform usersni list, create, password reset, block, unblock qila oladi. Shape
 workshop-user managementni mirror qiladi, lekin **permission model yo'q** — har platform
-user full platform scope ushlaydi. Creation share once uchun temp password qaytaradi
+user bir xil platform-ops scope ushlaydi, workshop order-content yoki profile-edit scope emas.
+Creation share once uchun temp password qaytaradi
 (`password_reset_required` set qilingan holda, see
 [`access-management.md`](access-management.md)).
 
