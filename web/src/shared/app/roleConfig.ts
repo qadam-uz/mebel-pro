@@ -64,8 +64,8 @@ export const clientConfig: RoleConfig = {
   notFoundHomeLabel: 'Go to client home',
   dashboardTitle: 'Client workspace',
   dashboardSubtitle: 'Cutting drafts, profile, and order entry points for clients.',
-  primaryActionLabel: 'Browse branches',
-  primaryActionTo: '/c/branches',
+  primaryActionLabel: 'New cutting',
+  primaryActionTo: '/c/cutting/drafts',
   dropdownLabel: 'Cutting context',
   dropdownOptions: [
     { value: 'drafts', label: 'Drafts', meta: 'first-run empty', status: 'active' },
@@ -73,8 +73,8 @@ export const clientConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Home', to: '/c' },
-    { label: 'Branches', to: '/c/branches' },
     { label: 'Cutting drafts', to: '/c/cutting/drafts' },
+    { label: 'Branches', to: '/c/branches' },
     { label: 'Profile', to: '/c/profile' },
   ],
   states: [
@@ -112,6 +112,7 @@ export const workshopConfig: RoleConfig = {
   nav: [
     { label: 'Dashboard', to: '/workshop' },
     { label: 'Branches', to: '/workshop/branches' },
+    { label: 'Cutting plans', to: '/workshop/cutting-plans' },
     { label: 'Users', to: '/workshop/settings/users' },
     { label: 'Profile', to: '/workshop/profile' },
   ],

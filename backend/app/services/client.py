@@ -122,6 +122,12 @@ async def _visible_branch(db: AsyncSession, branch_id: uuid.UUID) -> Branch:
     return branch
 
 
+async def visible_branch(db: AsyncSession, branch_id: uuid.UUID) -> Branch:
+    """Return a branch visible to client-facing catalog flows."""
+
+    return await _visible_branch(db, branch_id)
+
+
 async def client_branches(
     db: AsyncSession,
     *,
