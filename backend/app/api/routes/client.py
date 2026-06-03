@@ -1,14 +1,24 @@
 """Client app routes."""
 
+import uuid
+
 from fastapi import APIRouter
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.schemas.client import (
+    ClientBranchMaterialResponse,
     ClientBranchOption,
+    ClientBranchResponse,
     ClientProfilePatchRequest,
     ClientProfileResponse,
 )
-from app.services.client import branch_options, get_client_profile, update_client_profile
+from app.services.client import (
+    branch_options,
+    client_branch_materials,
+    client_branches,
+    get_client_profile,
+    update_client_profile,
+)
 
 router = APIRouter(prefix="/client", tags=["client"])
 
@@ -45,3 +55,27 @@ async def branch_options_index(
     search: str | None = None,
 ) -> list[ClientBranchOption]:
     return await branch_options(db, principal=principal, search=search)
+
+
+@router.get("/branches", response_model=list[ClientBranchResponse])
+async def branches_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+) -> list[ClientBranchResponse]:
+    return await client_branches(db, principal=principal, search=search)
+
+
+@router.get("/branches/{branch_id}/materials", response_model=list[ClientBranchMaterialResponse])
+async def branch_materials_index(
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+) -> list[ClientBranchMaterialResponse]:
+    return await client_branch_materials(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        search=search,
+    )

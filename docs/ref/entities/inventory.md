@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-03
 order: 30
 ---
 
@@ -15,8 +15,9 @@ suppliers stock arrives from. There is **no reservation** in v1: the order state
 
 ## Stock item
 
-A branch's balance for one material — a single on-hand quantity in the material's unit
-(panels for a `panel` material, metres for an `edge`) and a low-stock threshold. One per
+A branch's balance for one material — a single on-hand quantity in the material's stock
+unit (panel count for a `panel` material, integer millimetres for an `edge`) and a
+low-stock threshold in the same unit. The UI displays edge balances as metres. One per
 material per branch.
 
 | Field | Type | Notes |
@@ -24,8 +25,8 @@ material per branch.
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; `(branch_id, material_id)` unique |
-| `on_hand` | int | quantity physically in the warehouse, in the material's unit; ≥ 0 |
-| `min_stock` | int | low-stock alert threshold; ≥ 0 |
+| `on_hand` | int | quantity physically in the warehouse, in the material's stock unit; ≥ 0 |
+| `min_stock` | int | low-stock alert threshold in the same unit; ≥ 0 |
 | `updated_at` | timestamp | |
 
 Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
@@ -46,7 +47,7 @@ computation, not a stored field.
 
 Edge `consume` / `restore` is keyed by **edge material id** (not by thickness): an
 `edge_banding → ready` transition fires one `consume` per `shop` edge material that the
-order's `edge_length_snapshot` carries, each for the metres of that exact material. A
+order's `edge_length_snapshot` carries, each for the millimetres of that exact material. A
 revert fires one `restore` per material, mirroring the consume.
 
 ## Stock transaction
@@ -58,10 +59,11 @@ One audit row for one change to a stock item. Append-only.
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
 | `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
-| `quantity` | int | signed change, non-zero, in the material's unit |
+| `quantity` | int | signed change, non-zero, in the material's stock unit |
 | `balance_after` | int | `on_hand` after the change |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
 | `supplier_id` | UUID? | for `stock_in`; null otherwise |
+| `receipt_file_id` | UUID? | optional receipt attachment for `stock_in`; null otherwise |
 | `actor_user_id` | UUID? | for `stock_in` / `adjust`; null when the system did it (`consume` / `restore`) |
 | `note` | text? | supplier note, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |

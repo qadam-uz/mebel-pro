@@ -1,7 +1,7 @@
 import uuid
 
 from app.models.support import ActionLog, StatusChangeLog
-from app.services.seed import seed_workshop_with_owner
+from app.services.seed import default_working_hours, seed_workshop_with_owner
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,33 @@ async def _owner_login(client: AsyncClient, db_session: AsyncSession) -> tuple[s
     )
     assert response.status_code == 200
     return response.json()["access_token"], str(branch.id), workshop.code
+
+
+async def _ready_staff_access(
+    client: AsyncClient,
+    *,
+    workshop_code: str,
+    login: str,
+    password: str = "StaffTemp123",
+    new_password: str = "StaffNew123",
+) -> str:
+    staff_login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={
+            "workshop_code": workshop_code,
+            "login": login,
+            "password": password,
+        },
+    )
+    assert staff_login.status_code == 200
+    staff_access = staff_login.json()["access_token"]
+    changed = await client.post(
+        "/api/v1/auth/password/change",
+        headers=_auth(staff_access),
+        json={"current_password": password, "new_password": new_password},
+    )
+    assert changed.status_code == 204
+    return str(staff_access)
 
 
 async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_context(
@@ -79,6 +106,94 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "permissions": ["manage_orders"],
         }
     ]
+
+
+async def test_staff_branch_context_includes_multiple_active_grant_branches(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    second_branch = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Chilonzor",
+            "address": "Tashkent, Chilonzor",
+            "phone": "+998904040404",
+            "latitude": "41.28",
+            "longitude": "69.20",
+            "working_hours": default_working_hours(),
+        },
+    )
+    second_branch_id = second_branch.json()["id"]
+    created = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Multi Grant",
+            "phone": "+998905151515",
+            "login": "multigrant",
+            "temp_password": "StaffTemp123",
+            "grants": [
+                {"permission": "manage_orders", "branch_id": branch_id},
+                {"permission": "manage_inventory", "branch_id": branch_id},
+                {"permission": "process_production", "branch_id": second_branch_id},
+            ],
+        },
+    )
+    staff_access = await _ready_staff_access(
+        client,
+        workshop_code=workshop_code,
+        login="multigrant",
+    )
+
+    context = await client.get("/api/v1/workshop/branch-context", headers=_auth(staff_access))
+    branches = {row["id"]: row for row in context.json()["branches"]}
+
+    assert second_branch.status_code == 201
+    assert created.status_code == 201
+    assert context.status_code == 200
+    assert set(branches) == {branch_id, second_branch_id}
+    assert branches[branch_id]["permissions"] == ["manage_inventory", "manage_orders"]
+    assert branches[second_branch_id]["permissions"] == ["process_production"]
+
+
+async def test_staff_branch_context_excludes_inactive_grant_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Inactive Grant",
+            "phone": "+998905252525",
+            "login": "inactivegrant",
+            "temp_password": "StaffTemp123",
+            "grants": [{"permission": "manage_inventory", "branch_id": branch_id}],
+        },
+    )
+    staff_access = await _ready_staff_access(
+        client,
+        workshop_code=workshop_code,
+        login="inactivegrant",
+    )
+    before = await client.get("/api/v1/workshop/branch-context", headers=_auth(staff_access))
+    inactive = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/status",
+        headers=_auth(owner_access),
+        json={"status": "inactive", "reason": "Closed"},
+    )
+    after = await client.get("/api/v1/workshop/branch-context", headers=_auth(staff_access))
+
+    assert created.status_code == 201
+    assert before.status_code == 200
+    assert before.json()["branches"][0]["id"] == branch_id
+    assert inactive.status_code == 200
+    assert inactive.json()["status"] == "inactive"
+    assert after.status_code == 200
+    assert after.json()["branches"] == []
 
 
 async def test_grant_replacement_takes_effect_on_staff_next_request(

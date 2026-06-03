@@ -8,11 +8,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.models.enums import AuthenticatedPrincipalType, BranchStatus
+from app.models.catalog import BranchMaterial, Manufacturer, Material
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    BranchStatus,
+    MaterialStatus,
+    WorkshopStatus,
+)
 from app.models.identity import Client
 from app.models.workshop import Branch, Workshop
-from app.schemas.client import ClientBranchOption
+from app.schemas.client import (
+    ClientBranchMaterialResponse,
+    ClientBranchOption,
+    ClientBranchResponse,
+)
 from app.services.audit import record_action
+from app.services.inventory import display_unit
 
 
 def require_client(principal: AuthenticatedPrincipal) -> None:
@@ -82,7 +93,10 @@ async def branch_options(
     query: Select[tuple[Branch, Workshop]] = (
         select(Branch, Workshop)
         .join(Workshop, Workshop.id == Branch.workshop_id)
-        .where(Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]))
+        .where(
+            Workshop.status == WorkshopStatus.ACTIVE,
+            Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]),
+        )
         .order_by(Workshop.name, Branch.name)
     )
     normalized = search.strip() if search else ""
@@ -104,14 +118,124 @@ async def branch_options(
 
 
 async def _visible_branch(db: AsyncSession, branch_id: uuid.UUID) -> Branch:
-    branch = await db.get(Branch, branch_id)
-    if branch is None or branch.status not in {
-        BranchStatus.ACTIVE,
-        BranchStatus.TEMPORARILY_CLOSED,
-    }:
+    branch, _ = await _visible_branch_with_workshop(db, branch_id)
+    return branch
+
+
+async def client_branches(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    search: str | None = None,
+) -> list[ClientBranchResponse]:
+    require_client(principal)
+    query: Select[tuple[Branch, Workshop]] = (
+        select(Branch, Workshop)
+        .join(Workshop, Workshop.id == Branch.workshop_id)
+        .where(
+            Workshop.status == WorkshopStatus.ACTIVE,
+            Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]),
+        )
+        .order_by(Workshop.name, Branch.name)
+    )
+    normalized = search.strip() if search else ""
+    if normalized:
+        pattern = f"%{normalized.lower()}%"
+        query = query.where(or_(Workshop.name.ilike(pattern), Branch.name.ilike(pattern)))
+    rows = (await db.execute(query)).all()
+    return [
+        ClientBranchResponse(
+            branch_id=branch.id,
+            workshop_id=workshop.id,
+            workshop_name=workshop.name,
+            workshop_logo_file_id=workshop.logo_file_id,
+            branch_name=branch.name,
+            address=branch.address,
+            phone=branch.phone,
+            latitude=branch.latitude,
+            longitude=branch.longitude,
+            working_hours=branch.working_hours,
+            status=branch.status,
+            closed_reason=branch.closed_reason,
+        )
+        for branch, workshop in rows
+    ]
+
+
+async def client_branch_materials(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    search: str | None = None,
+) -> list[ClientBranchMaterialResponse]:
+    require_client(principal)
+    await _visible_branch_with_workshop(db, branch_id)
+    query = (
+        select(BranchMaterial, Material, Manufacturer)
+        .join(Material, Material.id == BranchMaterial.material_id)
+        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        .where(
+            BranchMaterial.branch_id == branch_id,
+            BranchMaterial.status == MaterialStatus.ACTIVE,
+            Material.status == MaterialStatus.ACTIVE,
+            Manufacturer.status == MaterialStatus.ACTIVE,
+        )
+        .order_by(Manufacturer.name, Material.name)
+    )
+    normalized = search.strip() if search else ""
+    if normalized:
+        pattern = f"%{normalized.lower()}%"
+        query = query.where(
+            or_(
+                Material.name.ilike(pattern),
+                Material.color.ilike(pattern),
+                Material.decor_code.ilike(pattern),
+                Manufacturer.name.ilike(pattern),
+            )
+        )
+    rows = (await db.execute(query)).all()
+    return [
+        ClientBranchMaterialResponse(
+            id=material.id,
+            kind=material.kind,
+            manufacturer_name=manufacturer.name,
+            type=material.type,
+            name=material.name,
+            thickness_mm=material.thickness_mm,
+            color=material.color,
+            decor_code=material.decor_code,
+            panel_length_mm=material.panel_length_mm,
+            panel_width_mm=material.panel_width_mm,
+            grain_direction=material.grain_direction,
+            image_file_id=material.image_file_id,
+            price_tiyin=branch_material.price_tiyin,
+            display_unit=display_unit(material.kind),
+        )
+        for branch_material, material, manufacturer in rows
+    ]
+
+
+async def _visible_branch_with_workshop(
+    db: AsyncSession,
+    branch_id: uuid.UUID,
+) -> tuple[Branch, Workshop]:
+    row = (
+        await db.execute(
+            select(Branch, Workshop)
+            .join(Workshop, Workshop.id == Branch.workshop_id)
+            .where(
+                Branch.id == branch_id,
+                Workshop.status == WorkshopStatus.ACTIVE,
+                Branch.status.in_([BranchStatus.ACTIVE, BranchStatus.TEMPORARILY_CLOSED]),
+            )
+        )
+    ).one_or_none()
+    if row is None:
         raise APIError(
             "branch_not_found",
             "Branch not found",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    return branch
+    branch, workshop = row
+    return branch, workshop

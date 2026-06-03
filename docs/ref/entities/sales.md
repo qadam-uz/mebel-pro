@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-03
 order: 50
 ---
 
@@ -61,7 +61,7 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 | `panels_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |
 | `edger_user_id` | UUID? | `edge_banding → ready` | the user credited; null when the order had no banded parts |
 | `edge_completed_at` | timestamp? | `edge_banding → ready` | |
-| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — metres of banding by edge material (only `shop` metres). Thickness is derived from each material at report read time. |
+| `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — consumed banding length in integer millimetres by edge material (only `shop` source). UI/reports display metres. Thickness is derived from each material at report read time. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
 Invariants: created only by a client, from a cutting draft with a `chosen` result (which

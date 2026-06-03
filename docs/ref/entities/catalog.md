@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 25
 ---
 
@@ -41,9 +41,10 @@ to new material creates and to branch material-selection pickers; existing mater
 
 A platform master record (one per spec, panel size where applicable, **and manufacturer**), of
 two **kinds** in v1: a `panel` (a cuttable board, stocked and priced per panel) or an `edge`
-(edge-banding tape, stocked and measured per metre). A client picks a panel when starting a
-cutting and an edge material per side; the optimizer reads the panel's size and grain; the
-order snapshots the material's details and the branch's price.
+(edge-banding tape, stocked in integer millimetres and priced/displayed per metre). A
+client picks a panel when starting a cutting and an edge material per side; the optimizer
+reads the panel's size and grain; the order snapshots the material's details and the
+branch's price.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -61,7 +62,7 @@ order snapshots the material's details and the branch's price.
 | `created_at` / `updated_at` | timestamp | |
 
 Invariants: `panel` materials have `type`, panel size (`length ≥ width`) and grain; `edge`
-materials have none of these and are measured in metres; one standard panel size per `panel`
+materials have none of these and are stocked in integer millimetres; one standard panel size per `panel`
 material (v1) — a material's identity is its spec, that size, **and its manufacturer**, so the
 same spec in two manufacturers is two catalog rows and the same spec in two panel sizes is two
 more, each naming its specifics; created and edited only by a platform operator (platform
@@ -82,8 +83,8 @@ catalog; holds the per-branch price and the branch-level visibility flag. The br
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; references a platform [Material](#material) |
-| `price_tiyin` | bigint | per stock unit (per **panel** for a `panel`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
-| `min_stock` | int | low-stock threshold for the branch's stock item; ≥ 0 |
+| `price_tiyin` | bigint | per sell unit (per **panel** for a `panel`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
+| `min_stock` | int | low-stock threshold for the branch's stock item, in the material's stock unit (panel count or edge millimetres); ≥ 0 |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
 

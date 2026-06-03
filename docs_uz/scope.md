@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 20
 ---
 
@@ -23,9 +23,9 @@ substitution.
 - **Workshops & branches** — multi-branch workshop'lar; har bir branch platform-curated material
   catalog'dan nimani olib yurishini tanlaydi va oʻz price'lari, worker'lari va settings'ini
   belgilaydi.
-- **Warehouse & inventory** (ERP core) — arrivals va adjustments bilan per-branch stock;
-  order'lar tomonidan avtomatik boshqariladigan reservation'lar va consumption'lar; low-stock
-  surfacing.
+- **Warehouse & inventory** (ERP core) — arrivals va adjustments bilan per-branch stock,
+  stock-in uchun lightweight supplier label'lar, order'lar tomonidan boshqariladigan automatic
+  consumption va low-stock surfacing. v1 da reservation balance yoʻq.
 - **Optimized cutting** — bir nechta cutting-optimization algoritmlari parallel run boʻladi;
   platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni nomlaydi**. Output har bir panel
   boʻyicha layout, panel count, waste, cut va edge-banding length va print-ready cutting map'ni
@@ -68,8 +68,8 @@ substitution.
 - **Advanced orders** — batching, reorder, template'lar, partial fulfilment, post-completion
   complaint'lar, client rating'lari.
 - **Multi-currency** — faqat local currency.
-- **Supplier management, automatic purchase order'lar, remnant tracking, barcode scanning** —
-  kelajak.
+- **Automatic purchase order'lar, supplier payable'lar / procurement management, remnant tracking,
+  barcode scanning** — kelajak.
 
 ## Next
 

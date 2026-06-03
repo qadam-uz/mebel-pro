@@ -27,6 +27,11 @@ export const clientRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/DraftsView.vue'),
   },
   {
+    path: '/c/branches',
+    name: 'client-branches',
+    component: () => import('@/shared/views/ClientBranchesView.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'client-not-found',
     component: () => import('@/shared/views/RoleNotFoundView.vue'),

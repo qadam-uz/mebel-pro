@@ -15,6 +15,18 @@ def _auth(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
+def _default_working_hours() -> dict[str, dict[str, str | None]]:
+    return {
+        "monday": {"open": "09:00", "close": "18:00"},
+        "tuesday": {"open": "09:00", "close": "18:00"},
+        "wednesday": {"open": "09:00", "close": "18:00"},
+        "thursday": {"open": "09:00", "close": "18:00"},
+        "friday": {"open": "09:00", "close": "18:00"},
+        "saturday": {"open": "10:00", "close": "16:00"},
+        "sunday": {"open": None, "close": None},
+    }
+
+
 async def _platform_access_token(client: AsyncClient, db_session: AsyncSession) -> str:
     await seed_platform_user(
         db_session,
@@ -44,7 +56,7 @@ def _provision_payload(code: str | None = None) -> dict[str, object]:
             "phone": "+998902020202",
             "latitude": "41.2995",
             "longitude": "69.2401",
-            "working_hours": {"mon": {"open": "09:00", "close": "18:00"}},
+            "working_hours": _default_working_hours(),
         },
         "owner": {
             "full_name": "Atlas Owner",
@@ -105,6 +117,42 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert [row["code"] for row in listed.json()] == ["atlas"]
     assert detail.status_code == 200
     assert detail.json()["owner"]["login"] == "owner"
+
+
+async def test_platform_provision_rejects_non_canonical_working_hours(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_token = await _platform_access_token(client, db_session)
+
+    missing_days = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="bad-hours"),
+            "branch": {
+                **_provision_payload()["branch"],
+                "working_hours": {"monday": {"open": "09:00", "close": "18:00"}},
+            },
+        },
+    )
+    bad_range = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="bad-range"),
+            "branch": {
+                **_provision_payload()["branch"],
+                "working_hours": {
+                    **_default_working_hours(),
+                    "monday": {"open": "18:00", "close": "09:00"},
+                },
+            },
+        },
+    )
+
+    assert missing_days.status_code == 422
+    assert bad_range.status_code == 422
 
 
 async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_sessions(

@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 50
 ---
 
@@ -45,7 +45,7 @@ this catalog. Two **kinds** in v1:
 | Kind | What it is | Measured in | Has |
 |---|---|---|---|
 | `panel` | a cuttable board (DSP / MDF / plywood / …) | panels | manufacturer, type, thickness, colour / decor, panel length × width (`length ≥ width` = grain direction), grain yes/no, image |
-| `edge` | edge-banding tape applied to a panel's sides | metres | manufacturer, thickness, colour / decor, image |
+| `edge` | edge-banding tape applied to a panel's sides | integer millimetres in stock; metres for price/display | manufacturer, thickness, colour / decor, image |
 
 **Operations (platform operator):**
 
@@ -66,8 +66,8 @@ A platform-level edit never touches existing orders (snapshots —
 
 A branch carries a subset of the catalog. The `(branch, material)` selection holds the
 branch's price (per panel for a `panel`, per metre for an `edge`), its min-stock
-threshold, and the client-visibility flag. Adding a material creates the branch's stock
-item for it (zero on hand).
+threshold in the material's stock unit, and the client-visibility flag. Adding a material
+creates the branch's stock item for it (zero on hand).
 
 **Operations (owner, or `manage_catalog` on the branch):**
 
@@ -113,14 +113,16 @@ only labels where stock came from.
 ## Inventory
 
 A branch holds one stock item per material it carries — a single `on_hand` balance in
-the material's unit (panels or metres) and a `min_stock` threshold. **No `reserved`,
-no `available`, no reservation** — the order never holds stock; it only decrements it.
+the material's stock unit (**panel count** for `panel`, **integer millimetres** for
+`edge`; UI displays edge stock as metres) and a `min_stock` threshold in the same unit.
+**No `reserved`, no `available`, no reservation** — the order never holds stock; it only
+decrements it.
 
 **Operations:**
 
 - **Stock-in** (owner, or `manage_inventory` on the branch) — material (must be in the
-  branch's selection), positive quantity, a supplier (existing or added inline),
-  optional receipt file. `on_hand += qty`.
+  branch's selection), positive quantity in the material's stock unit, a supplier
+  (existing or added inline), optional receipt file. `on_hand += qty`.
 - **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't
   go below 0. The single tool for stock-takes and **waste write-offs** of every kind
   — damage and accidents, a master's production error, an edge-roll remnant too short
@@ -130,10 +132,11 @@ no `available`, no reservation** — the order never holds stock; it only decrem
 - **Consume / restore** (system) — driven entirely by the order state machine.
 
 **The order seam.** Per [`orders.md`](orders.md): `shop` panel items are **consumed**
-when the order's **Cutting done** is marked; `shop` edge **consumed metres** (geometric
-banded length + the standard per-side trim overhang) are decremented, per
-edge material, when **Banding done** is marked. A revert re-increments exactly what its
-step decremented. `own`-source panels and `own`-source edge sides never touch stock.
+when the order's **Cutting done** is marked; `shop` edge consumed length (geometric
+banded length + the standard per-side trim overhang) is decremented in **integer
+millimetres**, per edge material, when **Banding done** is marked. A revert re-increments
+exactly what its step decremented. `own`-source panels and `own`-source edge sides never
+touch stock.
 
 **Projected balance & the verify warning.** There is no reservation, so a meaningful
 "will we have enough?" needs the demand already in flight. For a material at a branch:
@@ -141,7 +144,7 @@ step decremented. `own`-source panels and `own`-source edge sides never touch st
 > projected = `on_hand` − Σ (that material's demand from active orders ahead that have
 > not yet decremented it)
 
-— panels are still owed by orders in `confirmed`/`cutting`; edge metres (per edge
+— panels are still owed by orders in `confirmed`/`cutting`; edge millimetres (per edge
 material) by orders in `confirmed`/`cutting`/`edge_banding`. When an operator verifies
 an order ([`orders.md`](orders.md)), a `shop` material whose projected balance won't
 cover this order raises a **warning** so they can prompt the warehouseman — it
