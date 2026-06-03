@@ -1167,6 +1167,41 @@ def upgrade() -> None:
             sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
             nullable=False,
         ),
+        sa.Column(
+            "parts_snapshot",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "material_snapshots",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "edge_length_shop_by_material",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "edge_length_own_by_material",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "edge_consumed_shop_by_material",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "edge_consumed_own_by_material",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
+        sa.Column(
+            "edge_banded_sides_by_material",
+            sa.JSON().with_variant(postgresql.JSONB(astext_type=Text()), "postgresql"),
+            nullable=False,
+        ),
         sa.Column("order_id", sa.Uuid(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),

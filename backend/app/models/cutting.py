@@ -69,6 +69,41 @@ class CuttingResult(UUIDPrimaryKey, Base):
         nullable=False,
         default=dict,
     )
+    parts_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=list,
+    )
+    material_snapshots: Mapped[dict[str, dict[str, Any]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    edge_length_shop_by_material: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    edge_length_own_by_material: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    edge_consumed_shop_by_material: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    edge_consumed_own_by_material: Mapped[dict[str, int]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    edge_banded_sides_by_material: Mapped[dict[str, dict[str, int]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+    )
     order_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey(
             "orders.id",
