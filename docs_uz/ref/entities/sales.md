@@ -33,6 +33,7 @@ qarang.
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
 | `status` | enum | `new` / `confirmed` / `cutting` / `edge_banding` / `ready` / `completed` / `cancelled`; default `new` |
 | `version` | int | optimistic-lock counter for status transitions |
+| `contact_name` / `contact_phone` | text | workshop bilan ulashiladigan checkout contact; client profile dan default ko'chiriladi, lekin checkout form dan frozen qilinadi |
 | `note_client` / `note_workshop` | text? | client and staff notes |
 | `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
 
@@ -67,17 +68,19 @@ input'i)
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
 Invariant'lar: faqat client tomonidan yaratiladi, `chosen` result'iga ega cutting draft'dan
-(`confirmed` boʻladi va bind qilinadi); barcha money field integer tiyin; `total_tiyin`
-formulaga rioya qiladi va manfiy boʻla olmaydi; price snapshot creation'da muzlatiladi
-(qayta price qilish yoʻq — modification yoʻq); status transition'lar faqat state machine
-boʻyicha; concurrent transition'lar `version` orqali serialize boʻladi; `cutter_user_id` /
-`edger_user_id` `branch_id`'da `process_production` ushlab turgan workshop user'larga
-reference qiladi; production stamp'lar oʻz transition'lari bilan bir xil atomic
-transaction'da set qilinadi va oʻsha step'ning **revert'i tomonidan tozalanadi**; stock
-inventory module tomonidan har bir `shop` source uchun avto-decrement qilinadi
-(`cutting → next`'da panel'lar, `edge_banding → ready`'da edge'lar, per edge material) —
-order stock balance ushlab turmaydi; `completed` va `cancelled` terminal; order hech qachon
-oʻchirilmaydi (u `cancelled` boʻladi).
+(`confirmed` boʻladi va bind qilinadi); checkout contact snapshot creation paytida frozen
+qilinadi, shuning uchun keyingi client profile edit lar workshop-facing order ni qayta
+yozmaydi; barcha money field integer tiyin; `total_tiyin` formulaga rioya qiladi va manfiy
+boʻla olmaydi; price snapshot creation'da muzlatiladi (qayta price qilish yoʻq —
+modification yoʻq); status transition'lar faqat state machine boʻyicha; concurrent
+transition'lar `version` orqali serialize boʻladi; `cutter_user_id` / `edger_user_id`
+`branch_id`'da `process_production` ushlab turgan workshop user'larga reference qiladi;
+production stamp'lar oʻz transition'lari bilan bir xil atomic transaction'da set qilinadi va
+oʻsha step'ning **revert'i tomonidan tozalanadi**; stock inventory module tomonidan har bir
+`shop` source uchun avto-decrement qilinadi (`cutting → next`'da panel'lar,
+`edge_banding → ready`'da edge'lar, per edge material) — order stock balance ushlab
+turmaydi; `completed` va `cancelled` terminal; order hech qachon oʻchirilmaydi (u
+`cancelled` boʻladi).
 
 ## Order item
 

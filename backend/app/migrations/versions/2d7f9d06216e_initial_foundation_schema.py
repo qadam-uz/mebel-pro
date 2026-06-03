@@ -955,6 +955,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("version", sa.Integer(), nullable=False),
+        sa.Column("contact_name", sa.String(), nullable=False),
+        sa.Column("contact_phone", sa.String(), nullable=False),
         sa.Column("note_client", sa.String(), nullable=True),
         sa.Column("note_workshop", sa.String(), nullable=True),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),

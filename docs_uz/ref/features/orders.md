@@ -262,6 +262,7 @@ orders**). Branch placement'da, aniq cutting'ga qarshi tanlanadi — draft'ning
      toʻliq emas (greyed, "this branch can't take orders right now").
   2. **Checkout** — bitta scrollable sahifa, ikki section:
      - **Contact** — phone va name, client'ning profile'idan prefill qilingan,
+       checkout dan keyin workshop-facing contact snapshot sifatida order ga frozen qilinadi.
        inline tahrirlanadigan, non-dismissible note bilan: *"This is shared with the
        workshop so they can call you about your order."* va har bir field uchun
        reset-to-profile link.

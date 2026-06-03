@@ -32,6 +32,7 @@ for each edge — see [Order item](#order-item).
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
 | `status` | enum | `new` / `confirmed` / `cutting` / `edge_banding` / `ready` / `completed` / `cancelled`; default `new` |
 | `version` | int | optimistic-lock counter for status transitions |
+| `contact_name` / `contact_phone` | text | the checkout contact shared with the workshop; copied from the client profile by default but frozen from the checkout form |
 | `note_client` / `note_workshop` | text? | client and staff notes |
 | `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
 
@@ -65,15 +66,17 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
 Invariants: created only by a client, from a cutting draft with a `chosen` result (which
-becomes `confirmed` and bound); all money fields are integer tiyin; `total_tiyin` follows
-the formula and can't go negative; the price snapshot is frozen at creation (no
-re-pricing — there is no modification); status transitions follow the state machine only;
-concurrent transitions serialize by `version`; `cutter_user_id` / `edger_user_id` reference
-workshop users who hold `process_production` on `branch_id`; production stamps are set in the
-same atomic transaction as their transition and **cleared by a revert** of that step; stock
-is auto-decremented per `shop` source by the inventory module (panels at `cutting →` next,
-edges at `edge_banding → ready`, per edge material) — the order holds no stock balance;
-`completed` and `cancelled` are terminal; an order is never deleted (it goes `cancelled`).
+becomes `confirmed` and bound); the checkout contact snapshot is frozen at creation so later
+client profile edits do not rewrite the workshop-facing order; all money fields are integer
+tiyin; `total_tiyin` follows the formula and can't go negative; the price snapshot is frozen
+at creation (no re-pricing — there is no modification); status transitions follow the state
+machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
+`edger_user_id` reference workshop users who hold `process_production` on `branch_id`;
+production stamps are set in the same atomic transaction as their transition and **cleared by
+a revert** of that step; stock is auto-decremented per `shop` source by the inventory module
+(panels at `cutting →` next, edges at `edge_banding → ready`, per edge material) — the order
+holds no stock balance; `completed` and `cancelled` are terminal; an order is never deleted
+(it goes `cancelled`).
 
 ## Order item
 

@@ -386,15 +386,72 @@ async def record_adjustment(
     )
 
 
+async def consume_order_stock(
+    db: AsyncSession,
+    *,
+    branch_id: uuid.UUID,
+    material_id: uuid.UUID,
+    order_id: uuid.UUID,
+    quantity: int,
+) -> StockTransaction:
+    """Consume branch stock for an order-driven production step."""
+
+    if quantity <= 0:
+        raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
+    scope = await _system_scope_for_branch(db, branch_id=branch_id)
+    item, material = await _stock_item_for_movement(db, scope=scope, material_id=material_id)
+    transaction = await _apply_stock_delta(
+        db,
+        principal=None,
+        stock_item=item,
+        type_=StockTransactionType.CONSUME,
+        quantity=-quantity,
+        supplier_id=None,
+        order_id=order_id,
+        note=None,
+    )
+    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
+    return transaction
+
+
+async def restore_order_stock(
+    db: AsyncSession,
+    *,
+    branch_id: uuid.UUID,
+    material_id: uuid.UUID,
+    order_id: uuid.UUID,
+    quantity: int,
+) -> StockTransaction:
+    """Restore branch stock for an order revert."""
+
+    if quantity <= 0:
+        raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
+    scope = await _system_scope_for_branch(db, branch_id=branch_id)
+    item, material = await _stock_item_for_movement(db, scope=scope, material_id=material_id)
+    transaction = await _apply_stock_delta(
+        db,
+        principal=None,
+        stock_item=item,
+        type_=StockTransactionType.RESTORE,
+        quantity=quantity,
+        supplier_id=None,
+        order_id=order_id,
+        note=None,
+    )
+    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
+    return transaction
+
+
 async def _apply_stock_delta(
     db: AsyncSession,
     *,
-    principal: AuthenticatedPrincipal,
+    principal: AuthenticatedPrincipal | None,
     stock_item: StockItem,
     type_: StockTransactionType,
     quantity: int,
     supplier_id: uuid.UUID | None,
     note: str | None,
+    order_id: uuid.UUID | None = None,
 ) -> StockTransaction:
     next_balance = stock_item.on_hand + quantity
     if next_balance < 0:
@@ -406,8 +463,9 @@ async def _apply_stock_delta(
         type=type_,
         quantity=quantity,
         balance_after=next_balance,
+        order_id=order_id,
         supplier_id=supplier_id,
-        actor_user_id=principal.principal_id,
+        actor_user_id=principal.principal_id if principal is not None else None,
         note=note,
         created_at=datetime.now(UTC),
     )
@@ -470,6 +528,15 @@ async def _inventory_scope(
         branch_id=branch_id,
         permission=Permission.MANAGE_INVENTORY,
     )
+
+
+async def _system_scope_for_branch(db: AsyncSession, *, branch_id: uuid.UUID) -> BranchScope:
+    from app.models.workshop import Branch
+
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        raise APIError("branch_not_found", "Branch not found", status_code=404)
+    return BranchScope(workshop_id=branch.workshop_id, branch_id=branch.id)
 
 
 async def _supplier_in_scope(

@@ -62,6 +62,8 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
         nullable=False,
     )
     version: Mapped[int] = mapped_column(default=1, nullable=False)
+    contact_name: Mapped[str] = mapped_column(nullable=False)
+    contact_phone: Mapped[str] = mapped_column(nullable=False)
     note_client: Mapped[str | None]
     note_workshop: Mapped[str | None]
     confirmed_at: Mapped[datetime | None]

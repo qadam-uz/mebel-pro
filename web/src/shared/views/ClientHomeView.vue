@@ -69,6 +69,17 @@ async function newCutting() {
             <h3 class="mt-4 text-base font-extrabold text-ink">Branches and materials</h3>
             <p class="mt-1 text-sm text-ink-soft">Check carried panels and edge tapes.</p>
           </RouterLink>
+          <RouterLink
+            to="/c/orders"
+            class="rounded-lg border border-hairline bg-sunk p-4 transition hover:border-hairline-strong"
+          >
+            <span class="mp-chip bg-success-soft text-success">
+              <span class="mp-dot" aria-hidden="true"></span>
+              Orders
+            </span>
+            <h3 class="mt-4 text-base font-extrabold text-ink">My orders</h3>
+            <p class="mt-1 text-sm text-ink-soft">Track production and pickup status.</p>
+          </RouterLink>
         </div>
       </section>
 
