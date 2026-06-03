@@ -64,8 +64,8 @@ export const clientConfig: RoleConfig = {
   notFoundHomeLabel: 'Go to client home',
   dashboardTitle: 'Client workspace',
   dashboardSubtitle: 'Cutting drafts, profile, and order entry points for clients.',
-  primaryActionLabel: 'Open drafts',
-  primaryActionTo: '/c/cutting/drafts',
+  primaryActionLabel: 'Browse branches',
+  primaryActionTo: '/c/branches',
   dropdownLabel: 'Cutting context',
   dropdownOptions: [
     { value: 'drafts', label: 'Drafts', meta: 'first-run empty', status: 'active' },
@@ -73,6 +73,7 @@ export const clientConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Home', to: '/c' },
+    { label: 'Branches', to: '/c/branches' },
     { label: 'Cutting drafts', to: '/c/cutting/drafts' },
     { label: 'Profile', to: '/c/profile' },
   ],
@@ -100,8 +101,8 @@ export const workshopConfig: RoleConfig = {
   notFoundHomeLabel: 'Go to workshop home',
   dashboardTitle: 'Workshop dashboard',
   dashboardSubtitle: 'Branch context, access states, and production entry points for operators.',
-  primaryActionLabel: 'Manage users',
-  primaryActionTo: '/workshop/settings/users',
+  primaryActionLabel: 'Open branches',
+  primaryActionTo: '/workshop/branches',
   dropdownLabel: 'Branch',
   dropdownOptions: [
     { value: 'yunusobod', label: 'Yunusobod', meta: 'open branch', status: 'active' },
@@ -110,6 +111,7 @@ export const workshopConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Dashboard', to: '/workshop' },
+    { label: 'Branches', to: '/workshop/branches' },
     { label: 'Users', to: '/workshop/settings/users' },
     { label: 'Profile', to: '/workshop/profile' },
   ],
@@ -148,6 +150,7 @@ export const adminConfig: RoleConfig = {
   nav: [
     { label: 'Dashboard', to: '/admin' },
     { label: 'Workshops', to: '/admin/workshops' },
+    { label: 'Catalog', to: '/admin/catalog' },
     { label: 'Profile', to: '/admin/profile' },
     { label: 'Docs', to: '/docs' },
     { label: 'API', to: '/api-docs' },

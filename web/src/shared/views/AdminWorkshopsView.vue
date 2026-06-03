@@ -23,6 +23,18 @@ const form = reactive({
   tempPassword: '',
 })
 
+function defaultWorkingHours() {
+  return {
+    monday: { open: '09:00', close: '18:00' },
+    tuesday: { open: '09:00', close: '18:00' },
+    wednesday: { open: '09:00', close: '18:00' },
+    thursday: { open: '09:00', close: '18:00' },
+    friday: { open: '09:00', close: '18:00' },
+    saturday: { open: '10:00', close: '16:00' },
+    sunday: { open: null, close: null },
+  }
+}
+
 async function createWorkshop() {
   creating.value = true
   createError.value = null
@@ -40,7 +52,7 @@ async function createWorkshop() {
         phone: form.branchPhone,
         latitude: form.latitude,
         longitude: form.longitude,
-        working_hours: {},
+        working_hours: defaultWorkingHours(),
       },
       owner: {
         full_name: form.ownerName,

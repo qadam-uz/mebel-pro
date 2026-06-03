@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 20
 ---
 
@@ -22,8 +22,9 @@ that's a considered substitution.
   revocable, brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
-- **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments;
-  reservations and consumptions driven automatically by orders; low-stock surfacing.
+- **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
+  lightweight supplier labels for stock-in, automatic consumption driven by orders, and
+  low-stock surfacing. There is no reservation balance in v1.
 - **Optimized cutting** — multiple cutting-optimization algorithms run in parallel; the
   platform returns the best result and **names the winning algorithm**. Output includes the
   per-panel layout, panel count, waste, cut and edge-banding length, and a print-ready cutting
@@ -66,8 +67,8 @@ that's a considered substitution.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion
   complaints, client ratings.
 - **Multi-currency** — local currency only.
-- **Supplier management, automatic purchase orders, remnant tracking, barcode scanning** —
-  future.
+- **Automatic purchase orders, supplier payables / procurement management, remnant tracking,
+  barcode scanning** — future.
 
 ## Next
 

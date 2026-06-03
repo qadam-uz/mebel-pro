@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 30
 ---
 
@@ -41,8 +41,9 @@ Creation'da set qilinadi:
   (workshop panel'ni yetkazib beradi; inventory uning uchun avto-decrement qiladi) yoki
   `own` (client panel'ni olib keladi; faqat cutting service, oʻsha panel uchun stock
   harakati yoʻq). Har bir banded edge side mustaqil ravishda `shop` (workshop oʻsha
-  tape'ni yetkazib beradi; inventory uning metr'larini avto-decrement qiladi) yoki `own`
-  (client tape'ni olib keladi; oʻsha side uchun stock harakati yoʻq). Order har bir
+  tape'ni yetkazib beradi; inventory consumed length'ni ichkarida integer millimetres
+  sifatida decrement qiladi, display va pricing'da metres sifatida koʻrsatiladi) yoki
+  `own` (client tape'ni olib keladi; oʻsha side uchun stock harakati yoʻq). Order har bir
   level'da source'larni aralashtirishi mumkin; toʻliq `own` order stock'ga tegmaydi va
   saw'li har qanday active branch'da joylashtirilishi mumkin.
 - **Handover — faqat pickup.** Client branch'da olib ketadi. Delivery v1'dan tashqarida
@@ -151,10 +152,10 @@ Toʻliq shu state machine tomonidan boshqariladi; mexanika
   order'larning demand'i), shunda u warehouseman'ga ogohlantirishi mumkin. Bu warning,
   gate emas.
 - **Job tugashida avto-decrement.** `shop` panel'lar **Cutting done** belgilanganda
-  decrement qilinadi; har bir `shop` edge material'ning **consumed metr'lari** **Banding done**
-  belgilanganda decrement qilinadi (order'ning `edge_length_snapshot`'i shop metr'lar
+  decrement qilinadi; har bir `shop` edge material'ning consumed length'i **Banding done**
+  belgilanganda decrement qilinadi (order'ning `edge_length_snapshot`'i shop millimetres
   bilan olib yurgan har bir edge material uchun bittadan inventory transaction — bular
-  **consumed** metr'lar, *Pricing*'ga qarang).
+  display/pricing'da **consumed** metres, *Pricing*'ga qarang).
   Revert oʻzining step'i decrement qilganini aniq qayta increment qiladi.
 - **`own` part'lar va `own` edge side'lar stock'ga hech qachon tegmaydi.** `shop` panel
   va `shop` edge side yoʻq order bu seam'ni butunlay oʻtkazib yuboradi.

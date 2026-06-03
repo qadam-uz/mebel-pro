@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-03
 order: 50
 ---
 
@@ -45,7 +45,7 @@ shu catalog'dan tanlaydi. v1'da ikki **kind**:
 | Kind | What it is | Measured in | Has |
 |---|---|---|---|
 | `panel` | a cuttable board (DSP / MDF / plywood / …) | panels | manufacturer, type, thickness, colour / decor, panel length × width (`length ≥ width` = grain direction), grain yes/no, image |
-| `edge` | edge-banding tape applied to a panel's sides | metres | manufacturer, thickness, colour / decor, image |
+| `edge` | edge-banding tape applied to a panel's sides | stock'da integer millimetres; price/display uchun metres | manufacturer, thickness, colour / decor, image |
 
 **Operation'lar (platform operator):**
 
@@ -67,9 +67,9 @@ Platform level'idagi edit mavjud order'larga hech qachon tegmaydi (snapshot'lar 
 ## Branch material selection
 
 Branch catalog'ning subset'ini olib yuradi. `(branch, material)` selection branch'ning
-price'ini (`panel` uchun per panel, `edge` uchun per metr), min-stock threshold'ini va
-client-visibility flag'ini ushlab turadi. Material qoʻshish branch'ning shu material
-uchun stock item'ini yaratadi (on-hand nol).
+price'ini (`panel` uchun per panel, `edge` uchun per metre), material'ning stock unit'idagi
+min-stock threshold'ini va client-visibility flag'ini ushlab turadi. Material qoʻshish
+branch'ning shu material uchun stock item'ini yaratadi (on-hand nol).
 
 **Operation'lar (owner yoki branch'da `manage_catalog`):**
 
@@ -116,15 +116,16 @@ stock qaerdan kelganini belgilaydi.
 ## Inventory
 
 Branch olib yurgan har bir material uchun bitta stock item ushlab turadi —
-material'ning unit'idagi (panel'lar yoki metr'lar) bitta `on_hand` balance va bitta
-`min_stock` threshold. **`reserved` yoʻq, `available` yoʻq, reservation yoʻq** —
-order stock ushlab turmaydi; uni faqat decrement qiladi.
+material'ning stock unit'idagi (`panel` uchun panel count, `edge` uchun integer
+millimetres; UI edge stock'ni metres sifatida koʻrsatadi) bitta `on_hand` balance va
+shu unit'dagi `min_stock` threshold. **`reserved` yoʻq, `available` yoʻq, reservation
+yoʻq** — order stock ushlab turmaydi; uni faqat decrement qiladi.
 
 **Operation'lar:**
 
 - **Stock-in** (owner yoki branch'da `manage_inventory`) — material (branch'ning
-  selection'ida boʻlishi kerak), musbat quantity, supplier (mavjud yoki inline
-  qoʻshilgan), ixtiyoriy receipt file. `on_hand += qty`.
+  selection'ida boʻlishi kerak), material'ning stock unit'idagi musbat quantity,
+  supplier (mavjud yoki inline qoʻshilgan), ixtiyoriy receipt file. `on_hand += qty`.
 - **Adjust** (xuddi shu caller) — **majburiy note** bilan signed delta; `on_hand` 0'dan
   past tushishi mumkin emas. Stock-take va har qanday **waste write-off** uchun yagona
   vosita — shikast va accident'lar, master'ning production error'i, side'ni band qilishga
@@ -134,9 +135,9 @@ order stock ushlab turmaydi; uni faqat decrement qiladi.
 - **Consume / restore** (system) — toʻliq order state machine tomonidan boshqariladi.
 
 **Order seam.** [`orders.md`](orders.md) boʻyicha: `shop` panel item'lar order'ning
-**Cutting done**'i belgilanganda **consume** qilinadi; `shop` edge **consumed metr'lar**
-(geometric banded length + standart per-side trim overhang) har bir
-edge material uchun **Banding done** belgilanganda decrement qilinadi. Revert
+**Cutting done**'i belgilanganda **consume** qilinadi; `shop` edge consumed length
+(geometric banded length + standart per-side trim overhang) har bir edge material uchun
+**Banding done** belgilanganda **integer millimetres**'da decrement qilinadi. Revert
 oʻzining step'i decrement qilganini aniq qayta increment qiladi. `own`-source panel'lar
 va `own`-source edge side'lar stock'ga hech qachon tegmaydi.
 
@@ -148,7 +149,7 @@ material uchun:
 > oʻsha material'ning demand'i)
 
 — panel'lar hali ham `confirmed`/`cutting`'dagi order'lar tomonidan qarzdor; edge
-metr'lar (har bir edge material uchun) `confirmed`/`cutting`/`edge_banding`'dagi
+millimetres (har bir edge material uchun) `confirmed`/`cutting`/`edge_banding`'dagi
 order'lar tomonidan. Operator order'ni verify qilganda ([`orders.md`](orders.md)),
 projected balance bu order'ni qoplay olmaydigan `shop` material warehouseman'ga
 ogohlantirish berishi uchun **warning** koʻtaradi — approval'ni **hech qachon

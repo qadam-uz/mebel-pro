@@ -27,6 +27,16 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopUsersView.vue'),
   },
   {
+    path: '/workshop/branches',
+    name: 'workshop-branches',
+    component: () => import('@/shared/views/WorkshopBranchesView.vue'),
+  },
+  {
+    path: '/workshop/branches/:branch_id',
+    name: 'workshop-branch-detail',
+    component: () => import('@/shared/views/WorkshopBranchDetailView.vue'),
+  },
+  {
     path: '/workshop/settings/users/:user_id',
     name: 'workshop-user-detail',
     component: () => import('@/shared/views/WorkshopUserDetailView.vue'),

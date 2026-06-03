@@ -73,6 +73,13 @@ def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]
     for error in exc.errors():
         safe = dict(error)
         safe.pop("input", None)
+        if isinstance(safe.get("ctx"), dict):
+            safe["ctx"] = {
+                key: value
+                if value is None or isinstance(value, str | int | float | bool)
+                else str(value)
+                for key, value in safe["ctx"].items()
+            }
         safe_errors.append(safe)
     return safe_errors
 

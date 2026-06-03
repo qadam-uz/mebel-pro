@@ -1,0 +1,138 @@
+import { DOMWrapper, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
+
+import FormSelect from '@/shared/components/FormSelect.vue'
+import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
+import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+
+const options = [
+  { value: 'panel', label: 'Panel', meta: 'sheet materials' },
+  { value: 'edge', label: 'Edge', meta: 'edge banding' },
+  { value: 'disabled', label: 'Disabled', disabled: true },
+]
+
+describe('Phase 3 shared controls', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('FormSelect opens, skips disabled options, selects with keyboard, and returns focus', async () => {
+    const wrapper = mount(FormSelect, {
+      props: {
+        label: 'Material kind',
+        modelValue: 'panel',
+        options,
+      },
+      attachTo: document.body,
+    })
+
+    const button = wrapper.get('button')
+    await button.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+
+    const listbox = wrapper.get('[role="listbox"]')
+    expect(document.activeElement).toBe(listbox.element)
+    expect(listbox.attributes('aria-activedescendant')).toContain('edge')
+
+    await listbox.trigger('keydown', { key: 'ArrowDown' })
+    expect(listbox.attributes('aria-activedescendant')).toContain('panel')
+
+    await listbox.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['panel'])
+    expect(document.activeElement).toBe(button.element)
+  })
+
+  it('FormSelect associates validation text with the trigger', () => {
+    const wrapper = mount(FormSelect, {
+      props: {
+        label: 'Status',
+        modelValue: null,
+        options,
+        error: 'Choose a status',
+      },
+      attachTo: document.body,
+    })
+
+    const button = wrapper.get('button')
+    const error = wrapper.get('p')
+    expect(button.attributes('aria-describedby')).toBe(error.attributes('id'))
+  })
+
+  it('SearchCombobox filters by typed text and picks with Enter', async () => {
+    const wrapper = mount(SearchCombobox, {
+      props: {
+        label: 'Material',
+        modelValue: null,
+        options,
+      },
+      attachTo: document.body,
+    })
+
+    const input = wrapper.get('input')
+    await input.setValue('edge band')
+    await nextTick()
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(1)
+
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['edge'])
+    expect(document.activeElement).toBe(input.element)
+  })
+
+  it('SearchCombobox closes on outside click and restores selected label', async () => {
+    const wrapper = mount(SearchCombobox, {
+      props: {
+        label: 'Material',
+        modelValue: 'edge',
+        options,
+      },
+      attachTo: document.body,
+    })
+
+    const input = wrapper.get('input')
+    await input.setValue('unknown')
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await nextTick()
+
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    expect((input.element as HTMLInputElement).value).toBe('Edge')
+  })
+
+  it('MultiSelectFilter toggles selections with keyboard and keeps the list open', async () => {
+    const wrapper = mount(MultiSelectFilter, {
+      props: {
+        label: 'Kinds',
+        modelValue: [],
+        options,
+      },
+      attachTo: document.body,
+    })
+
+    await wrapper.get('button').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    const listbox = wrapper.get('[role="listbox"]')
+    await listbox.trigger('keydown', { key: ' ' })
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['panel']])
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+  })
+
+  it('MultiSelectFilter closes on Escape and returns focus', async () => {
+    const wrapper = mount(MultiSelectFilter, {
+      props: {
+        label: 'Kinds',
+        modelValue: ['panel'],
+        options,
+      },
+      attachTo: document.body,
+    })
+
+    const button = wrapper.get('button')
+    await button.trigger('click')
+    const listbox = new DOMWrapper(wrapper.get('[role="listbox"]').element as HTMLUListElement)
+    await listbox.trigger('keydown', { key: 'Escape' })
+
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(button.element)
+  })
+})

@@ -38,6 +38,7 @@ describe('role route matrix', () => {
       '/c',
       '/c/profile',
       '/c/cutting/drafts',
+      '/c/branches',
       '/:pathMatch(.*)*',
     ])
     expect(routePaths(workshopRoutes)).toEqual([
@@ -46,6 +47,8 @@ describe('role route matrix', () => {
       '/workshop',
       '/workshop/profile',
       '/workshop/settings/users',
+      '/workshop/branches',
+      '/workshop/branches/:branch_id',
       '/workshop/settings/users/:user_id',
       '/:pathMatch(.*)*',
     ])
@@ -55,6 +58,7 @@ describe('role route matrix', () => {
       '/admin',
       '/admin/profile',
       '/admin/workshops',
+      '/admin/catalog',
       '/admin/workshops/:workshop_id',
       '/:pathMatch(.*)*',
     ])

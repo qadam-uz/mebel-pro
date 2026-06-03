@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-03
 order: 30
 ---
 
@@ -15,17 +15,18 @@ qiladi — kontrakt [`orders.md`](../features/orders.md) → *The stock seam*'da
 
 ## Stock item
 
-Bir material uchun branch'ning balance'i — material'ning unit'idagi bitta on-hand qiymat
-(`panel` material uchun panel'lar, `edge` uchun metr) va low-stock threshold. Branch boʻyicha
-har bir material uchun bittadan.
+Bir material uchun branch'ning balance'i — material'ning stock unit'idagi bitta on-hand
+quantity (`panel` material uchun panel count, `edge` uchun integer millimetres) va shu
+unit'dagi low-stock threshold. UI edge balance'larni metres sifatida koʻrsatadi. Branch
+boʻyicha har bir material uchun bittadan.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; `(branch_id, material_id)` unique |
-| `on_hand` | int | quantity physically in the warehouse, in the material's unit; ≥ 0 |
-| `min_stock` | int | low-stock alert threshold; ≥ 0 |
+| `on_hand` | int | quantity physically in the warehouse, in the material's stock unit; ≥ 0 |
+| `min_stock` | int | low-stock alert threshold in the same unit; ≥ 0 |
 | `updated_at` | timestamp | |
 
 Operation'lar (barchasi atomic; row davomi davomida `FOR UPDATE` orqali lock qilinadi):
@@ -47,7 +48,7 @@ read-time hisob, saqlanadigan field emas.
 Edge `consume` / `restore` **edge material id** boʻyicha kalitlanadi (thickness boʻyicha
 emas): `edge_banding → ready` transition order'ning `edge_length_snapshot`'i koʻtaradigan
 har bir `shop` edge material uchun bittadan `consume` ishga tushiradi, har biri shu aynan
-material'ning metr'lari uchun. Revert har bir material uchun bittadan `restore` ishga
+material'ning millimetres'i uchun. Revert har bir material uchun bittadan `restore` ishga
 tushiradi va consume'ni mirror qiladi.
 
 ## Stock transaction
@@ -59,10 +60,11 @@ Stock item'ga bir oʻzgarish uchun bitta audit row. Append-only.
 | `id` | UUID | PK |
 | `stock_item_id` | UUID | required |
 | `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
-| `quantity` | int | signed change, non-zero, in the material's unit |
+| `quantity` | int | signed change, non-zero, in the material's stock unit |
 | `balance_after` | int | `on_hand` after the change |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
 | `supplier_id` | UUID? | for `stock_in`; null otherwise |
+| `receipt_file_id` | UUID? | `stock_in` uchun ixtiyoriy receipt attachment; aks holda null |
 | `actor_user_id` | UUID? | for `stock_in` / `adjust`; null when the system did it (`consume` / `restore`) |
 | `note` | text? | supplier note, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |

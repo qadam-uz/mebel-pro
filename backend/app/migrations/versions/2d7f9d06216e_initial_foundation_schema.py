@@ -1506,6 +1506,7 @@ def upgrade() -> None:
         sa.Column("balance_after", sa.Integer(), nullable=False),
         sa.Column("order_id", sa.Uuid(), nullable=True),
         sa.Column("supplier_id", sa.Uuid(), nullable=True),
+        sa.Column("receipt_file_id", sa.Uuid(), nullable=True),
         sa.Column("actor_user_id", sa.Uuid(), nullable=True),
         sa.Column("note", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -1519,6 +1520,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["order_id"],
             ["orders.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["receipt_file_id"],
+            ["files.id"],
         ),
         sa.ForeignKeyConstraint(
             ["stock_item_id"],

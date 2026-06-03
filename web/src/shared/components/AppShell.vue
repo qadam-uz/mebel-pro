@@ -7,7 +7,7 @@ import {
   readStoredContext,
   workshopContextStorageKey,
 } from '@/shared/app/contextStorage'
-import { useRoleConfig } from '@/shared/app/roleConfig'
+import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -50,6 +50,20 @@ const dropdownOptions = computed(() => {
     meta: branch.status === 'temporarily_closed' ? 'temporarily closed' : branch.address,
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   }))
+})
+const visibleNav = computed<NavItem[]>(() => {
+  if (config.role !== 'workshop') return config.nav
+  const nav: NavItem[] = [{ label: 'Dashboard', to: '/workshop' }]
+  if (auth.me?.is_owner) {
+    nav.push({ label: 'Branches', to: '/workshop/branches' })
+    nav.push({ label: 'Users', to: '/workshop/settings/users' })
+  } else {
+    const selectedBranch = workshop.branches.find((branch) => branch.id === selectedContext.value)
+    const branch = selectedBranch ?? workshop.branches[0]
+    if (branch) nav.push({ label: 'Branch workspace', to: `/workshop/branches/${branch.id}` })
+  }
+  nav.push({ label: 'Profile', to: '/workshop/profile' })
+  return nav
 })
 
 function isExternal(to: string) {
@@ -138,7 +152,7 @@ watch(
       </div>
 
       <nav class="mt-5 flex flex-1 flex-col gap-1">
-        <template v-for="item in config.nav" :key="item.to">
+        <template v-for="item in visibleNav" :key="item.to">
           <a
             v-if="isExternal(item.to)"
             :href="item.to"
@@ -185,7 +199,7 @@ watch(
           />
 
           <nav class="ml-auto flex flex-wrap items-center gap-2" aria-label="Top">
-            <template v-for="item in config.nav" :key="`top-${item.to}`">
+            <template v-for="item in visibleNav" :key="`top-${item.to}`">
               <a
                 v-if="isExternal(item.to)"
                 :href="item.to"

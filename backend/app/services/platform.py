@@ -22,6 +22,7 @@ from app.models.enums import (
 from app.models.identity import WorkshopUser
 from app.models.workshop import Branch, Workshop
 from app.schemas.platform import ProvisionWorkshopRequest
+from app.schemas.workshop import dump_working_hours
 from app.services.audit import record_action, record_status_change
 from app.services.otp import normalize_uz_phone
 from app.services.sessions import revoke_for_workshop
@@ -107,7 +108,7 @@ async def provision_workshop(
         phone=normalize_uz_phone(payload.branch.phone),
         latitude=payload.branch.latitude,
         longitude=payload.branch.longitude,
-        working_hours=payload.branch.working_hours,
+        working_hours=dump_working_hours(payload.branch.working_hours),
         status=BranchStatus.ACTIVE,
     )
     db.add(branch)

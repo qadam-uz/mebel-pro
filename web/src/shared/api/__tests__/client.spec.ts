@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/shared/api/client'
+import { ApiError, api, apiTraceId } from '@/shared/api/client'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -60,5 +60,44 @@ describe('shared API client', () => {
       status: 500,
       body: { code: 'internal_error', trace_id: 'trace-1' },
     })
+  })
+
+  it('extracts trace IDs from API errors', () => {
+    const error = new ApiError(500, { code: 'internal_error', trace_id: 'trace-1' })
+
+    expect(apiTraceId(error)).toBe('trace-1')
+    expect(apiTraceId(new Error('nope'))).toBeNull()
+  })
+
+  it('does not force JSON content type for multipart uploads', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ id: 'file-1' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const formData = new FormData()
+    formData.set('upload', new Blob(['hello']), 'receipt.png')
+
+    await api.postForm('/files', formData, { accessToken: 'access-1' })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const headers = init.headers as Headers
+    expect(headers.get('Content-Type')).toBeNull()
+    expect(headers.get('Authorization')).toBe('Bearer access-1')
+    expect(init.body).toBe(formData)
+  })
+
+  it('fetches blobs with bearer auth for protected files', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(new Blob(['image']), { status: 200 }))
+
+    const blob = await api.blob('/files/file-1', { accessToken: 'access-1' })
+
+    expect(blob).toBeInstanceOf(Blob)
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const headers = init.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer access-1')
   })
 })

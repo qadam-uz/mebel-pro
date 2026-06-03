@@ -41,6 +41,7 @@ class StockTransaction(UUIDPrimaryKey, Base):
     balance_after: Mapped[int] = mapped_column(nullable=False)
     order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"))
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
+    receipt_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshop_users.id"))
     note: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(nullable=False)
