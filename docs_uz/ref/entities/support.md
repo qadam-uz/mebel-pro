@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-06-02
 order: 60
 ---
 
@@ -90,7 +90,7 @@ qiymatlar). Audit log'ning "kim nima qildi" yarmi. Append-only.
 
 Invariant'lar: har bir mutating use case oʻzgarish bilan bir xil atomic operation'da aniq
 bitta row yozadi; hech qachon update yoki delete qilinmaydi; sensitive qiymatlar (password,
-full payment credential) `details`'da mask qilinadi; scoping — workshop owner/staff faqat
+tokens, secrets) `details`'da mask qilinadi; scoping — workshop owner/staff faqat
 oʻz workshop'i (va granted branch'lar) uchun row'larni koʻradi; platform operator hammasini
 koʻradi.
 

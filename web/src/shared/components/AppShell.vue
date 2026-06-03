@@ -1,18 +1,98 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
+import {
+  persistStoredContext,
+  readStoredContext,
+  workshopContextStorageKey,
+} from '@/shared/app/contextStorage'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useAuthStore } from '@/shared/stores/auth'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const config = useRoleConfig()
+const auth = useAuthStore()
+const workshop = useWorkshopStore()
 const route = useRoute()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const isAuthRoute = computed(() => route.meta.layout === 'auth')
+const canLoadWorkshopContext = computed(
+  () =>
+    config.role === 'workshop' &&
+    auth.isAllowedFor('workshop') &&
+    auth.me?.password_reset_required === false,
+)
+const contextStorageKey = computed(() =>
+  config.role === 'workshop' && auth.me
+    ? workshopContextStorageKey(auth.me.principal_id, auth.me.session_id)
+    : null,
+)
+const profileSubtitle = computed(() =>
+  auth.me?.password_reset_required ? 'password change required' : auth.displayName,
+)
+const dropdownOptions = computed(() => {
+  if (config.role !== 'workshop') return config.dropdownOptions
+  if (workshop.branches.length === 0) {
+    return [
+      {
+        value: 'none',
+        label: 'No accessible branch',
+        meta: 'account controls only',
+        status: 'pending' as const,
+      },
+    ]
+  }
+  return workshop.branches.map((branch) => ({
+    value: branch.id,
+    label: branch.name,
+    meta: branch.status === 'temporarily_closed' ? 'temporarily closed' : branch.address,
+    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
+  }))
+})
 
 function isExternal(to: string) {
   return to.startsWith('/docs') || to.startsWith('/api-docs') || to.startsWith('/api-redoc')
 }
+
+function browserStorage() {
+  return typeof window === 'undefined' ? null : window.localStorage
+}
+
+watch(
+  [dropdownOptions, contextStorageKey],
+  ([options, storageKey], oldValue) => {
+    const previousStorageKey = oldValue?.[1] ?? null
+    const storage = browserStorage()
+    if (storage && previousStorageKey && !storageKey) {
+      storage.removeItem(previousStorageKey)
+    }
+
+    const stored = storage && storageKey ? readStoredContext(storage, storageKey, options) : null
+    const nextValue = stored ?? selectedContext.value
+    if (options.some((option) => option.value === nextValue)) {
+      selectedContext.value = nextValue
+      return
+    }
+    selectedContext.value = options[0]?.value ?? ''
+  },
+  { immediate: true },
+)
+
+watch(selectedContext, (value) => {
+  const storage = browserStorage()
+  if (!storage || !contextStorageKey.value) return
+  persistStoredContext(storage, contextStorageKey.value, value, dropdownOptions.value)
+})
+
+watch(
+  canLoadWorkshopContext,
+  (canLoad) => {
+    if (canLoad) void workshop.loadBranchContext().catch(() => undefined)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -82,7 +162,9 @@ function isExternal(to: string) {
         class="mt-5 rounded-lg border border-transparent bg-sunk px-3 py-3 no-underline transition hover:border-hairline-strong"
       >
         <span class="block text-sm font-bold text-ink">{{ config.roleLabel }} profile</span>
-        <span class="block font-mono text-[11px] text-ink-muted">active session</span>
+        <span class="block truncate font-mono text-[11px] text-ink-muted">
+          {{ profileSubtitle }}
+        </span>
       </RouterLink>
     </aside>
 
@@ -99,7 +181,7 @@ function isExternal(to: string) {
           <ProjectDropdown
             v-model="selectedContext"
             :label="config.dropdownLabel"
-            :options="config.dropdownOptions"
+            :options="dropdownOptions"
           />
 
           <nav class="ml-auto flex flex-wrap items-center gap-2" aria-label="Top">

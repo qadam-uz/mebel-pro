@@ -14,26 +14,37 @@ and how the surfaces look in the three apps.
 
 ## Workshop & platform user sign-in
 
-Login + password. Login is case-insensitive; unique per workshop (workshop users) or
-platform-wide (platform users). The error on a bad pair is a **generic** "login or password
-is incorrect" — no account-existence oracle. **Five consecutive bad attempts → a 15-minute
-lockout** (`locked_until`); a correct password resets the counter. Passwords are argon2 /
-bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one digit.
+Platform users sign in with login + password. Workshop users sign in with workshop `code` +
+login + password; the code selects the tenant namespace, because workshop-user login is
+case-insensitive and unique only inside that workshop. The error on a bad pair is a **generic**
+"login or password is incorrect" — no account-existence oracle. **Five consecutive bad attempts
+→ a 15-minute lockout** (`locked_until`); a correct password resets the counter. Passwords are
+argon2 / bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one
+digit.
+
+`account_locked` and `account_blocked` are returned only after the submitted credential pair is
+otherwise valid. Unknown workshop code, unknown login, wrong password, wrong password for a locked
+account, and wrong password for a blocked account all return the same generic credential error.
 
 `password_reset_required` (set on creation, on a higher-principal password reset, and after
-a security rotation) is advisory. It is returned from `get-me` and the workshop /
-superadmin app shell shows a persistent warning until the user changes their password. It
-does **not** gate the rest of the app; only blocking the user or workshop denies access.
+a security rotation) is an account gate. It is returned from `get-me` and the workshop /
+superadmin app shell shows a blocking account banner until the user changes their password.
+While the flag is true, the user may use only `me`, profile/password, sessions, logout, and
+logout-everywhere surfaces; branch-scoped, platform-ops, and workshop-management routes are
+forbidden until password change clears the flag.
 
-**Platform users are seeded by a backend CLI command.** They're the top of the hierarchy, with
-no higher principal to create them; in-app creation is allowed once at least one platform
-user exists ([`platform.md`](platform.md)).
+**Platform users are seeded by a backend CLI command for bootstrap.** The in-app platform-user
+registry is owned by [`platform.md`](platform.md) and is outside this identity slice.
 
 ### Sessions
 
 Opaque tokens stored in the DB, hashed (SHA-256) — not JWTs. Access TTL **24 h**; refresh TTL
 **7 d**; **at most 5 concurrent sessions per principal** (a 6th login evicts the oldest).
 Revoking = deleting the row.
+
+Browser clients keep the access token in memory only. The refresh token is issued as an
+httpOnly, Secure, SameSite cookie scoped to the relevant app/API surface; it is never exposed to
+frontend JavaScript. A page reload restores auth by calling refresh through that cookie.
 
 | Trigger | Effect |
 |---|---|
@@ -56,12 +67,13 @@ revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant 
 
 ### UX
 
-- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — login +
-  password fields; generic error on failure; a lockout banner ("try again at HH:MM") when
-  `locked_until` came back.
-- **Password-reset warning** — shown in the workshop / superadmin app shell when
-  `password_reset_required = true`; it is persistent, non-blocking, and links to the profile
-  password tab. The warning disappears only after a successful password change.
+- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — workshop
+  users see workshop code + login + password fields; platform users see login + password
+  fields. Failure uses the same generic error; a lockout banner ("try again at HH:MM") appears
+  only after credentials are otherwise valid and the account is locked.
+- **Password-reset gate** — shown in the workshop / superadmin app shell when
+  `password_reset_required = true`; it is persistent, blocking for non-account routes, and links
+  to the profile password tab. The gate disappears only after a successful password change.
 - **Self profile** (`/workshop/profile`, `/admin/profile`) — Profile (read-only fields),
   Change password (strength meter), Sessions list (current marker, "revoke" per row, "log out
   everywhere").
@@ -77,7 +89,8 @@ that branches to registration only when the number is new. Three steps:
    6-digit code to that number **over Telegram** (via the Telegram Gateway). A malformed number
    is `invalid_phone`; a number not reachable on Telegram is `phone_unreachable_on_telegram`
    (there is **no SMS fallback** in v1 — the client must have Telegram on that number); exceeding
-   the resend cooldown (60 s) or the per-phone / per-IP send rate limit is `code_send_rate_limited`.
+   the resend cooldown (60 s), per-phone rate limit (5 sends / hour), or per-IP rate limit
+   (30 sends / hour) is `code_send_rate_limited`.
 2. **Verify the code.** Client submits the phone + code. A wrong code is `invalid_code` (the
    challenge survives, attempt counter bumped); the 5th wrong attempt burns the challenge
    (`too_many_attempts`, must request a new code); a code past its 5-minute TTL is `code_expired`.
@@ -119,40 +132,55 @@ the phone the client already typed when stepping forward or back:
 - **Name step** — shown **only** when verification returned `is_new = true`: one `name` field,
   primary **Continue**; returning clients skip straight into the app.
 - **Client profile** (`/c/profile`) — `name` editable (it's client-entered, not synced); `phone`
-  read-only (changing it would mean re-verification — out of scope in v1); sessions list with a
-  current marker; "log out" / "log out everywhere".
+  read-only (changing it would mean re-verification — out of scope in v1); preferred branch
+  selector with searchable workshop + branch options limited to branches the client may see
+  (`active` and `temporarily_closed`), plus a clear action; sessions list with a current marker;
+  "log out" / "log out everywhere".
 
 ## Workshop provisioning (superadmin app)
 
-A platform operator provisions a workshop atomically with its first user:
+A platform operator provisions a workshop atomically with its first user and first branch:
 
-- **Create a workshop and its owner — atomically.** Input: workshop fields + the owner's
-  `full_name`, `login`, `phone`, plus an auto-generated temp password (manual override). The
-  same transaction creates the `workshop` row and a `workshop_user` row with `is_owner = true`
-  and `password_reset_required = true`. Returns the summary and the temp password **once**.
-  The owner cannot be created, demoted, or deleted by anyone except a platform operator;
-  exactly one owner per workshop.
+- **Create a workshop, first branch, and owner — atomically.** Input: workshop fields + first
+  branch fields (`name`, `address`, `phone`, `latitude`, `longitude`, `working_hours`) + the
+  owner's `full_name`, `login`, `phone`, plus an auto-generated temp password (manual override).
+  The same transaction creates the `workshop` row, an `active` first `branch` row with empty
+  `branch_pricing`, and a `workshop_user` row with `is_owner = true`,
+  `home_branch_id = first_branch.id`, and `password_reset_required = true`. Returns the summary
+  and the temp password **once**. Workshop fields include a generated `code` with manual override;
+  the returned summary includes the workshop code and owner login. Only the temp password is
+  secret and shown once. The owner cannot be created, demoted, or deleted by anyone except a
+  platform operator; exactly one owner per workshop.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
   restore sessions — users log in again.
 
-The operator's **only** workshop write actions are: provision (workshop + first owner,
-atomic), block, and unblock. The operator does **not** edit the workshop profile or the
+The operator's **only** workshop write actions are: provision (workshop + first branch + first
+owner, atomic), block, and unblock. The operator does **not** edit the workshop profile or the
 owner's identity fields (name / phone / login) — that is owner territory and there is no
-operator path to it. Workshop *editing* (profile, settings, payment channels) lives in
+operator path to it. Workshop *editing* (profile, settings) lives in
 [`workshop.md`](workshop.md); owner-identity edits are owner self-service / owner-managed,
 not operator-managed. If correcting an owner's phone via the operator ever becomes a real
 need, it must be specified here first — it is deliberately absent in v1.
 
 ### UX
 
-- **Create-workshop dialog** — workshop fields + owner fields, temp password (auto-generated,
-  copy button, manual toggle). On success: read-only confirmation showing the owner login +
-  temp password with "share this with the owner — shown once" + copy button; the owner sees
-  the non-blocking password-reset warning after sign-in.
+- **Create-workshop dialog** — workshop fields + first branch fields + owner fields, temp
+  password (auto-generated, copy button, manual toggle). On success: read-only confirmation
+  showing the workshop code + owner login + temp password with "share this with the owner —
+  temp password shown once" + copy button; the owner sees the password-reset gate after sign-in
+  and lands with the first branch available in branch context. The code field
+  auto-generates from the workshop name and stays editable before save.
 - **Block** (in the workshop detail) — mandatory reason; warning that staff sessions are
   revoked and open orders freeze; destructive-styled.
+
+All provisioning, create-user, reset-password, and block dialogs move focus into the dialog, trap
+focus while open, and return focus to the trigger on close. One-time-secret confirmations expose a
+copy button and keep the secret visible until the operator/owner closes the confirmation. Action
+menus are keyboard-operable, and destructive actions move focus to the confirmation's primary
+decision. The grants matrix is keyboard-operable by row/column, has an explicit Save, and preserves
+unsaved changes until save, cancel, or confirmed navigation.
 
 ## Workshop user management (workshop app)
 
@@ -248,15 +276,20 @@ Rules:
   prompt.
 - The selection persists per session (local storage); a session revoke or re-login resets it.
 - The picker UI never lets the user pick a branch they can't scope to. The server never
-  trusts it anyway — every request still names the target's branch, checked against the
-  grant set.
+  trusts it anyway: create/list operations may submit a branch id, which the service validates
+  against the grant set; operations on existing records derive the target branch from stored data.
+
+Zero-grant staff keep access to account controls: profile, password-reset gate, sessions, logout,
+and logout-everywhere. Branch-scoped navigation and work screens stay hidden / empty until the owner
+grants at least one active branch permission.
 
 ## How a request is authorized
 
 1. The auth middleware turns the bearer token into a **principal context**: type, workshop
    id, `is_owner`, the grant set.
-2. The operation determines the **target's branch from stored data** — never from a
-   client-supplied branch id.
+2. The operation determines the **target branch**. Create/list operations may use a submitted
+   branch id after validating it against stored branch/workshop data; operations on existing
+   records derive the branch from the stored record, never from a client-supplied replacement.
 3. Allow if `is_owner`, or if `(required_permission, target_branch)` is in the grant set; for
    owner-only operations, allow only if `is_owner`. Otherwise → `forbidden`.
 
@@ -272,7 +305,8 @@ Rules:
 - **A staff member's only granted branch goes `inactive`** — they effectively have no
   actionable screens until it's reactivated or they're granted another; the branch picker
   hides the inactive entry.
-- **Staff user with zero grants** — can log in; every workshop screen is empty / hidden.
+- **Staff user with zero grants** — can log in; account controls remain available, while
+  branch-scoped screens are empty / hidden.
 - **Owner as cutter / edger on a non-home branch** — allowed: `is_owner` holds
   `process_production` on every branch and is **exempt** from the
   `home_branch_id = order.branch_id` assignment check that binds non-owner staff (see

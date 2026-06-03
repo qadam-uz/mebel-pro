@@ -2,7 +2,7 @@
 title: Support
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-06-02
 order: 60
 ---
 
@@ -84,7 +84,7 @@ what" half of the audit log. Append-only.
 | `created_at` | timestamp | |
 
 Invariants: every mutating use case writes exactly one row, in the same atomic operation as the
-change; never updated or deleted; sensitive values (passwords, full payment credentials) masked
+change; never updated or deleted; sensitive values (passwords, tokens, secrets) masked
 in `details`; scoping — a workshop owner/staff sees only rows for their workshop (and granted
 branches); a platform operator sees all.
 

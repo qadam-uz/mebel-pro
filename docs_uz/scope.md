@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-05-25
+updated: 2026-06-02
 order: 20
 ---
 
@@ -18,7 +18,7 @@ substitution.
 ## In scope
 
 - **Identity & access** — platform operator'lar workshop'larni provision qiladi; owner'lar
-  staff'ni per-branch permission'lar bilan boshqaradi; client'lar social login orqali oʻzini oʻzi
+  staff'ni per-branch permission'lar bilan boshqaradi; client'lar phone + Telegram OTP bilan
   self-register qiladi. Tenant-isolated, revocable, brute-force'dan himoyalangan.
 - **Workshops & branches** — multi-branch workshop'lar; har bir branch platform-curated material
   catalog'dan nimani olib yurishini tanlaydi va oʻz price'lari, worker'lari va settings'ini

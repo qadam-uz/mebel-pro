@@ -1,7 +1,7 @@
-from app.api.deps import Principal, get_session
+from app.api.deps import AccountReadyPrincipal, Principal, get_session
 from app.main import create_app
 from app.models.enums import AuthenticatedPrincipalType
-from app.services.seed import seed_workshop_with_owner
+from app.services.seed import seed_platform_user, seed_workshop_with_owner
 from app.services.sessions import create_session
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
@@ -103,6 +103,44 @@ async def test_access_token_resolves_principal_through_route(db_session: AsyncSe
         "principal_id": str(owner.id),
         "trace_id": "trace-auth",
     }
+
+
+async def test_account_ready_dependency_blocks_password_reset_required(
+    db_session: AsyncSession,
+) -> None:
+    user = await seed_platform_user(db_session, login="needs-reset", password="Admin123")
+    tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.PLATFORM_USER,
+        principal_id=user.id,
+    )
+    app = create_app()
+
+    async def _override() -> AsyncSession:
+        return db_session
+
+    @app.get("/api/v1/test/ready")
+    async def ready(_: AccountReadyPrincipal) -> dict[str, str]:
+        return {"ok": "true"}
+
+    app.dependency_overrides[get_session] = _override
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        blocked = await ac.get(
+            "/api/v1/test/ready",
+            headers={"Authorization": f"Bearer {tokens.access_token}"},
+        )
+        user.password_reset_required = False
+        allowed = await ac.get(
+            "/api/v1/test/ready",
+            headers={"Authorization": f"Bearer {tokens.access_token}"},
+        )
+    app.dependency_overrides.clear()
+
+    assert blocked.status_code == 403
+    assert blocked.json()["code"] == "password_reset_required"
+    assert allowed.status_code == 200
+    assert allowed.json() == {"ok": "true"}
 
 
 async def test_unexpected_errors_return_generic_public_body() -> None:

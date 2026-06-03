@@ -23,10 +23,12 @@ function sourceFiles(dir: string): string[] {
 
 describe('role route matrix', () => {
   it('resolves local bases and prod root bases', () => {
-    expect(resolveHistoryBase('/client', '/client/c')).toBe('/client/')
-    expect(resolveHistoryBase('/workshop', '/workshop/profile')).toBe('/workshop/')
-    expect(resolveHistoryBase('/admin', '/admin')).toBe('/admin/')
-    expect(resolveHistoryBase('/client', '/c')).toBe('/')
+    expect(resolveHistoryBase('/client', '/client/c', true)).toBe('/client/')
+    expect(resolveHistoryBase('/workshop', '/workshop/profile', true)).toBe('/workshop/')
+    expect(resolveHistoryBase('/admin', '/admin', true)).toBe('/admin/')
+    expect(resolveHistoryBase('/client', '/c', true)).toBe('/')
+    expect(resolveHistoryBase('/admin', '/admin/profile', false)).toBe('/')
+    expect(resolveHistoryBase('/workshop', '/workshop/settings/users', false)).toBe('/')
   })
 
   it('keeps the documented initial route inventories', () => {
@@ -43,6 +45,8 @@ describe('role route matrix', () => {
       '/auth/login',
       '/workshop',
       '/workshop/profile',
+      '/workshop/settings/users',
+      '/workshop/settings/users/:user_id',
       '/:pathMatch(.*)*',
     ])
     expect(routePaths(adminRoutes)).toEqual([
@@ -50,6 +54,8 @@ describe('role route matrix', () => {
       '/auth/login',
       '/admin',
       '/admin/profile',
+      '/admin/workshops',
+      '/admin/workshops/:workshop_id',
       '/:pathMatch(.*)*',
     ])
   })

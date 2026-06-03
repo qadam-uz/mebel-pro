@@ -22,6 +22,16 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/ProfileView.vue'),
   },
   {
+    path: '/workshop/settings/users',
+    name: 'workshop-users',
+    component: () => import('@/shared/views/WorkshopUsersView.vue'),
+  },
+  {
+    path: '/workshop/settings/users/:user_id',
+    name: 'workshop-user-detail',
+    component: () => import('@/shared/views/WorkshopUserDetailView.vue'),
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'workshop-not-found',
     component: () => import('@/shared/views/RoleNotFoundView.vue'),
