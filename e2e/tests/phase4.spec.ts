@@ -288,6 +288,8 @@ async def main() -> None:
             workshop_id=uuid.UUID(os.environ["WORKSHOP_ID"]),
             branch_id=uuid.UUID(os.environ["BRANCH_ID"]),
             cutting_result_id=result.id,
+            contact_name="Phase 4 API Client",
+            contact_phone="+998900000000",
             status=OrderStatus.CONFIRMED,
             confirmed_at=now,
             subtotal_cutting_tiyin=0,

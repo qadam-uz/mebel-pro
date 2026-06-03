@@ -30,6 +30,7 @@ const showAllCatalog = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
+const preferredEdgeByPart = ref<Record<string, string>>({})
 let saveTimer: number | undefined
 let hydrating = false
 
@@ -147,19 +148,31 @@ function addRow() {
 }
 
 function duplicateRow(part: CuttingPart) {
-  parts.value = [
-    ...parts.value,
-    { ...part, part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}` },
-  ]
+  const nextPart = { ...part, part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}` }
+  parts.value = [...parts.value, nextPart]
+  const preferredEdge = preferredEdgeId(part)
+  if (preferredEdge) {
+    preferredEdgeByPart.value = {
+      ...preferredEdgeByPart.value,
+      [nextPart.part_ref]: preferredEdge,
+    }
+  }
 }
 
 function deleteRow(index: number) {
+  const removed = parts.value[index]
   parts.value = parts.value.filter((_, current) => current !== index)
+  if (removed) {
+    const next = { ...preferredEdgeByPart.value }
+    delete next[removed.part_ref]
+    preferredEdgeByPart.value = next
+  }
 }
 
 function clearParts() {
   if (!window.confirm(`Remove all ${parts.value.length} parts? This cannot be undone.`)) return
   parts.value = []
+  preferredEdgeByPart.value = {}
 }
 
 function setPanelSource(part: CuttingPart, source: MaterialSource) {
@@ -180,6 +193,17 @@ function firstEdgeId(part: CuttingPart) {
   )
 }
 
+function preferredEdgeId(part: CuttingPart) {
+  return preferredEdgeByPart.value[part.part_ref] ?? null
+}
+
+function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
+  const next = { ...preferredEdgeByPart.value }
+  if (materialId) next[part.part_ref] = materialId
+  else delete next[part.part_ref]
+  preferredEdgeByPart.value = next
+}
+
 function commonEdgeSource(part: CuttingPart): MaterialSource {
   return (
     part.edge_top?.source ??
@@ -197,6 +221,7 @@ function setAllEdgeSources(part: CuttingPart, source: MaterialSource) {
 }
 
 function setEdgeMaterial(part: CuttingPart, materialId: string | null) {
+  rememberEdgeMaterial(part, materialId)
   const currentSource = commonEdgeSource(part)
   const nextId = materialId ?? ''
   for (const side of edgeFields) {
@@ -209,7 +234,7 @@ function toggleEdge(part: CuttingPart, side: EdgeField) {
     part[side] = null
     return
   }
-  const materialId = firstEdgeId(part) ?? cutting.edgeOptions[0]?.id
+  const materialId = firstEdgeId(part) ?? preferredEdgeId(part) ?? cutting.edgeOptions[0]?.id
   if (!materialId) return
   part[side] = { material_id: materialId, source: commonEdgeSource(part) }
 }
@@ -722,9 +747,16 @@ const sideLabels: Record<EdgeField, string> = {
           </div>
 
           <aside class="space-y-4">
+            <RouterLink
+              v-if="draft.chosen_result_id"
+              :to="`/c/orders/new/${draft.id}`"
+              class="mp-button mp-button-primary w-full"
+            >
+              Place order
+            </RouterLink>
             <button
               type="button"
-              class="mp-button mp-button-primary w-full"
+              class="mp-button mp-button-outline w-full"
               @click="cutting.downloadClientPdf(chosenResult.id)"
             >
               Download PDF

@@ -1,0 +1,414 @@
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from app.core.security import hash_password
+from app.models.catalog import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.models.cutting import CuttingDraft, CuttingResult
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    CuttingResultStatus,
+    MaterialKind,
+    PanelMaterialType,
+    Permission,
+    StockTransactionType,
+    UserStatus,
+)
+from app.models.identity import Client, PermissionGrant, WorkshopUser
+from app.models.inventory import StockItem, StockTransaction
+from app.models.sales import Order, OrderItem
+from app.services.seed import seed_workshop_with_owner
+from app.services.sessions import create_session
+from httpx import AsyncClient
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _auth(access_token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token}"}
+
+
+async def _client_access(db: AsyncSession, *, phone: str = "+998901555000") -> tuple[str, Client]:
+    client = Client(phone=phone, name="Order Client")
+    db.add(client)
+    await db.flush()
+    tokens = await create_session(
+        db,
+        principal_type=AuthenticatedPrincipalType.CLIENT,
+        principal_id=client.id,
+    )
+    return tokens.access_token, client
+
+
+async def _workshop_setup(
+    db: AsyncSession,
+) -> tuple[str, uuid.UUID, uuid.UUID, uuid.UUID]:
+    workshop, branch, owner = await seed_workshop_with_owner(db)
+    owner.password_reset_required = False
+    db.add(
+        BranchPricing(
+            branch_id=branch.id,
+            cutting_rate_tiyin=50_000,
+            edge_banding_rate_tiyin=20_000,
+            updated_at=datetime.now(UTC),
+            updated_by_user_id=owner.id,
+        )
+    )
+    await db.flush()
+    tokens = await create_session(
+        db,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=owner.id,
+    )
+    return tokens.access_token, workshop.id, branch.id, owner.id
+
+
+async def _staff(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    branch_id: uuid.UUID,
+) -> WorkshopUser:
+    staff = WorkshopUser(
+        workshop_id=workshop_id,
+        login=f"worker-{uuid.uuid4().hex[:8]}",
+        password_hash=hash_password("Worker123"),
+        full_name="Production Worker",
+        phone="+998901555111",
+        is_owner=False,
+        home_branch_id=branch_id,
+        status=UserStatus.ACTIVE,
+        password_reset_required=False,
+    )
+    db.add(staff)
+    await db.flush()
+    db.add(
+        PermissionGrant(
+            workshop_user_id=staff.id,
+            permission=Permission.PROCESS_PRODUCTION,
+            branch_id=branch_id,
+            granted_by_user_id=staff.id,
+            granted_at=datetime.now(UTC),
+        )
+    )
+    await db.flush()
+    return staff
+
+
+async def _materials(
+    db: AsyncSession,
+    *,
+    branch_id: uuid.UUID,
+) -> tuple[Material, Material]:
+    manufacturer = Manufacturer(name=f"Phase 5 Maker {uuid.uuid4().hex[:6]}", country="UZ")
+    db.add(manufacturer)
+    await db.flush()
+    panel = Material(
+        kind=MaterialKind.PANEL,
+        manufacturer_id=manufacturer.id,
+        type=PanelMaterialType.DSP,
+        name="Phase 5 Panel",
+        thickness_mm=Decimal("18"),
+        color="White",
+        decor_code="P5-P",
+        panel_length_mm=900,
+        panel_width_mm=600,
+        grain_direction=False,
+    )
+    edge = Material(
+        kind=MaterialKind.EDGE,
+        manufacturer_id=manufacturer.id,
+        name="Phase 5 Edge",
+        thickness_mm=Decimal("2"),
+        color="White",
+        decor_code="P5-E",
+    )
+    db.add_all([panel, edge])
+    await db.flush()
+    db.add_all(
+        [
+            BranchMaterial(
+                branch_id=branch_id,
+                material_id=panel.id,
+                price_tiyin=250_000,
+                min_stock=1,
+            ),
+            BranchMaterial(
+                branch_id=branch_id,
+                material_id=edge.id,
+                price_tiyin=10_000,
+                min_stock=1_000,
+            ),
+            StockItem(
+                branch_id=branch_id,
+                material_id=panel.id,
+                on_hand=3,
+                min_stock=1,
+                updated_at=datetime.now(UTC),
+            ),
+            StockItem(
+                branch_id=branch_id,
+                material_id=edge.id,
+                on_hand=10_000,
+                min_stock=1_000,
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    await db.flush()
+    return panel, edge
+
+
+async def _optimized_draft(
+    client: AsyncClient,
+    access: str,
+    *,
+    branch_id: uuid.UUID,
+    panel: Material,
+    edge: Material,
+) -> dict[str, object]:
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    assert created.status_code == 201
+    draft_id = created.json()["id"]
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={
+            "preferred_branch_id": str(branch_id),
+            "parts_snapshot": [
+                {
+                    "part_ref": "phase5-part",
+                    "material_id": str(panel.id),
+                    "material_source": "shop",
+                    "length_mm": 260,
+                    "width_mm": 180,
+                    "quantity": 2,
+                    "edge_top": {"material_id": str(edge.id), "source": "shop"},
+                    "edge_bottom": None,
+                    "edge_left": {"material_id": str(edge.id), "source": "shop"},
+                    "edge_right": None,
+                }
+            ],
+        },
+    )
+    assert patched.status_code == 200
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize",
+        headers=_auth(access),
+    )
+    assert optimized.status_code == 200
+    return optimized.json()
+
+
+async def _placed_order(
+    client: AsyncClient,
+    db: AsyncSession,
+) -> tuple[dict[str, object], str, str, uuid.UUID, uuid.UUID, uuid.UUID]:
+    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db)
+    panel, edge = await _materials(db, branch_id=branch_id)
+    client_access, _ = await _client_access(db, phone=f"+99890{uuid.uuid4().int % 10**7:07d}")
+    draft = await _optimized_draft(
+        client,
+        client_access,
+        branch_id=branch_id,
+        panel=panel,
+        edge=edge,
+    )
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": draft["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Checkout Name",
+            "contact_phone": "+998901555222",
+            "note_client": "Call before cutting",
+        },
+    )
+    assert placed.status_code == 201
+    return placed.json(), client_access, owner_access, workshop_id, branch_id, edge.id
+
+
+async def test_client_places_order_and_confirms_cutting_snapshot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, _, _, _, _ = await _placed_order(client, db_session)
+    order_id = uuid.UUID(str(order["id"]))
+    result_id = uuid.UUID(str(order["cutting_result_id"]))
+    draft_count = await db_session.scalar(select(func.count(CuttingDraft.id)))
+    result = await db_session.get(CuttingResult, result_id)
+    item_count = await db_session.scalar(
+        select(func.count(OrderItem.id)).where(OrderItem.order_id == order_id)
+    )
+    client_list = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+
+    assert order["status"] == "new"
+    assert order["contact_name"] == "Checkout Name"
+    assert order["contact_phone"] == "+998901555222"
+    assert order["subtotal_cutting_tiyin"] == 50_000
+    assert order["subtotal_materials_tiyin"] == 250_000
+    assert order["subtotal_edge_banding_tiyin"] == 30_000
+    assert order["total_tiyin"] == 330_000
+    assert order["items"][0]["unit_material_price_tiyin"] == 125_000
+    assert order["items"][0]["edge_cost_tiyin"] == 10_000
+    assert order["items"][0]["line_total_tiyin"] == 260_000
+    assert order["cutting_result"]["status"] == "confirmed"
+    assert result is not None
+    assert result.status is CuttingResultStatus.CONFIRMED
+    assert result.order_id == order_id
+    assert result.draft_id is None
+    assert draft_count == 0
+    assert item_count == 1
+    assert client_list.status_code == 200
+    assert client_list.json()[0]["id"] == str(order_id)
+
+
+async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, workshop_id, branch_id, edge_id = await _placed_order(
+        client,
+        db_session,
+    )
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assert approved.status_code == 200
+
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["status"] == "cutting"
+
+    stale = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": approved.json()["version"], "cutter_user_id": str(worker.id)},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["code"] == "order_version_conflict"
+
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    assert cut_done.status_code == 200
+    assert cut_done.json()["status"] == "edge_banding"
+    assert cut_done.json()["cutter_user_id"] == str(worker.id)
+
+    panel_tx = (
+        await db_session.scalars(
+            select(StockTransaction).where(StockTransaction.type == StockTransactionType.CONSUME)
+        )
+    ).all()
+    assert [(tx.quantity, tx.order_id) for tx in panel_tx] == [(-1, uuid.UUID(order_id))]
+
+    reverted_cut = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/revert",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "reason": "Saw mistake"},
+    )
+    assert reverted_cut.status_code == 200
+    assert reverted_cut.json()["status"] == "cutting"
+    assert reverted_cut.json()["cutter_user_id"] is None
+
+    restored_panel = await db_session.scalar(
+        select(StockItem.on_hand).where(StockItem.branch_id == branch_id, StockItem.on_hand == 3)
+    )
+    assert restored_panel == 3
+
+    cut_done_again = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={
+            "version": reverted_cut.json()["version"],
+            "completed_by_user_id": str(worker.id),
+        },
+    )
+    band_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/banding-done",
+        headers=_auth(owner_access),
+        json={
+            "version": cut_done_again.json()["version"],
+            "completed_by_user_id": str(worker.id),
+        },
+    )
+    assert band_done.status_code == 200
+    assert band_done.json()["status"] == "ready"
+    assert band_done.json()["edge_length_snapshot"] == {str(edge_id): 1000}
+
+    edge_on_hand = await db_session.scalar(
+        select(StockItem.on_hand).where(
+            StockItem.branch_id == branch_id,
+            StockItem.material_id == edge_id,
+        )
+    )
+    assert edge_on_hand == 9000
+
+    reverted_edge = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/revert",
+        headers=_auth(owner_access),
+        json={"version": band_done.json()["version"], "reason": "Banding correction"},
+    )
+    assert reverted_edge.status_code == 200
+    assert reverted_edge.json()["status"] == "edge_banding"
+    edge_restored = await db_session.scalar(
+        select(StockItem.on_hand).where(
+            StockItem.branch_id == branch_id,
+            StockItem.material_id == edge_id,
+        )
+    )
+    assert edge_restored == 10000
+
+
+async def test_discount_requires_version_and_client_cancel_only_new(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, owner_access, _, _, _ = await _placed_order(client, db_session)
+    order_id = order["id"]
+
+    discounted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/discount",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "fixed", "value": 30_000, "reason": "Promo"},
+    )
+    assert discounted.status_code == 200
+    assert discounted.json()["discount_tiyin"] == 30_000
+    assert discounted.json()["total_tiyin"] == 300_000
+
+    stale_cancel = await client.post(
+        f"/api/v1/client/orders/{order_id}/cancel",
+        headers=_auth(client_access),
+        json={"version": order["version"], "reason": "Changed plans"},
+    )
+    assert stale_cancel.status_code == 409
+
+    cancelled = await client.post(
+        f"/api/v1/client/orders/{order_id}/cancel",
+        headers=_auth(client_access),
+        json={"version": discounted.json()["version"], "reason": "Changed plans"},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+
+    stored = await db_session.get(Order, uuid.UUID(order_id))
+    stock_tx_count = await db_session.scalar(select(func.count(StockTransaction.id)))
+    assert stored is not None
+    assert stored.cancelled_at is not None
+    assert stock_tx_count == 0

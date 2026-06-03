@@ -73,6 +73,7 @@ export const clientConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Home', to: '/c' },
+    { label: 'Orders', to: '/c/orders' },
     { label: 'Cutting drafts', to: '/c/cutting/drafts' },
     { label: 'Branches', to: '/c/branches' },
     { label: 'Profile', to: '/c/profile' },
@@ -111,6 +112,9 @@ export const workshopConfig: RoleConfig = {
   ],
   nav: [
     { label: 'Dashboard', to: '/workshop' },
+    { label: 'Orders', to: '/workshop/orders' },
+    { label: 'Cutting queue', to: '/workshop/cutting' },
+    { label: 'Banding queue', to: '/workshop/banding' },
     { label: 'Branches', to: '/workshop/branches' },
     { label: 'Cutting plans', to: '/workshop/cutting-plans' },
     { label: 'Users', to: '/workshop/settings/users' },

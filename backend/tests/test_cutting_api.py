@@ -434,6 +434,8 @@ async def _confirmed_result(
         cutting_result_id=result.id,
         status=OrderStatus.NEW,
         version=1,
+        contact_name="Client",
+        contact_phone="+998901111003",
         subtotal_cutting_tiyin=0,
         subtotal_materials_tiyin=0,
         subtotal_edge_banding_tiyin=0,

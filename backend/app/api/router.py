@@ -11,6 +11,7 @@ from app.api.routes import (
     health,
     inventory,
     platform,
+    sales,
     workshop,
     workshop_setup,
 )
@@ -24,6 +25,7 @@ api_router.include_router(files.router)
 api_router.include_router(health.router, tags=["meta"])
 api_router.include_router(inventory.router)
 api_router.include_router(platform.router)
+api_router.include_router(sales.router)
 api_router.include_router(workshop_setup.router)
 api_router.include_router(workshop.router)
 # api_router.include_router(products.router, prefix="/products", tags=["products"])

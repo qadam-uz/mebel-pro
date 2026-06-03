@@ -55,6 +55,9 @@ const visibleNav = computed<NavItem[]>(() => {
   if (config.role !== 'workshop') return config.nav
   const nav: NavItem[] = [{ label: 'Dashboard', to: '/workshop' }]
   if (auth.me?.is_owner) {
+    nav.push({ label: 'Orders', to: '/workshop/orders' })
+    nav.push({ label: 'Cutting queue', to: '/workshop/cutting' })
+    nav.push({ label: 'Banding queue', to: '/workshop/banding' })
     nav.push({ label: 'Branches', to: '/workshop/branches' })
     nav.push({ label: 'Cutting plans', to: '/workshop/cutting-plans' })
     nav.push({ label: 'Users', to: '/workshop/settings/users' })
@@ -62,6 +65,9 @@ const visibleNav = computed<NavItem[]>(() => {
     const selectedBranch = workshop.branches.find((branch) => branch.id === selectedContext.value)
     const branch = selectedBranch ?? workshop.branches[0]
     if (branch) nav.push({ label: 'Branch workspace', to: `/workshop/branches/${branch.id}` })
+    nav.push({ label: 'Orders', to: '/workshop/orders' })
+    nav.push({ label: 'Cutting queue', to: '/workshop/cutting' })
+    nav.push({ label: 'Banding queue', to: '/workshop/banding' })
     nav.push({ label: 'Cutting plans', to: '/workshop/cutting-plans' })
   }
   nav.push({ label: 'Profile', to: '/workshop/profile' })

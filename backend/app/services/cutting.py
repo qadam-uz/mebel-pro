@@ -447,6 +447,13 @@ async def get_workshop_cutting_plan(
     )
 
 
+async def cutting_result_response(
+    db: AsyncSession,
+    result: CuttingResult,
+) -> CuttingResultResponse:
+    return await _result_response(db, result)
+
+
 async def _client_draft(
     db: AsyncSession,
     *,

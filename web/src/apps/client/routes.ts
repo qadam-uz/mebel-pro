@@ -22,6 +22,21 @@ export const clientRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/ProfileView.vue'),
   },
   {
+    path: '/c/orders',
+    name: 'client-orders',
+    component: () => import('@/shared/views/ClientOrdersView.vue'),
+  },
+  {
+    path: '/c/orders/new/:draft_id',
+    name: 'client-order-new',
+    component: () => import('@/shared/views/ClientOrderNewView.vue'),
+  },
+  {
+    path: '/c/orders/:order_id',
+    name: 'client-order-detail',
+    component: () => import('@/shared/views/ClientOrderDetailView.vue'),
+  },
+  {
     path: '/c/cutting/drafts',
     name: 'client-cutting-drafts',
     component: () => import('@/shared/views/DraftsView.vue'),

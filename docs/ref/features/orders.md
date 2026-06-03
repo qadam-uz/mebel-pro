@@ -247,8 +247,9 @@ draft's `preferred_branch_id` if set.
      (greyed, "this branch can't take orders right now").
   2. **Checkout** — one scrollable page, two sections:
      - **Contact** — phone and name, prefilled from the client's profile, editable
-       inline, with a non-dismissible note: *"This is shared with the workshop so they
-       can call you about your order."* and a reset-to-profile link per field.
+       inline, then frozen onto the order as the workshop-facing contact snapshot. It
+       has a non-dismissible note: *"This is shared with the workshop so they can call
+       you about your order."* and a reset-to-profile link per field.
      - **Review** — the final price breakdown + pickup branch (address + hours) +
        contact. A primary **Place order** button; an Edit link returns to the relevant
        field.

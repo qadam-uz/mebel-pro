@@ -22,6 +22,26 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/ProfileView.vue'),
   },
   {
+    path: '/workshop/orders',
+    name: 'workshop-orders',
+    component: () => import('@/shared/views/WorkshopOrdersView.vue'),
+  },
+  {
+    path: '/workshop/orders/:order_id',
+    name: 'workshop-order-detail',
+    component: () => import('@/shared/views/WorkshopOrderDetailView.vue'),
+  },
+  {
+    path: '/workshop/cutting',
+    name: 'workshop-cutting-queue',
+    component: () => import('@/shared/views/WorkshopCuttingQueueView.vue'),
+  },
+  {
+    path: '/workshop/banding',
+    name: 'workshop-banding-queue',
+    component: () => import('@/shared/views/WorkshopBandingQueueView.vue'),
+  },
+  {
     path: '/workshop/settings/users',
     name: 'workshop-users',
     component: () => import('@/shared/views/WorkshopUsersView.vue'),
