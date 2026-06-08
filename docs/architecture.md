@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-08
 order: 70
 ---
 
@@ -81,6 +81,51 @@ Each SPA stays same-origin with its API (no CORS).
 - **One external integration** — Telegram Gateway, used only to deliver client sign-in OTP codes.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
   (the only published service in prod — HTTPS + Let's Encrypt). Push to `main`.
+
+## Backend modules
+
+The backend is a **module-first modular monolith**. Modules share one FastAPI process, one
+SQLAlchemy metadata registry, one Postgres database, and one request transaction; they do not
+import another module's private ORM model implementation or private service functions. A module
+may call another module only through that module's public API (`api.py`) or stable contracts
+(`contracts.py`).
+
+Implementation lives under `backend/app/modules/<module>/`. Each module has `api.py` for
+cross-module use cases, `contracts.py` for stable shared shapes and explicit persistence
+contracts, `models.py` for its SQLAlchemy ORM classes, `schemas.py` or named `*_schemas.py` files
+for its API request/response models, and private implementation files such as `service.py`,
+`users.py`, `setup.py`, `optimizer.py`, or `rendering.py`. Domain route implementations live with
+the owning module as `routes.py` or a named `*_routes.py`; the top-level
+`backend/app/api/router.py` only mounts those routers, and `backend/app/api/routes/` is reserved
+for meta routes such as health checks. `backend/app/models/base.py` and
+`backend/app/models/enums.py` are shared infrastructure/value definitions, and
+`backend/app/schemas/common.py` holds the shared API schema base/meta responses. Layer-first
+domain files under `backend/app/models/`, `backend/app/schemas/`, or `backend/app/services/` are
+retired and must not be reintroduced. `backend/app/models/__init__.py` exposes `Base` and an
+explicit `import_all_models()` bootstrap used by Alembic and tests so metadata registration does
+not create import cycles during normal module imports.
+
+Cross-module behavior goes through `api.py`. If a same-transaction SQL query needs another
+module's table class, it imports that class from the owning module's `contracts.py`, never from
+the owning module's private `models.py`. That makes the remaining persistence coupling explicit
+without adding repository layers that would only forward SQLAlchemy calls in this envelope.
+
+| Module | Owns |
+|---|---|
+| `access` | platform/workshop/client identity, sessions, OTP, password gates, permission checks |
+| `client_portal` | client profile, public branch browsing, client-visible catalog reads |
+| `workshop` | workshops, branches, branch context, workshop settings |
+| `catalog` | manufacturers, platform materials, branch material selection, branch pricing |
+| `inventory` | stock items, suppliers, stock transactions, stock consume/restore seams |
+| `cutting` | cutting drafts, optimizer results, panel layouts, PDFs |
+| `sales` | orders, order state transitions, frozen price snapshots, order status events |
+| `finance` | income, expenses, settlement summaries, finance and production reports |
+| `support` | files, audit/status logs, notifications inbox |
+| `platform` | workshop provisioning orchestration, jobs, error monitor, platform users |
+
+App-facing routes may compose module APIs, but they do not become domain owners. A client-portal
+route that browses public branches still reads through `workshop`/`catalog`; a workshop route that
+shows an order cutting plan still reads through `sales`/`cutting`.
 
 ## Three SPAs + a static landing
 

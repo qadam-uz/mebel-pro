@@ -1,10 +1,11 @@
 import uuid
 
-from app.models.support import ActionLog, StatusChangeLog
-from app.services.seed import default_working_hours, seed_workshop_with_owner
+from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import default_working_hours, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:

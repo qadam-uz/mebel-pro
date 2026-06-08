@@ -9,16 +9,19 @@ the conflict points and consolidate them together.
 - **`docs/`** is the single source of truth, in English. Agents and humans work
   **only** from it; all reasoning, planning, editing, and the docs-management
   skill operate here.
-- **`docs_uz/`** is a read-only Uzbek mirror — a generated artifact, never a
-  source. **Agents must never read or reason over it.** Translation flows one
-  way: `docs/` → `docs_uz/`, never the reverse.
+- **`docs_uz/`** is the Uzbek mirror — a derived artifact, never a source.
+  Translation flows one way: `docs/` → `docs_uz/`, never the reverse. Agents
+  may read and edit `docs_uz/` only to keep the mirror synchronized with
+  already-decided English canon; never use it to infer requirements, resolve
+  conflicts, or make product/technical decisions.
 - The mirror is **1:1** with `docs/` — identical paths, structure, code blocks,
   link targets, mermaid node IDs, and **frontmatter (incl. `title:`) byte for
   byte**. Only connective prose is rendered into Uzbek; **every technical/
   domain/feature/role term, status value, and identifier stays English** (when
   in doubt, keep it English). It reads as Uzbek grammar carrying English terms.
-- **When you change a `docs/` page, regenerate its `docs_uz/` counterpart in
-  the same change** — they must never drift; if they do, `docs/` wins.
+- **When you change a `docs/` page, update its `docs_uz/` counterpart in the
+  same change** — manually if there is no generator. They must never drift; if
+  they do, `docs/` wins and the mirror is repaired from it.
 - Both are served live: `docs/` at `/docs`, `docs_uz/` at `/docs-uz`, each page
   linking to its counterpart.
 
@@ -42,7 +45,7 @@ The repo map below is the working layout.
 | `e2e/`     | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/AGENTS.md`](e2e/AGENTS.md)                                            |
 | `deploy/`  | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/AGENTS.md`](deploy/AGENTS.md)                                      |
 | `docs/`    | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill                                   |
-| `docs_uz/` | Uzbek **mirror** of `docs/` — derived, read-only (served live at `/docs-uz`)  | Markdown                                                                              | generated from `docs/`; never a source — see _Documentation language_ above |
+| `docs_uz/` | Uzbek **mirror** of `docs/` — derived (served live at `/docs-uz`)             | Markdown                                                                              | kept in sync from `docs/`; never a source — see _Documentation language_ above |
 
 Each subproject is self-contained with its own toolchain and `AGENTS.md` —
 **read the relevant one before working in that directory.** There is no

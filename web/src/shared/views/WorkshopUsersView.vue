@@ -2,9 +2,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const workshop = useWorkshopStore()
+const rolePath = useRolePath()
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const form = reactive({
@@ -50,30 +52,47 @@ onMounted(() => {
 
     <section class="mp-surface p-5">
       <h2 class="font-serif text-xl font-semibold">Create staff</h2>
-      <form class="mt-5 grid gap-3 md:grid-cols-4" @submit.prevent="createStaff">
-        <input
-          v-model="form.fullName"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Full name"
-          required
-        />
-        <input
-          v-model="form.phone"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Phone"
-          required
-        />
-        <input
-          v-model="form.login"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Login"
-          required
-        />
-        <input
-          v-model="form.tempPassword"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Temp password"
-        />
+      <form class="mt-5 grid gap-4 md:grid-cols-4" @submit.prevent="createStaff">
+        <label class="block text-sm font-bold text-ink" for="staff-full-name">
+          Full name
+          <input
+            id="staff-full-name"
+            v-model="form.fullName"
+            class="mp-input mt-1"
+            autocomplete="name"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="staff-phone">
+          Phone
+          <input
+            id="staff-phone"
+            v-model="form.phone"
+            class="mp-input mt-1"
+            autocomplete="tel"
+            inputmode="tel"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="staff-login">
+          Login
+          <input
+            id="staff-login"
+            v-model="form.login"
+            class="mp-input mt-1"
+            autocomplete="username"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="staff-temp-password">
+          Temp password
+          <input
+            id="staff-temp-password"
+            v-model="form.tempPassword"
+            class="mp-input mt-1"
+            autocomplete="new-password"
+          />
+        </label>
         <button
           class="mp-button mp-button-primary md:col-span-4"
           type="submit"
@@ -111,7 +130,7 @@ onMounted(() => {
         <RouterLink
           v-for="user in workshop.users"
           :key="user.id"
-          :to="`/workshop/settings/users/${user.id}`"
+          :to="rolePath(`/workshop/settings/users/${user.id}`)"
           class="grid gap-2 px-5 py-4 no-underline sm:grid-cols-[1fr_auto]"
         >
           <span>

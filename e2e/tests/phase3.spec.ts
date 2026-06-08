@@ -313,7 +313,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await page.getByLabel('New password').fill(staffReadyPassword)
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Password updated.')).toBeVisible()
-  await page.goto(`/workshop/workshop/branches/${branchId}`)
+  await page.goto(`/workshop/branches/${branchId}`)
 
   await expect(page.getByRole('link', { name: 'Branches' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)

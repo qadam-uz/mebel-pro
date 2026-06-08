@@ -13,10 +13,10 @@ covers only the **current build state**:
 - **Static landing exists** — `web/landing/index.html`, its own Vite entry
   (`build.rollupOptions.input.landing` → `dist/landing/index.html`), served at
   the apex by the Caddy edge; _not_ part of the Vue tree.
-- **The Vue side is still the initial single-app scaffold** (one `index.html`,
-  one `src/main.ts`, one router) — the seed of the **client** app. Pending build
-  work: split into three entries + extract shared code. Until then treat the
-  scaffold as the client app; **don't add workshop/superadmin screens to it.**
+- **The Vue side is three role SPAs** — `web/client/index.html`,
+  `web/workshop/index.html`, and `web/admin/index.html`, each mounting its own
+  entry under `src/apps/<role>/main.ts` with role routes in
+  `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/`.
 - **HTML prototype** lives in `web/prototypes/prototype-full/` — a design
   reference, not a Vite entry, not built or served. Port screens from it into
   the Vue SPAs; don't wire it into the build.
@@ -66,8 +66,11 @@ Adding deps: `pnpm add <pkg>` / `pnpm add -D <pkg>`. If a dep needs a postinstal
 
 ```
 web/
-  index.html                # Vite entry; mounts #app, loads /src/main.ts
-  vite.config.ts            # plugins, `@` → src alias, dev server + /api proxy
+  landing/index.html        # static SEO landing entry
+  client/index.html         # client SPA entry
+  workshop/index.html       # workshop SPA entry
+  admin/index.html          # superadmin SPA entry
+  vite.config.ts            # MPA inputs, role history fallback, `@` alias, /api proxy
   vitest.config.ts          # merges vite config; jsdom env; excludes e2e/**
   tsconfig*.json            # root references → app / node / vitest projects
   env.d.ts                  # ImportMetaEnv augmentation (VITE_* vars)
@@ -76,12 +79,16 @@ web/
   Dockerfile                # node:22 build (corepack→pnpm) → nginx:alpine runtime
   .env.dev.example          # build-time VITE_* vars (dev); .env.prod.example mirrors it
   src/
-    main.ts                 # createApp + Pinia + Router, mount
-    App.vue                 # root layout + <RouterView>
+    apps/
+      client/main.ts        # client app bootstrap
+      client/routes.ts      # client route inventory
+      workshop/main.ts      # workshop app bootstrap
+      workshop/routes.ts    # workshop route inventory
+      admin/main.ts         # superadmin app bootstrap
+      admin/routes.ts       # superadmin route inventory
+    shared/                 # shared shell, views, stores, API client, primitives
     assets/main.css         # `@import "tailwindcss"`; @theme tokens go here
-    router/index.ts         # routes (lazy-load non-critical views; 404 catch-all)
-    views/                  # route-level components (HomeView, AboutView, NotFoundView, …)
-    components/              # reusable presentational components
+    components/             # legacy/shared presentational components when still used
       __tests__/            # *.spec.ts colocated unit tests
     composables/            # shared composition functions (use*)
     stores/                 # Pinia stores — one file per domain (setup style)
@@ -92,7 +99,13 @@ web/
 
 - **SFCs**: `<script setup lang="ts">` + Composition API only. No Options API, no class components.
 - **Imports**: use the `@/` alias for anything under `src/` (e.g. `@/stores/health`). Relative imports only within a feature folder.
-- **Routing**: register routes in `src/router/index.ts`. Route-level components live in `views/`; lazy-load (`() => import(...)`) everything except the initial route. Keep the `:pathMatch(.*)*` 404 route last.
+- **Routing**: register routes in the owning role file under `src/apps/<role>/routes.ts`.
+  Route-level components currently live in `src/shared/views/`; move toward role-owned
+  views as feature modules mature. Lazy-load (`() => import(...)`) everything except the
+  initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
+  views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
+  role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
+  production is host-routed.
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.

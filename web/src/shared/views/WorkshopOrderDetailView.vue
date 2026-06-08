@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -20,6 +22,7 @@ import {
 } from '@/shared/stores/cutting'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const orders = useOrdersStore()
 const orderId = computed(() => String(route.params.order_id))
 const cutterId = ref<string | null>(null)
@@ -32,6 +35,8 @@ const discountReason = ref('')
 const actionError = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
+const reasonDialogAction = ref<'revert' | 'cancel' | null>(null)
+const reasonDraft = ref('')
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
@@ -101,8 +106,10 @@ async function run(action: () => Promise<unknown>) {
   actionError.value = null
   try {
     await action()
+    return true
   } catch {
     actionError.value = orders.error ?? 'order_action_failed'
+    return false
   }
 }
 
@@ -160,20 +167,27 @@ async function markCollected() {
   await run(() => orders.markCollected(current.id, current.version))
 }
 
-async function revertOrder() {
-  const current = order.value
-  if (!current) return
-  const reason = window.prompt('Revert reason', 'Production correction')
-  if (!reason?.trim()) return
-  await run(() => orders.revert(current.id, current.version, reason))
+function requestRevertOrder() {
+  reasonDraft.value = 'Production correction'
+  reasonDialogAction.value = 'revert'
 }
 
-async function cancelOrder() {
+function requestCancelOrder() {
+  reasonDraft.value = 'Workshop cancelled by request'
+  reasonDialogAction.value = 'cancel'
+}
+
+async function confirmReasonedAction() {
   const current = order.value
   if (!current) return
-  const reason = window.prompt('Cancellation reason', 'Workshop cancelled by request')
-  if (!reason?.trim()) return
-  await run(() => orders.cancelWorkshopOrder(current.id, current.version, reason))
+  const action = reasonDialogAction.value
+  const reason = reasonDraft.value.trim()
+  if (!action || !reason) return
+  const ok =
+    action === 'revert'
+      ? await run(() => orders.revert(current.id, current.version, reason))
+      : await run(() => orders.cancelWorkshopOrder(current.id, current.version, reason))
+  if (ok) reasonDialogAction.value = null
 }
 
 async function applyDiscount() {
@@ -241,7 +255,7 @@ onMounted(loadDetail)
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink to="/workshop/orders" class="text-sm font-bold text-accent">
+        <RouterLink :to="rolePath('/workshop/orders')" class="text-sm font-bold text-accent">
           Orders
         </RouterLink>
         <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Order detail</h1>
@@ -252,14 +266,14 @@ onMounted(loadDetail)
       <div v-if="order" class="flex flex-wrap gap-2">
         <RouterLink
           v-if="order.status === 'cutting'"
-          to="/workshop/cutting"
+          :to="rolePath('/workshop/cutting')"
           class="mp-button mp-button-outline"
         >
           Cutting queue
         </RouterLink>
         <RouterLink
           v-if="order.status === 'edge_banding'"
-          to="/workshop/banding"
+          :to="rolePath('/workshop/banding')"
           class="mp-button mp-button-outline"
         >
           Banding queue
@@ -585,7 +599,7 @@ onMounted(loadDetail)
                   type="button"
                   class="mp-button mp-button-outline w-full"
                   :disabled="orders.actionLoading"
-                  @click="revertOrder"
+                  @click="requestRevertOrder"
                 >
                   Revert one step
                 </button>
@@ -596,7 +610,7 @@ onMounted(loadDetail)
                 type="button"
                 class="mp-button mp-button-outline w-full text-danger"
                 :disabled="orders.actionLoading"
-                @click="cancelOrder"
+                @click="requestCancelOrder"
               >
                 Cancel order
               </button>
@@ -668,5 +682,26 @@ onMounted(loadDetail)
         </aside>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="reasonDialogAction !== null"
+      :title="reasonDialogAction === 'revert' ? 'Revert order' : 'Cancel order'"
+      :message="
+        reasonDialogAction === 'revert'
+          ? 'Record the correction reason before moving this order back one step.'
+          : 'Record the cancellation reason before closing this order.'
+      "
+      :confirm-label="reasonDialogAction === 'revert' ? 'Revert one step' : 'Cancel order'"
+      :danger="reasonDialogAction === 'cancel'"
+      :busy="orders.actionLoading"
+      :confirm-disabled="reasonDraft.trim().length === 0"
+      @cancel="reasonDialogAction = null"
+      @confirm="confirmReasonedAction"
+    >
+      <label class="grid gap-1 text-sm font-bold text-ink">
+        Reason
+        <textarea v-model="reasonDraft" class="mp-input min-h-24 resize-y" />
+      </label>
+    </ConfirmDialog>
   </section>
 </template>

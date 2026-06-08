@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FilterDropdown from '@/shared/components/FilterDropdown.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -47,6 +48,25 @@ const stockSearch = ref('')
 const supplierStatus = ref<string | null>('active')
 const editingBranchMaterialId = ref<string | null>(null)
 const editingSupplierId = ref<string | null>(null)
+const statusChangeSaving = ref(false)
+
+type PendingStatusChange =
+  | {
+      kind: 'material'
+      row: BranchMaterial
+      nextStatus: 'active' | 'inactive'
+      title: string
+      message: string
+    }
+  | {
+      kind: 'supplier'
+      row: Supplier
+      nextStatus: 'active' | 'inactive'
+      title: string
+      message: string
+    }
+
+const pendingStatusChange = ref<PendingStatusChange | null>(null)
 
 const materialForm = reactive({
   materialId: null as string | null,
@@ -474,41 +494,50 @@ function formatTransactionQuantity(materialId: string, quantity: number) {
   return formatStockQuantity(quantity, stockDisplayUnit(materialId))
 }
 
-async function setBranchMaterialStatusWithConfirm(row: BranchMaterial) {
+function setBranchMaterialStatusWithConfirm(row: BranchMaterial) {
   const nextStatus = row.status === 'active' ? 'inactive' : 'active'
   const effect =
     nextStatus === 'inactive'
       ? 'hide this material from client selection while inventory remains manageable'
       : 'make this material available for client selection again'
-  if (
-    !window.confirm(
-      `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} ${row.material.name}: ${effect}.`,
-    )
-  ) {
-    return
-  }
-  materialError.value = null
-  try {
-    await workshop.setBranchMaterialStatus(branchId.value, row.id, nextStatus)
-  } catch {
-    materialError.value = 'branch_material_status_failed'
+  pendingStatusChange.value = {
+    kind: 'material',
+    row,
+    nextStatus,
+    title: `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} material`,
+    message: `${row.material.name}: ${effect}.`,
   }
 }
 
-async function setSupplierStatusWithConfirm(supplier: Supplier) {
+function setSupplierStatusWithConfirm(supplier: Supplier) {
   const nextStatus = supplier.status === 'active' ? 'inactive' : 'active'
-  if (
-    !window.confirm(
-      `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} supplier ${supplier.name}.`,
-    )
-  ) {
-    return
+  pendingStatusChange.value = {
+    kind: 'supplier',
+    row: supplier,
+    nextStatus,
+    title: `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} supplier`,
+    message: `${supplier.name} will be ${nextStatus === 'inactive' ? 'hidden from active stock-in forms' : 'available for stock-in again'}.`,
   }
+}
+
+async function confirmStatusChange() {
+  const pending = pendingStatusChange.value
+  if (!pending) return
+  statusChangeSaving.value = true
+  materialError.value = null
   supplierError.value = null
   try {
-    await workshop.setSupplierStatus(branchId.value, supplier.id, nextStatus)
+    if (pending.kind === 'material') {
+      await workshop.setBranchMaterialStatus(branchId.value, pending.row.id, pending.nextStatus)
+    } else {
+      await workshop.setSupplierStatus(branchId.value, pending.row.id, pending.nextStatus)
+    }
+    pendingStatusChange.value = null
   } catch {
-    supplierError.value = 'supplier_status_failed'
+    if (pending.kind === 'material') materialError.value = 'branch_material_status_failed'
+    else supplierError.value = 'supplier_status_failed'
+  } finally {
+    statusChangeSaving.value = false
   }
 }
 
@@ -1226,5 +1255,16 @@ onMounted(refreshBranch)
         </form>
       </section>
     </section>
+
+    <ConfirmDialog
+      :open="Boolean(pendingStatusChange)"
+      :title="pendingStatusChange?.title ?? 'Confirm status change'"
+      :message="pendingStatusChange?.message ?? ''"
+      :confirm-label="pendingStatusChange?.nextStatus === 'inactive' ? 'Deactivate' : 'Activate'"
+      danger
+      :busy="statusChangeSaving"
+      @cancel="pendingStatusChange = null"
+      @confirm="confirmStatusChange"
+    />
   </section>
 </template>

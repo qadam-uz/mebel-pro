@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 30
 ---
 
@@ -268,7 +268,7 @@ draft's `preferred_branch_id` if set.
   The client-facing status is **five phases**: Placed → **Confirmed** → **In production**
   → **Ready** → Done — collapsing `cutting`/`edge_banding` into "In production" with
   optional sub-text. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
-  (the SVG + PDF link; a note if the bound result was `invalidated`), **Finance**
+  (the SVG + PDF link), **Finance**
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
   while `new`.
@@ -310,8 +310,8 @@ Permission names below are the per-branch grants from
   **read-only settlement summary** — total / recorded / balance, sourced from the
   finance module, shown at any status to staff with
   `view_finance_reports`/`manage_finance`; hidden otherwise — the warehouse warning if a
-  `shop` material is short, the internal note — inline editable), Cutting (SVG + PDF;
-  an invalidated note if applicable), Timeline (status events + audit), Notes. There is
+  `shop` material is short, the internal note — inline editable), Cutting (SVG + PDF),
+  Timeline (status events + audit), Notes. There is
   **no** Payments or Refunds tab here — recording and correcting money is the finance
   module; the summary is a read-only mirror.
 
@@ -378,8 +378,9 @@ actions are danger-styled and name their effect; modal focus is managed.
   auto-timeout.
 - **Client disputes a recorded payment** — out-of-system; the client calls the workshop
   and the accountant corrects the income in the finance module.
-- **Cutting result invalidated** (its draft re-cut elsewhere) → the order's bound result
-  is unchanged; the detail shows a note.
+- **Client re-cuts from the same idea after placing** → the existing order's confirmed
+  result stays authoritative. v1 has no modification path; the client cancels and places
+  a new order if the cutting was wrong.
 
 ## Next
 

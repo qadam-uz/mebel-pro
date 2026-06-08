@@ -2,9 +2,11 @@
 import { onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { metres, useCuttingStore } from '@/shared/stores/cutting'
 
 const cutting = useCuttingStore()
+const rolePath = useRolePath()
 
 onMounted(() => {
   void cutting.loadWorkshopPlans()
@@ -66,7 +68,7 @@ onMounted(() => {
             </div>
           </div>
           <RouterLink
-            :to="`/workshop/cutting-plans/${plan.id}`"
+            :to="rolePath(`/workshop/cutting-plans/${plan.id}`)"
             class="mp-button mp-button-primary"
           >
             Open

@@ -4,11 +4,17 @@ import pytest
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal
 from app.models.enums import AuthenticatedPrincipalType, Permission
-from app.models.identity import PermissionGrant, Session, WorkshopUser
-from app.services.authz import resolve_branch_scope, visible_branch_ids, visible_workshop_ids
-from app.services.seed import seed_workshop_with_owner
-from app.services.sessions import create_session, principal_from_session
+from app.modules.access.api import (
+    create_session,
+    principal_from_session,
+    resolve_branch_scope,
+    visible_branch_ids,
+    visible_workshop_ids,
+)
+from app.modules.access.contracts import PermissionGrant, Session, WorkshopUser
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_workshop_with_owner
 
 
 async def _principal_for_owner(

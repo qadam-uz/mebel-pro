@@ -2,7 +2,7 @@ import os
 import uuid
 
 import pytest
-from app.services.files import S3FileStorage
+from app.modules.support.api import S3FileStorage
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("MINIO_CONTRACT") != "1",

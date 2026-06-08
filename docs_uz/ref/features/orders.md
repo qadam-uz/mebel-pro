@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 30
 ---
 
@@ -283,9 +283,8 @@ orders**). Branch placement'da, aniq cutting'ga qarshi tanlanadi — draft'ning
   vaqtlar). Client-facing status **besh phase**: Placed → **Confirmed** → **In
   production** → **Ready** → Done — `cutting`/`edge_banding`'ni "In production"'ga
   qoʻshib, ixtiyoriy sub-text bilan. Tab'lar: Overview (item snapshot'lar, price
-  breakdown, izohlar), Cutting (SVG + PDF link; agar bind qilingan result
-  `invalidated` boʻlsa izoh), **Finance** (**faqat `ready` va `completed`'da**
-  koʻrinadi — total, hozirgacha yozilgan, balance; read-only; "contact the workshop
+  breakdown, izohlar), Cutting (SVG + PDF link), **Finance** (**faqat `ready` va
+  `completed`'da** koʻrinadi — total, hozirgacha yozilgan, balance; read-only; "contact the workshop
   about a payment" hint), Timeline. "Cancel" faqat `new` paytida koʻrsatiladi.
 - **Branches page** (`/c/branches`) — passive directory (name, address, hours,
   materials carried); flow'ning boshlanishi emas; per-branch CTA yoʻq.
@@ -328,9 +327,8 @@ hammasini ushlab turishi mumkin.
   price breakdown, **read-only settlement summary** — total / recorded / balance,
   finance module'dan manba, `view_finance_reports`/`manage_finance` bilan staff'ga har
   qanday status'da koʻrsatiladi; boshqa hollarda yashiriladi — `shop` material kam
-  boʻlsa warehouse warning, internal note — inline tahrirlanadigan), Cutting (SVG +
-  PDF; agar mavjud boʻlsa invalidated izoh), Timeline (status event'lar + audit),
-  Notes. Bu yerda **Payments yoki Refunds tab yoʻq** — pul yozish va tuzatish
+  boʻlsa warehouse warning, internal note — inline tahrirlanadigan), Cutting (SVG + PDF),
+  Timeline (status event'lar + audit), Notes. Bu yerda **Payments yoki Refunds tab yoʻq** — pul yozish va tuzatish
   finance module; summary read-only mirror.
 
 - **Cutter workspace** (`/workshop/cutting`, `process_production`) — tablet uchun
@@ -403,8 +401,9 @@ effect'ini nomlaydi; modal focus boshqariladi.
   Auto-timeout yoʻq.
 - **Client yozilgan payment'ga eʼtiroz bildiradi** — out-of-system; client workshop'ga
   qoʻngʻiroq qiladi va accountant finance module'da income'ni tuzatadi.
-- **Cutting result invalidated** (uning draft'i boshqa joyda qayta cut qilingan) →
-  order'ning bind qilingan result'i oʻzgarmagan; detail izoh koʻrsatadi.
+- **Client placing'dan keyin xuddi shu idea'dan qayta cut qiladi** → mavjud order'ning
+  confirmed result'i authoritative boʻlib qoladi. v1 da modification path yoʻq; cutting
+  notoʻgʻri boʻlsa client cancel qiladi va yangi order joylashtiradi.
 
 ## Next
 

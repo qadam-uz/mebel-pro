@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.api.routes.auth import REFRESH_COOKIE_NAME, get_otp_sender
 from app.core.config import settings
 from app.core.errors import APIError
-from app.models.identity import PhoneVerificationChallenge
-from app.services.otp import request_otp_code, resolve_client_ip
+from app.modules.access.api import request_otp_code, resolve_client_ip
+from app.modules.access.contracts import PhoneVerificationChallenge
+from app.modules.access.routes import REFRESH_COOKIE_NAME, get_otp_sender
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 20
 ---
 
@@ -26,10 +26,10 @@ substitution.
 - **Warehouse & inventory** (ERP core) — arrivals va adjustments bilan per-branch stock,
   stock-in uchun lightweight supplier label'lar, order'lar tomonidan boshqariladigan automatic
   consumption va low-stock surfacing. v1 da reservation balance yoʻq.
-- **Optimized cutting** — bir nechta cutting-optimization algoritmlari parallel run boʻladi;
-  platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni nomlaydi**. Output har bir panel
-  boʻyicha layout, panel count, waste, cut va edge-banding length va print-ready cutting map'ni
-  oʻz ichiga oladi.
+- **Optimized cutting** — bir nechta cutting-optimization algoritmlari bir xil input'ga qarshi
+  bitta request'da run boʻladi; platforma eng yaxshi result'ni qaytaradi va **gʻolib algoritmni
+  nomlaydi**. Output har bir panel boʻyicha layout, panel count, waste, cut va edge-banding
+  length va print-ready cutting map'ni oʻz ichiga oladi.
 - **Orders** — finalized cutting result'dan client tomonidan joylashtirilgan order'lar, **frozen
   pricing** va kichik production workflow (verify → cut → band → ready → collected, pickup-only),
   bir qadamli operator revert va asoslangan cancellation bilan. Order faqat production'ni

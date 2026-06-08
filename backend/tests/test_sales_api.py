@@ -3,8 +3,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.core.security import hash_password
-from app.models.catalog import BranchMaterial, BranchPricing, Manufacturer, Material
-from app.models.cutting import CuttingDraft, CuttingResult
 from app.models.enums import (
     AuthenticatedPrincipalType,
     CuttingResultStatus,
@@ -14,14 +12,17 @@ from app.models.enums import (
     StockTransactionType,
     UserStatus,
 )
-from app.models.identity import Client, PermissionGrant, WorkshopUser
-from app.models.inventory import StockItem, StockTransaction
-from app.models.sales import Order, OrderItem
-from app.services.seed import seed_workshop_with_owner
-from app.services.sessions import create_session
+from app.modules.access.api import create_session
+from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.cutting.contracts import CuttingDraft, CuttingResult
+from app.modules.inventory.contracts import StockItem, StockTransaction
+from app.modules.sales.contracts import Order, OrderItem
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:

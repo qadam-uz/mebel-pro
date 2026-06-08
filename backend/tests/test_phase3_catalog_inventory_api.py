@@ -2,17 +2,18 @@ import uuid
 from datetime import UTC, datetime
 
 from app.core.security import hash_password
-from app.models.catalog import BranchMaterial
 from app.models.enums import AuthenticatedPrincipalType, Permission, UserStatus
-from app.models.identity import Client, PermissionGrant, WorkshopUser
-from app.models.inventory import StockItem, StockTransaction, Supplier
-from app.models.support import ActionLog, File, Notification
-from app.services.files import InMemoryFileStorage, file_storage
-from app.services.seed import seed_platform_user, seed_workshop_with_owner
-from app.services.sessions import create_session
+from app.modules.access.api import create_session
+from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
+from app.modules.catalog.contracts import BranchMaterial
+from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier
+from app.modules.support.api import InMemoryFileStorage, file_storage
+from app.modules.support.contracts import ActionLog, File, Notification
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_platform_user, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:

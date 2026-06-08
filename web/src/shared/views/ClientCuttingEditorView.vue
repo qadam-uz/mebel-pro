@@ -2,6 +2,8 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -19,6 +21,7 @@ import {
 } from '@/shared/stores/cutting'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const draftId = computed(() => String(route.params.id))
 const parts = ref<CuttingPart[]>([])
@@ -27,6 +30,7 @@ const saveError = ref<string | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
+const clearPartsConfirmOpen = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
@@ -169,10 +173,14 @@ function deleteRow(index: number) {
   }
 }
 
+function requestClearParts() {
+  clearPartsConfirmOpen.value = true
+}
+
 function clearParts() {
-  if (!window.confirm(`Remove all ${parts.value.length} parts? This cannot be undone.`)) return
   parts.value = []
   preferredEdgeByPart.value = {}
+  clearPartsConfirmOpen.value = false
 }
 
 function setPanelSource(part: CuttingPart, source: MaterialSource) {
@@ -365,7 +373,7 @@ const sideLabels: Record<EdgeField, string> = {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink to="/c/cutting/drafts" class="text-sm font-bold text-accent">
+        <RouterLink :to="rolePath('/c/cutting/drafts')" class="text-sm font-bold text-accent">
           Cutting drafts
         </RouterLink>
         <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Cutting editor</h1>
@@ -394,7 +402,12 @@ const sideLabels: Record<EdgeField, string> = {
                   : 'Save error'
           }}
         </span>
-        <button type="button" class="mp-button mp-button-outline text-danger" @click="clearParts">
+        <button
+          type="button"
+          class="mp-button mp-button-outline text-danger"
+          :disabled="parts.length === 0"
+          @click="requestClearParts"
+        >
           Clear parts list
         </button>
       </div>
@@ -749,7 +762,7 @@ const sideLabels: Record<EdgeField, string> = {
           <aside class="space-y-4">
             <RouterLink
               v-if="draft.chosen_result_id"
-              :to="`/c/orders/new/${draft.id}`"
+              :to="rolePath(`/c/orders/new/${draft.id}`)"
               class="mp-button mp-button-primary w-full"
             >
               Place order
@@ -789,5 +802,15 @@ const sideLabels: Record<EdgeField, string> = {
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="clearPartsConfirmOpen"
+      title="Clear parts list"
+      :message="`Remove all ${parts.length} parts? This cannot be undone.`"
+      confirm-label="Clear list"
+      danger
+      @cancel="clearPartsConfirmOpen = false"
+      @confirm="clearParts"
+    />
   </section>
 </template>

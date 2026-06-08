@@ -287,7 +287,7 @@ async function loginWorkshop(
   await page.getByLabel("Login").fill(login);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page).toHaveURL(/\/workshop$/);
+  await expect(page).toHaveURL(/\/workshop\/?$/);
 }
 
 async function chooseOption(

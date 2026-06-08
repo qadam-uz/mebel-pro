@@ -7,7 +7,10 @@ import {
   readStoredContext,
   workshopContextStorageKey,
 } from '@/shared/app/contextStorage'
+import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
+import { workshopNavItems } from '@/shared/app/workshopNav'
+import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -16,6 +19,7 @@ const config = useRoleConfig()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const route = useRoute()
+const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const isAuthRoute = computed(() => route.meta.layout === 'auth')
 const canLoadWorkshopContext = computed(
@@ -31,6 +35,23 @@ const contextStorageKey = computed(() =>
 )
 const profileSubtitle = computed(() =>
   auth.me?.password_reset_required ? 'password change required' : auth.displayName,
+)
+const tenantLabel = computed(() => {
+  if (config.role === 'workshop') return workshop.settings?.name ?? config.tenantLabel
+  if (config.role === 'client' && auth.isAllowedFor('client')) return auth.displayName
+  return config.tenantLabel
+})
+const tenantMeta = computed(() => {
+  if (!auth.me) return config.tenantMeta
+  if (config.role === 'workshop') {
+    return auth.me.is_owner ? `owner · ${auth.displayName}` : `staff · ${auth.displayName}`
+  }
+  if (config.role === 'client') return auth.me.phone ?? auth.displayName
+  if (config.role === 'admin') return auth.displayName
+  return config.tenantMeta
+})
+const tenantInitial = computed(() =>
+  (tenantLabel.value.trim().slice(0, 1) || config.roleLabel[0]).toUpperCase(),
 )
 const dropdownOptions = computed(() => {
   if (config.role !== 'workshop') return config.dropdownOptions
@@ -53,25 +74,12 @@ const dropdownOptions = computed(() => {
 })
 const visibleNav = computed<NavItem[]>(() => {
   if (config.role !== 'workshop') return config.nav
-  const nav: NavItem[] = [{ label: 'Dashboard', to: '/workshop' }]
-  if (auth.me?.is_owner) {
-    nav.push({ label: 'Orders', to: '/workshop/orders' })
-    nav.push({ label: 'Cutting queue', to: '/workshop/cutting' })
-    nav.push({ label: 'Banding queue', to: '/workshop/banding' })
-    nav.push({ label: 'Branches', to: '/workshop/branches' })
-    nav.push({ label: 'Cutting plans', to: '/workshop/cutting-plans' })
-    nav.push({ label: 'Users', to: '/workshop/settings/users' })
-  } else {
-    const selectedBranch = workshop.branches.find((branch) => branch.id === selectedContext.value)
-    const branch = selectedBranch ?? workshop.branches[0]
-    if (branch) nav.push({ label: 'Branch workspace', to: `/workshop/branches/${branch.id}` })
-    nav.push({ label: 'Orders', to: '/workshop/orders' })
-    nav.push({ label: 'Cutting queue', to: '/workshop/cutting' })
-    nav.push({ label: 'Banding queue', to: '/workshop/banding' })
-    nav.push({ label: 'Cutting plans', to: '/workshop/cutting-plans' })
-  }
-  nav.push({ label: 'Profile', to: '/workshop/profile' })
-  return nav
+  return workshopNavItems({
+    isOwner: auth.me?.is_owner === true,
+    branches: workshop.branches,
+    selectedBranchId: selectedContext.value,
+    path: rolePath,
+  })
 })
 
 function isExternal(to: string) {
@@ -148,12 +156,12 @@ watch(
             class="grid size-8 place-items-center rounded-md bg-accent font-serif text-sm font-bold text-white"
             aria-hidden="true"
           >
-            {{ config.roleLabel.slice(0, 1) }}
+            {{ tenantInitial }}
           </span>
           <span class="min-w-0">
-            <span class="block truncate text-sm font-bold text-ink">{{ config.tenantLabel }}</span>
+            <span class="block truncate text-sm font-bold text-ink">{{ tenantLabel }}</span>
             <span class="block truncate font-mono text-[11px] text-ink-muted">
-              {{ config.tenantMeta }}
+              {{ tenantMeta }}
             </span>
           </span>
         </div>
@@ -207,6 +215,7 @@ watch(
           />
 
           <nav class="ml-auto flex flex-wrap items-center gap-2" aria-label="Top">
+            <NotificationsMenu />
             <template v-for="item in visibleNav" :key="`top-${item.to}`">
               <a
                 v-if="isExternal(item.to)"

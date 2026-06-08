@@ -2,11 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 const auth = useAuthStore()
+const rolePath = useRolePath()
 const orders = useOrdersStore()
 const actionError = ref<string | null>(null)
 
@@ -48,7 +50,9 @@ onMounted(refresh)
         <h1 class="font-serif text-3xl font-semibold text-ink">Cutting queue</h1>
         <p class="mt-2 max-w-2xl text-base text-ink-soft">Orders assigned to the current cutter.</p>
       </div>
-      <RouterLink to="/workshop/orders" class="mp-button mp-button-outline"> Orders </RouterLink>
+      <RouterLink :to="rolePath('/workshop/orders')" class="mp-button mp-button-outline">
+        Orders
+      </RouterLink>
     </div>
 
     <section v-if="orders.loading" class="mp-surface p-5" aria-live="polite">
@@ -81,7 +85,7 @@ onMounted(refresh)
             <RouterLink
               v-for="order in awaiting"
               :key="order.id"
-              :to="`/workshop/orders/${order.id}`"
+              :to="rolePath(`/workshop/orders/${order.id}`)"
               class="grid gap-2 px-5 py-4 no-underline transition hover:bg-sunk"
             >
               <span class="font-mono text-sm font-extrabold text-ink">
@@ -138,7 +142,7 @@ onMounted(refresh)
                   PDF
                 </button>
                 <RouterLink
-                  :to="`/workshop/orders/${order.id}`"
+                  :to="rolePath(`/workshop/orders/${order.id}`)"
                   class="mp-button mp-button-outline"
                 >
                   Detail

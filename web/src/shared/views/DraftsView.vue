@@ -2,12 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
 
 const router = useRouter()
+const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const creating = ref(false)
 const deletingId = ref<string | null>(null)
+const draftPendingDelete = ref<CuttingDraft | null>(null)
 
 const sortedDrafts = computed(() =>
   [...cutting.drafts].sort(
@@ -38,18 +42,27 @@ async function newCutting() {
   creating.value = true
   try {
     const draft = await cutting.createDraft()
-    await router.push(`/c/cutting/${draft.id}`)
+    await router.push(rolePath(`/c/cutting/${draft.id}`))
   } finally {
     creating.value = false
   }
 }
 
-async function deleteDraft(draft: CuttingDraft) {
-  const partCount = draft.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0)
-  if (!window.confirm(`Delete this draft with ${partCount} parts? This cannot be undone.`)) return
+const pendingDeletePartCount = computed(
+  () => draftPendingDelete.value?.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0) ?? 0,
+)
+
+function requestDeleteDraft(draft: CuttingDraft) {
+  draftPendingDelete.value = draft
+}
+
+async function confirmDeleteDraft() {
+  const draft = draftPendingDelete.value
+  if (!draft) return
   deletingId.value = draft.id
   try {
     await cutting.deleteDraft(draft.id)
+    draftPendingDelete.value = null
   } finally {
     deletingId.value = null
   }
@@ -137,14 +150,17 @@ onMounted(() => {
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <RouterLink :to="`/c/cutting/${draft.id}`" class="mp-button mp-button-primary">
+            <RouterLink
+              :to="rolePath(`/c/cutting/${draft.id}`)"
+              class="mp-button mp-button-primary"
+            >
               Open
             </RouterLink>
             <button
               type="button"
               class="mp-button mp-button-outline text-danger"
               :disabled="deletingId === draft.id"
-              @click="deleteDraft(draft)"
+              @click="requestDeleteDraft(draft)"
             >
               {{ deletingId === draft.id ? 'Deleting' : 'Delete' }}
             </button>
@@ -152,5 +168,16 @@ onMounted(() => {
         </article>
       </div>
     </section>
+
+    <ConfirmDialog
+      :open="Boolean(draftPendingDelete)"
+      title="Delete draft"
+      :message="`Delete this draft with ${pendingDeletePartCount} parts? This cannot be undone.`"
+      confirm-label="Delete draft"
+      danger
+      :busy="deletingId !== null"
+      @cancel="draftPendingDelete = null"
+      @confirm="confirmDeleteDraft"
+    />
   </section>
 </template>

@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-06-07
 order: 60
 ---
 
@@ -65,4 +65,4 @@ In all three apps (client / workshop / superadmin), in the top bar:
 ## Next
 
 [`platform.md`](platform.md) — the jobs that produce some of these (low-stock summary,
-cutting-draft expiry) and the error monitor that notifies operators on a job failure.
+job failure) and the error monitor that notifies operators on an error spike.

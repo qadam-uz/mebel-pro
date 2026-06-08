@@ -62,6 +62,26 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopCuttingPlansView.vue'),
   },
   {
+    path: '/workshop/finance',
+    name: 'workshop-finance',
+    component: () => import('@/shared/views/WorkshopFinanceView.vue'),
+  },
+  {
+    path: '/workshop/finance/income',
+    name: 'workshop-finance-income',
+    component: () => import('@/shared/views/WorkshopFinanceIncomeView.vue'),
+  },
+  {
+    path: '/workshop/finance/expenses',
+    name: 'workshop-finance-expenses',
+    component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
+  },
+  {
+    path: '/workshop/finance/production',
+    name: 'workshop-finance-production',
+    component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),
+  },
+  {
     path: '/workshop/cutting-plans/:result_id',
     name: 'workshop-cutting-plan-detail',
     component: () => import('@/shared/views/WorkshopCuttingPlanDetailView.vue'),

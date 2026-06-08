@@ -7,7 +7,14 @@ import { describe, expect, it } from 'vitest'
 import { adminRoutes } from '@/apps/admin/routes'
 import { clientRoutes } from '@/apps/client/routes'
 import { workshopRoutes } from '@/apps/workshop/routes'
-import { resolveHistoryBase } from '@/shared/app/createRoleApp'
+import {
+  normalizeRoleConfig,
+  normalizeRolePath,
+  normalizeRoleRoutes,
+  resolveHistoryBase,
+} from '@/shared/app/createRoleApp'
+import { rolePath } from '@/shared/app/paths'
+import { adminConfig, workshopConfig } from '@/shared/app/roleConfig'
 
 function routePaths(routes: { path: string }[]) {
   return routes.map((route) => route.path)
@@ -29,6 +36,57 @@ describe('role route matrix', () => {
     expect(resolveHistoryBase('/client', '/c', true)).toBe('/')
     expect(resolveHistoryBase('/admin', '/admin/profile', false)).toBe('/')
     expect(resolveHistoryBase('/workshop', '/workshop/settings/users', false)).toBe('/')
+  })
+
+  it('normalizes role-prefixed paths when a dev app is mounted under a role base', () => {
+    expect(normalizeRolePath('/admin', '/admin', '/admin/')).toBe('/')
+    expect(normalizeRolePath('/admin/workshops', '/admin', '/admin/')).toBe('/workshops')
+    expect(normalizeRolePath('/auth/login', '/admin', '/admin/')).toBe('/auth/login')
+    expect(normalizeRolePath('/admin/workshops', '/admin', '/')).toBe('/admin/workshops')
+  })
+
+  it('normalizes role links for local dev without changing production host-root paths', () => {
+    expect(rolePath('/admin/workshops/123', 'admin', '/admin/workshops', true)).toBe(
+      '/workshops/123',
+    )
+    expect(rolePath('/workshop/orders/123', 'workshop', '/workshop/orders', true)).toBe(
+      '/orders/123',
+    )
+    expect(rolePath('/c/orders/123', 'client', '/client/c/orders', true)).toBe('/c/orders/123')
+    expect(rolePath('/admin/workshops/123', 'admin', '/workshops', false)).toBe(
+      '/admin/workshops/123',
+    )
+  })
+
+  it('keeps direct dev URLs aligned with production route inventories', () => {
+    expect(routePaths(normalizeRoleRoutes(adminRoutes, '/admin', '/admin/'))).toEqual([
+      '/auth/login',
+      '/',
+      '/profile',
+      '/workshops',
+      '/catalog',
+      '/platform/jobs',
+      '/platform/errors',
+      '/platform/users',
+      '/audit',
+      '/workshops/:workshop_id',
+      '/:pathMatch(.*)*',
+    ])
+    expect(
+      normalizeRoleConfig(adminConfig, '/admin', '/admin/').nav.map((item) => item.to),
+    ).toEqual([
+      '/',
+      '/workshops',
+      '/catalog',
+      '/platform/jobs',
+      '/platform/errors',
+      '/platform/users',
+      '/audit',
+      '/profile',
+      '/docs',
+      '/api-docs',
+    ])
+    expect(normalizeRoleConfig(workshopConfig, '/workshop', '/workshop/').homePath).toBe('/')
   })
 
   it('keeps the documented initial route inventories', () => {
@@ -58,6 +116,10 @@ describe('role route matrix', () => {
       '/workshop/branches',
       '/workshop/branches/:branch_id',
       '/workshop/cutting-plans',
+      '/workshop/finance',
+      '/workshop/finance/income',
+      '/workshop/finance/expenses',
+      '/workshop/finance/production',
       '/workshop/cutting-plans/:result_id',
       '/workshop/settings/users/:user_id',
       '/:pathMatch(.*)*',
@@ -69,6 +131,10 @@ describe('role route matrix', () => {
       '/admin/profile',
       '/admin/workshops',
       '/admin/catalog',
+      '/admin/platform/jobs',
+      '/admin/platform/errors',
+      '/admin/platform/users',
+      '/admin/audit',
       '/admin/workshops/:workshop_id',
       '/:pathMatch(.*)*',
     ])
@@ -78,6 +144,17 @@ describe('role route matrix', () => {
     const files = sourceFiles(join(process.cwd(), 'src'))
     const nativeSelectTag = '<sel' + 'ect'
     const offenders = files.filter((file) => readFileSync(file, 'utf8').includes(nativeSelectTag))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('does not use native browser dialogs in app source', () => {
+    const files = sourceFiles(join(process.cwd(), 'src'))
+    const nativeDialogCalls = ['window.' + 'alert', 'window.' + 'confirm', 'window.' + 'prompt']
+    const offenders = files.filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return nativeDialogCalls.some((call) => source.includes(`${call}(`))
+    })
 
     expect(offenders).toEqual([])
   })

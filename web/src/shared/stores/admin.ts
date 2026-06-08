@@ -72,6 +72,122 @@ export interface Material {
   updated_at: string
 }
 
+export type PlatformUserStatus = 'active' | 'blocked'
+export type JobRunStatus = 'running' | 'ok' | 'failed' | 'skipped'
+export type ErrorRecordStatus = 'open' | 'resolved'
+
+export interface PlatformUser {
+  id: string
+  login: string
+  full_name: string
+  phone: string
+  status: PlatformUserStatus
+  password_reset_required: boolean
+  failed_login_count: number
+  locked_until: string | null
+  last_login_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PlatformUserTempPasswordResponse {
+  user: PlatformUser
+  temp_password: string
+}
+
+export interface JobDefinition {
+  id: string
+  name: string
+  schedule: string
+  enabled: boolean
+  running: boolean
+  last_run_at: string | null
+  last_result: JobRunStatus | null
+  updated_at: string
+}
+
+export interface JobRun {
+  id: string
+  job_definition_id: string | null
+  job_name: string
+  status: JobRunStatus
+  started_at: string
+  finished_at: string | null
+  brief_log: string | null
+  error_code: string | null
+  error_message: string | null
+  trace_id: string | null
+}
+
+export interface PlatformJobSummary {
+  definition: JobDefinition
+  recent_runs: JobRun[]
+}
+
+export interface ErrorRecord {
+  id: string
+  code: string
+  module: string
+  status: ErrorRecordStatus
+  count_24h: number
+  count_7d: number
+  last_occurred_at: string | null
+  preview_message: string | null
+  resolved_by_user_id: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ErrorOccurrence {
+  id: string
+  error_record_id: string
+  trace_id: string
+  message: string
+  stack: string | null
+  context: Record<string, unknown> | null
+  workshop_id: string | null
+  user_id: string | null
+  occurred_at: string
+}
+
+export interface ErrorRecordDetail {
+  record: ErrorRecord
+  occurrences: ErrorOccurrence[]
+}
+
+export interface ActionLog {
+  id: string
+  actor_type: 'platform_user' | 'workshop_user' | 'client' | 'system'
+  actor_user_id: string | null
+  actor_client_id: string | null
+  workshop_id: string | null
+  branch_id: string | null
+  action: string
+  entity_type: string | null
+  entity_id: string | null
+  summary: string | null
+  details: Record<string, unknown> | null
+  trace_id: string
+  created_at: string
+}
+
+export interface StatusChangeLog {
+  id: string
+  entity_type: string
+  entity_id: string
+  workshop_id: string | null
+  branch_id: string | null
+  from_status: string | null
+  to_status: string
+  actor_type: 'platform_user' | 'workshop_user' | 'client' | 'system'
+  actor_user_id: string | null
+  actor_client_id: string | null
+  reason: string | null
+  action_log_id: string | null
+  changed_at: string
+}
+
 export interface CatalogFilters {
   search?: string
   status?: MaterialStatus | null
@@ -94,12 +210,22 @@ export const useAdminStore = defineStore('admin', () => {
   const lastProvision = ref<ProvisionWorkshopResponse | null>(null)
   const manufacturers = ref<Manufacturer[]>([])
   const materials = ref<Material[]>([])
+  const platformUsers = ref<PlatformUser[]>([])
+  const lastPlatformUserSecret = ref<PlatformUserTempPasswordResponse | null>(null)
+  const jobs = ref<PlatformJobSummary[]>([])
+  const errors = ref<ErrorRecord[]>([])
+  const errorDetail = ref<ErrorRecordDetail | null>(null)
+  const auditActions = ref<ActionLog[]>([])
+  const auditStatusChanges = ref<StatusChangeLog[]>([])
   const loading = ref(false)
   const catalogLoading = ref(false)
+  const opsLoading = ref(false)
   const error = ref<string | null>(null)
   const catalogError = ref<string | null>(null)
+  const opsError = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   const catalogTraceId = ref<string | null>(null)
+  const opsTraceId = ref<string | null>(null)
   const auth = useAuthStore()
 
   function authInit() {
@@ -275,18 +401,171 @@ export const useAdminStore = defineStore('admin', () => {
     materials.value = materials.value.map((row) => (row.id === updated.id ? updated : row))
   }
 
+  async function loadPlatformUsers() {
+    opsLoading.value = true
+    opsError.value = null
+    opsTraceId.value = null
+    try {
+      platformUsers.value = await api.get<PlatformUser[]>('/platform/users', authInit())
+    } catch (errorValue) {
+      opsError.value = 'platform_users_load_failed'
+      opsTraceId.value = apiTraceId(errorValue)
+    } finally {
+      opsLoading.value = false
+    }
+  }
+
+  async function createPlatformUser(payload: unknown) {
+    lastPlatformUserSecret.value = await api.post<PlatformUserTempPasswordResponse>(
+      '/platform/users',
+      payload,
+      authInit(),
+    )
+    platformUsers.value = [lastPlatformUserSecret.value.user, ...platformUsers.value]
+    return lastPlatformUserSecret.value
+  }
+
+  async function updatePlatformUser(id: string, payload: unknown) {
+    const updated = await api.patch<PlatformUser>(`/platform/users/${id}`, payload, authInit())
+    patchPlatformUser(updated)
+    return updated
+  }
+
+  async function resetPlatformUserPassword(id: string) {
+    lastPlatformUserSecret.value = await api.post<PlatformUserTempPasswordResponse>(
+      `/platform/users/${id}/reset-password`,
+      undefined,
+      authInit(),
+    )
+    patchPlatformUser(lastPlatformUserSecret.value.user)
+    return lastPlatformUserSecret.value
+  }
+
+  async function blockPlatformUser(id: string, reason: string) {
+    const updated = await api.post<PlatformUser>(
+      `/platform/users/${id}/block`,
+      { reason },
+      authInit(),
+    )
+    patchPlatformUser(updated)
+    return updated
+  }
+
+  async function unblockPlatformUser(id: string) {
+    const updated = await api.post<PlatformUser>(
+      `/platform/users/${id}/unblock`,
+      undefined,
+      authInit(),
+    )
+    patchPlatformUser(updated)
+    return updated
+  }
+
+  function patchPlatformUser(updated: PlatformUser) {
+    platformUsers.value = platformUsers.value.map((row) => (row.id === updated.id ? updated : row))
+  }
+
+  async function loadJobs() {
+    opsLoading.value = true
+    opsError.value = null
+    opsTraceId.value = null
+    try {
+      jobs.value = await api.get<PlatformJobSummary[]>('/platform/jobs', authInit())
+    } catch (errorValue) {
+      opsError.value = 'jobs_load_failed'
+      opsTraceId.value = apiTraceId(errorValue)
+    } finally {
+      opsLoading.value = false
+    }
+  }
+
+  async function runJob(name: string) {
+    const run = await api.post<JobRun>(`/platform/jobs/${name}/run`, undefined, authInit())
+    const row = jobs.value.find((job) => job.definition.name === name)
+    if (row) {
+      row.definition.last_run_at = run.started_at
+      row.definition.last_result = run.status
+      row.recent_runs = [run, ...row.recent_runs].slice(0, 5)
+    }
+    return run
+  }
+
+  async function loadErrors() {
+    opsLoading.value = true
+    opsError.value = null
+    opsTraceId.value = null
+    try {
+      errors.value = await api.get<ErrorRecord[]>('/platform/errors', authInit())
+    } catch (errorValue) {
+      opsError.value = 'errors_load_failed'
+      opsTraceId.value = apiTraceId(errorValue)
+    } finally {
+      opsLoading.value = false
+    }
+  }
+
+  async function loadErrorDetail(id: string) {
+    errorDetail.value = await api.get<ErrorRecordDetail>(`/platform/errors/${id}`, authInit())
+    patchError(errorDetail.value.record)
+    return errorDetail.value
+  }
+
+  async function resolveError(id: string) {
+    const updated = await api.post<ErrorRecord>(
+      `/platform/errors/${id}/resolve`,
+      undefined,
+      authInit(),
+    )
+    patchError(updated)
+    if (errorDetail.value?.record.id === id) errorDetail.value.record = updated
+    return updated
+  }
+
+  function patchError(updated: ErrorRecord) {
+    errors.value = errors.value.map((row) => (row.id === updated.id ? updated : row))
+  }
+
+  async function loadAudit() {
+    opsLoading.value = true
+    opsError.value = null
+    opsTraceId.value = null
+    try {
+      const [actions, statusChanges] = await Promise.all([
+        api.get<ActionLog[]>('/platform/audit/actions', authInit()),
+        api.get<StatusChangeLog[]>('/platform/audit/status-changes', authInit()),
+      ])
+      auditActions.value = actions
+      auditStatusChanges.value = statusChanges
+    } catch (errorValue) {
+      opsError.value = 'audit_load_failed'
+      opsTraceId.value = apiTraceId(errorValue)
+    } finally {
+      opsLoading.value = false
+    }
+  }
+
   return {
     workshops,
     detail,
     lastProvision,
     manufacturers,
     materials,
+    platformUsers,
+    lastPlatformUserSecret,
+    jobs,
+    errors,
+    errorDetail,
+    auditActions,
+    auditStatusChanges,
     loading,
     catalogLoading,
+    opsLoading,
     error,
     catalogError,
+    opsError,
     traceId,
     catalogTraceId,
+    opsTraceId,
     loadWorkshops,
     loadWorkshop,
     provision,
@@ -300,5 +579,17 @@ export const useAdminStore = defineStore('admin', () => {
     createMaterial,
     updateMaterial,
     setMaterialStatus,
+    loadPlatformUsers,
+    createPlatformUser,
+    updatePlatformUser,
+    resetPlatformUserPassword,
+    blockPlatformUser,
+    unblockPlatformUser,
+    loadJobs,
+    runJob,
+    loadErrors,
+    loadErrorDetail,
+    resolveError,
+    loadAudit,
   }
 })

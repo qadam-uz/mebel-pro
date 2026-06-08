@@ -1,10 +1,11 @@
 from http.cookies import SimpleCookie
 
-from app.api.routes.auth import REFRESH_COOKIE_NAME
 from app.models.enums import UserStatus
-from app.services.seed import seed_platform_user, seed_workshop_with_owner
+from app.modules.access.routes import REFRESH_COOKIE_NAME
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_platform_user, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:

@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 40
 ---
 
@@ -53,7 +53,7 @@ tegmaydi.
 | `id` | UUID | PK |
 | `draft_id` | UUID? | the draft this result came from; null once `confirmed` (the draft is gone, the result outlives it via `order_id`) |
 | `algorithm_name` / `algorithm_version` | text | e.g. `ffd-guillotine` / `1.0` — stamped at run time |
-| `status` | enum | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order) · `invalidated` (was confirmed; an order modify produced a fresher result) |
+| `status` | enum | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order) |
 | `kerf_mm` / `edge_trim_mm` | int | snapshot of the global constants at run time |
 | `panels_used_by_material` | json | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material) |
 | `waste_percentage` | numeric | 0.0–1.0; weighted across all panel materials in the result |
@@ -65,24 +65,22 @@ tegmaydi.
 | `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json | source-split edge consumption, edge material id boʻyicha keyed, integer millimetre'da; har bir banded side uchun fixed 30 mm overhang'ni qoʻshadi |
 | `edge_banded_sides_by_material` | json | `{ "<edge-material_id>": { "shop": 4, "own": 2 } }` — consumption va Phase 5 stock math'ni feed qiladigan source-split banded side count |
 | `order_id` | UUID? | the order it's bound to, once `confirmed` |
-| `created_at` / `confirmed_at` / `invalidated_at` | timestamps | as the lifecycle moves |
+| `created_at` / `confirmed_at` | timestamps | as the lifecycle moves |
 
 Lifecycle: optimise'da `candidate` → order placement'da `confirmed` (`order_id` set,
-`confirmed_at`, `draft_id` clear) → order'ni modify qilish yangi result kerak qiladigan
-holatda `invalidated` (yangi result bind qilinadi; bu esa saqlanadi). `confirmed` va
-`invalidated` cheksiz saqlanadi; `candidate` result'lar qisqa muddatli (keyingi optimise
-call'da, ular tanlanmagan order placement'da yoki draft bilan birga oʻchiriladi).
+`confirmed_at`, `draft_id` clear). `confirmed` result'lar cheksiz saqlanadi; `candidate`
+result'lar qisqa muddatli (keyingi optimise call'da, ular tanlanmagan order placement'da yoki
+draft bilan birga oʻchiriladi).
 
 Invariant'lar: yaratilgandan keyin **immutable** — faqat `status`, `order_id`,
-`confirmed_at`, `invalidated_at` va `draft_id` (confirm'da clear qilinadi) oʻzgaradi;
-layout, metric, snapshot va per-panel row'lar hech qachon oʻzgarmaydi. Result draft
-oʻchirilgandan yoki catalog display fact'lari oʻzgargandan keyin confirmed plan'ni render
-qilish uchun yetarli source/material snapshot'larni olib yuradi. `confirmed` / `invalidated`
-result'ning `order_id`'i null emas; `candidate`'ning `draft_id`'i null emas.
-`panels_used_by_material`'dagi har bir material uchun count ≤ 20; result manba parts
-list'idagi har bir part-instance'ni qoplaydigan placement'lar bilan keladi. `candidate`
-holatida faqat draft yaratuvchisiga koʻrinadi; `confirmed` / `invalidated` boʻlganda
-scope'idagi workshop staff'iga va client'ga koʻrinadi.
+`confirmed_at` va `draft_id` (confirm'da clear qilinadi) oʻzgaradi; layout, metric, snapshot
+va per-panel row'lar hech qachon oʻzgarmaydi. Result draft oʻchirilgandan yoki catalog display
+fact'lari oʻzgargandan keyin confirmed plan'ni render qilish uchun yetarli source/material
+snapshot'larni olib yuradi. `confirmed` result'ning `order_id`'i null emas; `candidate`'ning
+`draft_id`'i null emas. `panels_used_by_material`'dagi har bir material uchun count ≤ 20; result
+manba parts list'idagi har bir part-instance'ni qoplaydigan placement'lar bilan keladi.
+`candidate` holatida faqat draft yaratuvchisiga koʻrinadi; `confirmed` boʻlganda scope'idagi
+workshop staff'iga va client'ga koʻrinadi.
 
 ## Cutting panel
 

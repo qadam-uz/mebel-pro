@@ -1,9 +1,11 @@
 import asyncio
 
-from app.models import Base
+from app.models import Base, import_all_models
 from app.models.enums import JobRunStatus
-from app.services.scheduler import JobRegistry, RegisteredJob
+from app.modules.platform.scheduler import JobRegistry, RegisteredJob
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+import_all_models()
 
 
 async def test_job_registry_skips_concurrent_runs() -> None:

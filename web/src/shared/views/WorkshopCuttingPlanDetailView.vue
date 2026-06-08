@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import {
   metres,
@@ -12,6 +13,7 @@ import {
 } from '@/shared/stores/cutting'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const resultId = computed(() => String(route.params.result_id))
 const activePanelId = ref<string | null>(null)
@@ -51,7 +53,7 @@ onMounted(async () => {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink to="/workshop/cutting-plans" class="text-sm font-bold text-accent">
+        <RouterLink :to="rolePath('/workshop/cutting-plans')" class="text-sm font-bold text-accent">
           Cutting plans
         </RouterLink>
         <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Read-only cutting plan</h1>

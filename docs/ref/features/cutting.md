@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 80
 ---
 
@@ -49,9 +49,9 @@ A draft owns:
   the chosen panel material. Edge thickness and colour are properties of the chosen edge
   material — the user picks the tape, not a thickness.
 - **Algorithm results.** Re-running the optimiser produces one result per available
-  algorithm in a single call (all run in parallel against the same input). All N results are
-  kept on the draft until the next run replaces them. The client picks one as the **chosen**
-  result; the chosen one is what binds to an order.
+  algorithm in a single call against the same input. All N results are kept on the draft until
+  the next run replaces them. The client picks one as the **chosen** result; the chosen one is
+  what binds to an order.
 
 Each algorithm result records: `algorithm_name`, `algorithm_version`, per-material panels
 and their placements, weighted `waste_percentage`, `panels_used_by_material`,
@@ -66,13 +66,11 @@ stateDiagram-v2
     [*] --> draft : client opens "New cutting"
     draft --> draft : edit parts · run optimiser · pick algorithm
     draft --> confirmed : client places an order with the chosen result
-    confirmed --> invalidated : order modify re-runs the optimiser (a new result is bound; this one is kept for audit)
     confirmed --> [*]
-    invalidated --> [*]
 ```
 
-- `draft` is mutable. `confirmed` and `invalidated` are immutable and kept forever — they're
-  the historical record an order points at.
+- `draft` is mutable. `confirmed` is immutable and kept forever — it is the historical
+  record an order points at.
 - Re-running the optimiser on a `draft` replaces all algorithm results in-place. No
   intermediate-run history.
 - On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
@@ -103,8 +101,8 @@ stateDiagram-v2
 
 - **One run, multiple materials, multiple algorithms.** A run takes all parts, groups them
   by panel material, and produces an independent layout per material (panels aren't shared
-  across materials — different thicknesses, colours). Every available algorithm runs
-  concurrently against the same input; all results are returned.
+  across materials — different thicknesses, colours). Every available algorithm runs against
+  the same input in the same request; all results are returned.
 - **Winner = lowest weighted waste %.** Pre-selected as the chosen result; the client may
   switch to a different algorithm's result if the trade favours fewer panels or different
   cut topology.
@@ -324,16 +322,13 @@ panel material, last-edited time (relative), the preferred branch chip when set,
 action. Empty: "No saved cuttings — start a new one." No expiry chip — drafts persist until
 the client deletes them or hits the cap.
 
-### Read-only view (`/c/cutting/:id` when `confirmed` / `invalidated`)
+### Read-only view (`/c/cutting/:id` when `confirmed`)
 
-Same workspace, editing disabled, with a banner naming the bound order. An **invalidated**
-result also says "a newer cutting result is bound to this order" with a link to it.
+Same workspace, editing disabled, with a banner naming the bound order.
 
 ### Workshop side
 
 An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
-If the result is `invalidated` (a modify produced a fresher one), the tab flags it and
-links to the current result.
 
 ## Edge cases
 
@@ -359,10 +354,9 @@ links to the current result.
   not-carried recovery affordances on every row, plus a banner pointing at the branch's
   status; the client clears or changes the pre-filter to unlock.
 - **`cutting_result_not_usable`** — the order step finds the draft is already `confirmed`
-  or `invalidated` (concurrent placement, or back-navigation after placing) → redirect to
-  its detail.
-- **Algorithm replaced later** — old `confirmed` / `invalidated` results stay exactly as
-  they were, stamped with the old algorithm version; their PDFs are not regenerated.
+  (concurrent placement, or back-navigation after placing) → redirect to its detail.
+- **Algorithm replaced later** — old `confirmed` results stay exactly as they were,
+  stamped with the old algorithm version; their PDFs are not regenerated.
 - **A workshop deactivates an edge material that's set as a per-side preference on an
   in-flight draft** — same handling as a deactivated panel: row flagged on next open, edge
   side cleared with a one-tap "pick replacement" affordance that opens the edge picker with
@@ -370,8 +364,8 @@ links to the current result.
 
 ## Next
 
-- [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order, when it's
-  invalidated, which cutting metrics drive which price component.
+- [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order and which
+  cutting metrics drive which price component.
 - [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog (manufacturers,
   panels, edges) the wizard reads from, and the branch's selection that drives the
   pre-filter.

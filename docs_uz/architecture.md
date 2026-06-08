@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-08
 order: 70
 ---
 
@@ -87,6 +87,53 @@ Har bir SPA oʻz API'si bilan same-origin qoladi (CORS yoʻq).
 - **One external integration** — Telegram Gateway, faqat client sign-in OTP code'larini deliver qilish uchun.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge
   (prod'da yagona published service — HTTPS + Let's Encrypt). `main` ga push.
+
+## Backend modules
+
+Backend **module-first modular monolith**. Module'lar bitta FastAPI process, bitta SQLAlchemy
+metadata registry, bitta Postgres database va bitta request transaction'ni share qiladi; ular
+boshqa module'ning private ORM model implementation'i yoki private service function'larini import
+qilmaydi. Bir module boshqa module'ni faqat uning public API'si (`api.py`) yoki stable
+contract'lari (`contracts.py`) orqali call qilishi mumkin.
+
+Implementation `backend/app/modules/<module>/` ostida yashaydi. Har bir module'da cross-module
+use case'lar uchun `api.py`, stable shared shape'lar va explicit persistence contract'lar uchun
+`contracts.py`, SQLAlchemy ORM class'lari uchun `models.py`, API request/response model'lari uchun
+`schemas.py` yoki named `*_schemas.py` file'lari, va `service.py`, `users.py`, `setup.py`,
+`optimizer.py`, yoki `rendering.py` kabi private implementation file'lar bor. Domain route
+implementation'lari owning module bilan birga `routes.py` yoki named `*_routes.py` sifatida
+yashaydi; top-level `backend/app/api/router.py` faqat shu router'larni mount qiladi, va
+`backend/app/api/routes/` health check kabi meta route'lar uchun reserved.
+`backend/app/models/base.py` va `backend/app/models/enums.py` shared infrastructure/value
+definition'lar, va `backend/app/schemas/common.py` shared API schema base/meta response'larni
+ushlaydi. `backend/app/models/`, `backend/app/schemas/`, yoki `backend/app/services/` ostidagi
+layer-first domain file'lar retired va qayta kiritilmasligi kerak.
+`backend/app/models/__init__.py` `Base` va explicit `import_all_models()` bootstrap'ni expose
+qiladi; undan Alembic va test'lar foydalanadi, shunda metadata registration normal module
+import'lari paytida import cycle yaratmaydi.
+
+Cross-module behavior `api.py` orqali oʻtadi. Agar same-transaction SQL query boshqa module'ning
+table class'ini talab qilsa, u class'ni owning module'ning `contracts.py` file'idan import qiladi,
+owning module'ning private `models.py` file'idan emas. Bu qolgan persistence coupling'ni explicit
+qiladi va shu envelope'da faqat SQLAlchemy call'larini forward qiladigan repository layer'larni
+qoʻshmaydi.
+
+| Module | Owns |
+|---|---|
+| `access` | platform/workshop/client identity, sessions, OTP, password gates, permission checks |
+| `client_portal` | client profile, public branch browsing, client-visible catalog reads |
+| `workshop` | workshops, branches, branch context, workshop settings |
+| `catalog` | manufacturers, platform materials, branch material selection, branch pricing |
+| `inventory` | stock items, suppliers, stock transactions, stock consume/restore seams |
+| `cutting` | cutting drafts, optimizer results, panel layouts, PDFs |
+| `sales` | orders, order state transitions, frozen price snapshots, order status events |
+| `finance` | income, expenses, settlement summaries, finance and production reports |
+| `support` | files, audit/status logs, notifications inbox |
+| `platform` | workshop provisioning orchestration, jobs, error monitor, platform users |
+
+App-facing route'lar module API'larini compose qilishi mumkin, lekin domain owner'ga aylanmaydi.
+Public branch'larni browse qiladigan client-portal route ham `workshop`/`catalog` orqali oʻqiydi;
+order cutting plan'ni koʻrsatadigan workshop route ham `sales`/`cutting` orqali oʻqiydi.
 
 ## Three SPAs + a static landing
 

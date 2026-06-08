@@ -18,7 +18,7 @@ from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, PermissionGrantKey
 from app.core.trace import get_trace_id
 from app.models.enums import Permission
-from app.services.sessions import (
+from app.modules.access.api import (
     get_session_by_access_token,
     principal_from_session,
     revoke_session,

@@ -4,8 +4,10 @@ import { RouterLink } from 'vue-router'
 
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore } from '@/shared/stores/workshop'
+import { useRolePath } from '@/shared/app/paths'
 
 const workshop = useWorkshopStore()
+const rolePath = useRolePath()
 const files = useFilesStore()
 const savingSettings = ref(false)
 const creatingBranch = ref(false)
@@ -310,7 +312,7 @@ onMounted(async () => {
         <RouterLink
           v-for="branch in workshop.managedBranches"
           :key="branch.id"
-          :to="`/workshop/branches/${branch.id}`"
+          :to="rolePath(`/workshop/branches/${branch.id}`)"
           class="grid gap-3 px-5 py-4 no-underline md:grid-cols-[1fr_auto]"
         >
           <span class="min-w-0">

@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 
 from app.core.db import SessionLocal
 from app.core.security import hash_password
-from app.models.identity import PlatformUser
+from app.modules.access.contracts import PlatformUser
 
 
 def main(argv: Sequence[str] | None = None) -> None:

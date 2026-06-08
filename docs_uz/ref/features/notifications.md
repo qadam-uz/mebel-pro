@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-05-17
+updated: 2026-06-07
 order: 60
 ---
 
@@ -67,5 +67,4 @@ Uchala app'da ham (client / workshop / superadmin), top bar'da:
 ## Next
 
 [`platform.md`](platform.md) — bularning ba'zilarini ishlab chiqaradigan job'lar (low-stock
-summary, cutting-draft expiry) va job failure'da operator'larni notify qiladigan error
-monitor.
+summary, job failure) va error spike'da operator'larni notify qiladigan error monitor.

@@ -2,9 +2,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const rolePath = useRolePath()
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const form = reactive({
@@ -93,82 +95,137 @@ onMounted(admin.loadWorkshops)
 
     <section class="mp-surface p-5">
       <h2 class="font-serif text-xl font-semibold">Provision workshop</h2>
-      <form class="mt-5 grid gap-3 md:grid-cols-3" @submit.prevent="createWorkshop">
-        <input
-          v-model="form.name"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Workshop name"
-          required
-        />
-        <input
-          v-model="form.code"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Code"
-        />
-        <input
-          v-model="form.phone"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Workshop phone"
-          required
-        />
-        <input
-          v-model="form.address"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Workshop address"
-        />
-        <input
-          v-model="form.branchName"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="First branch"
-          required
-        />
-        <input
-          v-model="form.branchAddress"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Branch address"
-          required
-        />
-        <input
-          v-model="form.branchPhone"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Branch phone"
-          required
-        />
-        <input
-          v-model="form.latitude"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Latitude"
-          required
-        />
-        <input
-          v-model="form.longitude"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Longitude"
-          required
-        />
-        <input
-          v-model="form.ownerName"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Owner name"
-          required
-        />
-        <input
-          v-model="form.ownerLogin"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Owner login"
-          required
-        />
-        <input
-          v-model="form.ownerPhone"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Owner phone"
-          required
-        />
-        <input
-          v-model="form.tempPassword"
-          class="min-h-11 rounded-md border border-hairline-strong px-3"
-          placeholder="Temp password"
-        />
+      <form class="mt-5 grid gap-4 md:grid-cols-3" @submit.prevent="createWorkshop">
+        <label class="block text-sm font-bold text-ink" for="provision-workshop-name">
+          Workshop name
+          <input
+            id="provision-workshop-name"
+            v-model="form.name"
+            class="mp-input mt-1"
+            autocomplete="organization"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-workshop-code">
+          Code
+          <input
+            id="provision-workshop-code"
+            v-model="form.code"
+            class="mp-input mt-1"
+            autocomplete="off"
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-workshop-phone">
+          Workshop phone
+          <input
+            id="provision-workshop-phone"
+            v-model="form.phone"
+            class="mp-input mt-1"
+            autocomplete="tel"
+            inputmode="tel"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-workshop-address">
+          Workshop address
+          <input
+            id="provision-workshop-address"
+            v-model="form.address"
+            class="mp-input mt-1"
+            autocomplete="street-address"
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-branch-name">
+          First branch
+          <input
+            id="provision-branch-name"
+            v-model="form.branchName"
+            class="mp-input mt-1"
+            autocomplete="organization-title"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-branch-address">
+          Branch address
+          <input
+            id="provision-branch-address"
+            v-model="form.branchAddress"
+            class="mp-input mt-1"
+            autocomplete="street-address"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-branch-phone">
+          Branch phone
+          <input
+            id="provision-branch-phone"
+            v-model="form.branchPhone"
+            class="mp-input mt-1"
+            autocomplete="tel"
+            inputmode="tel"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-branch-latitude">
+          Latitude
+          <input
+            id="provision-branch-latitude"
+            v-model="form.latitude"
+            class="mp-input mt-1"
+            inputmode="decimal"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-branch-longitude">
+          Longitude
+          <input
+            id="provision-branch-longitude"
+            v-model="form.longitude"
+            class="mp-input mt-1"
+            inputmode="decimal"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-owner-name">
+          Owner name
+          <input
+            id="provision-owner-name"
+            v-model="form.ownerName"
+            class="mp-input mt-1"
+            autocomplete="name"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-owner-login">
+          Owner login
+          <input
+            id="provision-owner-login"
+            v-model="form.ownerLogin"
+            class="mp-input mt-1"
+            autocomplete="username"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink" for="provision-owner-phone">
+          Owner phone
+          <input
+            id="provision-owner-phone"
+            v-model="form.ownerPhone"
+            class="mp-input mt-1"
+            autocomplete="tel"
+            inputmode="tel"
+            required
+          />
+        </label>
+        <label class="block text-sm font-bold text-ink md:col-span-3" for="provision-temp-password">
+          Temp password
+          <input
+            id="provision-temp-password"
+            v-model="form.tempPassword"
+            class="mp-input mt-1"
+            autocomplete="new-password"
+          />
+        </label>
         <button
           class="mp-button mp-button-primary md:col-span-3"
           type="submit"
@@ -206,7 +263,7 @@ onMounted(admin.loadWorkshops)
         <RouterLink
           v-for="workshop in admin.workshops"
           :key="workshop.id"
-          :to="`/admin/workshops/${workshop.id}`"
+          :to="rolePath(`/admin/workshops/${workshop.id}`)"
           class="grid gap-2 px-5 py-4 no-underline sm:grid-cols-[1fr_auto]"
         >
           <span>

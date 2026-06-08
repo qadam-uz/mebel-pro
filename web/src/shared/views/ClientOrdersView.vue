@@ -2,11 +2,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { clientStatusLabel, useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 const orders = useOrdersStore()
+const rolePath = useRolePath()
 const status = ref('all')
 const search = ref('')
 
@@ -48,7 +50,7 @@ onMounted(() => {
           Track active orders and review completed pickups.
         </p>
       </div>
-      <RouterLink to="/c/cutting/drafts" class="mp-button mp-button-primary">
+      <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary">
         New cutting
       </RouterLink>
     </div>
@@ -105,7 +107,7 @@ onMounted(() => {
               {{ formatTiyin(order.total_tiyin) }} frozen total
             </p>
           </div>
-          <RouterLink :to="`/c/orders/${order.id}`" class="mp-button mp-button-primary">
+          <RouterLink :to="rolePath(`/c/orders/${order.id}`)" class="mp-button mp-button-primary">
             Track
           </RouterLink>
         </article>

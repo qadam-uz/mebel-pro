@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { formatDate, formatTiyin } from '@/shared/formatters'
@@ -15,6 +16,7 @@ import {
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const orders = useOrdersStore()
+const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const branchId = ref('all')
 const status = ref('active')
@@ -95,10 +97,10 @@ onMounted(async () => {
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <RouterLink to="/workshop/cutting" class="mp-button mp-button-outline">
+        <RouterLink :to="rolePath('/workshop/cutting')" class="mp-button mp-button-outline">
           Cutting queue
         </RouterLink>
-        <RouterLink to="/workshop/banding" class="mp-button mp-button-primary">
+        <RouterLink :to="rolePath('/workshop/banding')" class="mp-button mp-button-primary">
           Banding queue
         </RouterLink>
       </div>
@@ -158,7 +160,7 @@ onMounted(async () => {
             <RouterLink
               v-for="order in column.orders.slice(0, 4)"
               :key="order.id"
-              :to="`/workshop/orders/${order.id}`"
+              :to="rolePath(`/workshop/orders/${order.id}`)"
               class="block px-4 py-3 no-underline transition hover:bg-sunk"
             >
               <span class="block font-mono text-xs font-extrabold text-ink">
@@ -205,7 +207,10 @@ onMounted(async () => {
             <div class="font-mono text-sm font-extrabold text-ink lg:text-right">
               {{ formatTiyin(order.total_tiyin) }}
             </div>
-            <RouterLink :to="`/workshop/orders/${order.id}`" class="mp-button mp-button-primary">
+            <RouterLink
+              :to="rolePath(`/workshop/orders/${order.id}`)"
+              class="mp-button mp-button-primary"
+            >
               Open
             </RouterLink>
           </article>

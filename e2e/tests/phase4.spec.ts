@@ -269,10 +269,12 @@ import uuid
 from datetime import UTC, datetime
 
 from app.core.db import SessionLocal
-from app.models.cutting import CuttingResult
+from app.models import import_all_models
 from app.models.enums import ActorType, Currency, CuttingResultStatus, OrderStatus
-from app.models.sales import Order, OrderStatusEvent
+from app.modules.cutting.contracts import CuttingResult
+from app.modules.sales.contracts import Order, OrderStatusEvent
 
+import_all_models()
 
 async def main() -> None:
     now = datetime.now(UTC)

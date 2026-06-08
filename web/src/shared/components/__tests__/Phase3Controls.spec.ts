@@ -2,6 +2,7 @@ import { DOMWrapper, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -57,6 +58,30 @@ describe('Phase 3 shared controls', () => {
     const button = wrapper.get('button')
     const error = wrapper.get('p')
     expect(button.attributes('aria-describedby')).toBe(error.attributes('id'))
+  })
+
+  it('ConfirmDialog focuses cancel, closes with Escape, and emits confirm', async () => {
+    const wrapper = mount(ConfirmDialog, {
+      props: {
+        open: true,
+        title: 'Delete draft',
+        message: 'This cannot be undone.',
+        confirmLabel: 'Delete draft',
+        danger: true,
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    const dialog = new DOMWrapper(document.body.querySelector('[role="dialog"]') as HTMLElement)
+    const buttons = Array.from(document.body.querySelectorAll('button'))
+    expect(document.activeElement).toBe(buttons[0])
+
+    await dialog.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('cancel')).toHaveLength(1)
+
+    await new DOMWrapper(buttons[1] as HTMLButtonElement).trigger('click')
+    expect(wrapper.emitted('confirm')).toHaveLength(1)
   })
 
   it('SearchCombobox filters by typed text and picks with Enter', async () => {

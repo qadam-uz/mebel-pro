@@ -2,7 +2,7 @@ import uuid
 
 import pytest
 from app.models.enums import MaterialSource
-from app.services.optimizer import (
+from app.modules.cutting.api import (
     EDGE_OVERHANG_MM,
     EDGE_TRIM_MM,
     EdgeBandInput,

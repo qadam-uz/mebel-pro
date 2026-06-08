@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { formatTiyin } from '@/shared/formatters'
@@ -11,6 +12,7 @@ import { useOrdersStore } from '@/shared/stores/orders'
 
 const route = useRoute()
 const router = useRouter()
+const rolePath = useRolePath()
 const auth = useAuthStore()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
@@ -86,7 +88,7 @@ async function placeOrder() {
       contact_name: contactName.value,
       contact_phone: contactPhone.value.replace(/\s/g, ''),
     })
-    await router.push(`/c/orders/${order.id}?new=1`)
+    await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
     localError.value = orders.error ?? 'Order could not be placed.'
   } finally {
@@ -111,7 +113,7 @@ onMounted(async () => {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink :to="`/c/cutting/${draftId}`" class="text-sm font-bold text-accent">
+        <RouterLink :to="rolePath(`/c/cutting/${draftId}`)" class="text-sm font-bold text-accent">
           Cutting editor
         </RouterLink>
         <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Place order</h1>

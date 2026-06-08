@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 40
 ---
 
@@ -49,7 +49,7 @@ the algorithm later doesn't touch past results.
 | `id` | UUID | PK |
 | `draft_id` | UUID? | the draft this result came from; null once `confirmed` (the draft is gone, the result outlives it via `order_id`) |
 | `algorithm_name` / `algorithm_version` | text | e.g. `ffd-guillotine` / `1.0` — stamped at run time |
-| `status` | enum | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order) · `invalidated` (was confirmed; an order modify produced a fresher result) |
+| `status` | enum | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order) |
 | `kerf_mm` / `edge_trim_mm` | int | snapshot of the global constants at run time |
 | `panels_used_by_material` | json | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material) |
 | `waste_percentage` | numeric | 0.0–1.0; weighted across all panel materials in the result |
@@ -61,22 +61,21 @@ the algorithm later doesn't touch past results.
 | `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json | source-split edge consumption, keyed by edge material id, in integer millimetres; includes the fixed 30 mm overhang per banded side |
 | `edge_banded_sides_by_material` | json | `{ "<edge-material_id>": { "shop": 4, "own": 2 } }` — source-split count of banded sides feeding consumption and Phase 5 stock math |
 | `order_id` | UUID? | the order it's bound to, once `confirmed` |
-| `created_at` / `confirmed_at` / `invalidated_at` | timestamps | as the lifecycle moves |
+| `created_at` / `confirmed_at` | timestamps | as the lifecycle moves |
 
 Lifecycle: `candidate` on optimise → `confirmed` on order placement (`order_id` set,
-`confirmed_at`, `draft_id` cleared) → `invalidated` when the order is modified in a way that
-needs a fresh result (the new result is bound; this one is kept). `confirmed` and
-`invalidated` are kept forever; `candidate` results are short-lived (deleted on the next
-optimise call, on order placement when they weren't chosen, or with the draft).
+`confirmed_at`, `draft_id` cleared). `confirmed` results are kept forever; `candidate`
+results are short-lived (deleted on the next optimise call, on order placement when they
+weren't chosen, or with the draft).
 
 Invariants: **immutable** after creation — only `status`, `order_id`, `confirmed_at`,
-`invalidated_at`, and `draft_id` (cleared on confirm) change; layout, metrics, snapshots, and
-the per-panel rows never change. A result carries enough source/material snapshots to render a
-confirmed plan after the draft is deleted or catalog display facts change. A `confirmed` /
-`invalidated` result has a non-null `order_id`; a `candidate` has a non-null `draft_id`. For
+and `draft_id` (cleared on confirm) change; layout, metrics, snapshots, and the per-panel
+rows never change. A result carries enough source/material snapshots to render a confirmed
+plan after the draft is deleted or catalog display facts change. A `confirmed` result has a
+non-null `order_id`; a `candidate` has a non-null `draft_id`. For
 each material in `panels_used_by_material`, the count is ≤ 20; the result has placements
 covering every part-instance from the source parts list. Visible only to its draft's creator
-while `candidate`; to workshop staff in scope and the client once `confirmed` / `invalidated`.
+while `candidate`; to workshop staff in scope and the client once `confirmed`.
 
 ## Cutting panel
 

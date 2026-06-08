@@ -2,11 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 const auth = useAuthStore()
+const rolePath = useRolePath()
 const orders = useOrdersStore()
 const actionError = ref<string | null>(null)
 
@@ -48,7 +50,9 @@ onMounted(refresh)
           Edge-banding work assigned to the current bander.
         </p>
       </div>
-      <RouterLink to="/workshop/orders" class="mp-button mp-button-outline"> Orders </RouterLink>
+      <RouterLink :to="rolePath('/workshop/orders')" class="mp-button mp-button-outline">
+        Orders
+      </RouterLink>
     </div>
 
     <section v-if="orders.loading" class="mp-surface p-5" aria-live="polite">
@@ -109,7 +113,10 @@ onMounted(refresh)
               >
                 PDF
               </button>
-              <RouterLink :to="`/workshop/orders/${order.id}`" class="mp-button mp-button-outline">
+              <RouterLink
+                :to="rolePath(`/workshop/orders/${order.id}`)"
+                class="mp-button mp-button-outline"
+              >
                 Detail
               </RouterLink>
             </div>

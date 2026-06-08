@@ -32,6 +32,26 @@ export const adminRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/AdminCatalogView.vue'),
   },
   {
+    path: '/admin/platform/jobs',
+    name: 'admin-platform-jobs',
+    component: () => import('@/shared/views/AdminPlatformJobsView.vue'),
+  },
+  {
+    path: '/admin/platform/errors',
+    name: 'admin-platform-errors',
+    component: () => import('@/shared/views/AdminPlatformErrorsView.vue'),
+  },
+  {
+    path: '/admin/platform/users',
+    name: 'admin-platform-users',
+    component: () => import('@/shared/views/AdminPlatformUsersView.vue'),
+  },
+  {
+    path: '/admin/audit',
+    name: 'admin-audit',
+    component: () => import('@/shared/views/AdminAuditView.vue'),
+  },
+  {
     path: '/admin/workshops/:workshop_id',
     name: 'admin-workshop-detail',
     component: () => import('@/shared/views/AdminWorkshopDetailView.vue'),

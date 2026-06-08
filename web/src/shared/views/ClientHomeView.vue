@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
 import { useCuttingStore } from '@/shared/stores/cutting'
 
 const router = useRouter()
+const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const creating = ref(false)
 
@@ -12,7 +14,7 @@ async function newCutting() {
   creating.value = true
   try {
     const draft = await cutting.createDraft()
-    await router.push(`/c/cutting/${draft.id}`)
+    await router.push(rolePath(`/c/cutting/${draft.id}`))
   } finally {
     creating.value = false
   }
@@ -48,7 +50,7 @@ async function newCutting() {
         </div>
         <div class="grid gap-3 p-5 sm:grid-cols-2">
           <RouterLink
-            to="/c/cutting/drafts"
+            :to="rolePath('/c/cutting/drafts')"
             class="rounded-lg border border-hairline bg-sunk p-4 transition hover:border-hairline-strong"
           >
             <span class="mp-chip bg-accent-soft text-accent">
@@ -59,7 +61,7 @@ async function newCutting() {
             <p class="mt-1 text-sm text-ink-soft">Open, delete, or continue saved layouts.</p>
           </RouterLink>
           <RouterLink
-            to="/c/branches"
+            :to="rolePath('/c/branches')"
             class="rounded-lg border border-hairline bg-sunk p-4 transition hover:border-hairline-strong"
           >
             <span class="mp-chip bg-info-soft text-info">
@@ -70,7 +72,7 @@ async function newCutting() {
             <p class="mt-1 text-sm text-ink-soft">Check carried panels and edge tapes.</p>
           </RouterLink>
           <RouterLink
-            to="/c/orders"
+            :to="rolePath('/c/orders')"
             class="rounded-lg border border-hairline bg-sunk p-4 transition hover:border-hairline-strong"
           >
             <span class="mp-chip bg-success-soft text-success">

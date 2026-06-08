@@ -1,9 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.models.enums import AuthenticatedPrincipalType, Permission, UserStatus
-from app.models.identity import Session, WorkshopUser
-from app.services.seed import seed_workshop_with_owner
-from app.services.sessions import (
+from app.modules.access.api import (
     MAX_SESSIONS_PER_PRINCIPAL,
     create_session,
     get_session_by_access_token,
@@ -11,8 +9,11 @@ from app.services.sessions import (
     refresh_session,
     revoke_for_workshop,
 )
+from app.modules.access.contracts import Session, WorkshopUser
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_workshop_with_owner
 
 
 async def test_session_access_token_resolves_active_workshop_principal(

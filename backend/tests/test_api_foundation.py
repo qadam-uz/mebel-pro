@@ -1,11 +1,12 @@
 from app.api.deps import AccountReadyPrincipal, Principal, get_session
 from app.main import create_app
 from app.models.enums import AuthenticatedPrincipalType
-from app.services.seed import seed_platform_user, seed_workshop_with_owner
-from app.services.sessions import create_session
+from app.modules.access.api import create_session
 from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_platform_user, seed_workshop_with_owner
 
 
 class SensitivePayload(BaseModel):

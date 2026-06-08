@@ -64,13 +64,15 @@ backend/
       db.py               # async engine, SessionLocal, get_session() dependency
     api/
       deps.py             # Annotated DI aliases — `Session = Annotated[AsyncSession, Depends(get_session)]`
-      router.py           # api_router; include feature routers here
-      routes/             # one module per resource (health.py, …)
+      router.py           # api_router; mounts module-owned routers
+      routes/             # meta-only routes (health.py); no domain route implementations
     models/
-      __init__.py         # re-exports Base; MUST import every model module (Alembic autogenerate)
+      __init__.py         # exports Base + import_all_models() metadata bootstrap
       base.py             # DeclarativeBase `Base` + mixins (UUIDPrimaryKey, Timestamped)
-    schemas/              # Pydantic request/response models (APIModel = from_attributes base)
-    services/             # business logic; routes stay thin, call into here
+      enums.py            # shared enum/value definitions used across modules
+    schemas/              # shared schema base/meta responses only
+    modules/              # domain modules; models, routes, schemas, public api.py/contracts.py, private service files
+    services/             # retired layer-first package; keep empty, do not add domain files
     migrations/           # Alembic: env.py (async), script.py.mako, versions/
   tests/
     conftest.py           # db_session (in-memory sqlite, schema via metadata.create_all) + httpx client w/ get_session override
@@ -84,11 +86,37 @@ backend/
 
 - **Async only.** Route handlers `async def`; DB access via the injected `AsyncSession`. Never call blocking I/O in a handler — offload with `anyio.to_thread` if unavoidable.
 - **Sessions** come from the `Session` dependency in `app/api/deps.py`. `get_session` commits on success, rolls back on exception. Don't create engines/sessions ad hoc outside `app/core/db.py` (tests are the exception).
-- **Models**: typed `Mapped[...]` / `mapped_column(...)` style (SQLAlchemy 2.0). Inherit `Base`; compose `UUIDPrimaryKey` / `Timestamped` mixins as needed. Every new model module must be imported in `app/models/__init__.py` or Alembic won't see it.
+- **Models**: domain ORM classes live in `app/modules/<module>/models.py`
+  using typed `Mapped[...]` / `mapped_column(...)` style (SQLAlchemy 2.0).
+  Inherit `Base`; compose `UUIDPrimaryKey` / `Timestamped` mixins as needed.
+  `app/models/base.py` and `app/models/enums.py` are shared
+  infrastructure/value definitions. Layer-first domain model files under
+  `app/models/` must not be reintroduced. Every new module-owned model class
+  must be listed in `app/models/__init__.py`'s `import_all_models()` registry
+  or Alembic won't see it.
 - **Migrations**: never edit a DB by hand. `alembic revision --autogenerate -m "..."`, review the generated file (autogenerate misses some things — enum changes, server defaults, renames), then `alembic upgrade head`. Migrations are auto-formatted by ruff via a post-write hook.
-- **Schemas vs models**: ORM objects never cross the API boundary — convert to a `schemas/` Pydantic model (`response_model=...`). Response schemas extend `APIModel` (`from_attributes=True`).
-- **Routes thin, services fat**: non-trivial logic lives in `app/services/`; routes parse input, call a service, shape the response.
-- **Module boundaries**: the codebase is layer-first (`models/` `schemas/` `services/` `api/routes/`), but the domain is split into logical _modules_ — the module map in [`docs/architecture.md`](../docs/architecture.md). A feature's files (model/schema/service/route) belong to one module; code in one module calls another module's **service** functions, never reads another module's tables or imports its ORM models.
+- **Schemas vs models**: ORM objects never cross the API boundary — convert to a
+  module-owned Pydantic schema (`app/modules/<module>/schemas.py`, or a named
+  `*_schemas.py` split). Response schemas extend `APIModel`
+  (`from_attributes=True`). `app/schemas/common.py` holds only shared schema
+  bases/meta responses; layer-first domain schema files under `app/schemas/`
+  must not be reintroduced.
+- **Routes thin, modules fat**: domain route implementations live with their
+  owning module as `app/modules/<module>/routes.py` or a named `*_routes.py`
+  split. `app/api/router.py` only mounts routers; `app/api/routes/` is
+  meta-only (`health.py`). Routes parse input, call module public APIs, and
+  shape the response with module-owned schemas.
+- **Module boundaries**: the backend is module-first — see the module map in
+  [`docs/architecture.md`](../docs/architecture.md). A module exposes public
+  use cases from `api.py` and public cross-module types from `contracts.py`.
+  Code in one module calls another module only through `app.modules.<name>.api`
+  or `app.modules.<name>.contracts`; it must not import another module's private
+  `service.py` helpers or private `models.py` file. Cross-module behavior goes
+  through `api.py`; same-transaction SQL composition may import an owning
+  module's explicitly exported persistence classes from `contracts.py`.
+- **No layer-first domain files**: `app/services/` is retired and kept empty.
+  Domain files under `app/models/` or `app/schemas/` are also retired. Add
+  domain code under `app/modules/<module>/`; the boundary test enforces this.
 - **Config**: add new settings to `Settings` in `app/core/config.py` with a default following the repo's Convention-over-Configuration rule (non-security → leans dev, security → leans prod/locked; secrets have no default). Surface each in all four templates — `.env.dev.example` + `.env.prod.example` here and in `deploy/`. Read config via the `settings` singleton.
 - **Errors**: raise `fastapi.HTTPException` (or a subclass) for client-facing failures; let unexpected errors propagate (they 500 + log).
 - **API prefix**: everything under `settings.API_V1_PREFIX` (`/api/v1`). `GET /api/v1/healthz` (liveness) and `/readyz` (DB-check) already exist.
@@ -103,10 +131,16 @@ backend/
 
 ## Adding a feature (typical flow)
 
-1. `app/models/<thing>.py` → model; import it in `app/models/__init__.py`.
+1. `app/modules/<module>/models.py` → model; add its module to
+   `app/models/__init__.py`'s `import_all_models()` registry.
 2. `uv run alembic revision --autogenerate -m "add <thing>"`; review; `alembic upgrade head`.
-3. `app/schemas/<thing>.py` → request/response Pydantic models.
-4. `app/services/<thing>.py` → logic.
-5. `app/api/routes/<thing>.py` → router; register it in `app/api/router.py`.
-6. `tests/test_<thing>.py` → cover the routes.
-7. `ruff check --fix . && ruff format . && mypy app && pytest`.
+3. `app/modules/<module>/contracts.py` → explicitly export any persistence shapes
+   another module must compose in SQL.
+4. `app/modules/<module>/schemas.py` → request/response Pydantic models.
+5. `app/modules/<module>/service.py` (or a smaller private file) → logic.
+6. `app/modules/<module>/api.py` → public functions/classes exported to routes
+   and other modules.
+7. `app/modules/<module>/routes.py` (or a named `*_routes.py`) → router;
+   register it in `app/api/router.py`.
+8. `tests/test_<thing>.py` → cover the routes and meaningful module contracts.
+9. `ruff check --fix . && ruff format . && mypy app && pytest`.

@@ -1,8 +1,12 @@
 from app.core.principal import system_actor
-from app.models.platform import ErrorOccurrence
-from app.services.audit import record_action, record_status_change, scrub_sensitive
-from app.services.errors import record_application_error
-from app.services.files import InMemoryFileStorage
+from app.modules.platform.api import record_application_error
+from app.modules.platform.contracts import ErrorOccurrence
+from app.modules.support.api import (
+    InMemoryFileStorage,
+    record_action,
+    record_status_change,
+    scrub_sensitive,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

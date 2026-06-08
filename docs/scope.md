@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 20
 ---
 
@@ -25,10 +25,10 @@ that's a considered substitution.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
   lightweight supplier labels for stock-in, automatic consumption driven by orders, and
   low-stock surfacing. There is no reservation balance in v1.
-- **Optimized cutting** — multiple cutting-optimization algorithms run in parallel; the
-  platform returns the best result and **names the winning algorithm**. Output includes the
-  per-panel layout, panel count, waste, cut and edge-banding length, and a print-ready cutting
-  map.
+- **Optimized cutting** — multiple cutting-optimization algorithms run against the same input
+  in one request; the platform returns the best result and **names the winning algorithm**.
+  Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a
+  print-ready cutting map.
 - **Orders** — client-placed orders from a finalized cutting result, with **frozen pricing**
   and a small production workflow (verify → cut → band → ready → collected, pickup-only),
   one-step operator revert, and reasoned cancellation. The order tracks production only — it

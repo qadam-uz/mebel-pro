@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-07
 order: 80
 ---
 
@@ -51,11 +51,10 @@ Draft ushlab turadi:
   `null` yoki oʻz source'iga ega catalog edge material). Grain — per-part tanlov **emas**
   — bu tanlangan panel material'ning xususiyati. Edge thickness va color — tanlangan edge
   material'ning xususiyatlari — user thickness emas, tape'ni tanlaydi.
-- **Algorithm results.** Optimiser'ni qayta ishga tushirish bitta call'da har bir mavjud
-  algorithm uchun bittadan result ishlab chiqaradi (barchasi bir xil input'ga qarshi
-  parallel ishga tushadi). Keyingi run ularni almashtirgunicha barcha N ta result
-  draft'da saqlanadi. Client bittasini **chosen** sifatida tanlaydi; chosen bo'lgani
-  order'ga bind qilinadi.
+- **Algorithm results.** Optimiser'ni qayta ishga tushirish bitta call'da bir xil input'ga
+  qarshi har bir mavjud algorithm uchun bittadan result ishlab chiqaradi. Keyingi run ularni
+  almashtirgunicha barcha N ta result draft'da saqlanadi. Client bittasini **chosen** sifatida
+  tanlaydi; chosen bo'lgani order'ga bind qilinadi.
 
 Har bir algorithm result yozadi: `algorithm_name`, `algorithm_version`, per-material
 panel'lar va ularning placement'lari, weighted `waste_percentage`,
@@ -71,13 +70,11 @@ stateDiagram-v2
     [*] --> draft : client opens "New cutting"
     draft --> draft : edit parts · run optimiser · pick algorithm
     draft --> confirmed : client places an order with the chosen result
-    confirmed --> invalidated : order modify re-runs the optimiser (a new result is bound; this one is kept for audit)
     confirmed --> [*]
-    invalidated --> [*]
 ```
 
-- `draft` mutable. `confirmed` va `invalidated` immutable va cheksiz saqlanadi — order
-  ishora qilayotgan tarixiy yozuv.
+- `draft` mutable. `confirmed` immutable va cheksiz saqlanadi — u order ishora qilayotgan
+  tarixiy yozuv.
 - `draft`'da optimiser'ni qayta ishga tushirish barcha algorithm result'larini joyida
   almashtiradi. Intermediate-run history yoʻq.
 - Order placement'da **chosen** algorithm result draft'ning frozen snapshot'i boʻladi va
@@ -110,7 +107,7 @@ stateDiagram-v2
 - **Bitta run, koʻp material, koʻp algorithm.** Run barcha part'larni oladi, ularni
   panel material boʻyicha guruhlaydi va har bir material uchun mustaqil layout ishlab
   chiqaradi (panel'lar material'lar boʻyicha ulashilmaydi — turli thickness, turli
-  color). Har bir mavjud algorithm bir xil input'ga qarshi parallel ishga tushadi;
+  color). Har bir mavjud algorithm bir xil input'ga qarshi shu request'da run boʻladi;
   barcha result qaytariladi.
 - **Winner = eng past weighted waste %.** Chosen result sifatida oldindan tanlanadi;
   client agar tradeoff kamroq panel yoki boshqa cut topology foydasiga boʻlsa boshqa
@@ -343,17 +340,14 @@ panel material, last-edited time (relative), set boʻlsa preferred branch chip, 
 action. Empty: "No saved cuttings — start a new one." Expiry chip yoʻq — draft'lar
 client uni oʻchirgunicha yoki cap'ga yetgunicha saqlanadi.
 
-### Read-only view (`/c/cutting/:id` when `confirmed` / `invalidated`)
+### Read-only view (`/c/cutting/:id` when `confirmed`)
 
 Xuddi shu workspace, editing disabled, bind qilingan order'ni nomlaydigan banner bilan.
-**Invalidated** result ham "a newer cutting result is bound to this order" deb aytadi va
-unga link qoʻyadi.
 
 ### Workshop side
 
 Order'ning **Cutting** tab'i order'ning confirmed result'ining SVG'ini va PDF link'ni
-embed qiladi. Agar result `invalidated` boʻlsa (modify yangiroq result ishlab chiqargan
-boʻlsa), tab buni flag qiladi va joriy result'ga link qoʻyadi.
+embed qiladi.
 
 ## Edge cases
 
@@ -382,12 +376,12 @@ boʻlsa), tab buni flag qiladi va joriy result'ga link qoʻyadi.
   shu not-carried recovery affordance'larini koʻrsatadi, plus branch'ning status'ini
   koʻrsatadigan banner; client unlock qilish uchun pre-filter'ni clear yoki change
   qiladi.
-- **`cutting_result_not_usable`** — order step draft allaqachon `confirmed` yoki
-  `invalidated` ekanini topadi (concurrent placement, yoki place qilgandan keyin
-  back-navigation) → uning detail'iga redirect qiladi.
-- **Algorithm keyinroq almashtirildi** — eski `confirmed` / `invalidated` result'lar
-  qanday boʻlsa shundayligicha qoladi, eski algorithm version'i bilan stamp qilingan;
-  ularning PDF'lari qayta generate qilinmaydi.
+- **`cutting_result_not_usable`** — order step draft allaqachon `confirmed` ekanini topadi
+  (concurrent placement, yoki place qilgandan keyin back-navigation) → uning detail'iga
+  redirect qiladi.
+- **Algorithm keyinroq almashtirildi** — eski `confirmed` result'lar qanday boʻlsa
+  shundayligicha qoladi, eski algorithm version'i bilan stamp qilingan; ularning PDF'lari
+  qayta generate qilinmaydi.
 - **Workshop in-flight draft'da per-side preference sifatida set qilingan edge
   material'ni deactivate qiladi** — deactivated panel bilan bir xil handling: keyingi
   ochilishda row flag qilinadi, edge side shu side active boʻlgan edge picker'ni ochadigan
@@ -395,8 +389,8 @@ boʻlsa), tab buni flag qiladi va joriy result'ga link qoʻyadi.
 
 ## Next
 
-- [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order, when
-  it's invalidated, which cutting metrics drive which price component.
+- [`orders.md`](orders.md) — chosen cutting result qanday qilib placed order'ga aylanishi va
+  qaysi cutting metric'lari qaysi price component'ni drive qilishi.
 - [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog (manufacturers,
   panels, edges) the wizard reads from, and the branch's selection that drives the
   pre-filter.

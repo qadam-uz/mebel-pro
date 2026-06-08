@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { useRolePath } from '@/shared/app/paths'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { clientStatusLabel, useOrdersStore, type OrderStatus } from '@/shared/stores/orders'
@@ -13,12 +15,15 @@ import {
 } from '@/shared/stores/cutting'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const orders = useOrdersStore()
 const orderId = computed(() => String(route.params.order_id))
 const isNew = computed(() => route.query.new === '1')
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
+const cancelDialogOpen = ref(false)
+const cancelReason = ref('Client cancelled before confirmation')
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
@@ -79,14 +84,20 @@ function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
 }
 
+function requestCancelOrder() {
+  cancelReason.value = 'Client cancelled before confirmation'
+  cancelDialogOpen.value = true
+}
+
 async function cancelOrder() {
   const current = order.value
   if (!current) return
-  const reason = window.prompt('Cancellation reason', 'Client cancelled before confirmation')
-  if (!reason?.trim()) return
+  const reason = cancelReason.value.trim()
+  if (!reason) return
   actionError.value = null
   try {
     await orders.cancelClientOrder(current.id, current.version, reason)
+    cancelDialogOpen.value = false
   } catch {
     actionError.value = orders.error ?? 'order_cancel_failed'
   }
@@ -117,7 +128,9 @@ onMounted(() => {
   <section class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <RouterLink to="/c/orders" class="text-sm font-bold text-accent"> My orders </RouterLink>
+        <RouterLink :to="rolePath('/c/orders')" class="text-sm font-bold text-accent">
+          My orders
+        </RouterLink>
         <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Order tracking</h1>
         <p v-if="order" class="mt-2 text-base text-ink-soft">
           {{ order.order_number }} · {{ order.branch_name }}
@@ -136,7 +149,7 @@ onMounted(() => {
           type="button"
           class="mp-button mp-button-outline text-danger"
           :disabled="orders.actionLoading"
-          @click="cancelOrder"
+          @click="requestCancelOrder"
         >
           Cancel order
         </button>
@@ -371,5 +384,22 @@ onMounted(() => {
         </aside>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="cancelDialogOpen"
+      title="Cancel order"
+      message="Tell the workshop why this order should be cancelled."
+      confirm-label="Cancel order"
+      danger
+      :busy="orders.actionLoading"
+      :confirm-disabled="cancelReason.trim().length === 0"
+      @cancel="cancelDialogOpen = false"
+      @confirm="cancelOrder"
+    >
+      <label class="grid gap-1 text-sm font-bold text-ink">
+        Cancellation reason
+        <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
+      </label>
+    </ConfirmDialog>
   </section>
 </template>

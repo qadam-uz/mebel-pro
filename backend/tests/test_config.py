@@ -11,6 +11,16 @@ def test_otp_dev_codes_parse_from_json_env(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.OTP_DEV_CODES == ["000000", "111111"]
 
 
+def test_dev_minio_defaults_match_local_compose_credentials() -> None:
+    settings = Settings(ENV="dev")
+
+    assert settings.MINIO_ENDPOINT_URL == "http://localhost:9000"
+    assert settings.MINIO_ACCESS_KEY_ID == "mebel"
+    assert settings.MINIO_SECRET_ACCESS_KEY == "mebel-secret"
+    assert len(settings.MINIO_SECRET_ACCESS_KEY) >= 8
+    assert settings.MINIO_BUCKET == "mebel"
+
+
 def test_otp_dev_codes_are_rejected_in_prod() -> None:
     with pytest.raises(ValidationError, match="OTP_DEV_CODES"):
         Settings(ENV="prod", OTP_DEV_CODES=["000000"])

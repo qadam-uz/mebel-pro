@@ -1,11 +1,12 @@
 from app.models.enums import AuthenticatedPrincipalType
-from app.models.identity import Client
-from app.models.support import ActionLog
-from app.services.seed import seed_workshop_with_owner
-from app.services.sessions import create_session
+from app.modules.access.api import create_session
+from app.modules.access.contracts import Client
+from app.modules.support.contracts import ActionLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:

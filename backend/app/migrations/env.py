@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 
-# Import the metadata. `app.models` re-exports `Base` and imports every model
-# module so autogenerate sees the complete schema.
-from app.models import Base
+# Import every module-owned model so autogenerate sees the complete schema.
+from app.models import Base, import_all_models
+
+import_all_models()
 
 config = context.config
 # Alembic's config is backed by ConfigParser, which treats `%` as an

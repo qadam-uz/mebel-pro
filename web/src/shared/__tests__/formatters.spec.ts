@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDate, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatDateInputValue, formatTiyin } from '@/shared/formatters'
 import { i18nSeed } from '@/shared/i18n'
 
 describe('shared formatters', () => {
@@ -10,6 +10,10 @@ describe('shared formatters', () => {
 
   it('formats dates with the Uzbek locale seed', () => {
     expect(formatDate(new Date('2026-06-02T00:00:00Z'))).toContain('2026')
+  })
+
+  it('formats date input values using the local calendar day', () => {
+    expect(formatDateInputValue(new Date(2026, 5, 2))).toBe('2026-06-02')
   })
 
   it('has labels for each role app', () => {

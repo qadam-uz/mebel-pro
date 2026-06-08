@@ -14,7 +14,7 @@ from structlog import get_logger
 
 from app.core.db import SessionLocal
 from app.core.trace import TRACE_HEADER, get_trace_id
-from app.services.errors import record_application_error
+from app.modules.platform.api import record_application_error
 
 logger = get_logger(__name__)
 

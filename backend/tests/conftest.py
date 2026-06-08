@@ -18,7 +18,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 
 from app.api.deps import get_session
 from app.main import app
-from app.models import Base
+from app.models import Base, import_all_models
+
+import_all_models()
 
 
 @pytest.fixture

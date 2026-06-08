@@ -8,22 +8,25 @@ import pytest
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.security import hash_password
-from app.models import Base
-from app.models.catalog import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.models import Base, import_all_models
 from app.models.enums import (
     AuthenticatedPrincipalType,
     MaterialKind,
     MaterialStatus,
     PanelMaterialType,
 )
-from app.models.identity import WorkshopUser
-from app.models.inventory import StockItem, StockTransaction
-from app.models.workshop import Branch, Workshop
-from app.schemas.inventory import StockAdjustmentRequest
-from app.services.inventory import record_adjustment
-from app.services.seed import default_working_hours
+from app.modules.access.contracts import WorkshopUser
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
+from app.modules.inventory.api import record_adjustment
+from app.modules.inventory.contracts import StockItem, StockTransaction
+from app.modules.inventory.schemas import StockAdjustmentRequest
+from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from tests.factories import default_working_hours
+
+import_all_models()
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("POSTGRES_CONCURRENCY") != "1"
