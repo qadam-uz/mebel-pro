@@ -3,44 +3,47 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import FormSelect from '@/shared/components/FormSelect.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { branchOptions, orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import {
   activeWorkshopStatuses,
   useOrdersStore,
-  workshopStatusLabel,
   type OrderStatus,
   type OrderSummary,
 } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const orders = useOrdersStore()
-const rolePath = useRolePath()
 const workshop = useWorkshopStore()
+const rolePath = useRolePath()
+const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
 const search = ref('')
 let timer: number | undefined
 
-const branchOptions = computed<ChoiceOption[]>(() => [
-  { value: 'all', label: 'All branches', meta: 'accessible orders' },
-  ...workshop.branches.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.status === 'temporarily_closed' ? 'temporarily closed' : branch.address,
-  })),
-])
-const statusOptions: ChoiceOption[] = [
-  { value: 'all', label: 'All', meta: 'every status' },
-  { value: 'active', label: 'Active', meta: 'not completed' },
-  { value: 'new', label: 'New', meta: 'needs approval' },
-  { value: 'confirmed', label: 'Confirmed', meta: 'needs assignment' },
-  { value: 'cutting', label: 'Cutting', meta: 'panels in production' },
-  { value: 'edge_banding', label: 'Edge banding', meta: 'edge tape work' },
-  { value: 'ready', label: 'Ready', meta: 'waiting pickup' },
-  { value: 'completed', label: 'Completed', meta: 'collected' },
-  { value: 'cancelled', label: 'Cancelled', meta: 'stopped' },
+const branchFilterOptions = computed(() => branchOptions(workshop.branches))
+const statusOptions = [
+  { value: 'all', label: 'Hammasi', meta: 'barcha holatlar', status: 'active' as const },
+  { value: 'active', label: 'Faol', meta: 'terminal emas', status: 'active' as const },
+  { value: 'new', label: 'Yangi', meta: 'tasdiq kerak', status: 'pending' as const },
+  {
+    value: 'confirmed',
+    label: 'Tasdiqlangan',
+    meta: 'kesuvchi kutilmoqda',
+    status: 'pending' as const,
+  },
+  { value: 'cutting', label: 'Kesilmoqda', meta: 'arra oldida', status: 'active' as const },
+  { value: 'edge_banding', label: 'Kromda', meta: 'krom ishlari', status: 'active' as const },
+  { value: 'ready', label: 'Tayyor', meta: 'olib ketishni kutmoqda', status: 'active' as const },
+  {
+    value: 'completed',
+    label: 'Tugatilgan',
+    meta: 'mijoz olib ketgan',
+    status: 'blocked' as const,
+  },
+  { value: 'cancelled', label: 'Bekor qilingan', meta: 'to‘xtatilgan', status: 'blocked' as const },
 ]
 const boardColumns = computed(() =>
   activeWorkshopStatuses.map((state) => ({
@@ -48,24 +51,19 @@ const boardColumns = computed(() =>
     orders: orders.workshopOrders.filter((order) => order.status === state),
   })),
 )
-
-function statusTone(state: OrderStatus) {
-  if (state === 'completed') return 'bg-success-soft text-success'
-  if (state === 'cancelled') return 'bg-danger-soft text-danger'
-  if (state === 'ready') return 'bg-info-soft text-info'
-  if (state === 'cutting' || state === 'edge_banding') return 'bg-accent-soft text-accent'
-  return 'bg-warning-soft text-warning'
-}
+const terminalStatus = computed(() => ['completed', 'cancelled'].includes(status.value))
 
 function assignedText(order: OrderSummary) {
-  if (order.status === 'cutting') {
-    return order.assigned_cutter_user_id ? 'cutter assigned' : 'no cutter'
-  }
-  if (order.status === 'edge_banding') {
-    return order.assigned_edger_user_id ? 'bander assigned' : 'no bander'
-  }
-  if (order.status === 'confirmed') return 'assignment needed'
-  return `${order.item_count} parts`
+  if (order.status === 'cutting')
+    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : 'kesuvchi yo‘q'
+  if (order.status === 'edge_banding')
+    return order.assigned_edger_user_id ? 'kromchi tayinlangan' : 'kromchi yo‘q'
+  if (order.status === 'confirmed') return 'tayinlash kerak'
+  return `${order.item_count} qism`
+}
+
+function setMode(next: 'board' | 'table') {
+  mode.value = terminalStatus.value && next === 'board' ? 'table' : next
 }
 
 async function refresh() {
@@ -75,6 +73,10 @@ async function refresh() {
     search: search.value,
   })
 }
+
+watch(status, () => {
+  if (terminalStatus.value) mode.value = 'table'
+})
 
 watch([branchId, status, search], () => {
   window.clearTimeout(timer)
@@ -88,132 +90,143 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Orders</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Branch-scoped order board and production handoff.
-        </p>
+        <h1>Buyurtmalar</h1>
+        <p class="sub">Barcha filiallar bo'yicha buyurtmalar oqimi.</p>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <RouterLink :to="rolePath('/workshop/cutting')" class="mp-button mp-button-outline">
-          Cutting queue
-        </RouterLink>
-        <RouterLink :to="rolePath('/workshop/banding')" class="mp-button mp-button-primary">
-          Banding queue
+      <div class="tools">
+        <button
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          :class="{ 'bg-accent-soft text-accent': mode === 'board' }"
+          type="button"
+          @click="setMode('board')"
+        >
+          Taxta
+        </button>
+        <button
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          :class="{ 'bg-accent-soft text-accent': mode === 'table' }"
+          type="button"
+          @click="setMode('table')"
+        >
+          Jadval
+        </button>
+        <RouterLink
+          :to="rolePath('/workshop/cutting')"
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+        >
+          Kesish navbati
         </RouterLink>
       </div>
     </div>
 
-    <section class="mp-surface p-4">
-      <div class="grid gap-3 md:grid-cols-[220px_220px_1fr]">
-        <FormSelect v-model="branchId" label="Branch" :options="branchOptions" />
-        <FormSelect v-model="status" label="Status" :options="statusOptions" />
-        <label class="grid gap-1 text-sm font-bold text-ink">
-          Search
-          <input v-model="search" class="mp-input" placeholder="Order number or contact" />
-        </label>
+    <div class="filters">
+      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" />
+      <label class="grid gap-1">
+        <span class="filter-label">Qidirish</span>
+        <input v-model="search" class="mp-input min-w-64" placeholder="ID yoki mijoz nomi..." />
+      </label>
+      <ProjectDropdown v-model="branchId" label="Filial" :options="branchFilterOptions" />
+    </div>
+
+    <section v-if="orders.loading" class="card p-5" aria-live="polite">
+      <div class="grid gap-3">
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
       </div>
     </section>
 
-    <section v-if="orders.loading" class="mp-surface p-5" aria-live="polite">
-      <div class="space-y-3">
-        <div class="h-16 animate-pulse rounded bg-sunk"></div>
-        <div class="h-16 animate-pulse rounded bg-sunk"></div>
-      </div>
+    <section v-else-if="orders.error" class="st-error">
+      <h3>Buyurtmalarni yuklab bo'lmadi</h3>
+      <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
     </section>
-    <section v-else-if="orders.error" class="mp-surface p-5">
-      <div class="rounded-md bg-danger-soft p-4 text-danger">
-        <div class="font-extrabold">Orders could not be loaded</div>
-        <p class="mt-1 text-sm">trace {{ orders.traceId ?? 'unavailable' }}</p>
-      </div>
+
+    <section v-else-if="workshop.branches.length === 0" class="st-empty">
+      <h3>Filial biriktirilmagan — ustaxona egasiga murojaat qiling</h3>
+      <p>Filial biriktirilgach, buyurtmalar shu yerda ko'rinadi.</p>
     </section>
-    <section v-else-if="orders.workshopOrders.length === 0" class="mp-surface p-5">
-      <div class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-6">
-        <h2 class="font-serif text-2xl font-semibold text-ink">No orders</h2>
-        <p class="mt-2 text-sm text-ink-soft">Orders appear here after clients place them.</p>
-      </div>
+
+    <section v-else-if="orders.workshopOrders.length === 0" class="st-empty">
+      <h3>Filial(lar)ingizda buyurtma yo'q</h3>
+      <p>Tanlangan filtrga mos buyurtma yo'q.</p>
     </section>
 
     <template v-else>
-      <section class="grid gap-3 xl:grid-cols-5">
-        <article
-          v-for="column in boardColumns"
-          :key="column.state"
-          class="mp-surface min-h-36 overflow-hidden"
-        >
-          <div class="border-b border-hairline px-4 py-3">
-            <div class="flex items-center justify-between gap-2">
-              <h2 class="text-sm font-extrabold text-ink">
-                {{ workshopStatusLabel[column.state] }}
-              </h2>
-              <span class="mp-chip" :class="statusTone(column.state)">
-                {{ column.orders.length }}
-              </span>
-            </div>
+      <section v-if="mode === 'board'" class="board">
+        <div v-for="column in boardColumns" :key="column.state" class="board-col">
+          <h4>
+            {{ workshopStatusUz[column.state] }}
+            <span class="ct">{{ column.orders.length }}</span>
+          </h4>
+          <RouterLink
+            v-for="order in column.orders"
+            :key="order.id"
+            :to="rolePath(`/workshop/orders/${order.id}`)"
+            class="board-card"
+          >
+            <span class="top">
+              <span class="id">{{ order.order_number }}</span>
+              <span class="amt">{{ formatTiyin(order.total_tiyin) }}</span>
+            </span>
+            <span class="who">{{ order.contact_name }}</span>
+            <span class="meta">
+              <span>{{ order.item_count }} qism</span>
+              <span>{{ formatDate(order.created_at) }}</span>
+              <span>{{ assignedText(order) }}</span>
+            </span>
+          </RouterLink>
+          <div v-if="column.orders.length === 0" class="py-4 text-center text-xs text-ink-muted">
+            bo'sh
           </div>
-          <div v-if="column.orders.length === 0" class="p-4 text-sm text-ink-soft">
-            No orders in this stage.
-          </div>
-          <div v-else class="divide-y divide-hairline">
-            <RouterLink
-              v-for="order in column.orders.slice(0, 4)"
-              :key="order.id"
-              :to="rolePath(`/workshop/orders/${order.id}`)"
-              class="block px-4 py-3 no-underline transition hover:bg-sunk"
-            >
-              <span class="block font-mono text-xs font-extrabold text-ink">
-                {{ order.order_number }}
-              </span>
-              <span class="mt-1 block truncate text-sm text-ink-soft">
-                {{ order.contact_name }} · {{ assignedText(order) }}
-              </span>
-              <span class="mt-2 block font-mono text-xs font-bold text-accent">
-                {{ formatTiyin(order.total_tiyin) }}
-              </span>
-            </RouterLink>
-          </div>
-        </article>
+        </div>
       </section>
 
-      <section class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Order list</h2>
-        </div>
-        <div class="divide-y divide-hairline">
-          <article
-            v-for="order in orders.workshopOrders"
-            :key="order.id"
-            class="grid gap-4 p-5 lg:grid-cols-[1fr_180px_auto]"
-          >
-            <div>
-              <div class="flex flex-wrap items-center gap-2">
-                <h3 class="font-mono text-base font-extrabold text-ink">
-                  {{ order.order_number }}
-                </h3>
-                <span class="mp-chip" :class="statusTone(order.status)">
-                  <span class="mp-dot" aria-hidden="true"></span>
-                  {{ workshopStatusLabel[order.status] }}
-                </span>
-              </div>
-              <p class="mt-2 text-sm text-ink-soft">
-                {{ order.contact_name }} · {{ order.contact_phone }} · {{ order.branch_name }}
-              </p>
-              <p class="mt-1 text-sm text-ink-soft">
-                {{ formatDate(order.created_at) }} · {{ assignedText(order) }}
-              </p>
-            </div>
-            <div class="font-mono text-sm font-extrabold text-ink lg:text-right">
-              {{ formatTiyin(order.total_tiyin) }}
-            </div>
-            <RouterLink
-              :to="rolePath(`/workshop/orders/${order.id}`)"
-              class="mp-button mp-button-primary"
-            >
-              Open
-            </RouterLink>
-          </article>
+      <section v-else class="card">
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Mijoz</th>
+                <th>Filial</th>
+                <th>Holat</th>
+                <th>Mas'ul</th>
+                <th class="right">Summa</th>
+                <th>Vaqt</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in orders.workshopOrders" :key="order.id" class="clickable">
+                <td class="id">{{ order.order_number }}</td>
+                <td class="nm">
+                  {{ order.contact_name }}<small>{{ order.contact_phone }}</small>
+                </td>
+                <td>{{ order.branch_name }}</td>
+                <td>
+                  <span :class="orderPillClass(order.status as OrderStatus)">
+                    <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+                  </span>
+                </td>
+                <td>
+                  <small class="text-ink-soft">{{ assignedText(order) }}</small>
+                </td>
+                <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
+                <td class="num text-[11px] text-ink-muted">{{ formatDate(order.created_at) }}</td>
+                <td class="right">
+                  <RouterLink
+                    :to="rolePath(`/workshop/orders/${order.id}`)"
+                    class="mp-button mp-button-primary min-h-8 px-2 text-xs"
+                  >
+                    Tafsilotlar
+                  </RouterLink>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
     </template>

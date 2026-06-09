@@ -107,6 +107,15 @@ class PlatformWorkshopDetail(APIModel):
     owner: WorkshopUserSummary
 
 
+class PlatformOverviewResponse(APIModel):
+    workshops_total: int
+    workshops_active: int
+    workshops_blocked: int
+    branches_total: int
+    clients_total: int
+    platform_users_active: int
+
+
 class BlockWorkshopRequest(BaseModel):
     reason: str
 

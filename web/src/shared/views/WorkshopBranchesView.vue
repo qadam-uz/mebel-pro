@@ -2,24 +2,17 @@
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { useFilesStore } from '@/shared/stores/files'
-import { useWorkshopStore } from '@/shared/stores/workshop'
 import { useRolePath } from '@/shared/app/paths'
+import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import { useAuthStore } from '@/shared/stores/auth'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
+const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const rolePath = useRolePath()
-const files = useFilesStore()
-const savingSettings = ref(false)
+const showCreate = ref(false)
 const creatingBranch = ref(false)
-const settingsError = ref<string | null>(null)
 const branchError = ref<string | null>(null)
-
-const settingsForm = reactive({
-  name: '',
-  phone: '',
-  address: '',
-  logoFileId: '',
-})
 const branchForm = reactive({
   name: '',
   address: '',
@@ -28,22 +21,14 @@ const branchForm = reactive({
   longitude: '69.2401',
 })
 const hours = reactive([
-  { key: 'monday', label: 'Mon', open: true, from: '09:00', to: '18:00' },
-  { key: 'tuesday', label: 'Tue', open: true, from: '09:00', to: '18:00' },
-  { key: 'wednesday', label: 'Wed', open: true, from: '09:00', to: '18:00' },
-  { key: 'thursday', label: 'Thu', open: true, from: '09:00', to: '18:00' },
-  { key: 'friday', label: 'Fri', open: true, from: '09:00', to: '18:00' },
-  { key: 'saturday', label: 'Sat', open: true, from: '10:00', to: '16:00' },
-  { key: 'sunday', label: 'Sun', open: false, from: '10:00', to: '16:00' },
+  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
+  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
+  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
+  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
+  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
+  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
+  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
 ])
-
-function syncSettingsForm() {
-  if (!workshop.settings) return
-  settingsForm.name = workshop.settings.name
-  settingsForm.phone = workshop.settings.phone
-  settingsForm.address = workshop.settings.address ?? ''
-  settingsForm.logoFileId = workshop.settings.logo_file_id ?? ''
-}
 
 function workingHoursPayload() {
   return Object.fromEntries(
@@ -52,24 +37,6 @@ function workingHoursPayload() {
       day.open ? { open: day.from, close: day.to } : { open: null, close: null },
     ]),
   )
-}
-
-async function saveSettings() {
-  savingSettings.value = true
-  settingsError.value = null
-  try {
-    await workshop.updateSettings({
-      name: settingsForm.name,
-      phone: settingsForm.phone,
-      address: settingsForm.address || null,
-      logo_file_id: settingsForm.logoFileId || null,
-    })
-    syncSettingsForm()
-  } catch {
-    settingsError.value = 'settings_save_failed'
-  } finally {
-    savingSettings.value = false
-  }
 }
 
 async function createBranch() {
@@ -89,6 +56,7 @@ async function createBranch() {
     branchForm.phone = '+998'
     branchForm.latitude = '41.2995'
     branchForm.longitude = '69.2401'
+    showCreate.value = false
   } catch {
     branchError.value = 'branch_create_failed'
   } finally {
@@ -96,151 +64,80 @@ async function createBranch() {
   }
 }
 
-async function onLogoFile(event: Event) {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
-  const uploaded = await files.upload(target.files[0])
-  settingsForm.logoFileId = uploaded.id
-  target.value = ''
-}
-
-onMounted(async () => {
-  await Promise.all([workshop.loadSettings(), workshop.loadManagedBranches()])
-  syncSettingsForm()
+onMounted(() => {
+  if (auth.me?.is_owner) void workshop.loadManagedBranches()
 })
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div>
-      <h1 class="font-serif text-3xl font-semibold text-ink">Branches</h1>
-      <p class="mt-2 text-base text-ink-soft">
-        Set workshop profile details and manage the branch surfaces clients can see.
-      </p>
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Filiallar</h1>
+        <p class="sub">
+          {{ workshop.managedBranches.length }} filial · har birining materiali va narxi alohida.
+        </p>
+      </div>
+      <div class="tools">
+        <button
+          v-if="auth.me?.is_owner"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="showCreate = !showCreate"
+        >
+          Yangi filial
+        </button>
+      </div>
     </div>
 
-    <div class="grid gap-5 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.28fr)]">
-      <section class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Workshop profile</h2>
-          <p class="mt-1 text-sm text-ink-soft">Name, contact details, and public logo.</p>
-        </div>
-        <form class="grid gap-3 p-5" @submit.prevent="saveSettings">
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="settings-name">Name</label>
-            <input
-              id="settings-name"
-              v-model="settingsForm.name"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="settings-phone">Phone</label>
-            <input
-              id="settings-phone"
-              v-model="settingsForm.phone"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="settings-address">
-              Address
-            </label>
-            <input
-              id="settings-address"
-              v-model="settingsForm.address"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="settings-logo">Logo</label>
-            <input
-              id="settings-logo"
-              type="file"
-              accept="image/*"
-              class="block min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 py-2 text-sm"
-              @change="onLogoFile"
-            />
-            <p v-if="settingsForm.logoFileId" class="mt-1 font-mono text-[11px] text-ink-muted">
-              logo {{ settingsForm.logoFileId.slice(0, 8) }}
-            </p>
-          </div>
-          <button class="mp-button mp-button-primary" type="submit" :disabled="savingSettings">
-            {{ savingSettings ? 'Saving' : 'Save profile' }}
-          </button>
-          <p
-            v-if="settingsError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+    <section v-if="!auth.me?.is_owner" class="st-empty">
+      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
+      <p>Filial yaratish va holatini boshqarish egaga tegishli.</p>
+    </section>
+
+    <template v-else>
+      <section v-if="showCreate" class="card mb-5">
+        <div class="card-h">
+          <h2>Yangi filial</h2>
+          <button
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            @click="showCreate = false"
           >
-            Workshop settings could not be saved.
-          </p>
-        </form>
-      </section>
-
-      <section class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Create branch</h2>
-          <p class="mt-1 text-sm text-ink-soft">A pricing row is created with every new branch.</p>
+            Bekor
+          </button>
         </div>
-        <form class="grid gap-3 p-5 lg:grid-cols-4" @submit.prevent="createBranch">
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-name">Name</label>
+        <form
+          class="card-b grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          @submit.prevent="createBranch"
+        >
+          <label class="field">
+            <span>Nom</span>
+            <input v-model="branchForm.name" class="mp-input" placeholder="Sergeli" required />
+          </label>
+          <label class="field">
+            <span>Telefon</span>
+            <input v-model="branchForm.phone" class="mp-input" required />
+          </label>
+          <label class="field">
+            <span>Lat</span>
+            <input v-model="branchForm.latitude" class="mp-input" inputmode="decimal" required />
+          </label>
+          <label class="field">
+            <span>Lng</span>
+            <input v-model="branchForm.longitude" class="mp-input" inputmode="decimal" required />
+          </label>
+          <label class="field md:col-span-2 xl:col-span-4">
+            <span>Manzil</span>
             <input
-              id="branch-name"
-              v-model="branchForm.name"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-phone">Phone</label>
-            <input
-              id="branch-phone"
-              v-model="branchForm.phone"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-latitude">
-              Latitude
-            </label>
-            <input
-              id="branch-latitude"
-              v-model="branchForm.latitude"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              inputmode="decimal"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-longitude">
-              Longitude
-            </label>
-            <input
-              id="branch-longitude"
-              v-model="branchForm.longitude"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              inputmode="decimal"
-              required
-            />
-          </div>
-          <div class="lg:col-span-4">
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-address">
-              Address
-            </label>
-            <input
-              id="branch-address"
               v-model="branchForm.address"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+              class="mp-input"
+              placeholder="Sergeli 1-mavze 4"
               required
             />
-          </div>
-
-          <fieldset class="lg:col-span-4">
-            <legend class="mb-2 text-sm font-bold text-ink">Working hours</legend>
+          </label>
+          <fieldset class="md:col-span-2 xl:col-span-4">
+            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
             <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-7">
               <div
                 v-for="day in hours"
@@ -254,86 +151,90 @@ onMounted(async () => {
                 <div class="mt-2 grid grid-cols-2 gap-2">
                   <input
                     v-model="day.from"
-                    class="min-h-10 rounded-md border border-hairline-strong px-2 text-sm"
+                    class="mp-input min-h-9 px-2 text-sm"
                     type="time"
                     :disabled="!day.open"
-                    :aria-label="`${day.label} opens`"
                   />
                   <input
                     v-model="day.to"
-                    class="min-h-10 rounded-md border border-hairline-strong px-2 text-sm"
+                    class="mp-input min-h-9 px-2 text-sm"
                     type="time"
                     :disabled="!day.open"
-                    :aria-label="`${day.label} closes`"
                   />
                 </div>
               </div>
             </div>
           </fieldset>
-
           <button
-            class="mp-button mp-button-primary lg:col-span-4"
             type="submit"
+            class="mp-button mp-button-primary md:col-span-2 xl:col-span-4"
             :disabled="creatingBranch"
           >
-            {{ creatingBranch ? 'Creating' : 'Create branch' }}
+            {{ creatingBranch ? 'Yaratilmoqda' : 'Yaratish' }}
           </button>
           <p
             v-if="branchError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger lg:col-span-4"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2 xl:col-span-4"
           >
-            Branch could not be created.
+            Filial yaratilmadi.
           </p>
         </form>
       </section>
-    </div>
 
-    <section class="mp-surface overflow-hidden">
-      <div class="border-b border-hairline px-5 py-4">
-        <h2 class="font-serif text-xl font-semibold text-ink">Branch registry</h2>
-      </div>
-      <div
-        v-if="workshop.setupLoading"
-        class="px-5 py-6 text-sm font-bold text-ink-soft"
-        aria-live="polite"
-      >
-        Loading branches
-      </div>
-      <div v-else-if="workshop.setupError" class="px-5 py-6 text-sm font-bold text-danger">
-        Branches could not be loaded. trace {{ workshop.setupTraceId ?? 'unavailable' }}
-      </div>
-      <div
-        v-else-if="workshop.managedBranches.length === 0"
-        class="px-5 py-6 text-sm text-ink-soft"
-      >
-        No branches yet.
-      </div>
-      <div v-else class="divide-y divide-hairline">
+      <section v-if="workshop.setupLoading" class="card p-5" aria-live="polite">
+        <div class="grid gap-3">
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+        </div>
+      </section>
+
+      <section v-else-if="workshop.setupError" class="st-error">
+        <h3>Filiallarni yuklab bo'lmadi</h3>
+        <p>trace_id: {{ workshop.setupTraceId ?? 'unavailable' }}</p>
+      </section>
+
+      <section v-else-if="workshop.managedBranches.length === 0" class="st-empty">
+        <h3>Hali filial yo'q</h3>
+        <p>Birinchi filial yaratilgach, mijozlar buyurtma beradigan manzil paydo bo'ladi.</p>
+      </section>
+
+      <div v-else class="br-grid">
         <RouterLink
           v-for="branch in workshop.managedBranches"
           :key="branch.id"
           :to="rolePath(`/workshop/branches/${branch.id}`)"
-          class="grid gap-3 px-5 py-4 no-underline md:grid-cols-[1fr_auto]"
+          class="br-card"
         >
-          <span class="min-w-0">
-            <span class="block truncate text-base font-extrabold text-ink">{{ branch.name }}</span>
-            <span class="block truncate text-sm text-ink-soft">
-              {{ branch.address }} · {{ branch.phone }}
+          <div class="top">
+            <div class="min-w-0">
+              <h3>{{ branch.name }}</h3>
+              <div class="addr">{{ branch.address }} · {{ branch.phone }}</div>
+            </div>
+            <span :class="branchPillClass(branch.status)">
+              <span class="pd"></span>{{ branchStatusUz[branch.status] }}
             </span>
-          </span>
-          <span
-            class="mp-chip"
-            :class="{
-              'bg-success-soft text-success': branch.status === 'active',
-              'bg-warning-soft text-warning': branch.status === 'temporarily_closed',
-              'bg-danger-soft text-danger': branch.status === 'inactive',
-            }"
-          >
-            <span class="mp-dot" aria-hidden="true"></span>
-            {{ branch.status }}
-          </span>
+          </div>
+          <div class="kpi-grid">
+            <div>
+              <div class="l">Faol buyurtma</div>
+              <div class="v">{{ branch.active_orders_count }}</div>
+            </div>
+            <div>
+              <div class="l">Holat</div>
+              <div class="v text-base">{{ branch.status === 'active' ? 'OK' : '!' }}</div>
+            </div>
+            <div>
+              <div class="l">Materiallar</div>
+              <div class="v text-base">Boshqarish</div>
+            </div>
+            <div>
+              <div class="l">Xodimlar</div>
+              <div class="v text-base">Ruxsatlar</div>
+            </div>
+          </div>
         </RouterLink>
       </div>
-    </section>
+    </template>
   </section>
 </template>

@@ -49,6 +49,7 @@ function withQuery(path: string, params: Record<string, string | null | undefine
 export const useClientCatalogStore = defineStore('clientCatalog', () => {
   const branches = ref<ClientBranch[]>([])
   const materials = ref<ClientBranchMaterial[]>([])
+  const materialsByBranch = ref<Record<string, ClientBranchMaterial[]>>({})
   const selectedBranchId = ref<string | null>(null)
   const loading = ref(false)
   const materialsLoading = ref(false)
@@ -95,6 +96,7 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
         withQuery(`/client/branches/${branchId}/materials`, { search }),
         authInit(),
       )
+      materialsByBranch.value = { ...materialsByBranch.value, [branchId]: materials.value }
     } catch (errorValue) {
       materialsError.value = 'client_materials_load_failed'
       materialsTraceId.value = apiTraceId(errorValue)
@@ -103,9 +105,19 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     }
   }
 
+  async function loadMaterialsForBranch(branchId: string) {
+    const rows = await api.get<ClientBranchMaterial[]>(
+      withQuery(`/client/branches/${branchId}/materials`, {}),
+      authInit(),
+    )
+    materialsByBranch.value = { ...materialsByBranch.value, [branchId]: rows }
+    return rows
+  }
+
   return {
     branches,
     materials,
+    materialsByBranch,
     selectedBranchId,
     loading,
     materialsLoading,
@@ -115,5 +127,6 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     materialsTraceId,
     loadBranches,
     loadMaterials,
+    loadMaterialsForBranch,
   }
 })

@@ -43,6 +43,15 @@ export interface PlatformWorkshopDetail {
   owner: { id: string; login: string; full_name: string; phone: string }
 }
 
+export interface PlatformOverview {
+  workshops_total: number
+  workshops_active: number
+  workshops_blocked: number
+  branches_total: number
+  clients_total: number
+  platform_users_active: number
+}
+
 export interface Manufacturer {
   id: string
   name: string
@@ -207,6 +216,7 @@ function withQuery(path: string, params: Record<string, string | null | undefine
 export const useAdminStore = defineStore('admin', () => {
   const workshops = ref<WorkshopSummary[]>([])
   const detail = ref<PlatformWorkshopDetail | null>(null)
+  const overview = ref<PlatformOverview | null>(null)
   const lastProvision = ref<ProvisionWorkshopResponse | null>(null)
   const manufacturers = ref<Manufacturer[]>([])
   const materials = ref<Material[]>([])
@@ -240,6 +250,20 @@ export const useAdminStore = defineStore('admin', () => {
       workshops.value = await api.get<WorkshopSummary[]>('/platform/workshops', authInit())
     } catch (errorValue) {
       error.value = 'workshops_load_failed'
+      traceId.value = apiTraceId(errorValue)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadOverview() {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      overview.value = await api.get<PlatformOverview>('/platform/overview', authInit())
+    } catch (errorValue) {
+      error.value = 'overview_load_failed'
       traceId.value = apiTraceId(errorValue)
     } finally {
       loading.value = false
@@ -547,6 +571,7 @@ export const useAdminStore = defineStore('admin', () => {
   return {
     workshops,
     detail,
+    overview,
     lastProvision,
     manufacturers,
     materials,
@@ -567,6 +592,7 @@ export const useAdminStore = defineStore('admin', () => {
     catalogTraceId,
     opsTraceId,
     loadWorkshops,
+    loadOverview,
     loadWorkshop,
     provision,
     blockWorkshop,

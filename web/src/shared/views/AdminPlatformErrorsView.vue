@@ -1,29 +1,44 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { useAdminStore, type ErrorRecord, type ErrorRecordStatus } from '@/shared/stores/admin'
+import { adminDateTime, dropdownOption, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useAdminStore, type ErrorRecord } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const selectedId = ref<string | null>(null)
 const resolvingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
+const query = ref('')
+const statusFilter = ref('all')
+const moduleFilter = ref('all')
 
-const selectedRecord = computed(() =>
-  selectedId.value ? admin.errors.find((row) => row.id === selectedId.value) : null,
+const statusOptions = [
+  dropdownOption('all', 'Hammasi', 'barcha kodlar'),
+  dropdownOption('open', 'Open', 'hal qilinmagan'),
+  dropdownOption('resolved', 'Resolved', 'tasdiqlangan'),
+]
+const moduleOptions = computed(() => [
+  dropdownOption('all', 'Modul', 'barcha modullar'),
+  ...Array.from(new Set(admin.errors.map((error) => error.module))).map((module) =>
+    dropdownOption(module, module, 'module'),
+  ),
+])
+const selectedDetail = computed(() =>
+  admin.errorDetail?.record.id === selectedId.value ? admin.errorDetail : null,
 )
-
-const statusTone: Record<ErrorRecordStatus, string> = {
-  open: 'bg-danger-soft text-danger',
-  resolved: 'bg-success-soft text-success',
-}
-
-function formatDate(value: string | null) {
-  if (!value) return 'Never'
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
+const filtered = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  return admin.errors.filter((record) => {
+    if (statusFilter.value !== 'all' && record.status !== statusFilter.value) return false
+    if (moduleFilter.value !== 'all' && record.module !== moduleFilter.value) return false
+    if (!needle) return true
+    return [record.code, record.module, record.preview_message ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(needle)
+  })
+})
 
 function contextText(value: Record<string, unknown> | null) {
   if (!value) return 'No context'
@@ -57,126 +72,180 @@ onMounted(admin.loadErrors)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="admin-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Application errors</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Grouped backend errors with occurrence traces and masked context.
-        </p>
+        <h1>Xatolik monitor</h1>
+        <p class="sub">Grouped application errors, spike counts, trace IDs va context.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadErrors">
-        Refresh
+        Yangilash
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="mp-surface p-5 text-sm font-bold text-ink-soft">
-      Loading errors
+    <div class="admin-filters">
+      <label class="admin-filter-input">
+        <span class="sr-only">Kod yoki tavsif</span>
+        <input v-model="query" placeholder="Kod yoki tavsif" />
+      </label>
+      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      <ProjectDropdown v-model="moduleFilter" label="Module" :options="moduleOptions" />
+    </div>
+
+    <section v-if="admin.opsLoading" class="admin-card p-5">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
     </section>
-    <section v-else-if="admin.opsError" class="mp-surface p-5 text-sm font-bold text-danger">
-      Errors could not be loaded.
-      <span v-if="admin.opsTraceId" class="font-mono">trace {{ admin.opsTraceId }}</span>
+
+    <section v-else-if="admin.opsError" class="admin-error">
+      <h3>Xatoliklar yuklanmadi</h3>
+      <p>
+        Monitor endpoint javob bermadi.
+        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
+      </p>
     </section>
-    <section v-else-if="admin.errors.length === 0" class="mp-surface p-5 text-sm text-ink-soft">
-      No errors recorded.
+
+    <section v-else-if="filtered.length === 0" class="admin-empty">
+      <h3>Xatolik yozilmagan</h3>
+      <p>No errors recorded - nice.</p>
     </section>
-    <section v-else class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <div class="mp-surface overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm">
-            <thead class="bg-sunk text-xs uppercase text-ink-muted">
-              <tr>
-                <th class="px-5 py-3">Code</th>
-                <th class="px-5 py-3">Module</th>
-                <th class="px-5 py-3">Counts</th>
-                <th class="px-5 py-3">Last occurrence</th>
-                <th class="px-5 py-3">Status</th>
-                <th class="px-5 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              <tr
-                v-for="record in admin.errors"
-                :key="record.id"
-                :class="selectedId === record.id ? 'bg-accent-soft' : ''"
-              >
-                <td class="max-w-[320px] px-5 py-3">
-                  <div class="truncate font-mono text-xs font-bold text-ink">
-                    {{ record.code }}
-                  </div>
-                  <div class="mt-1 truncate text-xs text-ink-soft">
-                    {{ record.preview_message ?? 'No preview' }}
-                  </div>
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">{{ record.module }}</td>
-                <td class="px-5 py-3 font-mono text-xs">
-                  {{ record.count_24h }} / 24 h · {{ record.count_7d }} / 7 d
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ formatDate(record.last_occurred_at) }}
-                </td>
-                <td class="px-5 py-3">
-                  <span class="mp-chip" :class="statusTone[record.status]">
-                    <span class="mp-dot" aria-hidden="true"></span>
-                    {{ record.status }}
+
+    <section v-else class="admin-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Kod</th>
+              <th>Modul</th>
+              <th class="admin-right">24 soat</th>
+              <th class="admin-right">7 kun</th>
+              <th>Oxirgi</th>
+              <th>Tavsif</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="record in filtered" :key="record.id">
+              <td class="nm">
+                {{ record.code }}
+                <small>{{ statusLabel(record.status) }}</small>
+              </td>
+              <td class="admin-mono text-ink-muted">{{ record.module }}</td>
+              <td class="admin-right admin-mono">{{ record.count_24h }}</td>
+              <td class="admin-right admin-mono">{{ record.count_7d }}</td>
+              <td class="admin-mono text-ink-muted">
+                {{ adminDateTime(record.last_occurred_at) }}
+              </td>
+              <td class="max-w-[360px] truncate">{{ record.preview_message ?? 'No preview' }}</td>
+              <td class="admin-right">
+                <div class="flex justify-end gap-2">
+                  <span class="admin-pill" :class="errorStatusTone(record.status)">
+                    {{ statusLabel(record.status) }}
                   </span>
-                </td>
-                <td class="px-5 py-3">
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     @click="openDetail(record)"
                   >
-                    Inspect
+                    Tafsilotlar
                   </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-
-      <aside class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Error detail</h2>
-          <p class="mt-1 text-sm text-ink-soft">
-            {{ selectedRecord?.code ?? 'Select a row to inspect occurrences.' }}
-          </p>
-        </div>
-        <div v-if="!admin.errorDetail || admin.errorDetail.record.id !== selectedId" class="p-5">
-          <p class="text-sm text-ink-soft">No error selected.</p>
-        </div>
-        <div v-else class="space-y-4 p-5">
-          <button
-            type="button"
-            class="mp-button mp-button-primary w-full"
-            :disabled="admin.errorDetail.record.status === 'resolved' || resolvingId === selectedId"
-            @click="resolveSelected"
-          >
-            {{ resolvingId === selectedId ? 'Resolving' : 'Resolve error code' }}
-          </button>
-
-          <article
-            v-for="occurrence in admin.errorDetail.occurrences"
-            :key="occurrence.id"
-            class="rounded-md border border-hairline bg-sunk p-4"
-          >
-            <div class="font-mono text-xs font-bold text-ink">trace {{ occurrence.trace_id }}</div>
-            <p class="mt-2 text-sm text-ink">{{ occurrence.message }}</p>
-            <p class="mt-1 font-mono text-xs text-ink-muted">
-              {{ formatDate(occurrence.occurred_at) }}
-            </p>
-            <pre
-              class="mt-3 max-h-44 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
-              >{{ contextText(occurrence.context) }}</pre
-            >
-          </article>
-        </div>
-      </aside>
     </section>
 
-    <p v-if="actionError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
-      Error action could not be completed.
+    <p
+      v-if="actionError"
+      class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+    >
+      Error action bajarilmadi.
     </p>
+
+    <template v-if="selectedId">
+      <div class="admin-modal-scrim" @click="selectedId = null"></div>
+      <section
+        class="admin-modal wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="error-title"
+      >
+        <div class="admin-modal-h">
+          <h3 id="error-title">Xatolik tafsiloti</h3>
+          <button
+            type="button"
+            class="admin-icon-button"
+            aria-label="Yopish"
+            @click="selectedId = null"
+          >
+            x
+          </button>
+        </div>
+        <div class="admin-modal-b">
+          <div v-if="!selectedDetail" class="admin-card p-4">
+            <div class="admin-skeleton-line w-3/5"></div>
+            <div class="admin-skeleton-line w-4/5"></div>
+          </div>
+          <template v-else>
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="font-mono text-sm font-extrabold text-ink">
+                  {{ selectedDetail.record.code }}
+                </div>
+                <p class="mt-1 text-sm text-ink-muted">
+                  {{ selectedDetail.record.preview_message }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="mp-button mp-button-primary"
+                :disabled="
+                  selectedDetail.record.status === 'resolved' || resolvingId === selectedId
+                "
+                @click="resolveSelected"
+              >
+                {{
+                  selectedDetail.record.status === 'resolved'
+                    ? 'Tasdiqlandi'
+                    : resolvingId === selectedId
+                      ? 'Tasdiqlanmoqda'
+                      : 'Tasdiqlash (resolve)'
+                }}
+              </button>
+            </div>
+            <article
+              v-for="occurrence in selectedDetail.occurrences"
+              :key="occurrence.id"
+              class="mb-3 rounded-md border border-hairline bg-sunk p-4"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="admin-mono font-bold text-ink">trace {{ occurrence.trace_id }}</span>
+                <span class="admin-mono text-ink-muted">{{
+                  adminDateTime(occurrence.occurred_at)
+                }}</span>
+              </div>
+              <p class="mt-3 text-sm text-ink">{{ occurrence.message }}</p>
+              <pre
+                class="mt-3 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
+                >{{ contextText(occurrence.context) }}</pre
+              >
+              <pre
+                v-if="occurrence.stack"
+                class="mt-3 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
+                >{{ occurrence.stack }}</pre
+              >
+            </article>
+          </template>
+        </div>
+        <div class="admin-modal-f">
+          <button type="button" class="mp-button mp-button-outline" @click="selectedId = null">
+            Yopish
+          </button>
+        </div>
+      </section>
+    </template>
   </section>
 </template>

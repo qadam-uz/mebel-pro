@@ -40,12 +40,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
-  async function loadList() {
+  async function loadList(limit = 10) {
     if (!auth.accessToken) return
     loading.value = true
     error.value = null
     try {
-      items.value = await api.get<NotificationItem[]>('/notifications?limit=10', authInit())
+      items.value = await api.get<NotificationItem[]>(`/notifications?limit=${limit}`, authInit())
     } catch {
       error.value = 'notifications_load_failed'
     } finally {

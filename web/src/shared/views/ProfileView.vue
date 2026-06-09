@@ -3,9 +3,15 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api } from '@/shared/api/client'
+import { formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
+import { useOrdersStore } from '@/shared/stores/orders'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 interface ClientProfile {
   id: string
@@ -25,6 +31,8 @@ interface ClientBranchOption {
 
 const config = useRoleConfig()
 const auth = useAuthStore()
+const orders = useOrdersStore()
+const workshop = useWorkshopStore()
 const router = useRouter()
 
 const sessions = ref<SessionResponse[]>([])
@@ -36,19 +44,43 @@ const branchOptions = ref<ClientBranchOption[]>([])
 const message = ref<string | null>(null)
 const error = ref<string | null>(null)
 const isSaving = ref(false)
+const editingClientName = ref(false)
+const logoutCurrentOpen = ref(false)
+const logoutEverywhereOpen = ref(false)
+const workshopProfileTab = ref<'profile' | 'password' | 'sessions'>('profile')
 
-const canChangePassword = computed(() => auth.me?.principal_type !== 'client')
 const accountLabel = computed(() => auth.displayName)
-const selectedBranchLabel = computed(() => {
-  const option = branchOptions.value.find((row) => row.branch_id === preferredBranchId.value)
-  return option ? `${option.workshop_name} · ${option.branch_name}` : 'No branch selected'
-})
+const branchChoiceOptions = computed<ChoiceOption[]>(() =>
+  branchOptions.value.map((option) => ({
+    value: option.branch_id,
+    label: `${option.workshop_name} · ${option.branch_name}`,
+    meta:
+      option.status === 'temporarily_closed'
+        ? (option.closed_reason ?? 'vaqtincha yopiq')
+        : undefined,
+    disabled: option.status === 'temporarily_closed',
+  })),
+)
 const scopeLabel = computed(() => {
   if (auth.me?.principal_type === 'workshop_user') {
-    return auth.me.is_owner ? 'Workshop owner' : `${auth.me.grants.length} branch grants`
+    return auth.me.is_owner ? 'Egasi · barcha ruxsatlar' : `${auth.me.grants.length} ruxsat`
   }
-  if (auth.me?.principal_type === 'platform_user') return 'Platform operations'
-  return auth.me?.preferred_branch_id ? 'Preferred branch selected' : 'No preferred branch'
+  if (auth.me?.principal_type === 'platform_user') return 'Platforma operatori'
+  return auth.me?.preferred_branch_id ? 'Afzal filial tanlangan' : 'Afzal filial tanlanmagan'
+})
+const workshopProfileSubtitle = computed(() => {
+  const role = auth.me?.is_owner ? 'Egasi' : 'Xodim'
+  const tenant = workshop.settings?.name?.trim() || config.tenantLabel
+  return `${auth.displayName} · ${role} · ${tenant}`
+})
+const workshopGrantRows = computed(() => {
+  if (auth.me?.principal_type !== 'workshop_user' || auth.me.is_owner) return []
+  return auth.me.grants.map((grant) => ({
+    key: `${grant.permission}-${grant.branch_id}`,
+    permission: grant.permission,
+    label: workshopPermissionLabel(grant.permission),
+    branch: grant.branch_id.slice(0, 8),
+  }))
 })
 
 async function loadSessions() {
@@ -68,22 +100,30 @@ async function loadClientProfile() {
 async function saveClientProfile() {
   error.value = null
   message.value = null
-  const updated = await api.patch<ClientProfile>(
-    '/client/profile',
-    {
-      name: clientName.value,
-      preferred_branch_id: preferredBranchId.value,
-    },
-    { accessToken: auth.accessToken },
-  )
-  if (auth.me) {
-    auth.me = {
-      ...auth.me,
-      name: updated.name,
-      preferred_branch_id: updated.preferred_branch_id,
+  isSaving.value = true
+  try {
+    const updated = await api.patch<ClientProfile>(
+      '/client/profile',
+      {
+        name: clientName.value,
+        preferred_branch_id: preferredBranchId.value,
+      },
+      { accessToken: auth.accessToken },
+    )
+    if (auth.me) {
+      auth.me = {
+        ...auth.me,
+        name: updated.name,
+        preferred_branch_id: updated.preferred_branch_id,
+      }
     }
+    message.value = 'Profil yangilandi.'
+    editingClientName.value = false
+  } catch {
+    error.value = 'profile_update_failed'
+  } finally {
+    isSaving.value = false
   }
-  message.value = 'Profile updated.'
 }
 
 async function savePassword() {
@@ -94,7 +134,7 @@ async function savePassword() {
     await auth.changePassword(currentPassword.value, newPassword.value)
     currentPassword.value = ''
     newPassword.value = ''
-    message.value = 'Password updated.'
+    message.value = "Parol o'zgartirildi."
     await loadSessions()
   } catch {
     error.value = auth.lastError ?? 'password_change_failed'
@@ -113,185 +153,424 @@ async function logoutEverywhere() {
   await router.replace(config.loginPath)
 }
 
+function deviceLabel(session: SessionResponse) {
+  const browser =
+    typeof session.device_info.browser === 'string' && session.device_info.browser.trim()
+      ? session.device_info.browser
+      : 'Browser'
+  const os =
+    typeof session.device_info.os === 'string' && session.device_info.os.trim()
+      ? session.device_info.os
+      : 'Qurilma'
+  return `${browser} · ${os}`
+}
+
+function workshopPermissionLabel(permission: string) {
+  const labels: Record<string, string> = {
+    view_dashboard: 'Dashboard',
+    manage_orders: 'Buyurtmalarni boshqarish',
+    process_production: 'Ishlab chiqarish',
+    manage_inventory: 'Ombor',
+    manage_catalog: 'Katalog',
+    manage_finance: 'Moliya yozuvlari',
+    view_finance_reports: 'Moliya hisobotlari',
+  }
+  return labels[permission] ?? permission
+}
+
 onMounted(async () => {
-  await loadSessions()
-  await loadClientProfile()
+  await Promise.all([
+    loadSessions(),
+    loadClientProfile(),
+    auth.me?.principal_type === 'client' ? orders.loadClientOrders() : Promise.resolve(),
+    auth.me?.principal_type === 'workshop_user' ? workshop.loadSettings() : Promise.resolve(),
+  ])
 })
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div>
-      <h1 class="font-serif text-3xl font-semibold text-ink">{{ config.roleLabel }} profile</h1>
-      <p class="mt-2 max-w-2xl text-base text-ink-soft">
-        Account identity, password state, and active sessions.
-      </p>
+  <section v-if="auth.me?.principal_type === 'client'">
+    <button type="button" class="client-back" @click="$router.back()">← Orqaga</button>
+
+    <div class="client-page-head">
+      <div>
+        <h1>Profil</h1>
+        <p class="sub">Profilingiz va faol sessiyalar.</p>
+      </div>
+      <button type="button" class="mp-button mp-button-outline" @click="logoutCurrentOpen = true">
+        Chiqib ketish
+      </button>
     </div>
 
-    <div
-      v-if="auth.me?.password_reset_required"
-      class="rounded-md border border-warning bg-warning-soft px-4 py-3 text-warning"
-    >
-      <div class="font-extrabold">Password change required</div>
-      <p class="mt-1 text-sm">Update the temporary password before opening workspace routes.</p>
-    </div>
+    <div class="grid max-w-[760px] gap-5">
+      <section class="client-card">
+        <div class="client-card-h">
+          <h2>Profil</h2>
+        </div>
+        <div class="client-card-b">
+          <div class="client-row-item">
+            <div>
+              <div class="client-row-name">Ism</div>
+              <div class="text-sm text-ink-muted">
+                Ustaxona buyurtmangiz bo'yicha sizga shunday murojaat qiladi
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <form
+                v-if="editingClientName"
+                class="flex items-center gap-2"
+                @submit.prevent="saveClientProfile"
+              >
+                <input
+                  v-model="clientName"
+                  class="mp-input min-w-52"
+                  autocomplete="name"
+                  required
+                />
+                <button
+                  type="submit"
+                  class="mp-button mp-button-primary min-h-8 px-3 text-xs"
+                  :disabled="isSaving"
+                >
+                  Saqlash
+                </button>
+              </form>
+              <template v-else>
+                <span class="font-bold text-ink">{{ auth.displayName }}</span>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-8 px-3 text-xs"
+                  @click="editingClientName = true"
+                >
+                  O'zgartirish
+                </button>
+              </template>
+            </div>
+          </div>
 
-    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold">Account</h2>
-        <dl class="mt-5 grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Name</dt>
-            <dd class="mt-1 text-base font-bold text-ink">{{ accountLabel }}</dd>
+          <div class="client-row-item">
+            <div>
+              <div class="client-row-name">Telefon</div>
+              <div class="text-sm text-ink-muted">
+                Kirish uchun ishlatiladi · o'zgartirib bo'lmaydi
+              </div>
+            </div>
+            <div class="font-mono text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
           </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Role</dt>
-            <dd class="mt-1 text-base font-bold text-ink">{{ config.roleLabel }}</dd>
+
+          <div class="client-row-item">
+            <div>
+              <div class="client-row-name">Afzal filial</div>
+              <div class="text-sm text-ink-muted">
+                Yangi chizma shu filial konteksti bilan boshlanadi
+              </div>
+            </div>
+            <div class="grid w-full max-w-md gap-2 sm:justify-items-end">
+              <FormSelect
+                v-model="preferredBranchId"
+                class="w-full sm:max-w-md"
+                label="Tanlangan"
+                :options="branchChoiceOptions"
+                placeholder="Tanlanmagan"
+              />
+              <div class="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-8 px-3 text-xs"
+                  @click="preferredBranchId = null"
+                >
+                  Tozalash
+                </button>
+                <button
+                  type="button"
+                  class="mp-button mp-button-primary min-h-8 px-3 text-xs"
+                  :disabled="isSaving"
+                  @click="saveClientProfile"
+                >
+                  Saqlash
+                </button>
+              </div>
+            </div>
           </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Phone</dt>
-            <dd class="mt-1 font-mono text-sm text-ink-soft">{{ auth.me?.phone ?? '—' }}</dd>
+
+          <div class="client-row-item">
+            <div>
+              <div class="client-row-name">Buyurtmalar soni</div>
+            </div>
+            <div class="font-mono text-sm text-ink">{{ orders.clientOrders.length }} ta</div>
           </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Scope</dt>
-            <dd class="mt-1 text-base font-bold text-ink">{{ scopeLabel }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Status</dt>
-            <dd class="mt-1">
-              <span class="mp-chip bg-success-soft text-success">
-                <span class="mp-dot" aria-hidden="true"></span>
-                {{ auth.me?.status ?? 'active' }}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Session</dt>
-            <dd class="mt-1 font-mono text-sm text-ink-soft">{{ auth.me?.session_id }}</dd>
-          </div>
-        </dl>
+
+          <p v-if="message" class="mt-3 text-sm font-bold text-success">{{ message }}</p>
+          <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
+        </div>
       </section>
 
-      <aside class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold">Session actions</h2>
-        <div class="mt-4 space-y-3">
-          <button type="button" class="mp-button mp-button-outline w-full" @click="logoutCurrent">
-            Log out
-          </button>
+      <section class="client-card">
+        <div class="client-card-h">
+          <h2>Faol sessiyalar</h2>
           <button
             type="button"
-            class="mp-button mp-button-outline w-full"
-            @click="logoutEverywhere"
+            class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+            @click="logoutEverywhereOpen = true"
           >
-            Log out everywhere
+            Hammasini chiqarish
           </button>
         </div>
-      </aside>
+        <div class="client-card-b">
+          <div v-if="sessions.length === 0" class="text-sm text-ink-muted">
+            Faol sessiya topilmadi.
+          </div>
+          <template v-else>
+            <div v-for="session in sessions" :key="session.id" class="client-row-item">
+              <div>
+                <div class="client-row-name">
+                  {{ deviceLabel(session) }}
+                  <span v-if="session.is_current" class="client-pill client-pill-ready ml-2"
+                    >Joriy</span
+                  >
+                </div>
+                <div class="text-sm text-ink-muted">
+                  {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
+                </div>
+              </div>
+              <div class="font-mono text-xs text-ink-muted">
+                {{ session.is_current ? '—' : 'active' }}
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
     </div>
 
-    <section v-if="canChangePassword" class="mp-surface p-5">
-      <h2 class="font-serif text-xl font-semibold">Password</h2>
-      <form class="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto]" @submit.prevent="savePassword">
+    <ConfirmDialog
+      :open="logoutCurrentOpen"
+      title="Chiqib ketish"
+      message="Mijoz kabinetidan chiqasiz."
+      confirm-label="Chiqish"
+      danger
+      @cancel="logoutCurrentOpen = false"
+      @confirm="logoutCurrent"
+    />
+    <ConfirmDialog
+      :open="logoutEverywhereOpen"
+      title="Hammasi chiqsin"
+      message="Barcha qurilmalardan chiqasiz."
+      confirm-label="Hammasini chiqarish"
+      danger
+      @cancel="logoutEverywhereOpen = false"
+      @confirm="logoutEverywhere"
+    />
+  </section>
+
+  <section v-else>
+    <div class="page-head">
+      <div>
+        <h1>Mening profilim</h1>
+        <p class="sub">{{ workshopProfileSubtitle }}</p>
+      </div>
+      <button type="button" class="mp-button mp-button-outline text-danger" @click="logoutCurrent">
+        Chiqib ketish
+      </button>
+    </div>
+
+    <div v-if="auth.me?.password_reset_required" class="client-banner warn">
+      <span class="font-extrabold">!</span>
+      <span class="min-w-0">
+        <b>Parolni o'zgartirish kerak</b>
+        <span class="block"
+          >Workspace yuzalarini ochishdan oldin vaqtinchalik parolni almashtiring.</span
+        >
+      </span>
+    </div>
+
+    <div class="client-tabs" role="tablist" aria-label="Profil bo'limlari">
+      <button
+        type="button"
+        class="client-tab"
+        :class="{ active: workshopProfileTab === 'profile' }"
+        @click="workshopProfileTab = 'profile'"
+      >
+        Profil
+      </button>
+      <button
+        type="button"
+        class="client-tab"
+        :class="{ active: workshopProfileTab === 'password' }"
+        @click="workshopProfileTab = 'password'"
+      >
+        Parolni o'zgartirish
+      </button>
+      <button
+        type="button"
+        class="client-tab"
+        :class="{ active: workshopProfileTab === 'sessions' }"
+        @click="workshopProfileTab = 'sessions'"
+      >
+        Sessiyalar
+      </button>
+    </div>
+
+    <section v-if="workshopProfileTab === 'profile'" class="grid max-w-[680px] gap-4">
+      <div class="card">
+        <div class="card-h">
+          <h2>Ma'lumotlar</h2>
+        </div>
+        <div class="card-b">
+          <div class="row-item">
+            <div>
+              <div class="nm">F.I.O</div>
+            </div>
+            <div class="meta">{{ accountLabel }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Login</div>
+            </div>
+            <div class="meta">{{ auth.me?.login ?? '—' }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Telefon</div>
+            </div>
+            <div class="meta">{{ auth.me?.phone ?? '—' }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Egasi</div>
+            </div>
+            <div class="meta">
+              <span
+                class="mp-chip"
+                :class="
+                  auth.me?.is_owner ? 'bg-success-soft text-success' : 'bg-sunk text-ink-muted'
+                "
+              >
+                <span class="mp-dot" aria-hidden="true"></span>
+                {{ auth.me?.is_owner ? 'Ha · barcha ruxsatlar' : "Yo'q" }}
+              </span>
+            </div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Scope</div>
+            </div>
+            <div class="meta">{{ scopeLabel }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Status</div>
+            </div>
+            <div class="meta">{{ auth.me?.status ?? 'active' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <h2>Ruxsatlar</h2>
+        </div>
+        <div class="card-b">
+          <div v-if="auth.me?.is_owner" class="client-banner warn mb-0">
+            <span class="font-extrabold">i</span>
+            <span>Egasi sifatida barcha filialda barcha ruxsatga avtomatik egasiz.</span>
+          </div>
+          <p v-else-if="workshopGrantRows.length === 0" class="text-sm text-ink-soft">
+            Sizga hali hech qanday ruxsat berilmagan — ustaxona egasiga murojaat qiling.
+          </p>
+          <div v-else class="divide-y divide-hairline">
+            <div
+              v-for="grant in workshopGrantRows"
+              :key="grant.key"
+              class="row-item"
+              style="border-bottom: 0"
+            >
+              <div>
+                <div class="nm">{{ grant.label }}</div>
+                <small class="font-mono text-[11px] text-ink-muted">{{ grant.permission }}</small>
+              </div>
+              <div class="meta">{{ grant.branch }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section v-else-if="workshopProfileTab === 'password'" class="card max-w-[520px]">
+      <div class="card-h">
+        <h2>Parolni o'zgartirish</h2>
+      </div>
+      <form class="card-b grid gap-4" @submit.prevent="savePassword">
+        <div class="client-banner warn mb-0">
+          <span class="font-extrabold">i</span>
+          <span>Parol o'zgartirilgandan keyin barcha boshqa sessiyalar yopiladi.</span>
+        </div>
         <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Current password</span>
+          <span class="mb-2 block text-sm font-bold text-ink">Joriy parol</span>
           <input
             v-model="currentPassword"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
+            class="mp-input"
             type="password"
             autocomplete="current-password"
             required
           />
         </label>
         <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">New password</span>
+          <span class="mb-2 block text-sm font-bold text-ink">Yangi parol</span>
           <input
             v-model="newPassword"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
+            class="mp-input"
             type="password"
             autocomplete="new-password"
+            minlength="8"
             required
           />
-        </label>
-        <button type="submit" class="mp-button mp-button-primary self-end" :disabled="isSaving">
-          {{ isSaving ? 'Saving' : 'Save' }}
-        </button>
-      </form>
-      <p v-if="message" class="mt-3 text-sm font-bold text-success">{{ message }}</p>
-      <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
-    </section>
-
-    <section v-else class="mp-surface p-5">
-      <h2 class="font-serif text-xl font-semibold">Client profile</h2>
-      <form class="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto]" @submit.prevent="saveClientProfile">
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Name</span>
-          <input
-            v-model="clientName"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
-            type="text"
-            autocomplete="name"
-            required
-          />
-        </label>
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Preferred branch</span>
-          <div class="flex gap-2">
-            <input
-              class="min-h-11 w-full rounded-md border border-hairline-strong bg-sunk px-3 text-base text-ink"
-              :value="selectedBranchLabel"
-              readonly
-            />
-            <button
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="preferredBranchId = null"
-            >
-              Clear
-            </button>
-          </div>
-        </label>
-        <button type="submit" class="mp-button mp-button-primary self-end">Save</button>
-      </form>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <button
-          v-for="option in branchOptions"
-          :key="option.branch_id"
-          type="button"
-          class="mp-button min-h-9 px-3 text-xs"
-          :class="
-            option.branch_id === preferredBranchId ? 'mp-button-primary' : 'mp-button-outline'
-          "
-          @click="preferredBranchId = option.branch_id"
-        >
-          {{ option.workshop_name }} · {{ option.branch_name }}
-        </button>
-      </div>
-    </section>
-
-    <section class="mp-surface overflow-hidden">
-      <div class="border-b border-hairline px-5 py-4">
-        <h2 class="font-serif text-xl font-semibold">Sessions</h2>
-      </div>
-      <div class="divide-y divide-hairline">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          class="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto]"
-        >
-          <div>
-            <div class="font-mono text-sm text-ink">{{ session.id }}</div>
-            <div class="mt-1 text-sm text-ink-soft">
-              Created {{ formatDate(session.created_at) }} · last used
-              {{ formatDate(session.last_used_at) }}
-            </div>
-          </div>
-          <span
-            class="mp-chip self-start"
-            :class="session.is_current ? 'bg-success-soft text-success' : 'bg-sunk text-ink-muted'"
+          <span class="mt-1 block text-xs text-ink-muted"
+            >Kamida 8 belgi · katta + kichik + raqam</span
           >
-            <span class="mp-dot" aria-hidden="true"></span>
-            {{ session.is_current ? 'current' : 'active' }}
-          </span>
+        </label>
+        <div class="flex justify-end">
+          <button type="submit" class="mp-button mp-button-primary" :disabled="isSaving">
+            {{ isSaving ? 'Saqlanmoqda' : "O'zgartirish" }}
+          </button>
+        </div>
+        <p v-if="message" class="text-sm font-bold text-success">{{ message }}</p>
+        <p v-if="error" class="text-sm font-bold text-danger">{{ error }}</p>
+      </form>
+    </section>
+
+    <section v-else class="card max-w-[680px]">
+      <div class="card-h">
+        <h2>Faol sessiyalar</h2>
+        <button
+          type="button"
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
+          @click="logoutEverywhere"
+        >
+          Hammasi yopilsin
+        </button>
+      </div>
+      <div class="card-b">
+        <div v-if="sessions.length === 0" class="client-empty">
+          <h3>Sessiya topilmadi</h3>
+          <p>Joriy sessiya keyingi yangilashda ko'rinadi.</p>
+        </div>
+        <div v-else class="divide-y divide-hairline">
+          <div v-for="session in sessions" :key="session.id" class="row-item">
+            <div>
+              <div class="nm">
+                {{ deviceLabel(session) }}
+                <span v-if="session.is_current" class="mp-chip bg-success-soft text-success ml-2">
+                  <span class="mp-dot" aria-hidden="true"></span>
+                  Joriy
+                </span>
+              </div>
+              <small class="text-ink-muted">
+                Oxirgi: {{ formatDate(session.last_used_at) }} · yaratildi
+                {{ formatDate(session.created_at) }}
+              </small>
+            </div>
+            <div class="meta">{{ session.is_current ? '—' : session.id.slice(0, 8) }}</div>
+          </div>
         </div>
       </div>
     </section>

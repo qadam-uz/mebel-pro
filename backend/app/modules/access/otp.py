@@ -279,6 +279,9 @@ async def _enforce_send_limits(
     request_ip: str,
     now: datetime,
 ) -> None:
+    if not settings.OTP_RATE_LIMITS_ENABLED:
+        return
+
     cooldown_row = await db.scalar(
         select(PhoneVerificationChallenge)
         .where(PhoneVerificationChallenge.phone == phone)

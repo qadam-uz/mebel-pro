@@ -102,6 +102,7 @@ services:
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
       OTP_DEV_CODES: ${OTP_DEV_CODES:-["000000"]}
+      OTP_RATE_LIMITS_ENABLED: ${OTP_RATE_LIMITS_ENABLED:-true}
     # `fastapi dev` = uvicorn with autoreload.
     command: ["sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]
     volumes:

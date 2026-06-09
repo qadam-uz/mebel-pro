@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
+import { clientStatusLabel, clientStatusPillClass, formatRelativeDate } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import { formatDate, formatTiyin } from '@/shared/formatters'
-import { clientStatusLabel, useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
+import { formatTiyin } from '@/shared/formatters'
+import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 
 const orders = useOrdersStore()
 const rolePath = useRolePath()
+const router = useRouter()
 const status = ref('all')
 const search = ref('')
+const orderPendingCancel = ref<OrderSummary | null>(null)
+const cancelReason = ref('Mijoz buyurtmani tasdiqlashdan oldin bekor qildi')
+const actionError = ref<string | null>(null)
 
 const statusOptions = [
-  { value: 'all', label: 'All', meta: 'all orders' },
-  { value: 'active', label: 'Active', meta: 'open production' },
-  { value: 'completed', label: 'Completed', meta: 'collected' },
-  { value: 'cancelled', label: 'Cancelled', meta: 'stopped' },
+  { value: 'all', label: 'Hammasi', meta: 'barcha buyurtmalar' },
+  { value: 'active', label: 'Faol', meta: 'ish jarayonida' },
+  { value: 'completed', label: 'Tugatilgan', meta: 'topshirilgan' },
+  { value: 'cancelled', label: 'Bekor qilingan', meta: "to'xtatilgan" },
 ]
 
-const filtered = computed(() => orders.clientOrders)
+const visibleOrders = computed(() => orders.clientOrders)
 
 let timer: number | undefined
 watch([status, search], () => {
@@ -29,11 +35,34 @@ watch([status, search], () => {
   }, 250)
 })
 
-function statusClass(order: OrderSummary) {
-  if (order.status === 'completed') return 'bg-success-soft text-success'
-  if (order.status === 'cancelled') return 'bg-danger-soft text-danger'
-  if (order.status === 'ready') return 'bg-info-soft text-info'
-  return 'bg-warning-soft text-warning'
+function nextAction(order: OrderSummary) {
+  if (order.status === 'new') return 'Bekor qilish'
+  if (order.status === 'ready') return 'Olishga tayyor'
+  if (order.status === 'completed') return 'Tafsilot'
+  return 'Kuzatish'
+}
+
+function openOrder(order: OrderSummary) {
+  void router.push(rolePath(`/c/orders/${order.id}`))
+}
+
+function requestCancel(order: OrderSummary) {
+  cancelReason.value = 'Mijoz buyurtmani tasdiqlashdan oldin bekor qildi'
+  actionError.value = null
+  orderPendingCancel.value = order
+}
+
+async function confirmCancel() {
+  const order = orderPendingCancel.value
+  if (!order) return
+  actionError.value = null
+  try {
+    await orders.cancelClientOrder(order.id, order.version, cancelReason.value.trim())
+    orderPendingCancel.value = null
+    await orders.loadClientOrders({ status: status.value, search: search.value })
+  } catch {
+    actionError.value = orders.error ?? 'order_cancel_failed'
+  }
 }
 
 onMounted(() => {
@@ -42,76 +71,128 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="client-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">My orders</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Track active orders and review completed pickups.
-        </p>
+        <h1>Mening buyurtmalarim</h1>
+        <p class="sub">Faol va tugatilgan buyurtmalaringiz.</p>
       </div>
       <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary">
-        New cutting
+        Yangi buyurtma
       </RouterLink>
     </div>
 
-    <section class="mp-surface p-4">
-      <div class="grid gap-3 md:grid-cols-[220px_1fr]">
-        <FormSelect v-model="status" label="Status" :options="statusOptions" />
-        <label class="grid gap-1 text-sm font-bold text-ink">
-          Search
-          <input v-model="search" class="mp-input" placeholder="Order number" />
-        </label>
-      </div>
-    </section>
+    <div class="mb-5 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+      <FormSelect v-model="status" label="Holat" :options="statusOptions" />
+      <label class="grid gap-1 text-sm font-bold text-ink">
+        Qidirish
+        <input v-model="search" class="mp-input" placeholder="Buyurtma raqami..." />
+      </label>
+    </div>
 
-    <section class="mp-surface overflow-hidden">
-      <div v-if="orders.loading" class="space-y-3 p-5" aria-live="polite">
-        <div class="h-16 animate-pulse rounded bg-sunk"></div>
-        <div class="h-16 animate-pulse rounded bg-sunk"></div>
+    <div v-if="orders.loading" class="grid gap-3" aria-live="polite">
+      <div v-for="item in 4" :key="item" class="client-card p-5">
+        <div class="client-skeleton h-4 w-1/3"></div>
+        <div class="client-skeleton mt-3 h-5 w-1/2"></div>
+        <div class="client-skeleton mt-5 h-4 w-2/5"></div>
       </div>
-      <div v-else-if="orders.error" class="p-5">
-        <div class="rounded-md bg-danger-soft p-4 text-danger">
-          <div class="font-extrabold">Orders could not be loaded</div>
-          <p class="mt-1 text-sm">trace {{ orders.traceId ?? 'unavailable' }}</p>
-        </div>
-      </div>
-      <div
-        v-else-if="filtered.length === 0"
-        class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-6"
+    </div>
+
+    <div v-else-if="orders.error" class="client-error">
+      <div class="client-error-icon">!</div>
+      <h3>Buyurtmalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="client-trace">trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4"
+        @click="orders.loadClientOrders({ status, search })"
       >
-        <h2 class="font-serif text-2xl font-semibold text-ink">No orders</h2>
-        <p class="mt-2 text-sm text-ink-soft">Start from a cutting when you are ready.</p>
-      </div>
-      <div v-else class="divide-y divide-hairline">
-        <article
-          v-for="order in filtered"
-          :key="order.id"
-          class="grid gap-4 p-5 md:grid-cols-[1fr_auto]"
-        >
+        Qayta urinish
+      </button>
+    </div>
+
+    <div v-else-if="visibleOrders.length === 0" class="client-empty">
+      <div class="client-empty-icon">B</div>
+      <h3>Buyurtma yo'q</h3>
+      <p v-if="status === 'all' && !search">Hali buyurtma bermagansiz — chizmadan boshlang.</p>
+      <p v-else>Bu so'rovga mos buyurtma topilmadi.</p>
+      <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
+        Yangi buyurtma
+      </RouterLink>
+    </div>
+
+    <div v-else class="grid gap-3">
+      <article
+        v-for="order in visibleOrders"
+        :key="order.id"
+        class="client-card cursor-pointer p-5 transition hover:border-ink"
+        @click="openOrder(order)"
+      >
+        <div class="mb-4 flex items-start justify-between gap-4">
           <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="font-mono text-base font-extrabold text-ink">
-                {{ order.order_number }}
-              </h2>
-              <span class="mp-chip" :class="statusClass(order)">
-                <span class="mp-dot" aria-hidden="true"></span>
-                {{ clientStatusLabel[order.status] }}
-              </span>
+            <div class="font-mono text-xs uppercase tracking-wide text-ink-muted">
+              {{ order.order_number }}
             </div>
-            <p class="mt-2 text-sm text-ink-soft">
-              {{ order.branch_name }} · {{ formatDate(order.created_at) }} ·
-              {{ order.item_count }} parts
-            </p>
-            <p class="mt-2 font-mono text-sm font-bold text-ink">
-              {{ formatTiyin(order.total_tiyin) }} frozen total
+            <h2 class="my-1 font-serif text-xl font-semibold text-ink">
+              {{ order.branch_name }}
+            </h2>
+            <p class="text-sm text-ink-soft">
+              {{ order.workshop_name }} · {{ formatRelativeDate(order.created_at) }} ·
+              {{ order.item_count }} qism
             </p>
           </div>
-          <RouterLink :to="rolePath(`/c/orders/${order.id}`)" class="mp-button mp-button-primary">
-            Track
+          <span :class="clientStatusPillClass(order.status)">
+            {{ clientStatusLabel[order.status] }}
+          </span>
+        </div>
+
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4"
+        >
+          <div class="font-mono text-base font-bold text-ink">
+            {{ formatTiyin(order.total_tiyin) }}
+            <small class="font-sans text-xs font-medium text-ink-muted">jami narx</small>
+          </div>
+          <button
+            v-if="order.status === 'new'"
+            type="button"
+            class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+            @click.stop="requestCancel(order)"
+          >
+            {{ nextAction(order) }}
+          </button>
+          <RouterLink
+            v-else
+            :to="rolePath(`/c/orders/${order.id}`)"
+            class="mp-button min-h-8 px-3 text-xs"
+            :class="order.status === 'completed' ? 'mp-button-outline' : 'mp-button-primary'"
+            @click.stop
+          >
+            {{ nextAction(order) }}
           </RouterLink>
-        </article>
-      </div>
-    </section>
+        </div>
+      </article>
+    </div>
+
+    <ConfirmDialog
+      :open="Boolean(orderPendingCancel)"
+      title="Buyurtmani bekor qilish"
+      message="Buyurtma bekor qilinadi. Bu amal qaytarilmaydi."
+      confirm-label="Bekor qilish"
+      danger
+      :busy="orders.actionLoading"
+      :confirm-disabled="cancelReason.trim().length === 0"
+      @cancel="orderPendingCancel = null"
+      @confirm="confirmCancel"
+    >
+      <label class="grid gap-1 text-sm font-bold text-ink">
+        Sabab
+        <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
+      </label>
+      <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">
+        {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
+      </p>
+    </ConfirmDialog>
   </section>
 </template>

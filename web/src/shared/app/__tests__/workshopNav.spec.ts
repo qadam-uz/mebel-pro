@@ -14,15 +14,17 @@ describe('workshop navigation permissions', () => {
         path: identity,
       }).map((item) => item.label),
     ).toEqual([
-      'Dashboard',
-      'Orders',
-      'Cutting queue',
-      'Banding queue',
-      'Branches',
-      'Cutting plans',
-      'Finance',
-      'Users',
-      'Profile',
+      'Asosiy',
+      'Buyurtmalar',
+      'Kesish navbati',
+      'Krom navbati',
+      'Ombor',
+      'Material katalogi',
+      'Hisobotlar',
+      'Tushum va xarajat',
+      'Filiallar',
+      'Xodimlar',
+      'Sozlamalar',
     ])
   })
 
@@ -34,7 +36,7 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: '',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Dashboard', 'Profile'])
+    ).toEqual(['Asosiy'])
   })
 
   it('shows only the granted branch workspace for inventory-only staff', () => {
@@ -45,7 +47,7 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Dashboard', 'Branch workspace', 'Profile'])
+    ).toEqual(['Asosiy', 'Ombor'])
   })
 
   it('shows production queues only to staff with production grants', () => {
@@ -56,14 +58,7 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual([
-      'Dashboard',
-      'Branch workspace',
-      'Cutting queue',
-      'Banding queue',
-      'Cutting plans',
-      'Profile',
-    ])
+    ).toEqual(['Asosiy', 'Kesish navbati', 'Krom navbati'])
   })
 
   it('shows finance only to staff with finance grants', () => {
@@ -74,6 +69,6 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Dashboard', 'Branch workspace', 'Finance', 'Profile'])
+    ).toEqual(['Asosiy', 'Hisobotlar', 'Tushum va xarajat'])
   })
 })

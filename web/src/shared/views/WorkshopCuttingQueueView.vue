@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
+import { orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
@@ -40,118 +41,138 @@ async function complete(order: OrderSummary) {
   }
 }
 
+function partsLine(order: OrderSummary) {
+  return `${order.item_count} qism${order.panels_used_snapshot ? ` · ${order.panels_used_snapshot} panel` : ''}`
+}
+
 onMounted(refresh)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Cutting queue</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">Orders assigned to the current cutter.</p>
+        <h1>Kesish navbati</h1>
+        <p class="sub">Sizga tayinlangan buyurtmalar. Boshqaning ishi bu yerda ko'rinmaydi.</p>
       </div>
-      <RouterLink :to="rolePath('/workshop/orders')" class="mp-button mp-button-outline">
-        Orders
-      </RouterLink>
+      <div class="tools">
+        <RouterLink
+          :to="rolePath('/workshop/orders')"
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+        >
+          Buyurtmalar
+        </RouterLink>
+      </div>
     </div>
 
-    <section v-if="orders.loading" class="mp-surface p-5" aria-live="polite">
-      Loading cutting queue
-    </section>
-    <section v-else-if="orders.error" class="mp-surface p-5 text-danger">
-      Cutting queue could not be loaded. trace {{ orders.traceId ?? 'unavailable' }}
-    </section>
-    <section v-else-if="queueOrders.length === 0" class="mp-surface p-5">
-      <div class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-6">
-        <h2 class="font-serif text-2xl font-semibold text-ink">No assigned cutting jobs</h2>
-        <p class="mt-2 text-sm text-ink-soft">Assigned cutting work appears here.</p>
+    <section v-if="orders.loading" class="card p-5" aria-live="polite">
+      <div class="grid gap-3">
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
       </div>
+    </section>
+
+    <section v-else-if="orders.error" class="st-error">
+      <h3>Kesish navbatini yuklab bo'lmadi</h3>
+      <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+    </section>
+
+    <section v-else-if="queueOrders.length === 0" class="st-empty">
+      <h3>Sizga tayinlangan kesish ishi yo'q</h3>
+      <p>Tasdiqlangan va sizga biriktirilgan buyurtmalar shu yerda paydo bo'ladi.</p>
     </section>
 
     <template v-else>
-      <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm text-danger">
-        {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
-      </p>
+      <div v-if="actionError" class="banner danger">
+        <div class="grow">{{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}</div>
+      </div>
 
-      <section class="grid gap-4 xl:grid-cols-2">
-        <div class="mp-surface overflow-hidden">
-          <div class="border-b border-hairline px-5 py-4">
-            <h2 class="font-serif text-xl font-semibold text-ink">Awaiting cut</h2>
+      <div class="queue-grid">
+        <section class="queue-col">
+          <h2>
+            Kesishni kutmoqda
+            <span class="ct">{{ awaiting.length }}</span>
+          </h2>
+          <div v-if="awaiting.length === 0" class="st-empty !px-4 !py-8">
+            <h3>Hozir kesishni kutayotgan ishingiz yo'q</h3>
           </div>
-          <div v-if="awaiting.length === 0" class="p-5 text-sm text-ink-soft">
-            No confirmed jobs waiting to start.
-          </div>
-          <div v-else class="divide-y divide-hairline">
-            <RouterLink
-              v-for="order in awaiting"
-              :key="order.id"
-              :to="rolePath(`/workshop/orders/${order.id}`)"
-              class="grid gap-2 px-5 py-4 no-underline transition hover:bg-sunk"
-            >
-              <span class="font-mono text-sm font-extrabold text-ink">
-                {{ order.order_number }}
-              </span>
-              <span class="text-sm text-ink-soft">
-                {{ order.contact_name }} · {{ order.item_count }} parts · {{ order.branch_name }}
-              </span>
-            </RouterLink>
-          </div>
-        </div>
-
-        <div class="mp-surface overflow-hidden">
-          <div class="border-b border-hairline px-5 py-4">
-            <h2 class="font-serif text-xl font-semibold text-ink">In cutting</h2>
-          </div>
-          <div v-if="inProgress.length === 0" class="p-5 text-sm text-ink-soft">
-            No orders are currently in cutting.
-          </div>
-          <div v-else class="divide-y divide-hairline">
-            <article v-for="order in inProgress" :key="order.id" class="px-5 py-4">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="font-mono text-sm font-extrabold text-ink">
-                    {{ order.order_number }}
-                  </div>
-                  <p class="mt-1 text-sm text-ink-soft">
-                    {{ order.contact_name }} · {{ order.item_count }} parts ·
-                    {{ formatDate(order.created_at) }}
-                  </p>
-                  <p class="mt-2 font-mono text-sm font-bold text-accent">
-                    {{ formatTiyin(order.total_tiyin) }}
-                  </p>
+          <article v-for="order in awaiting" v-else :key="order.id" class="q-card">
+            <div class="top">
+              <div>
+                <h4>{{ order.order_number }}</h4>
+                <div class="meta">
+                  {{ order.contact_name }} · <b>{{ partsLine(order) }}</b> ·
+                  {{ formatDate(order.created_at) }}
                 </div>
-                <span class="mp-chip bg-accent-soft text-accent">
-                  <span class="mp-dot" aria-hidden="true"></span>
-                  Assigned
-                </span>
               </div>
-              <div class="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary"
-                  :disabled="orders.actionLoading"
-                  @click="complete(order)"
-                >
-                  Mark cutting done
-                </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline"
-                  @click="orders.downloadWorkshopPdf(order.id)"
-                >
-                  PDF
-                </button>
-                <RouterLink
-                  :to="rolePath(`/workshop/orders/${order.id}`)"
-                  class="mp-button mp-button-outline"
-                >
-                  Detail
-                </RouterLink>
-              </div>
-            </article>
+              <span class="assigned-tag">Sizga</span>
+            </div>
+            <div class="act">
+              <RouterLink
+                :to="rolePath(`/workshop/orders/${order.id}`)"
+                class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+              >
+                Tafsilotlar
+              </RouterLink>
+              <button
+                type="button"
+                class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                @click="orders.downloadWorkshopPdf(order.id)"
+              >
+                PDF
+              </button>
+            </div>
+          </article>
+        </section>
+
+        <section class="queue-col">
+          <h2>
+            Kesilmoqda
+            <span class="ct">{{ inProgress.length }}</span>
+          </h2>
+          <div v-if="inProgress.length === 0" class="st-empty !px-4 !py-8">
+            <h3>Hozir kesilayotgan ishingiz yo'q</h3>
           </div>
-        </div>
-      </section>
+          <article v-for="order in inProgress" v-else :key="order.id" class="q-card">
+            <div class="top">
+              <div>
+                <h4>{{ order.order_number }}</h4>
+                <div class="meta">
+                  {{ order.contact_name }} · <b>{{ partsLine(order) }}</b> ·
+                  {{ formatTiyin(order.total_tiyin) }}
+                </div>
+              </div>
+              <span :class="orderPillClass(order.status)">
+                <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+              </span>
+            </div>
+            <div class="act">
+              <button
+                type="button"
+                class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+                :disabled="orders.actionLoading"
+                @click="complete(order)"
+              >
+                Kesish tugadi
+              </button>
+              <RouterLink
+                :to="rolePath(`/workshop/orders/${order.id}`)"
+                class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+              >
+                Chizmani ko'rish
+              </RouterLink>
+              <button
+                type="button"
+                class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                @click="orders.downloadWorkshopPdf(order.id)"
+              >
+                PDF
+              </button>
+            </div>
+          </article>
+        </section>
+      </div>
     </template>
   </section>
 </template>

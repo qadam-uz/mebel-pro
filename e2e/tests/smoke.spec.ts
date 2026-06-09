@@ -9,7 +9,7 @@ test('landing surface loads', async ({ page }) => {
 
 test('role login routes load', async ({ page }) => {
   await page.goto('/client/auth/login')
-  await expect(page.getByRole('heading', { name: 'Client sign-in' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Mijoz kabinetiga kirish' })).toBeVisible()
 
   await page.goto('/workshop/auth/login')
   await expect(page.getByRole('heading', { name: 'Workshop sign-in' })).toBeVisible()

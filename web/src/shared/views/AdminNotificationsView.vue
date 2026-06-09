@@ -1,0 +1,116 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+
+import {
+  adminDateTime,
+  adminNotificationDestination,
+  adminNotificationTitle,
+  dropdownOption,
+} from '@/shared/app/adminUi'
+import { useRolePath } from '@/shared/app/paths'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useNotificationsStore } from '@/shared/stores/notifications'
+
+const notifications = useNotificationsStore()
+const rolePath = useRolePath()
+const filter = ref('all')
+const markingId = ref<string | null>(null)
+const filterOptions = [
+  dropdownOption('all', 'Hammasi', 'barcha yozuvlar'),
+  dropdownOption('unread', "O'qilmagan", 'faqat yangi'),
+  dropdownOption('read', "O'qilgan", 'arxiv'),
+]
+
+const rows = computed(() => {
+  if (filter.value === 'unread') return notifications.items.filter((item) => item.read_at === null)
+  if (filter.value === 'read') return notifications.items.filter((item) => item.read_at !== null)
+  return notifications.items
+})
+
+async function markRead(id: string) {
+  markingId.value = id
+  try {
+    await notifications.markRead(id)
+  } finally {
+    markingId.value = null
+  }
+}
+
+onMounted(() => {
+  void notifications.loadList(100)
+})
+</script>
+
+<template>
+  <section>
+    <div class="admin-page-head">
+      <div>
+        <h1>Bildirishnomalar</h1>
+        <p class="sub">Operator uchun failed job va error spike xabarlari.</p>
+      </div>
+      <button
+        type="button"
+        class="mp-button mp-button-outline"
+        :disabled="notifications.unread === 0"
+        @click="notifications.markAllRead"
+      >
+        Hammasini o'qilgan
+      </button>
+    </div>
+
+    <div class="admin-filters">
+      <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
+    </div>
+
+    <section v-if="notifications.loading" class="admin-card p-5">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
+    </section>
+
+    <section v-else-if="notifications.error" class="admin-error">
+      <h3>Bildirishnomalar yuklanmadi</h3>
+      <p>Inbox endpoint vaqtincha javob bermadi.</p>
+    </section>
+
+    <section v-else-if="rows.length === 0" class="admin-empty">
+      <h3>Yangilik yo'q</h3>
+      <p>Platforma operatoriga tegishli bildirishnomalar shu yerda ko'rinadi.</p>
+    </section>
+
+    <section v-else class="admin-card">
+      <div class="admin-card-b py-2">
+        <article v-for="item in rows" :key="item.id" class="admin-row-item">
+          <span
+            class="admin-pill"
+            :class="item.read_at === null ? 'admin-pill-warning' : 'admin-pill-muted'"
+          >
+            {{ item.read_at === null ? 'new' : 'read' }}
+          </span>
+          <span class="min-w-0">
+            <RouterLink
+              :to="rolePath(adminNotificationDestination(item))"
+              class="block truncate font-bold text-ink no-underline"
+            >
+              {{ adminNotificationTitle(item) }}
+            </RouterLink>
+            <small class="block truncate text-ink-muted">
+              {{ item.event_code }} . {{ adminDateTime(item.created_at) }}
+            </small>
+          </span>
+          <button
+            v-if="item.read_at === null"
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            :disabled="markingId === item.id"
+            @click="markRead(item.id)"
+          >
+            O'qilgan
+          </button>
+          <span v-else class="admin-mono text-ink-muted">{{ adminDateTime(item.read_at) }}</span>
+        </article>
+      </div>
+    </section>
+  </section>
+</template>

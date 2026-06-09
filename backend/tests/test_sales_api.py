@@ -1,12 +1,15 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
     CuttingResultStatus,
+    IncomeType,
+    LedgerStatus,
     MaterialKind,
+    MoneyMethod,
     PanelMaterialType,
     Permission,
     StockTransactionType,
@@ -16,6 +19,7 @@ from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
+from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.sales.contracts import Order, OrderItem
 from httpx import AsyncClient
@@ -263,6 +267,100 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert item_count == 1
     assert client_list.status_code == 200
     assert client_list.json()[0]["id"] == str(order_id)
+
+
+async def test_client_order_detail_gates_settlement_until_ready(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, owner_access, workshop_id, branch_id, _ = await _placed_order(
+        client,
+        db_session,
+    )
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    new_detail = await client.get(f"/api/v1/client/orders/{order_id}", headers=_auth(client_access))
+    assert new_detail.status_code == 200
+    assert new_detail.json()["settlement"] is None
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    ready = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/banding-done",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+
+    owner_id = await db_session.scalar(
+        select(WorkshopUser.id).where(
+            WorkshopUser.workshop_id == workshop_id,
+            WorkshopUser.is_owner.is_(True),
+        )
+    )
+    assert owner_id is not None
+    db_session.add_all(
+        [
+            Income(
+                workshop_id=workshop_id,
+                branch_id=branch_id,
+                type=IncomeType.ORDER_PAYMENT,
+                order_id=uuid.UUID(order_id),
+                amount_tiyin=120_000,
+                method=MoneyMethod.CASH,
+                received_on=date(2026, 6, 8),
+                note="Client deposit",
+                status=LedgerStatus.RECORDED,
+                recorded_by_user_id=owner_id,
+            ),
+            Income(
+                workshop_id=workshop_id,
+                branch_id=branch_id,
+                type=IncomeType.ORDER_PAYMENT,
+                order_id=uuid.UUID(order_id),
+                amount_tiyin=50_000,
+                method=MoneyMethod.CASH,
+                received_on=date(2026, 6, 8),
+                note="Voided duplicate",
+                status=LedgerStatus.VOIDED,
+                recorded_by_user_id=owner_id,
+                voided_by_user_id=owner_id,
+                voided_at=datetime.now(UTC),
+                voided_reason="Duplicate",
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    ready_detail = await client.get(
+        f"/api/v1/client/orders/{order_id}", headers=_auth(client_access)
+    )
+
+    assert ready_detail.status_code == 200
+    assert ready_detail.json()["settlement"] == {
+        "total_tiyin": 330_000,
+        "recorded_tiyin": 120_000,
+        "balance_tiyin": 210_000,
+    }
 
 
 async def test_workshop_transitions_consume_restore_stock_and_lock_versions(

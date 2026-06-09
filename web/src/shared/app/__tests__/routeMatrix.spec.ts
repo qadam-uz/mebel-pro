@@ -12,6 +12,7 @@ import {
   normalizeRolePath,
   normalizeRoleRoutes,
   resolveHistoryBase,
+  roleDocumentTitle,
 } from '@/shared/app/createRoleApp'
 import { rolePath } from '@/shared/app/paths'
 import { adminConfig, workshopConfig } from '@/shared/app/roleConfig'
@@ -58,6 +59,15 @@ describe('role route matrix', () => {
     )
   })
 
+  it('formats page titles with role identity', () => {
+    expect(roleDocumentTitle('Buyurtmalar', workshopConfig)).toBe(
+      'Buyurtmalar — Mebel Pro · Boshqaruv',
+    )
+    expect(roleDocumentTitle(undefined, adminConfig)).toBe(
+      'Platforma asosiy — Mebel Pro · Superadmin',
+    )
+  })
+
   it('keeps direct dev URLs aligned with production route inventories', () => {
     expect(routePaths(normalizeRoleRoutes(adminRoutes, '/admin', '/admin/'))).toEqual([
       '/auth/login',
@@ -65,6 +75,9 @@ describe('role route matrix', () => {
       '/profile',
       '/workshops',
       '/catalog',
+      '/catalog/manufacturers',
+      '/catalog/materials',
+      '/notifications',
       '/platform/jobs',
       '/platform/errors',
       '/platform/users',
@@ -77,14 +90,12 @@ describe('role route matrix', () => {
     ).toEqual([
       '/',
       '/workshops',
-      '/catalog',
+      '/catalog/manufacturers',
+      '/catalog/materials',
       '/platform/jobs',
       '/platform/errors',
-      '/platform/users',
       '/audit',
-      '/profile',
-      '/docs',
-      '/api-docs',
+      '/platform/users',
     ])
     expect(normalizeRoleConfig(workshopConfig, '/workshop', '/workshop/').homePath).toBe('/')
   })
@@ -101,6 +112,7 @@ describe('role route matrix', () => {
       '/c/cutting/drafts',
       '/c/cutting/:id',
       '/c/branches',
+      '/c/notifications',
       '/:pathMatch(.*)*',
     ])
     expect(routePaths(workshopRoutes)).toEqual([
@@ -112,7 +124,10 @@ describe('role route matrix', () => {
       '/workshop/orders/:order_id',
       '/workshop/cutting',
       '/workshop/banding',
+      '/workshop/inventory',
+      '/workshop/catalog',
       '/workshop/settings/users',
+      '/workshop/settings',
       '/workshop/branches',
       '/workshop/branches/:branch_id',
       '/workshop/cutting-plans',
@@ -122,6 +137,7 @@ describe('role route matrix', () => {
       '/workshop/finance/production',
       '/workshop/cutting-plans/:result_id',
       '/workshop/settings/users/:user_id',
+      '/workshop/notifications',
       '/:pathMatch(.*)*',
     ])
     expect(routePaths(adminRoutes)).toEqual([
@@ -131,6 +147,9 @@ describe('role route matrix', () => {
       '/admin/profile',
       '/admin/workshops',
       '/admin/catalog',
+      '/admin/catalog/manufacturers',
+      '/admin/catalog/materials',
+      '/admin/notifications',
       '/admin/platform/jobs',
       '/admin/platform/errors',
       '/admin/platform/users',

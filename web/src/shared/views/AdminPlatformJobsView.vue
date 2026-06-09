@@ -1,27 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
-import { useAdminStore, type JobRunStatus } from '@/shared/stores/admin'
+import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import { useAdminStore, type PlatformJobSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const runningJob = ref<string | null>(null)
 const runError = ref<string | null>(null)
+const selectedJobName = ref<string | null>(null)
 
-const statusTone: Record<JobRunStatus | 'none', string> = {
-  running: 'bg-info-soft text-info',
-  ok: 'bg-success-soft text-success',
-  failed: 'bg-danger-soft text-danger',
-  skipped: 'bg-warning-soft text-warning',
-  none: 'bg-sunk text-ink-muted',
-}
-
-function formatDate(value: string | null) {
-  if (!value) return 'Never'
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
+const selectedJob = computed(() =>
+  selectedJobName.value
+    ? admin.jobs.find((job) => job.definition.name === selectedJobName.value)
+    : null,
+)
 
 async function runJob(name: string) {
   runningJob.value = name
@@ -35,104 +27,167 @@ async function runJob(name: string) {
   }
 }
 
+function openLog(job: PlatformJobSummary) {
+  selectedJobName.value = job.definition.name
+}
+
 onMounted(admin.loadJobs)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="admin-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Platform jobs</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Scheduled maintenance jobs and manual retry controls.
-        </p>
+        <h1>Background ish . scheduler</h1>
+        <p class="sub">In-process scheduler holati, oxirgi natija va manual trigger.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
-        Refresh
+        Yangilash
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="mp-surface p-5 text-sm font-bold text-ink-soft">
-      Loading jobs
+    <section v-if="admin.opsLoading" class="admin-card p-5">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
     </section>
-    <section v-else-if="admin.opsError" class="mp-surface p-5 text-sm font-bold text-danger">
-      Jobs could not be loaded.
-      <span v-if="admin.opsTraceId" class="font-mono">trace {{ admin.opsTraceId }}</span>
+
+    <section v-else-if="admin.opsError" class="admin-error">
+      <h3>Background ish yuklanmadi</h3>
+      <p>
+        Scheduler endpoint javob bermadi.
+        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
+      </p>
     </section>
-    <section v-else-if="admin.jobs.length === 0" class="mp-surface p-5 text-sm text-ink-soft">
-      No platform jobs are registered.
+
+    <section v-else-if="admin.jobs.length === 0" class="admin-empty">
+      <h3>Registered job yo'q</h3>
+      <p>Default scheduler jobs bootstrap qilingandan keyin ko'rinadi.</p>
     </section>
-    <section v-else class="space-y-4">
-      <article
-        v-for="job in admin.jobs"
-        :key="job.definition.id"
-        class="mp-surface overflow-hidden"
-      >
-        <div class="grid gap-4 border-b border-hairline px-5 py-4 lg:grid-cols-[1fr_auto]">
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="font-serif text-xl font-semibold text-ink">
+
+    <section v-else class="admin-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Ish nomi</th>
+              <th>Jadval</th>
+              <th>Oxirgi ishlashi</th>
+              <th>Natija</th>
+              <th>Xulosa</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="job in admin.jobs"
+              :key="job.definition.id"
+              :class="{ 'bg-danger-soft': job.definition.last_result === 'failed' }"
+            >
+              <td class="nm">
                 {{ job.definition.name }}
-              </h2>
-              <span class="mp-chip" :class="statusTone[job.definition.last_result ?? 'none']">
-                <span class="mp-dot" aria-hidden="true"></span>
-                {{ job.definition.last_result ?? 'no run' }}
-              </span>
-            </div>
-            <p class="mt-1 text-sm text-ink-soft">
-              {{ job.definition.schedule }} · last run
-              {{ formatDate(job.definition.last_run_at) }}
-            </p>
-          </div>
+                <small>{{ job.definition.enabled ? 'enabled' : 'disabled' }}</small>
+              </td>
+              <td class="admin-mono text-ink-muted">{{ job.definition.schedule }}</td>
+              <td class="admin-mono text-ink-muted">
+                {{ adminDateTime(job.definition.last_run_at) }}
+              </td>
+              <td>
+                <span class="admin-pill" :class="jobStatusTone(job.definition.last_result)">
+                  {{ statusLabel(job.definition.last_result) }}
+                </span>
+              </td>
+              <td class="max-w-[360px] truncate">
+                {{
+                  job.recent_runs[0]?.brief_log ??
+                  job.recent_runs[0]?.error_message ??
+                  'Jurnal hali yoq'
+                }}
+              </td>
+              <td class="admin-right">
+                <div class="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    @click="openLog(job)"
+                  >
+                    Jurnalni ko'rish
+                  </button>
+                  <button
+                    type="button"
+                    class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+                    :disabled="runningJob === job.definition.name || job.definition.running"
+                    @click="runJob(job.definition.name)"
+                  >
+                    {{
+                      runningJob === job.definition.name
+                        ? 'Ishlamoqda'
+                        : job.definition.last_result === 'failed'
+                          ? 'Qayta urinish (failed)'
+                          : 'Hozir ishga tushirish'
+                    }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p
+      v-if="runError"
+      class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+    >
+      Job ishga tushmadi.
+    </p>
+
+    <template v-if="selectedJob">
+      <div class="admin-modal-scrim" @click="selectedJobName = null"></div>
+      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="job-log-title">
+        <div class="admin-modal-h">
+          <h3 id="job-log-title">Ish jurnali</h3>
           <button
             type="button"
-            class="mp-button mp-button-primary"
-            :disabled="runningJob === job.definition.name"
-            @click="runJob(job.definition.name)"
+            class="admin-icon-button"
+            aria-label="Yopish"
+            @click="selectedJobName = null"
           >
-            {{ runningJob === job.definition.name ? 'Running' : 'Run now' }}
+            x
           </button>
         </div>
-
-        <div v-if="job.recent_runs.length === 0" class="px-5 py-4 text-sm text-ink-soft">
-          No recorded runs yet.
+        <div class="admin-modal-b">
+          <p class="mb-4 font-mono text-sm font-bold text-ink">{{ selectedJob.definition.name }}</p>
+          <div v-if="selectedJob.recent_runs.length === 0" class="admin-empty">
+            <h3>Run yo'q</h3>
+            <p>Job hali ishga tushmagan.</p>
+          </div>
+          <article
+            v-for="run in selectedJob.recent_runs"
+            v-else
+            :key="run.id"
+            class="mb-3 rounded-md border border-hairline bg-sunk p-4"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="admin-pill" :class="jobStatusTone(run.status)">
+                {{ statusLabel(run.status) }}
+              </span>
+              <span class="admin-mono text-ink-muted">{{ adminDateTime(run.started_at) }}</span>
+            </div>
+            <p class="mt-3 text-sm text-ink">
+              {{ run.brief_log ?? run.error_message ?? 'No log' }}
+            </p>
+            <p v-if="run.trace_id" class="mt-2 admin-mono text-ink-muted">
+              trace {{ run.trace_id }}
+            </p>
+          </article>
         </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm">
-            <thead class="bg-sunk text-xs uppercase text-ink-muted">
-              <tr>
-                <th class="px-5 py-3">Started</th>
-                <th class="px-5 py-3">Status</th>
-                <th class="px-5 py-3">Log</th>
-                <th class="px-5 py-3">Trace</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              <tr v-for="run in job.recent_runs" :key="run.id">
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ formatDate(run.started_at) }}
-                </td>
-                <td class="px-5 py-3">
-                  <span class="mp-chip" :class="statusTone[run.status]">
-                    <span class="mp-dot" aria-hidden="true"></span>
-                    {{ run.status }}
-                  </span>
-                </td>
-                <td class="px-5 py-3 text-ink">
-                  {{ run.brief_log ?? run.error_message ?? 'No log' }}
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-muted">
-                  {{ run.trace_id ?? 'none' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="admin-modal-f">
+          <button type="button" class="mp-button mp-button-outline" @click="selectedJobName = null">
+            Yopish
+          </button>
         </div>
-      </article>
-    </section>
-
-    <p v-if="runError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
-      Job could not be run.
-    </p>
+      </section>
+    </template>
   </section>
 </template>

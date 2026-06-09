@@ -22,6 +22,7 @@ from app.models.enums import (
     BranchStatus,
     Currency,
     CuttingResultStatus,
+    LedgerStatus,
     MaterialSource,
     MaterialStatus,
     OrderStatus,
@@ -39,6 +40,7 @@ from app.modules.cutting.contracts import (
     CuttingPlacement,
     CuttingResult,
 )
+from app.modules.finance.contracts import Income
 from app.modules.inventory.api import consume_order_stock, restore_order_stock
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order, OrderCancellation, OrderItem, OrderStatusEvent
@@ -47,6 +49,7 @@ from app.modules.sales.schemas import (
     OrderDetailResponse,
     OrderItemResponse,
     OrderQuoteResponse,
+    OrderSettlementResponse,
     OrderStatusEventResponse,
     OrderStockWarning,
     OrderSummaryResponse,
@@ -205,7 +208,10 @@ async def place_client_order(
         action_log_id=action.id,
     )
     await db.flush()
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    return cast(
+        OrderDetailResponse,
+        await _order_response(db, order, include_detail=True, settlement_visible=False),
+    )
 
 
 async def quote_client_order(
@@ -264,7 +270,15 @@ async def get_client_order(
     order = await db.get(Order, order_id)
     if order is None or order.client_id != client.id:
         raise APIError("order_not_found", "Order not found", status_code=404)
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    return cast(
+        OrderDetailResponse,
+        await _order_response(
+            db,
+            order,
+            include_detail=True,
+            settlement_visible=_client_settlement_visible(order.status),
+        ),
+    )
 
 
 async def cancel_client_order(
@@ -290,7 +304,10 @@ async def cancel_client_order(
         cancelled_by_client_id=client.id,
         cancelled_by_user_id=None,
     )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    return cast(
+        OrderDetailResponse,
+        await _order_response(db, order, include_detail=True, settlement_visible=False),
+    )
 
 
 async def get_client_order_cutting_result(
@@ -1023,6 +1040,7 @@ async def _order_response(
     order: Order,
     *,
     include_detail: bool,
+    settlement_visible: bool = True,
 ) -> OrderDetailResponse | OrderSummaryResponse:
     client = await db.get(Client, order.client_id)
     branch = await db.get(Branch, order.branch_id)
@@ -1109,6 +1127,28 @@ async def _order_response(
             for event in events
         ],
         cutting_result=await cutting_result_response(db, result) if result is not None else None,
+        settlement=await _order_settlement(db, order) if settlement_visible else None,
+    )
+
+
+def _client_settlement_visible(status_value: OrderStatus) -> bool:
+    return status_value in {OrderStatus.READY, OrderStatus.COMPLETED}
+
+
+async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
+    recorded = int(
+        await db.scalar(
+            select(func.coalesce(func.sum(Income.amount_tiyin), 0)).where(
+                Income.order_id == order.id,
+                Income.status == LedgerStatus.RECORDED,
+            )
+        )
+        or 0
+    )
+    return OrderSettlementResponse(
+        total_tiyin=order.total_tiyin,
+        recorded_tiyin=recorded,
+        balance_tiyin=max(order.total_tiyin - recorded, 0),
     )
 
 

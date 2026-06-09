@@ -136,17 +136,17 @@ const stockOptions = computed(() =>
   workshop.stockItems.map((item) => ({
     value: item.material_id,
     label: item.material.name,
-    meta: `${formatStockQuantity(item.on_hand, item.display_unit)} on hand`,
+    meta: `${formatStockQuantity(item.on_hand, item.display_unit)} mavjud`,
   })),
 )
 const activeSupplierOptions = computed(() => [
-  { value: 'inline', label: 'New supplier label', meta: 'create with stock-in' },
+  { value: 'inline', label: 'Yangi yetkazib beruvchi', meta: 'kirim bilan yaratiladi' },
   ...workshop.suppliers
     .filter((supplier) => supplier.status === 'active')
     .map((supplier) => ({
       value: supplier.id,
       label: supplier.name,
-      meta: supplier.phone ?? 'active',
+      meta: supplier.phone ?? 'faol',
     })),
 ])
 const selectedStockInItem = computed(() => stockItemByMaterial(stockInForm.materialId))
@@ -155,24 +155,24 @@ const materialMinStockUnit = computed(() =>
   selectedCatalogMaterial.value?.kind === 'edge' ? 'm' : 'pcs',
 )
 const statusOptions = [
-  { value: 'active', label: 'Active', meta: 'visible to clients' },
-  { value: 'temporarily_closed', label: 'Temporarily closed', meta: 'visible with reason' },
-  { value: 'inactive', label: 'Inactive', meta: 'hidden from clients' },
+  { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
+  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: 'sabab bilan ko`rinadi' },
+  { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
 ]
 const materialStatusOptions = [
-  { value: 'all', label: 'Any status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+  { value: 'all', label: 'Hamma holatlar' },
+  { value: 'active', label: 'Faol' },
+  { value: 'inactive', label: 'Faol emas' },
 ]
 const supplierStatusOptions = [
-  { value: 'all', label: 'Any status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+  { value: 'all', label: 'Hamma holatlar' },
+  { value: 'active', label: 'Faol' },
+  { value: 'inactive', label: 'Faol emas' },
 ]
 const tabs = [
-  { key: 'materials', label: 'Materials' },
-  { key: 'inventory', label: 'Inventory' },
-  { key: 'settings', label: 'Settings' },
+  { key: 'materials', label: 'Materiallar' },
+  { key: 'inventory', label: 'Ombor' },
+  { key: 'settings', label: 'Sozlamalar' },
 ] as const
 const visibleTabs = computed(() =>
   tabs.filter((tab) => {
@@ -254,7 +254,7 @@ async function saveBranchMaterial() {
   materialFieldError.value = null
   try {
     if (!editingBranchMaterialId.value && !materialForm.materialId) {
-      materialFieldError.value = 'Choose a material'
+      materialFieldError.value = 'Material tanlang'
       return
     }
     const material =
@@ -292,15 +292,15 @@ async function recordStockIn() {
   stockInSupplierError.value = null
   try {
     if (!stockInForm.materialId) {
-      stockInMaterialError.value = 'Choose a material'
+      stockInMaterialError.value = 'Material tanlang'
       return
     }
     if (!stockInForm.supplierId) {
-      stockInSupplierError.value = 'Choose a supplier'
+      stockInSupplierError.value = 'Yetkazib beruvchini tanlang'
       return
     }
     if (stockInForm.supplierId === 'inline' && stockInForm.inlineSupplierName.trim() === '') {
-      stockInSupplierError.value = 'Enter the new supplier name'
+      stockInSupplierError.value = 'Yangi yetkazib beruvchi nomini kiriting'
       return
     }
     const item = selectedStockInItem.value
@@ -337,7 +337,7 @@ async function recordAdjustment() {
   adjustmentMaterialError.value = null
   try {
     if (!adjustmentForm.materialId) {
-      adjustmentMaterialError.value = 'Choose a material'
+      adjustmentMaterialError.value = 'Material tanlang'
       return
     }
     const item = selectedAdjustmentItem.value
@@ -498,13 +498,13 @@ function setBranchMaterialStatusWithConfirm(row: BranchMaterial) {
   const nextStatus = row.status === 'active' ? 'inactive' : 'active'
   const effect =
     nextStatus === 'inactive'
-      ? 'hide this material from client selection while inventory remains manageable'
-      : 'make this material available for client selection again'
+      ? 'material mijoz tanlovidan yashiriladi, lekin ombor boshqaruvi qoladi'
+      : 'material mijoz tanloviga qaytariladi'
   pendingStatusChange.value = {
     kind: 'material',
     row,
     nextStatus,
-    title: `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} material`,
+    title: `${nextStatus === 'inactive' ? 'Materialni o`chirish' : 'Materialni faollashtirish'}`,
     message: `${row.material.name}: ${effect}.`,
   }
 }
@@ -515,8 +515,8 @@ function setSupplierStatusWithConfirm(supplier: Supplier) {
     kind: 'supplier',
     row: supplier,
     nextStatus,
-    title: `${nextStatus === 'inactive' ? 'Deactivate' : 'Activate'} supplier`,
-    message: `${supplier.name} will be ${nextStatus === 'inactive' ? 'hidden from active stock-in forms' : 'available for stock-in again'}.`,
+    title: `${nextStatus === 'inactive' ? 'Yetkazib beruvchini o`chirish' : 'Yetkazib beruvchini faollashtirish'}`,
+    message: `${supplier.name} ${nextStatus === 'inactive' ? 'kirim formalaridan yashiriladi' : 'kirim uchun yana ko`rinadi'}.`,
   }
 }
 
@@ -550,10 +550,10 @@ onMounted(refreshBranch)
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="font-serif text-3xl font-semibold text-ink">
-          {{ workshop.selectedBranch?.name ?? 'Branch' }}
+          {{ workshop.selectedBranch?.name ?? 'Filial' }}
         </h1>
         <p class="mt-2 text-base text-ink-soft">
-          Materials, stock, supplier labels, pricing, and client visibility for this branch.
+          Materiallar, ombor, yetkazib beruvchilar, narxlar va mijozlarga ko'rinish.
         </p>
       </div>
       <span
@@ -562,15 +562,21 @@ onMounted(refreshBranch)
         :class="statusClass(workshop.selectedBranch.status)"
       >
         <span class="mp-dot" aria-hidden="true"></span>
-        {{ workshop.selectedBranch.status }}
+        {{
+          workshop.selectedBranch.status === 'active'
+            ? 'Faol'
+            : workshop.selectedBranch.status === 'temporarily_closed'
+              ? 'Vaqtincha yopiq'
+              : 'Faol emas'
+        }}
       </span>
     </div>
 
     <div v-if="loading" class="rounded-lg bg-info-soft p-4 font-bold text-info" aria-live="polite">
-      Loading branch workspace
+      Filial sahifasi yuklanmoqda
     </div>
     <div v-else-if="pageError" class="rounded-lg bg-danger-soft p-4 font-bold text-danger">
-      Branch workspace could not be loaded. trace {{ pageTraceId ?? 'unavailable' }}
+      Filial sahifasini yuklab bo'lmadi. trace {{ pageTraceId ?? 'unavailable' }}
     </div>
 
     <div v-if="visibleTabs.length > 0" class="flex flex-wrap gap-2" aria-label="Branch workspace">
@@ -589,15 +595,15 @@ onMounted(refreshBranch)
       v-else-if="!loading && !pageError"
       class="rounded-lg bg-warning-soft p-4 font-bold text-warning"
     >
-      This account has no branch workspace permissions.
+      Bu akkauntda filial bo'yicha ruxsat yo'q.
     </div>
 
     <section v-if="activeTab === 'materials' && canManageCatalog" class="space-y-5">
       <section class="mp-surface overflow-hidden">
         <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Add branch material</h2>
+          <h2 class="font-serif text-xl font-semibold text-ink">Filial materiali qo'shish</h2>
           <p class="mt-1 text-sm text-ink-soft">
-            Edge min stock is entered in metres and stored internally as millimetres.
+            Krom minimum zaxirasi metrda kiritiladi, ichkarida millimetrda saqlanadi.
           </p>
         </div>
         <form class="grid gap-3 p-5 md:grid-cols-4" @submit.prevent="saveBranchMaterial">
@@ -611,7 +617,7 @@ onMounted(refreshBranch)
           />
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="branch-material-price">
-              Price tiyin
+              Narx (tiyin)
             </label>
             <input
               id="branch-material-price"
@@ -623,7 +629,7 @@ onMounted(refreshBranch)
           </div>
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="branch-material-min">
-              Min stock {{ materialMinStockUnit }}
+              Min zaxira {{ materialMinStockUnit }}
             </label>
             <input
               id="branch-material-min"
@@ -639,8 +645,8 @@ onMounted(refreshBranch)
                 materialSaving
                   ? 'Saving'
                   : editingBranchMaterialId
-                    ? 'Save selection'
-                    : 'Add material'
+                    ? 'Saqlash'
+                    : "Material qo'shish"
               }}
             </button>
             <button
@@ -649,14 +655,14 @@ onMounted(refreshBranch)
               class="mp-button mp-button-outline"
               @click="resetMaterialForm"
             >
-              Cancel edit
+              Tahrirni bekor qilish
             </button>
           </div>
           <p
             v-if="materialError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-4"
           >
-            Branch material could not be saved.
+            Filial materiali saqlanmadi.
           </p>
         </form>
       </section>
@@ -665,7 +671,7 @@ onMounted(refreshBranch)
         <div class="grid gap-3 border-b border-hairline p-5 md:grid-cols-[1fr_180px_auto]">
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="branch-material-search">
-              Search materials
+              Material qidirish
             </label>
             <input
               id="branch-material-search"
@@ -675,7 +681,7 @@ onMounted(refreshBranch)
           </div>
           <FilterDropdown
             v-model="branchMaterialStatus"
-            label="Status"
+            label="Holat"
             :options="materialStatusOptions"
           />
           <button
@@ -683,21 +689,21 @@ onMounted(refreshBranch)
             type="button"
             @click="refreshMaterials"
           >
-            Apply
+            Qo'llash
           </button>
         </div>
         <div v-if="workshop.branchMaterials.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-          No branch materials match the current filters.
+          Tanlangan filtrga mos material yo'q.
         </div>
         <div v-else class="overflow-x-auto">
           <table class="min-w-[760px] w-full text-left text-sm">
             <thead class="bg-sunk text-xs uppercase text-ink-muted">
               <tr>
                 <th class="px-5 py-3">Material</th>
-                <th class="px-5 py-3">Price</th>
-                <th class="px-5 py-3">Min stock</th>
-                <th class="px-5 py-3">Status</th>
-                <th class="px-5 py-3 text-right">Actions</th>
+                <th class="px-5 py-3">Narx</th>
+                <th class="px-5 py-3">Min zaxira</th>
+                <th class="px-5 py-3">Holat</th>
+                <th class="px-5 py-3 text-right">Amallar</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-hairline">
@@ -724,7 +730,7 @@ onMounted(refreshBranch)
                     "
                   >
                     <span class="mp-dot" aria-hidden="true"></span>
-                    {{ row.status }}
+                    {{ row.status === 'active' ? 'Faol' : 'Faol emas' }}
                   </span>
                 </td>
                 <td class="px-5 py-4">
@@ -734,7 +740,7 @@ onMounted(refreshBranch)
                       type="button"
                       @click="editBranchMaterial(row)"
                     >
-                      Edit
+                      Tahrir
                     </button>
                     <button
                       class="mp-button min-h-9 px-3 text-xs"
@@ -746,7 +752,7 @@ onMounted(refreshBranch)
                       type="button"
                       @click="setBranchMaterialStatusWithConfirm(row)"
                     >
-                      {{ row.status === 'active' ? 'Deactivate' : 'Activate' }}
+                      {{ row.status === 'active' ? "O'chirish" : 'Faollashtirish' }}
                     </button>
                   </div>
                 </td>
@@ -760,7 +766,7 @@ onMounted(refreshBranch)
     <section v-if="activeTab === 'inventory' && canManageInventory" class="space-y-5">
       <div class="grid gap-5 xl:grid-cols-2">
         <section class="mp-surface p-5">
-          <h2 class="font-serif text-xl font-semibold text-ink">Stock in</h2>
+          <h2 class="font-serif text-xl font-semibold text-ink">Kirim</h2>
           <form class="mt-4 grid gap-3" @submit.prevent="recordStockIn">
             <SearchCombobox
               v-model="stockInForm.materialId"
@@ -770,7 +776,7 @@ onMounted(refreshBranch)
             />
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="stock-in-quantity">
-                Quantity {{ selectedStockInItem?.display_unit ?? '' }}
+                Miqdor {{ selectedStockInItem?.display_unit ?? '' }}
               </label>
               <input
                 id="stock-in-quantity"
@@ -782,13 +788,13 @@ onMounted(refreshBranch)
             </div>
             <FormSelect
               v-model="stockInForm.supplierId"
-              label="Supplier"
+              label="Yetkazib beruvchi"
               :options="activeSupplierOptions"
               :error="stockInSupplierError"
             />
             <div v-if="stockInForm.supplierId === 'inline'">
               <label class="mb-1 block text-sm font-bold text-ink" for="inline-supplier">
-                New supplier name
+                Yangi yetkazib beruvchi nomi
               </label>
               <input
                 id="inline-supplier"
@@ -798,9 +804,7 @@ onMounted(refreshBranch)
               />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="receipt-file"
-                >Receipt</label
-              >
+              <label class="mb-1 block text-sm font-bold text-ink" for="receipt-file">Chek</label>
               <input
                 id="receipt-file"
                 type="file"
@@ -808,11 +812,11 @@ onMounted(refreshBranch)
                 @change="onReceiptFile"
               />
               <p v-if="stockInForm.receiptFileId" class="mt-1 font-mono text-[11px] text-ink-muted">
-                receipt {{ stockInForm.receiptFileId.slice(0, 8) }}
+                chek {{ stockInForm.receiptFileId.slice(0, 8) }}
               </p>
             </div>
             <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="stock-in-note">Note</label>
+              <label class="mb-1 block text-sm font-bold text-ink" for="stock-in-note">Izoh</label>
               <input
                 id="stock-in-note"
                 v-model="stockInForm.note"
@@ -820,19 +824,19 @@ onMounted(refreshBranch)
               />
             </div>
             <button class="mp-button mp-button-primary" type="submit" :disabled="movementSaving">
-              {{ movementSaving ? 'Recording' : 'Record stock-in' }}
+              {{ movementSaving ? 'Yozilmoqda' : 'Kirim yozish' }}
             </button>
             <p
               v-if="movementError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Stock movement could not be recorded.
+              Ombor harakati yozilmadi.
             </p>
           </form>
         </section>
 
         <section class="mp-surface p-5">
-          <h2 class="font-serif text-xl font-semibold text-ink">Adjustment</h2>
+          <h2 class="font-serif text-xl font-semibold text-ink">Tuzatish</h2>
           <form class="mt-4 grid gap-3" @submit.prevent="recordAdjustment">
             <SearchCombobox
               v-model="adjustmentForm.materialId"
@@ -842,7 +846,7 @@ onMounted(refreshBranch)
             />
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="adjustment-quantity">
-                Signed quantity {{ selectedAdjustmentItem?.display_unit ?? '' }}
+                Belgili miqdor {{ selectedAdjustmentItem?.display_unit ?? '' }}
               </label>
               <input
                 id="adjustment-quantity"
@@ -854,7 +858,7 @@ onMounted(refreshBranch)
             </div>
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="adjustment-note"
-                >Note</label
+                >Izoh</label
               >
               <input
                 id="adjustment-note"
@@ -864,13 +868,13 @@ onMounted(refreshBranch)
               />
             </div>
             <button class="mp-button mp-button-primary" type="submit" :disabled="movementSaving">
-              {{ movementSaving ? 'Recording' : 'Record adjustment' }}
+              {{ movementSaving ? 'Yozilmoqda' : 'Tuzatish yozish' }}
             </button>
             <p
               v-if="movementError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Stock movement could not be recorded.
+              Ombor harakati yozilmadi.
             </p>
           </form>
         </section>
@@ -880,7 +884,7 @@ onMounted(refreshBranch)
         <div class="grid gap-3 border-b border-hairline p-5 md:grid-cols-[1fr_auto]">
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="stock-search"
-              >Search stock</label
+              >Ombor qidirish</label
             >
             <input
               id="stock-search"
@@ -893,7 +897,7 @@ onMounted(refreshBranch)
             type="button"
             @click="refreshInventory"
           >
-            Refresh
+            Yangilash
           </button>
         </div>
         <div
@@ -901,23 +905,23 @@ onMounted(refreshBranch)
           class="px-5 py-6 text-sm font-bold text-ink-soft"
           aria-live="polite"
         >
-          Loading inventory
+          Ombor yuklanmoqda
         </div>
         <div v-else-if="workshop.inventoryError" class="px-5 py-6 text-sm font-bold text-danger">
-          Inventory could not be loaded. trace {{ workshop.inventoryTraceId ?? 'unavailable' }}
+          Omborni yuklab bo'lmadi. trace {{ workshop.inventoryTraceId ?? 'unavailable' }}
         </div>
         <div v-else-if="workshop.stockItems.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-          No stock rows yet. Add branch materials first.
+          Hali ombor qatori yo'q. Avval filial materiallarini qo'shing.
         </div>
         <div v-else class="overflow-x-auto">
           <table class="min-w-[760px] w-full text-left text-sm">
             <thead class="bg-sunk text-xs uppercase text-ink-muted">
               <tr>
                 <th class="px-5 py-3">Material</th>
-                <th class="px-5 py-3">On hand</th>
-                <th class="px-5 py-3">Min stock</th>
-                <th class="px-5 py-3">State</th>
-                <th class="px-5 py-3">Updated</th>
+                <th class="px-5 py-3">Mavjud</th>
+                <th class="px-5 py-3">Min zaxira</th>
+                <th class="px-5 py-3">Holat</th>
+                <th class="px-5 py-3">Yangilangan</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-hairline">
@@ -944,7 +948,7 @@ onMounted(refreshBranch)
                     "
                   >
                     <span class="mp-dot" aria-hidden="true"></span>
-                    {{ item.is_low_stock ? 'low stock' : 'in range' }}
+                    {{ item.is_low_stock ? 'past zaxira' : 'yetarli' }}
                   </span>
                 </td>
                 <td class="px-5 py-4 text-ink-soft">{{ formatDate(item.updated_at) }}</td>
@@ -956,10 +960,10 @@ onMounted(refreshBranch)
 
       <div class="grid gap-5 xl:grid-cols-[minmax(320px,0.72fr)_minmax(0,1.28fr)]">
         <section class="mp-surface p-5">
-          <h2 class="font-serif text-xl font-semibold text-ink">Supplier labels</h2>
+          <h2 class="font-serif text-xl font-semibold text-ink">Yetkazib beruvchilar</h2>
           <form class="mt-4 grid gap-3" @submit.prevent="saveSupplier">
             <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="supplier-name">Name</label>
+              <label class="mb-1 block text-sm font-bold text-ink" for="supplier-name">Nom</label>
               <input
                 id="supplier-name"
                 v-model="supplierForm.name"
@@ -969,7 +973,7 @@ onMounted(refreshBranch)
             </div>
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="supplier-phone"
-                >Phone</label
+                >Telefon</label
               >
               <input
                 id="supplier-phone"
@@ -978,7 +982,7 @@ onMounted(refreshBranch)
               />
             </div>
             <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="supplier-note">Note</label>
+              <label class="mb-1 block text-sm font-bold text-ink" for="supplier-note">Izoh</label>
               <input
                 id="supplier-note"
                 v-model="supplierForm.note"
@@ -991,8 +995,8 @@ onMounted(refreshBranch)
                   supplierSaving
                     ? 'Saving'
                     : editingSupplierId
-                      ? 'Save supplier'
-                      : 'Create supplier'
+                      ? 'Yetkazib beruvchini saqlash'
+                      : 'Yetkazib beruvchi yaratish'
                 }}
               </button>
               <button
@@ -1001,14 +1005,14 @@ onMounted(refreshBranch)
                 class="mp-button mp-button-outline"
                 @click="resetSupplierForm"
               >
-                Cancel edit
+                Tahrirni bekor qilish
               </button>
             </div>
             <p
               v-if="supplierError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Supplier could not be saved.
+              Yetkazib beruvchi saqlanmadi.
             </p>
           </form>
         </section>
@@ -1017,7 +1021,7 @@ onMounted(refreshBranch)
           <div class="grid gap-3 border-b border-hairline p-5 md:grid-cols-[180px_auto]">
             <FilterDropdown
               v-model="supplierStatus"
-              label="Supplier status"
+              label="Yetkazib beruvchi holati"
               :options="supplierStatusOptions"
             />
             <button
@@ -1025,11 +1029,11 @@ onMounted(refreshBranch)
               type="button"
               @click="refreshInventory"
             >
-              Apply
+              Qo'llash
             </button>
           </div>
           <div v-if="workshop.suppliers.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-            No suppliers match the current filters.
+            Tanlangan filtrga mos yetkazib beruvchi yo'q.
           </div>
           <div v-else class="divide-y divide-hairline">
             <article
@@ -1040,7 +1044,7 @@ onMounted(refreshBranch)
               <div>
                 <div class="font-extrabold text-ink">{{ supplier.name }}</div>
                 <div class="text-sm text-ink-soft">
-                  {{ supplier.phone || 'No phone' }} · {{ supplier.note || 'No note' }}
+                  {{ supplier.phone || 'telefon yoq' }} · {{ supplier.note || 'izoh yoq' }}
                 </div>
               </div>
               <div class="flex flex-wrap items-center gap-2">
@@ -1053,14 +1057,14 @@ onMounted(refreshBranch)
                   "
                 >
                   <span class="mp-dot" aria-hidden="true"></span>
-                  {{ supplier.status }}
+                  {{ supplier.status === 'active' ? 'Faol' : 'Faol emas' }}
                 </span>
                 <button
                   class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                   type="button"
                   @click="editSupplier(supplier)"
                 >
-                  Edit
+                  Tahrir
                 </button>
                 <button
                   class="mp-button min-h-9 px-3 text-xs"
@@ -1072,7 +1076,7 @@ onMounted(refreshBranch)
                   type="button"
                   @click="setSupplierStatusWithConfirm(supplier)"
                 >
-                  {{ supplier.status === 'active' ? 'Deactivate' : 'Activate' }}
+                  {{ supplier.status === 'active' ? "O'chirish" : 'Faollashtirish' }}
                 </button>
               </div>
             </article>
@@ -1082,21 +1086,21 @@ onMounted(refreshBranch)
 
       <section class="mp-surface overflow-hidden">
         <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Transactions</h2>
+          <h2 class="font-serif text-xl font-semibold text-ink">Tranzaksiyalar</h2>
         </div>
         <div v-if="workshop.stockTransactions.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-          No stock transactions yet.
+          Hali ombor tranzaksiyasi yo'q.
         </div>
         <div v-else class="overflow-x-auto">
           <table class="min-w-[780px] w-full text-left text-sm">
             <thead class="bg-sunk text-xs uppercase text-ink-muted">
               <tr>
-                <th class="px-5 py-3">Date</th>
+                <th class="px-5 py-3">Sana</th>
                 <th class="px-5 py-3">Material</th>
-                <th class="px-5 py-3">Type</th>
-                <th class="px-5 py-3">Qty</th>
-                <th class="px-5 py-3">Balance</th>
-                <th class="px-5 py-3">Supplier</th>
+                <th class="px-5 py-3">Turi</th>
+                <th class="px-5 py-3">Miqdor</th>
+                <th class="px-5 py-3">Qoldiq</th>
+                <th class="px-5 py-3">Yetkazib beruvchi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-hairline">
@@ -1110,7 +1114,7 @@ onMounted(refreshBranch)
                 <td class="px-5 py-4 font-mono">
                   {{ formatTransactionQuantity(tx.material_id, tx.balance_after) }}
                 </td>
-                <td class="px-5 py-4 text-ink-soft">{{ tx.supplier_name || 'none' }}</td>
+                <td class="px-5 py-4 text-ink-soft">{{ tx.supplier_name || 'yoq' }}</td>
               </tr>
             </tbody>
           </table>
@@ -1120,11 +1124,11 @@ onMounted(refreshBranch)
 
     <section v-if="activeTab === 'settings' && canManageSettings" class="grid gap-5 xl:grid-cols-2">
       <section class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Branch details and pricing</h2>
+        <h2 class="font-serif text-xl font-semibold text-ink">Filial ma'lumotlari va narxlar</h2>
         <form class="mt-4 grid gap-3" @submit.prevent="saveBranchSettings">
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-name"
-              >Name</label
+              >Nom</label
             >
             <input
               id="detail-branch-name"
@@ -1135,7 +1139,7 @@ onMounted(refreshBranch)
           </div>
           <div>
             <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-address"
-              >Address</label
+              >Manzil</label
             >
             <input
               id="detail-branch-address"
@@ -1147,7 +1151,7 @@ onMounted(refreshBranch)
           <div class="grid gap-3 md:grid-cols-3">
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-phone"
-                >Phone</label
+                >Telefon</label
               >
               <input
                 id="detail-branch-phone"
@@ -1184,7 +1188,7 @@ onMounted(refreshBranch)
           <div class="grid gap-3 md:grid-cols-2">
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="cutting-rate"
-                >Cutting rate tiyin</label
+                >Kesish narxi (tiyin)</label
               >
               <input
                 id="cutting-rate"
@@ -1195,7 +1199,7 @@ onMounted(refreshBranch)
             </div>
             <div>
               <label class="mb-1 block text-sm font-bold text-ink" for="edge-rate"
-                >Edge rate tiyin</label
+                >Krom narxi (tiyin)</label
               >
               <input
                 id="edge-rate"
@@ -1206,18 +1210,18 @@ onMounted(refreshBranch)
             </div>
           </div>
           <button class="mp-button mp-button-primary" type="submit" :disabled="settingsSaving">
-            {{ settingsSaving ? 'Saving' : 'Save branch settings' }}
+            {{ settingsSaving ? 'Saqlanmoqda' : 'Filial sozlamalarini saqlash' }}
           </button>
         </form>
       </section>
 
       <section class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Client visibility</h2>
+        <h2 class="font-serif text-xl font-semibold text-ink">Mijozlarga ko'rinish</h2>
         <form class="mt-4 grid gap-3" @submit.prevent="changeBranchStatus">
-          <FormSelect v-model="statusForm.status" label="Status" :options="statusOptions" />
+          <FormSelect v-model="statusForm.status" label="Holat" :options="statusOptions" />
           <div v-if="statusForm.status !== 'active'">
             <label class="mb-1 block text-sm font-bold text-ink" for="branch-status-reason"
-              >Reason</label
+              >Sabab</label
             >
             <input
               id="branch-status-reason"
@@ -1235,7 +1239,7 @@ onMounted(refreshBranch)
               class="mt-1 size-4 accent-warning"
             />
             <span>
-              Confirm client visibility change. Open-order warning count:
+              Mijozlarga ko'rinish o'zgarishini tasdiqlayman. Ochiq buyurtmalar soni:
               {{ workshop.selectedBranch?.active_orders_count ?? 0 }}.
             </span>
           </label>
@@ -1244,13 +1248,13 @@ onMounted(refreshBranch)
             type="submit"
             :disabled="settingsSaving || !statusForm.confirmed"
           >
-            {{ settingsSaving ? 'Changing' : 'Change status' }}
+            {{ settingsSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}
           </button>
           <p
             v-if="settingsError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Branch settings could not be saved.
+            Filial sozlamalari saqlanmadi.
           </p>
         </form>
       </section>
@@ -1258,9 +1262,11 @@ onMounted(refreshBranch)
 
     <ConfirmDialog
       :open="Boolean(pendingStatusChange)"
-      :title="pendingStatusChange?.title ?? 'Confirm status change'"
+      :title="pendingStatusChange?.title ?? 'Holat o`zgarishini tasdiqlash'"
       :message="pendingStatusChange?.message ?? ''"
-      :confirm-label="pendingStatusChange?.nextStatus === 'inactive' ? 'Deactivate' : 'Activate'"
+      :confirm-label="
+        pendingStatusChange?.nextStatus === 'inactive' ? 'O`chirish' : 'Faollashtirish'
+      "
       danger
       :busy="statusChangeSaving"
       @cancel="pendingStatusChange = null"

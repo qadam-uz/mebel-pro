@@ -12,6 +12,7 @@ from app.modules.platform.api import (
     block_workshop,
     create_platform_user,
     get_error_record_detail,
+    get_platform_overview,
     get_workshop_detail,
     list_error_records,
     list_platform_action_logs,
@@ -39,6 +40,7 @@ from app.modules.platform.schemas import (
     JobDefinitionResponse,
     JobRunResponse,
     PlatformJobSummary,
+    PlatformOverviewResponse,
     PlatformUserCreateRequest,
     PlatformUserPatchRequest,
     PlatformUserResponse,
@@ -54,6 +56,15 @@ from app.modules.platform.schemas import (
 router = APIRouter(prefix="/platform", tags=["platform"])
 ErrorStatusQuery = Annotated[ErrorRecordStatus | None, Query(alias="status")]
 LimitQuery = Annotated[int, Query(ge=1, le=200)]
+
+
+@router.get("/overview", response_model=PlatformOverviewResponse)
+async def overview_show(
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> PlatformOverviewResponse:
+    overview = await get_platform_overview(db, principal=principal)
+    return PlatformOverviewResponse.model_validate(overview)
 
 
 @router.get("/workshops", response_model=list[WorkshopSummary])

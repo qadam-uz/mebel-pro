@@ -66,6 +66,12 @@ export interface OrderStockWarning {
   projected_after: number
 }
 
+export interface OrderSettlement {
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
+}
+
 export interface WorkshopWorkerOption {
   id: string
   full_name: string
@@ -124,6 +130,7 @@ export interface OrderDetail extends OrderSummary {
   items: OrderItem[]
   events: OrderEvent[]
   cutting_result: CuttingResult | null
+  settlement: OrderSettlement | null
 }
 
 function withQuery(path: string, params: Record<string, string | boolean | null | undefined>) {
@@ -194,10 +201,7 @@ export const useOrdersStore = defineStore('orders', () => {
     error.value = null
     traceId.value = null
     try {
-      currentQuote.value = await api.get<OrderQuote>(
-        withQuery('/client/orders/quote', { draft_id: draftId, branch_id: branchId }),
-        authInit(),
-      )
+      currentQuote.value = await quoteForDraft(draftId, branchId)
       return currentQuote.value
     } catch (errorValue) {
       currentQuote.value = null
@@ -206,6 +210,13 @@ export const useOrdersStore = defineStore('orders', () => {
     } finally {
       quoteLoading.value = false
     }
+  }
+
+  async function quoteForDraft(draftId: string, branchId: string) {
+    return await api.get<OrderQuote>(
+      withQuery('/client/orders/quote', { draft_id: draftId, branch_id: branchId }),
+      authInit(),
+    )
   }
 
   async function createClientOrder(payload: unknown) {
@@ -378,6 +389,7 @@ export const useOrdersStore = defineStore('orders', () => {
     error,
     traceId,
     loadQuote,
+    quoteForDraft,
     createClientOrder,
     loadClientOrders,
     loadClientOrder,

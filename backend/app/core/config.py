@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     # Client phone-OTP dev sign-in. Empty means the real Telegram flow is required.
     # A non-empty list is a local/CI bypass and is rejected in production.
     OTP_DEV_CODES: list[str] = []
+    OTP_RATE_LIMITS_ENABLED: bool = True
     OTP_CODE_PEPPER: str = "{{change-me}}"
     TELEGRAM_GATEWAY_ACCESS_TOKEN: str = "{{change-me}}"  # noqa: S105 - secret placeholder.
     TELEGRAM_GATEWAY_API_BASE_URL: str = "https://gatewayapi.telegram.org"

@@ -258,11 +258,11 @@ async function stockIn(
 
 async function loginClient(page: Page, phone: string, name?: string) {
   await page.goto("/client/auth/login");
-  await page.getByLabel("Phone").fill(phone);
-  await page.getByRole("button", { name: "Send code" }).click();
-  await page.getByLabel("Code").fill("000000");
-  await page.getByRole("button", { name: "Continue" }).click();
-  const nameField = page.getByLabel("Name");
+  await page.getByLabel("Telefon raqami").fill(phone);
+  await page.getByRole("button", { name: "Kod yuborish" }).click();
+  await page.getByLabel("Tasdiqlash kodi").fill("000000");
+  await page.getByRole("button", { name: "Tasdiqlash" }).click();
+  const nameField = page.getByLabel("Ismingiz");
   if (
     await nameField
       .waitFor({ state: "visible", timeout: 2_000 })
@@ -270,7 +270,7 @@ async function loginClient(page: Page, phone: string, name?: string) {
       .catch(() => false)
   ) {
     await nameField.fill(name ?? "Phase 5 Client");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("button", { name: "Davom etish" }).click();
   }
   await expect(page).toHaveURL(/\/client\/c$/);
 }
@@ -331,53 +331,53 @@ test("client places an order and workshop completes it through production queues
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
 
   await loginClient(page, clientPhone, `Phase 5 Client ${id}`);
-  await page.getByRole("button", { name: "New cutting" }).click();
+  await page.getByRole("button", { name: "Yangi kesim chizmasi" }).click();
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
   await expect(
-    page.getByRole("heading", { name: "Cutting editor" }),
+    page.getByRole("heading", { name: "Chizma", exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Pick a branch" }).click();
+  await page.getByRole("button", { name: "Ustaxona tanlash" }).click();
   await chooseOption(
     page,
-    /Preferred branch/,
+    /Afzal filial/,
     new RegExp(`Phase 5 Workshop ${id}`),
   );
-  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Qo'llash" }).click();
   await expect(
     page.getByText(`Phase 5 Branch ${id} · Phase 5 Workshop ${id}`),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add part" }).click();
-  await page.getByRole("combobox", { name: "Panel material" }).fill(panel.name);
+  await page.getByRole("button", { name: "Qism qo'shish" }).first().click();
+  await page.getByRole("combobox", { name: "Panel materiali" }).fill(panel.name);
   await page.getByRole("option", { name: new RegExp(panel.name) }).click();
-  await page.getByRole("combobox", { name: "Panel material" }).press("Escape");
-  await page.getByLabel("Length millimetres").fill("260");
-  await page.getByLabel("Width millimetres").fill("180");
-  await page.getByLabel("Quantity").fill("2");
-  await page.getByRole("combobox", { name: "Edge tape" }).fill(edge.name);
+  await page.getByRole("combobox", { name: "Panel materiali" }).press("Escape");
+  await page.getByLabel("Uzunlik millimetr").fill("260");
+  await page.getByLabel("Eni millimetr").fill("180");
+  await page.getByLabel("Soni").fill("2");
+  await page.getByRole("combobox", { name: "Krom materiali" }).fill(edge.name);
   await page.getByRole("option", { name: new RegExp(edge.name) }).click();
-  await page.getByRole("combobox", { name: "Edge tape" }).press("Escape");
+  await page.getByRole("combobox", { name: "Krom materiali" }).press("Escape");
   await page.getByRole("button", { name: "Top" }).click();
   await page.getByRole("button", { name: "Left" }).click();
-  await page.getByRole("button", { name: "Optimise" }).click();
+  await page.getByRole("button", { name: "Optimallashtirish" }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "Result", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Place order" })).toBeVisible();
-  await page.getByRole("link", { name: "Place order" }).click();
+  await expect(page.getByRole("heading", { name: "Natija", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
+  await page.getByRole("link", { name: "Buyurtma berish" }).click();
 
+  await expect(page.getByRole("heading", { name: "Ustaxonani tanlang" })).toBeVisible();
+  await page
+    .getByRole("button", { name: new RegExp(`Phase 5 Branch ${id}`) })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Place order" }),
+    page.getByRole("heading", { name: "Tasdiqlash", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText("Total")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Place order" })).toBeEnabled();
-  await page.getByRole("button", { name: "Place order" }).click();
+  await expect(page.getByText("Jami").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Buyurtma berish" })).toBeEnabled();
+  await page.getByRole("button", { name: "Buyurtma berish" }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "Order tracking" }),
-  ).toBeVisible();
-  await expect(page.getByText("Order placed")).toBeVisible();
+  await expect(page.getByText("Buyurtma berildi")).toBeVisible();
   const orderText = await page
     .getByText(/ORD-\d{4}-\d{6}/)
     .first()
@@ -466,12 +466,8 @@ test("client places an order and workshop completes it through production queues
 
   await page.goto("/client/c/orders");
   await expect(page.getByText(orderNumber as string).first()).toBeVisible();
-  await expect(page.getByText("Done", { exact: true }).first()).toBeVisible();
-  await page.getByRole("link", { name: "Track" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Order tracking" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Collected", { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+  await page.getByRole("link", { name: "Tafsilot" }).click();
+  await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
+  await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
 });

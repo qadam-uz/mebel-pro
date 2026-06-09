@@ -1,229 +1,167 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import AuthFileImage from '@/shared/components/AuthFileImage.vue'
-import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatTiyin } from '@/shared/formatters'
-import { useClientCatalogStore, type ClientBranchMaterial } from '@/shared/stores/clientCatalog'
+import {
+  useClientCatalogStore,
+  type ClientBranch,
+  type ClientBranchMaterial,
+} from '@/shared/stores/clientCatalog'
 
 const catalog = useClientCatalogStore()
-const branchSearch = ref('')
-const materialSearch = ref('')
+const search = ref('')
+const loadingMaterials = ref(false)
+let searchTimer: number | undefined
 
-const branchOptions = computed(() =>
-  catalog.branches.map((branch) => ({
-    value: branch.branch_id,
-    label: `${branch.workshop_name} · ${branch.branch_name}`,
-    meta:
-      branch.status === 'temporarily_closed'
-        ? (branch.closed_reason ?? 'temporarily closed')
-        : branch.address,
-  })),
-)
-const selectedBranch = computed(() =>
-  catalog.branches.find((branch) => branch.branch_id === catalog.selectedBranchId),
-)
+const visibleBranches = computed(() => catalog.branches)
 
 async function refreshBranches() {
-  await catalog.loadBranches(branchSearch.value)
-  if (catalog.selectedBranchId)
-    await catalog.loadMaterials(catalog.selectedBranchId, materialSearch.value)
+  await catalog.loadBranches(search.value)
+  loadingMaterials.value = true
+  try {
+    await Promise.all(
+      catalog.branches.map((branch) => catalog.loadMaterialsForBranch(branch.branch_id)),
+    )
+  } finally {
+    loadingMaterials.value = false
+  }
 }
 
-async function refreshMaterials() {
-  if (catalog.selectedBranchId)
-    await catalog.loadMaterials(catalog.selectedBranchId, materialSearch.value)
+function materialLabels(branchId: string) {
+  const rows = catalog.materialsByBranch[branchId] ?? []
+  return rows.map(materialTitle)
 }
 
-function materialSpec(material: ClientBranchMaterial) {
-  if (material.kind === 'edge') return `${material.thickness_mm} mm edge`
-  return `${material.thickness_mm} mm · ${material.panel_length_mm}x${material.panel_width_mm} mm`
+function materialTitle(material: ClientBranchMaterial) {
+  const name = material.name.split('·')[0].trim()
+  const price = formatTiyin(material.price_tiyin)
+  return `${material.manufacturer_name} ${name} · ${price}/${material.display_unit}`
 }
 
-watch(
-  () => catalog.selectedBranchId,
-  async (id) => {
-    if (id) await catalog.loadMaterials(id, materialSearch.value)
-  },
-)
+function hours(branch: ClientBranch) {
+  const values = Object.values(branch.working_hours ?? {}).filter(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0,
+  )
+  return values[0] ?? "Ish vaqti ko'rsatilmagan"
+}
+
+watch(search, () => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => void refreshBranches(), 250)
+})
 
 onMounted(refreshBranches)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div>
-      <h1 class="font-serif text-3xl font-semibold text-ink">Branches and materials</h1>
-      <p class="mt-2 text-base text-ink-soft">
-        Browse active workshop branches and public material prices before creating a cutting draft.
-      </p>
+  <section>
+    <div class="client-page-head mb-2">
+      <div>
+        <h1>Ustaxonalar</h1>
+        <p class="sub">Faol ustaxonalar va ularda mavjud materiallar.</p>
+      </div>
     </div>
 
-    <section class="mp-surface overflow-hidden">
-      <div class="grid gap-3 border-b border-hairline p-5 lg:grid-cols-[1fr_auto]">
-        <div>
-          <label class="mb-1 block text-sm font-bold text-ink" for="client-branch-search">
-            Search branches
-          </label>
-          <input
-            id="client-branch-search"
-            v-model="branchSearch"
-            class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-          />
-        </div>
-        <button class="mp-button mp-button-outline self-end" type="button" @click="refreshBranches">
-          Search
-        </button>
-      </div>
+    <div class="client-banner warn !mb-5">
+      <span class="font-bold">i</span>
+      <span>Bu ro'yxat shunchaki ma'lumot uchun. Buyurtma uchun chizmadan boshlang.</span>
+    </div>
 
+    <label class="mb-2 block text-sm font-bold text-ink" for="branch-search">Qidirish</label>
+    <input
+      id="branch-search"
+      v-model="search"
+      class="mp-input mb-5 max-w-[380px]"
+      aria-label="Ustaxona yoki shahar nomi"
+      placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..."
+    />
+
+    <div v-if="catalog.loading" class="grid gap-3" aria-live="polite">
       <div
-        v-if="catalog.loading"
-        class="px-5 py-6 text-sm font-bold text-ink-soft"
-        aria-live="polite"
+        v-for="item in 4"
+        :key="item"
+        class="client-card grid grid-cols-[50px_1fr_auto] gap-4 p-5"
       >
-        Loading branches
+        <div class="client-skeleton size-[50px]"></div>
+        <div>
+          <div class="client-skeleton h-4 w-1/3"></div>
+          <div class="client-skeleton mt-3 h-3 w-2/3"></div>
+          <div class="client-skeleton mt-3 h-3 w-4/5"></div>
+        </div>
+        <div class="client-skeleton h-6 w-16"></div>
       </div>
-      <div v-else-if="catalog.error" class="px-5 py-6 text-sm font-bold text-danger">
-        Branch directory could not be loaded. trace {{ catalog.traceId ?? 'unavailable' }}
-      </div>
-      <div v-else-if="catalog.branches.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-        No active workshop branches match the search.
-      </div>
-      <div v-else class="grid gap-5 p-5 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.22fr)]">
-        <div class="space-y-3">
-          <FormSelect
-            v-model="catalog.selectedBranchId"
-            label="Selected branch"
-            :options="branchOptions"
-          />
-          <article v-if="selectedBranch" class="rounded-lg border border-hairline bg-sunk p-4">
-            <div class="flex flex-wrap items-center gap-3">
-              <AuthFileImage
-                v-if="selectedBranch.workshop_logo_file_id"
-                :file-id="selectedBranch.workshop_logo_file_id"
-                alt=""
-                class="size-12 rounded-md object-cover"
-              />
-              <div class="min-w-0">
-                <h2 class="truncate text-lg font-extrabold text-ink">
-                  {{ selectedBranch.workshop_name }}
-                </h2>
-                <p class="text-sm text-ink-soft">{{ selectedBranch.branch_name }}</p>
-              </div>
-            </div>
-            <dl class="mt-4 grid gap-3 text-sm">
-              <div>
-                <dt class="font-bold text-ink">Address</dt>
-                <dd class="text-ink-soft">{{ selectedBranch.address }}</dd>
-              </div>
-              <div>
-                <dt class="font-bold text-ink">Phone</dt>
-                <dd class="text-ink-soft">{{ selectedBranch.phone }}</dd>
-              </div>
-              <div>
-                <dt class="font-bold text-ink">Status</dt>
-                <dd>
-                  <span
-                    class="mp-chip"
-                    :class="
-                      selectedBranch.status === 'active'
-                        ? 'bg-success-soft text-success'
-                        : 'bg-warning-soft text-warning'
-                    "
-                  >
-                    <span class="mp-dot" aria-hidden="true"></span>
-                    {{
-                      selectedBranch.status === 'active'
-                        ? 'active'
-                        : `temporarily closed · ${selectedBranch.closed_reason ?? 'reason not set'}`
-                    }}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </article>
+    </div>
+
+    <div v-else-if="catalog.error" class="client-error">
+      <div class="client-error-icon">!</div>
+      <h3>Ustaxonalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="client-trace">trace_id: {{ catalog.traceId ?? 'unavailable' }}</p>
+      <button type="button" class="mp-button mp-button-outline mt-4" @click="refreshBranches">
+        Qayta urinish
+      </button>
+    </div>
+
+    <div v-else-if="visibleBranches.length === 0" class="client-empty">
+      <div class="client-empty-icon">U</div>
+      <h3>Ustaxona topilmadi</h3>
+      <p>Qidiruv bo'yicha faol yoki vaqtincha yopiq ustaxona yo'q.</p>
+    </div>
+
+    <div v-else class="grid gap-3">
+      <article
+        v-for="branch in visibleBranches"
+        :key="branch.branch_id"
+        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5"
+        :class="branch.status !== 'active' ? 'opacity-70' : ''"
+      >
+        <div
+          class="grid size-[50px] place-items-center rounded-lg font-serif text-lg font-bold"
+          :class="
+            branch.status === 'active'
+              ? 'bg-accent-tint text-accent'
+              : 'bg-warning-soft text-warning'
+          "
+          aria-hidden="true"
+        >
+          {{ branch.branch_name.slice(0, 1).toUpperCase() }}
         </div>
 
-        <section class="min-w-0">
-          <div class="grid gap-3 md:grid-cols-[1fr_auto]">
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="client-material-search">
-                Search materials
-              </label>
-              <input
-                id="client-material-search"
-                v-model="materialSearch"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              />
-            </div>
-            <button
-              class="mp-button mp-button-outline self-end"
-              type="button"
-              @click="refreshMaterials"
-            >
-              Apply
-            </button>
-          </div>
+        <div class="min-w-0">
+          <h2 class="m-0 truncate font-serif text-lg font-semibold text-ink">
+            {{ branch.workshop_name }} · {{ branch.branch_name }}
+          </h2>
+          <p class="mt-1 font-mono text-xs text-ink-muted">
+            {{ branch.address }} · {{ hours(branch) }} · {{ branch.phone }}
+          </p>
+          <p v-if="loadingMaterials" class="mt-2 text-sm text-ink-soft">
+            Materiallar yuklanmoqda...
+          </p>
+          <p
+            v-else-if="materialLabels(branch.branch_id).length > 0"
+            class="mt-2 text-sm text-ink-soft"
+          >
+            Materiallar:
+            <b class="font-semibold text-ink">
+              {{ materialLabels(branch.branch_id).slice(0, 4).join(' · ') }}
+            </b>
+            <span v-if="materialLabels(branch.branch_id).length > 4">
+              +{{ materialLabels(branch.branch_id).length - 4 }}
+            </span>
+          </p>
+          <p v-else class="mt-2 text-sm text-ink-soft">Ochiq materiallar ko'rsatilmagan.</p>
+          <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
+            {{ branch.closed_reason ?? 'Vaqtincha yopiq' }}
+          </p>
+        </div>
 
-          <div
-            v-if="catalog.materialsLoading"
-            class="mt-5 text-sm font-bold text-ink-soft"
-            aria-live="polite"
-          >
-            Loading materials
-          </div>
-          <div
-            v-else-if="catalog.materialsError"
-            class="mt-5 rounded-md bg-danger-soft p-4 font-bold text-danger"
-          >
-            Materials could not be loaded. trace {{ catalog.materialsTraceId ?? 'unavailable' }}
-          </div>
-          <div
-            v-else-if="catalog.materials.length === 0"
-            class="mt-5 rounded-md border border-dashed border-hairline-strong p-5 text-sm text-ink-soft"
-          >
-            No active public materials match this branch and search.
-          </div>
-          <div v-else class="mt-5 grid gap-3">
-            <article
-              v-for="material in catalog.materials"
-              :key="material.id"
-              class="grid gap-3 rounded-lg border border-hairline bg-elevated p-4 md:grid-cols-[auto_1fr_auto]"
-            >
-              <AuthFileImage
-                v-if="material.image_file_id"
-                :file-id="material.image_file_id"
-                alt=""
-                class="size-14 rounded-md object-cover"
-              />
-              <div
-                v-else
-                class="grid size-14 place-items-center rounded-md bg-accent-soft font-serif font-bold text-accent"
-                aria-hidden="true"
-              >
-                {{ material.kind.slice(0, 1).toUpperCase() }}
-              </div>
-              <div class="min-w-0">
-                <h3 class="truncate text-base font-extrabold text-ink">{{ material.name }}</h3>
-                <p class="mt-1 text-sm text-ink-soft">
-                  {{ material.manufacturer_name }} · {{ materialSpec(material) }}
-                </p>
-                <p class="mt-1 font-mono text-xs text-ink-muted">
-                  {{ material.color }}{{ material.decor_code ? ` · ${material.decor_code}` : '' }}
-                </p>
-              </div>
-              <div class="text-left md:text-right">
-                <div class="text-base font-extrabold text-ink">
-                  {{ formatTiyin(material.price_tiyin) }}
-                </div>
-                <div class="text-xs font-bold uppercase text-ink-muted">
-                  per {{ material.display_unit }}
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-      </div>
-    </section>
+        <span
+          class="client-pill"
+          :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
+        >
+          {{ branch.status === 'active' ? 'Faol' : 'Vaqtincha yopiq' }}
+        </span>
+      </article>
+    </div>
   </section>
 </template>

@@ -121,6 +121,60 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert detail.json()["owner"]["login"] == "owner"
 
 
+async def test_platform_overview_reports_provisioning_and_actor_counts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_token = await _platform_access_token(client, db_session)
+    db_session.add(Client(phone="+998904040404", name="Client User"))
+    await db_session.flush()
+
+    first = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="overview-a"),
+            "owner": {
+                **_provision_payload()["owner"],
+                "login": "owner-a",
+                "phone": "+998903030301",
+            },
+        },
+    )
+    second = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="overview-b"),
+            "owner": {
+                **_provision_payload()["owner"],
+                "login": "owner-b",
+                "phone": "+998903030302",
+            },
+        },
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    block = await client.post(
+        f"/api/v1/platform/workshops/{second.json()['workshop']['id']}/block",
+        headers=_auth(access_token),
+        json={"reason": "Contract paused"},
+    )
+    overview = await client.get("/api/v1/platform/overview", headers=_auth(access_token))
+
+    assert block.status_code == 200
+    assert overview.status_code == 200
+    assert overview.json() == {
+        "workshops_total": 2,
+        "workshops_active": 1,
+        "workshops_blocked": 1,
+        "branches_total": 2,
+        "clients_total": 1,
+        "platform_users_active": 1,
+    }
+
+
 async def test_platform_provision_rejects_non_canonical_working_hours(
     client: AsyncClient,
     db_session: AsyncSession,

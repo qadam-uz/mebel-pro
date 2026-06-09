@@ -3,17 +3,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
+import { orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { formatDate, formatTiyin } from '@/shared/formatters'
-import {
-  useOrdersStore,
-  workshopStatusLabel,
-  type OrderStatus,
-  type OrderStockWarning,
-} from '@/shared/stores/orders'
+import { useOrdersStore, type OrderItem, type OrderStockWarning } from '@/shared/stores/orders'
 import {
   metres,
   type CuttingPanel,
@@ -32,6 +28,7 @@ const noteDraft = ref('')
 const discountKind = ref('fixed')
 const discountValue = ref('')
 const discountReason = ref('')
+const activeTab = ref<'overview' | 'cutting' | 'timeline'>('overview')
 const actionError = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
@@ -64,12 +61,25 @@ const discountOptions: ChoiceOption[] = [
   { value: 'percent', label: 'Percent', meta: '0-100 percent' },
 ]
 
-function statusTone(status: OrderStatus) {
-  if (status === 'completed') return 'bg-success-soft text-success'
-  if (status === 'cancelled') return 'bg-danger-soft text-danger'
-  if (status === 'ready') return 'bg-info-soft text-info'
-  if (status === 'cutting' || status === 'edge_banding') return 'bg-accent-soft text-accent'
-  return 'bg-warning-soft text-warning'
+function snapshotName(item: OrderItem) {
+  const value = item.material_snapshot.name
+  return typeof value === 'string' ? value : item.material_id.slice(0, 8)
+}
+
+function edgeSummary(item: OrderItem) {
+  const sides = [
+    ['T', item.edge_top],
+    ['B', item.edge_bottom],
+    ['L', item.edge_left],
+    ['R', item.edge_right],
+  ]
+    .filter(([, edge]) => edge)
+    .map(([side, edge]) => {
+      const data = edge as Record<string, unknown>
+      const source = data.source === 'own' ? ' · mijoz' : ''
+      return `${side}${source}`
+    })
+  return sides.length > 0 ? `Krom · ${sides.join(' · ')}` : 'krom yoq'
 }
 
 function workerName(id: string | null) {
@@ -252,193 +262,312 @@ onMounted(loadDetail)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <RouterLink :to="rolePath('/workshop/orders')" class="text-sm font-bold text-accent">
-          Orders
-        </RouterLink>
-        <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Order detail</h1>
-        <p v-if="order" class="mt-2 text-base text-ink-soft">
-          {{ order.order_number }} · {{ order.contact_name }} · {{ order.branch_name }}
-        </p>
-      </div>
-      <div v-if="order" class="flex flex-wrap gap-2">
-        <RouterLink
-          v-if="order.status === 'cutting'"
-          :to="rolePath('/workshop/cutting')"
-          class="mp-button mp-button-outline"
-        >
-          Cutting queue
-        </RouterLink>
-        <RouterLink
-          v-if="order.status === 'edge_banding'"
-          :to="rolePath('/workshop/banding')"
-          class="mp-button mp-button-outline"
-        >
-          Banding queue
-        </RouterLink>
-        <button
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="orders.downloadWorkshopPdf(order.id)"
-        >
-          Download PDF
-        </button>
-      </div>
-    </div>
+  <section>
+    <RouterLink :to="rolePath('/workshop/orders')" class="back">← Buyurtmalar</RouterLink>
 
-    <section v-if="orders.loading" class="mp-surface p-5" aria-live="polite">Loading order</section>
-    <section v-else-if="orders.error" class="mp-surface p-5 text-danger">
-      Order could not be loaded. trace {{ orders.traceId ?? 'unavailable' }}
-    </section>
-    <section v-else-if="!order" class="mp-surface p-5">
-      <div class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-5">
-        <h2 class="font-serif text-2xl font-semibold text-ink">Order not found</h2>
-        <p class="mt-2 text-sm text-ink-soft">Open the order list and try again.</p>
+    <section v-if="orders.loading" class="card p-5" aria-live="polite">
+      <div class="grid gap-3">
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
       </div>
+    </section>
+    <section v-else-if="orders.error" class="st-error">
+      <h3>Buyurtmani yuklab bo'lmadi</h3>
+      <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+    </section>
+    <section v-else-if="!order" class="st-empty">
+      <h3>Buyurtma topilmadi</h3>
+      <p>Buyurtmalar ro'yxatidan qayta ochib ko'ring.</p>
     </section>
 
     <template v-else>
-      <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div class="space-y-4">
-          <section class="mp-surface p-5">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <span class="mp-chip" :class="statusTone(order.status)">
-                  <span class="mp-dot" aria-hidden="true"></span>
-                  {{ workshopStatusLabel[order.status] }}
-                </span>
-                <h2 class="mt-4 font-serif text-xl font-semibold text-ink">
-                  {{ order.order_number }}
-                </h2>
-                <p class="mt-1 text-sm text-ink-soft">
-                  Created {{ formatDate(order.created_at) }} · version {{ order.version }}
-                </p>
-              </div>
-              <div class="text-right">
-                <div class="font-mono text-2xl font-extrabold text-accent">
-                  {{ formatTiyin(order.total_tiyin) }}
-                </div>
-                <div v-if="order.discount_tiyin > 0" class="mt-1 text-sm font-bold text-success">
-                  discount {{ formatTiyin(order.discount_tiyin) }}
-                </div>
+      <div class="od-head">
+        <h1>{{ order.order_number }}</h1>
+        <div class="id">
+          {{ order.branch_name }} · {{ formatDate(order.created_at) }} · v{{ order.version }}
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
+          <span :class="orderPillClass(order.status)">
+            <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+          </span>
+          <span
+            >Mijoz: <b class="text-ink">{{ order.contact_name }}</b> ·
+            {{ order.contact_phone }}</span
+          >
+          <span class="font-mono text-ink-muted">{{ formatTiyin(order.total_tiyin) }}</span>
+        </div>
+        <div class="actions">
+          <RouterLink
+            v-if="order.status === 'cutting'"
+            :to="rolePath('/workshop/cutting')"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          >
+            Kesish navbati
+          </RouterLink>
+          <RouterLink
+            v-if="order.status === 'edge_banding'"
+            :to="rolePath('/workshop/banding')"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          >
+            Krom navbati
+          </RouterLink>
+          <button
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            @click="orders.downloadWorkshopPdf(order.id)"
+          >
+            Chizma PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button
+          class="tab"
+          :class="{ on: activeTab === 'overview' }"
+          type="button"
+          @click="activeTab = 'overview'"
+        >
+          Umumiy
+        </button>
+        <button
+          class="tab"
+          :class="{ on: activeTab === 'cutting' }"
+          type="button"
+          @click="activeTab = 'cutting'"
+        >
+          Chizma
+        </button>
+        <button
+          class="tab"
+          :class="{ on: activeTab === 'timeline' }"
+          type="button"
+          @click="activeTab = 'timeline'"
+        >
+          Tarix
+        </button>
+      </div>
+
+      <div class="od-grid">
+        <main class="min-w-0">
+          <section v-if="activeTab === 'overview'" class="grid gap-4">
+            <div v-if="order.stock_warnings.length > 0" class="banner warn">
+              <div class="grow">
+                Kesishdan keyin past zaxira:
+                <b>
+                  {{
+                    order.stock_warnings
+                      .map(
+                        (warning) =>
+                          `${warning.material_name} → ${warningQuantity(warning, 'projected_after')}`,
+                      )
+                      .join(' · ')
+                  }}
+                </b>
               </div>
             </div>
+
+            <section class="card">
+              <div class="card-h"><h2>Buyurtma tarkibi</h2></div>
+              <div class="card-b">
+                <div v-for="item in order.items" :key="item.id" class="row-item">
+                  <div>
+                    <div class="nm">
+                      {{ snapshotName(item) }} · {{ item.length_mm }}x{{ item.width_mm }}
+                    </div>
+                    <small class="text-ink-muted"
+                      >{{ item.material_source === 'own' ? 'mijoz paneli' : 'ustaxona paneli' }} ·
+                      {{ edgeSummary(item) }}</small
+                    >
+                  </div>
+                  <div class="meta">{{ item.quantity }} dona</div>
+                </div>
+                <div v-if="order.items.length === 0" class="st-empty !border-0 !py-8">
+                  <h3>Chizma qismi yo'q</h3>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-h"><h2>Narx tafsiloti</h2></div>
+              <div class="card-b">
+                <div class="row-item">
+                  <div><div class="nm">Kesish xizmati</div></div>
+                  <div class="meta">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</div>
+                </div>
+                <div class="row-item">
+                  <div><div class="nm">Material</div></div>
+                  <div class="meta">{{ formatTiyin(order.subtotal_materials_tiyin) }}</div>
+                </div>
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Krom</div>
+                    <small class="text-ink-muted">{{
+                      order.subtotal_edge_banding_tiyin > 0
+                        ? 'material + xizmat'
+                        : "bu buyurtmada krom yo'q"
+                    }}</small>
+                  </div>
+                  <div class="meta">
+                    {{
+                      order.subtotal_edge_banding_tiyin > 0
+                        ? formatTiyin(order.subtotal_edge_banding_tiyin)
+                        : '—'
+                    }}
+                  </div>
+                </div>
+                <div v-if="order.discount_tiyin > 0" class="row-item">
+                  <div>
+                    <div class="nm">Chegirma</div>
+                    <small class="text-ink-muted">{{ order.discount_reason }}</small>
+                  </div>
+                  <div class="meta">- {{ formatTiyin(order.discount_tiyin) }}</div>
+                </div>
+                <div class="row-item font-extrabold">
+                  <div><div class="nm">Jami</div></div>
+                  <div class="meta">{{ formatTiyin(order.total_tiyin) }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="order.settlement" class="card">
+              <div class="card-h">
+                <h2>To'lov holati <span class="pill p-dn ml-1">faqat o'qish</span></h2>
+              </div>
+              <div class="card-b">
+                <div class="ro-figure">
+                  <span>Jami summa</span
+                  ><span class="v">{{ formatTiyin(order.settlement.total_tiyin) }}</span>
+                </div>
+                <div class="ro-figure">
+                  <span>Yozilgan to'lov</span
+                  ><span class="v success-text">{{
+                    formatTiyin(order.settlement.recorded_tiyin)
+                  }}</span>
+                </div>
+                <div class="ro-figure">
+                  <span>Qoldiq</span
+                  ><span class="v">{{ formatTiyin(order.settlement.balance_tiyin) }}</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-h"><h2>Ishlab chiqarish</h2></div>
+              <div class="card-b">
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Kesuvchi</div>
+                    <small class="text-ink-muted">{{
+                      order.cut_completed_at
+                        ? `Bajardi · ${formatDate(order.cut_completed_at)}`
+                        : order.assigned_cutter_user_id
+                          ? 'tayinlangan'
+                          : 'tayinlanmagan'
+                    }}</small>
+                  </div>
+                  <div class="meta">
+                    {{ workerName(order.cutter_user_id ?? order.assigned_cutter_user_id) }}
+                  </div>
+                </div>
+                <div
+                  v-if="order.cut_count_snapshot !== null || order.panels_used_snapshot !== null"
+                  class="row-item"
+                >
+                  <div><div class="nm">Kesilgan</div></div>
+                  <div class="meta">
+                    {{ order.cut_count_snapshot ?? 0 }} ta ·
+                    {{ order.panels_used_snapshot ?? 0 }} panel
+                  </div>
+                </div>
+                <div class="row-item">
+                  <div>
+                    <div class="nm">Krom yopishtiruvchi</div>
+                    <small class="text-ink-muted">{{
+                      order.has_banding
+                        ? order.edge_completed_at
+                          ? `Bajardi · ${formatDate(order.edge_completed_at)}`
+                          : order.assigned_edger_user_id
+                            ? 'tayinlangan'
+                            : 'tayinlanmagan'
+                        : "bu buyurtmada krom yo'q"
+                    }}</small>
+                  </div>
+                  <div class="meta">
+                    {{
+                      order.has_banding
+                        ? workerName(order.edger_user_id ?? order.assigned_edger_user_id)
+                        : '—'
+                    }}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-h"><h2>Ichki izoh</h2></div>
+              <div class="card-b">
+                <textarea
+                  v-model="noteDraft"
+                  class="mp-input min-h-28 resize-y"
+                  placeholder="Faqat ustaxona xodimlari ko'radi"
+                ></textarea>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline mt-3 min-h-9 px-3 text-xs"
+                  :disabled="orders.actionLoading"
+                  @click="saveNote"
+                >
+                  Saqlash
+                </button>
+              </div>
+            </section>
           </section>
 
-          <section class="mp-surface overflow-hidden">
-            <div class="border-b border-hairline px-5 py-4">
-              <h2 class="font-serif text-xl font-semibold text-ink">Production</h2>
-              <p class="mt-1 text-sm text-ink-soft">
-                Assignments, credited workers, and stock-sensitive transitions.
-              </p>
+          <section v-else-if="activeTab === 'cutting'" class="card">
+            <div class="card-h"><h2>Chizma rejasi</h2></div>
+            <div v-if="!result" class="card-b">
+              <div class="st-empty !border-0 !py-8"><h3>Chizma biriktirilmagan</h3></div>
             </div>
-            <div class="grid gap-3 p-5 md:grid-cols-2">
-              <div class="rounded-md bg-sunk p-4">
-                <div class="text-xs font-bold uppercase text-ink-muted">Cutter</div>
-                <div class="mt-1 font-bold text-ink">
-                  {{ workerName(order.assigned_cutter_user_id) }}
-                </div>
-                <p class="mt-1 text-sm text-ink-soft">
-                  {{
-                    order.cut_completed_at
-                      ? `done ${formatDate(order.cut_completed_at)}`
-                      : 'not done'
-                  }}
-                </p>
-              </div>
-              <div class="rounded-md bg-sunk p-4">
-                <div class="text-xs font-bold uppercase text-ink-muted">Edge bander</div>
-                <div class="mt-1 font-bold text-ink">
-                  {{
-                    order.has_banding ? workerName(order.assigned_edger_user_id) : 'Not required'
-                  }}
-                </div>
-                <p class="mt-1 text-sm text-ink-soft">
-                  {{
-                    order.edge_completed_at
-                      ? `done ${formatDate(order.edge_completed_at)}`
-                      : order.has_banding
-                        ? 'not done'
-                        : 'no edge step'
-                  }}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="order.stock_warnings.length > 0" class="mp-surface overflow-hidden">
-            <div class="border-b border-hairline px-5 py-4">
-              <h2 class="font-serif text-xl font-semibold text-ink">Stock warnings</h2>
-            </div>
-            <div class="divide-y divide-hairline">
-              <article
-                v-for="warning in order.stock_warnings"
-                :key="`${warning.material_id}-${warning.kind}`"
-                class="grid gap-3 px-5 py-4 md:grid-cols-[1fr_auto]"
-              >
-                <div>
-                  <div class="font-bold text-warning">{{ warning.material_name }}</div>
-                  <p class="mt-1 text-sm text-ink-soft">
-                    Required {{ warningQuantity(warning, 'required') }} · on hand
-                    {{ warningQuantity(warning, 'on_hand') }}
-                  </p>
-                </div>
-                <div class="font-mono text-sm font-bold text-warning">
-                  after {{ warningQuantity(warning, 'projected_after') }}
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="mp-surface overflow-hidden">
-            <div class="border-b border-hairline px-5 py-4">
-              <h2 class="font-serif text-xl font-semibold text-ink">Cutting result</h2>
-            </div>
-            <div v-if="!result" class="p-5 text-sm text-ink-soft">
-              Cutting result is unavailable.
-            </div>
-            <div v-else class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div v-else class="card-b grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
               <div class="min-w-0 space-y-4">
                 <div class="grid gap-3 sm:grid-cols-4">
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Panels</div>
-                    <div class="mt-1 text-xl font-extrabold text-ink">{{ totalPanels }}</div>
+                    <div class="filter-label">Panel</div>
+                    <div class="mt-1 text-xl font-extrabold">{{ totalPanels }}</div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Cut length</div>
-                    <div class="mt-1 text-xl font-extrabold text-ink">
+                    <div class="filter-label">Kesim</div>
+                    <div class="mt-1 text-xl font-extrabold">
                       {{ metres(result.total_cut_length_mm) }}
                     </div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Edge</div>
-                    <div class="mt-1 text-xl font-extrabold text-ink">
+                    <div class="filter-label">Krom</div>
+                    <div class="mt-1 text-xl font-extrabold">
                       {{ metres(result.total_edge_length_mm) }}
                     </div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Waste</div>
-                    <div class="mt-1 text-xl font-extrabold text-ink">
+                    <div class="filter-label">Qoldiq</div>
+                    <div class="mt-1 text-xl font-extrabold">
                       {{ (Number(result.waste_percentage) * 100).toFixed(2) }}%
                     </div>
                   </div>
                 </div>
-
                 <div class="flex flex-wrap gap-2">
                   <button
                     v-for="panel in result.panels"
                     :key="panel.id"
                     type="button"
-                    class="mp-chip"
-                    :class="panel.id === activePanel?.id ? 'bg-accent-soft text-accent' : ''"
+                    class="pill"
+                    :class="panel.id === activePanel?.id ? 'p-cut' : 'p-dn'"
                     @click="activePanelId = panel.id"
                   >
                     {{ panelTitle(result, panel) }}
                   </button>
                 </div>
-
                 <CuttingPanelSvg
                   v-if="activePanel"
                   :result="result"
@@ -446,10 +575,16 @@ onMounted(loadDetail)
                   :active-placement-id="activePlacementId"
                   @select-placement="selectPlacement"
                 />
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline w-full"
+                  @click="orders.downloadWorkshopPdf(order.id)"
+                >
+                  Chizma (PDF)
+                </button>
               </div>
-
               <aside v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
-                <h3 class="text-sm font-extrabold text-ink">Placements</h3>
+                <h3 class="text-sm font-extrabold text-ink">Qismlar</h3>
                 <div class="mt-3 grid gap-2">
                   <button
                     v-for="placement in activePanel.placements"
@@ -469,63 +604,77 @@ onMounted(loadDetail)
             </div>
           </section>
 
-          <section class="mp-surface overflow-hidden">
-            <div class="border-b border-hairline px-5 py-4">
-              <h2 class="font-serif text-xl font-semibold text-ink">Status events</h2>
-            </div>
-            <div v-if="order.events.length === 0" class="p-5 text-sm text-ink-soft">
-              No status events yet.
-            </div>
-            <div v-else class="divide-y divide-hairline">
-              <article
-                v-for="event in order.events"
-                :key="event.id"
-                class="grid gap-2 px-5 py-4 md:grid-cols-[1fr_auto]"
-              >
-                <div>
-                  <div class="font-bold text-ink">
-                    {{ event.from_status ? workshopStatusLabel[event.from_status] : 'Created' }}
-                    <span class="text-ink-muted">→</span>
-                    {{ workshopStatusLabel[event.to_status] }}
-                  </div>
-                  <p v-if="event.reason" class="mt-1 text-sm text-ink-soft">
-                    {{ event.reason }}
-                  </p>
-                </div>
-                <div class="font-mono text-xs text-ink-muted">
-                  {{ formatDate(event.changed_at) }}
-                </div>
-              </article>
+          <section v-else class="card">
+            <div class="card-h"><h2>Holat tarixi</h2></div>
+            <div class="card-b">
+              <div v-if="order.events.length === 0" class="st-empty !border-0 !py-8">
+                <h3>Holat tarixi hali yo'q</h3>
+              </div>
+              <ol v-else class="tl">
+                <li
+                  v-for="event in order.events"
+                  :key="event.id"
+                  class="step"
+                  :class="event.to_status === 'cancelled' ? 'bad' : 'done'"
+                >
+                  <span class="when">{{ formatDate(event.changed_at) }}</span>
+                  {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
+                  <span class="text-ink-muted">→</span>
+                  {{ workshopStatusUz[event.to_status] }}
+                  <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
+                </li>
+              </ol>
             </div>
           </section>
-        </div>
+        </main>
 
-        <aside class="space-y-4">
-          <section class="mp-surface p-5">
-            <h2 class="font-serif text-xl font-semibold text-ink">Actions</h2>
-            <div class="mt-4 space-y-3">
-              <template v-if="order.status === 'new'">
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading"
-                  @click="approve"
-                >
-                  Approve
-                </button>
-              </template>
+        <aside class="grid content-start gap-4">
+          <section class="totals">
+            <div class="r">
+              <span>Kesish xizmati</span
+              ><span class="num">{{ formatTiyin(order.subtotal_cutting_tiyin) }}</span>
+            </div>
+            <div class="r">
+              <span>Material</span
+              ><span class="num">{{ formatTiyin(order.subtotal_materials_tiyin) }}</span>
+            </div>
+            <div class="r">
+              <span>Krom</span
+              ><span class="num">{{ formatTiyin(order.subtotal_edge_banding_tiyin) }}</span>
+            </div>
+            <div v-if="order.discount_tiyin > 0" class="r">
+              <span>Chegirma</span
+              ><span class="num">- {{ formatTiyin(order.discount_tiyin) }}</span>
+            </div>
+            <div class="r grand">
+              <span>Jami</span><span class="num">{{ formatTiyin(order.total_tiyin) }}</span>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><h2>Amallar</h2></div>
+            <div class="card-b grid gap-3">
+              <button
+                v-if="order.status === 'new'"
+                type="button"
+                class="mp-button mp-button-primary w-full"
+                :disabled="orders.actionLoading"
+                @click="approve"
+              >
+                Tasdiqlash
+              </button>
 
               <template v-else-if="order.status === 'confirmed'">
                 <FormSelect
                   v-model="cutterId"
-                  label="Cutter"
+                  label="Kesuvchi"
                   :options="workerOptions"
                   :disabled="workerOptions.length === 0"
                 />
                 <FormSelect
                   v-if="order.has_banding"
                   v-model="edgerId"
-                  label="Edge bander"
+                  label="Krom yopishtiruvchi"
                   :options="workerOptions"
                   :disabled="workerOptions.length === 0"
                 />
@@ -535,7 +684,7 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
                   @click="assignWorkers"
                 >
-                  Assign and start
+                  Tayinlash va boshlash
                 </button>
               </template>
 
@@ -543,7 +692,7 @@ onMounted(loadDetail)
                 <FormSelect
                   v-if="workerOptions.length > 0"
                   v-model="completedById"
-                  label="Credited cutter"
+                  label="Kim bajardi"
                   :options="workerOptions"
                 />
                 <button
@@ -552,7 +701,7 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading"
                   @click="completeCutting"
                 >
-                  Mark cutting done
+                  Kesish tugadi
                 </button>
               </template>
 
@@ -560,7 +709,7 @@ onMounted(loadDetail)
                 <FormSelect
                   v-if="workerOptions.length > 0"
                   v-model="completedById"
-                  label="Credited bander"
+                  label="Kim bajardi"
                   :options="workerOptions"
                 />
                 <button
@@ -569,42 +718,36 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading"
                   @click="completeBanding"
                 >
-                  Mark banding done
+                  Krom tugadi
                 </button>
               </template>
 
-              <template v-else-if="order.status === 'ready'">
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading"
-                  @click="markCollected"
-                >
-                  Mark collected
-                </button>
-              </template>
+              <button
+                v-else-if="order.status === 'ready'"
+                type="button"
+                class="mp-button mp-button-primary w-full"
+                :disabled="orders.actionLoading"
+                @click="markCollected"
+              >
+                Mijoz olib ketdi
+              </button>
 
               <p
                 v-if="order.status === 'completed' || order.status === 'cancelled'"
                 class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
               >
-                No further production actions are available.
+                Bu holatda ishlab chiqarish amali yo'q.
               </p>
 
-              <div
+              <button
                 v-if="['cutting', 'edge_banding', 'ready'].includes(order.status)"
-                class="grid gap-2"
+                type="button"
+                class="mp-button mp-button-outline w-full"
+                :disabled="orders.actionLoading"
+                @click="requestRevertOrder"
               >
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline w-full"
-                  :disabled="orders.actionLoading"
-                  @click="requestRevertOrder"
-                >
-                  Revert one step
-                </button>
-              </div>
-
+                Bir qadam orqaga
+              </button>
               <button
                 v-if="!['completed', 'cancelled'].includes(order.status)"
                 type="button"
@@ -612,94 +755,76 @@ onMounted(loadDetail)
                 :disabled="orders.actionLoading"
                 @click="requestCancelOrder"
               >
-                Cancel order
+                Buyurtmani bekor qilish
               </button>
+              <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm text-danger">
+                {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
+              </p>
             </div>
-            <p v-if="actionError" class="mt-4 rounded-md bg-danger-soft p-3 text-sm text-danger">
-              {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
-            </p>
           </section>
 
-          <section
-            v-if="order.status === 'new' || order.status === 'confirmed'"
-            class="mp-surface p-5"
-          >
-            <h2 class="font-serif text-xl font-semibold text-ink">Discount</h2>
-            <div class="mt-4 grid gap-3">
-              <FormSelect v-model="discountKind" label="Kind" :options="discountOptions" />
-              <label class="grid gap-1 text-sm font-bold text-ink">
-                Value
-                <input v-model="discountValue" class="mp-input" inputmode="numeric" />
-              </label>
-              <label class="grid gap-1 text-sm font-bold text-ink">
-                Reason
-                <input v-model="discountReason" class="mp-input" />
-              </label>
+          <section v-if="order.status === 'new' || order.status === 'confirmed'" class="card">
+            <div class="card-h"><h2>Chegirma</h2></div>
+            <div class="card-b grid gap-3">
+              <FormSelect v-model="discountKind" label="Turi" :options="discountOptions" />
+              <label class="field !mb-0"
+                ><span>Qiymat</span
+                ><input v-model="discountValue" class="mp-input" inputmode="numeric"
+              /></label>
+              <label class="field !mb-0"
+                ><span>Sabab</span><input v-model="discountReason" class="mp-input"
+              /></label>
               <button
                 type="button"
                 class="mp-button mp-button-outline"
                 :disabled="orders.actionLoading"
                 @click="applyDiscount"
               >
-                Apply discount
+                Chegirma qo'shish
               </button>
             </div>
           </section>
 
-          <section class="mp-surface p-5">
-            <h2 class="font-serif text-xl font-semibold text-ink">Contact</h2>
-            <div class="mt-4 grid gap-2 text-sm">
-              <div class="flex justify-between gap-3">
-                <span class="text-ink-soft">Client</span>
-                <span class="font-bold text-ink">{{ order.client_name }}</span>
+          <section class="card">
+            <div class="card-h"><h2>Mijoz</h2></div>
+            <div class="card-b">
+              <div class="row-item">
+                <div>
+                  <div class="nm">{{ order.client_name }}</div>
+                </div>
+                <div></div>
               </div>
-              <div class="flex justify-between gap-3">
-                <span class="text-ink-soft">Order contact</span>
-                <span class="font-bold text-ink">{{ order.contact_name }}</span>
+              <div class="row-item">
+                <div><div class="nm">Aloqa</div></div>
+                <div class="meta">{{ order.contact_name }}</div>
               </div>
-              <div class="flex justify-between gap-3">
-                <span class="text-ink-soft">Phone</span>
-                <span class="font-mono font-bold text-ink">{{ order.contact_phone }}</span>
+              <div class="row-item">
+                <div><div class="nm">Telefon</div></div>
+                <div class="meta">{{ order.contact_phone }}</div>
               </div>
             </div>
           </section>
-
-          <section class="mp-surface p-5">
-            <h2 class="font-serif text-xl font-semibold text-ink">Internal note</h2>
-            <label class="mt-4 grid gap-1 text-sm font-bold text-ink">
-              Note
-              <textarea v-model="noteDraft" class="mp-input min-h-28 resize-y" />
-            </label>
-            <button
-              type="button"
-              class="mp-button mp-button-outline mt-3 w-full"
-              :disabled="orders.actionLoading"
-              @click="saveNote"
-            >
-              Save note
-            </button>
-          </section>
         </aside>
-      </section>
+      </div>
     </template>
 
     <ConfirmDialog
       :open="reasonDialogAction !== null"
-      :title="reasonDialogAction === 'revert' ? 'Revert order' : 'Cancel order'"
+      :title="reasonDialogAction === 'revert' ? 'Buyurtmani qaytarish' : 'Buyurtmani bekor qilish'"
       :message="
         reasonDialogAction === 'revert'
-          ? 'Record the correction reason before moving this order back one step.'
-          : 'Record the cancellation reason before closing this order.'
+          ? 'Buyurtma bir qadam orqaga qaytadi. Sababni yozing.'
+          : 'Buyurtma yopiladi. Bekor qilish sababini yozing.'
       "
-      :confirm-label="reasonDialogAction === 'revert' ? 'Revert one step' : 'Cancel order'"
+      :confirm-label="reasonDialogAction === 'revert' ? 'Qaytarish' : 'Bekor qilish'"
       :danger="reasonDialogAction === 'cancel'"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"
       @cancel="reasonDialogAction = null"
       @confirm="confirmReasonedAction"
     >
-      <label class="grid gap-1 text-sm font-bold text-ink">
-        Reason
+      <label class="field !mb-0">
+        <span>Sabab</span>
         <textarea v-model="reasonDraft" class="mp-input min-h-24 resize-y" />
       </label>
     </ConfirmDialog>

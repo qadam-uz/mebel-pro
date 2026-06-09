@@ -214,7 +214,7 @@ function resetMaterialForm() {
 
 function materialSpec(material: Material) {
   if (material.kind === 'edge') return `${material.thickness_mm} mm edge`
-  return `${material.thickness_mm} mm · ${material.panel_length_mm}x${material.panel_width_mm} mm`
+  return `${material.thickness_mm} mm . ${material.panel_length_mm}x${material.panel_width_mm} mm`
 }
 
 onMounted(async () => {
@@ -380,7 +380,7 @@ onMounted(async () => {
                 </span>
               </div>
               <p class="mt-1 text-sm text-ink-soft">
-                {{ manufacturer.country || 'Country not set' }} ·
+                {{ manufacturer.country || 'Country not set' }} .
                 {{ manufacturer.note || 'No note' }}
               </p>
             </div>
@@ -603,7 +603,7 @@ onMounted(async () => {
                 <td class="px-5 py-4">
                   <div class="font-extrabold text-ink">{{ material.name }}</div>
                   <div class="font-mono text-xs text-ink-muted">
-                    {{ material.manufacturer_name }} · {{ material.kind }}
+                    {{ material.manufacturer_name }} . {{ material.kind }}
                   </div>
                 </td>
                 <td class="px-5 py-4 text-ink-soft">

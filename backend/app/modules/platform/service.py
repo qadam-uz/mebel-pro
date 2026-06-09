@@ -27,7 +27,7 @@ from app.modules.access.api import (
     revoke_for_principal,
     revoke_for_workshop,
 )
-from app.modules.access.contracts import PlatformUser, WorkshopUser
+from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.inventory.contracts import StockItem
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord, JobDefinition, JobRun
@@ -69,6 +69,16 @@ class PlatformJobRecord:
     recent_runs: list[JobRun]
 
 
+@dataclass(frozen=True)
+class PlatformOverview:
+    workshops_total: int
+    workshops_active: int
+    workshops_blocked: int
+    branches_total: int
+    clients_total: int
+    platform_users_active: int
+
+
 async def _cleanup_expired_sessions_job(db: AsyncSession) -> str:
     count = await prune_expired_sessions(db)
     return f"Pruned {count} expired sessions"
@@ -105,6 +115,36 @@ async def list_workshops(db: AsyncSession) -> list[Workshop]:
         await db.scalars(select(Workshop).order_by(Workshop.created_at.desc(), Workshop.name))
     ).all()
     return list(rows)
+
+
+async def get_platform_overview(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+) -> PlatformOverview:
+    require_platform_operator(principal)
+    workshops_total = await db.scalar(select(func.count()).select_from(Workshop))
+    workshops_active = await db.scalar(
+        select(func.count()).select_from(Workshop).where(Workshop.status == WorkshopStatus.ACTIVE)
+    )
+    workshops_blocked = await db.scalar(
+        select(func.count()).select_from(Workshop).where(Workshop.status == WorkshopStatus.BLOCKED)
+    )
+    branches_total = await db.scalar(select(func.count()).select_from(Branch))
+    clients_total = await db.scalar(select(func.count()).select_from(Client))
+    platform_users_active = await db.scalar(
+        select(func.count())
+        .select_from(PlatformUser)
+        .where(PlatformUser.status == UserStatus.ACTIVE)
+    )
+    return PlatformOverview(
+        workshops_total=int(workshops_total or 0),
+        workshops_active=int(workshops_active or 0),
+        workshops_blocked=int(workshops_blocked or 0),
+        branches_total=int(branches_total or 0),
+        clients_total=int(clients_total or 0),
+        platform_users_active=int(platform_users_active or 0),
+    )
 
 
 async def get_workshop_detail(

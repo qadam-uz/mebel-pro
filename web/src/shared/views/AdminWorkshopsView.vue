@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
 const creating = ref(false)
+const modalOpen = ref(false)
 const createError = ref<string | null>(null)
+const search = ref('')
+const statusFilter = ref('all')
 const form = reactive({
   name: '',
   code: '',
@@ -25,6 +30,23 @@ const form = reactive({
   tempPassword: '',
 })
 
+const statusOptions = [
+  dropdownOption('all', 'Hammasi', 'barcha holatlar'),
+  dropdownOption('active', 'Faol', 'kirish mumkin'),
+  dropdownOption('blocked', 'Bloklangan', 'sessiyalar yopilgan'),
+]
+const filtered = computed(() => {
+  const needle = search.value.trim().toLowerCase()
+  return admin.workshops.filter((workshop) => {
+    if (statusFilter.value !== 'all' && workshop.status !== statusFilter.value) return false
+    if (!needle) return true
+    return [workshop.name, workshop.code, workshop.phone, workshop.address ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(needle)
+  })
+})
+
 function defaultWorkingHours() {
   return {
     monday: { open: '09:00', close: '18:00' },
@@ -35,6 +57,31 @@ function defaultWorkingHours() {
     saturday: { open: '10:00', close: '16:00' },
     sunday: { open: null, close: null },
   }
+}
+
+function codeFromName(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 16)
+}
+
+function resetForm() {
+  form.name = ''
+  form.code = ''
+  form.phone = '+998'
+  form.address = ''
+  form.branchName = ''
+  form.branchAddress = ''
+  form.branchPhone = '+998'
+  form.latitude = '41.2995'
+  form.longitude = '69.2401'
+  form.ownerName = ''
+  form.ownerLogin = ''
+  form.ownerPhone = '+998'
+  form.tempPassword = ''
 }
 
 async function createWorkshop() {
@@ -63,17 +110,9 @@ async function createWorkshop() {
       },
       temp_password: form.tempPassword || undefined,
     })
-    form.name = ''
-    form.code = ''
-    form.phone = '+998'
-    form.address = ''
-    form.branchName = ''
-    form.branchAddress = ''
-    form.branchPhone = '+998'
-    form.ownerName = ''
-    form.ownerLogin = ''
-    form.ownerPhone = '+998'
-    form.tempPassword = ''
+    resetForm()
+    modalOpen.value = false
+    await admin.loadOverview()
   } catch {
     createError.value = 'workshop_create_failed'
   } finally {
@@ -81,207 +120,245 @@ async function createWorkshop() {
   }
 }
 
-onMounted(admin.loadWorkshops)
+watch(
+  () => form.name,
+  (name) => {
+    if (!form.code) form.code = codeFromName(name)
+    if (!form.branchName) form.branchName = name ? 'Asosiy filial' : ''
+  },
+)
+
+onMounted(async () => {
+  await Promise.all([admin.loadWorkshops(), admin.loadOverview()])
+})
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="admin-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Workshops</h1>
-        <p class="mt-2 text-base text-ink-soft">Provision tenants and control access.</p>
+        <h1>Ustaxonalar</h1>
+        <p class="sub">Tenantlarni provisioning qilish, bloklash va holatini kuzatish.</p>
       </div>
+      <button type="button" class="admin-primary-action" @click="modalOpen = true">
+        Yangi ustaxona
+      </button>
     </div>
 
-    <section class="mp-surface p-5">
-      <h2 class="font-serif text-xl font-semibold">Provision workshop</h2>
-      <form class="mt-5 grid gap-4 md:grid-cols-3" @submit.prevent="createWorkshop">
-        <label class="block text-sm font-bold text-ink" for="provision-workshop-name">
-          Workshop name
-          <input
-            id="provision-workshop-name"
-            v-model="form.name"
-            class="mp-input mt-1"
-            autocomplete="organization"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-workshop-code">
-          Code
-          <input
-            id="provision-workshop-code"
-            v-model="form.code"
-            class="mp-input mt-1"
-            autocomplete="off"
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-workshop-phone">
-          Workshop phone
-          <input
-            id="provision-workshop-phone"
-            v-model="form.phone"
-            class="mp-input mt-1"
-            autocomplete="tel"
-            inputmode="tel"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-workshop-address">
-          Workshop address
-          <input
-            id="provision-workshop-address"
-            v-model="form.address"
-            class="mp-input mt-1"
-            autocomplete="street-address"
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-branch-name">
-          First branch
-          <input
-            id="provision-branch-name"
-            v-model="form.branchName"
-            class="mp-input mt-1"
-            autocomplete="organization-title"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-branch-address">
-          Branch address
-          <input
-            id="provision-branch-address"
-            v-model="form.branchAddress"
-            class="mp-input mt-1"
-            autocomplete="street-address"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-branch-phone">
-          Branch phone
-          <input
-            id="provision-branch-phone"
-            v-model="form.branchPhone"
-            class="mp-input mt-1"
-            autocomplete="tel"
-            inputmode="tel"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-branch-latitude">
-          Latitude
-          <input
-            id="provision-branch-latitude"
-            v-model="form.latitude"
-            class="mp-input mt-1"
-            inputmode="decimal"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-branch-longitude">
-          Longitude
-          <input
-            id="provision-branch-longitude"
-            v-model="form.longitude"
-            class="mp-input mt-1"
-            inputmode="decimal"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-owner-name">
-          Owner name
-          <input
-            id="provision-owner-name"
-            v-model="form.ownerName"
-            class="mp-input mt-1"
-            autocomplete="name"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-owner-login">
-          Owner login
-          <input
-            id="provision-owner-login"
-            v-model="form.ownerLogin"
-            class="mp-input mt-1"
-            autocomplete="username"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="provision-owner-phone">
-          Owner phone
-          <input
-            id="provision-owner-phone"
-            v-model="form.ownerPhone"
-            class="mp-input mt-1"
-            autocomplete="tel"
-            inputmode="tel"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink md:col-span-3" for="provision-temp-password">
-          Temp password
-          <input
-            id="provision-temp-password"
-            v-model="form.tempPassword"
-            class="mp-input mt-1"
-            autocomplete="new-password"
-          />
-        </label>
-        <button
-          class="mp-button mp-button-primary md:col-span-3"
-          type="submit"
-          :disabled="creating"
-        >
-          {{ creating ? 'Creating' : 'Create workshop' }}
-        </button>
-      </form>
-      <div v-if="admin.lastProvision" class="mt-4 rounded-md bg-success-soft p-4 text-success">
-        <div class="font-extrabold">Created {{ admin.lastProvision.workshop.code }}</div>
-        <p class="mt-1 font-mono text-sm">
-          owner {{ admin.lastProvision.owner.login }} · temp
-          {{ admin.lastProvision.temp_password }}
-        </p>
-      </div>
-      <p v-if="createError" class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-        Workshop could not be created.
+    <div class="admin-filters">
+      <label class="admin-filter-input">
+        <span class="sr-only">Ustaxona nomi yoki kod</span>
+        <input v-model="search" placeholder="Ustaxona nomi yoki kod" />
+      </label>
+      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      <button type="button" class="mp-button mp-button-outline" @click="admin.loadWorkshops">
+        Yangilash
+      </button>
+    </div>
+
+    <section v-if="admin.loading" class="admin-card p-5" aria-live="polite">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
+    </section>
+
+    <section v-else-if="admin.error" class="admin-error">
+      <h3>Ustaxonalar yuklanmadi</h3>
+      <p>
+        Registry endpoint javob bermadi.
+        <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
       </p>
     </section>
 
-    <section class="mp-surface overflow-hidden">
-      <div class="border-b border-hairline px-5 py-4">
-        <h2 class="font-serif text-xl font-semibold">Workshop registry</h2>
+    <section v-else-if="filtered.length === 0" class="admin-empty">
+      <h3>Ustaxona topilmadi</h3>
+      <p>Filtrni o'zgartiring yoki yangi ustaxona provisioning qiling.</p>
+    </section>
+
+    <section v-else class="admin-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Ustaxona</th>
+              <th>Egasi</th>
+              <th>Telefon</th>
+              <th>Yaratildi</th>
+              <th>Holat</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="workshop in filtered" :key="workshop.id">
+              <td class="nm">
+                {{ workshop.name }}
+                <small>{{ workshop.code }} . {{ workshop.address ?? 'address unset' }}</small>
+              </td>
+              <td class="admin-mono text-ink-muted">{{ workshop.owner_user_id.slice(0, 8) }}</td>
+              <td class="admin-mono text-ink-muted">{{ workshop.phone }}</td>
+              <td class="admin-mono text-ink-muted">{{ adminDate(workshop.created_at) }}</td>
+              <td>
+                <span class="admin-pill" :class="workshopStatusTone(workshop.status)">
+                  {{ workshop.status }}
+                </span>
+              </td>
+              <td class="admin-right">
+                <RouterLink
+                  :to="rolePath(`/admin/workshops/${workshop.id}`)"
+                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                >
+                  Tafsilotlar
+                </RouterLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div v-if="admin.loading" class="px-5 py-6 text-sm font-bold text-ink-soft">
-        Loading workshops
-      </div>
-      <div v-else-if="admin.error" class="px-5 py-6 text-sm font-bold text-danger">
-        Workshop registry could not be loaded.
-      </div>
-      <div v-else-if="admin.workshops.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-        No workshops yet.
-      </div>
-      <div v-else class="divide-y divide-hairline">
-        <RouterLink
-          v-for="workshop in admin.workshops"
-          :key="workshop.id"
-          :to="rolePath(`/admin/workshops/${workshop.id}`)"
-          class="grid gap-2 px-5 py-4 no-underline sm:grid-cols-[1fr_auto]"
-        >
-          <span>
-            <span class="block font-bold text-ink">{{ workshop.name }}</span>
-            <span class="block font-mono text-xs text-ink-muted">{{ workshop.code }}</span>
-          </span>
-          <span
-            class="mp-chip"
-            :class="
-              workshop.status === 'active'
-                ? 'bg-success-soft text-success'
-                : 'bg-danger-soft text-danger'
-            "
+    </section>
+
+    <template v-if="modalOpen">
+      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <section
+        class="admin-modal wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-workshop-title"
+      >
+        <div class="admin-modal-h">
+          <h3 id="new-workshop-title">Yangi ustaxona + egasi . atomik yaratish</h3>
+          <button
+            type="button"
+            class="admin-icon-button"
+            aria-label="Yopish"
+            @click="modalOpen = false"
           >
-            <span class="mp-dot" aria-hidden="true"></span>
-            {{ workshop.status }}
-          </span>
-        </RouterLink>
+            x
+          </button>
+        </div>
+        <form @submit.prevent="createWorkshop">
+          <div class="admin-modal-b">
+            <div class="admin-form-grid three">
+              <label class="admin-field admin-full" for="w-name">
+                <span>Ustaxona nomi</span>
+                <input id="w-name" v-model="form.name" autocomplete="organization" required />
+              </label>
+              <label class="admin-field" for="w-code">
+                <span>Workshop code</span>
+                <input id="w-code" v-model="form.code" autocomplete="off" required />
+              </label>
+              <label class="admin-field" for="w-phone">
+                <span>Telefon</span>
+                <input
+                  id="w-phone"
+                  v-model="form.phone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  required
+                />
+              </label>
+              <label class="admin-field" for="w-address">
+                <span>Manzil</span>
+                <input id="w-address" v-model="form.address" autocomplete="street-address" />
+              </label>
+              <label class="admin-field" for="b-name">
+                <span>Birinchi filial</span>
+                <input id="b-name" v-model="form.branchName" required />
+              </label>
+              <label class="admin-field" for="b-phone">
+                <span>Filial telefoni</span>
+                <input
+                  id="b-phone"
+                  v-model="form.branchPhone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  required
+                />
+              </label>
+              <label class="admin-field" for="b-address">
+                <span>Filial manzili</span>
+                <input id="b-address" v-model="form.branchAddress" required />
+              </label>
+              <label class="admin-field" for="b-lat">
+                <span>Latitude</span>
+                <input id="b-lat" v-model="form.latitude" inputmode="decimal" required />
+              </label>
+              <label class="admin-field" for="b-lon">
+                <span>Longitude</span>
+                <input id="b-lon" v-model="form.longitude" inputmode="decimal" required />
+              </label>
+              <label class="admin-field" for="o-name">
+                <span>Owner ism</span>
+                <input id="o-name" v-model="form.ownerName" autocomplete="name" required />
+              </label>
+              <label class="admin-field" for="o-phone">
+                <span>Owner telefon</span>
+                <input
+                  id="o-phone"
+                  v-model="form.ownerPhone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  required
+                />
+              </label>
+              <label class="admin-field" for="o-login">
+                <span>Owner login</span>
+                <input id="o-login" v-model="form.ownerLogin" autocomplete="username" required />
+              </label>
+              <label class="admin-field admin-full" for="o-pass">
+                <span>Temp password</span>
+                <input
+                  id="o-pass"
+                  v-model="form.tempPassword"
+                  autocomplete="new-password"
+                  placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
+                />
+              </label>
+            </div>
+            <p
+              v-if="createError"
+              class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+            >
+              Ustaxona yaratilmadi. Maydonlarni tekshiring.
+            </p>
+          </div>
+          <div class="admin-modal-f">
+            <button type="button" class="mp-button mp-button-outline" @click="modalOpen = false">
+              Bekor
+            </button>
+            <button type="submit" class="mp-button mp-button-primary" :disabled="creating">
+              {{ creating ? 'Yaratilmoqda' : 'Yaratish' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </template>
+
+    <section v-if="admin.lastProvision" class="admin-card mt-5 max-w-[720px]">
+      <div class="admin-card-h">
+        <h2>Share once</h2>
+        <span class="sub">temp password shu oynada bir marta ko'rsatiladi</span>
+      </div>
+      <div class="admin-card-b">
+        <div class="admin-secret-box">
+          <div class="admin-secret-row">
+            <span>
+              <span class="admin-secret-key">Workshop code</span>
+              <span class="admin-secret-value">{{ admin.lastProvision.workshop.code }}</span>
+            </span>
+          </div>
+          <div class="admin-secret-row">
+            <span>
+              <span class="admin-secret-key">Owner login</span>
+              <span class="admin-secret-value">{{ admin.lastProvision.owner.login }}</span>
+            </span>
+          </div>
+          <div class="admin-secret-row">
+            <span>
+              <span class="admin-secret-key">Temp password</span>
+              <span class="admin-secret-value">{{ admin.lastProvision.temp_password }}</span>
+            </span>
+          </div>
+        </div>
       </div>
     </section>
   </section>

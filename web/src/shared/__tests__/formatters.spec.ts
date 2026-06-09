@@ -9,7 +9,7 @@ describe('shared formatters', () => {
   })
 
   it('formats dates with the Uzbek locale seed', () => {
-    expect(formatDate(new Date('2026-06-02T00:00:00Z'))).toContain('2026')
+    expect(formatDate(new Date(2026, 5, 2))).toBe('02.06.2026')
   })
 
   it('formats date input values using the local calendar day', () => {

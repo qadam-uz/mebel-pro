@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { useAdminStore, type PlatformUserStatus } from '@/shared/stores/admin'
+import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import { useAdminStore, type PlatformUser } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
 const admin = useAdminStore()
 const auth = useAuthStore()
+const modalOpen = ref(false)
+const blockModalOpen = ref(false)
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
-const blockTargetId = ref<string | null>(null)
+const editingId = ref<string | null>(null)
+const blockTarget = ref<PlatformUser | null>(null)
 const blockReason = ref('')
-
+const query = ref('')
 const form = reactive({
   fullName: '',
   login: '',
@@ -19,39 +23,52 @@ const form = reactive({
   tempPassword: '',
 })
 
-const statusTone: Record<PlatformUserStatus, string> = {
-  active: 'bg-success-soft text-success',
-  blocked: 'bg-danger-soft text-danger',
-}
+const filtered = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!needle) return admin.platformUsers
+  return admin.platformUsers.filter((user) =>
+    [user.full_name, user.login, user.phone, user.status].join(' ').toLowerCase().includes(needle),
+  )
+})
 
-const canConfirmBlock = computed(() => blockReason.value.trim().length > 0)
-
-function formatDate(value: string | null) {
-  if (!value) return 'Never'
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
-
-function resetForm() {
+function openCreate() {
+  editingId.value = null
   form.fullName = ''
   form.login = ''
   form.phone = '+998'
   form.tempPassword = ''
+  actionError.value = null
+  modalOpen.value = true
 }
 
-async function createUser() {
+function openEdit(user: PlatformUser) {
+  editingId.value = user.id
+  form.fullName = user.full_name
+  form.login = user.login
+  form.phone = user.phone
+  form.tempPassword = ''
+  actionError.value = null
+  modalOpen.value = true
+}
+
+async function saveUser() {
   saving.value = true
   actionError.value = null
   try {
-    await admin.createPlatformUser({
-      full_name: form.fullName,
-      login: form.login,
-      phone: form.phone,
-      temp_password: form.tempPassword || null,
-    })
-    resetForm()
+    if (editingId.value) {
+      await admin.updatePlatformUser(editingId.value, {
+        full_name: form.fullName,
+        phone: form.phone,
+      })
+    } else {
+      await admin.createPlatformUser({
+        full_name: form.fullName,
+        login: form.login,
+        phone: form.phone,
+        temp_password: form.tempPassword || null,
+      })
+    }
+    modalOpen.value = false
   } catch {
     actionError.value = 'platform_user_save_failed'
   } finally {
@@ -71,19 +88,20 @@ async function resetPassword(id: string) {
   }
 }
 
-function askBlock(id: string) {
-  blockTargetId.value = id
+function askBlock(user: PlatformUser) {
+  blockTarget.value = user
   blockReason.value = ''
+  blockModalOpen.value = true
 }
 
 async function confirmBlock() {
-  if (!blockTargetId.value || !canConfirmBlock.value) return
-  actionId.value = blockTargetId.value
+  if (!blockTarget.value || !blockReason.value.trim()) return
+  actionId.value = blockTarget.value.id
   actionError.value = null
   try {
-    await admin.blockPlatformUser(blockTargetId.value, blockReason.value)
-    blockTargetId.value = null
-    blockReason.value = ''
+    await admin.blockPlatformUser(blockTarget.value.id, blockReason.value)
+    blockModalOpen.value = false
+    blockTarget.value = null
   } catch {
     actionError.value = 'platform_user_block_failed'
   } finally {
@@ -107,143 +125,98 @@ onMounted(admin.loadPlatformUsers)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="admin-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Platform users</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Operators who can provision workshops and monitor platform operations.
-        </p>
+        <h1>Platforma operatorlari</h1>
+        <p class="sub">Platforma scope bir xil; permission modeli yo'q.</p>
       </div>
+      <button type="button" class="admin-primary-action" @click="openCreate">Yangi operator</button>
+    </div>
+
+    <div class="admin-filters">
+      <label class="admin-filter-input">
+        <span class="sr-only">Operator qidiruv</span>
+        <input v-model="query" placeholder="Ism, login yoki telefon" />
+      </label>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadPlatformUsers">
-        Refresh
+        Yangilash
       </button>
     </div>
 
-    <section class="mp-surface p-5">
-      <h2 class="font-serif text-xl font-semibold text-ink">Create platform user</h2>
-      <form class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4" @submit.prevent="createUser">
-        <label class="block text-sm font-bold text-ink" for="platform-user-full-name">
-          Full name
-          <input
-            id="platform-user-full-name"
-            v-model="form.fullName"
-            class="mp-input mt-1"
-            autocomplete="name"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="platform-user-login">
-          Login
-          <input
-            id="platform-user-login"
-            v-model="form.login"
-            class="mp-input mt-1"
-            autocomplete="username"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="platform-user-phone">
-          Phone
-          <input
-            id="platform-user-phone"
-            v-model="form.phone"
-            class="mp-input mt-1"
-            autocomplete="tel"
-            inputmode="tel"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="platform-user-temp-password">
-          Temp password
-          <input
-            id="platform-user-temp-password"
-            v-model="form.tempPassword"
-            class="mp-input mt-1"
-            autocomplete="new-password"
-          />
-        </label>
-        <button
-          type="submit"
-          class="mp-button mp-button-primary md:col-span-2 xl:col-span-4"
-          :disabled="saving"
-        >
-          {{ saving ? 'Creating' : 'Create platform user' }}
-        </button>
-      </form>
-
-      <div
-        v-if="admin.lastPlatformUserSecret"
-        class="mt-4 rounded-md bg-success-soft p-4 text-success"
-      >
-        <div class="font-extrabold">
-          Temp password for {{ admin.lastPlatformUserSecret.user.login }}
-        </div>
-        <p class="mt-1 break-all font-mono text-sm">
-          {{ admin.lastPlatformUserSecret.temp_password }}
-        </p>
-      </div>
+    <section v-if="admin.opsLoading" class="admin-card p-5">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-if="admin.opsLoading" class="mp-surface p-5 text-sm font-bold text-ink-soft">
-      Loading platform users
+    <section v-else-if="admin.opsError" class="admin-error">
+      <h3>Operatorlar yuklanmadi</h3>
+      <p>
+        Platform users endpoint javob bermadi.
+        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
+      </p>
     </section>
-    <section v-else-if="admin.opsError" class="mp-surface p-5 text-sm font-bold text-danger">
-      Platform users could not be loaded.
-      <span v-if="admin.opsTraceId" class="font-mono">trace {{ admin.opsTraceId }}</span>
+
+    <section v-else-if="filtered.length === 0" class="admin-empty">
+      <h3>Operator topilmadi</h3>
+      <p>Filtrni tozalang yoki yangi operator yarating.</p>
     </section>
-    <section
-      v-else-if="admin.platformUsers.length === 0"
-      class="mp-surface p-5 text-sm text-ink-soft"
-    >
-      No platform users yet.
-    </section>
-    <section v-else class="mp-surface overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-left text-sm">
-          <thead class="bg-sunk text-xs uppercase text-ink-muted">
+
+    <section v-else class="admin-card">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
             <tr>
-              <th class="px-5 py-3">User</th>
-              <th class="px-5 py-3">Phone</th>
-              <th class="px-5 py-3">Status</th>
-              <th class="px-5 py-3">Last login</th>
-              <th class="px-5 py-3">Actions</th>
+              <th>Operator</th>
+              <th>Login</th>
+              <th>Telefon</th>
+              <th>Oxirgi kirish</th>
+              <th>Holat</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-hairline">
-            <tr v-for="user in admin.platformUsers" :key="user.id">
-              <td class="px-5 py-3">
-                <div class="font-bold text-ink">{{ user.full_name }}</div>
-                <div class="font-mono text-xs text-ink-soft">{{ user.login }}</div>
+          <tbody>
+            <tr v-for="user in filtered" :key="user.id">
+              <td class="nm">
+                {{ user.full_name }}
+                <small>{{ user.id.slice(0, 8) }}</small>
               </td>
-              <td class="px-5 py-3 font-mono text-xs text-ink-soft">{{ user.phone }}</td>
-              <td class="px-5 py-3">
-                <span class="mp-chip" :class="statusTone[user.status]">
-                  <span class="mp-dot" aria-hidden="true"></span>
+              <td class="admin-mono text-ink-muted">{{ user.login }}</td>
+              <td class="admin-mono text-ink-muted">{{ user.phone }}</td>
+              <td class="admin-mono text-ink-muted">{{ adminDateTime(user.last_login_at) }}</td>
+              <td>
+                <span class="admin-pill" :class="platformUserStatusTone(user.status)">
                   {{ user.status }}
                 </span>
               </td>
-              <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                {{ formatDate(user.last_login_at) }}
-              </td>
-              <td class="px-5 py-3">
-                <div class="flex flex-wrap gap-2">
+              <td class="admin-right">
+                <div class="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    @click="openEdit(user)"
+                  >
+                    Tahrirlash
+                  </button>
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
                     @click="resetPassword(user.id)"
                   >
-                    Reset password
+                    Parol qaytarish
                   </button>
                   <button
                     v-if="user.status === 'active'"
                     type="button"
-                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
                     :disabled="user.id === auth.me?.principal_id"
-                    @click="askBlock(user.id)"
+                    @click="askBlock(user)"
                   >
-                    Block
+                    {{
+                      user.id === auth.me?.principal_id ? "O'zini bloklab bo'lmaydi" : 'Bloklash'
+                    }}
                   </button>
                   <button
                     v-else
@@ -252,39 +225,9 @@ onMounted(admin.loadPlatformUsers)
                     :disabled="actionId === user.id"
                     @click="unblock(user.id)"
                   >
-                    Unblock
+                    Blokdan chiqarish
                   </button>
                 </div>
-
-                <form
-                  v-if="blockTargetId === user.id"
-                  class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]"
-                  @submit.prevent="confirmBlock"
-                >
-                  <label class="block text-sm font-bold text-ink" :for="`block-reason-${user.id}`">
-                    Block reason
-                    <input
-                      :id="`block-reason-${user.id}`"
-                      v-model="blockReason"
-                      class="mp-input mt-1"
-                      required
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    class="mp-button mp-button-primary self-end"
-                    :disabled="!canConfirmBlock || actionId === user.id"
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline self-end"
-                    @click="blockTargetId = null"
-                  >
-                    Cancel
-                  </button>
-                </form>
               </td>
             </tr>
           </tbody>
@@ -292,8 +235,150 @@ onMounted(admin.loadPlatformUsers)
       </div>
     </section>
 
-    <p v-if="actionError" class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
-      Platform user action could not be completed.
+    <p
+      v-if="actionError"
+      class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+    >
+      Operator amali bajarilmadi.
     </p>
+
+    <section v-if="admin.lastPlatformUserSecret" class="admin-card mt-5 max-w-[620px]">
+      <div class="admin-card-h">
+        <h2>One-time secret</h2>
+        <span class="sub">temp password faqat shu yerda ko'rsatiladi</span>
+      </div>
+      <div class="admin-card-b">
+        <div class="admin-secret-box">
+          <div class="admin-secret-row">
+            <span>
+              <span class="admin-secret-key">Operator</span>
+              <span class="admin-secret-value">{{ admin.lastPlatformUserSecret.user.login }}</span>
+            </span>
+          </div>
+          <div class="admin-secret-row">
+            <span>
+              <span class="admin-secret-key">Temp password</span>
+              <span class="admin-secret-value">{{
+                admin.lastPlatformUserSecret.temp_password
+              }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <template v-if="modalOpen">
+      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="operator-title">
+        <div class="admin-modal-h">
+          <h3 id="operator-title">{{ editingId ? 'Operator tahrirlash' : 'Yangi operator' }}</h3>
+          <button
+            type="button"
+            class="admin-icon-button"
+            aria-label="Yopish"
+            @click="modalOpen = false"
+          >
+            x
+          </button>
+        </div>
+        <form @submit.prevent="saveUser">
+          <div class="admin-modal-b">
+            <div class="admin-form-grid">
+              <label class="admin-field admin-full" for="op-name">
+                <span>Ism</span>
+                <input id="op-name" v-model="form.fullName" autocomplete="name" required />
+              </label>
+              <label class="admin-field" for="op-phone">
+                <span>Telefon</span>
+                <input
+                  id="op-phone"
+                  v-model="form.phone"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  required
+                />
+              </label>
+              <label class="admin-field" for="op-login">
+                <span>Login</span>
+                <input
+                  id="op-login"
+                  v-model="form.login"
+                  autocomplete="username"
+                  :disabled="!!editingId"
+                  required
+                />
+              </label>
+              <label v-if="!editingId" class="admin-field admin-full" for="op-pass">
+                <span>Temp password</span>
+                <input
+                  id="op-pass"
+                  v-model="form.tempPassword"
+                  autocomplete="new-password"
+                  placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
+                />
+              </label>
+            </div>
+          </div>
+          <div class="admin-modal-f">
+            <button type="button" class="mp-button mp-button-outline" @click="modalOpen = false">
+              Bekor
+            </button>
+            <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
+              {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </template>
+
+    <template v-if="blockModalOpen && blockTarget">
+      <div class="admin-modal-scrim" @click="blockModalOpen = false"></div>
+      <section
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="block-user-title"
+      >
+        <div class="admin-modal-h">
+          <h3 id="block-user-title">Operatorni bloklash</h3>
+          <button
+            type="button"
+            class="admin-icon-button"
+            aria-label="Yopish"
+            @click="blockModalOpen = false"
+          >
+            x
+          </button>
+        </div>
+        <form @submit.prevent="confirmBlock">
+          <div class="admin-modal-b">
+            <p class="mb-4 text-sm text-ink-soft">
+              {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Oxirgi faol operator
+              bloklanmaydi.
+            </p>
+            <label class="admin-field" for="op-block-reason">
+              <span>Majburiy sabab</span>
+              <textarea id="op-block-reason" v-model="blockReason" required></textarea>
+            </label>
+          </div>
+          <div class="admin-modal-f">
+            <button
+              type="button"
+              class="mp-button mp-button-outline"
+              @click="blockModalOpen = false"
+            >
+              Bekor
+            </button>
+            <button
+              type="submit"
+              class="mp-button mp-button-primary"
+              :disabled="!blockReason.trim() || actionId === blockTarget.id"
+            >
+              Bloklash
+            </button>
+          </div>
+        </form>
+      </section>
+    </template>
   </section>
 </template>

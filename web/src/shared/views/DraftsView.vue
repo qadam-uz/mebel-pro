@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
+import { formatPercent, formatRelativeDate, pluralUz } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
+
+const DRAFT_CAP = 50
 
 const router = useRouter()
 const rolePath = useRolePath()
@@ -18,24 +21,41 @@ const sortedDrafts = computed(() =>
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
   ),
 )
+const pendingDeletePartCount = computed(() => draftParts(draftPendingDelete.value))
 
-function draftSummary(draft: CuttingDraft) {
-  const parts = draft.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0)
-  const panels = draft.results.find((result) => result.id === draft.chosen_result_id)
-  const panelCount = panels
-    ? Object.values(panels.panels_used_by_material).reduce((sum, count) => sum + count, 0)
-    : 0
-  if (parts === 0) return 'No parts yet'
-  return `${parts} parts${panelCount ? ` · ${panelCount} panels` : ''}`
+function chosenResult(draft: CuttingDraft | null) {
+  if (!draft) return null
+  return (
+    draft.results.find((result) => result.id === draft.chosen_result_id) ?? draft.results[0] ?? null
+  )
 }
 
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value))
+function draftParts(draft: CuttingDraft | null) {
+  return draft?.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0) ?? 0
+}
+
+function draftPanels(draft: CuttingDraft) {
+  const result = chosenResult(draft)
+  if (!result) return 0
+  return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
+}
+
+function materialName(draft: CuttingDraft, materialId: string) {
+  const snapshot = chosenResult(draft)?.material_snapshots[materialId]
+  return typeof snapshot?.name === 'string' ? snapshot.name.split('·')[0].trim() : null
+}
+
+function draftTitle(draft: CuttingDraft) {
+  const materials = [
+    ...new Set(
+      draft.parts_snapshot
+        .map((part) => materialName(draft, part.material_id))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ]
+  const label =
+    materials.slice(0, 2).join(' + ') + (materials.length > 2 ? ` +${materials.length - 2}` : '')
+  return `${draft.id.slice(0, 8)} · ${label || 'Material tanlanmagan'}`
 }
 
 async function newCutting() {
@@ -48,9 +68,9 @@ async function newCutting() {
   }
 }
 
-const pendingDeletePartCount = computed(
-  () => draftPendingDelete.value?.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0) ?? 0,
-)
+function openDraft(draft: CuttingDraft) {
+  void router.push(rolePath(`/c/cutting/${draft.id}`))
+}
 
 function requestDeleteDraft(draft: CuttingDraft) {
   draftPendingDelete.value = draft
@@ -74,12 +94,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="client-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Cutting drafts</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Saved client cuttings with their branch context and latest result.
+        <h1>Saqlangan chizmalar</h1>
+        <p class="sub">
+          Saqlangan chizmani oching yoki yangi chizma boshlang. Chizmalar muddatsiz saqlanadi.
         </p>
       </div>
       <button
@@ -88,92 +108,94 @@ onMounted(() => {
         :disabled="creating"
         @click="newCutting"
       >
-        {{ creating ? 'Creating' : 'New cutting' }}
+        {{ creating ? 'Yaratilmoqda' : 'Yangi chizma' }}
       </button>
     </div>
 
-    <section class="mp-surface overflow-hidden">
-      <div v-if="cutting.loading" class="space-y-3 p-5" aria-live="polite">
-        <div class="h-5 w-40 animate-pulse rounded bg-sunk"></div>
-        <div class="h-16 w-full animate-pulse rounded bg-sunk"></div>
-        <div class="h-16 w-full animate-pulse rounded bg-sunk"></div>
-      </div>
+    <div class="client-section-title">
+      <h2>Hammasi</h2>
+      <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
+      <span v-else class="font-mono text-sm text-ink-muted">
+        <b class="text-ink">{{ sortedDrafts.length }}</b> / {{ DRAFT_CAP }} chizma
+      </span>
+    </div>
 
-      <div v-else-if="cutting.error" class="p-5">
-        <div class="rounded-md bg-danger-soft p-4 text-danger">
-          <div class="font-extrabold">Drafts could not be loaded</div>
-          <p class="mt-1 text-sm">trace {{ cutting.traceId ?? 'unavailable' }}</p>
+    <div v-if="cutting.loading" class="grid gap-2" aria-live="polite">
+      <div v-for="item in 3" :key="item" class="client-card grid grid-cols-[1fr_auto] gap-4 p-4">
+        <div>
+          <div class="client-skeleton h-4 w-1/2"></div>
+          <div class="client-skeleton mt-3 h-3 w-4/5"></div>
+        </div>
+        <div class="client-skeleton h-4 w-16"></div>
+      </div>
+    </div>
+
+    <div v-else-if="cutting.error" class="client-error">
+      <div class="client-error-icon">!</div>
+      <h3>Chizmalarni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="client-trace">trace_id: {{ cutting.traceId ?? 'unavailable' }}</p>
+      <button type="button" class="mp-button mp-button-outline mt-4" @click="cutting.loadDrafts">
+        Qayta urinish
+      </button>
+    </div>
+
+    <div v-else-if="sortedDrafts.length === 0" class="client-empty">
+      <div class="client-empty-icon">C</div>
+      <h3>Saqlangan chizma yo'q</h3>
+      <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
+      <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
+        Yangi chizma
+      </button>
+    </div>
+
+    <div v-else class="grid gap-2">
+      <article
+        v-for="draft in sortedDrafts"
+        :key="draft.id"
+        class="client-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4 transition hover:border-ink"
+      >
+        <button type="button" class="min-w-0 text-left" @click="openDraft(draft)">
+          <span class="block truncate text-sm font-bold text-ink">{{ draftTitle(draft) }}</span>
+          <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+            <span
+              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> qism</span
+            >
+            <span
+              ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> panel</span
+            >
+            <span v-if="chosenResult(draft)">
+              <b class="font-mono text-ink">{{
+                formatPercent(chosenResult(draft)?.waste_percentage)
+              }}</b>
+              chiqim
+            </span>
+            <span>{{ formatRelativeDate(draft.updated_at) }} · tahrirlangan</span>
+          </span>
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" class="font-bold text-accent" @click="openDraft(draft)">
+            Ochish →
+          </button>
           <button
             type="button"
-            class="mp-button mp-button-outline mt-4"
-            @click="cutting.loadDrafts"
+            class="grid size-8 place-items-center rounded-md border border-hairline text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
+            :disabled="deletingId === draft.id"
+            aria-label="Chizmani o'chirish"
+            @click="requestDeleteDraft(draft)"
           >
-            Retry
+            ×
           </button>
         </div>
-      </div>
-
-      <div
-        v-else-if="sortedDrafts.length === 0"
-        class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-6"
-      >
-        <span class="mp-chip bg-warning-soft text-warning">
-          <span class="mp-dot" aria-hidden="true"></span>
-          Empty
-        </span>
-        <h2 class="mt-5 font-serif text-2xl font-semibold">No cutting drafts</h2>
-        <p class="mt-2 max-w-xl text-base text-ink-soft">
-          Start a draft, add panel parts, and run the optimiser when the list is ready.
-        </p>
-      </div>
-
-      <div v-else class="divide-y divide-hairline">
-        <article
-          v-for="draft in sortedDrafts"
-          :key="draft.id"
-          class="grid gap-4 p-5 md:grid-cols-[1fr_auto]"
-        >
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="text-base font-extrabold text-ink">{{ draftSummary(draft) }}</h2>
-              <span v-if="draft.preferred_branch_id" class="mp-chip bg-info-soft text-info">
-                <span class="mp-dot" aria-hidden="true"></span>
-                preferred branch
-              </span>
-              <span v-if="draft.chosen_result_id" class="mp-chip bg-success-soft text-success">
-                <span class="mp-dot" aria-hidden="true"></span>
-                optimized
-              </span>
-            </div>
-            <p class="mt-1 font-mono text-xs text-ink-muted">
-              edited {{ dateLabel(draft.updated_at) }}
-            </p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <RouterLink
-              :to="rolePath(`/c/cutting/${draft.id}`)"
-              class="mp-button mp-button-primary"
-            >
-              Open
-            </RouterLink>
-            <button
-              type="button"
-              class="mp-button mp-button-outline text-danger"
-              :disabled="deletingId === draft.id"
-              @click="requestDeleteDraft(draft)"
-            >
-              {{ deletingId === draft.id ? 'Deleting' : 'Delete' }}
-            </button>
-          </div>
-        </article>
-      </div>
-    </section>
+      </article>
+      <p class="sr-only">{{ pluralUz(sortedDrafts.length, 'chizma') }}</p>
+    </div>
 
     <ConfirmDialog
       :open="Boolean(draftPendingDelete)"
-      title="Delete draft"
-      :message="`Delete this draft with ${pendingDeletePartCount} parts? This cannot be undone.`"
-      confirm-label="Delete draft"
+      title="Chizmani o'chirish"
+      :message="`${pendingDeletePartCount} qismli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
+      confirm-label="O'chirish"
       danger
       :busy="deletingId !== null"
       @cancel="draftPendingDelete = null"

@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-08
 order: 20
 ---
 
@@ -115,6 +115,10 @@ it is **empty** — the default, and **mandatory in production** — the real fl
 per-challenge code delivered over Telegram. One field, not two: the presence of codes *is* the
 on-switch, there is no separate enable flag; a non-empty `otp_dev_codes` in production is a
 boot-time misconfiguration.
+
+Send-rate enforcement is controlled separately by **`OTP_RATE_LIMITS_ENABLED`**. It defaults
+to `true` and must stay enabled outside automated test runs; local E2E sets it to `false` so
+repeated parallel browser tests from one localhost IP do not exhaust the per-IP OTP bucket.
 
 ### UX
 

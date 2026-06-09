@@ -8,11 +8,9 @@ export function formatTiyin(value: number): string {
 
 export function formatDate(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value
-  return new Intl.DateTimeFormat('uz-UZ', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${day}.${month}.${date.getFullYear()}`
 }
 
 export function formatDateInputValue(value: Date): string {

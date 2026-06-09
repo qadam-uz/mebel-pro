@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-08
 order: 20
 ---
 
@@ -118,6 +118,11 @@ codeni **any** phone uchun qabul qiladi, shuning uchun developer istalgan number
 real flow ishlaydi: per-challenge random code Telegram orqali delivered. Bitta field, ikkita
 emas: codes mavjudligi on-switch, alohida enable flag yo'q; productionda non-empty
 `otp_dev_codes` boot-time misconfiguration.
+
+Send-rate enforcement alohida **`OTP_RATE_LIMITS_ENABLED`** bilan boshqariladi. U `true`
+default qiladi va automated test runs tashqarisida enabled qolishi kerak; local E2E uni
+`false` set qiladi, shunda bitta localhost IPdan repeated parallel browser tests per-IP OTP
+bucketni exhaust qilmaydi.
 
 ### UX
 

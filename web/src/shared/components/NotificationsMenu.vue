@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
@@ -17,8 +18,12 @@ const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
 const badgeText = computed(() => (notifications.unread > 9 ? '9+' : String(notifications.unread)))
+const isClient = computed(() => roleConfig.role === 'client')
+const isWorkshop = computed(() => roleConfig.role === 'workshop')
+const isAdmin = computed(() => roleConfig.role === 'admin')
 
 function title(item: NotificationItem) {
+  if (isAdmin.value) return adminNotificationTitle(item)
   const summary = item.payload.summary
   if (typeof summary === 'string' && summary.trim()) return summary
   return item.event_code
@@ -38,6 +43,7 @@ function destination(item: NotificationItem) {
   if (item.entity_type === 'workshop' && roleConfig.role === 'admin') {
     return `/admin/workshops/${item.entity_id}`
   }
+  if (roleConfig.role === 'admin') return adminNotificationDestination(item)
   return null
 }
 
@@ -51,6 +57,18 @@ async function openItem(item: NotificationItem) {
   const to = destination(item)
   open.value = false
   if (to) await router.push(rolePath(to))
+}
+
+async function openAll() {
+  open.value = false
+  if (roleConfig.role === 'client') await router.push(rolePath('/c/notifications'))
+  if (roleConfig.role === 'workshop') await router.push(rolePath('/workshop/notifications'))
+  if (roleConfig.role === 'admin') await router.push(rolePath('/admin/notifications'))
+}
+
+async function markAllRead() {
+  await notifications.markAllRead()
+  await notifications.loadList()
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -81,41 +99,73 @@ onBeforeUnmount(() => {
   <div ref="rootRef" class="relative">
     <button
       type="button"
-      class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+      :class="isClient ? 'client-icon-button' : isWorkshop ? 'workshop-bell' : 'admin-icon-button'"
       :aria-expanded="open"
       aria-haspopup="menu"
+      :aria-label="`Bildirishnomalar - ${notifications.unread} o'qilmagan`"
       @click="toggle"
     >
-      Notifications
-      <span v-if="notifications.unread > 0" class="mp-chip bg-danger-soft text-danger">
+      <template v-if="isClient || isWorkshop || isAdmin">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
+      </template>
+      <template v-else>Bildirishnomalar</template>
+      <span
+        v-if="notifications.unread > 0"
+        :class="
+          isClient || isWorkshop || isAdmin ? 'client-badge' : 'mp-chip bg-danger-soft text-danger'
+        "
+      >
         {{ badgeText }}
       </span>
     </button>
 
     <div
       v-if="open"
-      class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-md border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
       role="menu"
     >
       <div class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div class="font-bold text-ink">Notifications</div>
+        <div class="font-bold text-ink">
+          {{ isClient || isWorkshop || isAdmin ? 'Bildirishnomalar' : 'Notifications' }}
+        </div>
         <button
           type="button"
           class="text-xs font-bold text-accent"
           :disabled="notifications.unread === 0"
-          @click="notifications.markAllRead"
+          @click="markAllRead"
         >
-          Mark all read
+          {{ isClient || isWorkshop ? "Hammasini o'qilgan deb belgilash" : 'Mark all read' }}
         </button>
       </div>
       <div v-if="notifications.loading" class="px-4 py-5 text-sm font-bold text-ink-soft">
-        Loading notifications
+        {{
+          isClient || isWorkshop || isAdmin
+            ? 'Bildirishnomalar yuklanmoqda'
+            : 'Loading notifications'
+        }}
       </div>
       <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-bold text-danger">
-        Notifications could not be loaded.
+        {{
+          isClient || isWorkshop || isAdmin
+            ? "Bildirishnomalarni yuklab bo'lmadi."
+            : 'Notifications could not be loaded.'
+        }}
       </div>
       <div v-else-if="notifications.items.length === 0" class="px-4 py-5 text-sm text-ink-soft">
-        Nothing new.
+        {{ isClient || isWorkshop || isAdmin ? "Bildirishnoma yo'q." : 'Nothing new.' }}
       </div>
       <template v-else>
         <button
@@ -137,6 +187,14 @@ onBeforeUnmount(() => {
           </span>
         </button>
       </template>
+      <button
+        v-if="isClient || isWorkshop || isAdmin"
+        type="button"
+        class="block w-full border-t border-hairline px-4 py-3 text-center text-xs font-bold text-accent transition hover:bg-sunk"
+        @click="openAll"
+      >
+        Hammasini ko'rish
+      </button>
     </div>
   </div>
 </template>

@@ -98,6 +98,12 @@ class OrderStockWarning(APIModel):
     projected_after: int
 
 
+class OrderSettlementResponse(APIModel):
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
+
+
 class WorkshopWorkerOption(APIModel):
     id: uuid.UUID
     full_name: str
@@ -156,3 +162,4 @@ class OrderDetailResponse(OrderSummaryResponse):
     items: list[OrderItemResponse] = Field(default_factory=list)
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
     cutting_result: CuttingResultResponse | None = None
+    settlement: OrderSettlementResponse | None = None

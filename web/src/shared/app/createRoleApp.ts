@@ -74,6 +74,12 @@ export function normalizeRoleConfig(
   }
 }
 
+export function roleDocumentTitle(pageTitle: unknown, config: RoleConfig): string {
+  const title =
+    typeof pageTitle === 'string' && pageTitle.trim() ? pageTitle.trim() : config.dashboardTitle
+  return `${title} — ${config.productLabel} · ${config.roleLabel}`
+}
+
 export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], localBase: string) {
   const historyBase = resolveHistoryBase(localBase)
   const roleConfig = normalizeRoleConfig(config, localBase, historyBase)
@@ -99,6 +105,10 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
       return { path: roleConfig.profilePath }
     }
     return true
+  })
+
+  router.afterEach((to) => {
+    document.title = roleDocumentTitle(to.meta.title, roleConfig)
   })
 
   const app = createApp(RoleApp)

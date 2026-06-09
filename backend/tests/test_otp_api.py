@@ -156,6 +156,41 @@ async def test_otp_resend_cooldown_is_durable(
     assert exc_info.value.details == {"retry_after_seconds": 50}
 
 
+async def test_otp_send_limits_can_be_disabled_for_e2e(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "OTP_DEV_CODES", ["000000"])
+    monkeypatch.setattr(settings, "OTP_CODE_PEPPER", "test-pepper")
+    monkeypatch.setattr(settings, "OTP_RATE_LIMITS_ENABLED", False)
+    sender = FakeOtpSender()
+    now = datetime(2026, 6, 2, 10, 0, tzinfo=UTC)
+
+    await request_otp_code(
+        db_session,
+        phone="+998904444444",
+        request_ip="198.51.100.3",
+        sender=sender,
+        now=now,
+    )
+    await request_otp_code(
+        db_session,
+        phone="+998904444444",
+        request_ip="198.51.100.3",
+        sender=sender,
+        now=now + timedelta(seconds=10),
+    )
+
+    rows = (
+        await db_session.scalars(
+            select(PhoneVerificationChallenge).where(
+                PhoneVerificationChallenge.phone == "+998904444444"
+            )
+        )
+    ).all()
+    assert len(rows) == 2
+
+
 async def test_otp_ip_hourly_limit_is_durable(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

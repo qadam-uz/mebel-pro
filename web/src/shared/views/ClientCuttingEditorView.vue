@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { formatPercent } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -12,6 +13,7 @@ import {
   materialLabel,
   metres,
   useCuttingStore,
+  type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
   type CuttingPanel,
   type CuttingPart,
@@ -31,10 +33,20 @@ const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
+const entryMode = ref<'manual' | 'upload'>('manual')
+const algorithmsOpen = ref(true)
+const recoveryDismissed = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
+const edgePickerPart = ref<CuttingPart | null>(null)
+const edgePickerState = ref<Record<EdgeField, CuttingEdgeBand | null>>(blankEdgeState())
+const edgePickerSource = ref<MaterialSource>('shop')
+const edgePickerSearch = ref('')
+const edgePickerThickness = ref<string | null>('all')
+const edgeDialogRef = ref<HTMLElement | null>(null)
+let edgeReturnFocus: HTMLElement | null = null
 let saveTimer: number | undefined
 let hydrating = false
 
@@ -59,15 +71,6 @@ const panelOptions = computed(() =>
 )
 const panelChoices = computed<ChoiceOption[]>(() =>
   panelOptions.value.map((material) => ({
-    value: material.id,
-    label: materialLabel(material),
-    meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
-      material.branch_carried ? '' : ' · not at branch'
-    }`,
-  })),
-)
-const edgeChoices = computed<ChoiceOption[]>(() =>
-  cutting.edgeOptions.map((material) => ({
     value: material.id,
     label: materialLabel(material),
     meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
@@ -107,9 +110,68 @@ const totalPanels = computed(() =>
 )
 const consumedShop = computed(() => sumRecord(chosenResult.value?.edge_consumed_shop_by_material))
 const consumedOwn = computed(() => sumRecord(chosenResult.value?.edge_consumed_own_by_material))
-const resultWaste = computed(() =>
-  chosenResult.value ? `${(Number(chosenResult.value.waste_percentage) * 100).toFixed(2)}%` : '-',
+const resultWaste = computed(() => formatPercent(chosenResult.value?.waste_percentage))
+const totalQuantity = computed(() =>
+  parts.value.reduce((sum, part) => sum + Math.max(0, Number(part.quantity) || 0), 0),
 )
+const showRecovery = computed(() => !recoveryDismissed.value && notCarriedRows.value.length > 0)
+const edgePickerOpen = computed(() => edgePickerPart.value !== null)
+const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
+  const values = [...new Set(cutting.edgeOptions.map((material) => material.thickness_mm))]
+    .filter(Boolean)
+    .sort((left, right) => Number(left) - Number(right))
+  return [
+    { value: 'all', label: 'Hamma qalinlik', meta: 'Barcha kromlar' },
+    ...values.map((value) => ({ value, label: `${value} mm`, meta: 'Qalinlik' })),
+  ]
+})
+const edgePickerMaterials = computed(() => {
+  const part = edgePickerPart.value
+  if (!part) return []
+  const query = edgePickerSearch.value.trim().toLowerCase()
+  return rankedEdgesForPart(part)
+    .filter(({ material }) =>
+      edgePickerThickness.value && edgePickerThickness.value !== 'all'
+        ? material.thickness_mm === edgePickerThickness.value
+        : true,
+    )
+    .filter(({ material }) => {
+      if (!query) return true
+      return edgeSearchText(material).includes(query)
+    })
+})
+const edgePickerActiveSides = computed(() => bandedEdgeFields(edgePickerState.value))
+const edgePickerPatternKey = computed(() => {
+  const active = edgePickerActiveSides.value
+  return (
+    edgePatterns.find(
+      (pattern) =>
+        pattern.sides.length === active.length &&
+        pattern.sides.every((side) => active.includes(side)),
+    )?.key ?? null
+  )
+})
+const edgePickerSelectedMaterialId = computed(() => {
+  const first = edgePickerActiveSides.value
+    .map((side) => edgePickerState.value[side]?.material_id)
+    .find(Boolean)
+  return first ?? null
+})
+const edgePickerBranchNote = computed(() => {
+  if (!draft.value?.preferred_branch_id) return null
+  const missing = new Map<string, string>()
+  for (const side of edgeFields) {
+    const edge = edgePickerState.value[side]
+    if (!edge || edge.source === 'own') continue
+    const material = edgeById(edge.material_id)
+    if (material && !material.branch_carried) {
+      missing.set(material.id, edgeShortLabel(material, true))
+    }
+  }
+  if (!missing.size) return null
+  const branch = preferredBranch.value?.branch_name ?? 'tanlangan filial'
+  return `${branch} filialida ${[...missing.values()].join(' · ')} hozir mavjud emas. Manbani "O'zim olib kelaman" qiling yoki boshqa krom tanlang.`
+})
 
 function blankPart(): CuttingPart {
   return {
@@ -119,6 +181,15 @@ function blankPart(): CuttingPart {
     length_mm: 100,
     width_mm: 100,
     quantity: 1,
+    edge_top: null,
+    edge_bottom: null,
+    edge_left: null,
+    edge_right: null,
+  }
+}
+
+function blankEdgeState(): Record<EdgeField, CuttingEdgeBand | null> {
+  return {
     edge_top: null,
     edge_bottom: null,
     edge_left: null,
@@ -145,6 +216,140 @@ function rowNotCarried(part: CuttingPart) {
     if (edge?.source === 'shop' && material && !material.branch_carried) issues.push(side)
   }
   return issues
+}
+
+function partIsInvalid(part: CuttingPart) {
+  return (
+    !part.material_id ||
+    part.length_mm < 50 ||
+    part.width_mm < 50 ||
+    part.quantity < 1 ||
+    !Number.isFinite(Number(part.length_mm)) ||
+    !Number.isFinite(Number(part.width_mm)) ||
+    !Number.isFinite(Number(part.quantity))
+  )
+}
+
+function edgeCount(part: CuttingPart) {
+  return edgeFields.filter((side) => part[side]).length
+}
+
+function edgeSummary(part: CuttingPart) {
+  const count = edgeCount(part)
+  if (count === 0) return "Krom yo'q"
+  if (count === 4) return '4 tomon'
+  return `${count} tomon`
+}
+
+function edgeSourceSummary(part: CuttingPart) {
+  const active = edgeFields.filter((side) => part[side])
+  if (active.length === 0) return 'tomonlar tanlanmagan'
+  const own = active.filter((side) => part[side]?.source === 'own').length
+  if (own === active.length) return "o'zim olib kelaman"
+  if (own > 0) return 'aralash manba'
+  return 'ustaxonadan'
+}
+
+function edgeSearchText(material: ClientCatalogMaterialOption) {
+  return `${material.manufacturer_name} ${material.name} ${material.color} ${material.decor_code ?? ''} ${material.thickness_mm}`.toLowerCase()
+}
+
+function edgeRankForPart(part: CuttingPart, edge: ClientCatalogMaterialOption) {
+  const panel = materialById(part.material_id)
+  if (!panel) return 2
+  if (panel.decor_code && edge.decor_code && panel.decor_code === edge.decor_code) return 0
+  if (panel.color && edge.color && panel.color.toLowerCase() === edge.color.toLowerCase()) return 1
+  return 2
+}
+
+function rankedEdgesForPart(part: CuttingPart) {
+  return cutting.edgeOptions
+    .map((material) => ({ material, rank: edgeRankForPart(part, material) }))
+    .sort((left, right) => {
+      if (left.rank !== right.rank) return left.rank - right.rank
+      const leftThickness = Number(left.material.thickness_mm)
+      const rightThickness = Number(right.material.thickness_mm)
+      if (leftThickness !== rightThickness) return leftThickness - rightThickness
+      return `${left.material.manufacturer_name} ${left.material.name}`.localeCompare(
+        `${right.material.manufacturer_name} ${right.material.name}`,
+      )
+    })
+}
+
+function recommendedEdgeForPart(part: CuttingPart) {
+  const current = edgePickerSelectedMaterialId.value
+  if (current) return edgeById(current)
+  const remembered = preferredEdgeId(part)
+  if (remembered) return edgeById(remembered)
+  return rankedEdgesForPart(part)[0]?.material ?? null
+}
+
+function edgeShortLabel(
+  material: ClientCatalogMaterialOption | null | undefined,
+  withThickness = false,
+) {
+  if (!material) return '-'
+  const decor = material.decor_code ? `${material.decor_code} ` : ''
+  const thickness = withThickness ? ` · ${material.thickness_mm} mm` : ''
+  return `${material.manufacturer_name} · ${decor}${material.color}${thickness}`
+}
+
+function edgeTinyLabel(material: ClientCatalogMaterialOption | null | undefined) {
+  if (!material) return '-'
+  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.thickness_mm}`
+}
+
+function edgeCellTitle(part: CuttingPart) {
+  const lines = edgeFields.map((side) => {
+    const edge = part[side]
+    const material = edgeById(edge?.material_id)
+    const source = edge?.source === 'own' ? " (o'zim)" : ''
+    return `${sideLabels[side]}: ${edge ? `${edgeShortLabel(material, true)}${source}` : '-'}`
+  })
+  return `Krom yopishtirish - tahrirlash uchun bosing\n${lines.join(' · ')}`
+}
+
+function edgeStrokeWidth(edge: CuttingEdgeBand | null) {
+  const material = edgeById(edge?.material_id)
+  const thickness = Number(material?.thickness_mm ?? 0.4)
+  return thickness >= 2 ? 3 : 1.3
+}
+
+function edgeCellLabel(part: CuttingPart, side: EdgeField) {
+  const material = edgeById(part[side]?.material_id)
+  return material?.thickness_mm ?? ''
+}
+
+function pickerSideLabel(side: EdgeField) {
+  return edgeTinyLabel(edgeById(edgePickerState.value[side]?.material_id))
+}
+
+function swatchStyle(part: CuttingPart) {
+  const material = materialById(part.material_id)
+  return { background: colorForMaterial(material?.color ?? material?.name ?? part.material_id) }
+}
+
+function colorForMaterial(value: string | null | undefined) {
+  const text = (value ?? '').toLowerCase()
+  if (text.includes('white') || text.includes('oq')) return '#f7f4ec'
+  if (text.includes('black') || text.includes('qora')) return '#2a2d33'
+  if (text.includes('gray') || text.includes('grey') || text.includes('kul')) return '#a7adb5'
+  if (text.includes('walnut') || text.includes('yong')) return '#805434'
+  if (text.includes('oak') || text.includes('dub')) return '#c9aa73'
+  let hash = 0
+  for (const char of text || 'material') hash = (hash * 31 + char.charCodeAt(0)) % 360
+  return `hsl(${hash} 34% 72%)`
+}
+
+function resultPanelCount(result: CuttingResult) {
+  return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
+}
+
+function saveLabel() {
+  if (saveState.value === 'saved') return 'Saqlangan'
+  if (saveState.value === 'saving') return 'Saqlanmoqda'
+  if (saveState.value === 'editing') return 'Tahrirlanmoqda'
+  return 'Saqlash xatosi'
 }
 
 function addRow() {
@@ -222,29 +427,114 @@ function commonEdgeSource(part: CuttingPart): MaterialSource {
   )
 }
 
-function setAllEdgeSources(part: CuttingPart, source: MaterialSource) {
-  for (const side of edgeFields) {
-    if (part[side]) part[side] = { ...part[side], source } as CuttingEdgeBand
+function cloneEdgeStateFromPart(part: CuttingPart) {
+  return {
+    edge_top: part.edge_top ? { ...part.edge_top } : null,
+    edge_bottom: part.edge_bottom ? { ...part.edge_bottom } : null,
+    edge_left: part.edge_left ? { ...part.edge_left } : null,
+    edge_right: part.edge_right ? { ...part.edge_right } : null,
   }
 }
 
-function setEdgeMaterial(part: CuttingPart, materialId: string | null) {
-  rememberEdgeMaterial(part, materialId)
-  const currentSource = commonEdgeSource(part)
-  const nextId = materialId ?? ''
-  for (const side of edgeFields) {
-    if (part[side]) part[side] = nextId ? { material_id: nextId, source: currentSource } : null
-  }
+function bandedEdgeFields(state: Record<EdgeField, CuttingEdgeBand | null>) {
+  return edgeFields.filter((side) => state[side])
 }
 
-function toggleEdge(part: CuttingPart, side: EdgeField) {
-  if (part[side]) {
-    part[side] = null
+function openEdgePicker(part: CuttingPart, event?: Event) {
+  edgePickerPart.value = part
+  edgePickerState.value = cloneEdgeStateFromPart(part)
+  const active = bandedEdgeFields(edgePickerState.value)
+  edgePickerSource.value =
+    active.length > 0 && active.every((side) => edgePickerState.value[side]?.source === 'own')
+      ? 'own'
+      : commonEdgeSource(part)
+  edgePickerSearch.value = ''
+  edgePickerThickness.value = 'all'
+  edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  void nextTick(() => edgeDialogRef.value?.focus())
+}
+
+function closeEdgePicker(returnFocus = true) {
+  edgePickerPart.value = null
+  edgePickerState.value = blankEdgeState()
+  edgePickerSearch.value = ''
+  edgePickerThickness.value = 'all'
+  if (returnFocus) edgeReturnFocus?.focus()
+  edgeReturnFocus = null
+}
+
+function applyEdgePicker() {
+  const part = edgePickerPart.value
+  if (!part) {
+    closeEdgePicker(false)
     return
   }
-  const materialId = firstEdgeId(part) ?? preferredEdgeId(part) ?? cutting.edgeOptions[0]?.id
-  if (!materialId) return
-  part[side] = { material_id: materialId, source: commonEdgeSource(part) }
+  part.edge_top = edgePickerState.value.edge_top ? { ...edgePickerState.value.edge_top } : null
+  part.edge_bottom = edgePickerState.value.edge_bottom
+    ? { ...edgePickerState.value.edge_bottom }
+    : null
+  part.edge_left = edgePickerState.value.edge_left ? { ...edgePickerState.value.edge_left } : null
+  part.edge_right = edgePickerState.value.edge_right
+    ? { ...edgePickerState.value.edge_right }
+    : null
+  const materialId = firstEdgeId(part)
+  rememberEdgeMaterial(part, materialId)
+  closeEdgePicker()
+}
+
+function applyEdgePattern(key: string) {
+  const part = edgePickerPart.value
+  if (!part) return
+  const pattern = edgePatterns.find((item) => item.key === key)
+  if (!pattern) return
+  if (pattern.sides.length === 0) {
+    edgePickerState.value = blankEdgeState()
+    return
+  }
+  const fallback = recommendedEdgeForPart(part)
+  if (!fallback) return
+  const next = blankEdgeState()
+  for (const side of pattern.sides) {
+    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
+  }
+  edgePickerState.value = next
+}
+
+function togglePickerSide(side: EdgeField) {
+  const part = edgePickerPart.value
+  if (!part) return
+  const next = { ...edgePickerState.value }
+  if (next[side]) {
+    next[side] = null
+  } else {
+    const fallback = recommendedEdgeForPart(part)
+    if (!fallback) return
+    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
+  }
+  edgePickerState.value = next
+}
+
+function setPickerSource(source: MaterialSource) {
+  edgePickerSource.value = source
+  const next = { ...edgePickerState.value }
+  for (const side of edgeFields) {
+    if (next[side]) next[side] = { ...next[side], source }
+  }
+  edgePickerState.value = next
+}
+
+function selectPickerMaterial(materialId: string) {
+  const active = edgePickerActiveSides.value
+  const targetSides = active.length ? active : edgeFields
+  const next = { ...edgePickerState.value }
+  for (const side of targetSides) {
+    next[side] = { material_id: materialId, source: edgePickerSource.value }
+  }
+  edgePickerState.value = next
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && edgePickerOpen.value) closeEdgePicker()
 }
 
 function bringOwn(part: CuttingPart) {
@@ -283,6 +573,7 @@ async function setPreferredBranch(branchId: string | null) {
   await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
   branchPickerOpen.value = false
   selectedBranchId.value = branchId
+  recoveryDismissed.value = false
   await loadMaterials()
 }
 
@@ -353,32 +644,61 @@ watch(
 watch(parts, scheduleSave, { deep: true })
 
 onMounted(async () => {
+  document.addEventListener('keydown', onDocumentKeydown)
   await cutting.loadDraft(draftId.value)
   await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
   await loadMaterials()
 })
 
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onDocumentKeydown)
+  window.clearTimeout(saveTimer)
+  document.body.classList.remove('modal-open')
+})
+
+watch(edgePickerOpen, (open) => {
+  document.body.classList.toggle('modal-open', open)
+})
+
 const edgeFields = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
 type EdgeField = (typeof edgeFields)[number]
 const sideLabels: Record<EdgeField, string> = {
-  edge_top: 'Top',
-  edge_bottom: 'Bottom',
-  edge_left: 'Left',
-  edge_right: 'Right',
+  edge_top: 'Yuqori',
+  edge_bottom: 'Pastki',
+  edge_left: 'Chap',
+  edge_right: "O'ng",
 }
+const edgePatterns: Array<{
+  key: string
+  label: string
+  hint: string
+  sides: EdgeField[]
+}> = [
+  { key: 'none', label: 'Hech qaysi', hint: 'Krom olib tashlanadi', sides: [] },
+  { key: 'all', label: 'Hamma tomon', hint: "Ko'p ishlatiladi", sides: [...edgeFields] },
+  {
+    key: 'tb',
+    label: 'Yuqori + pastki',
+    hint: 'Uzun tomonlar',
+    sides: ['edge_top', 'edge_bottom'],
+  },
+  { key: 'lr', label: "Chap + o'ng", hint: 'Yon tomonlar', sides: ['edge_left', 'edge_right'] },
+]
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <RouterLink :to="rolePath('/c/cutting/drafts')" class="client-back">
+      <span aria-hidden="true">←</span>
+      Saqlangan chizmalar
+    </RouterLink>
+
+    <div class="client-page-head">
       <div>
-        <RouterLink :to="rolePath('/c/cutting/drafts')" class="text-sm font-bold text-accent">
-          Cutting drafts
-        </RouterLink>
-        <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Cutting editor</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Enter parts, run deterministic layouts, and download the cutting plan.
+        <h1>Chizma</h1>
+        <p class="sub">
+          Qismlarni kiriting, ustaxona katalogi bo'yicha tekshiring va kesish natijasini oling.
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -392,15 +712,7 @@ const sideLabels: Record<EdgeField, string> = {
           aria-live="polite"
         >
           <span class="mp-dot" aria-hidden="true"></span>
-          {{
-            saveState === 'saved'
-              ? 'Saved'
-              : saveState === 'saving'
-                ? 'Saving'
-                : saveState === 'editing'
-                  ? 'Editing'
-                  : 'Save error'
-          }}
+          {{ saveLabel() }}
         </span>
         <button
           type="button"
@@ -408,355 +720,485 @@ const sideLabels: Record<EdgeField, string> = {
           :disabled="parts.length === 0"
           @click="requestClearParts"
         >
-          Clear parts list
+          Ro'yxatni tozalash
         </button>
       </div>
     </div>
 
-    <div v-if="cutting.loading" class="mp-surface p-5" aria-live="polite">
-      Loading cutting draft
-    </div>
-    <div v-else-if="cutting.error" class="mp-surface p-5 text-danger">
-      Draft could not be loaded. trace {{ cutting.traceId ?? 'unavailable' }}
-    </div>
+    <section v-if="cutting.loading" class="grid gap-3" aria-live="polite">
+      <div class="client-skeleton h-28"></div>
+      <div class="client-skeleton h-64"></div>
+    </section>
+
+    <section v-else-if="cutting.error" class="client-error">
+      <div class="client-error-icon">!</div>
+      <h3>Chizma yuklanmadi</h3>
+      <p>Chizmani ochish uchun sahifani qayta yuklang yoki saqlangan chizmalarga qayting.</p>
+      <p class="client-trace">trace {{ cutting.traceId ?? 'unavailable' }}</p>
+    </section>
 
     <template v-else-if="draft">
-      <section class="mp-surface p-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div class="text-sm font-bold text-ink">Catalog pre-filter</div>
-            <p class="mt-1 text-sm text-ink-soft">
-              {{
-                preferredBranch
-                  ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
-                  : 'Catalog: all branches'
-              }}
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
+      <section
+        class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-hairline border-l-4 border-l-accent bg-sunk px-4 py-3 text-sm text-ink-soft"
+      >
+        <span
+          class="grid size-6 place-items-center rounded bg-elevated font-mono font-black text-accent"
+          aria-hidden="true"
+        >
+          i
+        </span>
+        <div class="min-w-0 flex-1">
+          <span>Katalog filtri: </span>
+          <b class="text-ink">
+            {{
+              preferredBranch
+                ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+                : 'barcha ustaxonalar'
+            }}
+          </b>
+        </div>
+        <button type="button" class="mp-button mp-button-outline" @click="branchPickerOpen = true">
+          {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
+        </button>
+        <button
+          v-if="preferredBranch"
+          type="button"
+          class="mp-button mp-button-outline"
+          @click="setPreferredBranch(null)"
+        >
+          Tozalash
+        </button>
+      </section>
+
+      <section
+        v-if="branchPickerOpen"
+        class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
+      >
+        <FormSelect v-model="selectedBranchId" label="Afzal filial" :options="branchOptions" />
+        <button
+          type="button"
+          class="mp-button mp-button-primary self-end"
+          @click="setPreferredBranch(selectedBranchId)"
+        >
+          Qo'llash
+        </button>
+      </section>
+
+      <section v-if="showRecovery" class="client-banner warn">
+        <span class="grid size-6 place-items-center rounded bg-warning text-white">!</span>
+        <span class="min-w-0 flex-1">
+          {{ notCarriedRows.length }} qator tanlangan ustaxonada mavjud bo'lmagan materialdan
+          foydalanadi. Shu qatorlarni o'zim olib kelaman deb belgilang yoki pre-filterni tozalang.
+          <span class="mt-2 flex flex-wrap gap-2">
             <button
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="branchPickerOpen = true"
-            >
-              {{ preferredBranch ? 'Change' : 'Pick a branch' }}
-            </button>
-            <button
-              v-if="preferredBranch"
               type="button"
               class="mp-button mp-button-outline"
               @click="setPreferredBranch(null)"
             >
-              Clear
+              Pre-filterni tozalash
+            </button>
+            <button
+              type="button"
+              class="mp-button mp-button-outline"
+              @click="recoveryDismissed = true"
+            >
+              Yopish
+            </button>
+          </span>
+        </span>
+      </section>
+
+      <section class="client-card">
+        <div class="client-card-h">
+          <div>
+            <h2>Qismlar ro'yxati</h2>
+            <p class="mt-1 text-sm text-ink-muted">
+              {{ parts.length }} qator · {{ totalQuantity }} dona
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
+              <button
+                type="button"
+                class="rounded-md px-3 py-2 text-sm font-bold"
+                :class="entryMode === 'manual' ? 'bg-elevated text-ink shadow-sm' : 'text-ink-soft'"
+                @click="entryMode = 'manual'"
+              >
+                Qo'lda
+              </button>
+              <button
+                type="button"
+                class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
+                disabled
+                @click="entryMode = 'upload'"
+              >
+                Fayldan
+                <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]">tez kunda</span>
+              </button>
+            </div>
+            <button type="button" class="mp-button mp-button-outline" @click="addRow">
+              Qism qo'shish
             </button>
           </div>
         </div>
 
-        <div v-if="branchPickerOpen" class="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-          <FormSelect
-            v-model="selectedBranchId"
-            label="Preferred branch"
-            :options="branchOptions"
-          />
-          <button
-            type="button"
-            class="mp-button mp-button-primary self-end"
-            @click="setPreferredBranch(selectedBranchId)"
+        <div v-if="entryMode === 'upload'" class="client-card-b">
+          <div class="client-empty">
+            <div class="client-empty-icon">↑</div>
+            <h3>Import hali yoqilmagan</h3>
+            <p>Hozircha qismlarni manual kiritish barqaror yo'l.</p>
+          </div>
+        </div>
+
+        <div v-else-if="parts.length === 0" class="client-card-b">
+          <div class="client-empty">
+            <div class="client-empty-icon">+</div>
+            <h3>Bu chizmada qism yo'q</h3>
+            <p>Kesish ro'yxatini boshlash uchun birinchi qatorni qo'shing.</p>
+            <button type="button" class="mp-button mp-button-primary mt-4" @click="addRow">
+              Qism qo'shish
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="grid gap-3 p-4">
+          <article
+            v-for="(part, index) in parts"
+            :key="part.part_ref"
+            class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
+            :class="partIsInvalid(part) ? 'border-danger-soft' : 'border-hairline'"
           >
-            Apply
-          </button>
-        </div>
+            <div
+              class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
+            >
+              <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
 
-        <label class="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-ink">
-          <input v-model="showAllCatalog" type="checkbox" class="size-4" />
-          Show all catalog
-        </label>
-      </section>
-
-      <section v-if="notCarriedRows.length > 0" class="rounded-lg bg-warning-soft p-4 text-warning">
-        <div class="font-extrabold">
-          {{ notCarriedRows.length }} parts use materials not carried at the preferred branch.
-        </div>
-        <button
-          type="button"
-          class="mp-button mp-button-outline mt-3"
-          @click="setPreferredBranch(null)"
-        >
-          Clear preferred branch
-        </button>
-      </section>
-
-      <section class="mp-surface overflow-hidden">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-5">
-          <div>
-            <h2 class="font-serif text-xl font-semibold text-ink">Manual entry</h2>
-            <p class="mt-1 text-sm text-ink-soft">Part rows for this draft.</p>
-          </div>
-          <button type="button" class="mp-button mp-button-outline" @click="addRow">
-            Add part
-          </button>
-        </div>
-
-        <div v-if="parts.length === 0" class="p-5">
-          <div class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-5">
-            <h3 class="text-base font-extrabold text-ink">No parts in this draft</h3>
-            <p class="mt-1 text-sm text-ink-soft">Add a row to start the cutting list.</p>
-          </div>
-        </div>
-
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-[1120px] w-full border-collapse text-sm">
-            <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
-              <tr>
-                <th class="px-4 py-3">#</th>
-                <th class="px-4 py-3">Panel</th>
-                <th class="px-4 py-3">L mm</th>
-                <th class="px-4 py-3">W mm</th>
-                <th class="px-4 py-3">Qty</th>
-                <th class="px-4 py-3">Edges</th>
-                <th class="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              <tr v-for="(part, index) in parts" :key="part.part_ref" class="align-top">
-                <td class="px-4 py-4 font-mono text-xs text-ink-muted">{{ index + 1 }}</td>
-                <td class="w-[360px] px-4 py-4">
-                  <SearchCombobox
-                    label="Panel material"
-                    :model-value="part.material_id"
-                    :options="panelChoices"
-                    placeholder="Pick panel"
-                    @update:model-value="setPanel(part, $event)"
-                  />
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setPanelSource(part, 'shop')"
-                    >
-                      From shop
-                    </button>
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setPanelSource(part, 'own')"
-                    >
-                      I'll bring it
-                    </button>
-                  </div>
-                  <div
-                    v-if="rowNotCarried(part).length"
-                    class="mt-2 text-xs font-bold text-warning"
+              <div class="min-w-0">
+                <SearchCombobox
+                  label="Panel materiali"
+                  :model-value="part.material_id"
+                  :options="panelChoices"
+                  placeholder="Panel tanlang"
+                  :error="!part.material_id ? 'Material tanlang' : null"
+                  @update:model-value="setPanel(part, $event)"
+                />
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  <span
+                    class="size-5 rounded border border-hairline"
+                    :style="swatchStyle(part)"
+                  ></span>
+                  <button
+                    type="button"
+                    class="mp-chip"
+                    :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
+                    @click="setPanelSource(part, 'shop')"
                   >
-                    Not at branch
-                    <button type="button" class="underline" @click="bringOwn(part)">
-                      I'll bring my own
-                    </button>
-                  </div>
-                </td>
-                <td class="px-4 py-4">
-                  <input
-                    v-model.number="part.length_mm"
-                    type="number"
-                    min="50"
-                    class="min-h-11 w-24 rounded-md border border-hairline-strong px-3"
-                    aria-label="Length millimetres"
-                  />
-                </td>
-                <td class="px-4 py-4">
-                  <input
-                    v-model.number="part.width_mm"
-                    type="number"
-                    min="50"
-                    class="min-h-11 w-24 rounded-md border border-hairline-strong px-3"
-                    aria-label="Width millimetres"
-                  />
-                </td>
-                <td class="px-4 py-4">
-                  <input
-                    v-model.number="part.quantity"
-                    type="number"
-                    min="1"
-                    class="min-h-11 w-20 rounded-md border border-hairline-strong px-3"
-                    aria-label="Quantity"
-                  />
-                </td>
-                <td class="w-[340px] px-4 py-4">
-                  <SearchCombobox
-                    label="Edge tape"
-                    :model-value="firstEdgeId(part)"
-                    :options="edgeChoices"
-                    placeholder="Pick edge"
-                    @update:model-value="setEdgeMaterial(part, $event)"
-                  />
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    <button
-                      v-for="side in edgeFields"
-                      :key="side"
-                      type="button"
-                      class="mp-chip"
-                      :class="part[side] ? 'bg-info-soft text-info' : ''"
-                      @click="toggleEdge(part, side)"
-                    >
-                      {{ sideLabels[side] }}
-                    </button>
-                  </div>
-                  <div class="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="commonEdgeSource(part) === 'shop' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setAllEdgeSources(part, 'shop')"
-                    >
-                      Workshop supplies
-                    </button>
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="commonEdgeSource(part) === 'own' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setAllEdgeSources(part, 'own')"
-                    >
-                      I'll bring it
-                    </button>
-                  </div>
-                </td>
-                <td class="px-4 py-4">
-                  <div class="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline"
-                      @click="duplicateRow(part)"
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline text-danger"
-                      @click="deleteRow(index)"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    Ustaxona
+                  </button>
+                  <button
+                    type="button"
+                    class="mp-chip"
+                    :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
+                    @click="setPanelSource(part, 'own')"
+                  >
+                    O'zim olib kelaman
+                  </button>
+                </div>
+              </div>
+
+              <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                Uzunlik
+                <input
+                  v-model.number="part.length_mm"
+                  type="number"
+                  min="50"
+                  class="mp-input font-mono"
+                  :class="part.length_mm < 50 ? 'border-danger' : ''"
+                  aria-label="Uzunlik millimetr"
+                />
+              </label>
+
+              <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                Eni
+                <input
+                  v-model.number="part.width_mm"
+                  type="number"
+                  min="50"
+                  class="mp-input font-mono"
+                  :class="part.width_mm < 50 ? 'border-danger' : ''"
+                  aria-label="Eni millimetr"
+                />
+              </label>
+
+              <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                Soni
+                <input
+                  v-model.number="part.quantity"
+                  type="number"
+                  min="1"
+                  class="mp-input font-mono"
+                  :class="part.quantity < 1 ? 'border-danger' : ''"
+                  aria-label="Soni"
+                />
+              </label>
+
+              <div class="min-w-0">
+                <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
+                <button
+                  type="button"
+                  class="client-edges-btn"
+                  :title="edgeCellTitle(part)"
+                  :aria-label="`Qism #${index + 1} kromini tahrirlash`"
+                  @click="openEdgePicker(part, $event)"
+                >
+                  <svg viewBox="0 0 76 48" class="client-edge-svg" aria-hidden="true">
+                    <rect class="frame" x="14" y="13" width="48" height="22" />
+                    <line
+                      v-if="part.edge_top"
+                      class="side"
+                      x1="14"
+                      y1="13"
+                      x2="62"
+                      y2="13"
+                      :stroke-width="edgeStrokeWidth(part.edge_top)"
+                      :class="{ own: part.edge_top.source === 'own' }"
+                    />
+                    <line
+                      v-if="part.edge_bottom"
+                      class="side"
+                      x1="14"
+                      y1="35"
+                      x2="62"
+                      y2="35"
+                      :stroke-width="edgeStrokeWidth(part.edge_bottom)"
+                      :class="{ own: part.edge_bottom.source === 'own' }"
+                    />
+                    <line
+                      v-if="part.edge_left"
+                      class="side"
+                      x1="14"
+                      y1="13"
+                      x2="14"
+                      y2="35"
+                      :stroke-width="edgeStrokeWidth(part.edge_left)"
+                      :class="{ own: part.edge_left.source === 'own' }"
+                    />
+                    <line
+                      v-if="part.edge_right"
+                      class="side"
+                      x1="62"
+                      y1="13"
+                      x2="62"
+                      y2="35"
+                      :stroke-width="edgeStrokeWidth(part.edge_right)"
+                      :class="{ own: part.edge_right.source === 'own' }"
+                    />
+                    <text v-if="part.edge_top" class="lbl" x="38" y="7" text-anchor="middle">
+                      {{ edgeCellLabel(part, 'edge_top') }}
+                    </text>
+                    <text v-if="part.edge_bottom" class="lbl" x="38" y="45" text-anchor="middle">
+                      {{ edgeCellLabel(part, 'edge_bottom') }}
+                    </text>
+                    <text v-if="part.edge_left" class="lbl" x="6" y="24" text-anchor="middle">
+                      {{ edgeCellLabel(part, 'edge_left') }}
+                    </text>
+                    <text v-if="part.edge_right" class="lbl" x="70" y="24" text-anchor="middle">
+                      {{ edgeCellLabel(part, 'edge_right') }}
+                    </text>
+                  </svg>
+                  <span class="client-edge-summary">
+                    <b>{{ edgeSummary(part) }}</b>
+                    <small>{{ edgeSourceSummary(part) }}</small>
+                  </span>
+                </button>
+              </div>
+
+              <div class="grid gap-2">
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline"
+                  @click="duplicateRow(part)"
+                >
+                  Nusxa
+                </button>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline text-danger"
+                  @click="deleteRow(index)"
+                >
+                  O'chirish
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="rowNotCarried(part).length"
+              class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
+            >
+              <span class="font-black">!</span>
+              <span class="min-w-0 flex-1">
+                Bu qator tanlangan ustaxonada mavjud bo'lmagan materialdan foydalanadi.
+              </span>
+              <button type="button" class="mp-button mp-button-outline" @click="bringOwn(part)">
+                O'zim olib kelaman
+              </button>
+            </div>
+          </article>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5">
-          <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
-          <p v-else class="text-sm text-ink-soft">{{ parts.length }} rows</p>
+          <div>
+            <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
+            <p v-else class="text-sm text-ink-soft">
+              {{ parts.length }} qator · {{ totalQuantity }} dona · pre-filter
+              {{ preferredBranch ? preferredBranch.branch_name : 'yoqilmagan' }}
+            </p>
+            <label class="mt-2 inline-flex min-h-9 items-center gap-2 text-sm font-bold text-ink">
+              <input v-model="showAllCatalog" type="checkbox" class="size-4" />
+              Barcha katalogni ko'rsatish
+            </label>
+          </div>
           <button
             type="button"
             class="mp-button mp-button-primary"
             :disabled="cutting.optimizing || parts.length === 0"
             @click="optimize"
           >
-            {{ cutting.optimizing ? 'Optimising' : 'Optimise' }}
+            {{ cutting.optimizing ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
           </button>
         </div>
       </section>
 
-      <section id="cutting-results" class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline p-5">
-          <h2 class="font-serif text-xl font-semibold text-ink">Result</h2>
-          <p class="mt-1 text-sm text-ink-soft">Compare algorithms and download the chosen plan.</p>
+      <section id="cutting-results" class="client-card mt-6">
+        <div class="client-card-h">
+          <div>
+            <h2>Natija</h2>
+            <p class="mt-1 text-sm text-ink-muted">
+              Algoritmlarni solishtiring, PDF yuklab oling yoki tanlangan natijadan buyurtma bering.
+            </p>
+          </div>
+          <span
+            v-if="chosenResult?.status === 'invalidated'"
+            class="client-pill client-pill-danger"
+          >
+            eskirgan
+          </span>
         </div>
 
-        <div v-if="!chosenResult" class="p-5">
-          <div class="rounded-lg border border-dashed border-hairline-strong bg-sunk p-5">
-            <h3 class="text-base font-extrabold text-ink">No optimizer result</h3>
-            <p class="mt-1 text-sm text-ink-soft">
-              Run the optimiser after the parts list is saved.
-            </p>
+        <div v-if="!chosenResult" class="client-card-b">
+          <div class="client-empty">
+            <div class="client-empty-icon">∑</div>
+            <h3>Optimizer natijasi yo'q</h3>
+            <p>Qismlar saqlangach optimallashtirishni ishga tushiring.</p>
           </div>
         </div>
 
-        <div v-else class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div v-else class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div class="min-w-0 space-y-4">
-            <div class="grid gap-3 sm:grid-cols-4">
-              <div class="rounded-md bg-sunk p-3">
-                <div class="text-xs font-bold uppercase text-ink-muted">Waste</div>
-                <div class="mt-1 text-xl font-extrabold text-ink">{{ resultWaste }}</div>
+            <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
+              <span class="font-mono font-black">!</span>
+              <span
+                >Qismlar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
+                tushiring.</span
+              >
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div class="rounded-md border border-hairline bg-elevated p-4">
+                <div class="text-xs font-bold uppercase text-ink-muted">Chiqim</div>
+                <div class="mt-1 font-serif text-2xl font-semibold text-success">
+                  {{ resultWaste }}
+                </div>
               </div>
-              <div class="rounded-md bg-sunk p-3">
-                <div class="text-xs font-bold uppercase text-ink-muted">Panels</div>
-                <div class="mt-1 text-xl font-extrabold text-ink">{{ totalPanels }}</div>
+              <div class="rounded-md border border-hairline bg-elevated p-4">
+                <div class="text-xs font-bold uppercase text-ink-muted">Panellar</div>
+                <div class="mt-1 font-serif text-2xl font-semibold text-ink">{{ totalPanels }}</div>
               </div>
-              <div class="rounded-md bg-sunk p-3">
-                <div class="text-xs font-bold uppercase text-ink-muted">Edge tape</div>
-                <div class="mt-1 text-xl font-extrabold text-ink">
+              <div class="rounded-md border border-hairline bg-elevated p-4">
+                <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
+                <div class="mt-1 font-serif text-2xl font-semibold text-ink">
                   {{ metres(consumedShop + consumedOwn) }}
                 </div>
               </div>
-              <div class="rounded-md bg-sunk p-3">
-                <div class="text-xs font-bold uppercase text-ink-muted">Cut length</div>
-                <div class="mt-1 text-xl font-extrabold text-ink">
+              <div class="rounded-md border border-hairline bg-elevated p-4">
+                <div class="text-xs font-bold uppercase text-ink-muted">Kesish yo'li</div>
+                <div class="mt-1 font-serif text-2xl font-semibold text-ink">
                   {{ metres(chosenResult.total_cut_length_mm) }}
                 </div>
               </div>
             </div>
 
-            <div class="overflow-x-auto rounded-lg border border-hairline">
-              <table class="w-full min-w-[520px] text-sm">
-                <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
-                  <tr>
-                    <th class="px-3 py-2">Algorithm</th>
-                    <th class="px-3 py-2">Waste</th>
-                    <th class="px-3 py-2">Panels</th>
-                    <th class="px-3 py-2">Action</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-hairline">
-                  <tr v-for="result in draft.results" :key="result.id">
-                    <td class="px-3 py-3 font-bold">{{ result.algorithm_name }}</td>
-                    <td class="px-3 py-3">
-                      {{ (Number(result.waste_percentage) * 100).toFixed(2) }}%
-                    </td>
-                    <td class="px-3 py-3">
-                      {{
-                        Object.values(result.panels_used_by_material).reduce(
-                          (sum, count) => sum + count,
-                          0,
-                        )
-                      }}
-                    </td>
-                    <td class="px-3 py-3">
-                      <button
-                        type="button"
-                        class="mp-button mp-button-outline"
-                        @click="choose(result)"
-                      >
-                        {{ result.id === draft.chosen_result_id ? 'Chosen' : 'Use this one' }}
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="panel in chosenResult.panels"
-                :key="panel.id"
-                type="button"
-                class="mp-chip"
-                :class="panel.id === activePanel?.id ? 'bg-accent-soft text-accent' : ''"
-                @click="activePanelId = panel.id"
+            <section class="rounded-lg border border-hairline bg-elevated">
+              <div
+                class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4"
               >
-                {{ panelTitle(chosenResult, panel) }}
-              </button>
-            </div>
+                <div class="text-sm font-bold text-ink">Algoritm solishtirish</div>
+                <button
+                  type="button"
+                  class="text-sm font-bold text-accent"
+                  @click="algorithmsOpen = !algorithmsOpen"
+                >
+                  {{ algorithmsOpen ? 'Yopish' : 'Ochish' }}
+                </button>
+              </div>
+              <div v-if="algorithmsOpen" class="overflow-x-auto">
+                <table class="w-full min-w-[560px] text-sm">
+                  <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
+                    <tr>
+                      <th class="px-4 py-3">Algorithm</th>
+                      <th class="px-4 py-3">Chiqim</th>
+                      <th class="px-4 py-3">Panel</th>
+                      <th class="px-4 py-3">Holat</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-hairline">
+                    <tr
+                      v-for="result in draft.results"
+                      :key="result.id"
+                      :class="result.id === draft.chosen_result_id ? 'bg-accent-soft/40' : ''"
+                    >
+                      <td class="px-4 py-3 font-bold text-ink">{{ result.algorithm_name }}</td>
+                      <td class="px-4 py-3 font-mono">
+                        {{ formatPercent(result.waste_percentage) }}
+                      </td>
+                      <td class="px-4 py-3 font-mono">{{ resultPanelCount(result) }}</td>
+                      <td class="px-4 py-3">
+                        <button
+                          type="button"
+                          class="mp-button mp-button-outline"
+                          @click="choose(result)"
+                        >
+                          {{ result.id === draft.chosen_result_id ? 'Tanlangan' : 'Shuni tanlash' }}
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-            <CuttingPanelSvg
-              v-if="activePanel"
-              :result="chosenResult"
-              :panel="activePanel"
-              :active-placement-id="activePlacementId"
-              @select-placement="selectPlacement"
-            />
+            <section class="rounded-lg border border-hairline bg-elevated p-4">
+              <div class="mb-3 flex flex-wrap gap-2">
+                <button
+                  v-for="panel in chosenResult.panels"
+                  :key="panel.id"
+                  type="button"
+                  class="mp-chip"
+                  :class="panel.id === activePanel?.id ? 'bg-accent text-white' : ''"
+                  @click="activePanelId = panel.id"
+                >
+                  {{ panelTitle(chosenResult, panel) }}
+                </button>
+              </div>
+
+              <CuttingPanelSvg
+                v-if="activePanel"
+                :result="chosenResult"
+                :panel="activePanel"
+                :active-placement-id="activePlacementId"
+                @select-placement="selectPlacement"
+              />
+            </section>
           </div>
 
           <aside class="space-y-4">
@@ -765,23 +1207,23 @@ const sideLabels: Record<EdgeField, string> = {
               :to="rolePath(`/c/orders/new/${draft.id}`)"
               class="mp-button mp-button-primary w-full"
             >
-              Place order
+              Buyurtma berish
             </RouterLink>
             <button
               type="button"
               class="mp-button mp-button-outline w-full"
               @click="cutting.downloadClientPdf(chosenResult.id)"
             >
-              Download PDF
+              PDF yuklab olish
             </button>
             <div class="rounded-lg border border-hairline bg-sunk p-4">
-              <h3 class="text-sm font-extrabold text-ink">Edge split</h3>
+              <h3 class="text-sm font-extrabold text-ink">Krom bo'linishi</h3>
               <p class="mt-2 text-sm text-ink-soft">
-                Shop {{ metres(consumedShop) }} · Own {{ metres(consumedOwn) }}
+                Ustaxona {{ metres(consumedShop) }} · O'zim {{ metres(consumedOwn) }}
               </p>
             </div>
             <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
-              <h3 class="text-sm font-extrabold text-ink">Placements</h3>
+              <h3 class="text-sm font-extrabold text-ink">Joylashuvlar</h3>
               <div class="mt-3 grid gap-2">
                 <button
                   v-for="placement in activePanel.placements"
@@ -805,12 +1247,192 @@ const sideLabels: Record<EdgeField, string> = {
 
     <ConfirmDialog
       :open="clearPartsConfirmOpen"
-      title="Clear parts list"
-      :message="`Remove all ${parts.length} parts? This cannot be undone.`"
-      confirm-label="Clear list"
+      title="Ro'yxatni tozalash"
+      :message="`Barcha ${parts.length} qator o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
+      confirm-label="Tozalash"
       danger
       @cancel="clearPartsConfirmOpen = false"
       @confirm="clearParts"
     />
+
+    <template v-if="edgePickerPart">
+      <div class="client-modal-scrim" @click="closeEdgePicker()"></div>
+      <section
+        ref="edgeDialogRef"
+        class="client-edge-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edge-picker-title"
+        tabindex="-1"
+      >
+        <div class="client-edge-modal-h">
+          <h3 id="edge-picker-title">
+            Krom yopishtirish — qism #{{ parts.findIndex((part) => part === edgePickerPart) + 1 }}
+          </h3>
+          <button
+            type="button"
+            class="client-edge-close"
+            aria-label="Krom oynasini yopish"
+            @click="closeEdgePicker()"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="client-edge-modal-b">
+          <p class="ep-help">
+            {{
+              edgePickerMaterials.some((item) => item.rank < 2)
+                ? "Mos kromlar ro'yxatda yuqorida turadi; kerak bo'lsa rang yoki qalinlik bo'yicha tanlang."
+                : "Bu panel uchun mos krom topilmadi; katalogdan rang yoki qalinlik bo'yicha tanlang."
+            }}
+          </p>
+
+          <div class="ep-patterns" aria-label="Krom tomoni shablonlari">
+            <button
+              v-for="pattern in edgePatterns"
+              :key="pattern.key"
+              type="button"
+              class="ep-pattern"
+              :class="{ on: edgePickerPatternKey === pattern.key }"
+              :disabled="pattern.sides.length > 0 && !recommendedEdgeForPart(edgePickerPart)"
+              @click="applyEdgePattern(pattern.key)"
+            >
+              <span class="nm">{{ pattern.label }}</span>
+              <span class="meta">{{ pattern.hint }}</span>
+            </button>
+          </div>
+
+          <div class="edge-diagram" aria-label="Krom tomonlari">
+            <span class="lbl">Yuqori</span>
+            <button
+              type="button"
+              class="edge-btn h"
+              :class="{
+                set: Boolean(edgePickerState.edge_top),
+                own: edgePickerState.edge_top?.source === 'own',
+              }"
+              :aria-pressed="Boolean(edgePickerState.edge_top)"
+              @click="togglePickerSide('edge_top')"
+            >
+              {{ edgePickerState.edge_top ? pickerSideLabel('edge_top') : '-' }}
+            </button>
+            <div class="mid">
+              <button
+                type="button"
+                class="edge-btn v"
+                :class="{
+                  set: Boolean(edgePickerState.edge_left),
+                  own: edgePickerState.edge_left?.source === 'own',
+                }"
+                :aria-pressed="Boolean(edgePickerState.edge_left)"
+                @click="togglePickerSide('edge_left')"
+              >
+                {{ edgePickerState.edge_left ? pickerSideLabel('edge_left') : '-' }}
+              </button>
+              <div class="panel">Qism</div>
+              <button
+                type="button"
+                class="edge-btn v"
+                :class="{
+                  set: Boolean(edgePickerState.edge_right),
+                  own: edgePickerState.edge_right?.source === 'own',
+                }"
+                :aria-pressed="Boolean(edgePickerState.edge_right)"
+                @click="togglePickerSide('edge_right')"
+              >
+                {{ edgePickerState.edge_right ? pickerSideLabel('edge_right') : '-' }}
+              </button>
+            </div>
+            <button
+              type="button"
+              class="edge-btn h"
+              :class="{
+                set: Boolean(edgePickerState.edge_bottom),
+                own: edgePickerState.edge_bottom?.source === 'own',
+              }"
+              :aria-pressed="Boolean(edgePickerState.edge_bottom)"
+              @click="togglePickerSide('edge_bottom')"
+            >
+              {{ edgePickerState.edge_bottom ? pickerSideLabel('edge_bottom') : '-' }}
+            </button>
+            <span class="lbl">Pastki</span>
+          </div>
+
+          <div class="ep-source">
+            <button
+              type="button"
+              :class="{ on: edgePickerSource === 'shop' }"
+              :aria-pressed="edgePickerSource === 'shop'"
+              @click="setPickerSource('shop')"
+            >
+              <span class="nm">Ustaxonadan</span>
+              <span class="meta">Krom narxga qo'shiladi</span>
+            </button>
+            <button
+              type="button"
+              :class="{ on: edgePickerSource === 'own' }"
+              :aria-pressed="edgePickerSource === 'own'"
+              @click="setPickerSource('own')"
+            >
+              <span class="nm">O'zim olib kelaman</span>
+              <span class="meta">Faqat yopishtirish xizmati</span>
+            </button>
+          </div>
+
+          <div class="ep-tools">
+            <input
+              v-model="edgePickerSearch"
+              class="ep-search"
+              type="search"
+              placeholder="Krom nomi, decor yoki rang..."
+              aria-label="Krom qidirish"
+            />
+            <FormSelect
+              v-model="edgePickerThickness"
+              class="picker-select"
+              label="Qalinlik"
+              :options="edgeThicknessOptions"
+            />
+            <div class="ep-edge-list">
+              <button
+                v-for="{ material, rank } in edgePickerMaterials"
+                :key="material.id"
+                type="button"
+                class="ep-edge-opt"
+                :class="{ on: edgePickerSelectedMaterialId === material.id }"
+                @click="selectPickerMaterial(material.id)"
+              >
+                <span class="rad" aria-hidden="true"></span>
+                <span class="sw" :style="{ background: colorForMaterial(material.color) }"></span>
+                <span class="lab">
+                  <span class="nm">
+                    {{ edgeShortLabel(material) }}
+                    <span v-if="rank < 2" class="fav">Mos</span>
+                  </span>
+                  <span class="meta">{{ material.name }}</span>
+                </span>
+                <span class="thk">{{ material.thickness_mm }} mm</span>
+              </button>
+              <div v-if="edgePickerMaterials.length === 0" class="ep-empty">
+                Mos krom topilmadi. Qidiruv yoki qalinlikni o'zgartiring.
+              </div>
+            </div>
+            <div v-if="edgePickerBranchNote" class="ep-branch-note">
+              {{ edgePickerBranchNote }}
+            </div>
+          </div>
+        </div>
+
+        <div class="client-edge-modal-f">
+          <button type="button" class="mp-button mp-button-outline" @click="closeEdgePicker()">
+            Bekor qilish
+          </button>
+          <button type="button" class="mp-button mp-button-primary" @click="applyEdgePicker">
+            Qo'llash
+          </button>
+        </div>
+      </section>
+    </template>
   </section>
 </template>

@@ -1,19 +1,36 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
+import { adminDateTime } from '@/shared/app/adminUi'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const tab = ref<'actions' | 'status'>('actions')
+const query = ref('')
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value))
-}
+const filteredActions = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!needle) return admin.auditActions
+  return admin.auditActions.filter((row) =>
+    [row.action, row.entity_type ?? '', row.entity_id ?? '', row.summary ?? '', row.trace_id]
+      .join(' ')
+      .toLowerCase()
+      .includes(needle),
+  )
+})
+const filteredStatus = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!needle) return admin.auditStatusChanges
+  return admin.auditStatusChanges.filter((row) =>
+    [row.entity_type, row.entity_id, row.from_status ?? '', row.to_status, row.reason ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(needle),
+  )
+})
 
 function detailsText(value: Record<string, unknown> | null) {
-  if (!value) return 'No details'
+  if (!value) return '-'
   return JSON.stringify(value)
 }
 
@@ -21,110 +38,127 @@ onMounted(admin.loadAudit)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="admin-page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">Audit</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Cross-workshop action history and status changes for platform review.
-        </p>
+        <h1>Audit log . platforma</h1>
+        <p class="sub">Mutating use cases va status transitions append-only loglari.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadAudit">
-        Refresh
+        Yangilash
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="mp-surface p-5 text-sm font-bold text-ink-soft">
-      Loading audit logs
-    </section>
-    <section v-else-if="admin.opsError" class="mp-surface p-5 text-sm font-bold text-danger">
-      Audit logs could not be loaded.
-      <span v-if="admin.opsTraceId" class="font-mono">trace {{ admin.opsTraceId }}</span>
-    </section>
-    <section v-else class="grid gap-5 xl:grid-cols-2">
-      <div class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Actions</h2>
-          <p class="mt-1 text-sm text-ink-soft">Append-only mutating use cases.</p>
-        </div>
-        <div v-if="admin.auditActions.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-          No action logs yet.
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm">
-            <thead class="bg-sunk text-xs uppercase text-ink-muted">
-              <tr>
-                <th class="px-5 py-3">When</th>
-                <th class="px-5 py-3">Action</th>
-                <th class="px-5 py-3">Actor</th>
-                <th class="px-5 py-3">Entity</th>
-                <th class="px-5 py-3">Details</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              <tr v-for="row in admin.auditActions" :key="row.id">
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ formatDate(row.created_at) }}
-                </td>
-                <td class="px-5 py-3">
-                  <div class="font-mono text-xs font-bold text-ink">{{ row.action }}</div>
-                  <div class="mt-1 text-xs text-ink-soft">{{ row.summary ?? 'No summary' }}</div>
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ row.actor_type }}
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ row.entity_type ?? 'none' }}
-                </td>
-                <td class="max-w-[280px] truncate px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ detailsText(row.details) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="admin-filters">
+      <label class="admin-filter-input">
+        <span class="sr-only">Obyekt ID yoki action</span>
+        <input v-model="query" placeholder="Obyekt ID yoki action" />
+      </label>
+      <button type="button" class="mp-button mp-button-outline">CSV</button>
+    </div>
 
-      <div class="mp-surface overflow-hidden">
-        <div class="border-b border-hairline px-5 py-4">
-          <h2 class="font-serif text-xl font-semibold text-ink">Status changes</h2>
-          <p class="mt-1 text-sm text-ink-soft">State transitions written with the action.</p>
-        </div>
-        <div v-if="admin.auditStatusChanges.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-          No status changes yet.
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="min-w-full text-left text-sm">
-            <thead class="bg-sunk text-xs uppercase text-ink-muted">
-              <tr>
-                <th class="px-5 py-3">When</th>
-                <th class="px-5 py-3">Entity</th>
-                <th class="px-5 py-3">Change</th>
-                <th class="px-5 py-3">Actor</th>
-                <th class="px-5 py-3">Reason</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-hairline">
-              <tr v-for="row in admin.auditStatusChanges" :key="row.id">
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ formatDate(row.changed_at) }}
-                </td>
-                <td class="px-5 py-3 font-mono text-xs font-bold text-ink">
-                  {{ row.entity_type }}
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ row.from_status ?? 'new' }} -> {{ row.to_status }}
-                </td>
-                <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                  {{ row.actor_type }}
-                </td>
-                <td class="px-5 py-3 text-sm text-ink-soft">
-                  {{ row.reason ?? 'No reason' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <div class="admin-tabs" role="tablist" aria-label="Audit turi">
+      <button
+        type="button"
+        class="admin-tab"
+        :class="{ on: tab === 'actions' }"
+        @click="tab = 'actions'"
+      >
+        Amallar (Action log)
+      </button>
+      <button
+        type="button"
+        class="admin-tab"
+        :class="{ on: tab === 'status' }"
+        @click="tab = 'status'"
+      >
+        Holat o'zgarishlari (Status changes)
+      </button>
+    </div>
+
+    <section v-if="admin.opsLoading" class="admin-card p-5">
+      <div class="admin-skeleton-line w-3/5"></div>
+      <div class="admin-skeleton-line w-4/5"></div>
+      <div class="admin-skeleton-line w-2/5"></div>
+    </section>
+
+    <section v-else-if="admin.opsError" class="admin-error">
+      <h3>Audit log yuklanmadi</h3>
+      <p>
+        Audit endpoint javob bermadi.
+        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
+      </p>
+    </section>
+
+    <section v-else-if="tab === 'actions'" class="admin-card">
+      <div v-if="filteredActions.length === 0" class="admin-empty m-5">
+        <h3>Action log bo'sh</h3>
+        <p>Mutating platform amallari shu yerda ko'rinadi.</p>
+      </div>
+      <div v-else class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Vaqt</th>
+              <th>Ustaxona</th>
+              <th>Modul</th>
+              <th>Amal</th>
+              <th>Aktor</th>
+              <th>Tafsilot</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in filteredActions" :key="row.id">
+              <td class="admin-mono text-ink-muted">{{ adminDateTime(row.created_at) }}</td>
+              <td class="admin-mono text-ink-muted">{{ row.workshop_id?.slice(0, 8) ?? '-' }}</td>
+              <td>{{ row.entity_type ?? '-' }}</td>
+              <td class="nm">
+                {{ row.action }}
+                <small>{{ row.summary ?? 'No summary' }}</small>
+              </td>
+              <td class="admin-mono text-ink-muted">
+                {{ row.actor_type }} {{ row.actor_user_id?.slice(0, 8) ?? '' }}
+              </td>
+              <td class="max-w-[320px] truncate admin-mono text-ink-muted">
+                {{ detailsText(row.details) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section v-else class="admin-card">
+      <div v-if="filteredStatus.length === 0" class="admin-empty m-5">
+        <h3>Status log bo'sh</h3>
+        <p>Status transitions shu yerda ko'rinadi.</p>
+      </div>
+      <div v-else class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Vaqt</th>
+              <th>Entity</th>
+              <th>Change</th>
+              <th>Aktor</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in filteredStatus" :key="row.id">
+              <td class="admin-mono text-ink-muted">{{ adminDateTime(row.changed_at) }}</td>
+              <td class="nm">
+                {{ row.entity_type }}
+                <small>{{ row.entity_id }}</small>
+              </td>
+              <td class="admin-mono">{{ row.from_status ?? '-' }} -> {{ row.to_status }}</td>
+              <td class="admin-mono text-ink-muted">
+                {{ row.actor_type }} {{ row.actor_user_id?.slice(0, 8) ?? '' }}
+              </td>
+              <td>{{ row.reason ?? '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
   </section>

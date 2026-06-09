@@ -1,20 +1,101 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { useWorkshopStore } from '@/shared/stores/workshop'
+import { grantSummary, initials, permissionLabels } from '@/shared/app/workshopUi'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useAuthStore } from '@/shared/stores/auth'
+import { permissionCatalog, useWorkshopStore } from '@/shared/stores/workshop'
 
+const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const rolePath = useRolePath()
+const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const search = ref('')
+const branchFilter = ref('all')
+const statusFilter = ref('all')
+const selected = ref<Set<string>>(new Set())
 const form = reactive({
   fullName: '',
   phone: '+998',
   login: '',
+  homeBranchId: '',
   tempPassword: '',
 })
+
+const branchOptions = computed(() => [
+  { value: '', label: 'Asosiy filial yo`q', meta: 'ixtiyoriy', status: 'pending' as const },
+  ...workshop.branches.map((branch) => ({
+    value: branch.id,
+    label: branch.name,
+    meta: branch.address,
+    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
+  })),
+])
+const branchFilterOptions = computed(() => [
+  {
+    value: 'all',
+    label: 'Barcha filiallar',
+    meta: `${workshop.branches.length} filial`,
+    status: 'active' as const,
+  },
+  ...workshop.branches.map((branch) => ({
+    value: branch.id,
+    label: branch.name,
+    meta: branch.address,
+    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
+  })),
+])
+const statusOptions = [
+  { value: 'all', label: 'Hammasi', meta: 'barcha xodimlar', status: 'active' as const },
+  { value: 'active', label: 'Faol', meta: 'kirishi mumkin', status: 'active' as const },
+  {
+    value: 'blocked',
+    label: 'Bloklangan',
+    meta: 'kirishi to`xtatilgan',
+    status: 'blocked' as const,
+  },
+]
+const filteredUsers = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return workshop.users.filter((user) => {
+    if (statusFilter.value !== 'all' && user.status !== statusFilter.value) return false
+    if (branchFilter.value !== 'all') {
+      const inBranch =
+        user.home_branch_id === branchFilter.value ||
+        user.grants.some((grant) => grant.branch_id === branchFilter.value)
+      if (!inBranch) return false
+    }
+    if (
+      query &&
+      !user.full_name.toLowerCase().includes(query) &&
+      !user.login.toLowerCase().includes(query)
+    ) {
+      return false
+    }
+    return true
+  })
+})
+
+function branchName(id: string | null) {
+  if (!id) return '—'
+  return workshop.branches.find((branch) => branch.id === id)?.name ?? 'Filial'
+}
+
+function grantKey(permission: string, branchId: string) {
+  return `${permission}|${branchId}`
+}
+
+function toggleGrant(permission: string, branchId: string) {
+  const next = new Set(selected.value)
+  const key = grantKey(permission, branchId)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  selected.value = next
+}
 
 async function createStaff() {
   creating.value = true
@@ -24,13 +105,20 @@ async function createStaff() {
       full_name: form.fullName,
       phone: form.phone,
       login: form.login,
+      home_branch_id: form.homeBranchId || null,
       temp_password: form.tempPassword || undefined,
-      grants: [],
+      grants: [...selected.value].map((value) => {
+        const [permission, branch_id] = value.split('|')
+        return { permission, branch_id }
+      }),
     })
     form.fullName = ''
     form.phone = '+998'
     form.login = ''
+    form.homeBranchId = ''
     form.tempPassword = ''
+    selected.value = new Set()
+    showCreate.value = false
   } catch {
     createError.value = 'user_create_failed'
   } finally {
@@ -38,118 +126,223 @@ async function createStaff() {
   }
 }
 
-onMounted(() => {
-  void workshop.loadUsers()
+onMounted(async () => {
+  await workshop.loadBranchContext().catch(() => undefined)
+  if (auth.me?.is_owner) void workshop.loadUsers()
 })
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div>
-      <h1 class="font-serif text-3xl font-semibold text-ink">Workshop users</h1>
-      <p class="mt-2 text-base text-ink-soft">Create staff and manage branch permissions.</p>
+  <section>
+    <div class="page-head">
+      <div>
+        <h1>Xodimlar</h1>
+        <p class="sub">Ustaxona xodimlari · ruxsatlar. Faqat egasi yangi xodim qo'shadi.</p>
+      </div>
+      <div class="tools">
+        <button
+          v-if="auth.me?.is_owner"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="showCreate = !showCreate"
+        >
+          Yangi xodim
+        </button>
+      </div>
     </div>
 
-    <section class="mp-surface p-5">
-      <h2 class="font-serif text-xl font-semibold">Create staff</h2>
-      <form class="mt-5 grid gap-4 md:grid-cols-4" @submit.prevent="createStaff">
-        <label class="block text-sm font-bold text-ink" for="staff-full-name">
-          Full name
-          <input
-            id="staff-full-name"
-            v-model="form.fullName"
-            class="mp-input mt-1"
-            autocomplete="name"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="staff-phone">
-          Phone
-          <input
-            id="staff-phone"
-            v-model="form.phone"
-            class="mp-input mt-1"
-            autocomplete="tel"
-            inputmode="tel"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="staff-login">
-          Login
-          <input
-            id="staff-login"
-            v-model="form.login"
-            class="mp-input mt-1"
-            autocomplete="username"
-            required
-          />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="staff-temp-password">
-          Temp password
-          <input
-            id="staff-temp-password"
-            v-model="form.tempPassword"
-            class="mp-input mt-1"
-            autocomplete="new-password"
-          />
-        </label>
-        <button
-          class="mp-button mp-button-primary md:col-span-4"
-          type="submit"
-          :disabled="creating"
-        >
-          {{ creating ? 'Creating' : 'Create user' }}
-        </button>
-      </form>
-      <div
-        v-if="workshop.lastTempPassword"
-        class="mt-4 rounded-md bg-success-soft p-4 text-success"
-      >
-        <div class="font-extrabold">Temporary password</div>
-        <p class="mt-1 font-mono text-sm">{{ workshop.lastTempPassword }}</p>
-      </div>
-      <p v-if="createError" class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
-        User could not be created.
-      </p>
+    <section v-if="!auth.me?.is_owner" class="st-empty">
+      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
+      <p>Xodimlar va ruxsatlar matritsasini egasi boshqaradi.</p>
     </section>
 
-    <section class="mp-surface overflow-hidden">
-      <div class="border-b border-hairline px-5 py-4">
-        <h2 class="font-serif text-xl font-semibold">Users</h2>
-      </div>
-      <div v-if="workshop.loading" class="px-5 py-6 text-sm font-bold text-ink-soft">
-        Loading users
-      </div>
-      <div v-else-if="workshop.error" class="px-5 py-6 text-sm font-bold text-danger">
-        Users could not be loaded.
-      </div>
-      <div v-else-if="workshop.users.length === 0" class="px-5 py-6 text-sm text-ink-soft">
-        No staff users yet.
-      </div>
-      <div v-else class="divide-y divide-hairline">
-        <RouterLink
-          v-for="user in workshop.users"
-          :key="user.id"
-          :to="rolePath(`/workshop/settings/users/${user.id}`)"
-          class="grid gap-2 px-5 py-4 no-underline sm:grid-cols-[1fr_auto]"
-        >
-          <span>
-            <span class="block font-bold text-ink">{{ user.full_name }}</span>
-            <span class="block font-mono text-xs text-ink-muted">{{ user.login }}</span>
-          </span>
-          <span
-            class="mp-chip"
-            :class="
-              user.status === 'active'
-                ? 'bg-success-soft text-success'
-                : 'bg-danger-soft text-danger'
-            "
+    <template v-else>
+      <section v-if="showCreate" class="card mb-5">
+        <div class="card-h">
+          <h2>Yangi xodim</h2>
+          <button
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            @click="showCreate = false"
           >
-            <span class="mp-dot" aria-hidden="true"></span>
-            {{ user.is_owner ? 'owner' : user.status }}
-          </span>
-        </RouterLink>
+            Bekor
+          </button>
+        </div>
+        <form class="card-b grid gap-4" @submit.prevent="createStaff">
+          <div class="grid gap-3 md:grid-cols-2">
+            <label class="field">
+              <span>F.I.O</span>
+              <input v-model="form.fullName" class="mp-input" autocomplete="name" required />
+            </label>
+            <label class="field">
+              <span>Telefon</span>
+              <input
+                v-model="form.phone"
+                class="mp-input"
+                autocomplete="tel"
+                inputmode="tel"
+                required
+              />
+            </label>
+            <label class="field">
+              <span>Login</span>
+              <input v-model="form.login" class="mp-input" autocomplete="username" required />
+            </label>
+            <ProjectDropdown
+              v-model="form.homeBranchId"
+              label="Asosiy filial"
+              :options="branchOptions"
+            />
+            <label class="field md:col-span-2">
+              <span>Vaqtinchalik parol</span>
+              <input
+                v-model="form.tempPassword"
+                class="mp-input"
+                autocomplete="new-password"
+                placeholder="bo'sh qoldirilsa avtomatik yaratiladi"
+              />
+            </label>
+          </div>
+
+          <div class="banner info">
+            <div class="grow">
+              Vaqtinchalik parol faqat 1 marta ko'rsatiladi. Xodim kirgandan keyin parolni yangilash
+              haqida ogohlantirish ko'radi.
+            </div>
+          </div>
+
+          <div>
+            <h3 class="mb-2 text-xs font-extrabold uppercase tracking-[0.12em] text-ink-muted">
+              Boshlang'ich ruxsatlar
+            </h3>
+            <div class="table-wrap">
+              <table class="matrix">
+                <thead>
+                  <tr>
+                    <th class="permission">Ruxsat</th>
+                    <th v-for="branch in workshop.branches" :key="branch.id">{{ branch.name }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="permission in permissionCatalog" :key="permission">
+                    <td class="permission">
+                      {{ permissionLabels[permission] ?? permission }}
+                      <small class="block font-mono text-[10.5px] font-normal text-ink-muted">{{
+                        permission
+                      }}</small>
+                    </td>
+                    <td v-for="branch in workshop.branches" :key="branch.id">
+                      <input
+                        type="checkbox"
+                        class="size-4 accent-accent"
+                        :checked="selected.has(grantKey(permission, branch.id))"
+                        @change="toggleGrant(permission, branch.id)"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <button class="mp-button mp-button-primary" type="submit" :disabled="creating">
+            {{ creating ? 'Yaratilmoqda' : 'Yaratish' }}
+          </button>
+          <p
+            v-if="createError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          >
+            Xodim yaratilmadi.
+          </p>
+        </form>
+      </section>
+
+      <div v-if="workshop.lastTempPassword" class="banner info">
+        <div class="grow">
+          <b>Vaqtinchalik parol:</b>
+          <span class="font-mono">{{ workshop.lastTempPassword }}</span>
+        </div>
       </div>
-    </section>
+
+      <div class="filters">
+        <label class="field">
+          <span>Qidirish</span>
+          <input v-model="search" class="mp-input min-w-64" placeholder="Ism yoki login..." />
+        </label>
+        <ProjectDropdown v-model="branchFilter" label="Filial" :options="branchFilterOptions" />
+        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      </div>
+
+      <section v-if="workshop.loading" class="card p-5" aria-live="polite">
+        <div class="grid gap-3">
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+        </div>
+      </section>
+
+      <section v-else-if="workshop.error" class="st-error">
+        <h3>Xodimlarni yuklab bo'lmadi</h3>
+        <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+      </section>
+
+      <section v-else class="card">
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Xodim</th>
+                <th>Login</th>
+                <th>Asosiy filial</th>
+                <th>Ruxsatlar</th>
+                <th>Holat</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in filteredUsers" :key="user.id" class="clickable">
+                <td>
+                  <div class="flex min-w-0 items-center gap-3">
+                    <span class="user-avatar">{{ initials(user.full_name, 'U') }}</span>
+                    <span class="min-w-0">
+                      <span class="nm">
+                        {{ user.full_name }}
+                        <span v-if="user.is_owner" class="pill p-cut ml-1">Egasi</span>
+                      </span>
+                      <small class="block truncate text-ink-muted">{{ user.phone }}</small>
+                    </span>
+                  </div>
+                </td>
+                <td class="num">{{ user.login }}</td>
+                <td>{{ branchName(user.home_branch_id) }}</td>
+                <td>
+                  <small class="text-ink-soft">{{
+                    grantSummary(user.is_owner, user.grants)
+                  }}</small>
+                </td>
+                <td>
+                  <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
+                    <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
+                  </span>
+                </td>
+                <td class="right">
+                  <RouterLink
+                    :to="rolePath(`/workshop/settings/users/${user.id}`)"
+                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                  >
+                    Tahrir
+                  </RouterLink>
+                </td>
+              </tr>
+              <tr v-if="filteredUsers.length === 0">
+                <td colspan="6">
+                  <div class="st-empty !border-0 !py-8"><h3>Mos xodim topilmadi</h3></div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
   </section>
 </template>
