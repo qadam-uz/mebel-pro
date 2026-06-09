@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -788,7 +789,16 @@ async def _ensure_platform_job_definitions(db: AsyncSession) -> None:
     for job in registry.registered():
         definition = await db.scalar(select(JobDefinition).where(JobDefinition.name == job.name))
         if definition is None:
-            db.add(JobDefinition(name=job.name, schedule=job.schedule, enabled=True))
+            try:
+                async with db.begin_nested():
+                    db.add(JobDefinition(name=job.name, schedule=job.schedule, enabled=True))
+                    await db.flush()
+            except IntegrityError:
+                definition = await db.scalar(
+                    select(JobDefinition).where(JobDefinition.name == job.name)
+                )
+                if definition is not None:
+                    definition.schedule = job.schedule
         else:
             definition.schedule = job.schedule
     await db.flush()

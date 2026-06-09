@@ -1,13 +1,18 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 const execFileAsync = promisify(execFile)
 const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 const ownerReadyPassword = 'OwnerReady123'
 const staffReadyPassword = 'StaffReady123'
+const passwordLabel = /^(Password|Parol)$/
+const currentPasswordLabel = /^(Current password|Joriy parol)$/
+const newPasswordLabel = /^(New password|Yangi parol)/
+const continueButton = /^(Continue|Kirish)$/
+const saveButton = /^(Save|Saqlash|O'zgartirish)$/
 
 function runId(testInfo: { workerIndex: number; title: string }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
@@ -125,6 +130,14 @@ async function readyOwnerToken(request: APIRequestContext, setup: Awaited<Return
   return access
 }
 
+async function changeRequiredPassword(page: Page, current: string, next: string) {
+  await expect(page.locator('main').getByText(/Parolni o'zgartirish kerak|Password change required/)).toBeVisible()
+  await page.getByLabel(currentPasswordLabel).fill(current)
+  await page.getByLabel(newPasswordLabel).fill(next)
+  await page.getByRole('button', { name: saveButton }).click()
+  await expect(page.getByText(/Parol o'zgartirildi\.|Password updated\./)).toBeVisible()
+}
+
 test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   const id = runId(testInfo)
   const login = `admin-${id}`
@@ -132,32 +145,36 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
 
   await page.goto('/admin/')
   await page.getByLabel('Login').fill(login)
-  await page.getByLabel('Password').fill(adminPassword)
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByRole('link', { name: 'Workshops' }).first().click()
+  await page.getByLabel(passwordLabel).fill(adminPassword)
+  await page.getByRole('button', { name: continueButton }).click()
+  await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
 
-  const provisionForm = page
-    .getByRole('heading', { name: 'Provision workshop' })
-    .locator('xpath=ancestor::section[1]')
-  await provisionForm.getByLabel('Workshop name').fill(`Workshop ${id}`)
+  await page.getByRole('button', { name: 'Yangi ustaxona' }).click()
+  const provisionForm = page.getByRole('dialog', { name: /Yangi ustaxona/ })
+  await provisionForm.getByLabel('Ustaxona nomi').fill(`Workshop ${id}`)
   await provisionForm.getByLabel('Code').fill(`ui-${id}`)
-  await provisionForm.getByLabel('Workshop phone').fill(phoneFor(id, 10))
-  await provisionForm.getByLabel('Workshop address').fill('Tashkent')
-  await provisionForm.getByLabel('First branch').fill(`Branch ${id}`)
-  await provisionForm.getByLabel('Branch address').fill('Tashkent, Test')
-  await provisionForm.getByLabel('Branch phone').fill(phoneFor(id, 11))
+  await provisionForm.getByLabel(/^Telefon$/).fill(phoneFor(id, 10))
+  await provisionForm.getByLabel(/^Manzil$/).fill('Tashkent')
+  await provisionForm.getByLabel('Birinchi filial').fill(`Branch ${id}`)
+  await provisionForm.getByLabel('Filial manzili').fill('Tashkent, Test')
+  await provisionForm.getByLabel('Filial telefoni').fill(phoneFor(id, 11))
   await provisionForm.getByLabel('Latitude').fill('41.2995')
   await provisionForm.getByLabel('Longitude').fill('69.2401')
-  await provisionForm.getByLabel('Owner name').fill('UI Owner')
+  await provisionForm.getByLabel('Owner ism').fill('UI Owner')
   await provisionForm.getByLabel('Owner login').fill(`ui-owner-${id}`)
-  await provisionForm.getByLabel('Owner phone').fill(phoneFor(id, 12))
+  await provisionForm.getByLabel('Owner telefon').fill(phoneFor(id, 12))
   await provisionForm.getByLabel('Temp password').fill('OwnerTemp123')
-  await provisionForm.getByRole('button', { name: 'Create workshop' }).click()
+  await provisionForm.getByRole('button', { name: 'Yaratish' }).click()
 
-  await expect(page.getByText(`Created ui-${id}`)).toBeVisible()
-  await page.getByRole('link', { name: new RegExp(`Workshop ${id}`) }).click()
-  await page.getByPlaceholder('Block reason').fill('E2E block')
-  await page.getByRole('button', { name: 'Block', exact: true }).click()
+  await expect(page.getByText('Share once')).toBeVisible()
+  await expect(page.getByText(`ui-${id}`, { exact: true })).toBeVisible()
+  await page
+    .getByRole('row', { name: new RegExp(`Workshop ${id}`) })
+    .getByRole('link', { name: 'Tafsilotlar' })
+    .click()
+  await page.getByRole('button', { name: 'Ustaxonani bloklash' }).click()
+  await page.getByLabel(/sabab/i).fill('E2E block')
+  await page.getByRole('button', { name: 'Bloklash', exact: true }).click()
   await expect(page.getByText('blocked').first()).toBeVisible()
 })
 
@@ -171,27 +188,23 @@ test('owner changes temp password, creates staff, and saves a grant', async ({ p
   await page.goto('/workshop/')
   await page.getByLabel('Workshop code').fill(setup.code)
   await page.getByLabel('Login').fill(setup.ownerLogin)
-  await page.getByLabel('Password').fill(setup.ownerPassword)
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await expect(page.locator('main').getByText('Password change required', { exact: true })).toBeVisible()
-  await page.getByLabel('Current password').fill(setup.ownerPassword)
-  await page.getByLabel('New password').fill(ownerReadyPassword)
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByText('Password updated.')).toBeVisible()
-  await page.getByRole('link', { name: 'Users' }).first().click()
+  await page.getByLabel(passwordLabel).fill(setup.ownerPassword)
+  await page.getByRole('button', { name: continueButton }).click()
+  await changeRequiredPassword(page, setup.ownerPassword, ownerReadyPassword)
+  await page.goto('/workshop/settings/users')
 
-  const staffForm = page
-    .getByRole('heading', { name: 'Create staff' })
-    .locator('xpath=ancestor::section[1]')
-  await staffForm.getByLabel('Full name').fill('E2E Staff')
-  await staffForm.getByLabel('Phone').fill(phoneFor(id, 20))
+  await page.getByRole('button', { name: 'Yangi xodim' }).click()
+  const staffForm = page.getByRole('heading', { name: 'Yangi xodim' }).locator('xpath=ancestor::section[1]')
+  await staffForm.getByLabel('F.I.O').fill('E2E Staff')
+  await staffForm.getByLabel('Telefon').fill(phoneFor(id, 20))
   await staffForm.getByLabel('Login').fill(`staff-${id}`)
-  await staffForm.getByLabel('Temp password').fill('StaffTemp123')
-  await staffForm.getByRole('button', { name: 'Create user' }).click()
+  await staffForm.getByLabel('Vaqtinchalik parol').fill('StaffTemp123')
+  await staffForm.getByRole('button', { name: 'Yaratish' }).click()
   await expect(page.getByText('StaffTemp123')).toBeVisible()
-  await page.getByRole('link', { name: /E2E Staff/ }).click()
+  await page.getByRole('row', { name: /E2E Staff/ }).getByRole('link', { name: 'Tahrir' }).click()
+  await page.getByRole('button', { name: 'Ruxsatlar' }).click()
   await page.getByRole('checkbox').first().check()
-  await page.getByRole('button', { name: 'Save grants' }).click()
+  await page.getByRole('button', { name: 'Saqlash' }).click()
   await expect(page.getByRole('checkbox').first()).toBeChecked()
 })
 
@@ -218,12 +231,9 @@ test('staff sees granted branch context after password change', async ({ page, r
   await page.goto('/workshop/')
   await page.getByLabel('Workshop code').fill(setup.code)
   await page.getByLabel('Login').fill(staffLogin)
-  await page.getByLabel('Password').fill('StaffTemp123')
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.getByLabel('Current password').fill('StaffTemp123')
-  await page.getByLabel('New password').fill(staffReadyPassword)
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByText('Password updated.')).toBeVisible()
+  await page.getByLabel(passwordLabel).fill('StaffTemp123')
+  await page.getByRole('button', { name: continueButton }).click()
+  await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
 
   await expect(page.getByRole('button', { name: new RegExp(`Branch ${id}`) })).toBeVisible()
 })

@@ -179,6 +179,9 @@ function workshopPermissionLabel(permission: string) {
 }
 
 onMounted(async () => {
+  if (auth.me?.principal_type === 'workshop_user' && auth.me.password_reset_required) {
+    workshopProfileTab.value = 'password'
+  }
   await Promise.all([
     loadSessions(),
     loadClientProfile(),

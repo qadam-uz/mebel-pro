@@ -12,6 +12,8 @@ const execFileAsync = promisify(execFile);
 const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
 const ownerReadyPassword = "OwnerReady123";
+const passwordLabel = /^(Password|Parol)$/;
+const continueButton = /^(Continue|Kirish)$/;
 
 interface MaterialResponse {
   id: string;
@@ -285,8 +287,8 @@ async function loginWorkshop(
   await page.goto(`${baseUrl}/workshop/`);
   await page.getByLabel("Workshop code").fill(code);
   await page.getByLabel("Login").fill(login);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel(passwordLabel).fill(password);
+  await page.getByRole("button", { name: continueButton }).click();
   await expect(page).toHaveURL(/\/workshop\/?$/);
 }
 
@@ -297,6 +299,15 @@ async function chooseOption(
 ) {
   await page.getByRole("button", { name: buttonName }).click();
   await page.getByRole("option", { name: optionName }).click();
+}
+
+async function chooseEdgeBanding(page: Page, edgeName: string) {
+  await page.getByRole("button", { name: /Qism #1 kromini tahrirlash/ }).click();
+  const dialog = page.getByRole("dialog", { name: /Krom yopishtirish/ });
+  await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
+  await dialog.getByLabel("Krom qidirish").fill(edgeName);
+  await dialog.getByRole("button", { name: new RegExp(edgeName) }).click();
+  await dialog.getByRole("button", { name: "Qo'llash" }).click();
 }
 
 test("client places an order and workshop completes it through production queues", async ({
@@ -331,11 +342,18 @@ test("client places an order and workshop completes it through production queues
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
 
   await loginClient(page, clientPhone, `Phase 5 Client ${id}`);
+  const branchesLoaded = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response.url().includes("/api/v1/client/branch-options") &&
+      response.ok(),
+  );
   await page.getByRole("button", { name: "Yangi kesim chizmasi" }).click();
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
   await expect(
     page.getByRole("heading", { name: "Chizma", exact: true }),
   ).toBeVisible();
+  await branchesLoaded;
 
   await page.getByRole("button", { name: "Ustaxona tanlash" }).click();
   await chooseOption(
@@ -355,11 +373,7 @@ test("client places an order and workshop completes it through production queues
   await page.getByLabel("Uzunlik millimetr").fill("260");
   await page.getByLabel("Eni millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
-  await page.getByRole("combobox", { name: "Krom materiali" }).fill(edge.name);
-  await page.getByRole("option", { name: new RegExp(edge.name) }).click();
-  await page.getByRole("combobox", { name: "Krom materiali" }).press("Escape");
-  await page.getByRole("button", { name: "Top" }).click();
-  await page.getByRole("button", { name: "Left" }).click();
+  await chooseEdgeBanding(page, edge.name);
   await page.getByRole("button", { name: "Optimallashtirish" }).click();
 
   await expect(page.getByRole("heading", { name: "Natija", exact: true })).toBeVisible();
@@ -395,72 +409,82 @@ test("client places an order and workshop completes it through production queues
     ownerReadyPassword,
     baseUrl,
   );
-  await workshopPage.getByRole("link", { name: "Orders" }).first().click();
+  await workshopPage.getByRole("link", { name: "Buyurtmalar" }).first().click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Orders" }),
+    workshopPage.getByRole("heading", { name: "Buyurtmalar" }),
   ).toBeVisible();
+  await workshopPage.getByRole("button", { name: "Jadval" }).click();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
-  await workshopPage.getByRole("link", { name: "Open" }).click();
+  await workshopPage
+    .getByRole("row", { name: new RegExp(orderNumber as string) })
+    .getByRole("link", { name: "Tafsilotlar" })
+    .click();
 
   await expect(
-    workshopPage.getByRole("heading", { name: "Order detail" }),
+    workshopPage.getByRole("heading", { name: orderNumber as string }),
   ).toBeVisible();
-  await workshopPage.getByRole("button", { name: "Approve" }).click();
+  const workshopOrderUrl = workshopPage.url();
+  await workshopPage.getByRole("button", { name: "Tasdiqlash" }).click();
   await expect(
-    workshopPage.getByText("Confirmed", { exact: true }).first(),
+    workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
 
-  await chooseOption(workshopPage, /Cutter/, new RegExp(`Phase 5 Owner ${id}`));
+  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(`Phase 5 Owner ${id}`));
   await chooseOption(
     workshopPage,
-    /Edge bander/,
+    /Krom yopishtiruvchi/,
     new RegExp(`Phase 5 Owner ${id}`),
   );
-  await workshopPage.getByRole("button", { name: "Assign and start" }).click();
+  await workshopPage.getByRole("button", { name: "Tayinlash va boshlash" }).click();
   await expect(
-    workshopPage.getByText("Cutting", { exact: true }).first(),
+    workshopPage.getByText("Kesilmoqda", { exact: true }).first(),
   ).toBeVisible();
 
   await workshopPage
-    .getByRole("link", { name: "Cutting queue" })
+    .getByRole("link", { name: "Kesish navbati" })
     .first()
     .click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Cutting queue" }),
+    workshopPage.getByRole("heading", { name: "Kesish navbati" }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
-  await workshopPage.getByRole("button", { name: "Mark cutting done" }).click();
-  await expect(
-    workshopPage.getByText("No assigned cutting jobs"),
-  ).toBeVisible();
+  const cuttingDone = workshopPage.waitForResponse(
+    (response) => response.url().includes("/cutting-done") && response.ok(),
+  );
+  await workshopPage.getByRole("button", { name: "Kesish tugadi" }).click();
+  await cuttingDone;
 
   await workshopPage
-    .getByRole("link", { name: "Banding queue" })
+    .getByRole("link", { name: "Krom navbati" })
     .first()
     .click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Banding queue" }),
+    workshopPage.getByRole("heading", { name: "Krom yopishtirish navbati" }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
-  await workshopPage.getByRole("button", { name: "Mark banding done" }).click();
-  await expect(
-    workshopPage.getByText("No assigned banding jobs"),
-  ).toBeVisible();
+  const bandingDone = workshopPage.waitForResponse(
+    (response) => response.url().includes("/banding-done") && response.ok(),
+  );
+  await workshopPage.getByRole("button", { name: "Krom tugadi" }).click();
+  await bandingDone;
 
-  await workshopPage.getByRole("link", { name: "Orders" }).first().click();
-  await workshopPage.getByRole("link", { name: "Open" }).click();
+  await workshopPage.goto(workshopOrderUrl);
   await expect(
-    workshopPage.getByText("Ready", { exact: true }).first(),
+    workshopPage.getByText("Tayyor", { exact: true }).first(),
   ).toBeVisible();
-  await workshopPage.getByRole("button", { name: "Mark collected" }).click();
+  const collected = workshopPage.waitForResponse(
+    (response) => response.url().includes("/mark-collected") && response.ok(),
+  );
+  await workshopPage.getByRole("button", { name: "Mijoz olib ketdi" }).click();
+  await collected;
   await expect(
-    workshopPage.getByText("Completed", { exact: true }).first(),
+    workshopPage.getByText("Tugatilgan", { exact: true }).first(),
   ).toBeVisible();
   await workshopContext.close();
 

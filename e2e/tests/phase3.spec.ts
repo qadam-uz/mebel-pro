@@ -9,6 +9,11 @@ const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 const ownerReadyPassword = 'OwnerReady123'
 const staffReadyPassword = 'StaffReady123'
+const passwordLabel = /^(Password|Parol)$/
+const currentPasswordLabel = /^(Current password|Joriy parol)$/
+const newPasswordLabel = /^(New password|Yangi parol)/
+const continueButton = /^(Continue|Kirish)$/
+const saveButton = /^(Save|Saqlash|O'zgartirish)$/
 
 function runId(testInfo: { workerIndex: number }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
@@ -164,16 +169,25 @@ async function createCatalogMaterial(
 async function loginAdmin(page: Page, login: string) {
   await page.goto('/admin/')
   await page.getByLabel('Login').fill(login)
-  await page.getByLabel('Password').fill(adminPassword)
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByLabel(passwordLabel).fill(adminPassword)
+  await page.getByRole('button', { name: continueButton }).click()
 }
 
 async function loginWorkshop(page: Page, code: string, login: string, password: string) {
   await page.goto('/workshop/')
   await page.getByLabel('Workshop code').fill(code)
   await page.getByLabel('Login').fill(login)
-  await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByLabel(passwordLabel).fill(password)
+  await page.getByRole('button', { name: continueButton }).click()
+  await expect(page).toHaveURL(/\/workshop(\/profile)?\/?$/)
+}
+
+async function changeRequiredPassword(page: Page, current: string, next: string) {
+  await expect(page.locator('main').getByText(/Parolni o'zgartirish kerak|Password change required/)).toBeVisible()
+  await page.getByLabel(currentPasswordLabel).fill(current)
+  await page.getByLabel(newPasswordLabel).fill(next)
+  await page.getByRole('button', { name: saveButton }).click()
+  await expect(page.getByText(/Parol o'zgartirildi\.|Password updated\./)).toBeVisible()
 }
 
 test('admin creates platform catalog material through the UI', async ({ page }, testInfo) => {
@@ -184,26 +198,23 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   await seedPlatform(login)
   await loginAdmin(page, login)
 
-  await page.getByRole('link', { name: 'Catalog' }).first().click()
-  await expect(page.getByRole('heading', { name: 'Catalog' })).toBeVisible()
+  await page.getByRole('link', { name: 'Materiallar' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Platforma material katalogi' })).toBeVisible()
 
-  const manufacturerSection = page
-    .getByRole('heading', { name: 'Manufacturers' })
-    .locator('xpath=ancestor::section[1]')
-  await manufacturerSection.getByLabel('Name').fill(makerName)
-  await manufacturerSection.getByLabel('Country').fill('UZ')
-  await manufacturerSection.getByRole('button', { name: 'Create manufacturer' }).click()
-  await expect(page.getByRole('heading', { name: makerName })).toBeVisible()
+  await page.getByRole('button', { name: 'Yangi material' }).click()
+  const materialDialog = page.getByRole('dialog', { name: 'Yangi material' })
+  await materialDialog.getByRole('button', { name: 'Inline manufacturer' }).click()
+  const manufacturerDialog = page.getByRole('dialog', { name: 'Yangi manufacturer' })
+  await manufacturerDialog.getByLabel('Nomi').fill(makerName)
+  await manufacturerDialog.getByLabel('Country').fill('UZ')
+  await manufacturerDialog.getByRole('button', { name: 'Saqlash' }).click()
+  await expect(manufacturerDialog).toBeHidden()
+  await expect(materialDialog.getByRole('button', { name: new RegExp(makerName) })).toBeVisible()
 
-  const materialSection = page
-    .getByRole('heading', { name: 'Materials' })
-    .locator('xpath=ancestor::section[1]')
-  await materialSection.getByRole('button', { name: /Manufacturer/ }).click()
-  await page.getByRole('option', { name: new RegExp(makerName) }).click()
-  await materialSection.getByLabel('Name').fill(materialName)
-  await materialSection.getByLabel('Color').fill('White')
-  await materialSection.getByLabel('Decor code').fill(`UI-${id}`)
-  await materialSection.getByRole('button', { name: 'Create material' }).click()
+  await materialDialog.getByLabel('Material nomi').fill(materialName)
+  await materialDialog.getByLabel('Rang / decor').fill('White')
+  await materialDialog.getByLabel('Decor code').fill(`UI-${id}`)
+  await materialDialog.getByRole('button', { name: 'Saqlash' }).click()
 
   await expect(page.getByRole('cell', { name: materialName })).toBeVisible()
 })
@@ -221,46 +232,46 @@ test('owner adds a branch material and records stock movement with a receipt', a
   const material = await createCatalogMaterial(request, adminAccess, id)
 
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
-  await page.getByRole('link', { name: 'Branches' }).first().click()
+  await page.goto('/workshop/branches')
   await page.getByRole('link', { name: new RegExp(`Phase 3 Branch ${id}`) }).click()
 
   const addMaterial = page
-    .getByRole('heading', { name: 'Add branch material' })
+    .getByRole('heading', { name: "Filial materiali qo'shish" })
     .locator('xpath=ancestor::section[1]')
   await addMaterial.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await addMaterial.getByRole('combobox', { name: 'Material' }).press('Escape')
-  await addMaterial.getByLabel('Price tiyin').fill('250000')
-  await addMaterial.getByLabel(/Min stock/).fill('2')
-  await addMaterial.getByRole('button', { name: 'Add material' }).click()
+  await addMaterial.getByLabel('Narx (tiyin)').fill('250000')
+  await addMaterial.getByLabel(/Min zaxira/).fill('2')
+  await addMaterial.getByRole('button', { name: "Material qo'shish" }).click()
   await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Inventory' }).click()
-  const stockIn = page.getByRole('heading', { name: 'Stock in' }).locator('xpath=ancestor::section[1]')
+  await page.getByRole('button', { name: 'Ombor' }).click()
+  const stockIn = page.getByRole('heading', { name: 'Kirim' }).locator('xpath=ancestor::section[1]')
   await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await stockIn.getByRole('combobox', { name: 'Material' }).press('Escape')
-  await stockIn.getByLabel(/Quantity/).fill('3')
-  await stockIn.getByRole('button', { name: /Supplier/ }).click()
-  await page.getByRole('option', { name: 'New supplier label' }).click()
-  await stockIn.getByLabel('New supplier name').fill(`Supplier ${id}`)
+  await stockIn.getByLabel(/Miqdor/).fill('3')
+  await stockIn.getByRole('button', { name: /Yetkazib beruvchi/ }).click()
+  await page.getByRole('option', { name: 'Yangi yetkazib beruvchi' }).click()
+  await stockIn.getByLabel('Yangi yetkazib beruvchi nomi').fill(`Supplier ${id}`)
   const receiptPath = testInfo.outputPath('receipt.pdf')
   writeFileSync(receiptPath, '%PDF-1.4\n% receipt\n')
-  await stockIn.getByLabel('Receipt').setInputFiles(receiptPath)
-  await expect(stockIn.getByText(/receipt /)).toBeVisible()
-  await stockIn.getByRole('button', { name: 'Record stock-in' }).click()
+  await stockIn.getByLabel('Chek').setInputFiles(receiptPath)
+  await expect(stockIn.getByText(/chek /)).toBeVisible()
+  await stockIn.getByRole('button', { name: 'Kirim yozish' }).click()
   await expect(page.getByRole('cell', { name: '3 panel' })).toBeVisible()
 
   const adjustment = page
-    .getByRole('heading', { name: 'Adjustment' })
+    .getByRole('heading', { name: 'Tuzatish' })
     .locator('xpath=ancestor::section[1]')
   await adjustment.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await adjustment.getByRole('combobox', { name: 'Material' }).press('Escape')
-  await adjustment.getByLabel(/Signed quantity/).fill('-1')
-  await adjustment.getByLabel('Note').fill('E2E stock take')
-  await adjustment.getByRole('button', { name: 'Record adjustment' }).click()
-  await expect(page.getByText('low stock')).toBeVisible()
+  await adjustment.getByLabel(/Belgili miqdor/).fill('-1')
+  await adjustment.getByLabel('Izoh').fill('E2E stock take')
+  await adjustment.getByRole('button', { name: 'Tuzatish yozish' }).click()
+  await expect(page.getByText('past zaxira')).toBeVisible()
   await expect(page.getByRole('cell', { name: `Supplier ${id}` })).toBeVisible()
 })
 
@@ -309,16 +320,13 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   expect(staff.ok()).toBe(true)
 
   await loginWorkshop(page, setup.code, staffLogin, 'StaffTemp123')
-  await page.getByLabel('Current password').fill('StaffTemp123')
-  await page.getByLabel('New password').fill(staffReadyPassword)
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByText('Password updated.')).toBeVisible()
+  await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
   await page.goto(`/workshop/branches/${branchId}`)
 
-  await expect(page.getByRole('link', { name: 'Branches' })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Materials' })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Stock in' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Filiallar' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Xodimlar' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Materiallar' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Kirim' })).toBeVisible()
 })
 
 test('client browses public branch catalog without stock details', async ({ page, request }, testInfo) => {

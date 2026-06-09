@@ -5,6 +5,7 @@ from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PlatformUser, Session, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.platform.api import record_application_error
+from app.modules.platform.contracts import JobDefinition
 from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -410,6 +411,7 @@ async def test_platform_jobs_errors_and_audit_surfaces(
     )
 
     jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
+    repeated_jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
     run = await client.post(
         "/api/v1/platform/jobs/cleanup-expired-sessions/run",
         headers=_auth(access_token),
@@ -441,6 +443,8 @@ async def test_platform_jobs_errors_and_audit_surfaces(
         "cleanup-expired-sessions",
         "daily-low-stock-summary",
     }
+    assert repeated_jobs.status_code == 200
+    assert await db_session.scalar(select(func.count()).select_from(JobDefinition)) == 2
     assert run.status_code == 200
     assert run.json()["status"] == "ok"
     assert run.json()["brief_log"] == "Pruned 0 expired sessions"

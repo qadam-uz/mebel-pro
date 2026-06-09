@@ -7,6 +7,8 @@ const execFileAsync = promisify(execFile)
 const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 const ownerReadyPassword = 'OwnerReady123'
+const passwordLabel = /^(Password|Parol)$/
+const continueButton = /^(Continue|Kirish)$/
 
 interface MaterialResponse {
   id: string
@@ -351,8 +353,18 @@ async function loginWorkshop(page: Page, code: string, login: string, password: 
   await page.goto('/workshop/')
   await page.getByLabel('Workshop code').fill(code)
   await page.getByLabel('Login').fill(login)
-  await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByLabel(passwordLabel).fill(password)
+  await page.getByRole('button', { name: continueButton }).click()
+  await expect(page).toHaveURL(/\/workshop\/?$/)
+}
+
+async function chooseEdgeBanding(page: Page, edgeName: string) {
+  await page.getByRole('button', { name: /Qism #1 kromini tahrirlash/ }).click()
+  const dialog = page.getByRole('dialog', { name: /Krom yopishtirish/ })
+  await dialog.getByRole('button', { name: 'Yuqori + pastki' }).click()
+  await dialog.getByLabel('Krom qidirish').fill(edgeName)
+  await dialog.getByRole('button', { name: new RegExp(edgeName) }).click()
+  await dialog.getByRole('button', { name: "Qo'llash" }).click()
 }
 
 test('client signs in with Telegram OTP, optimizes a cutting draft, and downloads PDF', async ({
@@ -379,9 +391,16 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await page.getByRole('button', { name: 'Davom etish' }).click()
   await expect(page).toHaveURL(/\/client\/c$/)
 
+  const branchesLoaded = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/v1/client/branch-options') &&
+      response.ok(),
+  )
   await page.getByRole('button', { name: 'Yangi kesim chizmasi' }).click()
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
+  await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
   await page.getByRole('button', { name: 'Afzal filial' }).click()
@@ -396,11 +415,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await page.getByLabel('Uzunlik millimetr').fill('260')
   await page.getByLabel('Eni millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
-  await page.getByRole('combobox', { name: 'Krom materiali' }).fill(edge.name)
-  await page.getByRole('option', { name: new RegExp(edge.name) }).click()
-  await page.getByRole('combobox', { name: 'Krom materiali' }).press('Escape')
-  await page.getByRole('button', { name: 'Top' }).click()
-  await page.getByRole('button', { name: 'Left' }).click()
+  await chooseEdgeBanding(page, edge.name)
   await page.getByRole('button', { name: 'Optimallashtirish' }).click()
 
   await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
@@ -450,7 +465,7 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
   })
 
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
-  await page.getByRole('link', { name: 'Cutting plans' }).first().click()
+  await page.goto('/workshop/cutting-plans')
   await expect(page.getByRole('heading', { name: 'Cutting plans' })).toBeVisible()
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()
   await page.getByRole('link', { name: 'Open' }).click()
