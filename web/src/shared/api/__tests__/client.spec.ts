@@ -89,13 +89,17 @@ describe('shared API client', () => {
   })
 
   it('fetches blobs with bearer auth for protected files', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(new Blob(['image']), { status: 200 }))
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('image-bytes', {
+        status: 200,
+        headers: { 'content-type': 'image/png' },
+      }),
+    )
 
     const blob = await api.blob('/files/file-1', { accessToken: 'access-1' })
 
-    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.size).toBe(11)
+    expect(blob.type).toBe('image/png')
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = init.headers as Headers
     expect(headers.get('Authorization')).toBe('Bearer access-1')
