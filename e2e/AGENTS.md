@@ -43,7 +43,11 @@ e2e/
   playwright.config.ts   # base URL, projects (browsers), webServer, reporters
   tsconfig.json          # for `pnpm typecheck` only
   tests/                 # *.spec.ts — one file per flow/feature
-    smoke.spec.ts        # home loads, routing, 404
+    smoke.spec.ts
+    access-and-provisioning.spec.ts
+    catalog-and-inventory.spec.ts
+    cutting-drafts.spec.ts
+    order-production.spec.ts
 ```
 
 ## Conventions
@@ -53,4 +57,4 @@ e2e/
 - Use web-first assertions (`await expect(locator).toBeVisible()`) — they auto-retry; never `waitForTimeout`.
 - Keep tests independent and parallel-safe (`fullyParallel`): no shared mutable state, each test sets up what it needs. If a flow needs seeded data, do it via the API (`request` fixture) in a setup step, not the UI.
 - This package is for *integration through the browser*. Component-level and pure-logic tests belong in `web/` (Vitest), API tests in `backend/` (pytest). Don't duplicate those here — see the **testing-practices** skill for where a given test belongs.
-- `pnpm typecheck` must pass; keep the suite green before pushing.
+- `pnpm typecheck && pnpm test` must pass; keep the suite green before pushing.

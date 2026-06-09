@@ -99,10 +99,8 @@ admin.{$BASE_DOMAIN} {
 		reverse_proxy backend:8000
 	}
 
-	# TEMPORARY: /prototypes (static design gallery) needs no rule of its own —
-	# it falls through to the `web` container below, which serves it from
-	# baked-in static files. Remove the prototypes once a design system is
-	# committed to web/DESIGN.md (see web/Dockerfile + web/nginx.conf).
+	# TEMPORARY: /prototypes serves the prototype-full reference from baked-in
+	# static files (see web/Dockerfile + web/nginx.conf).
 	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-* /prototypes /prototypes/*
 	handle @admin_public {
 		reverse_proxy web:80

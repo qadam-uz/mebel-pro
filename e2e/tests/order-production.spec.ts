@@ -99,13 +99,13 @@ async function provisionWorkshop(
     headers: { Authorization: `Bearer ${token}` },
     data: {
       workshop: {
-        name: `Phase 5 Workshop ${id}`,
+        name: `Order Workshop ${id}`,
         code,
         phone: phoneFor(id, 2),
         address: "Tashkent",
       },
       branch: {
-        name: `Phase 5 Branch ${id}`,
+        name: `Order Branch ${id}`,
         address: "Tashkent, Test",
         phone: phoneFor(id, 3),
         latitude: "41.2995",
@@ -113,7 +113,7 @@ async function provisionWorkshop(
         working_hours: defaultWorkingHours(),
       },
       owner: {
-        full_name: `Phase 5 Owner ${id}`,
+        full_name: `Order Owner ${id}`,
         login: ownerLogin,
         phone: phoneFor(id, 4),
       },
@@ -157,7 +157,7 @@ async function createCatalogMaterials(
     "/api/v1/platform/catalog/manufacturers",
     {
       headers: { Authorization: `Bearer ${token}` },
-      data: { name: `Phase 5 Maker ${id}`, country: "UZ" },
+      data: { name: `Order Maker ${id}`, country: "UZ" },
     },
   );
   expect(manufacturer.ok()).toBe(true);
@@ -169,7 +169,7 @@ async function createCatalogMaterials(
       kind: "panel",
       manufacturer_id: manufacturerId,
       type: "dsp",
-      name: `Phase 5 Panel ${id}`,
+      name: `Order Panel ${id}`,
       thickness_mm: "18",
       color: "White",
       decor_code: `P5-P-${id}`,
@@ -185,7 +185,7 @@ async function createCatalogMaterials(
     data: {
       kind: "edge",
       manufacturer_id: manufacturerId,
-      name: `Phase 5 Edge ${id}`,
+      name: `Order Edge ${id}`,
       thickness_mm: "2",
       color: "White",
       decor_code: `P5-E-${id}`,
@@ -251,7 +251,7 @@ async function stockIn(
         material_id: materialId,
         quantity,
         supplier: { name: `E2E Supplier ${branchId.slice(0, 6)}` },
-        note: "Phase 5 E2E stock",
+        note: "Order E2E stock",
       },
     },
   );
@@ -271,7 +271,7 @@ async function loginClient(page: Page, phone: string, name?: string) {
       .then(() => true)
       .catch(() => false)
   ) {
-    await nameField.fill(name ?? "Phase 5 Client");
+    await nameField.fill(name ?? "Order Client");
     await page.getByRole("button", { name: "Davom etish" }).click();
   }
   await expect(page).toHaveURL(/\/client\/c$/);
@@ -341,7 +341,7 @@ test("client places an order and workshop completes it through production queues
   await stockIn(request, ownerAccess, branchId, panel.id, 5);
   await stockIn(request, ownerAccess, branchId, edge.id, 10_000);
 
-  await loginClient(page, clientPhone, `Phase 5 Client ${id}`);
+  await loginClient(page, clientPhone, `Order Client ${id}`);
   const branchesLoaded = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&
@@ -359,11 +359,11 @@ test("client places an order and workshop completes it through production queues
   await chooseOption(
     page,
     /Afzal filial/,
-    new RegExp(`Phase 5 Workshop ${id}`),
+    new RegExp(`Order Workshop ${id}`),
   );
   await page.getByRole("button", { name: "Qo'llash" }).click();
   await expect(
-    page.getByText(`Phase 5 Branch ${id} · Phase 5 Workshop ${id}`),
+    page.getByText(`Order Branch ${id} · Order Workshop ${id}`),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Qism qo'shish" }).first().click();
@@ -382,7 +382,7 @@ test("client places an order and workshop completes it through production queues
 
   await expect(page.getByRole("heading", { name: "Ustaxonani tanlang" })).toBeVisible();
   await page
-    .getByRole("button", { name: new RegExp(`Phase 5 Branch ${id}`) })
+    .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
     .click();
   await expect(
     page.getByRole("heading", { name: "Tasdiqlash", level: 1 }),
@@ -431,11 +431,11 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
 
-  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(`Phase 5 Owner ${id}`));
+  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(`Order Owner ${id}`));
   await chooseOption(
     workshopPage,
     /Krom yopishtiruvchi/,
-    new RegExp(`Phase 5 Owner ${id}`),
+    new RegExp(`Order Owner ${id}`),
   );
   await workshopPage.getByRole("button", { name: "Tayinlash va boshlash" }).click();
   await expect(

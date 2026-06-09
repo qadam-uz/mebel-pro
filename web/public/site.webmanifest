@@ -1,8 +1,8 @@
 {
   "name": "Mebel Pro",
   "short_name": "Mebel Pro",
-  "theme_color": "#FAF7F2",
-  "background_color": "#FAF7F2",
+  "theme_color": "#F4F6F8",
+  "background_color": "#F4F6F8",
   "display": "standalone",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

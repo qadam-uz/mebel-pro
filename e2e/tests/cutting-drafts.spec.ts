@@ -100,13 +100,13 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     headers: { Authorization: `Bearer ${token}` },
     data: {
       workshop: {
-        name: `Phase 4 Workshop ${id}`,
+        name: `Cutting Workshop ${id}`,
         code,
         phone: phoneFor(id, 2),
         address: 'Tashkent',
       },
       branch: {
-        name: `Phase 4 Branch ${id}`,
+        name: `Cutting Branch ${id}`,
         address: 'Tashkent, Test',
         phone: phoneFor(id, 3),
         latitude: '41.2995',
@@ -114,7 +114,7 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
         working_hours: defaultWorkingHours(),
       },
       owner: {
-        full_name: 'Phase 4 Owner',
+        full_name: 'Cutting Owner',
         login: ownerLogin,
         phone: phoneFor(id, 4),
       },
@@ -149,7 +149,7 @@ async function readyOwnerToken(
 async function createCatalogMaterials(request: APIRequestContext, token: string, id: string) {
   const manufacturer = await request.post('/api/v1/platform/catalog/manufacturers', {
     headers: { Authorization: `Bearer ${token}` },
-    data: { name: `Phase 4 Maker ${id}`, country: 'UZ' },
+    data: { name: `Cutting Maker ${id}`, country: 'UZ' },
   })
   expect(manufacturer.ok()).toBe(true)
   const manufacturerId = (await manufacturer.json()).id as string
@@ -160,7 +160,7 @@ async function createCatalogMaterials(request: APIRequestContext, token: string,
       kind: 'panel',
       manufacturer_id: manufacturerId,
       type: 'dsp',
-      name: `Phase 4 Panel ${id}`,
+      name: `Cutting Panel ${id}`,
       thickness_mm: '18',
       color: 'White',
       decor_code: `P4-P-${id}`,
@@ -176,7 +176,7 @@ async function createCatalogMaterials(request: APIRequestContext, token: string,
     data: {
       kind: 'edge',
       manufacturer_id: manufacturerId,
-      name: `Phase 4 Edge ${id}`,
+      name: `Cutting Edge ${id}`,
       thickness_mm: '2',
       color: 'White',
       decor_code: `P4-E-${id}`,
@@ -292,7 +292,7 @@ async def main() -> None:
             workshop_id=uuid.UUID(os.environ["WORKSHOP_ID"]),
             branch_id=uuid.UUID(os.environ["BRANCH_ID"]),
             cutting_result_id=result.id,
-            contact_name="Phase 4 API Client",
+            contact_name="Cutting API Client",
             contact_phone="+998900000000",
             status=OrderStatus.CONFIRMED,
             confirmed_at=now,
@@ -322,8 +322,8 @@ async def main() -> None:
                 from_status=None,
                 to_status=OrderStatus.CONFIRMED,
                 actor_type=ActorType.SYSTEM,
-                reason="E2E Phase 4 confirmed cutting result",
-                metadata_json={"source": "phase4_e2e"},
+                reason="E2E Cutting confirmed cutting result",
+                metadata_json={"source": "cutting_e2e"},
                 changed_at=now,
             )
         )
@@ -387,7 +387,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await page.getByRole('button', { name: 'Kod yuborish' }).click()
   await page.getByLabel('Tasdiqlash kodi').fill('000000')
   await page.getByRole('button', { name: 'Tasdiqlash' }).click()
-  await page.getByLabel('Ismingiz').fill('Phase 4 Client')
+  await page.getByLabel('Ismingiz').fill('Cutting Client')
   await page.getByRole('button', { name: 'Davom etish' }).click()
   await expect(page).toHaveURL(/\/client\/c$/)
 
@@ -404,9 +404,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
   await page.getByRole('button', { name: 'Afzal filial' }).click()
-  await page.getByRole('option', { name: new RegExp(`Phase 4 Workshop ${id}`) }).click()
+  await page.getByRole('option', { name: new RegExp(`Cutting Workshop ${id}`) }).click()
   await page.getByRole('button', { name: "Qo'llash" }).click()
-  await expect(page.getByText(`Phase 4 Branch ${id} · Phase 4 Workshop ${id}`)).toBeVisible()
+  await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
   await page.getByRole('button', { name: "Qism qo'shish" }).first().click()
   await page.getByRole('combobox', { name: 'Panel materiali' }).fill(panel.name)
@@ -447,7 +447,7 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
   await addBranchMaterial(request, ownerAccess, branchId, panel.id)
   await addBranchMaterial(request, ownerAccess, branchId, edge.id)
 
-  const clientLogin = await clientToken(request, phoneFor(id, 80), 'Phase 4 API Client')
+  const clientLogin = await clientToken(request, phoneFor(id, 80), 'Cutting API Client')
   const resultId = await optimizedClientDraft(
     request,
     clientLogin.access_token,

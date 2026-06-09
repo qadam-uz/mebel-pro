@@ -27,6 +27,10 @@ function phoneFor(id: string, offset: number) {
   return `+99890${String(hash).padStart(7, '0')}`
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function defaultWorkingHours() {
   return {
     monday: { open: '09:00', close: '18:00' },
@@ -88,13 +92,13 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     headers: { Authorization: `Bearer ${token}` },
     data: {
       workshop: {
-        name: `Phase 3 Workshop ${id}`,
+        name: `Catalog Workshop ${id}`,
         code,
         phone: phoneFor(id, 2),
         address: 'Tashkent',
       },
       branch: {
-        name: `Phase 3 Branch ${id}`,
+        name: `Catalog Branch ${id}`,
         address: 'Tashkent, Test',
         phone: phoneFor(id, 3),
         latitude: '41.2995',
@@ -102,7 +106,7 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
         working_hours: defaultWorkingHours(),
       },
       owner: {
-        full_name: 'Phase 3 Owner',
+        full_name: 'Catalog Owner',
         login: ownerLogin,
         phone: phoneFor(id, 4),
       },
@@ -142,7 +146,7 @@ async function createCatalogMaterial(
 ) {
   const manufacturer = await request.post('/api/v1/platform/catalog/manufacturers', {
     headers: { Authorization: `Bearer ${token}` },
-    data: { name: `Phase 3 Maker ${id}`, country: 'UZ' },
+    data: { name: `Catalog Maker ${id}`, country: 'UZ' },
   })
   expect(manufacturer.ok()).toBe(true)
   const manufacturerId = (await manufacturer.json()).id as string
@@ -152,7 +156,7 @@ async function createCatalogMaterial(
       kind: 'panel',
       manufacturer_id: manufacturerId,
       type: 'dsp',
-      name: `Phase 3 Panel ${id}`,
+      name: `Catalog Panel ${id}`,
       thickness_mm: '18',
       color: 'White',
       decor_code: `P3-${id}`,
@@ -233,7 +237,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
 
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/branches')
-  await page.getByRole('link', { name: new RegExp(`Phase 3 Branch ${id}`) }).click()
+  await page.getByRole('link', { name: new RegExp(`Catalog Branch ${id}`) }).click()
 
   const addMaterial = page
     .getByRole('heading', { name: "Filial materiali qo'shish" })
@@ -260,7 +264,12 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await stockIn.getByLabel('Chek').setInputFiles(receiptPath)
   await expect(stockIn.getByText(/chek /)).toBeVisible()
   await stockIn.getByRole('button', { name: 'Kirim yozish' }).click()
-  await expect(page.getByRole('cell', { name: '3 panel' })).toBeVisible()
+  const stockTable = page.getByRole('table').filter({
+    has: page.getByRole('columnheader', { name: 'Mavjud' }),
+  })
+  await expect(
+    stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.name)}.*3 panel`) }),
+  ).toBeVisible()
 
   const adjustment = page
     .getByRole('heading', { name: 'Tuzatish' })
@@ -363,14 +372,14 @@ test('client browses public branch catalog without stock details', async ({ page
   await page.getByRole('button', { name: 'Kod yuborish' }).click()
   await page.getByLabel('Tasdiqlash kodi').fill('000000')
   await page.getByRole('button', { name: 'Tasdiqlash' }).click()
-  await page.getByLabel('Ismingiz').fill('Phase 3 Client')
+  await page.getByLabel('Ismingiz').fill('Catalog Client')
   await page.getByRole('button', { name: 'Davom etish' }).click()
   await page.getByRole('link', { name: 'Ustaxonalar' }).first().click()
-  await page.getByLabel('Ustaxona yoki shahar nomi').fill(`Phase 3 Workshop ${id}`)
+  await page.getByLabel('Ustaxona yoki shahar nomi').fill(`Catalog Workshop ${id}`)
 
   await expect(page.getByRole('heading', { name: 'Ustaxonalar' })).toBeVisible()
   const branchCard = page.locator('article.client-card').filter({
-    has: page.getByRole('heading', { name: new RegExp(`Phase 3 Workshop ${id}`) }),
+    has: page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),
   })
   await expect(branchCard).toBeVisible()
   await expect(branchCard.getByText(material.name)).toBeVisible()

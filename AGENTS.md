@@ -33,8 +33,8 @@ The repo map below is the working layout.
 
 ## Prototypes
 
-- `prototype-full` is the "full" version of the prototype, with all features.
-- `prototype-{style}` is the "style" version of prototypes, with only the 1-2 pages for each role for defining design system of apps.
+- `web/prototypes/prototype-full` is the full, polished prototype and the executable design
+  reference for all three SPAs. Style-exploration prototype directories have been removed.
 
 ## Repo map
 

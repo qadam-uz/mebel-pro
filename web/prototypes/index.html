@@ -26,7 +26,7 @@
   .note{display:flex;gap:12px;align-items:flex-start;margin-top:26px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px;color:var(--ink-2)}
   .note b{color:var(--ink)}
   .note .d{width:7px;height:7px;border-radius:50%;background:#f6c455;flex:none;margin-top:6px}
-  .grid{display:grid;gap:18px;grid-template-columns:repeat(2,1fr);margin-top:40px}
+  .grid{display:grid;gap:18px;grid-template-columns:minmax(0,620px);margin-top:40px}
   @media(max-width:760px){.grid{grid-template-columns:1fr}}
   .card{border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden;transition:.16s}
   .card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.2)}
@@ -49,19 +49,19 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="eyebrow">Mebel Pro · Design exploration</div>
+  <div class="eyebrow">Mebel Pro · Design reference</div>
   <h1>Prototip darvozasi</h1>
-  <p class="lead">To‘rt xil design system — bir xil v1 mahsulot oqimi va statik ma’lumot bilan. Har biri client, workshop va superadmin ilovalaridan tanlangan sahifalarni ko‘rsatadi. Maqsad: yagona design tilini tanlab, uni <code style="font-family:var(--m)">web/DESIGN.md</code> ga muhrlash.</p>
+  <p class="lead">Tanlangan <code style="font-family:var(--m)">prototype-full</code> — client, workshop va superadmin ilovalari uchun to‘liq statik reference. Vue SPAlar shu dizaynga moslab qattiqlashtiriladi.</p>
 
-  <div class="note"><span class="d"></span><div><b>Vaqtinchalik.</b> Bu darvoza va prototiplar <code>admin.&lt;domain&gt;/prototypes</code> manzilida xizmat qiladi. Design system tanlanib <code>web/DESIGN.md</code> ga yozilgach, prototip rout'i va u uchun qilingan deploy/nginx o‘zgarishlari olib tashlanadi.</div></div>
+  <div class="note"><span class="d"></span><div><b>Reference.</b> Bu darvoza <code>admin.&lt;domain&gt;/prototypes</code> manzilida xizmat qiladi va faqat <code>prototype-full</code> ni ko‘rsatadi. Style-exploration prototiplari olib tashlangan.</div></div>
 
   <div class="grid">
 
     <div class="card">
       <a class="hd" href="prototype-full/index.html">
-        <div class="swatch"><i style="background:#FAF7F2"></i><i style="background:#1a1714"></i><i style="background:#b4530a"></i><i style="background:#2f7d4f"></i></div>
-        <h2>Full <span class="tag">warm · serif</span></h2>
-        <p>To‘liq, mukammal prototip — barcha rollar va sahifalar. Issiq qog‘oz fon, Source Serif sarlavhalar. Joriy referens dizayn.</p>
+        <div class="swatch"><i style="background:#F4F6F8"></i><i style="background:#0F1B2A"></i><i style="background:#0F766E"></i><i style="background:#0B5A54"></i></div>
+        <h2>Full <span class="tag">green · serif</span></h2>
+        <p>To‘liq, mukammal prototip — barcha rollar va sahifalar. Cool paper fon, Source Serif sarlavhalar, green brand mark. Joriy reference design.</p>
         <span class="open">Launcher ochish →</span>
       </a>
       <div class="links">
@@ -71,53 +71,10 @@
       </div>
     </div>
 
-    <div class="card">
-      <a class="hd" href="prototype-noir/index.html">
-        <div class="swatch"><i style="background:#0a0b0d"></i><i style="background:#15171c"></i><i style="background:#38d6ff"></i><i style="background:#a78bfa"></i></div>
-        <h2>Noir <span class="tag">dark · dense</span></h2>
-        <p>Keyboard-first dark SaaS — grafit yuzalar, hairline chiziqlar, elektr-siyan akcent, monospace raqamlar. Linear/Vercel uslubi.</p>
-        <span class="open">Launcher ochish →</span>
-      </a>
-      <div class="links">
-        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-noir/client/home.html">Bosh sahifa <span>client/home</span></a></div>
-        <div class="lrow"><span class="role">Workshop</span><a href="prototype-noir/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
-        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-noir/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <a class="hd" href="prototype-swiss/index.html">
-        <div class="swatch"><i style="background:#ffffff"></i><i style="background:#111111"></i><i style="background:#e4002b"></i><i style="background:#f4f4f2"></i></div>
-        <h2>Swiss <span class="tag">editorial · grid</span></h2>
-        <p>International Typographic Style — oq fon, qora hairline chiziqlar, qat’iy grid, bitta signal-qizil. Soyasiz, burchaksiz, tipografik.</p>
-        <span class="open">Launcher ochish →</span>
-      </a>
-      <div class="links">
-        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-swiss/client/home.html">Bosh sahifa <span>client/home</span></a></div>
-        <div class="lrow"><span class="role">Workshop</span><a href="prototype-swiss/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
-        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-swiss/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <a class="hd" href="prototype-aurora/index.html">
-        <div class="swatch"><i style="background:#f4f5fb"></i><i style="background:#7b5cff"></i><i style="background:#4f9dff"></i><i style="background:#ffffff"></i></div>
-        <h2>Aurora <span class="tag">glass · gradient</span></h2>
-        <p>Zamonaviy yorug‘ SaaS — aurora mesh fon, frosted-glass kartalar, keng bo‘shliq, violet→ko‘k gradient. Stripe/Framer uslubi.</p>
-        <span class="open">Launcher ochish →</span>
-      </a>
-      <div class="links">
-        <div class="lrow"><span class="role">Mijoz</span><a href="prototype-aurora/client/home.html">Bosh sahifa <span>client/home</span></a></div>
-        <div class="lrow"><span class="role">Workshop</span><a href="prototype-aurora/workshop/dashboard.html">Asosiy <span>workshop/dashboard</span></a></div>
-        <div class="lrow"><span class="role">Superadmin</span><a href="prototype-aurora/admin/dashboard.html">Asosiy <span>admin/dashboard</span></a></div>
-      </div>
-    </div>
-
   </div>
 
   <footer>
-    Har bir prototip o‘z <code>assets/</code> jildidagi mustaqil design system'ga ega — bir-biriga bog‘liq emas.
-    Full prototip ham SEO landing'ni o‘z ichiga oladi. Tanlangach: yutgan tilni <code>web/DESIGN.md</code> ga, qolganini arxivga.
+    <code>prototype-full</code> o‘z <code>assets/</code> jildidagi brand kit, shell scripts va statik data bilan saqlanadi. Yangi style-prototype directories qo‘shmang.
   </footer>
 </div>
 </body>

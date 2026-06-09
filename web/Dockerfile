@@ -24,11 +24,9 @@ FROM nginx:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# --- TEMPORARY: static design-prototype gallery ------------------------------
-# Bake web/prototypes/ into the image so it is served at
-# admin.<domain>/prototypes (see the /prototypes/ block in nginx.conf).
-# REMOVE this line and that nginx block once a design system is chosen and
-# committed to web/DESIGN.md.
+# --- TEMPORARY: static prototype-full reference ------------------------------
+# Bake web/prototypes/ into the image so prototype-full remains reviewable at
+# admin.<domain>/prototypes while the Vue SPAs are hardened against it.
 COPY prototypes /usr/share/nginx/html/prototypes
 # --- end TEMPORARY -----------------------------------------------------------
 

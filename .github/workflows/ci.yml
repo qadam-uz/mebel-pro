@@ -5,7 +5,7 @@
 #   1. Verify (PR + push to main)
 #        - verify-backend : ruff check · ruff format --check · mypy · pytest
 #        - verify-web     : pnpm lint:check · format:check · typecheck · test · build
-#        - verify-e2e     : pnpm typecheck
+#        - verify-e2e     : pnpm typecheck · Playwright browser tests
 #      These mirror the per-directory check gates documented in the repo
 #      AGENTS.md. Run them locally before pushing; CI is the safety net.
 #
@@ -56,7 +56,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: latest
+          version: 0.8.22
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
@@ -122,19 +122,26 @@ jobs:
         run: pnpm build
 
   # ---------------------------------------------------------------------------
-  # 3. E2E gate — typecheck only. Running the full Playwright suite in CI
-  #    would mean booting the dev stack here; today it lives behind the local
-  #    pre-push gate. Revisit when there's a stable staging URL to run against.
+  # 3. E2E gate — typecheck + full Playwright suite. The Playwright config
+  #    boots the same dev stack used locally: Postgres/MinIO via Compose,
+  #    migrated FastAPI backend, then Vite.
   # ---------------------------------------------------------------------------
   verify-e2e:
-    name: E2E · typecheck
+    name: E2E · browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: e2e
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: 0.8.22
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
       # No root package.json — point the action at e2e/'s.
       - name: Setup pnpm
@@ -146,13 +153,34 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: e2e/pnpm-lock.yaml
+          cache-dependency-path: |
+            e2e/pnpm-lock.yaml
+            web/pnpm-lock.yaml
 
-      - name: Install dependencies
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Install web dependencies
+        working-directory: web
         run: pnpm install --frozen-lockfile
+
+      - name: Install E2E dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm install:browsers
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Playwright tests
+        run: pnpm test
+
+      - name: Stop E2E data services
+        if: always()
+        working-directory: deploy
+        run: docker compose --env-file .env.dev.example -f compose.yaml down -v --remove-orphans
 
   # ---------------------------------------------------------------------------
   # 4. Docker build smoke — make sure the backend + web images still compile.
@@ -161,7 +189,7 @@ jobs:
   docker-build:
     name: Docker · build smoke
     runs-on: ubuntu-latest
-    needs: [verify-backend, verify-web]
+    needs: [verify-backend, verify-web, verify-e2e]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

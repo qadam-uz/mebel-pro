@@ -56,7 +56,7 @@ Ports in dev: web `http://localhost:5173`, API `http://localhost:8000` (and via 
 
 `.github/workflows/ci.yml`:
 
-1. **Verify** — runs on every PR and every push to `main`. Three parallel jobs (`verify-backend`, `verify-web`, `verify-e2e`) that run the per-directory check gates owned by the repo `AGENTS.md`. `verify-e2e` runs `pnpm typecheck` only — the full Playwright suite needs a running stack; we run it locally before pushing and revisit CI when a staging URL exists.
+1. **Verify** — runs on every PR and every push to `main`. Three parallel jobs (`verify-backend`, `verify-web`, `verify-e2e`) that run the per-directory check gates owned by the repo `AGENTS.md`. `verify-e2e` runs `pnpm typecheck` and the full Playwright suite; the Playwright config boots Postgres/MinIO via Compose, migrates the FastAPI backend, starts Vite, and tears the data services down afterward.
 2. **Docker-build smoke** — builds the backend + web images so we know they still compile. No registry push.
 3. **Deploy** — only on push to `main`, only after every other job is green. SSHes to the VPS and runs `DEPLOY_REF=<sha> bash /opt/mebel-pro/deploy/scripts/deploy.sh`. No registry, no rsync — the server does its own `git pull` + `docker compose up --build`.
 
