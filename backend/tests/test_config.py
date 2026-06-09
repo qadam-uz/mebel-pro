@@ -26,6 +26,19 @@ def test_otp_dev_codes_are_rejected_in_prod() -> None:
         Settings(ENV="prod", OTP_DEV_CODES=["000000"])
 
 
+def test_prod_otp_dev_codes_require_explicit_testing_override() -> None:
+    settings = Settings(
+        ENV="prod",
+        OTP_DEV_CODES=["000000"],
+        ALLOW_PROD_OTP_DEV_CODES=True,
+        OTP_CODE_PEPPER="{{change-me}}",
+        TELEGRAM_GATEWAY_ACCESS_TOKEN="",
+    )
+
+    assert settings.OTP_DEV_CODES == ["000000"]
+    assert settings.ALLOW_PROD_OTP_DEV_CODES is True
+
+
 def test_prod_requires_telegram_gateway_token_and_otp_pepper() -> None:
     with pytest.raises(ValidationError, match="TELEGRAM_GATEWAY_ACCESS_TOKEN"):
         Settings(

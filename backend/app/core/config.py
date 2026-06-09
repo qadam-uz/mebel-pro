@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     MINIO_USE_SSL: bool = False
 
     # Client phone-OTP dev sign-in. Empty means the real Telegram flow is required.
-    # A non-empty list is a local/CI bypass and is rejected in production.
+    # A non-empty list is a local/CI bypass and is rejected in production unless
+    # the explicit pre-production testing override below is set.
     OTP_DEV_CODES: list[str] = []
+    ALLOW_PROD_OTP_DEV_CODES: bool = False
     OTP_RATE_LIMITS_ENABLED: bool = True
     OTP_CODE_PEPPER: str = "{{change-me}}"
     TELEGRAM_GATEWAY_ACCESS_TOKEN: str = "{{change-me}}"  # noqa: S105 - secret placeholder.
@@ -99,13 +101,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_defaults(self) -> "Settings":
-        if self.ENV == "prod" and self.OTP_DEV_CODES:
+        using_dev_otp_codes = bool(self.OTP_DEV_CODES)
+        if self.ENV == "prod" and using_dev_otp_codes and not self.ALLOW_PROD_OTP_DEV_CODES:
             msg = "OTP_DEV_CODES must be empty in production"
             raise ValueError(msg)
-        if self.ENV == "prod" and self.TELEGRAM_GATEWAY_ACCESS_TOKEN in {"", "{{change-me}}"}:
+        if (
+            self.ENV == "prod"
+            and not using_dev_otp_codes
+            and self.TELEGRAM_GATEWAY_ACCESS_TOKEN in {"", "{{change-me}}"}
+        ):
             msg = "TELEGRAM_GATEWAY_ACCESS_TOKEN must be set in production"
             raise ValueError(msg)
-        if self.ENV == "prod" and self.OTP_CODE_PEPPER in {"", "{{change-me}}"}:
+        if (
+            self.ENV == "prod"
+            and not using_dev_otp_codes
+            and self.OTP_CODE_PEPPER in {"", "{{change-me}}"}
+        ):
             msg = "OTP_CODE_PEPPER must be set in production"
             raise ValueError(msg)
         return self

@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-08
+updated: 2026-06-09
 order: 20
 ---
 
@@ -112,9 +112,13 @@ sent. A single setting — **`otp_dev_codes`**, a list of fixed codes — covers
 **non-empty**, the send step is a no-op (no Gateway call) and verification accepts **any** code
 in the list for **any** phone, so a developer signs in as any number with, say, `000000`. When
 it is **empty** — the default, and **mandatory in production** — the real flow runs: one random
-per-challenge code delivered over Telegram. One field, not two: the presence of codes *is* the
-on-switch, there is no separate enable flag; a non-empty `otp_dev_codes` in production is a
-boot-time misconfiguration.
+per-challenge code delivered over Telegram.
+
+Production rejects non-empty `otp_dev_codes` unless
+**`ALLOW_PROD_OTP_DEV_CODES=true`** is also set. That flag exists only for pre-production public
+testing before the Telegram Gateway account is funded and configured; remove it, set
+`OTP_DEV_CODES=[]`, and configure `TELEGRAM_GATEWAY_ACCESS_TOKEN` before onboarding real users or
+real workshop data.
 
 Send-rate enforcement is controlled separately by **`OTP_RATE_LIMITS_ENABLED`**. It defaults
 to `true` and must stay enabled outside automated test runs; local E2E sets it to `false` so

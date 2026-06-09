@@ -102,7 +102,13 @@ services:
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME:-docs}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD:-docs}
       OTP_DEV_CODES: ${OTP_DEV_CODES:-["000000"]}
+      ALLOW_PROD_OTP_DEV_CODES: ${ALLOW_PROD_OTP_DEV_CODES:-false}
       OTP_RATE_LIMITS_ENABLED: ${OTP_RATE_LIMITS_ENABLED:-true}
+      OTP_CODE_PEPPER: ${OTP_CODE_PEPPER:-dev-otp-code-pepper-change-in-prod}
+      TELEGRAM_GATEWAY_ACCESS_TOKEN: ${TELEGRAM_GATEWAY_ACCESS_TOKEN:-}
+      TELEGRAM_GATEWAY_API_BASE_URL: ${TELEGRAM_GATEWAY_API_BASE_URL:-https://gatewayapi.telegram.org}
+      TELEGRAM_GATEWAY_TIMEOUT_SECONDS: ${TELEGRAM_GATEWAY_TIMEOUT_SECONDS:-5}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-["127.0.0.1/32","::1/128"]}
     # `fastapi dev` = uvicorn with autoreload.
     command: ["sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]
     volumes:

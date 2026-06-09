@@ -51,7 +51,13 @@ services:
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
       OTP_DEV_CODES: ${OTP_DEV_CODES:-[]}
+      ALLOW_PROD_OTP_DEV_CODES: ${ALLOW_PROD_OTP_DEV_CODES:-false}
       OTP_RATE_LIMITS_ENABLED: ${OTP_RATE_LIMITS_ENABLED:-true}
+      OTP_CODE_PEPPER: ${OTP_CODE_PEPPER:-}
+      TELEGRAM_GATEWAY_ACCESS_TOKEN: ${TELEGRAM_GATEWAY_ACCESS_TOKEN:-}
+      TELEGRAM_GATEWAY_API_BASE_URL: ${TELEGRAM_GATEWAY_API_BASE_URL:-https://gatewayapi.telegram.org}
+      TELEGRAM_GATEWAY_TIMEOUT_SECONDS: ${TELEGRAM_GATEWAY_TIMEOUT_SECONDS:-5}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-["127.0.0.1/32","::1/128"]}
     volumes:
       # Live docs site reads these on every request — no build step. The
       # repo is present on the host (the deploy pulls it). docs_uz/ is the

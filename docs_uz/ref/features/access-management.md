@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-08
+updated: 2026-06-09
 order: 20
 ---
 
@@ -115,9 +115,13 @@ yuborilmaydi. Bitta setting — **`otp_dev_codes`**, fixed codes list — buni q
 **non-empty** bo'lsa, send step no-op (Gateway call yo'q) va verification listdagi **any**
 codeni **any** phone uchun qabul qiladi, shuning uchun developer istalgan numberga, masalan
 `000000` bilan sign in qiladi. U **empty** bo'lsa — default va **productionda mandatory** —
-real flow ishlaydi: per-challenge random code Telegram orqali delivered. Bitta field, ikkita
-emas: codes mavjudligi on-switch, alohida enable flag yo'q; productionda non-empty
-`otp_dev_codes` boot-time misconfiguration.
+real flow ishlaydi: per-challenge random code Telegram orqali delivered.
+
+Production non-empty `otp_dev_codes`ni **`ALLOW_PROD_OTP_DEV_CODES=true`** ham set
+qilinmagan bo'lsa reject qiladi. Bu flag faqat Telegram Gateway account funded va
+configured bo'lishidan oldingi pre-production public testing uchun mavjud; real users yoki
+real workshop data onboarding qilishdan oldin uni olib tashlang, `OTP_DEV_CODES=[]` set
+qiling va `TELEGRAM_GATEWAY_ACCESS_TOKEN`ni configure qiling.
 
 Send-rate enforcement alohida **`OTP_RATE_LIMITS_ENABLED`** bilan boshqariladi. U `true`
 default qiladi va automated test runs tashqarisida enabled qolishi kerak; local E2E uni
