@@ -26,6 +26,9 @@ function roleHistoryFallback() {
   }
 }
 
+// Dev API proxy target — localhost for host-based dev, the backend service in Docker compose.
+const apiTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:8000'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [roleHistoryFallback(), vue(), vueDevTools(), tailwindcss()],
@@ -50,23 +53,23 @@ export default defineConfig({
     proxy: {
       // Dev: forward API calls to the FastAPI backend.
       '/api': {
-        target: 'http://localhost:8000',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/docs': {
-        target: 'http://localhost:8000',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/docs-uz': {
-        target: 'http://localhost:8000',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/api-docs': {
-        target: 'http://localhost:8000',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/api-redoc': {
-        target: 'http://localhost:8000',
+        target: apiTarget,
         changeOrigin: true,
       },
     },

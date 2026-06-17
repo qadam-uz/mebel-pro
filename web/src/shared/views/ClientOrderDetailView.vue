@@ -381,6 +381,20 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+
+            <div v-if="order.note_workshop || order.note_client" class="client-card">
+              <div class="client-card-h"><h2>Izoh</h2></div>
+              <div class="client-card-b space-y-3">
+                <div v-if="order.note_workshop">
+                  <div class="text-xs font-bold uppercase text-ink-muted">Ustaxonadan</div>
+                  <p class="mt-1 text-sm text-ink">{{ order.note_workshop }}</p>
+                </div>
+                <div v-if="order.note_client">
+                  <div class="text-xs font-bold uppercase text-ink-muted">Sizning izohingiz</div>
+                  <p class="mt-1 text-sm text-ink">{{ order.note_client }}</p>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section v-else-if="activeTab === 'cutting'" class="client-card">

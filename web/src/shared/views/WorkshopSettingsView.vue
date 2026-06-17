@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
+import { apiTraceId } from '@/shared/api/client'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
@@ -23,12 +24,28 @@ watch(
   { immediate: true },
 )
 
+const saving = ref(false)
+const saveError = ref<string | null>(null)
+const saveTraceId = ref<string | null>(null)
+const saved = ref(false)
+
 async function save() {
-  await workshop.updateSettings({
-    name: form.name,
-    phone: form.phone,
-    address: form.address || null,
-  })
+  saving.value = true
+  saveError.value = null
+  saved.value = false
+  try {
+    await workshop.updateSettings({
+      name: form.name,
+      phone: form.phone,
+      address: form.address || null,
+    })
+    saved.value = true
+  } catch (caught) {
+    saveError.value = 'settings_save_failed'
+    saveTraceId.value = apiTraceId(caught)
+  } finally {
+    saving.value = false
+  }
 }
 
 onMounted(() => {
@@ -80,8 +97,14 @@ onMounted(() => {
           <span>Logo</span>
           <input class="mp-input" type="file" />
         </label>
-        <div class="flex justify-end">
-          <button class="mp-button mp-button-primary" type="submit">Saqlash</button>
+        <div class="flex items-center justify-end gap-3">
+          <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
+          <p v-else-if="saveError" class="text-sm font-bold text-danger">
+            Saqlab bo'lmadi · trace_id: {{ saveTraceId ?? 'unavailable' }}
+          </p>
+          <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
+            {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+          </button>
         </div>
       </div>
     </form>

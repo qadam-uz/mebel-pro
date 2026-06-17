@@ -5,7 +5,12 @@ import { RouterLink } from 'vue-router'
 import { useRolePath } from '@/shared/app/paths'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { formatDateInputValue, formatStockQuantity, formatTiyin } from '@/shared/formatters'
-import { useFinanceStore, type ExpenseCategory, type IncomeType } from '@/shared/stores/finance'
+import {
+  useFinanceStore,
+  type ExpenseCategory,
+  type IncomeType,
+  type MoneyMethod,
+} from '@/shared/stores/finance'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const finance = useFinanceStore()
@@ -32,6 +37,11 @@ const expenseCategoryLabel: Record<ExpenseCategory, string> = {
   taxes_and_fees: 'Soliqlar',
   salary: 'Maosh',
   other: 'Boshqalar',
+}
+const methodLabel: Record<MoneyMethod, string> = {
+  cash: 'Naqd',
+  bank_transfer: 'Bank / karta',
+  other: 'Boshqa',
 }
 const periodOptions = [
   {
@@ -220,7 +230,9 @@ onMounted(async () => {
                       <td>{{ incomeTypeLabel[income.type] }}</td>
                       <td class="id">{{ income.order_id ?? '—' }}</td>
                       <td>
-                        <small class="text-ink-soft">{{ income.method }}</small>
+                        <small class="text-ink-soft">{{
+                          methodLabel[income.method] ?? income.method
+                        }}</small>
                       </td>
                       <td class="amt success-text">{{ formatTiyin(income.amount_tiyin) }}</td>
                     </tr>

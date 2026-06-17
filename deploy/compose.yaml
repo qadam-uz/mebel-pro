@@ -138,6 +138,9 @@ services:
       # Vite proxies /api → http://backend:8000 in dev; same-origin via the
       # edge in prod. Leave empty.
       VITE_API_BASE_URL: ""
+      # Dev-server proxy target: the backend service on the compose network
+      # (Vite runs inside this container, so localhost would point at itself).
+      API_PROXY_TARGET: "http://backend:8000"
     volumes:
       - ../web:/app
       - web-node-modules:/app/node_modules

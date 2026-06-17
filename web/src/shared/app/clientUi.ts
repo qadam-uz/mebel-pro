@@ -45,8 +45,13 @@ export function clientStatusPillClass(status: OrderStatus): string {
 }
 
 export function normalizeUzPhone(value: string): string {
-  const digits = value.replace(/\D/g, '')
-  if (digits.startsWith('998')) return `+${digits}`
+  let digits = value.replace(/\D/g, '')
+  // drop a trunk-prefix 8 typed before the 998 country code ("8 998 …")
+  if (digits.startsWith('8998')) digits = digits.slice(1)
+  // drop a leading national-trunk 0 ("0 90 …")
+  if (digits.startsWith('0')) digits = digits.replace(/^0+/, '')
+  // a bare 9-digit national subscriber number gets the 998 country code
+  if (digits.length === 9) digits = `998${digits}`
   return `+${digits}`
 }
 
@@ -73,8 +78,8 @@ export function formatPercent(value: string | number | null | undefined): string
   if (value === null || value === undefined || value === '') return '-'
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return '-'
-  const percent = numeric <= 1 ? numeric * 100 : numeric
-  return `${percent.toFixed(2)}%`
+  // waste_percentage is always a 0..1 fraction (backend constrains it to [0,1])
+  return `${(numeric * 100).toFixed(2)}%`
 }
 
 export function pluralUz(count: number, label: string): string {
