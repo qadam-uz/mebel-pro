@@ -62,8 +62,8 @@ onMounted(refreshBranches)
       </div>
     </div>
 
-    <div class="client-banner warn !mb-5">
-      <span class="font-bold">i</span>
+    <div class="client-banner info !mb-5">
+      <span class="font-bold text-accent">i</span>
       <span>Bu ro'yxat shunchaki ma'lumot uchun. Buyurtma uchun chizmadan boshlang.</span>
     </div>
 

@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 56 | 28 | **102** |
-| Done | 14 | 12 | 4 | **30** |
+| Open (incl. partial) | 18 | 56 | 27 | **101** |
+| Done | 14 | 12 | 5 | **31** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -122,7 +122,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-42 | P2 | i18n-copy | med | S | Open | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Open | Lock background scroll when ConfirmDialog is open |
 | CB-44 | P3 | design-parity | low | S | Open | Use `.tl` timeline with done/bad states in order history |
-| CB-45 | P3 | design-parity | low | S | Open | Recolor branches info banner from warn-yellow to neutral |
+| CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Open | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
 | CB-48 | P3 | responsive | low | S | Open ✓partial | Stack branches/notifications rows on small phones |
