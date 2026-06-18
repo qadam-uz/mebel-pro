@@ -228,9 +228,18 @@ async def verify_otp_code(
 
     client = await db.scalar(select(Client).where(Client.phone == normalized_phone))
     if client is None:
+        if name is None:
+            # First-time phone, no name supplied yet → prompt the registration step.
+            return ClientOtpVerifyResult(is_new=True)
         client_name = _normalize_name(name)
         if client_name is None:
-            return ClientOtpVerifyResult(is_new=True)
+            # A name was supplied but is blank/whitespace — reject it explicitly
+            # instead of silently re-prompting forever (CB-79).
+            raise APIError(
+                "name_required",
+                "Name is required",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         client = Client(phone=normalized_phone, name=client_name, status=UserStatus.ACTIVE)
         db.add(client)
         await db.flush()

@@ -98,6 +98,7 @@ const CLIENT_ERROR_LABELS: Record<string, string> = {
   part_too_large: 'Qism panel uchun juda katta.',
   part_too_small: 'Qism juda kichik.',
   draft_limit_exceeded: "Saqlangan chizmalar chegarasi (50) to'ldi — eskisini o'chiring.",
+  invalid_name: 'Ismingizni kiriting.',
   profile_update_failed: "Profilni saqlab bo'lmadi. Qayta urinib ko'ring.",
   password_change_failed: "Parolni o'zgartirib bo'lmadi. Qayta urinib ko'ring.",
 }

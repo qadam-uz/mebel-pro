@@ -57,6 +57,9 @@ const logoutEverywhereOpen = ref(false)
 const workshopProfileTab = ref<'profile' | 'password' | 'sessions'>('profile')
 
 const accountLabel = computed(() => auth.displayName)
+// temporarily_closed branches stay SELECTABLE (CB-77): a closure is temporary but
+// the preference is durable, so the client may still pin a closed branch — the
+// meta just flags why it's closed.
 const branchChoiceOptions = computed<ChoiceOption[]>(() =>
   branchOptions.value.map((option) => ({
     value: option.branch_id,
@@ -65,8 +68,15 @@ const branchChoiceOptions = computed<ChoiceOption[]>(() =>
       option.status === 'temporarily_closed'
         ? (option.closed_reason ?? 'vaqtincha yopiq')
         : undefined,
-    disabled: option.status === 'temporarily_closed',
   })),
+)
+// The saved preferred branch no longer appears in branch-options (it went inactive
+// or was removed): the combobox silently falls back to its placeholder, so surface
+// an explicit stale-preference state instead (CB-77).
+const preferredBranchMissing = computed(
+  () =>
+    !!preferredBranchId.value &&
+    !branchOptions.value.some((option) => option.branch_id === preferredBranchId.value),
 )
 const scopeLabel = computed(() => {
   if (auth.me?.principal_type === 'workshop_user') {
@@ -110,19 +120,16 @@ async function loadClientProfile() {
   preferredBranchId.value = profile.preferred_branch_id
 }
 
-async function saveClientProfile() {
+// Send only the field being edited (CB-78): the name form PATCHes {name} and the
+// branch row PATCHes {preferred_branch_id}, so saving a branch never persists a
+// half-typed name (and vice-versa). The backend treats an absent key as
+// "unchanged".
+async function patchProfile(payload: Partial<ClientProfile>, successMessage: string) {
   error.value = null
   message.value = null
   isSaving.value = true
   try {
-    const updated = await api.patch<ClientProfile>(
-      '/client/profile',
-      {
-        name: clientName.value,
-        preferred_branch_id: preferredBranchId.value,
-      },
-      authInit(),
-    )
+    const updated = await api.patch<ClientProfile>('/client/profile', payload, authInit())
     if (auth.me) {
       auth.me = {
         ...auth.me,
@@ -130,13 +137,27 @@ async function saveClientProfile() {
         preferred_branch_id: updated.preferred_branch_id,
       }
     }
-    message.value = 'Profil yangilandi.'
-    editingClientName.value = false
+    message.value = successMessage
+    return true
   } catch {
     error.value = 'profile_update_failed'
+    return false
   } finally {
     isSaving.value = false
   }
+}
+
+async function saveClientName() {
+  if (clientName.value.trim().length === 0) {
+    error.value = 'invalid_name'
+    return
+  }
+  const ok = await patchProfile({ name: clientName.value }, 'Profil yangilandi.')
+  if (ok) editingClientName.value = false
+}
+
+async function savePreferredBranch() {
+  await patchProfile({ preferred_branch_id: preferredBranchId.value }, 'Afzal filial saqlandi.')
 }
 
 async function savePassword() {
@@ -153,6 +174,20 @@ async function savePassword() {
     error.value = auth.lastError ?? 'password_change_failed'
   } finally {
     isSaving.value = false
+  }
+}
+
+// Revoke ONE other session with optimistic removal + rollback (CB-114).
+async function revokeSessionRow(id: string) {
+  const index = sessions.value.findIndex((session) => session.id === id)
+  if (index === -1) return
+  const [removed] = sessions.value.splice(index, 1)
+  try {
+    await auth.revokeSession(id)
+    toast.success('Sessiya yopildi.')
+  } catch {
+    sessions.value.splice(index, 0, removed)
+    toast.danger("Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.")
   }
 }
 
@@ -270,7 +305,7 @@ onMounted(async () => {
               <form
                 v-if="editingClientName"
                 class="flex items-center gap-2"
-                @submit.prevent="saveClientProfile"
+                @submit.prevent="saveClientName"
               >
                 <input
                   v-model="clientName"
@@ -324,6 +359,9 @@ onMounted(async () => {
                 :options="branchChoiceOptions"
                 placeholder="Filialni qidiring"
               />
+              <p v-if="preferredBranchMissing" class="text-sm font-bold text-warning sm:text-right">
+                Avvalgi filial endi mavjud emas — boshqasini tanlang yoki tozalang.
+              </p>
               <div class="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
@@ -336,7 +374,7 @@ onMounted(async () => {
                   type="button"
                   class="mp-button mp-button-primary min-h-8 px-3 text-xs"
                   :disabled="isSaving"
-                  @click="saveClientProfile"
+                  @click="savePreferredBranch"
                 >
                   Saqlash
                 </button>
@@ -386,9 +424,15 @@ onMounted(async () => {
                   {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
                 </div>
               </div>
-              <div class="font-mono text-xs text-ink-muted">
-                {{ session.is_current ? '—' : 'faol' }}
-              </div>
+              <button
+                v-if="!session.is_current"
+                type="button"
+                class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+                @click="revokeSessionRow(session.id)"
+              >
+                Yopish
+              </button>
+              <span v-else class="font-mono text-xs text-ink-muted">—</span>
             </div>
           </template>
         </div>
@@ -622,7 +666,15 @@ onMounted(async () => {
                 {{ formatDate(session.created_at) }}
               </small>
             </div>
-            <div class="meta">{{ session.is_current ? '—' : session.id.slice(0, 8) }}</div>
+            <button
+              v-if="!session.is_current"
+              type="button"
+              class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+              @click="revokeSessionRow(session.id)"
+            >
+              Yopish
+            </button>
+            <div v-else class="meta">—</div>
           </div>
         </div>
       </div>

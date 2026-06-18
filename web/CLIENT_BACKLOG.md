@@ -42,9 +42,23 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 22 | 14 | **39** |
-| Done | 29 | 46 | 18 | **93** |
+| Open (incl. partial) | 3 | 20 | 12 | **35** |
+| Done | 29 | 48 | 20 | **97** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B3): profile & auth batch (adversarial
+> review — 0 actionable findings). **CB-78** (the profile name form now PATCHes
+> only `{name}` and the branch row only `{preferred_branch_id}` via a shared
+> `patchProfile` helper — saving a branch no longer persists a half-typed name;
+> the backend already treats an absent key as unchanged). **CB-77** (closed
+> branches are selectable in the preferred-branch picker — a closure is temporary,
+> the preference durable — and a stale-preference note shows when the saved branch
+> no longer appears in the options). **CB-79** (backend `verify_otp_code` now
+> raises `name_required` when a name is supplied but blank, while a truly-absent
+> name still returns `is_new` for the registration step; +backend test). **CB-114**
+> (`auth.revokeSession(id)` → `DELETE /auth/sessions/{id}` + a per-row "Yopish"
+> button with optimistic removal + rollback in both the client and workshop session
+> lists).
 
 > Progress (2026-06-18, client-finish B2): a11y & polish batch (adversarially
 > reviewed — the only actionable finding was adding a nav-structure test, applied).
@@ -315,9 +329,9 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
 | CB-75 | P1 | security | med | S | Done | Block protocol-relative `?redirect` (open redirect) |
 | CB-76 | P2 | spec-conformance | med | M | Done | Searchable preferred-branch selector |
-| CB-77 | P3 | spec-conformance | low | S | Open | Selectable temporarily_closed branches; stale-pref state |
-| CB-78 | P3 | correctness-bug | low | S | Open | Split profile PATCH payloads (branch save vs name form) |
-| CB-79 | P2 | correctness-bug | med | S | Partial | Reject whitespace-only name on registration step |
+| CB-77 | P3 | spec-conformance | low | S | Done | Selectable temporarily_closed branches; stale-pref state |
+| CB-78 | P3 | correctness-bug | low | S | Done | Split profile PATCH payloads (branch save vs name form) |
+| CB-79 | P2 | correctness-bug | med | S | Done | Reject whitespace-only name on registration step |
 | CB-80 | P3 | ux-flow | low | S | Won't | Surface OTP 5-min expiry on the code step |
 | CB-81 | P3 | i18n-copy | low | S | Done | Uzbek session-row labels ("active"/"Browser") |
 | CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
@@ -352,7 +366,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Done | Order-detail Timeline: 5 client phases, not raw events |
-| CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |
+| CB-114 | P2 | completeness-stub | med | M | Done | Per-session revoke ("Yopish") in profile sessions |
 | CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
 | CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |

@@ -55,6 +55,38 @@ async def test_client_dev_code_registers_new_client_without_telegram(
     assert login.json()["me"]["principal_type"] == "client"
     assert login.json()["me"]["name"] == "Ali Valiyev"
     assert login.json()["me"]["phone"] == "+998901234567"
+
+
+async def test_client_verify_rejects_blank_name_on_registration(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A supplied-but-blank name must raise name_required, not silently re-prompt (CB-79)."""
+    sender = FakeOtpSender()
+    monkeypatch.setattr(settings, "OTP_DEV_CODES", ["000000"])
+    monkeypatch.setattr(settings, "OTP_CODE_PEPPER", "test-pepper")
+    from app.main import app
+
+    app.dependency_overrides[get_otp_sender] = lambda: sender
+
+    await client.post("/api/v1/auth/client/otp/request", json={"phone": "+998903334455"})
+
+    # No name → first step still asks for the name (is_new), no error.
+    needs_name = await client.post(
+        "/api/v1/auth/client/otp/verify",
+        json={"phone": "+998903334455", "code": "000000"},
+    )
+    assert needs_name.status_code == 200
+    assert needs_name.json() == {"is_new": True}
+
+    # A whitespace-only name is an explicit failure, not another is_new.
+    blank = await client.post(
+        "/api/v1/auth/client/otp/verify",
+        json={"phone": "+998903334455", "code": "000000", "name": "   "},
+    )
+    assert blank.status_code == 400
+    assert blank.json()["code"] == "name_required"
     assert sender.sent == []
 
 
