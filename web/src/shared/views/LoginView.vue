@@ -130,6 +130,10 @@ async function sendOtp() {
     startCooldown(response.resend_after_seconds)
   } catch {
     error.value = auth.lastError
+    if (error.value === 'code_send_rate_limited') {
+      const retry = Number(auth.lastErrorDetails?.retry_after_seconds)
+      if (Number.isFinite(retry) && retry > 0) startCooldown(retry)
+    }
   } finally {
     isSubmitting.value = false
   }

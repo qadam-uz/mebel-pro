@@ -64,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
   const status = ref<AuthStatus>('idle')
   const restored = ref(false)
   const lastError = ref<string | null>(null)
+  const lastErrorDetails = ref<Record<string, unknown> | null>(null)
 
   const displayName = computed(
     () => me.value?.full_name ?? me.value?.name ?? me.value?.login ?? me.value?.phone ?? 'Account',
@@ -135,6 +136,10 @@ export const useAuthStore = defineStore('auth', () => {
       )
     } catch (error) {
       lastError.value = errorCode(error)
+      lastErrorDetails.value =
+        error instanceof ApiError && typeof error.body === 'object' && error.body
+          ? ((error.body as { details?: Record<string, unknown> }).details ?? null)
+          : null
       throw error
     }
   }
@@ -206,6 +211,7 @@ export const useAuthStore = defineStore('auth', () => {
     status,
     restored,
     lastError,
+    lastErrorDetails,
     displayName,
     isAuthenticated,
     restore,

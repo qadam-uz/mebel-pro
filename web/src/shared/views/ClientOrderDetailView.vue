@@ -84,6 +84,22 @@ function phaseNodeClass(index: number) {
   return ''
 }
 
+function phaseTimestamp(index: number): string | null {
+  if (!order.value) return null
+  const statusForPhase: OrderStatus[][] = [
+    ['new'],
+    ['confirmed'],
+    ['cutting', 'edge_banding'],
+    ['ready'],
+    ['completed'],
+  ]
+  const statuses = statusForPhase[index] ?? []
+  const event = order.value.events.find((entry) => statuses.includes(entry.to_status))
+  if (event) return formatRelativeDate(event.changed_at)
+  if (index === 0) return formatRelativeDate(order.value.created_at)
+  return null
+}
+
 function materialName(snapshot: Record<string, unknown>) {
   return String(snapshot.name ?? snapshot.decor_code ?? 'Material')
 }
@@ -591,18 +607,30 @@ onMounted(() => {
           >
             <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
             <div class="client-card-b">
-              <ol class="relative ml-4 grid gap-4 border-l-2 border-hairline pl-5">
-                <li v-for="event in order.events" :key="event.id" class="relative">
-                  <span class="absolute -left-[27px] top-1 size-3 rounded-full bg-accent"></span>
-                  <div class="font-bold text-ink">
-                    {{ event.from_status ? clientStatusLabel[event.from_status] : 'Yaratildi' }}
-                    →
-                    {{ clientStatusLabel[event.to_status] }}
-                  </div>
-                  <p v-if="event.reason" class="mt-1 text-sm text-ink-soft">{{ event.reason }}</p>
-                  <div class="mt-1 font-mono text-xs text-ink-muted">
-                    {{ formatRelativeDate(event.changed_at) }}
-                  </div>
+              <ol v-if="order.status === 'cancelled'" class="tl">
+                <li class="step done">
+                  <span class="when">{{ formatRelativeDate(order.created_at) }}</span>
+                  Joylashtirildi
+                </li>
+                <li class="step bad">
+                  <span v-if="order.cancelled_at" class="when">{{
+                    formatRelativeDate(order.cancelled_at)
+                  }}</span>
+                  Bekor qilingan
+                  <p v-if="cancelledReason" class="mt-1 text-sm text-ink-soft">
+                    {{ cancelledReason }}
+                  </p>
+                </li>
+              </ol>
+              <ol v-else class="tl">
+                <li
+                  v-for="(label, index) in clientPhaseLabels"
+                  :key="label"
+                  class="step"
+                  :class="{ done: index <= clientPhaseIndex(order.status) }"
+                >
+                  <span v-if="phaseTimestamp(index)" class="when">{{ phaseTimestamp(index) }}</span>
+                  {{ label }}
                 </li>
               </ol>
             </div>

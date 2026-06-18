@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 54 | 25 | **97** |
-| Done | 14 | 14 | 7 | **35** |
+| Open (incl. partial) | 18 | 53 | 24 | **95** |
+| Done | 14 | 15 | 8 | **37** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -121,7 +121,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Open | Lock background scroll when ConfirmDialog is open |
-| CB-44 | P3 | design-parity | low | S | Open | Use `.tl` timeline with done/bad states in order history |
+| CB-44 | P3 | design-parity | low | S | Done | Use `.tl` timeline with done/bad states in order history |
 | CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
@@ -148,7 +148,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-68 | P2 | responsive | med | S | Open | 16px form-control font on mobile (stop iOS auto-zoom) |
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
-| CB-71 | P2 | states-errors | med | M | Open | Honor 429 `retry_after_seconds` with live resend countdown |
+| CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
 | CB-72 | P2 | design-parity | med | M | Open | Show attempts-remaining on `invalid_code` |
 | CB-73 | P2 | ux-flow | med | S | Done | Un-dead-end the name step on `code_expired` |
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
