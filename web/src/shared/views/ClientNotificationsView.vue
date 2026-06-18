@@ -4,7 +4,12 @@ import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import { formatRelativeDate } from '@/shared/app/clientUi'
+import {
+  clientNotificationBody,
+  clientNotificationIconName,
+  clientNotificationTitle,
+  formatRelativeDate,
+} from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
@@ -35,16 +40,18 @@ const visibleItems = computed(() =>
 )
 
 function title(item: NotificationItem) {
-  const summary = item.payload.summary
-  if (typeof summary === 'string' && summary.trim()) return summary
-  return item.event_code
+  return clientNotificationTitle(item)
 }
 
 function body(item: NotificationItem) {
-  const value = item.payload.body ?? item.payload.detail ?? item.payload.message
-  if (typeof value === 'string' && value.trim()) return value
-  if (item.entity_type === 'order') return "Buyurtma holati o'zgardi."
-  return 'Yangi xabar mavjud.'
+  return (
+    clientNotificationBody(item) ??
+    (item.entity_type === 'order' ? "Buyurtma holati o'zgardi." : 'Yangi xabar mavjud.')
+  )
+}
+
+function iconName(item: NotificationItem) {
+  return clientNotificationIconName(item)
 }
 
 function iconClass(item: NotificationItem) {
@@ -136,11 +143,11 @@ onMounted(() => {
           @click="openItem(item)"
         >
           <span
-            class="grid size-[38px] place-items-center rounded-lg font-serif text-sm font-bold text-white"
+            class="client-notif-icon grid size-[38px] place-items-center rounded-lg text-white"
             :class="iconClass(item)"
             aria-hidden="true"
           >
-            {{ item.entity_type?.slice(0, 1).toUpperCase() ?? 'N' }}
+            <Icon :name="iconName(item)" />
           </span>
           <span class="min-w-0">
             <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>

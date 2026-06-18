@@ -115,8 +115,17 @@ async function confirmDeleteDraft() {
   }
 }
 
+// Resolve a draft's preferred-branch label for the row chip (CB-88). Branch
+// options are loaded client-side; no per-draft fetch.
+function branchName(draft: CuttingDraft): string | null {
+  if (!draft.preferred_branch_id) return null
+  const branch = cutting.branchOptions.find((row) => row.branch_id === draft.preferred_branch_id)
+  return branch ? `${branch.workshop_name} · ${branch.branch_name}` : null
+}
+
 onMounted(() => {
   void cutting.loadDrafts()
+  void cutting.loadBranchOptions()
 })
 </script>
 
@@ -186,6 +195,9 @@ onMounted(() => {
       >
         <button type="button" class="min-w-0 text-left" @click="openDraft(draft)">
           <span class="block truncate text-sm font-bold text-ink">{{ draftTitle(draft) }}</span>
+          <span v-if="branchName(draft)" class="client-pill client-pill-info mt-1 inline-block">
+            {{ branchName(draft) }}
+          </span>
           <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span
               ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> qism</span

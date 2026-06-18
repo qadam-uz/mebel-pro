@@ -42,9 +42,22 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 33 | 24 | **60** |
-| Done | 29 | 35 | 8 | **72** |
+| Open (incl. partial) | 3 | 29 | 24 | **56** |
+| Done | 29 | 39 | 8 | **76** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R10): visible spec-conformance, planned by a parallel
+> e2e-aware analysis workflow + adversarially reviewed (0 findings). **CB-126**
+> (notification bell + list show a per-family icon and a localized one-line title
+> via new `clientNotificationTitle/Body/IconName` — never the raw `event_code`).
+> **CB-113** (order-detail timeline highlights the *current* phase with a `.now`
+> ring; CB-44 had already done the 5-phase collapse). **CB-76** (preferred-branch
+> picker is now a searchable `SearchCombobox` in ProfileView + the editor; e2e
+> selector updated button→combobox). **CB-88** (drafts list shows a preferred-branch
+> chip per row). **CB-112 deferred** — needs a backend change (working_hours not
+> routed to `/branch-options` / quote / order responses). **CB-84/89** still
+> deferred (UX-placement call / backend). CB-88's pre-optimise material label also
+> needs backend (`material_snapshots` on the draft) — branch chip shipped.
 
 > Progress (2026-06-18, R9): cutting-editor spec-conformance, planned by a parallel
 > e2e-aware analysis workflow + adversarially reviewed (0 findings). **CB-83**
@@ -244,7 +257,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-73 | P2 | ux-flow | med | S | Done | Un-dead-end the name step on `code_expired` |
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
 | CB-75 | P1 | security | med | S | Done | Block protocol-relative `?redirect` (open redirect) |
-| CB-76 | P2 | spec-conformance | med | M | Open | Searchable preferred-branch selector |
+| CB-76 | P2 | spec-conformance | med | M | Done | Searchable preferred-branch selector |
 | CB-77 | P3 | spec-conformance | low | S | Open | Selectable temporarily_closed branches; stale-pref state |
 | CB-78 | P3 | correctness-bug | low | S | Open | Split profile PATCH payloads (branch save vs name form) |
 | CB-79 | P2 | correctness-bug | med | S | Partial | Reject whitespace-only name on registration step |
@@ -256,7 +269,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-85 | P2 | spec-conformance | med | S | Done | Grain indicator on the panel chip |
 | CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
 | CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |
-| CB-88 | P2 | spec-conformance | med | M | Open | Drafts list: branch chip + material label pre-optimise |
+| CB-88 | P2 | spec-conformance | med | M | Done | Drafts list: branch chip + material label pre-optimise |
 | CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
 | CB-90 | P3 | spec-conformance | low | S | Open | Algo compare: cut-length column, algo name, closed default |
 | CB-91 | P3 | spec-conformance | low | S | Open | Name the tape in the Edges cell summary |
@@ -281,7 +294,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-110 | P1 | testing | high | M | Done | Cover client OTP auth path in auth store |
 | CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
-| CB-113 | P2 | spec-conformance | med | M | Open | Order-detail Timeline: 5 client phases, not raw events |
+| CB-113 | P2 | spec-conformance | med | M | Done | Order-detail Timeline: 5 client phases, not raw events |
 | CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |
 | CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
@@ -294,7 +307,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
 | CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |
 | CB-125 | P2 | states-errors | low | S | Open | Null-destination notification: "not available", not silent |
-| CB-126 | P2 | spec-conformance | low | S | Open | Bell rows: event-family icon, drop raw event_code subtext |
+| CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
 | CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |

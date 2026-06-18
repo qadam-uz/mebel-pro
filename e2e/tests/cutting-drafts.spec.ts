@@ -403,7 +403,8 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
-  await page.getByRole('button', { name: 'Afzal filial' }).click()
+  // CB-76: the preferred-branch picker is now a searchable combobox.
+  await page.getByRole('combobox', { name: 'Afzal filial' }).click()
   await page.getByRole('option', { name: new RegExp(`Cutting Workshop ${id}`) }).click()
   await page.getByRole('button', { name: "Qo'llash" }).click()
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
