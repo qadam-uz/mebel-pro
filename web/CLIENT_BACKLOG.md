@@ -42,9 +42,20 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 11 | 51 | 24 | **86** |
-| Done | 21 | 17 | 8 | **46** |
+| Open (incl. partial) | 7 | 51 | 24 | **82** |
+| Done | 25 | 17 | 8 | **50** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R5c): states / session / PDF batch. **CB-08** (the API
+> client now intercepts 401 on an authed call: one deduped silent `/auth/refresh`
+> + retry; on failure the auth store clears and the app bounces to login with a
+> "Sessiya tugadi" notice — wired via a `configureSession` bridge, covered by
+> `client.spec.ts`). **CB-10** (`NotificationsMenu` polls the unread count every
+> ~45s while the tab is visible and a session exists). **CB-17** + **CB-111** (one
+> shared `downloadBlob` helper that attaches the anchor and async-revokes the
+> object URL so Firefox/Safari stop aborting the download; both stores wrap it
+> with a per-id busy flag + transient error/trace, surfaced in the editor and
+> order-detail PDF buttons).
 
 > Progress (2026-06-18, R5b): editor a11y + responsive batch. **CB-06** (Tab/
 > Shift-Tab focus-trap inside the edge modal, mirroring `ConfirmDialog`). **CB-07**
@@ -105,16 +116,16 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
 | CB-06 | P1 | a11y | high | M | Done | Focus-trap the cutting-editor edge-banding modal |
 | CB-07 | P1 | a11y | high | M | Done | Keyboard-operable placement rects (name + visible focus) |
-| CB-08 | P1 | states-errors | high | L | Open | 401/session-expired: silent refresh then login redirect |
+| CB-08 | P1 | states-errors | high | L | Done | 401/session-expired: silent refresh then login redirect |
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
-| CB-10 | P1 | completeness-stub | high | S | Open | Poll notification unread count (~45s) |
+| CB-10 | P1 | completeness-stub | high | S | Done | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
-| CB-17 | P1 | states-errors | med | S | Open | Handle PDF download failures with feedback |
+| CB-17 | P1 | states-errors | med | S | Done | Handle PDF download failures with feedback |
 | CB-18 | P1 | ux-flow | med | S | Open | Pre-check draft usability on entering order wizard |
 | CB-19 | P2 | states-errors | med | M | Open | "No branch carries the set" recovery panel |
 | CB-20 | P2 | correctness-bug | med | M | Open | Per-branch quote error labeling uses real per-call error |
@@ -208,7 +219,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-108 | P1 | testing | high | M | Done | Test autosave debounce + hydration guard (CB-15) |
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
 | CB-110 | P1 | testing | high | M | Open | Cover client OTP auth path in auth store |
-| CB-111 | P1 | states-errors | med | S | Open | PDF download: async revoke + attach anchor (silent fail) |
+| CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Open | Order-detail Timeline: 5 client phases, not raw events |
 | CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |

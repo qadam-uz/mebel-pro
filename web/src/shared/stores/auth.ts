@@ -95,6 +95,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // On-demand silent refresh used by the API client's 401 interceptor (CB-08).
+  // Returns the new access token, or null when the session can't be renewed.
+  async function refreshSession(): Promise<string | null> {
+    try {
+      const response = await api.post<TokenResponse>('/auth/refresh')
+      applyToken(response)
+      return response.access_token
+    } catch {
+      clear()
+      return null
+    }
+  }
+
   function isAllowedFor(role: RoleKey) {
     return me.value?.principal_type === rolePrincipal[role]
   }
@@ -215,6 +228,7 @@ export const useAuthStore = defineStore('auth', () => {
     displayName,
     isAuthenticated,
     restore,
+    refreshSession,
     isAllowedFor,
     platformLogin,
     workshopLogin,

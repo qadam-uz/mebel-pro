@@ -264,9 +264,10 @@ onMounted(() => {
             v-if="result"
             type="button"
             class="mp-button mp-button-outline min-h-8 px-3 text-xs"
+            :disabled="orders.downloadingId === order.id"
             @click="orders.downloadClientPdf(order.id)"
           >
-            Chizmani PDF olish
+            {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'Chizmani PDF olish' }}
           </button>
         </div>
       </section>
@@ -512,12 +513,23 @@ onMounted(() => {
                 v-if="result"
                 type="button"
                 class="text-sm font-bold text-accent"
+                :disabled="orders.downloadingId === order.id"
                 @click="orders.downloadClientPdf(order.id)"
               >
-                PDF olish →
+                {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'PDF olish →' }}
               </button>
             </div>
             <div class="client-card-b">
+              <p
+                v-if="orders.downloadError"
+                class="mb-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+                role="alert"
+              >
+                {{ orders.downloadError }}
+                <span v-if="orders.downloadTraceId" class="block text-xs font-normal opacity-80">
+                  trace {{ orders.downloadTraceId }}
+                </span>
+              </p>
               <div v-if="!result" class="text-sm text-ink-muted">Chizma natijasi topilmadi.</div>
               <template v-else>
                 <div class="mb-4 grid gap-3 sm:grid-cols-3">

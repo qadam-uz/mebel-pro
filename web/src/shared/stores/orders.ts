@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, api, apiErrorCode, apiTraceId } from '@/shared/api/client'
+import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -181,6 +182,11 @@ export const useOrdersStore = defineStore('orders', () => {
   const quoteLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  // PDF download feedback (CB-17): id of the order currently downloading, plus a
+  // transient error + trace for the last failed download.
+  const downloadingId = ref<string | null>(null)
+  const downloadError = ref<string | null>(null)
+  const downloadTraceId = ref<string | null>(null)
   const auth = useAuthStore()
 
   function authInit() {
@@ -321,11 +327,19 @@ export const useOrdersStore = defineStore('orders', () => {
   }
 
   async function downloadClientPdf(orderId: string) {
-    await downloadPdf(`/client/orders/${orderId}/cutting/pdf`, `order-${orderId}-cutting.pdf`)
+    await downloadPdf(
+      `/client/orders/${orderId}/cutting/pdf`,
+      `order-${orderId}-cutting.pdf`,
+      orderId,
+    )
   }
 
   async function downloadWorkshopPdf(orderId: string) {
-    await downloadPdf(`/workshop/orders/${orderId}/cutting/pdf`, `order-${orderId}-cutting.pdf`)
+    await downloadPdf(
+      `/workshop/orders/${orderId}/cutting/pdf`,
+      `order-${orderId}-cutting.pdf`,
+      orderId,
+    )
   }
 
   async function loadOrder(path: string, fallback: string) {
@@ -377,14 +391,18 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders.value = [order, ...workshopOrders.value.filter((item) => item.id !== order.id)]
   }
 
-  async function downloadPdf(path: string, filename: string) {
-    const blob = await api.blob(path, authInit())
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+  async function downloadPdf(path: string, filename: string, id: string) {
+    downloadingId.value = id
+    downloadError.value = null
+    downloadTraceId.value = null
+    try {
+      await downloadBlob(path, filename, authInit())
+    } catch (errorValue) {
+      downloadError.value = "PDF'ni yuklab bo'lmadi. Qayta urinib ko'ring."
+      downloadTraceId.value = apiTraceId(errorValue)
+    } finally {
+      downloadingId.value = null
+    }
   }
 
   return {
@@ -398,6 +416,9 @@ export const useOrdersStore = defineStore('orders', () => {
     quoteLoading,
     error,
     traceId,
+    downloadingId,
+    downloadError,
+    downloadTraceId,
     loadQuote,
     quoteForDraft,
     createClientOrder,

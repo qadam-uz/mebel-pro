@@ -1435,10 +1435,21 @@ const edgePatterns: Array<{
             <button
               type="button"
               class="mp-button mp-button-outline w-full"
+              :disabled="cutting.downloadingId === chosenResult.id"
               @click="cutting.downloadClientPdf(chosenResult.id)"
             >
-              PDF yuklab olish
+              {{ cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish' }}
             </button>
+            <p
+              v-if="cutting.downloadError"
+              class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              {{ cutting.downloadError }}
+              <span v-if="cutting.downloadTraceId" class="block text-xs font-normal opacity-80">
+                trace {{ cutting.downloadTraceId }}
+              </span>
+            </p>
             <div class="rounded-lg border border-hairline bg-sunk p-4">
               <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
               <template v-if="edgeByMaterial.length">

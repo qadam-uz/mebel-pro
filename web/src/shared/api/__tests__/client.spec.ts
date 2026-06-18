@@ -1,10 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api, apiTraceId } from '@/shared/api/client'
+import { ApiError, api, apiTraceId, configureSession } from '@/shared/api/client'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  configureSession(null)
 })
+
+function jsonResponse(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
 
 describe('shared API client', () => {
   it('uses same-origin /api/v1 by default', async () => {
@@ -103,5 +111,46 @@ describe('shared API client', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     const headers = init.headers as Headers
     expect(headers.get('Authorization')).toBe('Bearer access-1')
+  })
+
+  it('refreshes once and retries the original request on 401 (CB-08)', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse({ code: 'unauthorized' }, 401))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }, 200))
+    const refresh = vi.fn().mockResolvedValue('access-2')
+    const onExpired = vi.fn()
+    configureSession({ refresh, onExpired })
+
+    await expect(api.get('/client/orders', { accessToken: 'access-1' })).resolves.toEqual({
+      ok: true,
+    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(onExpired).not.toHaveBeenCalled()
+    const retryInit = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect((retryInit.headers as Headers).get('Authorization')).toBe('Bearer access-2')
+  })
+
+  it('clears the session and rethrows when the refresh fails (CB-08)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 'unauthorized' }, 401))
+    const refresh = vi.fn().mockResolvedValue(null)
+    const onExpired = vi.fn()
+    configureSession({ refresh, onExpired })
+
+    await expect(api.get('/client/orders', { accessToken: 'access-1' })).rejects.toMatchObject({
+      status: 401,
+    })
+    expect(onExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not attempt a refresh for unauthenticated 401s (CB-08)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 'invalid_code' }, 401))
+    const refresh = vi.fn()
+    configureSession({ refresh, onExpired: vi.fn() })
+
+    await expect(api.post('/auth/client/otp/verify', { code: '0' })).rejects.toMatchObject({
+      status: 401,
+    })
+    expect(refresh).not.toHaveBeenCalled()
   })
 })

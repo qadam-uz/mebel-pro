@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
+import { configureSession } from '@/shared/api/client'
 import RoleApp from '@/shared/components/RoleApp.vue'
 import { roleConfigKey, type RoleConfig } from '@/shared/app/roleConfig'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -90,6 +91,21 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
     scrollBehavior: () => ({ top: 0 }),
   })
   const auth = useAuthStore(pinia)
+
+  // Transparent 401 handling (CB-08): the API client refreshes silently and
+  // retries; if that fails (refreshSession has already cleared auth) it bounces
+  // to login with a notice.
+  configureSession({
+    refresh: () => auth.refreshSession(),
+    onExpired: () => {
+      const current = router.currentRoute.value
+      if (current.meta.layout === 'auth') return
+      void router.push({
+        path: roleConfig.loginPath,
+        query: { redirect: current.fullPath, reason: 'session_expired' },
+      })
+    },
+  })
 
   router.beforeEach(async (to) => {
     await auth.restore()

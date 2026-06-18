@@ -34,7 +34,41 @@ export function apiErrorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
-async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+// Session bridge for transparent token refresh on 401 (CB-08). The app wires
+// this at bootstrap so the framework-agnostic client can ask the auth store to
+// refresh and, on failure, redirect to login — without importing the store
+// (which would create a cycle).
+export interface SessionHooks {
+  // Silently refresh the access token; resolves to the new token, or null when
+  // the session can't be renewed.
+  refresh: () => Promise<string | null>
+  // Called when refresh fails — clear auth and route to login.
+  onExpired: () => void
+}
+
+let sessionHooks: SessionHooks | null = null
+let refreshInFlight: Promise<string | null> | null = null
+
+export function configureSession(hooks: SessionHooks | null) {
+  sessionHooks = hooks
+}
+
+// Dedupe concurrent 401s onto a single refresh round-trip.
+function runRefresh(): Promise<string | null> {
+  if (!sessionHooks) return Promise.resolve(null)
+  if (!refreshInFlight) {
+    const hooks = sessionHooks
+    refreshInFlight = hooks
+      .refresh()
+      .catch(() => null)
+      .finally(() => {
+        refreshInFlight = null
+      })
+  }
+  return refreshInFlight
+}
+
+async function request<T>(path: string, init: ApiRequestInit = {}, retrying = false): Promise<T> {
   const { accessToken, headers, ...requestInit } = init
   const mergedHeaders = new Headers(headers)
   const isFormData = typeof FormData !== 'undefined' && requestInit.body instanceof FormData
@@ -52,7 +86,23 @@ async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const isJson = res.headers.get('content-type')?.includes('application/json')
   const text = res.status === 204 ? '' : await res.text()
   const body = isJson && text.length > 0 ? JSON.parse(text) : text
-  if (!res.ok) throw new ApiError(res.status, body)
+  if (!res.ok) {
+    // An authed call whose token expired: try one silent refresh + retry, then
+    // hand off to the session bridge to redirect to login (CB-08). The refresh
+    // call itself carries no accessToken, so it never recurses here.
+    if (
+      res.status === 401 &&
+      accessToken &&
+      !retrying &&
+      sessionHooks &&
+      !path.startsWith('/auth/refresh')
+    ) {
+      const newToken = await runRefresh()
+      if (newToken) return request<T>(path, { ...init, accessToken: newToken }, true)
+      sessionHooks.onExpired()
+    }
+    throw new ApiError(res.status, body)
+  }
   return body as T
 }
 
