@@ -26,6 +26,14 @@ export function apiTraceId(error: unknown): string | null {
   return typeof traceId === 'string' ? traceId : null
 }
 
+export function apiErrorCode(error: unknown): string | null {
+  if (!(error instanceof ApiError) || typeof error.body !== 'object' || error.body === null) {
+    return null
+  }
+  const code = (error.body as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
+}
+
 async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const { accessToken, headers, ...requestInit } = init
   const mergedHeaders = new Headers(headers)

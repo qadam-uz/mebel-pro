@@ -151,6 +151,36 @@ export function metres(mm: number) {
   return `${(mm / 1000).toFixed(2)} m`
 }
 
+// Mirrors the backend cutting optimizer (app/modules/cutting/optimizer.py).
+export const EDGE_TRIM_MM = 10
+
+/**
+ * Pure check of whether a part fits its chosen panel, mirroring the backend
+ * validation (panel usable area = panel − 2×edge-trim; non-grained panels may
+ * rotate the part, grained panels may not). Returns the matching backend error
+ * code, or null when the part fits (or the panel size is unknown).
+ */
+export function partFitError(
+  lengthMm: number,
+  widthMm: number,
+  panel: Pick<
+    ClientCatalogMaterialOption,
+    'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
+  >,
+  trimMm: number = EDGE_TRIM_MM,
+): 'impossible_grain' | 'part_too_large' | null {
+  if (panel.panel_length_mm == null || panel.panel_width_mm == null) return null
+  const length = Number(lengthMm)
+  const width = Number(widthMm)
+  if (!Number.isFinite(length) || !Number.isFinite(width)) return null
+  const usableLength = panel.panel_length_mm - 2 * trimMm
+  const usableWidth = panel.panel_width_mm - 2 * trimMm
+  const fitsNormal = length <= usableLength && width <= usableWidth
+  const fitsRotated = width <= usableLength && length <= usableWidth
+  if (panel.grain_direction) return fitsNormal ? null : 'impossible_grain'
+  return fitsNormal || fitsRotated ? null : 'part_too_large'
+}
+
 export const useCuttingStore = defineStore('cutting', () => {
   const drafts = ref<CuttingDraft[]>([])
   const currentDraft = ref<CuttingDraft | null>(null)

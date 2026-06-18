@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { api } from '@/shared/api/client'
-import { formatPhone } from '@/shared/app/clientUi'
+import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -312,7 +312,9 @@ onMounted(async () => {
           </div>
 
           <p v-if="message" class="mt-3 text-sm font-bold text-success">{{ message }}</p>
-          <p v-if="error" class="mt-3 text-sm font-bold text-danger">{{ error }}</p>
+          <p v-if="error" class="mt-3 text-sm font-bold text-danger">
+            {{ clientErrorLabel(error) }}
+          </p>
         </div>
       </section>
 
@@ -545,7 +547,7 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="message" class="text-sm font-bold text-success">{{ message }}</p>
-        <p v-if="error" class="text-sm font-bold text-danger">{{ error }}</p>
+        <p v-if="error" class="text-sm font-bold text-danger">{{ clientErrorLabel(error) }}</p>
       </form>
     </section>
 

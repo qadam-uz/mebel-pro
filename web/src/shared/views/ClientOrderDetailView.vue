@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
+  clientErrorLabel,
   clientPhaseIndex,
   clientPhaseLabels,
   clientStatusLabel,
@@ -597,7 +598,7 @@ onMounted(() => {
           </section>
 
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
-            {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
+            {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
           </p>
         </aside>
       </div>

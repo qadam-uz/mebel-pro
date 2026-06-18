@@ -2,7 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { formatPercent, formatRelativeDate, pluralUz } from '@/shared/app/clientUi'
+import { apiErrorCode } from '@/shared/api/client'
+import {
+  clientErrorLabel,
+  formatPercent,
+  formatRelativeDate,
+  pluralUz,
+} from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -13,6 +19,7 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const creating = ref(false)
+const createError = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const draftPendingDelete = ref<CuttingDraft | null>(null)
 
@@ -60,9 +67,12 @@ function draftTitle(draft: CuttingDraft) {
 
 async function newCutting() {
   creating.value = true
+  createError.value = null
   try {
     const draft = await cutting.createDraft()
     await router.push(rolePath(`/c/cutting/${draft.id}`))
+  } catch (errorValue) {
+    createError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizma yaratib bo'lmadi.")
   } finally {
     creating.value = false
   }
@@ -110,6 +120,11 @@ onMounted(() => {
       >
         {{ creating ? 'Yaratilmoqda' : 'Yangi chizma' }}
       </button>
+    </div>
+
+    <div v-if="createError" class="client-banner danger mb-4" role="alert">
+      <span class="font-mono font-black">!</span>
+      <span>{{ createError }}</span>
     </div>
 
     <div class="client-section-title">

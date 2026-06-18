@@ -82,6 +82,43 @@ export function formatPercent(value: string | number | null | undefined): string
   return `${(numeric * 100).toFixed(2)}%`
 }
 
+const CLIENT_ERROR_LABELS: Record<string, string> = {
+  permission_denied: "Bu amal uchun ruxsat yo'q.",
+  order_version_conflict: "Buyurtma holati o'zgardi — sahifani yangilab, qayta urinib ko'ring.",
+  order_not_found: 'Buyurtma topilmadi.',
+  order_cancel_not_allowed: "Bu buyurtmani hozir bekor qilib bo'lmaydi.",
+  order_cancel_failed: "Buyurtmani bekor qilib bo'lmadi.",
+  order_quote_failed: "Narxni hisoblab bo'lmadi. Qayta urinib ko'ring.",
+  order_action_failed: "Amalni bajarib bo'lmadi. Qayta urinib ko'ring.",
+  client_orders_load_failed: "Buyurtmalar ro'yxatini yuklab bo'lmadi.",
+  client_order_load_failed: "Buyurtmani yuklab bo'lmadi.",
+  branch_does_not_carry_panel: "Bu filialda kerakli panel materiali yo'q.",
+  branch_does_not_carry_edge: "Bu filialda kerakli krom materiali yo'q.",
+  part_too_large: 'Qism panel uchun juda katta.',
+  part_too_small: 'Qism juda kichik.',
+  draft_limit_exceeded: "Saqlangan chizmalar chegarasi (50) to'ldi — eskisini o'chiring.",
+  profile_update_failed: "Profilni saqlab bo'lmadi. Qayta urinib ko'ring.",
+  password_change_failed: "Parolni o'zgartirib bo'lmadi. Qayta urinib ko'ring.",
+}
+
+const CLIENT_ERROR_FALLBACK = "Amal bajarilmadi. Qayta urinib ko'ring."
+
+/**
+ * Map a backend/store error code to Uzbek client copy. Unknown snake_case codes
+ * fall back to a generic Uzbek message (a raw code is never shown to the user);
+ * a value that is already a human sentence is returned unchanged.
+ */
+export function clientErrorLabel(
+  code: string | null | undefined,
+  fallback: string = CLIENT_ERROR_FALLBACK,
+): string {
+  if (!code) return fallback
+  const mapped = CLIENT_ERROR_LABELS[code]
+  if (mapped) return mapped
+  if (/\s/.test(code)) return code
+  return fallback
+}
+
 export function pluralUz(count: number, label: string): string {
   return `${new Intl.NumberFormat('uz-UZ').format(count)} ${label}`
 }

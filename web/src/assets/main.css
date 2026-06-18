@@ -127,6 +127,16 @@
     transform: translateY(0);
   }
 
+  .mp-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .mp-button:disabled:hover {
+    transform: none;
+  }
+
   .mp-button-primary {
     background: var(--color-accent);
     border-color: var(--color-accent);

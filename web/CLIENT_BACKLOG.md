@@ -42,8 +42,18 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 32 | 65 | 33 | **130** |
-| Won't (refuted) | — | — | 1 (CB-49) | 1 |
+| Open (incl. partial) | 22 | 57 | 28 | **107** |
+| Done | 10 | 11 | 4 | **25** |
+| Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, editor focus): 25 Done. This session — **CB-29** (result
+> panel: "Joylashtirildi N/N" + per-edge-material metres), **CB-16** (optimize
+> failures caught + inline banner with trace), **CB-50** (Optimise disabled until
+> parts change / blocked for invalid rows), **CB-82**/**CB-121** (part-max
+> validation + pure `partFitError()` test), **CB-01** (Uzbek `clientErrorLabel()`
+> map), **CB-09** (createDraft + 50-draft cap; `apiErrorCode()`). Plus autosave now
+> skips invalid rows, disabled `.mp-button`s now visibly dim, and a dev seeder at
+> `deploy/seed-dev-data.sh`.
 
 By category (approx): states-errors ~17 · spec-conformance ~14 · tech-debt ~16 ·
 ux-flow ~12 · design-parity ~12 · testing ~12 · a11y ~10 · correctness-bug ~9 ·
@@ -53,7 +63,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 
 | ID | Pri | Cat | Sev | Eff | Status | Title |
 |----|-----|-----|-----|-----|--------|-------|
-| CB-01 | P1 | i18n-copy | high | M | Open | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
+| CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
 | CB-02 | P1 | i18n-copy | high | M | Open | Human-readable Uzbek notification titles (+body) in bell & list |
 | CB-03 | P1 | ux-flow | high | M | Open | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Open | Pre-select & badge preferred branch in order-new step |
@@ -61,14 +71,14 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-06 | P1 | a11y | high | M | Open | Focus-trap the cutting-editor edge-banding modal |
 | CB-07 | P1 | a11y | high | M | Open | Keyboard-operable placement rects (name + visible focus) |
 | CB-08 | P1 | states-errors | high | L | Open | 401/session-expired: silent refresh then login redirect |
-| CB-09 | P1 | states-errors | high | S | Open | Surface createDraft failures incl. 50-draft cap |
+| CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
 | CB-10 | P1 | completeness-stub | high | S | Open | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Open | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Open | Flush autosave on unmount; stop clobbering edits mid-optimize |
-| CB-16 | P1 | states-errors | med | S | Open | Surface optimize failures inline (+trace_id) |
+| CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
 | CB-17 | P1 | states-errors | med | S | Open | Handle PDF download failures with feedback |
 | CB-18 | P1 | ux-flow | med | S | Open | Pre-check draft usability on entering order wizard |
 | CB-19 | P2 | states-errors | med | M | Open | "No branch carries the set" recovery panel |
@@ -81,7 +91,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
-| CB-29 | P2 | completeness-stub | med | M | Open | Per-edge-material metres + parts-placed count in result |
+| CB-29 | P2 | completeness-stub | med | M | Done | Per-edge-material metres + parts-placed count in result |
 | CB-30 | P2 | completeness-stub | med | S | Done | Show order notes (note_workshop/client) in Overview |
 | CB-31 | P2 | a11y | med | M | Open | Valid tablist/tab/tabpanel + keyboard on order detail |
 | CB-32 | P2 | a11y | med | M | Open | ARIA menu keyboard ops on notifications dropdown |
@@ -102,7 +112,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
 | CB-48 | P3 | responsive | low | S | Open ✓partial | Stack branches/notifications rows on small phones |
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
-| CB-50 | P3 | ux-flow | low | S | Open | Disable Optimise after a run until a part changes |
+| CB-50 | P3 | ux-flow | low | S | Done | Disable Optimise after a run until a part changes |
 | CB-51 | P3 | ux-flow | low | M | Open | Two-pane workshop+branch picker in editor pre-filter |
 | CB-52 | P3 | performance | low | S | Open | Cache/staleness reuse for home/notifications/branch-options |
 | CB-53 | P3 | a11y | low | S | Open | Self-describing autosave live region (role=status) |
@@ -134,7 +144,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-79 | P2 | correctness-bug | med | S | Partial | Reject whitespace-only name on registration step |
 | CB-80 | P3 | ux-flow | low | S | Won't | Surface OTP 5-min expiry on the code step |
 | CB-81 | P3 | i18n-copy | low | S | Open | Uzbek session-row labels ("active"/"Browser") |
-| CB-82 | P1 | spec-conformance | high | M | Open | Validate part max against panel − 2× edge trim |
+| CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
 | CB-83 | P2 | spec-conformance | med | S | Open | 100-part cap + blocking roll-up under the parts table |
 | CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |
 | CB-85 | P2 | spec-conformance | med | S | Open | Grain indicator on the panel chip |
@@ -173,7 +183,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-118 | P2 | design-parity | med | M | Open | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Open | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
-| CB-121 | P2 | testing | med | M | Open | Test part validation bounds (ships w/ CB-82/83) |
+| CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
 | CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
 | CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
 | CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |

@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
+import { apiErrorCode } from '@/shared/api/client'
 import {
   activeClientStatuses,
+  clientErrorLabel,
   clientPhaseIndex,
   clientPhaseLabels,
   clientStatusLabel,
@@ -22,6 +24,7 @@ const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
 const creating = ref(false)
+const createError = ref<string | null>(null)
 
 const activeOrders = computed(() =>
   orders.clientOrders.filter((order) => activeClientStatuses.includes(order.status)),
@@ -46,9 +49,12 @@ const traceId = computed(() => cutting.traceId ?? orders.traceId)
 
 async function newCutting() {
   creating.value = true
+  createError.value = null
   try {
     const draft = await cutting.createDraft()
     await router.push(rolePath(`/c/cutting/${draft.id}`))
+  } catch (errorValue) {
+    createError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizma yaratib bo'lmadi.")
   } finally {
     creating.value = false
   }
@@ -123,6 +129,11 @@ onMounted(() => {
       >
         {{ creating ? 'Yaratilmoqda' : 'Yangi kesim chizmasi' }}
       </button>
+    </div>
+
+    <div v-if="createError" class="client-banner danger mb-5" role="alert">
+      <span class="font-mono font-black">!</span>
+      <span>{{ createError }}</span>
     </div>
 
     <div v-if="pageLoading" class="grid gap-3 md:grid-cols-4" aria-live="polite">

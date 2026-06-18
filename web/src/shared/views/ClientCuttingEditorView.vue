@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { formatPercent } from '@/shared/app/clientUi'
+import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -10,8 +10,10 @@ import FormSelect from '@/shared/components/FormSelect.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
+  EDGE_TRIM_MM,
   materialLabel,
   metres,
+  partFitError,
   useCuttingStore,
   type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
@@ -29,6 +31,7 @@ const draftId = computed(() => String(route.params.id))
 const parts = ref<CuttingPart[]>([])
 const saveState = ref<'saved' | 'saving' | 'error' | 'editing'>('saved')
 const saveError = ref<string | null>(null)
+const optimizeError = ref<string | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
@@ -78,11 +81,35 @@ const panelChoices = computed<ChoiceOption[]>(() =>
     }`,
   })),
 )
-const hasPersistableParts = computed(() =>
-  parts.value.every(
-    (part) => part.material_id && part.length_mm >= 50 && part.width_mm >= 50 && part.quantity >= 1,
-  ),
+const hasPersistableParts = computed(() => parts.value.every((part) => !partIsInvalid(part)))
+const lastOptimizedSignature = ref<string | null>(null)
+function partsSignature(list: CuttingPart[] = parts.value) {
+  return JSON.stringify(
+    list.map((part) => [
+      part.material_id,
+      part.material_source,
+      part.length_mm,
+      part.width_mm,
+      part.quantity,
+      part.edge_top,
+      part.edge_bottom,
+      part.edge_left,
+      part.edge_right,
+    ]),
+  )
+}
+const optimizedUnchanged = computed(
+  () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
 )
+const canOptimize = computed(
+  () => parts.value.length > 0 && hasPersistableParts.value && !optimizedUnchanged.value,
+)
+const optimizeDisabledHint = computed(() => {
+  if (parts.value.length === 0) return "Avval qism qo'shing"
+  if (!hasPersistableParts.value) return "Qatorlardagi xatolarni to'g'rilang"
+  if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
+  return ''
+})
 const notCarriedRows = computed(() =>
   parts.value.filter((part) => rowNotCarried(part).length > 0 && part.material_source === 'shop'),
 )
@@ -114,6 +141,35 @@ const resultWaste = computed(() => formatPercent(chosenResult.value?.waste_perce
 const totalQuantity = computed(() =>
   parts.value.reduce((sum, part) => sum + Math.max(0, Number(part.quantity) || 0), 0),
 )
+const placedCount = computed(() =>
+  chosenResult.value
+    ? chosenResult.value.panels.reduce((sum, panel) => sum + panel.placements.length, 0)
+    : 0,
+)
+const requestedCount = computed(() =>
+  chosenResult.value
+    ? chosenResult.value.parts_snapshot.reduce((sum, part) => sum + part.quantity, 0)
+    : 0,
+)
+const allPlaced = computed(() => placedCount.value >= requestedCount.value)
+const edgeByMaterial = computed(() => {
+  const result = chosenResult.value
+  if (!result) return []
+  const ids = new Set([
+    ...Object.keys(result.edge_consumed_shop_by_material),
+    ...Object.keys(result.edge_consumed_own_by_material),
+  ])
+  return [...ids]
+    .map((id) => {
+      const shop = result.edge_consumed_shop_by_material[id] ?? 0
+      const own = result.edge_consumed_own_by_material[id] ?? 0
+      const snapshot = result.material_snapshots[id]
+      const name = typeof snapshot?.name === 'string' ? snapshot.name : id.slice(0, 8)
+      return { id, name, total: shop + own }
+    })
+    .filter((row) => row.total > 0)
+    .sort((left, right) => right.total - left.total)
+})
 const showRecovery = computed(() => !recoveryDismissed.value && notCarriedRows.value.length > 0)
 const edgePickerOpen = computed(() => edgePickerPart.value !== null)
 const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
@@ -218,6 +274,18 @@ function rowNotCarried(part: CuttingPart) {
   return issues
 }
 
+function partSizeError(part: CuttingPart): string | null {
+  const panel = materialById(part.material_id)
+  if (!panel || panel.panel_length_mm == null || panel.panel_width_mm == null) return null
+  const code = partFitError(part.length_mm, part.width_mm, panel)
+  if (!code) return null
+  const usableLength = panel.panel_length_mm - 2 * EDGE_TRIM_MM
+  const usableWidth = panel.panel_width_mm - 2 * EDGE_TRIM_MM
+  if (code === 'impossible_grain')
+    return `Tola yo'nalishi qat'iy — qism ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
+  return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${EDGE_TRIM_MM} mm chetki qirqim).`
+}
+
 function partIsInvalid(part: CuttingPart) {
   return (
     !part.material_id ||
@@ -226,7 +294,8 @@ function partIsInvalid(part: CuttingPart) {
     part.quantity < 1 ||
     !Number.isFinite(Number(part.length_mm)) ||
     !Number.isFinite(Number(part.width_mm)) ||
-    !Number.isFinite(Number(part.quantity))
+    !Number.isFinite(Number(part.quantity)) ||
+    partSizeError(part) !== null
   )
 }
 
@@ -554,8 +623,11 @@ function scheduleSave() {
 async function saveParts() {
   window.clearTimeout(saveTimer)
   if (!hasPersistableParts.value) {
-    saveState.value = 'error'
-    saveError.value = 'Complete material, length, width, and quantity before saving.'
+    // Incomplete or out-of-bounds rows surface their own inline validation
+    // (red inputs, the per-row size banner) — don't fire a doomed network save
+    // or a scary top-level error; just stay in the editing state.
+    saveState.value = 'editing'
+    saveError.value = null
     return
   }
   saveState.value = 'saving'
@@ -565,7 +637,7 @@ async function saveParts() {
     saveState.value = 'saved'
   } catch {
     saveState.value = 'error'
-    saveError.value = 'Draft could not be saved.'
+    saveError.value = "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring."
   }
 }
 
@@ -578,11 +650,21 @@ async function setPreferredBranch(branchId: string | null) {
 }
 
 async function optimize() {
+  if (cutting.optimizing || !canOptimize.value) return
+  optimizeError.value = null
   await saveParts()
   if (saveState.value === 'error') return
-  const updated = await cutting.optimizeDraft(draftId.value)
-  activeResultId.value = updated.chosen_result_id
-  activePanelId.value = updated.results[0]?.panels[0]?.id ?? null
+  try {
+    const updated = await cutting.optimizeDraft(draftId.value)
+    activeResultId.value = updated.chosen_result_id
+    activePanelId.value = updated.results[0]?.panels[0]?.id ?? null
+    lastOptimizedSignature.value = partsSignature()
+  } catch {
+    optimizeError.value = clientErrorLabel(
+      cutting.error,
+      "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
+    )
+  }
   await nextTick()
   document.getElementById('cutting-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -628,6 +710,10 @@ watch(
     hydrating = true
     parts.value = value.parts_snapshot.map((part) => ({ ...part }))
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
+    const optimizedResult = value.results.find((result) => result.id === activeResultId.value)
+    lastOptimizedSignature.value = optimizedResult
+      ? partsSignature(optimizedResult.parts_snapshot)
+      : null
     activePanelId.value =
       value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
       value.results[0]?.panels[0]?.id ??
@@ -913,7 +999,7 @@ const edgePatterns: Array<{
                   type="number"
                   min="50"
                   class="mp-input font-mono"
-                  :class="part.length_mm < 50 ? 'border-danger' : ''"
+                  :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
                   aria-label="Uzunlik millimetr"
                 />
               </label>
@@ -925,7 +1011,7 @@ const edgePatterns: Array<{
                   type="number"
                   min="50"
                   class="mp-input font-mono"
-                  :class="part.width_mm < 50 ? 'border-danger' : ''"
+                  :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
                   aria-label="Eni millimetr"
                 />
               </label>
@@ -1031,6 +1117,14 @@ const edgePatterns: Array<{
               </div>
             </div>
 
+            <p
+              v-if="partSizeError(part)"
+              class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+            >
+              <span aria-hidden="true">!</span>
+              <span>{{ partSizeError(part) }}</span>
+            </p>
+
             <div
               v-if="rowNotCarried(part).length"
               class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
@@ -1061,7 +1155,8 @@ const edgePatterns: Array<{
           <button
             type="button"
             class="mp-button mp-button-primary"
-            :disabled="cutting.optimizing || parts.length === 0"
+            :disabled="cutting.optimizing || !canOptimize"
+            :title="optimizeDisabledHint"
             @click="optimize"
           >
             {{ cutting.optimizing ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
@@ -1078,6 +1173,13 @@ const edgePatterns: Array<{
             </p>
           </div>
           <span
+            v-if="chosenResult"
+            class="client-pill"
+            :class="allPlaced ? 'client-pill-done' : 'client-pill-danger'"
+          >
+            Joylashtirildi {{ placedCount }}/{{ requestedCount }}
+          </span>
+          <span
             v-if="chosenResult?.status === 'invalidated'"
             class="client-pill client-pill-danger"
           >
@@ -1085,7 +1187,19 @@ const edgePatterns: Array<{
           </span>
         </div>
 
-        <div v-if="!chosenResult" class="client-card-b">
+        <div v-if="optimizeError" class="client-card-b">
+          <div class="client-banner danger" role="alert">
+            <span class="font-mono font-black">!</span>
+            <span>
+              {{ optimizeError }}
+              <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
+                trace {{ cutting.traceId }}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div v-if="!chosenResult && !optimizeError" class="client-card-b">
           <div class="client-empty">
             <div class="client-empty-icon">∑</div>
             <h3>Optimizer natijasi yo'q</h3>
@@ -1093,7 +1207,7 @@ const edgePatterns: Array<{
           </div>
         </div>
 
-        <div v-else class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div v-if="chosenResult" class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div class="min-w-0 space-y-4">
             <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
               <span class="font-mono font-black">!</span>
@@ -1126,6 +1240,14 @@ const edgePatterns: Array<{
                   {{ metres(chosenResult.total_cut_length_mm) }}
                 </div>
               </div>
+            </div>
+
+            <div v-if="!allPlaced" class="client-banner danger" role="alert">
+              <span class="font-mono font-black">!</span>
+              <span>
+                {{ requestedCount - placedCount }} ta qism panelga joylashmadi — qism o'lchamini
+                kichraytiring yoki boshqa panel tanlang.
+              </span>
             </div>
 
             <section class="rounded-lg border border-hairline bg-elevated">
@@ -1217,10 +1339,23 @@ const edgePatterns: Array<{
               PDF yuklab olish
             </button>
             <div class="rounded-lg border border-hairline bg-sunk p-4">
-              <h3 class="text-sm font-extrabold text-ink">Krom bo'linishi</h3>
-              <p class="mt-2 text-sm text-ink-soft">
-                Ustaxona {{ metres(consumedShop) }} · O'zim {{ metres(consumedOwn) }}
-              </p>
+              <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
+              <template v-if="edgeByMaterial.length">
+                <ul class="mt-2 space-y-1.5 text-sm">
+                  <li
+                    v-for="row in edgeByMaterial"
+                    :key="row.id"
+                    class="flex justify-between gap-3"
+                  >
+                    <span class="min-w-0 truncate text-ink-soft">{{ row.name }}</span>
+                    <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
+                  </li>
+                </ul>
+                <p class="mt-2 text-xs text-ink-muted">
+                  Ustaxona {{ metres(consumedShop) }} · O'zim {{ metres(consumedOwn) }}
+                </p>
+              </template>
+              <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
             </div>
             <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
               <h3 class="text-sm font-extrabold text-ink">Joylashuvlar</h3>
