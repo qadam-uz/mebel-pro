@@ -63,4 +63,28 @@ describe('orders store', () => {
     expect(api.get).not.toHaveBeenCalled()
     expect(store.error).toBe('permission_denied')
   })
+
+  it('attributes each branch its own quote error and keeps successes (CB-20/107)', async () => {
+    const store = useOrdersStore()
+    // A succeeds; B is closed (403 → permission_denied); C can't fulfil (422 → generic).
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.includes('branch_id=A')) {
+        return Promise.resolve({ branch_id: 'A', branch_name: 'Branch A' } as never)
+      }
+      if (path.includes('branch_id=B')) {
+        return Promise.reject(new ApiError(403, { code: 'permission_denied' }))
+      }
+      return Promise.reject(new ApiError(422, { code: 'materials_unavailable' }))
+    })
+
+    const { quotes, errors } = await store.quoteBranches('draft-1', ['A', 'B', 'C'])
+
+    // The success is not poisoned by sibling failures (the CB-20 race).
+    expect(quotes.A).toMatchObject({ branch_id: 'A' })
+    expect(quotes.B).toBeUndefined()
+    expect(quotes.C).toBeUndefined()
+    expect(errors.A).toBeUndefined()
+    expect(errors.B).toBe('permission_denied')
+    expect(errors.C).toBeNull()
+  })
 })

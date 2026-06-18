@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { api, apiTraceId } from '@/shared/api/client'
 import Icon from '@/shared/components/AppIcon.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
@@ -32,6 +33,7 @@ interface ClientBranchOption {
 
 const config = useRoleConfig()
 const auth = useAuthStore()
+const toast = useToast()
 const orders = useOrdersStore()
 const workshop = useWorkshopStore()
 const router = useRouter()
@@ -146,7 +148,7 @@ async function savePassword() {
     await auth.changePassword(currentPassword.value, newPassword.value)
     currentPassword.value = ''
     newPassword.value = ''
-    message.value = "Parol o'zgartirildi."
+    toast.success("Parol o'zgartirildi.")
     await loadSessions()
   } catch {
     error.value = auth.lastError ?? 'password_change_failed'
