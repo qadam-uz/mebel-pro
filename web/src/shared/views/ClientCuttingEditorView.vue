@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -800,11 +801,12 @@ onBeforeUnmount(() => {
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
   void autosave.flush()
-  document.body.classList.remove('modal-open')
+  if (edgePickerOpen.value) unlockBodyScroll()
 })
 
 watch(edgePickerOpen, (open) => {
-  document.body.classList.toggle('modal-open', open)
+  if (open) lockBodyScroll()
+  else unlockBodyScroll()
 })
 
 const edgeFields = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
@@ -1085,6 +1087,8 @@ const edgePatterns: Array<{
                       v-model.number="part.length_mm"
                       type="number"
                       min="50"
+                      inputmode="numeric"
+                      enterkeyhint="next"
                       class="mp-input font-mono"
                       :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
                       aria-label="Uzunlik millimetr"
@@ -1097,6 +1101,8 @@ const edgePatterns: Array<{
                       v-model.number="part.width_mm"
                       type="number"
                       min="50"
+                      inputmode="numeric"
+                      enterkeyhint="next"
                       class="mp-input font-mono"
                       :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
                       aria-label="Eni millimetr"
@@ -1109,6 +1115,8 @@ const edgePatterns: Array<{
                       v-model.number="part.quantity"
                       type="number"
                       min="1"
+                      inputmode="numeric"
+                      enterkeyhint="done"
                       class="mp-input font-mono"
                       :class="part.quantity < 1 ? 'border-danger' : ''"
                       aria-label="Soni"
@@ -1358,7 +1366,7 @@ const edgePatterns: Array<{
                 <div class="text-sm font-bold text-ink">Algoritm solishtirish</div>
                 <button
                   type="button"
-                  class="text-sm font-bold text-accent"
+                  class="-mr-2 inline-flex min-h-11 items-center px-3 text-sm font-bold text-accent"
                   @click="algorithmsOpen = !algorithmsOpen"
                 >
                   {{ algorithmsOpen ? 'Yopish' : 'Ochish' }}
