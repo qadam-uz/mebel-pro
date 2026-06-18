@@ -482,6 +482,11 @@ test("client places an order and workshop completes it through production queues
     (response) => response.url().includes("/mark-collected") && response.ok(),
   );
   await workshopPage.getByRole("button", { name: "Mijoz olib ketdi" }).click();
+  // Marking collected is final/irreversible, so it now goes through a
+  // confirmation dialog — confirm it to fire the request.
+  await workshopPage
+    .getByRole("button", { name: "Ha, topshirildi" })
+    .click();
   await collected;
   await expect(
     workshopPage.getByText("Tugatilgan", { exact: true }).first(),
