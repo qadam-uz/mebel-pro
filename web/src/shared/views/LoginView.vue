@@ -27,6 +27,8 @@ const error = ref<string | null>(null)
 let resendTimer: number | undefined
 
 const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.homePath))
+// Set by the API client's 401 interceptor when a silent refresh fails (CB-08).
+const sessionExpired = computed(() => route.query.reason === 'session_expired')
 
 const errorText = computed(() => {
   const code = error.value
@@ -221,6 +223,11 @@ onBeforeUnmount(() => {
         <img src="/favicon.svg" alt="" class="size-8" />
         <span class="client-brand-name">Mebel Pro</span>
       </RouterLink>
+
+      <div v-if="sessionExpired" class="client-banner warn mb-4" role="status">
+        <span aria-hidden="true">!</span>
+        <span>Sessiya tugadi. Davom etish uchun qaytadan kiring.</span>
+      </div>
 
       <form v-if="clientStep === 'phone'" class="space-y-4" novalidate @submit.prevent="sendOtp">
         <div>

@@ -78,8 +78,21 @@ function onDocumentPointerDown(event: PointerEvent) {
   open.value = false
 }
 
+// Notifications are the only v1 update channel, so poll the unread count
+// (~45s) while the tab is visible and a session exists — otherwise a "ready"
+// or cancelled order shows a stale badge until manual reload (CB-10).
+const POLL_INTERVAL_MS = 45000
+let pollTimer: number | undefined
+
+function pollUnread() {
+  if (document.visibilityState === 'visible' && auth.accessToken) {
+    void notifications.loadUnreadCount()
+  }
+}
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
+  pollTimer = window.setInterval(pollUnread, POLL_INTERVAL_MS)
 })
 
 watch(
@@ -92,6 +105,7 @@ watch(
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
+  if (pollTimer !== undefined) window.clearInterval(pollTimer)
 })
 </script>
 

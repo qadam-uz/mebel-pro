@@ -42,9 +42,40 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 49 | 24 | **91** |
-| Done | 14 | 19 | 8 | **41** |
+| Open (incl. partial) | 7 | 49 | 24 | **80** |
+| Done | 25 | 19 | 8 | **52** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R5c): states / session / PDF batch. **CB-08** (the API
+> client now intercepts 401 on an authed call: one deduped silent `/auth/refresh`
+> + retry; on failure the auth store clears and the app bounces to login with a
+> "Sessiya tugadi" notice — wired via a `configureSession` bridge, covered by
+> `client.spec.ts`). **CB-10** (`NotificationsMenu` polls the unread count every
+> ~45s while the tab is visible and a session exists). **CB-17** + **CB-111** (one
+> shared `downloadBlob` helper that attaches the anchor and async-revokes the
+> object URL so Firefox/Safari stop aborting the download; both stores wrap it
+> with a per-id busy flag + transient error/trace, surfaced in the editor and
+> order-detail PDF buttons).
+
+> Progress (2026-06-18, R5b): editor a11y + responsive batch. **CB-06** (Tab/
+> Shift-Tab focus-trap inside the edge modal, mirroring `ConfirmDialog`). **CB-07**
+> (placement rects are now `<g role="button">` with an `aria-label` and a
+> scale-independent `:focus-visible` ring; the SVG keeps `role="img"` so the
+> placement list stays the SR-primary affordance). **CB-62** (edge modal uses
+> `dvh` sizing and becomes a bottom-sheet with a safe-area sticky footer at
+> ≤520px; the fixed edge diagram shrinks at ≤360px so it stops clipping). **CB-60**
+> (sub-`lg` part rows: the three dimensions share one row and the row actions sit
+> 2-up via `lg:contents`/`lg:grid-cols-1`, leaving the desktop grid unchanged).
+
+> Progress (2026-06-18, R5): editor-correctness batch. **CB-15** + **CB-108**
+> (autosave timing extracted into a pure, unit-tested `autosaveController`: edits
+> coalesce, `flush()` runs on optimize and on unmount so navigating away within
+> the 700ms window no longer drops the edit, and the `currentDraft` watcher only
+> re-hydrates `parts` when the draft **id** changes so a save/optimize round-trip
+> can't clobber an in-flight keystroke). **CB-03** (a draft bound to an order —
+> any result with an `order_id` — is read-only: a non-dismissible banner links to
+> the order and the whole editing region is gated via `<fieldset disabled>` +
+> autosave gate).
 
 > Progress (2026-06-18, R4): 41 Done (PRs #18–20). Visual + states polish, each
 > planned by a parallel e2e-aware analysis workflow: **CB-45** (neutral branches
@@ -89,21 +120,21 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 |----|-----|-----|-----|-----|--------|-------|
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
 | CB-02 | P1 | i18n-copy | high | M | Blocked | Human-readable Uzbek notification titles (+body) in bell & list — backend emits no client notifications yet (only `inventory.low_stock` → workshop) |
-| CB-03 | P1 | ux-flow | high | M | Open | Read-only mode + bound-order banner for confirmed drafts in editor |
+| CB-03 | P1 | ux-flow | high | M | Done | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
-| CB-06 | P1 | a11y | high | M | Open | Focus-trap the cutting-editor edge-banding modal |
-| CB-07 | P1 | a11y | high | M | Open | Keyboard-operable placement rects (name + visible focus) |
-| CB-08 | P1 | states-errors | high | L | Open | 401/session-expired: silent refresh then login redirect |
+| CB-06 | P1 | a11y | high | M | Done | Focus-trap the cutting-editor edge-banding modal |
+| CB-07 | P1 | a11y | high | M | Done | Keyboard-operable placement rects (name + visible focus) |
+| CB-08 | P1 | states-errors | high | L | Done | 401/session-expired: silent refresh then login redirect |
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
-| CB-10 | P1 | completeness-stub | high | S | Open | Poll notification unread count (~45s) |
+| CB-10 | P1 | completeness-stub | high | S | Done | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
-| CB-15 | P1 | correctness-bug | med | M | Open | Flush autosave on unmount; stop clobbering edits mid-optimize |
+| CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
-| CB-17 | P1 | states-errors | med | S | Open | Handle PDF download failures with feedback |
+| CB-17 | P1 | states-errors | med | S | Done | Handle PDF download failures with feedback |
 | CB-18 | P1 | ux-flow | med | S | Open | Pre-check draft usability on entering order wizard |
 | CB-19 | P2 | states-errors | med | M | Open | "No branch carries the set" recovery panel |
 | CB-20 | P2 | correctness-bug | med | M | Open | Per-branch quote error labeling uses real per-call error |
@@ -146,9 +177,9 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
 | CB-58 | P3 | completeness-stub | low | S | Open | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
 | CB-59 | P2 | ux-flow | med | S | Open | `inputmode=numeric` on dimension/quantity inputs |
-| CB-60 | P1 | design-parity | high | M | Open | Port prototype's compact phone layout for part rows |
+| CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
 | CB-61 | P2 | a11y | med | S | Open | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
-| CB-62 | P1 | responsive | high | M | Open | Edge modal: dvh sizing + bottom-sheet on phones |
+| CB-62 | P1 | responsive | high | M | Done | Edge modal: dvh sizing + bottom-sheet on phones |
 | CB-63 | P2 | ux-flow | med | S | Open | iOS-proof modal scroll lock + overscroll containment |
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
@@ -194,10 +225,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
 | CB-106 | P1 | testing | high | S | Done | Regression test: notifications markRead idempotency (CB-55) |
 | CB-107 | P1 | testing | high | M | Open | Test per-branch quote error attribution (CB-20) |
-| CB-108 | P1 | testing | high | M | Open | Test autosave debounce + hydration guard (CB-15) |
+| CB-108 | P1 | testing | high | M | Done | Test autosave debounce + hydration guard (CB-15) |
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
 | CB-110 | P1 | testing | high | M | Open | Cover client OTP auth path in auth store |
-| CB-111 | P1 | states-errors | med | S | Open | PDF download: async revoke + attach anchor (silent fail) |
+| CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Open | Order-detail Timeline: 5 client phases, not raw events |
 | CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |

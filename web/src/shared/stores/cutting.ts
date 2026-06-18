@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { ApiError, api, apiTraceId } from '@/shared/api/client'
+import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -196,6 +197,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   const workshopLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  // PDF download feedback (CB-17): id of the result currently downloading, plus
+  // a transient error + trace for the last failed download.
+  const downloadingId = ref<string | null>(null)
+  const downloadError = ref<string | null>(null)
+  const downloadTraceId = ref<string | null>(null)
   const auth = useAuthStore()
 
   function authInit() {
@@ -337,7 +343,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   }
 
   async function downloadClientPdf(resultId: string) {
-    await downloadPdf(`/client/cutting-results/${resultId}/pdf`, `cutting-${resultId}.pdf`)
+    await downloadPdf(
+      `/client/cutting-results/${resultId}/pdf`,
+      `cutting-${resultId}.pdf`,
+      resultId,
+    )
   }
 
   async function loadWorkshopPlans() {
@@ -374,17 +384,25 @@ export const useCuttingStore = defineStore('cutting', () => {
   }
 
   async function downloadWorkshopPdf(resultId: string) {
-    await downloadPdf(`/workshop/cutting-plans/${resultId}/pdf`, `cutting-${resultId}.pdf`)
+    await downloadPdf(
+      `/workshop/cutting-plans/${resultId}/pdf`,
+      `cutting-${resultId}.pdf`,
+      resultId,
+    )
   }
 
-  async function downloadPdf(path: string, filename: string) {
-    const blob = await api.blob(path, authInit())
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+  async function downloadPdf(path: string, filename: string, id: string) {
+    downloadingId.value = id
+    downloadError.value = null
+    downloadTraceId.value = null
+    try {
+      await downloadBlob(path, filename, authInit())
+    } catch (errorValue) {
+      downloadError.value = "PDF'ni yuklab bo'lmadi. Qayta urinib ko'ring."
+      downloadTraceId.value = apiTraceId(errorValue)
+    } finally {
+      downloadingId.value = null
+    }
   }
 
   return {
@@ -402,6 +420,9 @@ export const useCuttingStore = defineStore('cutting', () => {
     workshopLoading,
     error,
     traceId,
+    downloadingId,
+    downloadError,
+    downloadTraceId,
     loadDrafts,
     createDraft,
     loadDraft,

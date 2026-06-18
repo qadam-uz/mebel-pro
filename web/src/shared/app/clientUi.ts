@@ -134,6 +134,7 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
   upload: '<path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   store: '<path d="M4 10h16l-1-5H5l-1 5Z"/><path d="M6 10v10h12V10"/><path d="M9 20v-6h6v6"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 }
 
 export function clientIconPath(name: string): string {
