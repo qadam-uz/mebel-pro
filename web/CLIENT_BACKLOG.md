@@ -46,6 +46,15 @@ file tracks *fixes/polish* against the current Vue implementation.
 | Done | 14 | 19 | 8 | **41** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-18, R4): 41 Done (PRs #18–20). Visual + states polish, each
+> planned by a parallel e2e-aware analysis workflow: **CB-45** (neutral branches
+> banner), **CB-46** (5-phase home stepper), **CB-42** (Uzbek fallbacks), **CB-127**
+> (cancel reason), **CB-36** (header nav icons), **CB-44** (`.tl` done/bad order
+> timeline), **CB-71** (429 resend countdown), **CB-118** (Krom material/service
+> split), **CB-35** (empty-state glyphs → `AppIcon` SVGs across 8 views), **CB-25**
+> (profile load skeleton + error/retry), **CB-72** (`invalid_code` attempts-remaining,
+> backend `otp.py` + login copy). **CB-128 is blocked** (no backend `order.due_at`).
+>
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
 > now flips only the not-carried panel/sides, a "Boshqa krom tanlash" button opens
 > the picker, the warning names the branch, and the banner count no longer drops
