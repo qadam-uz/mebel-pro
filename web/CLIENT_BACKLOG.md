@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 55 | 25 | **98** |
-| Done | 14 | 13 | 7 | **34** |
+| Open (incl. partial) | 18 | 54 | 25 | **97** |
+| Done | 14 | 14 | 7 | **35** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -113,7 +113,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
 | CB-35 | P2 | design-parity | med | M | Open | Replace letter-glyph placeholders with prototype SVG icons |
-| CB-36 | P2 | design-parity | med | S | Open | Add line icons to client header nav |
+| CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |

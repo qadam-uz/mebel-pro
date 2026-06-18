@@ -74,11 +74,11 @@ export const clientConfig: RoleConfig = {
     { value: 'orders', label: 'Orders', meta: 'no active orders', status: 'pending' },
   ],
   nav: [
-    { label: 'Bosh sahifa', to: '/c' },
-    { label: 'Chizmalar', to: '/c/cutting/drafts' },
-    { label: 'Buyurtmalar', to: '/c/orders' },
-    { label: 'Ustaxonalar', to: '/c/branches' },
-    { label: 'Profil', to: '/c/profile' },
+    { label: 'Bosh sahifa', to: '/c', icon: 'home' },
+    { label: 'Chizmalar', to: '/c/cutting/drafts', icon: 'scissors' },
+    { label: 'Buyurtmalar', to: '/c/orders', icon: 'orders' },
+    { label: 'Ustaxonalar', to: '/c/branches', icon: 'store' },
+    { label: 'Profil', to: '/c/profile', icon: 'users' },
   ],
   states: [
     { kind: 'loading', label: 'Loading client workspace', detail: 'Backend status is checked.' },
