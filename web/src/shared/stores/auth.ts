@@ -174,6 +174,10 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       status.value = accessToken.value ? 'authenticated' : 'anonymous'
       lastError.value = errorCode(error)
+      lastErrorDetails.value =
+        error instanceof ApiError && typeof error.body === 'object' && error.body
+          ? ((error.body as { details?: Record<string, unknown> }).details ?? null)
+          : null
       throw error
     }
   }

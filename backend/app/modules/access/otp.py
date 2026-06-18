@@ -219,7 +219,12 @@ async def verify_otp_code(
                 "Too many verification attempts",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        raise APIError("invalid_code", "Invalid code", status_code=status.HTTP_400_BAD_REQUEST)
+        raise APIError(
+            "invalid_code",
+            "Invalid code",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details={"attempts_remaining": MAX_VERIFY_ATTEMPTS - challenge.attempt_count},
+        )
 
     client = await db.scalar(select(Client).where(Client.phone == normalized_phone))
     if client is None:

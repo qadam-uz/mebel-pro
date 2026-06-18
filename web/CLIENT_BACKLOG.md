@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 7 | 51 | 24 | **82** |
-| Done | 25 | 17 | 8 | **50** |
+| Open (incl. partial) | 7 | 49 | 24 | **80** |
+| Done | 25 | 19 | 8 | **52** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R5c): states / session / PDF batch. **CB-08** (the API
@@ -77,6 +77,15 @@ file tracks *fixes/polish* against the current Vue implementation.
 > the order and the whole editing region is gated via `<fieldset disabled>` +
 > autosave gate).
 
+> Progress (2026-06-18, R4): 41 Done (PRs #18–20). Visual + states polish, each
+> planned by a parallel e2e-aware analysis workflow: **CB-45** (neutral branches
+> banner), **CB-46** (5-phase home stepper), **CB-42** (Uzbek fallbacks), **CB-127**
+> (cancel reason), **CB-36** (header nav icons), **CB-44** (`.tl` done/bad order
+> timeline), **CB-71** (429 resend countdown), **CB-118** (Krom material/service
+> split), **CB-35** (empty-state glyphs → `AppIcon` SVGs across 8 views), **CB-25**
+> (profile load skeleton + error/retry), **CB-72** (`invalid_code` attempts-remaining,
+> backend `otp.py` + login copy). **CB-128 is blocked** (no backend `order.due_at`).
+>
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
 > now flips only the not-carried panel/sides, a "Boshqa krom tanlash" button opens
 > the picker, the warning names the branch, and the banner count no longer drops
@@ -133,7 +142,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-22 | P2 | states-errors | med | M | Open | Extract shared ClientErrorState; add trace_id to notifications |
 | CB-23 | P2 | states-errors | med | M | Open | Fault-tolerant per-branch material loads (allSettled+retry) |
 | CB-24 | P2 | states-errors | med | M | Open | Handle cancel-order / delete-draft failures in dialogs |
-| CB-25 | P2 | states-errors | med | M | Open | Loading + error/empty state on client profile load |
+| CB-25 | P2 | states-errors | med | M | Done | Loading + error/empty state on client profile load |
 | CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
@@ -180,7 +189,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
 | CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
-| CB-72 | P2 | design-parity | med | M | Open | Show attempts-remaining on `invalid_code` |
+| CB-72 | P2 | design-parity | med | M | Done | Show attempts-remaining on `invalid_code` |
 | CB-73 | P2 | ux-flow | med | S | Done | Un-dead-end the name step on `code_expired` |
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
 | CB-75 | P1 | security | med | S | Done | Block protocol-relative `?redirect` (open redirect) |
