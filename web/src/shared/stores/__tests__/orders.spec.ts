@@ -16,7 +16,10 @@ vi.mock('@/shared/api/client', () => {
   }
   return {
     ApiError,
-    apiTraceId: () => null,
+    apiTraceId: (error: unknown) =>
+      error instanceof ApiError && typeof error.body === 'object' && error.body
+        ? ((error.body as { trace_id?: unknown }).trace_id ?? null)
+        : null,
     apiErrorCode: (error: unknown) => {
       if (error instanceof ApiError && typeof error.body === 'object' && error.body) {
         const code = (error.body as { code?: unknown }).code
@@ -109,28 +112,42 @@ describe('orders store', () => {
     expect(store.clientOrders).toHaveLength(1)
   })
 
-  it('attributes each branch its own quote error and keeps successes (CB-20/107)', async () => {
+  it('maps each branch to its own quote or error from the batch endpoint (CB-12/20)', async () => {
     const store = useOrdersStore()
-    // A succeeds; B is closed (403 → permission_denied); C can't fulfil (422 → generic).
-    vi.mocked(api.get).mockImplementation((path: string) => {
-      if (path.includes('branch_id=A')) {
-        return Promise.resolve({ branch_id: 'A', branch_name: 'Branch A' } as never)
-      }
-      if (path.includes('branch_id=B')) {
-        return Promise.reject(new ApiError(403, { code: 'permission_denied' }))
-      }
-      return Promise.reject(new ApiError(422, { code: 'materials_unavailable' }))
-    })
+    // One batch request: A quotes, B is closed, C can't fulfil — each branch keeps
+    // its OWN backend code (CB-19 needs the real code, not a shared/blanked one).
+    vi.mocked(api.post).mockResolvedValueOnce({
+      quotes: { A: { branch_id: 'A', branch_name: 'Branch A' } },
+      errors: { B: 'permission_denied', C: 'materials_unavailable' },
+    } as never)
 
-    const { quotes, errors } = await store.quoteBranches('draft-1', ['A', 'B', 'C'])
+    const { quotes, errors, firstErrorTraceId } = await store.quoteBranches('draft-1', [
+      'A',
+      'B',
+      'C',
+    ])
 
-    // The success is not poisoned by sibling failures (the CB-20 race), and each
-    // branch keeps its OWN backend code (CB-19 needs the real code, not 403→null).
+    expect(api.post).toHaveBeenCalledWith(
+      '/client/orders/quote/batch',
+      { draft_id: 'draft-1', branch_ids: ['A', 'B', 'C'] },
+      expect.anything(),
+    )
     expect(quotes.A).toMatchObject({ branch_id: 'A' })
     expect(quotes.B).toBeUndefined()
-    expect(quotes.C).toBeUndefined()
-    expect(errors.A).toBeUndefined()
     expect(errors.B).toBe('permission_denied')
     expect(errors.C).toBe('materials_unavailable')
+    expect(firstErrorTraceId).toBeNull()
+  })
+
+  it('marks every branch failed with the trace when the whole batch request fails (CB-12)', async () => {
+    const store = useOrdersStore()
+    vi.mocked(api.post).mockRejectedValueOnce(new ApiError(500, { trace_id: 'tr-batch' }))
+
+    const { quotes, errors, firstErrorTraceId } = await store.quoteBranches('draft-1', ['A', 'B'])
+
+    expect(Object.keys(quotes)).toHaveLength(0)
+    expect(errors.A).toBeNull()
+    expect(errors.B).toBeNull()
+    expect(firstErrorTraceId).toBe('tr-batch')
   })
 })

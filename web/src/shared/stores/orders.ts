@@ -34,6 +34,27 @@ export interface OrderQuote {
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
   total_tiyin: number
+  panels_used: number
+  cutting_rate_tiyin: number
+  material_lines: MaterialPriceLine[]
+  edge_lines: EdgePriceLine[]
+}
+
+export interface MaterialPriceLine {
+  material_id: string
+  material_name: string
+  panels_used: number
+  unit_price_tiyin: number
+  line_total_tiyin: number
+}
+
+export interface EdgePriceLine {
+  material_id: string
+  material_name: string
+  consumed_mm: number
+  material_cost_tiyin: number
+  service_cost_tiyin: number
+  line_total_tiyin: number
 }
 
 export interface OrderItem {
@@ -181,32 +202,33 @@ export const useOrdersStore = defineStore('orders', () => {
     )
   }
 
-  // Quote a draft against many branches concurrently, capturing each branch's
-  // OWN error code in the result rather than reading the shared `error`
-  // singleton a sibling request may have overwritten (the CB-20 race). Returns
-  // a quote per successful branch and a code (or null = generic) per failed one.
+  // Quote a draft against many branches in ONE request (CB-12) — the backend
+  // prices the validated result once and returns each branch's own quote or error
+  // code (branch_does_not_carry_*, branch_closed, missing_*_rate), so the view can
+  // still name each failure (CB-19/CB-20) without N round-trips. On a whole-request
+  // failure (network/auth) every branch is marked with the generic code + trace.
   async function quoteBranches(draftId: string, branchIds: string[]) {
-    const quotes: Record<string, OrderQuote> = {}
-    const errors: Record<string, string | null> = {}
-    let firstErrorTraceId: string | null = null
-    await Promise.all(
-      branchIds.map(async (branchId) => {
-        try {
-          quotes[branchId] = await quoteForDraft(draftId, branchId)
-        } catch (errorValue) {
-          // Preserve the real per-branch code (branch_does_not_carry_*,
-          // branch_closed, missing_*_rate) so the view can name the problem
-          // (CB-19/CB-20); fall back to the 403 mapping, then null.
-          errors[branchId] =
-            apiErrorCode(errorValue) ??
-            (errorValue instanceof ApiError && errorValue.status === 403
-              ? 'permission_denied'
-              : null)
-          if (firstErrorTraceId === null) firstErrorTraceId = apiTraceId(errorValue)
-        }
-      }),
-    )
-    return { quotes, errors, firstErrorTraceId }
+    if (branchIds.length === 0) {
+      return { quotes: {} as Record<string, OrderQuote>, errors: {}, firstErrorTraceId: null }
+    }
+    try {
+      const response = await api.post<{
+        quotes: Record<string, OrderQuote>
+        errors: Record<string, string | null>
+      }>('/client/orders/quote/batch', { draft_id: draftId, branch_ids: branchIds }, authInit())
+      return { quotes: response.quotes, errors: response.errors, firstErrorTraceId: null }
+    } catch (errorValue) {
+      const code =
+        apiErrorCode(errorValue) ??
+        (errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null)
+      const errors: Record<string, string | null> = {}
+      for (const branchId of branchIds) errors[branchId] = code
+      return {
+        quotes: {} as Record<string, OrderQuote>,
+        errors,
+        firstErrorTraceId: apiTraceId(errorValue),
+      }
+    }
   }
 
   async function createClientOrder(payload: unknown) {

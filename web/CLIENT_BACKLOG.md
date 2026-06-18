@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 2 | 9 | 4 | **15** |
-| Done | 30 | 59 | 28 | **117** |
+| Open (incl. partial) | 1 | 8 | 4 | **13** |
+| Done | 31 | 60 | 28 | **119** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B12): checkout quote — batch + itemized
+> (curl-verified, adversarially reviewed; a real edge-labor reconciliation drift was
+> found and fixed). **CB-12** (new POST `/client/orders/quote/batch` prices the draft
+> against all branches in ONE request, returning per-branch quote/error;
+> `orders.quoteBranches` now does one POST instead of N GETs, same return contract;
+> +2 store tests). **CB-117** (`OrderQuoteResponse` gained `panels_used`,
+> `cutting_rate_tiyin`, `material_lines`, `edge_lines`; the checkout review shows an
+> itemized breakdown — cutting = N panel × rate, per-material lines, per-edge
+> material+service — and the branch card a per-panel hint). The per-edge labor is now
+> summed per-material so the itemized lines reconcile exactly with the subtotals
+> (integer floor-division isn't distributive).
 
 > Progress (2026-06-19, client-finish B11): pagination — additive limit/offset,
 > bare-array + load-more, curl-verified + adversarially reviewed (filter-reset and
@@ -357,7 +369,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
 | CB-10 | P1 | completeness-stub | high | S | Done | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
-| CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
+| CB-12 | P1 | performance | high | M | Done | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Done | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Done | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
@@ -462,7 +474,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-114 | P2 | completeness-stub | med | M | Done | Per-session revoke ("Yopish") in profile sessions |
 | CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
-| CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
+| CB-117 | P2 | design-parity | med | L | Done | Itemized branch-card / checkout price lines |
 | CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Done | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
