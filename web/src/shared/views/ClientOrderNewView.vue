@@ -50,6 +50,13 @@ const branchRows = computed(() =>
     )
   }),
 )
+const preferredBranch = computed(() =>
+  draft.value?.preferred_branch_id
+    ? (activeBranches.value.find(
+        (branch) => branch.branch_id === draft.value?.preferred_branch_id,
+      ) ?? null)
+    : null,
+)
 const inactiveBranches = computed(() =>
   cutting.branchOptions.filter((branch) => branch.status !== 'active'),
 )
@@ -158,6 +165,14 @@ async function loadQuotes() {
     )
   } finally {
     quotesLoading.value = false
+    // Pre-select the client's preferred branch when it can fulfil the order.
+    if (
+      !selectedBranchId.value &&
+      preferredBranch.value &&
+      quoteByBranch.value[preferredBranch.value.branch_id]
+    ) {
+      selectedBranchId.value = preferredBranch.value.branch_id
+    }
   }
 }
 
@@ -279,6 +294,15 @@ onMounted(async () => {
                   <h2 class="font-serif text-lg font-semibold text-ink">
                     {{ branchTitle(quoteBranch(branch.branch_id), branch) }}
                   </h2>
+                  <span
+                    v-if="
+                      branch.branch_id === preferredBranch?.branch_id &&
+                      quoteBranch(branch.branch_id)
+                    "
+                    class="client-pill client-pill-info mt-1 inline-block"
+                  >
+                    Tavsiya — afzal filial
+                  </span>
                   <p class="mt-1 font-mono text-xs text-ink-muted">
                     {{
                       quoteBranch(branch.branch_id)?.branch_address ??
