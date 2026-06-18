@@ -4,19 +4,22 @@ import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import { formatRelativeDate } from '@/shared/app/clientUi'
 import {
-  clientNotificationBody,
-  clientNotificationIconName,
-  clientNotificationTitle,
-  formatRelativeDate,
-} from '@/shared/app/clientUi'
+  notificationBody,
+  notificationDestination,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
 const router = useRouter()
 const rolePath = useRolePath()
+const toast = useToast()
 const readFilter = ref<'all' | 'unread' | 'read'>('all')
 
 function goBack() {
@@ -40,18 +43,18 @@ const visibleItems = computed(() =>
 )
 
 function title(item: NotificationItem) {
-  return clientNotificationTitle(item)
+  return notificationTitle(item, 'client')
 }
 
 function body(item: NotificationItem) {
   return (
-    clientNotificationBody(item) ??
+    notificationBody(item) ??
     (item.entity_type === 'order' ? "Buyurtma holati o'zgardi." : 'Yangi xabar mavjud.')
   )
 }
 
 function iconName(item: NotificationItem) {
-  return clientNotificationIconName(item)
+  return notificationIconName(item)
 }
 
 function iconClass(item: NotificationItem) {
@@ -61,19 +64,31 @@ function iconClass(item: NotificationItem) {
 }
 
 function destination(item: NotificationItem) {
-  if (item.entity_type === 'order' && item.entity_id) return `/c/orders/${item.entity_id}`
-  return null
+  return notificationDestination(item, 'client')
 }
 
 async function openItem(item: NotificationItem) {
-  if (item.read_at === null) await notifications.markRead(item.id)
   const to = destination(item)
-  if (to) await router.push(rolePath(to))
+  if (!to) {
+    // No viewable target — keep it unread and tell the user rather than a dead tap (CB-125).
+    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    return
+  }
+  // markRead is best-effort: opening the order is the intent, so navigate
+  // regardless. A failure leaves the row unread (the badge stays) as its own
+  // feedback — no disjointed toast-then-navigate.
+  if (item.read_at === null) await notifications.markRead(item.id)
+  await router.push(rolePath(to))
 }
 
 async function markAllRead() {
   await notifications.markAllRead()
+  if (notifications.actionError) {
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   await notifications.loadList(50)
+  toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
 onMounted(() => {

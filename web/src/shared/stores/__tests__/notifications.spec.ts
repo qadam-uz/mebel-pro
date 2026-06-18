@@ -91,4 +91,17 @@ describe('notifications store', () => {
     expect(store.items[0].read_at).not.toBeNull()
     expect(store.items[1].read_at).toBe('2026-06-01T01:00:00Z')
   })
+
+  it('captures a markAllRead failure without zeroing the badge or stamping rows', async () => {
+    const store = useNotificationsStore()
+    store.items = [item('a', null)]
+    store.unread = 1
+    vi.mocked(api.post).mockRejectedValueOnce(new ApiError(500, { trace_id: 'tr-2' }))
+
+    await expect(store.markAllRead()).resolves.toBeUndefined()
+    expect(store.unread).toBe(1)
+    expect(store.items[0].read_at).toBeNull()
+    expect(store.actionError).toBe('notifications_read_all_failed')
+    expect(store.traceId).toBe('tr-2')
+  })
 })

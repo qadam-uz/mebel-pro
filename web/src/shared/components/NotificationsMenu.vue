@@ -2,12 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
 import {
-  clientNotificationBody,
-  clientNotificationIconName,
-  clientNotificationTitle,
-} from '@/shared/app/clientUi'
+  notificationBody,
+  notificationDestination,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
@@ -33,34 +33,19 @@ const isWorkshop = computed(() => roleConfig.role === 'workshop')
 const isAdmin = computed(() => roleConfig.role === 'admin')
 
 function title(item: NotificationItem) {
-  if (isAdmin.value) return adminNotificationTitle(item)
-  return clientNotificationTitle(item)
+  return notificationTitle(item, roleConfig.role)
 }
 
 function body(item: NotificationItem) {
-  return clientNotificationBody(item)
+  return notificationBody(item)
 }
 
 function iconName(item: NotificationItem) {
-  return clientNotificationIconName(item)
+  return notificationIconName(item)
 }
 
 function destination(item: NotificationItem) {
-  if (!item.entity_type || !item.entity_id) return null
-  if (item.entity_type === 'order' && roleConfig.role === 'client') {
-    return `/c/orders/${item.entity_id}`
-  }
-  if (item.entity_type === 'order' && roleConfig.role === 'workshop') {
-    return `/workshop/orders/${item.entity_id}`
-  }
-  if (item.entity_type === 'branch' && roleConfig.role === 'workshop') {
-    return `/workshop/branches/${item.entity_id}`
-  }
-  if (item.entity_type === 'workshop' && roleConfig.role === 'admin') {
-    return `/admin/workshops/${item.entity_id}`
-  }
-  if (roleConfig.role === 'admin') return adminNotificationDestination(item)
-  return null
+  return notificationDestination(item, roleConfig.role)
 }
 
 async function toggle() {
@@ -110,10 +95,19 @@ function onMenuKeydown(event: KeyboardEvent) {
 }
 
 async function openItem(item: NotificationItem) {
-  if (item.read_at === null) await notifications.markRead(item.id)
   const to = destination(item)
+  if (!to) {
+    // No viewable target (entity gone / not visible): don't silently mark read —
+    // tell the user and keep the row unread (CB-125).
+    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    return
+  }
+  // markRead is best-effort: opening the entity is the user's intent, so navigate
+  // regardless. A failure leaves the row unread (the badge stays) — that is its own
+  // feedback, with no disjointed toast-then-navigate.
+  if (item.read_at === null) await notifications.markRead(item.id)
   open.value = false
-  if (to) await router.push(rolePath(to))
+  await router.push(rolePath(to))
 }
 
 async function openAll() {
@@ -125,6 +119,10 @@ async function openAll() {
 
 async function markAllRead() {
   await notifications.markAllRead()
+  if (notifications.actionError) {
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   await notifications.loadList()
   toast.success("Hammasi o'qilgan deb belgilandi.")
 }

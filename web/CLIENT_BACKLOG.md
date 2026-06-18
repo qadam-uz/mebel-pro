@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 20 | 12 | **35** |
-| Done | 29 | 48 | 20 | **97** |
+| Open (incl. partial) | 3 | 17 | 12 | **32** |
+| Done | 29 | 51 | 20 | **100** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B4): notifications batch (adversarial
+> review caught one real issue — a disjointed toast-then-navigate on a failed
+> per-item mark-read — fixed by navigating regardless and dropping the toast, the
+> unread badge being the feedback). **CB-101** (new shared
+> `app/notificationPresenter.ts` — role-aware `notificationTitle/Body/IconName/
+> Destination` — replaces the per-component helper-picking in both the bell and the
+> page; `NotificationItem.payload` is now a typed `NotificationPayload`). **CB-26**
+> (`markAllRead` failures surface a danger toast + early-return in both surfaces;
+> the store already mutated only after the API resolved, so no rollback was needed;
+> +a markAllRead-failure store test). **CB-125** (a null-destination notification
+> now shows a "ochib bo'lmaydi" toast and stays unread instead of a silent dead tap).
 
 > Progress (2026-06-18, client-finish B3): profile & auth batch (adversarial
 > review — 0 actionable findings). **CB-78** (the profile name form now PATCHes
@@ -278,7 +290,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-23 | P2 | states-errors | med | M | Done | Fault-tolerant per-branch material loads (allSettled+retry) |
 | CB-24 | P2 | states-errors | med | M | Done | Handle cancel-order / delete-draft failures in dialogs |
 | CB-25 | P2 | states-errors | med | M | Done | Loading + error/empty state on client profile load |
-| CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
+| CB-26 | P2 | states-errors | med | S | Done | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
 | CB-29 | P2 | completeness-stub | med | M | Done | Per-edge-material metres + parts-placed count in result |
@@ -353,7 +365,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
 | CB-99 | P3 | tech-debt | low | S | Done | Extract shared downloadBlob() (2 copies) |
 | CB-100 | P2 | tech-debt | med | S | Open | Unify captureApiError() (3 divergent variants) |
-| CB-101 | P2 | tech-debt | med | M | Open | Typed notification payload + shared presenter |
+| CB-101 | P2 | tech-debt | med | M | Done | Typed notification payload + shared presenter |
 | CB-102 | P3 | tech-debt | low | S | Open | Centralize magic numbers (debounces, limits, 50 mm) |
 | CB-103 | P2 | tech-debt | med | S | Done | Fix stale AGENTS.md API-client path + phantom dirs |
 | CB-104 | P3 | tech-debt | low | S | Done | Remove dead quote surface in orders store |
@@ -377,7 +389,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
 | CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
 | CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |
-| CB-125 | P2 | states-errors | low | S | Open | Null-destination notification: "not available", not silent |
+| CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
