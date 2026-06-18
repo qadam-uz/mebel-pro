@@ -170,7 +170,7 @@ function deviceLabel(session: SessionResponse) {
   const browser =
     typeof session.device_info.browser === 'string' && session.device_info.browser.trim()
       ? session.device_info.browser
-      : 'Browser'
+      : 'Brauzer'
   const os =
     typeof session.device_info.os === 'string' && session.device_info.os.trim()
       ? session.device_info.os
@@ -387,7 +387,7 @@ onMounted(async () => {
                 </div>
               </div>
               <div class="font-mono text-xs text-ink-muted">
-                {{ session.is_current ? '—' : 'active' }}
+                {{ session.is_current ? '—' : 'faol' }}
               </div>
             </div>
           </template>

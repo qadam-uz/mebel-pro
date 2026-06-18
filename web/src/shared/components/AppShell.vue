@@ -225,7 +225,11 @@ watch(
 
         <div class="client-actions">
           <NotificationsMenu />
-          <RouterLink :to="config.profilePath" class="client-user-pill">
+          <RouterLink
+            :to="config.profilePath"
+            class="client-user-pill"
+            :aria-label="`Profil — ${auth.displayName}`"
+          >
             <span class="client-user-avatar" aria-hidden="true">{{ clientInitial }}</span>
             <span class="client-user-name text-sm font-bold text-ink">{{ auth.displayName }}</span>
           </RouterLink>

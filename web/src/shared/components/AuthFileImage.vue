@@ -3,14 +3,16 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { useFilesStore } from '@/shared/stores/files'
 
+// `alt` is required: a meaningful image without alt is hidden from assistive
+// tech, and the load-failure fallback needs it to announce what was missing
+// (CB-54). Pass an empty string explicitly for a purely decorative image.
 const props = withDefaults(
   defineProps<{
     fileId: string | null
-    alt?: string
+    alt: string
     class?: string
   }>(),
   {
-    alt: '',
     class: '',
   },
 )
@@ -47,8 +49,10 @@ onBeforeUnmount(revoke)
   <span
     v-else-if="failed"
     :class="props.class"
+    role="img"
+    :aria-label="alt ? `${alt} — rasmni yuklab bo'lmadi` : 'Rasmni yuklab bo\'lmadi'"
     class="grid place-items-center bg-sunk text-xs text-ink-muted"
   >
-    image
+    Rasm yo'q
   </span>
 </template>

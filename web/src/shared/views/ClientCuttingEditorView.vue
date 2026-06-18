@@ -444,10 +444,12 @@ function resultPanelCount(result: CuttingResult) {
 }
 
 function saveLabel() {
-  if (saveState.value === 'saved') return 'Saqlangan'
-  if (saveState.value === 'saving') return 'Saqlanmoqda'
+  // Self-describing for SR users (CB-53): the autosave chip is a role=status live
+  // region, so the announced text must stand on its own, not a bare "Saqlangan".
+  if (saveState.value === 'saved') return 'Chizma saqlandi'
+  if (saveState.value === 'saving') return 'Chizma saqlanmoqda'
   if (saveState.value === 'editing') return 'Tahrirlanmoqda'
-  return 'Saqlash xatosi'
+  return "Saqlash xatosi — qayta urinib ko'ring"
 }
 
 function addRow() {
@@ -892,6 +894,7 @@ const edgePatterns: Array<{
             'bg-info-soft text-info': saveState === 'saving' || saveState === 'editing',
             'bg-danger-soft text-danger': saveState === 'error',
           }"
+          role="status"
           aria-live="polite"
         >
           <span class="mp-dot" aria-hidden="true"></span>

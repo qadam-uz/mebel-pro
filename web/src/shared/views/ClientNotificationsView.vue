@@ -104,7 +104,7 @@ onMounted(() => {
         <div
           v-for="item in 5"
           :key="item"
-          class="client-card grid grid-cols-[38px_1fr_64px] gap-4 p-4"
+          class="client-card grid grid-cols-[38px_minmax(0,1fr)_auto] gap-4 p-4 max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
         >
           <div class="client-skeleton h-[38px]"></div>
           <div>
@@ -138,7 +138,7 @@ onMounted(() => {
           v-for="item in visibleItems"
           :key="item.id"
           type="button"
-          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left transition hover:border-ink"
+          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left transition hover:border-ink max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
           :class="item.read_at === null ? 'bg-accent-soft border-accent-tint' : ''"
           @click="openItem(item)"
         >
@@ -153,7 +153,7 @@ onMounted(() => {
             <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
             <span class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
           </span>
-          <span class="font-mono text-xs text-ink-muted">
+          <span class="font-mono text-xs text-ink-muted max-[480px]:col-start-2 max-[480px]:mt-1">
             {{ formatRelativeDate(item.created_at) }}
           </span>
         </button>

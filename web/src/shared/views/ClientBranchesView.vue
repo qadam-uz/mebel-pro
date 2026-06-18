@@ -86,7 +86,7 @@ onMounted(refreshBranches)
       <div
         v-for="item in 4"
         :key="item"
-        class="client-card grid grid-cols-[50px_1fr_auto] gap-4 p-5"
+        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
       >
         <div class="client-skeleton size-[50px]"></div>
         <div>
@@ -115,7 +115,7 @@ onMounted(refreshBranches)
       <article
         v-for="branch in visibleBranches"
         :key="branch.branch_id"
-        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5"
+        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
         :class="branch.status !== 'active' ? 'opacity-70' : ''"
       >
         <div
@@ -173,7 +173,7 @@ onMounted(refreshBranches)
         </div>
 
         <span
-          class="client-pill"
+          class="client-pill max-[480px]:col-span-2 max-[480px]:mt-1 max-[480px]:justify-self-start"
           :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
         >
           {{ branch.status === 'active' ? 'Faol' : 'Vaqtincha yopiq' }}

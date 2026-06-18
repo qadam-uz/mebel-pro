@@ -42,9 +42,24 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 23 | 19 | **45** |
-| Done | 29 | 45 | 13 | **87** |
+| Open (incl. partial) | 3 | 22 | 14 | **39** |
+| Done | 29 | 46 | 18 | **93** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B2): a11y & polish batch (adversarially
+> reviewed — the only actionable finding was adding a nav-structure test, applied).
+> **CB-37** (dropped the 5th "Profil" nav item; Profil now lives only in the user
+> pill — reachable at all sizes — and the two `display:none` mobile hacks are gone;
+> the pill gained an `aria-label`; a routeMatrix test pins the 4 client nav labels).
+> **CB-48** (aligned the branches/notifications skeleton grids to the real rows and
+> added a `≤480px` stacking variant so the status pill / timestamp drop below the
+> content instead of being squeezed). **CB-53** (autosave chip is now a
+> `role="status"` live region with self-describing text — "Chizma saqlandi" etc.).
+> **CB-54** (`AuthFileImage` `alt` is required; the load-failure fallback is a
+> localized `role="img"` with an `aria-label` naming the intended alt). **CB-67**
+> (wrapped the 5 selection-like `:hover` rules in `@media (hover: hover)` so a tap no
+> longer leaves the Krom button / edge options stuck-highlighted on touch).
+> **CB-81** ("active"→"faol", "Browser"→"Brauzer" in the session rows).
 
 > Progress (2026-06-18, client-finish B1): cleanup & dead-code batch (branch
 > `client-finish`, planned by the parallel triage workflow + adversarially reviewed
@@ -260,7 +275,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
 | CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
-| CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
+| CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
@@ -271,13 +286,13 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
-| CB-48 | P3 | responsive | low | S | Open ✓partial | Stack branches/notifications rows on small phones |
+| CB-48 | P3 | responsive | low | S | Done | Stack branches/notifications rows on small phones |
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
 | CB-50 | P3 | ux-flow | low | S | Done | Disable Optimise after a run until a part changes |
 | CB-51 | P3 | ux-flow | low | M | Open | Two-pane workshop+branch picker in editor pre-filter |
 | CB-52 | P3 | performance | low | S | Open | Cache/staleness reuse for home/notifications/branch-options |
-| CB-53 | P3 | a11y | low | S | Open | Self-describing autosave live region (role=status) |
-| CB-54 | P3 | a11y | low | S | Open | AuthFileImage: required alt + localized failure label |
+| CB-53 | P3 | a11y | low | S | Done | Self-describing autosave live region (role=status) |
+| CB-54 | P3 | a11y | low | S | Done | AuthFileImage: required alt + localized failure label |
 | CB-55 | P3 | correctness-bug | low | S | Done | Idempotent markRead decrement (only when was unread) |
 | CB-56 | P3 | correctness-bug | low | S | Done | One defined quantity for order-detail "Krom" figure |
 | CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
@@ -290,7 +305,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
 | CB-66 | P3 | ux-flow | low | S | Open | `scroll-margin` for #cutting-results under sticky header |
-| CB-67 | P3 | tech-debt | low | S | Open | Guard hover styles with `@media (hover:hover)` |
+| CB-67 | P3 | tech-debt | low | S | Done | Guard hover styles with `@media (hover:hover)` |
 | CB-68 | P2 | responsive | med | S | Done | 16px form-control font on mobile (stop iOS auto-zoom) |
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
@@ -304,7 +319,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-78 | P3 | correctness-bug | low | S | Open | Split profile PATCH payloads (branch save vs name form) |
 | CB-79 | P2 | correctness-bug | med | S | Partial | Reject whitespace-only name on registration step |
 | CB-80 | P3 | ux-flow | low | S | Won't | Surface OTP 5-min expiry on the code step |
-| CB-81 | P3 | i18n-copy | low | S | Open | Uzbek session-row labels ("active"/"Browser") |
+| CB-81 | P3 | i18n-copy | low | S | Done | Uzbek session-row labels ("active"/"Browser") |
 | CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
 | CB-83 | P2 | spec-conformance | med | S | Done | 100-part cap + blocking roll-up under the parts table |
 | CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |

@@ -15,7 +15,7 @@ import {
   roleDocumentTitle,
 } from '@/shared/app/createRoleApp'
 import { rolePath } from '@/shared/app/paths'
-import { adminConfig, workshopConfig } from '@/shared/app/roleConfig'
+import { adminConfig, clientConfig, workshopConfig } from '@/shared/app/roleConfig'
 
 function routePaths(routes: { path: string }[]) {
   return routes.map((route) => route.path)
@@ -98,6 +98,14 @@ describe('role route matrix', () => {
       '/platform/users',
     ])
     expect(normalizeRoleConfig(workshopConfig, '/workshop', '/workshop/').homePath).toBe('/')
+  })
+
+  it('keeps the client header nav to four items (Profil lives in the user pill, CB-37)', () => {
+    expect(
+      normalizeRoleConfig(clientConfig, '/client', '/client/').nav.map((item) => item.label),
+    ).toEqual(['Bosh sahifa', 'Chizmalar', 'Buyurtmalar', 'Ustaxonalar'])
+    // Profile stays reachable via the user pill (config.profilePath), not the nav.
+    expect(clientConfig.profilePath).toBe('/c/profile')
   })
 
   it('keeps the documented initial route inventories', () => {
