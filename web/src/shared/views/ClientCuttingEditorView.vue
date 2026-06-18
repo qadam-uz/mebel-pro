@@ -618,8 +618,43 @@ function selectPickerMaterial(materialId: string) {
   edgePickerState.value = next
 }
 
+const EDGE_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+// Trap Tab/Shift-Tab inside the edge modal so keyboard/SR users can't reach the
+// obscured part rows behind the scrim (CB-06; mirrors ConfirmDialog).
+function trapEdgeFocus(event: KeyboardEvent) {
+  const root = edgeDialogRef.value
+  if (!root) return
+  const focusable = Array.from(root.querySelectorAll<HTMLElement>(EDGE_FOCUSABLE)).filter(
+    (element) => element.getClientRects().length > 0,
+  )
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (!first || !last) {
+    event.preventDefault()
+    root.focus()
+    return
+  }
+  const active = document.activeElement
+  if (event.shiftKey) {
+    if (active === first || active === root) {
+      event.preventDefault()
+      last.focus()
+    }
+  } else if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 function onDocumentKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && edgePickerOpen.value) closeEdgePicker()
+  if (!edgePickerOpen.value) return
+  if (event.key === 'Escape') {
+    closeEdgePicker()
+    return
+  }
+  if (event.key === 'Tab') trapEdgeFocus(event)
 }
 
 function bringOwn(part: CuttingPart) {
@@ -1040,41 +1075,46 @@ const edgePatterns: Array<{
                   </div>
                 </div>
 
-                <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                  Uzunlik
-                  <input
-                    v-model.number="part.length_mm"
-                    type="number"
-                    min="50"
-                    class="mp-input font-mono"
-                    :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
-                    aria-label="Uzunlik millimetr"
-                  />
-                </label>
+                <!-- Sub-lg: the three dimensions share one row; lg:contents
+                     dissolves this wrapper so each input is a column of the
+                     parent grid again (desktop layout unchanged) — CB-60. -->
+                <div class="grid grid-cols-3 gap-2 lg:contents">
+                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                    Uzunlik
+                    <input
+                      v-model.number="part.length_mm"
+                      type="number"
+                      min="50"
+                      class="mp-input font-mono"
+                      :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      aria-label="Uzunlik millimetr"
+                    />
+                  </label>
 
-                <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                  Eni
-                  <input
-                    v-model.number="part.width_mm"
-                    type="number"
-                    min="50"
-                    class="mp-input font-mono"
-                    :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
-                    aria-label="Eni millimetr"
-                  />
-                </label>
+                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                    Eni
+                    <input
+                      v-model.number="part.width_mm"
+                      type="number"
+                      min="50"
+                      class="mp-input font-mono"
+                      :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      aria-label="Eni millimetr"
+                    />
+                  </label>
 
-                <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                  Soni
-                  <input
-                    v-model.number="part.quantity"
-                    type="number"
-                    min="1"
-                    class="mp-input font-mono"
-                    :class="part.quantity < 1 ? 'border-danger' : ''"
-                    aria-label="Soni"
-                  />
-                </label>
+                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                    Soni
+                    <input
+                      v-model.number="part.quantity"
+                      type="number"
+                      min="1"
+                      class="mp-input font-mono"
+                      :class="part.quantity < 1 ? 'border-danger' : ''"
+                      aria-label="Soni"
+                    />
+                  </label>
+                </div>
 
                 <div class="min-w-0">
                   <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
@@ -1147,7 +1187,7 @@ const edgePatterns: Array<{
                   </button>
                 </div>
 
-                <div class="grid gap-2">
+                <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
                   <button
                     type="button"
                     class="mp-button mp-button-outline"

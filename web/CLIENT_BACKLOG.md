@@ -42,9 +42,19 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 15 | 51 | 24 | **90** |
-| Done | 17 | 17 | 8 | **42** |
+| Open (incl. partial) | 11 | 51 | 24 | **86** |
+| Done | 21 | 17 | 8 | **46** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R5b): editor a11y + responsive batch. **CB-06** (Tab/
+> Shift-Tab focus-trap inside the edge modal, mirroring `ConfirmDialog`). **CB-07**
+> (placement rects are now `<g role="button">` with an `aria-label` and a
+> scale-independent `:focus-visible` ring; the SVG keeps `role="img"` so the
+> placement list stays the SR-primary affordance). **CB-62** (edge modal uses
+> `dvh` sizing and becomes a bottom-sheet with a safe-area sticky footer at
+> ≤520px; the fixed edge diagram shrinks at ≤360px so it stops clipping). **CB-60**
+> (sub-`lg` part rows: the three dimensions share one row and the row actions sit
+> 2-up via `lg:contents`/`lg:grid-cols-1`, leaving the desktop grid unchanged).
 
 > Progress (2026-06-18, R5): editor-correctness batch. **CB-15** + **CB-108**
 > (autosave timing extracted into a pure, unit-tested `autosaveController`: edits
@@ -93,8 +103,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-03 | P1 | ux-flow | high | M | Done | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
-| CB-06 | P1 | a11y | high | M | Open | Focus-trap the cutting-editor edge-banding modal |
-| CB-07 | P1 | a11y | high | M | Open | Keyboard-operable placement rects (name + visible focus) |
+| CB-06 | P1 | a11y | high | M | Done | Focus-trap the cutting-editor edge-banding modal |
+| CB-07 | P1 | a11y | high | M | Done | Keyboard-operable placement rects (name + visible focus) |
 | CB-08 | P1 | states-errors | high | L | Open | 401/session-expired: silent refresh then login redirect |
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
 | CB-10 | P1 | completeness-stub | high | S | Open | Poll notification unread count (~45s) |
@@ -147,9 +157,9 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
 | CB-58 | P3 | completeness-stub | low | S | Open | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
 | CB-59 | P2 | ux-flow | med | S | Open | `inputmode=numeric` on dimension/quantity inputs |
-| CB-60 | P1 | design-parity | high | M | Open | Port prototype's compact phone layout for part rows |
+| CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
 | CB-61 | P2 | a11y | med | S | Open | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
-| CB-62 | P1 | responsive | high | M | Open | Edge modal: dvh sizing + bottom-sheet on phones |
+| CB-62 | P1 | responsive | high | M | Done | Edge modal: dvh sizing + bottom-sheet on phones |
 | CB-63 | P2 | ux-flow | med | S | Open | iOS-proof modal scroll lock + overscroll containment |
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |

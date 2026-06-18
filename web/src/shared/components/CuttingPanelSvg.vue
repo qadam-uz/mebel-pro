@@ -68,7 +68,17 @@ function labelFits(placement: CuttingPlacement) {
       stroke="#334155"
       stroke-width="2"
     />
-    <g v-for="placement in panel.placements" :key="placement.id">
+    <g
+      v-for="placement in panel.placements"
+      :key="placement.id"
+      class="placement"
+      role="button"
+      tabindex="0"
+      :aria-label="label(placement)"
+      @click="emit('select-placement', placement)"
+      @keydown.enter.prevent="emit('select-placement', placement)"
+      @keydown.space.prevent="emit('select-placement', placement)"
+    >
       <rect
         :x="placement.x_mm"
         :y="svgY(placement)"
@@ -77,11 +87,6 @@ function labelFits(placement: CuttingPlacement) {
         :fill="placement.id === activePlacementId ? '#c8e8e3' : '#dbeafe'"
         stroke="#2563eb"
         stroke-width="1.5"
-        role="button"
-        tabindex="0"
-        @click="emit('select-placement', placement)"
-        @keydown.enter.prevent="emit('select-placement', placement)"
-        @keydown.space.prevent="emit('select-placement', placement)"
       />
       <text
         v-if="labelFits(placement)"
@@ -90,9 +95,24 @@ function labelFits(placement: CuttingPlacement) {
         fill="#0f172a"
         :font-size="labelFontSize"
         font-family="sans-serif"
+        aria-hidden="true"
       >
         {{ label(placement) }}
       </text>
     </g>
   </svg>
 </template>
+
+<style scoped>
+.placement {
+  cursor: pointer;
+  outline: none;
+}
+
+/* A clear, scale-independent focus ring for keyboard users (CB-07). */
+.placement:focus-visible rect {
+  stroke: #0f766e;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+</style>
