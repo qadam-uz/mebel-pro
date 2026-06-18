@@ -42,9 +42,19 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 51 | 24 | **93** |
-| Done | 14 | 17 | 8 | **39** |
+| Open (incl. partial) | 15 | 51 | 24 | **90** |
+| Done | 17 | 17 | 8 | **42** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R5): editor-correctness batch. **CB-15** + **CB-108**
+> (autosave timing extracted into a pure, unit-tested `autosaveController`: edits
+> coalesce, `flush()` runs on optimize and on unmount so navigating away within
+> the 700ms window no longer drops the edit, and the `currentDraft` watcher only
+> re-hydrates `parts` when the draft **id** changes so a save/optimize round-trip
+> can't clobber an in-flight keystroke). **CB-03** (a draft bound to an order —
+> any result with an `order_id` — is read-only: a non-dismissible banner links to
+> the order and the whole editing region is gated via `<fieldset disabled>` +
+> autosave gate).
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
 > now flips only the not-carried panel/sides, a "Boshqa krom tanlash" button opens
@@ -80,7 +90,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 |----|-----|-----|-----|-----|--------|-------|
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
 | CB-02 | P1 | i18n-copy | high | M | Blocked | Human-readable Uzbek notification titles (+body) in bell & list — backend emits no client notifications yet (only `inventory.low_stock` → workshop) |
-| CB-03 | P1 | ux-flow | high | M | Open | Read-only mode + bound-order banner for confirmed drafts in editor |
+| CB-03 | P1 | ux-flow | high | M | Done | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
 | CB-06 | P1 | a11y | high | M | Open | Focus-trap the cutting-editor edge-banding modal |
@@ -92,7 +102,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
-| CB-15 | P1 | correctness-bug | med | M | Open | Flush autosave on unmount; stop clobbering edits mid-optimize |
+| CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
 | CB-17 | P1 | states-errors | med | S | Open | Handle PDF download failures with feedback |
 | CB-18 | P1 | ux-flow | med | S | Open | Pre-check draft usability on entering order wizard |
@@ -185,7 +195,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
 | CB-106 | P1 | testing | high | S | Done | Regression test: notifications markRead idempotency (CB-55) |
 | CB-107 | P1 | testing | high | M | Open | Test per-branch quote error attribution (CB-20) |
-| CB-108 | P1 | testing | high | M | Open | Test autosave debounce + hydration guard (CB-15) |
+| CB-108 | P1 | testing | high | M | Done | Test autosave debounce + hydration guard (CB-15) |
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
 | CB-110 | P1 | testing | high | M | Open | Cover client OTP auth path in auth store |
 | CB-111 | P1 | states-errors | med | S | Open | PDF download: async revoke + attach anchor (silent fail) |

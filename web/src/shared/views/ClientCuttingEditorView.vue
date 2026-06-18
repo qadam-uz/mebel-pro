@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -51,10 +52,20 @@ const edgePickerSearch = ref('')
 const edgePickerThickness = ref<string | null>('all')
 const edgeDialogRef = ref<HTMLElement | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
-let saveTimer: number | undefined
 let hydrating = false
+// The draft whose parts are currently mirrored into `parts.value`. We only
+// re-hydrate from a server snapshot when this changes — saves/optimizes return
+// the same draft and must not clobber unsaved local edits (CB-15).
+let hydratedDraftId: string | null = null
 
 const draft = computed(() => cutting.currentDraft)
+// A draft is bound to an order once one of its results is confirmed onto an
+// order (the backend enforces one result per order). Bound drafts are
+// read-only — editing them would fire doomed saves and contradict the order.
+const boundOrderId = computed(
+  () => draft.value?.results.find((result) => result.order_id)?.order_id ?? null,
+)
+const isReadOnly = computed(() => boundOrderId.value !== null)
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === draft.value?.preferred_branch_id),
 )
@@ -103,7 +114,11 @@ const optimizedUnchanged = computed(
   () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
 )
 const canOptimize = computed(
-  () => parts.value.length > 0 && hasPersistableParts.value && !optimizedUnchanged.value,
+  () =>
+    !isReadOnly.value &&
+    parts.value.length > 0 &&
+    hasPersistableParts.value &&
+    !optimizedUnchanged.value,
 )
 const optimizeDisabledHint = computed(() => {
   if (parts.value.length === 0) return "Avval qism qo'shing"
@@ -169,7 +184,9 @@ const edgeByMaterial = computed(() => {
     .filter((row) => row.total > 0)
     .sort((left, right) => right.total - left.total)
 })
-const showRecovery = computed(() => !recoveryDismissed.value && notCarriedRows.value.length > 0)
+const showRecovery = computed(
+  () => !isReadOnly.value && !recoveryDismissed.value && notCarriedRows.value.length > 0,
+)
 const edgePickerOpen = computed(() => edgePickerPart.value !== null)
 const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
   const values = [...new Set(cutting.edgeOptions.map((material) => material.thickness_mm))]
@@ -617,32 +634,23 @@ function bringOwn(part: CuttingPart) {
   }
 }
 
-function scheduleSave() {
-  if (hydrating) return
-  window.clearTimeout(saveTimer)
-  saveState.value = 'editing'
-  saveTimer = window.setTimeout(() => void saveParts(), 700)
-}
+// Debounced autosave (700ms). The timing core lives in the framework-agnostic
+// `autosaveController` (unit-tested in autosaveController.spec.ts — CB-108); we
+// only mirror its status onto `saveState`/`saveError` and feed it the gate:
+// don't persist incomplete/out-of-bounds rows (they surface their own inline
+// validation) or a read-only bound draft.
+const autosave = createAutosaveController({
+  persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
+  canPersist: () => hasPersistableParts.value && !isReadOnly.value,
+  onStatus: (status) => {
+    saveState.value = status
+    saveError.value = status === 'error' ? "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring." : null
+  },
+})
 
-async function saveParts() {
-  window.clearTimeout(saveTimer)
-  if (!hasPersistableParts.value) {
-    // Incomplete or out-of-bounds rows surface their own inline validation
-    // (red inputs, the per-row size banner) — don't fire a doomed network save
-    // or a scary top-level error; just stay in the editing state.
-    saveState.value = 'editing'
-    saveError.value = null
-    return
-  }
-  saveState.value = 'saving'
-  saveError.value = null
-  try {
-    await cutting.updateDraft(draftId.value, { parts_snapshot: parts.value })
-    saveState.value = 'saved'
-  } catch {
-    saveState.value = 'error'
-    saveError.value = "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring."
-  }
+function scheduleSave() {
+  if (hydrating || isReadOnly.value) return
+  autosave.schedule()
 }
 
 async function setPreferredBranch(branchId: string | null) {
@@ -656,7 +664,9 @@ async function setPreferredBranch(branchId: string | null) {
 async function optimize() {
   if (cutting.optimizing || !canOptimize.value) return
   optimizeError.value = null
-  await saveParts()
+  // Flush any pending debounced edit so we optimize the latest parts, not a
+  // stale server snapshot.
+  await autosave.flush()
   if (saveState.value === 'error') return
   try {
     const updated = await cutting.optimizeDraft(draftId.value)
@@ -711,8 +721,20 @@ watch(
   () => cutting.currentDraft,
   (value) => {
     if (!value) return
-    hydrating = true
-    parts.value = value.parts_snapshot.map((part) => ({ ...part }))
+    // Only mirror the server snapshot into the editable `parts` when a
+    // genuinely different draft loaded. Our own saves/optimizes return the
+    // same draft id; re-hydrating then would discard a keystroke made during
+    // the round-trip (CB-15). Result-derived state below always tracks the
+    // latest payload so fresh optimize results show immediately.
+    if (value.id !== hydratedDraftId) {
+      hydrating = true
+      parts.value = value.parts_snapshot.map((part) => ({ ...part }))
+      hydratedDraftId = value.id
+      autosave.markSaved()
+      nextTick(() => {
+        hydrating = false
+      })
+    }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
     const optimizedResult = value.results.find((result) => result.id === activeResultId.value)
     lastOptimizedSignature.value = optimizedResult
@@ -723,10 +745,6 @@ watch(
       value.results[0]?.panels[0]?.id ??
       null
     selectedBranchId.value = value.preferred_branch_id
-    saveState.value = 'saved'
-    nextTick(() => {
-      hydrating = false
-    })
   },
   { immediate: true },
 )
@@ -743,7 +761,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onDocumentKeydown)
-  window.clearTimeout(saveTimer)
+  // Flush a debounced edit before teardown so navigating away within the 700ms
+  // window doesn't silently drop it (CB-15). The store action outlives the
+  // component, so the PATCH still completes.
+  void autosave.flush()
   document.body.classList.remove('modal-open')
 })
 
@@ -791,7 +812,7 @@ const edgePatterns: Array<{
           Qismlarni kiriting, ustaxona katalogi bo'yicha tekshiring va kesish natijasini oling.
         </p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
         <span
           class="mp-chip"
           :class="{
@@ -828,355 +849,381 @@ const edgePatterns: Array<{
     </section>
 
     <template v-else-if="draft">
-      <section
-        class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-hairline border-l-4 border-l-accent bg-sunk px-4 py-3 text-sm text-ink-soft"
+      <RouterLink
+        v-if="isReadOnly"
+        :to="rolePath(`/c/orders/${boundOrderId}`)"
+        class="client-banner info hover:border-accent"
       >
-        <span
-          class="grid size-6 place-items-center rounded bg-elevated font-mono font-black text-accent"
-          aria-hidden="true"
-        >
-          i
+        <span class="grid size-6 shrink-0 place-items-center text-accent" aria-hidden="true">
+          <Icon name="lock" />
         </span>
-        <div class="min-w-0 flex-1">
-          <span>Katalog filtri: </span>
-          <b class="text-ink">
-            {{
-              preferredBranch
-                ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
-                : 'barcha ustaxonalar'
-            }}
-          </b>
-        </div>
-        <button type="button" class="mp-button mp-button-outline" @click="branchPickerOpen = true">
-          {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
-        </button>
-        <button
-          v-if="preferredBranch"
-          type="button"
-          class="mp-button mp-button-outline"
-          @click="setPreferredBranch(null)"
-        >
-          Tozalash
-        </button>
-      </section>
-
-      <section
-        v-if="branchPickerOpen"
-        class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
-      >
-        <FormSelect v-model="selectedBranchId" label="Afzal filial" :options="branchOptions" />
-        <button
-          type="button"
-          class="mp-button mp-button-primary self-end"
-          @click="setPreferredBranch(selectedBranchId)"
-        >
-          Qo'llash
-        </button>
-      </section>
-
-      <section v-if="showRecovery" class="client-banner warn">
-        <span class="grid size-6 place-items-center rounded bg-warning text-white">!</span>
         <span class="min-w-0 flex-1">
-          {{ notCarriedRows.length }} qator tanlangan ustaxonada mavjud bo'lmagan materialdan
-          foydalanadi. Shu qatorlarni o'zim olib kelaman deb belgilang yoki pre-filterni tozalang.
-          <span class="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="setPreferredBranch(null)"
-            >
-              Pre-filterni tozalash
-            </button>
-            <button
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="recoveryDismissed = true"
-            >
-              Yopish
-            </button>
-          </span>
+          Bu chizma tasdiqlangan buyurtmaga bog'langan, shuning uchun faqat o'qish uchun.
+          <span class="font-bold text-accent">Buyurtmani ochish →</span>
         </span>
-      </section>
+      </RouterLink>
 
-      <section class="client-card">
-        <div class="client-card-h">
-          <div>
-            <h2>Qismlar ro'yxati</h2>
-            <p class="mt-1 text-sm text-ink-muted">
-              {{ parts.length }} qator · {{ totalQuantity }} dona
-            </p>
+      <fieldset :disabled="isReadOnly" class="contents">
+        <section
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-hairline border-l-4 border-l-accent bg-sunk px-4 py-3 text-sm text-ink-soft"
+        >
+          <span
+            class="grid size-6 place-items-center rounded bg-elevated font-mono font-black text-accent"
+            aria-hidden="true"
+          >
+            i
+          </span>
+          <div class="min-w-0 flex-1">
+            <span>Katalog filtri: </span>
+            <b class="text-ink">
+              {{
+                preferredBranch
+                  ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+                  : 'barcha ustaxonalar'
+              }}
+            </b>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
+          <button
+            type="button"
+            class="mp-button mp-button-outline"
+            @click="branchPickerOpen = true"
+          >
+            {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
+          </button>
+          <button
+            v-if="preferredBranch"
+            type="button"
+            class="mp-button mp-button-outline"
+            @click="setPreferredBranch(null)"
+          >
+            Tozalash
+          </button>
+        </section>
+
+        <section
+          v-if="branchPickerOpen"
+          class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
+        >
+          <FormSelect v-model="selectedBranchId" label="Afzal filial" :options="branchOptions" />
+          <button
+            type="button"
+            class="mp-button mp-button-primary self-end"
+            @click="setPreferredBranch(selectedBranchId)"
+          >
+            Qo'llash
+          </button>
+        </section>
+
+        <section v-if="showRecovery" class="client-banner warn">
+          <span class="grid size-6 place-items-center rounded bg-warning text-white">!</span>
+          <span class="min-w-0 flex-1">
+            {{ notCarriedRows.length }} qator tanlangan ustaxonada mavjud bo'lmagan materialdan
+            foydalanadi. Shu qatorlarni o'zim olib kelaman deb belgilang yoki pre-filterni tozalang.
+            <span class="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
-                class="rounded-md px-3 py-2 text-sm font-bold"
-                :class="entryMode === 'manual' ? 'bg-elevated text-ink shadow-sm' : 'text-ink-soft'"
-                @click="entryMode = 'manual'"
+                class="mp-button mp-button-outline"
+                @click="setPreferredBranch(null)"
               >
-                Qo'lda
+                Pre-filterni tozalash
               </button>
               <button
                 type="button"
-                class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
-                disabled
-                @click="entryMode = 'upload'"
+                class="mp-button mp-button-outline"
+                @click="recoveryDismissed = true"
               >
-                Fayldan
-                <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]">tez kunda</span>
+                Yopish
+              </button>
+            </span>
+          </span>
+        </section>
+
+        <section class="client-card">
+          <div class="client-card-h">
+            <div>
+              <h2>Qismlar ro'yxati</h2>
+              <p class="mt-1 text-sm text-ink-muted">
+                {{ parts.length }} qator · {{ totalQuantity }} dona
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
+                <button
+                  type="button"
+                  class="rounded-md px-3 py-2 text-sm font-bold"
+                  :class="
+                    entryMode === 'manual' ? 'bg-elevated text-ink shadow-sm' : 'text-ink-soft'
+                  "
+                  @click="entryMode = 'manual'"
+                >
+                  Qo'lda
+                </button>
+                <button
+                  type="button"
+                  class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
+                  disabled
+                  @click="entryMode = 'upload'"
+                >
+                  Fayldan
+                  <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]"
+                    >tez kunda</span
+                  >
+                </button>
+              </div>
+              <button type="button" class="mp-button mp-button-outline" @click="addRow">
+                Qism qo'shish
               </button>
             </div>
-            <button type="button" class="mp-button mp-button-outline" @click="addRow">
-              Qism qo'shish
-            </button>
           </div>
-        </div>
 
-        <div v-if="entryMode === 'upload'" class="client-card-b">
-          <div class="client-empty">
-            <div class="client-empty-icon"><Icon name="upload" /></div>
-            <h3>Import hali yoqilmagan</h3>
-            <p>Hozircha qismlarni manual kiritish barqaror yo'l.</p>
+          <div v-if="entryMode === 'upload'" class="client-card-b">
+            <div class="client-empty">
+              <div class="client-empty-icon"><Icon name="upload" /></div>
+              <h3>Import hali yoqilmagan</h3>
+              <p>Hozircha qismlarni manual kiritish barqaror yo'l.</p>
+            </div>
           </div>
-        </div>
 
-        <div v-else-if="parts.length === 0" class="client-card-b">
-          <div class="client-empty">
-            <div class="client-empty-icon"><Icon name="plus" /></div>
-            <h3>Bu chizmada qism yo'q</h3>
-            <p>Kesish ro'yxatini boshlash uchun birinchi qatorni qo'shing.</p>
-            <button type="button" class="mp-button mp-button-primary mt-4" @click="addRow">
-              Qism qo'shish
-            </button>
+          <div v-else-if="parts.length === 0" class="client-card-b">
+            <div class="client-empty">
+              <div class="client-empty-icon"><Icon name="plus" /></div>
+              <h3>Bu chizmada qism yo'q</h3>
+              <p>Kesish ro'yxatini boshlash uchun birinchi qatorni qo'shing.</p>
+              <button type="button" class="mp-button mp-button-primary mt-4" @click="addRow">
+                Qism qo'shish
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div v-else class="grid gap-3 p-4">
-          <article
-            v-for="(part, index) in parts"
-            :key="part.part_ref"
-            class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
-            :class="partIsInvalid(part) ? 'border-danger-soft' : 'border-hairline'"
-          >
-            <div
-              class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
+          <div v-else class="grid gap-3 p-4">
+            <article
+              v-for="(part, index) in parts"
+              :key="part.part_ref"
+              class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
+              :class="partIsInvalid(part) ? 'border-danger-soft' : 'border-hairline'"
             >
-              <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
+              <div
+                class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
+              >
+                <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
 
-              <div class="min-w-0">
-                <SearchCombobox
-                  label="Panel materiali"
-                  :model-value="part.material_id"
-                  :options="panelChoices"
-                  placeholder="Panel tanlang"
-                  :error="!part.material_id ? 'Material tanlang' : null"
-                  @update:model-value="setPanel(part, $event)"
-                />
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                  <span
-                    class="size-5 rounded border border-hairline"
-                    :style="swatchStyle(part)"
-                  ></span>
+                <div class="min-w-0">
+                  <SearchCombobox
+                    label="Panel materiali"
+                    :model-value="part.material_id"
+                    :options="panelChoices"
+                    placeholder="Panel tanlang"
+                    :error="!part.material_id ? 'Material tanlang' : null"
+                    @update:model-value="setPanel(part, $event)"
+                  />
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      class="size-5 rounded border border-hairline"
+                      :style="swatchStyle(part)"
+                    ></span>
+                    <button
+                      type="button"
+                      class="mp-chip"
+                      :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
+                      @click="setPanelSource(part, 'shop')"
+                    >
+                      Ustaxona
+                    </button>
+                    <button
+                      type="button"
+                      class="mp-chip"
+                      :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
+                      @click="setPanelSource(part, 'own')"
+                    >
+                      O'zim olib kelaman
+                    </button>
+                  </div>
+                </div>
+
+                <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                  Uzunlik
+                  <input
+                    v-model.number="part.length_mm"
+                    type="number"
+                    min="50"
+                    class="mp-input font-mono"
+                    :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                    aria-label="Uzunlik millimetr"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                  Eni
+                  <input
+                    v-model.number="part.width_mm"
+                    type="number"
+                    min="50"
+                    class="mp-input font-mono"
+                    :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                    aria-label="Eni millimetr"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-xs font-bold text-ink-muted">
+                  Soni
+                  <input
+                    v-model.number="part.quantity"
+                    type="number"
+                    min="1"
+                    class="mp-input font-mono"
+                    :class="part.quantity < 1 ? 'border-danger' : ''"
+                    aria-label="Soni"
+                  />
+                </label>
+
+                <div class="min-w-0">
+                  <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
                   <button
                     type="button"
-                    class="mp-chip"
-                    :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
-                    @click="setPanelSource(part, 'shop')"
+                    class="client-edges-btn"
+                    :title="edgeCellTitle(part)"
+                    :aria-label="`Qism #${index + 1} kromini tahrirlash`"
+                    @click="openEdgePicker(part, $event)"
                   >
-                    Ustaxona
+                    <svg viewBox="0 0 76 48" class="client-edge-svg" aria-hidden="true">
+                      <rect class="frame" x="14" y="13" width="48" height="22" />
+                      <line
+                        v-if="part.edge_top"
+                        class="side"
+                        x1="14"
+                        y1="13"
+                        x2="62"
+                        y2="13"
+                        :stroke-width="edgeStrokeWidth(part.edge_top)"
+                        :class="{ own: part.edge_top.source === 'own' }"
+                      />
+                      <line
+                        v-if="part.edge_bottom"
+                        class="side"
+                        x1="14"
+                        y1="35"
+                        x2="62"
+                        y2="35"
+                        :stroke-width="edgeStrokeWidth(part.edge_bottom)"
+                        :class="{ own: part.edge_bottom.source === 'own' }"
+                      />
+                      <line
+                        v-if="part.edge_left"
+                        class="side"
+                        x1="14"
+                        y1="13"
+                        x2="14"
+                        y2="35"
+                        :stroke-width="edgeStrokeWidth(part.edge_left)"
+                        :class="{ own: part.edge_left.source === 'own' }"
+                      />
+                      <line
+                        v-if="part.edge_right"
+                        class="side"
+                        x1="62"
+                        y1="13"
+                        x2="62"
+                        y2="35"
+                        :stroke-width="edgeStrokeWidth(part.edge_right)"
+                        :class="{ own: part.edge_right.source === 'own' }"
+                      />
+                      <text v-if="part.edge_top" class="lbl" x="38" y="7" text-anchor="middle">
+                        {{ edgeCellLabel(part, 'edge_top') }}
+                      </text>
+                      <text v-if="part.edge_bottom" class="lbl" x="38" y="45" text-anchor="middle">
+                        {{ edgeCellLabel(part, 'edge_bottom') }}
+                      </text>
+                      <text v-if="part.edge_left" class="lbl" x="6" y="24" text-anchor="middle">
+                        {{ edgeCellLabel(part, 'edge_left') }}
+                      </text>
+                      <text v-if="part.edge_right" class="lbl" x="70" y="24" text-anchor="middle">
+                        {{ edgeCellLabel(part, 'edge_right') }}
+                      </text>
+                    </svg>
+                    <span class="client-edge-summary">
+                      <b>{{ edgeSummary(part) }}</b>
+                      <small>{{ edgeSourceSummary(part) }}</small>
+                    </span>
+                  </button>
+                </div>
+
+                <div class="grid gap-2">
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline"
+                    @click="duplicateRow(part)"
+                  >
+                    Nusxa
                   </button>
                   <button
                     type="button"
-                    class="mp-chip"
-                    :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-                    @click="setPanelSource(part, 'own')"
+                    class="mp-button mp-button-outline text-danger"
+                    @click="deleteRow(index)"
                   >
-                    O'zim olib kelaman
+                    O'chirish
                   </button>
                 </div>
               </div>
 
-              <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                Uzunlik
-                <input
-                  v-model.number="part.length_mm"
-                  type="number"
-                  min="50"
-                  class="mp-input font-mono"
-                  :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
-                  aria-label="Uzunlik millimetr"
-                />
-              </label>
+              <p
+                v-if="partSizeError(part)"
+                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+              >
+                <span aria-hidden="true">!</span>
+                <span>{{ partSizeError(part) }}</span>
+              </p>
 
-              <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                Eni
-                <input
-                  v-model.number="part.width_mm"
-                  type="number"
-                  min="50"
-                  class="mp-input font-mono"
-                  :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
-                  aria-label="Eni millimetr"
-                />
-              </label>
-
-              <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                Soni
-                <input
-                  v-model.number="part.quantity"
-                  type="number"
-                  min="1"
-                  class="mp-input font-mono"
-                  :class="part.quantity < 1 ? 'border-danger' : ''"
-                  aria-label="Soni"
-                />
-              </label>
-
-              <div class="min-w-0">
-                <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
-                <button
-                  type="button"
-                  class="client-edges-btn"
-                  :title="edgeCellTitle(part)"
-                  :aria-label="`Qism #${index + 1} kromini tahrirlash`"
-                  @click="openEdgePicker(part, $event)"
-                >
-                  <svg viewBox="0 0 76 48" class="client-edge-svg" aria-hidden="true">
-                    <rect class="frame" x="14" y="13" width="48" height="22" />
-                    <line
-                      v-if="part.edge_top"
-                      class="side"
-                      x1="14"
-                      y1="13"
-                      x2="62"
-                      y2="13"
-                      :stroke-width="edgeStrokeWidth(part.edge_top)"
-                      :class="{ own: part.edge_top.source === 'own' }"
-                    />
-                    <line
-                      v-if="part.edge_bottom"
-                      class="side"
-                      x1="14"
-                      y1="35"
-                      x2="62"
-                      y2="35"
-                      :stroke-width="edgeStrokeWidth(part.edge_bottom)"
-                      :class="{ own: part.edge_bottom.source === 'own' }"
-                    />
-                    <line
-                      v-if="part.edge_left"
-                      class="side"
-                      x1="14"
-                      y1="13"
-                      x2="14"
-                      y2="35"
-                      :stroke-width="edgeStrokeWidth(part.edge_left)"
-                      :class="{ own: part.edge_left.source === 'own' }"
-                    />
-                    <line
-                      v-if="part.edge_right"
-                      class="side"
-                      x1="62"
-                      y1="13"
-                      x2="62"
-                      y2="35"
-                      :stroke-width="edgeStrokeWidth(part.edge_right)"
-                      :class="{ own: part.edge_right.source === 'own' }"
-                    />
-                    <text v-if="part.edge_top" class="lbl" x="38" y="7" text-anchor="middle">
-                      {{ edgeCellLabel(part, 'edge_top') }}
-                    </text>
-                    <text v-if="part.edge_bottom" class="lbl" x="38" y="45" text-anchor="middle">
-                      {{ edgeCellLabel(part, 'edge_bottom') }}
-                    </text>
-                    <text v-if="part.edge_left" class="lbl" x="6" y="24" text-anchor="middle">
-                      {{ edgeCellLabel(part, 'edge_left') }}
-                    </text>
-                    <text v-if="part.edge_right" class="lbl" x="70" y="24" text-anchor="middle">
-                      {{ edgeCellLabel(part, 'edge_right') }}
-                    </text>
-                  </svg>
-                  <span class="client-edge-summary">
-                    <b>{{ edgeSummary(part) }}</b>
-                    <small>{{ edgeSourceSummary(part) }}</small>
-                  </span>
+              <div
+                v-if="rowNotCarried(part).length"
+                class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
+              >
+                <span class="font-black">!</span>
+                <span class="min-w-0 flex-1">
+                  Bu qator
+                  <b>{{ preferredBranch?.branch_name ?? 'tanlangan filial' }}</b>
+                  filialida mavjud bo'lmagan materialdan foydalanadi.
+                </span>
+                <button type="button" class="mp-button mp-button-outline" @click="bringOwn(part)">
+                  O'zim olib kelaman
                 </button>
-              </div>
-
-              <div class="grid gap-2">
                 <button
+                  v-if="rowNotCarried(part).some((issue) => issue !== 'panel')"
                   type="button"
                   class="mp-button mp-button-outline"
-                  @click="duplicateRow(part)"
+                  @click="openEdgePicker(part)"
                 >
-                  Nusxa
-                </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline text-danger"
-                  @click="deleteRow(index)"
-                >
-                  O'chirish
+                  Boshqa krom tanlash
                 </button>
               </div>
-            </div>
-
-            <p
-              v-if="partSizeError(part)"
-              class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
-            >
-              <span aria-hidden="true">!</span>
-              <span>{{ partSizeError(part) }}</span>
-            </p>
-
-            <div
-              v-if="rowNotCarried(part).length"
-              class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
-            >
-              <span class="font-black">!</span>
-              <span class="min-w-0 flex-1">
-                Bu qator
-                <b>{{ preferredBranch?.branch_name ?? 'tanlangan filial' }}</b>
-                filialida mavjud bo'lmagan materialdan foydalanadi.
-              </span>
-              <button type="button" class="mp-button mp-button-outline" @click="bringOwn(part)">
-                O'zim olib kelaman
-              </button>
-              <button
-                v-if="rowNotCarried(part).some((issue) => issue !== 'panel')"
-                type="button"
-                class="mp-button mp-button-outline"
-                @click="openEdgePicker(part)"
-              >
-                Boshqa krom tanlash
-              </button>
-            </div>
-          </article>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5">
-          <div>
-            <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
-            <p v-else class="text-sm text-ink-soft">
-              {{ parts.length }} qator · {{ totalQuantity }} dona · pre-filter
-              {{ preferredBranch ? preferredBranch.branch_name : 'yoqilmagan' }}
-            </p>
-            <label class="mt-2 inline-flex min-h-9 items-center gap-2 text-sm font-bold text-ink">
-              <input v-model="showAllCatalog" type="checkbox" class="size-4" />
-              Barcha katalogni ko'rsatish
-            </label>
+            </article>
           </div>
-          <button
-            type="button"
-            class="mp-button mp-button-primary"
-            :disabled="cutting.optimizing || !canOptimize"
-            :title="optimizeDisabledHint"
-            @click="optimize"
+
+          <div
+            class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5"
           >
-            {{ cutting.optimizing ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
-          </button>
-        </div>
-      </section>
+            <div>
+              <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
+              <p v-else class="text-sm text-ink-soft">
+                {{ parts.length }} qator · {{ totalQuantity }} dona · pre-filter
+                {{ preferredBranch ? preferredBranch.branch_name : 'yoqilmagan' }}
+              </p>
+              <label class="mt-2 inline-flex min-h-9 items-center gap-2 text-sm font-bold text-ink">
+                <input v-model="showAllCatalog" type="checkbox" class="size-4" />
+                Barcha katalogni ko'rsatish
+              </label>
+            </div>
+            <button
+              type="button"
+              class="mp-button mp-button-primary"
+              :disabled="cutting.optimizing || !canOptimize"
+              :title="optimizeDisabledHint"
+              @click="optimize"
+            >
+              {{ cutting.optimizing ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
+            </button>
+          </div>
+        </section>
+      </fieldset>
 
       <section id="cutting-results" class="client-card mt-6">
         <div class="client-card-h">
