@@ -63,8 +63,8 @@ const branchOptions = computed<ChoiceOption[]>(() =>
     label: `${branch.workshop_name} · ${branch.branch_name}`,
     meta:
       branch.status === 'temporarily_closed'
-        ? (branch.closed_reason ?? 'temporarily closed')
-        : 'active branch',
+        ? (branch.closed_reason ?? 'vaqtincha yopiq')
+        : 'faol filial',
   })),
 )
 const panelOptions = computed(() =>
@@ -77,7 +77,7 @@ const panelChoices = computed<ChoiceOption[]>(() =>
     value: material.id,
     label: materialLabel(material),
     meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
-      material.branch_carried ? '' : ' · not at branch'
+      material.branch_carried ? '' : " · filialda yo'q"
     }`,
   })),
 )

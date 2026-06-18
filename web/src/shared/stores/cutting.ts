@@ -139,11 +139,11 @@ function withQuery(path: string, params: Record<string, string | boolean | null 
 }
 
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
-  if (!material) return 'No material'
+  if (!material) return "Material yo'q"
   const size =
     material.kind === 'panel'
       ? `${material.panel_length_mm ?? '-'}x${material.panel_width_mm ?? '-'}`
-      : `${material.thickness_mm} mm edge`
+      : `${material.thickness_mm} mm krom`
   return `${material.manufacturer_name} ${material.name} · ${size}`
 }
 

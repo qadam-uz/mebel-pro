@@ -287,7 +287,7 @@ onMounted(() => {
               </div>
 
               <div class="my-4 flex items-center">
-                <template v-for="(label, index) in clientPhaseLabels.slice(0, 4)" :key="label">
+                <template v-for="(label, index) in clientPhaseLabels" :key="label">
                   <span class="flex shrink-0 flex-col items-center gap-1">
                     <span
                       class="size-3 rounded-full border-2"
@@ -306,7 +306,7 @@ onMounted(() => {
                     </span>
                   </span>
                   <span
-                    v-if="index < 3"
+                    v-if="index < 4"
                     class="mb-5 h-0.5 flex-1 rounded bg-hairline sm:mb-[22px]"
                     :class="index < clientPhaseIndex(order.status) ? 'bg-accent' : ''"
                   ></span>

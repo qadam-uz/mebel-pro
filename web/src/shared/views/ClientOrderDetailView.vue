@@ -38,6 +38,9 @@ const cancelDialogOpen = ref(false)
 const cancelReason = ref('Mijoz buyurtmani tasdiqlashdan oldin bekor qildi')
 
 const order = computed(() => orders.currentOrder)
+const cancelledReason = computed(
+  () => order.value?.events.find((event) => event.to_status === 'cancelled')?.reason ?? null,
+)
 const result = computed(() => order.value?.cutting_result ?? null)
 const activePanel = computed(() => {
   const current = result.value
@@ -250,7 +253,9 @@ onMounted(() => {
         <span>
           Buyurtma bekor qilindi<span v-if="order.cancelled_at">
             · {{ formatDate(order.cancelled_at) }}</span
-          >.
+          >.<span v-if="cancelledReason">
+            Sabab: <b>{{ cancelledReason }}</b></span
+          >
         </span>
       </div>
 

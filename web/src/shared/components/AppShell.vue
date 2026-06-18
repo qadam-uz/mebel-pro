@@ -130,6 +130,7 @@ const adminDocsLinks = [
 function iconPath(name: string | undefined) {
   const paths: Record<string, string> = {
     dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-5H4v5Z"/>',
+    home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
     orders: '<path d="M6 3h9l3 3v15H6V3Z"/><path d="M14 3v4h4"/><path d="M9 11h6M9 15h6"/>',
     scissors:
       '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8 8l10 10M8 16 18 6"/>',
@@ -214,6 +215,9 @@ watch(
 
         <nav class="client-nav" aria-label="Asosiy navigatsiya">
           <RouterLink v-for="item in visibleNav" :key="item.to" :to="item.to">
+            <span class="client-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
+            </span>
             {{ item.label }}
           </RouterLink>
         </nav>

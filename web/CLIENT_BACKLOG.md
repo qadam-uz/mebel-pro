@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 56 | 28 | **102** |
-| Done | 14 | 12 | 4 | **30** |
+| Open (incl. partial) | 18 | 54 | 25 | **97** |
+| Done | 14 | 14 | 7 | **35** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -113,17 +113,17 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
 | CB-35 | P2 | design-parity | med | M | Open | Replace letter-glyph placeholders with prototype SVG icons |
-| CB-36 | P2 | design-parity | med | S | Open | Add line icons to client header nav |
+| CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
 | CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
-| CB-42 | P2 | i18n-copy | med | S | Open | Localize English fallbacks (pickers/summary/SearchCombobox) |
+| CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Open | Lock background scroll when ConfirmDialog is open |
 | CB-44 | P3 | design-parity | low | S | Open | Use `.tl` timeline with done/bad states in order history |
-| CB-45 | P3 | design-parity | low | S | Open | Recolor branches info banner from warn-yellow to neutral |
-| CB-46 | P3 | design-parity | low | S | Open | Full 5-phase model on home active-order progress |
+| CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
+| CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
 | CB-48 | P3 | responsive | low | S | Open ✓partial | Stack branches/notifications rows on small phones |
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
@@ -204,7 +204,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |
 | CB-125 | P2 | states-errors | low | S | Open | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Open | Bell rows: event-family icon, drop raw event_code subtext |
-| CB-127 | P3 | completeness-stub | low | S | Open | Cancelled banner shows cancellation reason |
+| CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
 | CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
 | CB-130 | P3 | testing | low | M | Open | Test edge ranking/recommendation helpers |
