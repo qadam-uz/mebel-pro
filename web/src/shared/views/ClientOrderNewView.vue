@@ -6,6 +6,7 @@ import {
   clientErrorLabel,
   formatPercent,
   formatPhone,
+  formatTodayHours,
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
@@ -394,6 +395,9 @@ onMounted(async () => {
                         `${branch.workshop_name} · ${branch.branch_name}`
                       }}
                     </p>
+                    <p class="mt-1 text-xs text-ink-soft">
+                      Bugun: {{ formatTodayHours(branch.today_hours) }}
+                    </p>
                   </div>
                   <div class="font-mono text-2xl font-extrabold text-accent">
                     {{
@@ -472,6 +476,9 @@ onMounted(async () => {
                 </div>
                 <div class="mt-1 font-mono text-xs text-ink-muted">
                   {{ selectedQuote?.branch_address }}
+                </div>
+                <div class="mt-1 text-xs text-ink-soft">
+                  Bugun: {{ formatTodayHours(selectedQuote?.today_hours) }}
                 </div>
                 <div class="mt-2 font-mono text-xs text-ink-muted">
                   Tel: {{ formatPhone(selectedQuote?.branch_phone) }}

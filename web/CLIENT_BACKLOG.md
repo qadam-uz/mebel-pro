@@ -42,9 +42,22 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 12 | 4 | **17** |
-| Done | 29 | 56 | 28 | **113** |
+| Open (incl. partial) | 2 | 11 | 4 | **17** |
+| Done | 30 | 57 | 28 | **115** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B10): backend perf + spec — runtime
+> curl-verified against the hot-reloading dev backend, then adversarially reviewed
+> (a "+N overflow" finding was a false alarm — the `total > 4` guard makes
+> `total − 4` correct). **CB-13** (the branches list is now ONE request: the
+> backend attaches a top-6 `materials_preview` + `materials_total` per branch via a
+> single grouped query, and the per-branch materials N+1 — the CB-23
+> fault-tolerant batch machinery — was removed from `clientCatalog.ts` as dead
+> code, 154→67 lines). **CB-112** (a `Branch.today_hours()` method feeds a new
+> `today_hours {open,close}` field on `ClientBranchOption` / `OrderQuoteResponse` /
+> `OrderSummaryResponse`; the client renders "Bugun: 09:00–18:00 / Bugun yopiq" on
+> the order-new branch cards, the Review pickup block, and the order-detail pickup
+> card). Backend verified via CI (no local uv); +a branch-options regression test.
 
 > Progress (2026-06-19, client-finish B9): testing — pure-helper extraction +
 > coverage (adversarial review confirmed the tests pin behaviour; added a
@@ -333,7 +346,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-10 | P1 | completeness-stub | high | S | Done | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
-| CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
+| CB-13 | P1 | performance | high | M | Done | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Done | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
@@ -432,7 +445,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
 | CB-110 | P1 | testing | high | M | Done | Cover client OTP auth path in auth store |
 | CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
-| CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
+| CB-112 | P2 | spec-conformance | med | M | Done | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Done | Order-detail Timeline: 5 client phases, not raw events |
 | CB-114 | P2 | completeness-stub | med | M | Done | Per-session revoke ("Yopish") in profile sessions |
 | CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |

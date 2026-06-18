@@ -10,6 +10,7 @@ import {
   clientStatusPillClass,
   formatPercent,
   formatRelativeDate,
+  formatTodayHours,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -473,6 +474,9 @@ onMounted(() => {
                       {{ order.workshop_name }} · {{ order.branch_name }}
                     </div>
                     <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
+                    <div class="mt-1 text-sm text-ink-soft">
+                      Bugun: {{ formatTodayHours(order.today_hours) }}
+                    </div>
                   </div>
                   <div class="client-row-meta">{{ order.branch_phone }}</div>
                 </div>

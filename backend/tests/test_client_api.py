@@ -46,6 +46,8 @@ async def test_client_profile_updates_name_and_preferred_branch_without_phone_pa
 
     assert options.status_code == 200
     assert options.json()[0]["branch_id"] == str(branch.id)
+    # CB-112: branch-options carries today's working hours for the picker.
+    assert set(options.json()[0]["today_hours"]) == {"open", "close"}
     assert updated.status_code == 200
     assert updated.json()["name"] == "New Name"
     assert updated.json()["phone"] == "+998909090909"

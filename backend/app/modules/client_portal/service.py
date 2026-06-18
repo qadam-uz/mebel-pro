@@ -17,6 +17,7 @@ from app.models.enums import (
 from app.modules.access.contracts import Client
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.client_portal.schemas import (
+    ClientBranchMaterialPreview,
     ClientBranchMaterialResponse,
     ClientBranchOption,
     ClientBranchResponse,
@@ -112,6 +113,7 @@ async def branch_options(
             branch_name=branch.name,
             status=branch.status,
             closed_reason=branch.closed_reason,
+            today_hours=branch.today_hours(),
         )
         for branch, workshop in rows
     ]
@@ -149,6 +151,7 @@ async def client_branches(
         pattern = f"%{normalized.lower()}%"
         query = query.where(or_(Workshop.name.ilike(pattern), Branch.name.ilike(pattern)))
     rows = (await db.execute(query)).all()
+    previews, totals = await _branch_material_previews(db, [branch.id for branch, _ in rows])
     return [
         ClientBranchResponse(
             branch_id=branch.id,
@@ -163,9 +166,53 @@ async def client_branches(
             working_hours=branch.working_hours,
             status=branch.status,
             closed_reason=branch.closed_reason,
+            materials_preview=previews.get(branch.id, []),
+            materials_total=totals.get(branch.id, 0),
         )
         for branch, workshop in rows
     ]
+
+
+_BRANCH_PREVIEW_LIMIT = 6
+
+
+async def _branch_material_previews(
+    db: AsyncSession,
+    branch_ids: list[uuid.UUID],
+) -> tuple[dict[uuid.UUID, list[ClientBranchMaterialPreview]], dict[uuid.UUID, int]]:
+    """Top-N carried-material previews + total counts for many branches in ONE
+    query, so the branches list avoids the per-branch N+1 (CB-13)."""
+    previews: dict[uuid.UUID, list[ClientBranchMaterialPreview]] = {}
+    totals: dict[uuid.UUID, int] = {}
+    if not branch_ids:
+        return previews, totals
+    query = (
+        select(BranchMaterial, Material, Manufacturer)
+        .join(Material, Material.id == BranchMaterial.material_id)
+        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        .where(
+            BranchMaterial.branch_id.in_(branch_ids),
+            BranchMaterial.status == MaterialStatus.ACTIVE,
+            Material.status == MaterialStatus.ACTIVE,
+            Manufacturer.status == MaterialStatus.ACTIVE,
+        )
+        .order_by(Manufacturer.name, Material.name)
+    )
+    for branch_material, material, manufacturer in (await db.execute(query)).all():
+        branch_id = branch_material.branch_id
+        totals[branch_id] = totals.get(branch_id, 0) + 1
+        bucket = previews.setdefault(branch_id, [])
+        if len(bucket) < _BRANCH_PREVIEW_LIMIT:
+            bucket.append(
+                ClientBranchMaterialPreview(
+                    id=material.id,
+                    manufacturer_name=manufacturer.name,
+                    name=material.name,
+                    price_tiyin=branch_material.price_tiyin,
+                    display_unit=display_unit(material.kind),
+                )
+            )
+    return previews, totals
 
 
 async def client_branch_materials(

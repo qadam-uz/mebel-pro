@@ -110,6 +110,7 @@ export interface ClientBranchOption {
   branch_name: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
+  today_hours: { open: string | null; close: string | null }
 }
 
 export interface WorkshopCuttingPlanSummary {

@@ -1,6 +1,7 @@
 """Workshop tenant and branch models."""
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -69,3 +70,30 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
         nullable=False,
     )
     closed_reason: Mapped[str | None]
+
+    _WEEKDAYS = (
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    )
+
+    def today_hours(self, *, now: datetime | None = None) -> dict[str, str | None]:
+        """Today's open/close from the per-weekday ``working_hours`` map (CB-112).
+
+        Returns ``{"open": None, "close": None}`` when the branch has no entry for
+        today (closed). Pure/derived — no extra column or migration.
+        """
+        moment = now or datetime.now(UTC)
+        entry = self.working_hours.get(self._WEEKDAYS[moment.weekday()])
+        if not isinstance(entry, dict):
+            return {"open": None, "close": None}
+        open_at = entry.get("open")
+        close_at = entry.get("close")
+        return {
+            "open": open_at if isinstance(open_at, str) else None,
+            "close": close_at if isinstance(close_at, str) else None,
+        }
