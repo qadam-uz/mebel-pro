@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api } from '@/shared/api/client'
+import { api, apiTraceId } from '@/shared/api/client'
 import { useAuthStore } from '@/shared/stores/auth'
 
 export interface NotificationItem {
@@ -21,6 +21,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const items = ref<NotificationItem[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const traceId = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
   const auth = useAuthStore()
 
   function authInit() {
@@ -34,9 +36,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
         await api.get<{ unread: number }>('/notifications/unread-count', authInit())
       ).unread
       error.value = null
-    } catch {
+    } catch (caught) {
       unread.value = 0
       error.value = 'notifications_count_failed'
+      traceId.value = apiTraceId(caught)
     }
   }
 
@@ -44,33 +47,49 @@ export const useNotificationsStore = defineStore('notifications', () => {
     if (!auth.accessToken) return
     loading.value = true
     error.value = null
+    traceId.value = null
     try {
       items.value = await api.get<NotificationItem[]>(`/notifications?limit=${limit}`, authInit())
-    } catch {
+    } catch (caught) {
       error.value = 'notifications_load_failed'
+      traceId.value = apiTraceId(caught)
     } finally {
       loading.value = false
     }
   }
 
   async function markRead(id: string) {
-    const updated = await api.post<NotificationItem>(
-      `/notifications/${id}/read`,
-      undefined,
-      authInit(),
-    )
-    items.value = items.value.map((item) => (item.id === id ? updated : item))
-    unread.value = Math.max(0, unread.value - 1)
-    return updated
+    // Decrement the badge only for a genuinely-unread item, so a double-tap or a
+    // re-read never drives the count below the true value.
+    const wasUnread = items.value.find((item) => item.id === id)?.read_at === null
+    actionError.value = null
+    try {
+      const updated = await api.post<NotificationItem>(
+        `/notifications/${id}/read`,
+        undefined,
+        authInit(),
+      )
+      items.value = items.value.map((item) => (item.id === id ? updated : item))
+      if (wasUnread) unread.value = Math.max(0, unread.value - 1)
+    } catch (caught) {
+      actionError.value = 'notifications_read_failed'
+      traceId.value = apiTraceId(caught)
+    }
   }
 
   async function markAllRead() {
-    await api.post('/notifications/read-all', undefined, authInit())
-    unread.value = 0
-    items.value = items.value.map((item) => ({
-      ...item,
-      read_at: item.read_at ?? new Date().toISOString(),
-    }))
+    actionError.value = null
+    try {
+      await api.post('/notifications/read-all', undefined, authInit())
+      unread.value = 0
+      items.value = items.value.map((item) => ({
+        ...item,
+        read_at: item.read_at ?? new Date().toISOString(),
+      }))
+    } catch (caught) {
+      actionError.value = 'notifications_read_all_failed'
+      traceId.value = apiTraceId(caught)
+    }
   }
 
   return {
@@ -78,6 +97,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     items,
     loading,
     error,
+    traceId,
+    actionError,
     loadUnreadCount,
     loadList,
     markRead,

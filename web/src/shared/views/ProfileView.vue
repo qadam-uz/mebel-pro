@@ -79,9 +79,17 @@ const workshopGrantRows = computed(() => {
     key: `${grant.permission}-${grant.branch_id}`,
     permission: grant.permission,
     label: workshopPermissionLabel(grant.permission),
-    branch: grant.branch_id.slice(0, 8),
+    branch:
+      workshop.branches.find((branch) => branch.id === grant.branch_id)?.name ??
+      grant.branch_id.slice(0, 8),
   }))
 })
+
+function goBack() {
+  // Reached via a deep link / refresh, history may have no in-app entry to return to.
+  if (window.history.state?.back) router.back()
+  else router.push(config.homePath)
+}
 
 async function loadSessions() {
   sessions.value = await auth.fetchSessions()
@@ -193,7 +201,7 @@ onMounted(async () => {
 
 <template>
   <section v-if="auth.me?.principal_type === 'client'">
-    <button type="button" class="client-back" @click="$router.back()">← Orqaga</button>
+    <button type="button" class="client-back" @click="goBack">← Orqaga</button>
 
     <div class="client-page-head">
       <div>

@@ -463,6 +463,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loading.value = true
     error.value = null
     traceId.value = null
+    lastTempPassword.value = null
     try {
       const loadedUsers = await api.get<WorkshopUser[]>('/workshop/users', authInit())
       if (requestId === usersLoadRequestId) {
@@ -498,6 +499,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loading.value = true
     error.value = null
     traceId.value = null
+    lastTempPassword.value = null
     try {
       selectedUser.value = await api.get<WorkshopUser>(`/workshop/users/${id}`, authInit())
       sessions.value = (

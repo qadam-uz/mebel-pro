@@ -37,7 +37,7 @@ covers only the **current build state**:
 | Lint         | **ESLint 9** flat config (`eslint-plugin-vue`, `@vue/eslint-config-typescript`, prettier-skip)           |
 | Format       | **Prettier** (no semicolons, single quotes, width 100)                                                   |
 | Unit tests   | **Vitest** + `@vue/test-utils` + jsdom                                                                   |
-| HTTP         | native `fetch` wrapper — `src/api/client.ts` (no axios)                                                  |
+| HTTP         | native `fetch` wrapper — `src/shared/api/client.ts` (no axios)                                           |
 
 E2E tests live in the sibling `e2e/` package (Playwright), not here.
 
@@ -108,8 +108,8 @@ web/
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
   production is host-routed.
-- **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
-- **Data fetching**: go through `src/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
+- **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
+- **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
 - **Env vars**: only `VITE_`-prefixed vars reach client code; declare them in `env.d.ts` (`ImportMetaEnv`) and document in `.env.dev.example` + `.env.prod.example`. In dev leave `VITE_API_BASE_URL` empty (Vite proxies `/api`); same in prod (the Caddy edge serves the API same-origin under `/api`).
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`.

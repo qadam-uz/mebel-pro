@@ -34,6 +34,7 @@ const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const reasonDialogAction = ref<'revert' | 'cancel' | null>(null)
 const reasonDraft = ref('')
+const markCollectedOpen = ref(false)
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
@@ -174,7 +175,8 @@ async function completeBanding() {
 async function markCollected() {
   const current = order.value
   if (!current) return
-  await run(() => orders.markCollected(current.id, current.version))
+  const ok = await run(() => orders.markCollected(current.id, current.version))
+  if (ok) markCollectedOpen.value = false
 }
 
 function requestRevertOrder() {
@@ -727,7 +729,7 @@ onMounted(loadDetail)
                 type="button"
                 class="mp-button mp-button-primary w-full"
                 :disabled="orders.actionLoading"
-                @click="markCollected"
+                @click="markCollectedOpen = true"
               >
                 Mijoz olib ketdi
               </button>
@@ -828,5 +830,15 @@ onMounted(loadDetail)
         <textarea v-model="reasonDraft" class="mp-input min-h-24 resize-y" />
       </label>
     </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="markCollectedOpen"
+      title="Mijoz olib ketdimi?"
+      message="Buyurtma yakuniy «topshirildi» holatiga o'tadi va ortga qaytarib bo'lmaydi."
+      confirm-label="Ha, topshirildi"
+      :busy="orders.actionLoading"
+      @cancel="markCollectedOpen = false"
+      @confirm="markCollected"
+    />
   </section>
 </template>

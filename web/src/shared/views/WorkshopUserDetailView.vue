@@ -49,7 +49,9 @@ function toggleGrant(permission: string, branchId: string) {
 
 async function load() {
   if (!auth.me?.is_owner) return
-  await workshop.loadBranchContext()
+  // A transient branch-context failure must not skip loadUser and make an existing
+  // staffer look deleted; loadUser surfaces its own error state instead.
+  await workshop.loadBranchContext().catch(() => undefined)
   await workshop.loadUser(userId)
   selected.value = new Set(
     user.value?.grants.map((grant) => grantKey(grant.permission, grant.branch_id)) ?? [],

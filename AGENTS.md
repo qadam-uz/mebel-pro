@@ -119,7 +119,7 @@ touches more than one area, load every matching skill. When in doubt, load it.**
 ## Conventions
 
 - Work happens on feature branches off `main`; commit only when asked.
-- API surface is owned by the backend (`/api/v1`); the web client talks to it through `web/src/api/client.ts`. In every environment the API is same-origin under `/api` (Vite proxy in dev, Caddy edge in prod) — don't hardcode `localhost:8000` in app code.
+- API surface is owned by the backend (`/api/v1`); the web client talks to it through `web/src/shared/api/client.ts`. In every environment the API is same-origin under `/api` (Vite proxy in dev, Caddy edge in prod) — don't hardcode `localhost:8000` in app code.
 - Pin versions (Docker image tags, `packageManager`, `requires-python`, lockfiles are committed). Don't introduce `latest`.
 - Add new dependencies via the project's tool (`uv add`, `pnpm add`) so the lockfile updates.
 

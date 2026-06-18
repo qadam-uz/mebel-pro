@@ -22,10 +22,11 @@ export function formatDateInputValue(value: Date): string {
 
 export function formatStockQuantity(value: number, displayUnit: string): string {
   if (displayUnit === 'm') {
-    return `${new Intl.NumberFormat('uz-UZ', {
-      maximumFractionDigits: 3,
-      minimumFractionDigits: value % 1000 === 0 ? 0 : 3,
-    }).format(value / 1000)} m`
+    // metres use a dot decimal so 2.5 m is not misread as 2,500 m (uz-UZ uses a comma decimal)
+    const metres = new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 3 })
+      .format(value / 1000)
+      .replace(',', '.')
+    return `${metres} m`
   }
   return `${new Intl.NumberFormat('uz-UZ').format(value)} ${displayUnit}`
 }

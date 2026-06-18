@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -23,6 +23,14 @@ const workshop = useWorkshopStore()
 const now = new Date()
 const today = formatDateInputValue(now)
 const activeTab = ref<'expense' | 'income'>(route.path.endsWith('/income') ? 'income' : 'expense')
+// One component serves both /finance/income and /finance/expenses; Vue Router reuses
+// the instance, so the active tab must track the path rather than only the initial setup.
+watch(
+  () => route.path,
+  (path) => {
+    activeTab.value = path.endsWith('/income') ? 'income' : 'expense'
+  },
+)
 const formMode = ref<'expense' | 'income' | null>(null)
 const saving = ref(false)
 const actionError = ref<string | null>(null)

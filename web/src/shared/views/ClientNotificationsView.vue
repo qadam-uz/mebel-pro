@@ -12,6 +12,12 @@ const router = useRouter()
 const rolePath = useRolePath()
 const readFilter = ref<'all' | 'unread' | 'read'>('all')
 
+function goBack() {
+  // Reached via a deep link / refresh, history may have no in-app entry to return to.
+  if (window.history.state?.back) router.back()
+  else router.push(rolePath('/c'))
+}
+
 const filterOptions = [
   { value: 'all', label: 'Hammasi', meta: 'barcha xabarlar' },
   { value: 'unread', label: "O'qilmagan", meta: 'hali ochilmagan' },
@@ -68,7 +74,7 @@ onMounted(() => {
 
 <template>
   <section>
-    <button type="button" class="client-back" @click="$router.back()">← Orqaga</button>
+    <button type="button" class="client-back" @click="goBack">← Orqaga</button>
 
     <div class="client-page-head">
       <div>

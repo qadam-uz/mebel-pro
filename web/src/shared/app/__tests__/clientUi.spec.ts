@@ -12,7 +12,12 @@ import {
 describe('client UI helpers', () => {
   it('normalizes and validates Uzbek phone numbers', () => {
     expect(normalizeUzPhone('+998 90 123 45 67')).toBe('+998901234567')
+    expect(normalizeUzPhone('901234567')).toBe('+998901234567')
+    expect(normalizeUzPhone('0901234567')).toBe('+998901234567')
+    expect(normalizeUzPhone('998901234567')).toBe('+998901234567')
+    expect(normalizeUzPhone('8 998 90 123 45 67')).toBe('+998901234567')
     expect(isUzPhone('+998 90 123 45 67')).toBe(true)
+    expect(isUzPhone('901234567')).toBe(true)
     expect(isUzPhone('+997901234567')).toBe(false)
   })
 
@@ -25,10 +30,13 @@ describe('client UI helpers', () => {
     expect(clientStatusPillClass('cancelled')).toContain('client-pill-danger')
   })
 
-  it('formats optimizer waste ratios as percentages', () => {
+  it('formats optimizer waste ratios as percentages (0..1 fraction × 100)', () => {
     expect(formatPercent('0.1234')).toBe('12.34%')
-    expect(formatPercent(18.5)).toBe('18.50%')
+    expect(formatPercent(0)).toBe('0.00%')
+    expect(formatPercent(1)).toBe('100.00%')
     expect(formatPercent(null)).toBe('-')
+    expect(formatPercent('')).toBe('-')
+    expect(formatPercent('abc')).toBe('-')
   })
 
   it('uses stable numeric compact dates', () => {
