@@ -2,7 +2,6 @@ import type { InjectionKey } from 'vue'
 import { inject } from 'vue'
 
 export type RoleKey = 'client' | 'workshop' | 'admin'
-export type ShellStateKind = 'loading' | 'empty' | 'error' | 'ready'
 
 export interface NavItem {
   label: string
@@ -16,12 +15,6 @@ export interface DropdownOption {
   label: string
   meta: string
   status: 'active' | 'pending' | 'blocked'
-}
-
-export interface ShellState {
-  kind: ShellStateKind
-  label: string
-  detail: string
 }
 
 export interface RoleConfig {
@@ -41,7 +34,6 @@ export interface RoleConfig {
   dropdownLabel: string
   dropdownOptions: DropdownOption[]
   nav: NavItem[]
-  states: ShellState[]
 }
 
 export const roleConfigKey = Symbol('role-config') as InjectionKey<RoleConfig>
@@ -79,16 +71,6 @@ export const clientConfig: RoleConfig = {
     { label: 'Buyurtmalar', to: '/c/orders', icon: 'orders' },
     { label: 'Ustaxonalar', to: '/c/branches', icon: 'store' },
     { label: 'Profil', to: '/c/profile', icon: 'users' },
-  ],
-  states: [
-    { kind: 'loading', label: 'Loading client workspace', detail: 'Backend status is checked.' },
-    {
-      kind: 'empty',
-      label: 'No drafts yet',
-      detail: 'Saved cutting drafts appear here.',
-    },
-    { kind: 'error', label: 'API error', detail: 'Trace ID is shown when readiness fails.' },
-    { kind: 'ready', label: 'Ready', detail: 'Workspace navigation is available.' },
   ],
 }
 
@@ -134,16 +116,6 @@ export const workshopConfig: RoleConfig = {
     { label: 'Filiallar', to: '/workshop/branches', group: 'Tizim', icon: 'store' },
     { label: 'Xodimlar', to: '/workshop/settings/users', group: 'Tizim', icon: 'users' },
     { label: 'Sozlamalar', to: '/workshop/settings', group: 'Tizim', icon: 'settings' },
-  ],
-  states: [
-    { kind: 'loading', label: 'Loading branch context', detail: 'Branch data is loading.' },
-    {
-      kind: 'empty',
-      label: 'No accessible branch',
-      detail: 'Staff without branch access see this.',
-    },
-    { kind: 'error', label: 'API error', detail: 'Trace ID is carried into the error panel.' },
-    { kind: 'ready', label: 'Ready', detail: 'Branch picker and navigation are available.' },
   ],
 }
 
@@ -191,11 +163,5 @@ export const adminConfig: RoleConfig = {
     },
     { label: 'Audit log', to: '/admin/audit', group: 'Operatorlik', icon: 'list' },
     { label: 'Operatorlar', to: '/admin/platform/users', group: 'Tizim', icon: 'users' },
-  ],
-  states: [
-    { kind: 'loading', label: 'Loading platform console', detail: 'Readiness check is in flight.' },
-    { kind: 'empty', label: 'No workshops yet', detail: 'Provisioned workshops appear here.' },
-    { kind: 'error', label: 'API error', detail: 'Trace ID is visible for support.' },
-    { kind: 'ready', label: 'Ready', detail: 'Docs and API links are available.' },
   ],
 }

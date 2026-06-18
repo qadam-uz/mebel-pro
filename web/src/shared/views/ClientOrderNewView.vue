@@ -173,7 +173,6 @@ function selectBranch(branchId: string) {
   const quote = quoteBranch(branchId)
   if (!quote) return
   selectedBranchId.value = branchId
-  orders.currentQuote = quote
   step.value = 'checkout'
   localError.value = null
 }

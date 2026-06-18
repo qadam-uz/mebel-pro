@@ -61,10 +61,14 @@ const totalPanels = computed(() =>
 const totalEdge = computed(() => {
   const current = result.value
   if (!current) return 0
-  const consumed =
+  // The consumed sum (edge_length + overhang, per banded side) is the
+  // client-facing figure, matching the editor's metres. The geometric
+  // total_edge_length_mm fallback was unreachable (both sums share the same
+  // banded sides, so consumed === 0 ⟺ total === 0) — dropped (CB-56).
+  return (
     Object.values(current.edge_consumed_shop_by_material).reduce((sum, value) => sum + value, 0) +
     Object.values(current.edge_consumed_own_by_material).reduce((sum, value) => sum + value, 0)
-  return consumed || current.total_edge_length_mm
+  )
 })
 const edgeCostSplit = computed(() => {
   // No backend material/service split yet — mirror the prototype's 45/55 fallback.
