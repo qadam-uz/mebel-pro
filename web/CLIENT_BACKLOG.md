@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 51 | 24 | **93** |
-| Done | 14 | 17 | 8 | **39** |
+| Open (incl. partial) | 18 | 49 | 24 | **91** |
+| Done | 14 | 19 | 8 | **41** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -102,7 +102,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-22 | P2 | states-errors | med | M | Open | Extract shared ClientErrorState; add trace_id to notifications |
 | CB-23 | P2 | states-errors | med | M | Open | Fault-tolerant per-branch material loads (allSettled+retry) |
 | CB-24 | P2 | states-errors | med | M | Open | Handle cancel-order / delete-draft failures in dialogs |
-| CB-25 | P2 | states-errors | med | M | Open | Loading + error/empty state on client profile load |
+| CB-25 | P2 | states-errors | med | M | Done | Loading + error/empty state on client profile load |
 | CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
@@ -149,7 +149,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
 | CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
-| CB-72 | P2 | design-parity | med | M | Open | Show attempts-remaining on `invalid_code` |
+| CB-72 | P2 | design-parity | med | M | Done | Show attempts-remaining on `invalid_code` |
 | CB-73 | P2 | ux-flow | med | S | Done | Un-dead-end the name step on `code_expired` |
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
 | CB-75 | P1 | security | med | S | Done | Block protocol-relative `?redirect` (open redirect) |
