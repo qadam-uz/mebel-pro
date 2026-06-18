@@ -11,6 +11,7 @@ import {
   formatPercent,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -62,6 +63,12 @@ const totalEdge = computed(() => {
     Object.values(current.edge_consumed_own_by_material).reduce((sum, value) => sum + value, 0)
   return consumed || current.total_edge_length_mm
 })
+const edgeCostSplit = computed(() => {
+  // No backend material/service split yet — mirror the prototype's 45/55 fallback.
+  const total = order.value?.subtotal_edge_banding_tiyin ?? 0
+  const materials = Math.round(total * 0.45)
+  return { total, materials, service: total - materials }
+})
 const financeOpen = computed(
   () =>
     Boolean(order.value?.settlement) && ['ready', 'completed'].includes(order.value?.status ?? ''),
@@ -82,6 +89,22 @@ function phaseNodeClass(index: number) {
   if (index < current) return 'done'
   if (index === current) return 'now'
   return ''
+}
+
+function phaseTimestamp(index: number): string | null {
+  if (!order.value) return null
+  const statusForPhase: OrderStatus[][] = [
+    ['new'],
+    ['confirmed'],
+    ['cutting', 'edge_banding'],
+    ['ready'],
+    ['completed'],
+  ]
+  const statuses = statusForPhase[index] ?? []
+  const event = order.value.events.find((entry) => statuses.includes(entry.to_status))
+  if (event) return formatRelativeDate(event.changed_at)
+  if (index === 0) return formatRelativeDate(order.value.created_at)
+  return null
 }
 
 function materialName(snapshot: Record<string, unknown>) {
@@ -189,7 +212,7 @@ onMounted(() => {
     </div>
 
     <div v-else-if="!order" class="client-empty">
-      <div class="client-empty-icon">B</div>
+      <div class="client-empty-icon"><Icon name="box" /></div>
       <h3>Buyurtma topilmadi</h3>
       <p>Bunday raqamli buyurtma yo'q yoki sizga tegishli emas.</p>
       <RouterLink :to="rolePath('/c/orders')" class="mp-button mp-button-primary mt-4">
@@ -350,15 +373,33 @@ onMounted(() => {
                     {{ formatTiyin(order.subtotal_materials_tiyin) }}
                   </div>
                 </div>
-                <div v-if="order.subtotal_edge_banding_tiyin > 0" class="client-row-item">
-                  <div>
-                    <div class="client-row-name">Krom</div>
-                    <div class="text-sm text-ink-muted">material + xizmat</div>
+                <template v-if="order.subtotal_edge_banding_tiyin > 0">
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom</div>
+                      <div class="text-sm text-ink-muted">
+                        {{ metres(totalEdge) }} · material + xizmat
+                      </div>
+                    </div>
+                    <div class="client-row-meta">
+                      {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+                    </div>
                   </div>
-                  <div class="client-row-meta">
-                    {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom materiali</div>
+                      <div class="text-sm text-ink-muted">lenta narxi</div>
+                    </div>
+                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
                   </div>
-                </div>
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom yopishtirish xizmati</div>
+                      <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
+                    </div>
+                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
+                  </div>
+                </template>
                 <div v-if="order.discount_tiyin > 0" class="client-row-item">
                   <div>
                     <div class="client-row-name">Chegirma</div>
@@ -387,15 +428,20 @@ onMounted(() => {
                       formatTiyin(order.subtotal_materials_tiyin)
                     }}</span>
                   </div>
-                  <div
-                    v-if="order.subtotal_edge_banding_tiyin > 0"
-                    class="flex justify-between py-1 text-ink-soft"
-                  >
-                    <span>Krom</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(order.subtotal_edge_banding_tiyin)
-                    }}</span>
-                  </div>
+                  <template v-if="order.subtotal_edge_banding_tiyin > 0">
+                    <div class="flex justify-between py-1 text-ink-soft">
+                      <span>Krom materiali</span
+                      ><span class="font-mono text-ink">{{
+                        formatTiyin(edgeCostSplit.materials)
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between py-1 text-ink-soft">
+                      <span>Krom yopishtirish xizmati</span
+                      ><span class="font-mono text-ink">{{
+                        formatTiyin(edgeCostSplit.service)
+                      }}</span>
+                    </div>
+                  </template>
                   <div
                     v-if="order.discount_tiyin > 0"
                     class="flex justify-between py-1 text-success"
@@ -574,7 +620,7 @@ onMounted(() => {
                 </p>
               </template>
               <div v-else class="client-empty border-0 !p-8">
-                <div class="client-empty-icon">L</div>
+                <div class="client-empty-icon"><Icon name="layers" /></div>
                 <h3>To'lov ma'lumotlari hali yopiq</h3>
                 <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
               </div>
@@ -591,18 +637,30 @@ onMounted(() => {
           >
             <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
             <div class="client-card-b">
-              <ol class="relative ml-4 grid gap-4 border-l-2 border-hairline pl-5">
-                <li v-for="event in order.events" :key="event.id" class="relative">
-                  <span class="absolute -left-[27px] top-1 size-3 rounded-full bg-accent"></span>
-                  <div class="font-bold text-ink">
-                    {{ event.from_status ? clientStatusLabel[event.from_status] : 'Yaratildi' }}
-                    →
-                    {{ clientStatusLabel[event.to_status] }}
-                  </div>
-                  <p v-if="event.reason" class="mt-1 text-sm text-ink-soft">{{ event.reason }}</p>
-                  <div class="mt-1 font-mono text-xs text-ink-muted">
-                    {{ formatRelativeDate(event.changed_at) }}
-                  </div>
+              <ol v-if="order.status === 'cancelled'" class="tl">
+                <li class="step done">
+                  <span class="when">{{ formatRelativeDate(order.created_at) }}</span>
+                  Joylashtirildi
+                </li>
+                <li class="step bad">
+                  <span v-if="order.cancelled_at" class="when">{{
+                    formatRelativeDate(order.cancelled_at)
+                  }}</span>
+                  Bekor qilingan
+                  <p v-if="cancelledReason" class="mt-1 text-sm text-ink-soft">
+                    {{ cancelledReason }}
+                  </p>
+                </li>
+              </ol>
+              <ol v-else class="tl">
+                <li
+                  v-for="(label, index) in clientPhaseLabels"
+                  :key="label"
+                  class="step"
+                  :class="{ done: index <= clientPhaseIndex(order.status) }"
+                >
+                  <span v-if="phaseTimestamp(index)" class="when">{{ phaseTimestamp(index) }}</span>
+                  {{ label }}
                 </li>
               </ol>
             </div>

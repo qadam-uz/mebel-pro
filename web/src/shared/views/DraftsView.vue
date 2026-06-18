@@ -9,6 +9,7 @@ import {
   formatRelativeDate,
   pluralUz,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -156,7 +157,7 @@ onMounted(() => {
     </div>
 
     <div v-else-if="sortedDrafts.length === 0" class="client-empty">
-      <div class="client-empty-icon">C</div>
+      <div class="client-empty-icon"><Icon name="scissors" /></div>
       <h3>Saqlangan chizma yo'q</h3>
       <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">

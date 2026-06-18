@@ -8,6 +8,7 @@ import {
   clientStatusPillClass,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -118,7 +119,7 @@ onMounted(() => {
     </div>
 
     <div v-else-if="visibleOrders.length === 0" class="client-empty">
-      <div class="client-empty-icon">B</div>
+      <div class="client-empty-icon"><Icon name="box" /></div>
       <h3>Buyurtma yo'q</h3>
       <p v-if="status === 'all' && !search">Hali buyurtma bermagansiz — chizmadan boshlang.</p>
       <p v-else>Bu so'rovga mos buyurtma topilmadi.</p>

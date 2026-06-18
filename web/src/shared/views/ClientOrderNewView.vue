@@ -9,6 +9,7 @@ import {
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
 import { materialLabel, metres, useCuttingStore } from '@/shared/stores/cutting'
@@ -249,7 +250,7 @@ onMounted(async () => {
     </section>
 
     <section v-else-if="!draft || !chosenResult" class="client-empty">
-      <div class="client-empty-icon">0</div>
+      <div class="client-empty-icon"><Icon name="box" /></div>
       <h3>Tanlangan natija yo'q</h3>
       <p>Buyurtma berishdan oldin chizmani optimallashtiring va natijani tanlang.</p>
       <RouterLink :to="rolePath(`/c/cutting/${draftId}`)" class="mp-button mp-button-primary mt-4">
@@ -268,7 +269,7 @@ onMounted(async () => {
 
           <template v-else>
             <div v-if="activeBranches.length === 0" class="client-empty">
-              <div class="client-empty-icon">!</div>
+              <div class="client-empty-icon"><Icon name="alert" /></div>
               <h3>Faol ustaxona topilmadi</h3>
               <p>Hozir hech bir ustaxona mijoz buyurtmasi qabul qilmayapti.</p>
             </div>

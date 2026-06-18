@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { formatTiyin } from '@/shared/formatters'
+import Icon from '@/shared/components/AppIcon.vue'
 import {
   useClientCatalogStore,
   type ClientBranch,
@@ -103,7 +104,7 @@ onMounted(refreshBranches)
     </div>
 
     <div v-else-if="visibleBranches.length === 0" class="client-empty">
-      <div class="client-empty-icon">U</div>
+      <div class="client-empty-icon"><Icon name="store" /></div>
       <h3>Ustaxona topilmadi</h3>
       <p>Qidiruv bo'yicha faol yoki vaqtincha yopiq ustaxona yo'q.</p>
     </div>

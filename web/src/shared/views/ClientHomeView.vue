@@ -14,6 +14,7 @@ import {
   formatRelativeDate,
   pluralUz,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -256,7 +257,7 @@ onMounted(() => {
           </div>
 
           <div v-if="activeOrders.length === 0" class="client-empty">
-            <div class="client-empty-icon">B</div>
+            <div class="client-empty-icon"><Icon name="box" /></div>
             <h3>Faol buyurtma yo'q</h3>
             <p>Hali buyurtma bermagansiz — chizmadan boshlang.</p>
             <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
@@ -344,7 +345,7 @@ onMounted(() => {
           </div>
 
           <div v-if="recentDrafts.length === 0" class="client-empty">
-            <div class="client-empty-icon">C</div>
+            <div class="client-empty-icon"><Icon name="scissors" /></div>
             <h3>Saqlangan chizma yo'q</h3>
             <p>Yangisini boshlang.</p>
             <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">

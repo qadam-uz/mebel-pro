@@ -503,6 +503,11 @@
     color: var(--color-danger);
   }
 
+  .client-icon {
+    width: 24px;
+    height: 24px;
+  }
+
   .client-empty h3,
   .client-error h3 {
     margin: 0;

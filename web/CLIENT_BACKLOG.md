@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 54 | 25 | **97** |
-| Done | 14 | 14 | 7 | **35** |
+| Open (incl. partial) | 18 | 51 | 24 | **93** |
+| Done | 14 | 17 | 8 | **39** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -112,7 +112,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-32 | P2 | a11y | med | M | Open | ARIA menu keyboard ops on notifications dropdown |
 | CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
-| CB-35 | P2 | design-parity | med | M | Open | Replace letter-glyph placeholders with prototype SVG icons |
+| CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
@@ -121,7 +121,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Open | Lock background scroll when ConfirmDialog is open |
-| CB-44 | P3 | design-parity | low | S | Open | Use `.tl` timeline with done/bad states in order history |
+| CB-44 | P3 | design-parity | low | S | Done | Use `.tl` timeline with done/bad states in order history |
 | CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
@@ -148,7 +148,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-68 | P2 | responsive | med | S | Open | 16px form-control font on mobile (stop iOS auto-zoom) |
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
-| CB-71 | P2 | states-errors | med | M | Open | Honor 429 `retry_after_seconds` with live resend countdown |
+| CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
 | CB-72 | P2 | design-parity | med | M | Open | Show attempts-remaining on `invalid_code` |
 | CB-73 | P2 | ux-flow | med | S | Done | Un-dead-end the name step on `code_expired` |
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
@@ -195,7 +195,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-115 | P2 | states-errors | med | M | Open | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Open | Order-new: split already-used vs no-chosen-result bail |
 | CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
-| CB-118 | P2 | design-parity | med | M | Open | Order-detail Krom material-vs-service split + metres |
+| CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Open | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
