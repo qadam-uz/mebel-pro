@@ -2,8 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { ApiError } from '@/shared/api/client'
 import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -32,11 +34,20 @@ import {
 const route = useRoute()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
+const toast = useToast()
 const draftId = computed(() => String(route.params.id))
 const parts = ref<CuttingPart[]>([])
 const saveState = ref<'saved' | 'saving' | 'error' | 'editing'>('saved')
 const saveError = ref<string | null>(null)
 const optimizeError = ref<string | null>(null)
+// Per-row optimiser-error attribution (CB-89): the backend returns
+// details {part_ref, row_index} on a part-specific failure, so flag THAT row
+// rather than only a single opaque banner.
+const optimizeRowError = ref<{
+  partRef: string | null
+  rowIndex: number | null
+  message: string
+} | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
@@ -399,9 +410,18 @@ function partSizeError(part: CuttingPart): string | null {
   return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${EDGE_TRIM_MM} mm chetki qirqim).`
 }
 
+// A chosen panel id that no longer resolves in the loaded catalog — e.g. the
+// material was deactivated while the draft sat (CB-89). Only meaningful once the
+// catalog has loaded, so an empty list (mid-load) never false-flags.
+function rowMaterialMissing(part: CuttingPart): boolean {
+  if (cutting.panelOptions.length === 0) return false
+  return !!part.material_id && !materialById(part.material_id)
+}
+
 function partIsInvalid(part: CuttingPart) {
   return (
     !part.material_id ||
+    rowMaterialMissing(part) ||
     part.length_mm < 50 ||
     part.width_mm < 50 ||
     part.quantity < 1 ||
@@ -410,6 +430,48 @@ function partIsInvalid(part: CuttingPart) {
     !Number.isFinite(Number(part.quantity)) ||
     partSizeError(part) !== null
   )
+}
+
+function optimizeRowMessage(code: string | undefined): string {
+  if (code === 'part_too_large')
+    return "Bu qism panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
+  if (code === 'impossible_grain')
+    return "Tola yo'nalishi bu qismni joylashtirishga to'sqinlik qiladi."
+  if (code === 'material_not_found')
+    return "Bu qatordagi material endi katalogda yo'q — boshqasini tanlang."
+  return "Bu qatorni optimallashtirib bo'lmadi."
+}
+
+function optimizeRowFromError(errorValue: unknown) {
+  if (
+    !(errorValue instanceof ApiError) ||
+    typeof errorValue.body !== 'object' ||
+    !errorValue.body
+  ) {
+    return null
+  }
+  const body = errorValue.body as {
+    code?: string
+    details?: { part_ref?: unknown; row_index?: unknown }
+  }
+  const details = body.details
+  if (!details) return null
+  const partRef = typeof details.part_ref === 'string' ? details.part_ref : null
+  const rowIndex = typeof details.row_index === 'number' ? details.row_index : null
+  if (partRef === null && rowIndex === null) return null
+  return { partRef, rowIndex, message: optimizeRowMessage(body.code) }
+}
+
+function rowOptimizeError(part: CuttingPart, index: number): string | null {
+  const error = optimizeRowError.value
+  if (!error) return null
+  if (error.partRef !== null) return part.part_ref === error.partRef ? error.message : null
+  // Backend row_index is 1-indexed (enumerate(parts, start=1)); the array is 0-indexed.
+  return error.rowIndex === index + 1 ? error.message : null
+}
+
+function rowHasError(part: CuttingPart, index: number): boolean {
+  return partIsInvalid(part) || rowOptimizeError(part, index) !== null
 }
 
 function edgeCount(part: CuttingPart) {
@@ -796,11 +858,20 @@ const autosave = createAutosaveController({
 
 function scheduleSave() {
   if (hydrating || isReadOnly.value) return
+  // A row-attributed optimiser error is stale once the parts change.
+  optimizeRowError.value = null
   autosave.schedule()
 }
 
 async function setPreferredBranch(branchId: string | null) {
-  await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
+  // Surface a failure instead of an unhandled rejection that leaves the local
+  // pick disagreeing with the server (CB-57).
+  try {
+    await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
+  } catch {
+    toast.danger("Afzal filialni saqlab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   branchPickerOpen.value = false
   selectedBranchId.value = branchId
   recoveryDismissed.value = false
@@ -810,27 +881,47 @@ async function setPreferredBranch(branchId: string | null) {
 async function optimize() {
   if (cutting.optimizing || !canOptimize.value) return
   optimizeError.value = null
+  optimizeRowError.value = null
   // Flush any pending debounced edit so we optimize the latest parts, not a
   // stale server snapshot.
   await autosave.flush()
   if (saveState.value === 'error') return
+  let failedRowRef: string | null = null
   try {
     const updated = await cutting.optimizeDraft(draftId.value)
     activeResultId.value = updated.chosen_result_id
     activePanelId.value = updated.results[0]?.panels[0]?.id ?? null
     lastOptimizedSignature.value = partsSignature()
-  } catch {
+  } catch (errorValue) {
     optimizeError.value = clientErrorLabel(
       cutting.error,
       "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
     )
+    optimizeRowError.value = optimizeRowFromError(errorValue)
+    if (optimizeRowError.value?.partRef) failedRowRef = optimizeRowError.value.partRef
+    else if (optimizeRowError.value?.rowIndex != null) {
+      // row_index is 1-indexed (backend enumerate start=1) → 0-indexed array.
+      failedRowRef = parts.value[optimizeRowError.value.rowIndex - 1]?.part_ref ?? null
+    }
   }
   await nextTick()
-  document.getElementById('cutting-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // On a row-attributed failure, scroll the offending row into view; otherwise
+  // the results section (CB-89).
+  const target = failedRowRef
+    ? document.getElementById(`part-row-${failedRowRef}`)
+    : document.getElementById('cutting-results')
+  target?.scrollIntoView({ behavior: 'smooth', block: failedRowRef ? 'center' : 'start' })
 }
 
 async function choose(result: CuttingResult) {
-  await cutting.chooseResult(draftId.value, result.id)
+  // chooseResult can throw (stale/invalidated result, network) — surface it
+  // rather than silently leaving the chosen result out of sync (CB-57).
+  try {
+    await cutting.chooseResult(draftId.value, result.id)
+  } catch {
+    toast.danger("Natijani tanlab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   activeResultId.value = result.id
   activePanelId.value = result.panels[0]?.id ?? null
 }
@@ -1191,9 +1282,10 @@ const edgePatterns: Array<{
           <div v-else class="grid gap-3 p-4">
             <article
               v-for="(part, index) in parts"
+              :id="`part-row-${part.part_ref}`"
               :key="part.part_ref"
               class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
-              :class="partIsInvalid(part) ? 'border-danger-soft' : 'border-hairline'"
+              :class="rowHasError(part, index) ? 'border-danger-soft' : 'border-hairline'"
             >
               <div
                 class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
@@ -1383,6 +1475,22 @@ const edgePatterns: Array<{
               >
                 <span aria-hidden="true">!</span>
                 <span>{{ partSizeError(part) }}</span>
+              </p>
+
+              <p
+                v-if="rowMaterialMissing(part)"
+                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+              >
+                <span aria-hidden="true">!</span>
+                <span>Bu qatordagi panel materiali endi katalogda yo'q — boshqasini tanlang.</span>
+              </p>
+
+              <p
+                v-if="rowOptimizeError(part, index)"
+                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+              >
+                <span aria-hidden="true">!</span>
+                <span>{{ rowOptimizeError(part, index) }}</span>
               </p>
 
               <div

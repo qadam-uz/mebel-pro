@@ -42,9 +42,19 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 15 | 8 | **26** |
-| Done | 29 | 53 | 24 | **106** |
+| Open (incl. partial) | 3 | 14 | 7 | **24** |
+| Done | 29 | 54 | 25 | **108** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B7): editor states (adversarial review
+> caught a real off-by-one — fixed). **CB-89** (per-row optimiser-error
+> attribution: optimize()'s catch parses the backend `details {part_ref,
+> row_index}` and flags THAT row with a localized message + scrolls it into view,
+> instead of one opaque banner; a chosen panel id that no longer resolves once the
+> catalog loads is flagged as stale via `rowMaterialMissing`; backend `row_index`
+> is 1-indexed — the fallback now offsets correctly). **CB-57** (`choose()` and
+> `setPreferredBranch()` catch failures and show a danger toast + early-return
+> instead of an unhandled rejection that left the local pick out of sync).
 
 > Progress (2026-06-18, client-finish B6): editor pickers (adversarial review
 > caught 5 real bugs in the new code — all fixed). **CB-84** (a panel-filter bar
@@ -343,7 +353,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-54 | P3 | a11y | low | S | Done | AuthFileImage: required alt + localized failure label |
 | CB-55 | P3 | correctness-bug | low | S | Done | Idempotent markRead decrement (only when was unread) |
 | CB-56 | P3 | correctness-bug | low | S | Done | One defined quantity for order-detail "Krom" figure |
-| CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
+| CB-57 | P3 | states-errors | low | M | Done | Error feedback for chooseResult / preferred-branch save |
 | CB-58 | P3 | completeness-stub | low | S | Done | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
 | CB-59 | P2 | ux-flow | med | S | Done | `inputmode=numeric` on dimension/quantity inputs |
 | CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
@@ -375,7 +385,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
 | CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |
 | CB-88 | P2 | spec-conformance | med | M | Done | Drafts list: branch chip + material label pre-optimise |
-| CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
+| CB-89 | P2 | spec-conformance | med | L | Done | Per-row attribution of optimiser/stale-catalog errors |
 | CB-90 | P3 | spec-conformance | low | S | Done | Algo compare: cut-length column, algo name, closed default |
 | CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
