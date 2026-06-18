@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
@@ -195,9 +195,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   const downloadTraceId = ref<string | null>(null)
 
   function captureError(errorValue: unknown, fallback: string) {
-    error.value =
-      errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : fallback
-    traceId.value = apiTraceId(errorValue)
+    // Canonical capture (CB-100): 403 → permission_denied, else the backend code
+    // is preserved (previously this collapsed every non-403 to the fallback).
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
   }
 
   async function loadDrafts() {

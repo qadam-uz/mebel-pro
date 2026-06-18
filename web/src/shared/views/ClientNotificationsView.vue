@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatRelativeDate } from '@/shared/app/clientUi'
+import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
   notificationBody,
   notificationDestination,
@@ -87,12 +88,12 @@ async function markAllRead() {
     toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     return
   }
-  await notifications.loadList(50)
+  await notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)
   toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
 onMounted(() => {
-  void notifications.loadList(50)
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)
 })
 </script>
 
@@ -135,7 +136,7 @@ onMounted(() => {
         title="Bildirishnomalarni yuklab bo'lmadi"
         message="Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring."
         :trace-id="notifications.traceId"
-        @retry="notifications.loadList(50)"
+        @retry="notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)"
       />
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">

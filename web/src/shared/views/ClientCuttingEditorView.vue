@@ -5,6 +5,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ApiError } from '@/shared/api/client'
 import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { AUTOSAVE_DEBOUNCE_MS, MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -208,8 +209,7 @@ function partsSignature(list: CuttingPart[] = parts.value) {
 const optimizedUnchanged = computed(
   () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
 )
-// docs/ref/features/cutting.md — at most 100 parts per optimisation.
-const MAX_PARTS = 100
+// docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
 const canOptimize = computed(
   () =>
     !isReadOnly.value &&
@@ -422,8 +422,8 @@ function partIsInvalid(part: CuttingPart) {
   return (
     !part.material_id ||
     rowMaterialMissing(part) ||
-    part.length_mm < 50 ||
-    part.width_mm < 50 ||
+    part.length_mm < MIN_PART_MM ||
+    part.width_mm < MIN_PART_MM ||
     part.quantity < 1 ||
     !Number.isFinite(Number(part.length_mm)) ||
     !Number.isFinite(Number(part.width_mm)) ||
@@ -848,6 +848,7 @@ function bringOwn(part: CuttingPart) {
 // don't persist incomplete/out-of-bounds rows (they surface their own inline
 // validation) or a read-only bound draft.
 const autosave = createAutosaveController({
+  delayMs: AUTOSAVE_DEBOUNCE_MS,
   persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
   canPersist: () => hasPersistableParts.value && !isReadOnly.value,
   onStatus: (status) => {
@@ -1342,11 +1343,13 @@ const edgePatterns: Array<{
                     <input
                       v-model.number="part.length_mm"
                       type="number"
-                      min="50"
+                      :min="MIN_PART_MM"
                       inputmode="numeric"
                       enterkeyhint="next"
                       class="mp-input font-mono"
-                      :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      :class="
+                        part.length_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
+                      "
                       aria-label="Uzunlik millimetr"
                     />
                   </label>
@@ -1356,11 +1359,13 @@ const edgePatterns: Array<{
                     <input
                       v-model.number="part.width_mm"
                       type="number"
-                      min="50"
+                      :min="MIN_PART_MM"
                       inputmode="numeric"
                       enterkeyhint="next"
                       class="mp-input font-mono"
-                      :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      :class="
+                        part.width_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
+                      "
                       aria-label="Eni millimetr"
                     />
                   </label>

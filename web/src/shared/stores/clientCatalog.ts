@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiErrorCode, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiErrorCode, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 
@@ -69,8 +69,9 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
         selectedBranchId.value = branches.value[0]?.branch_id ?? null
       }
     } catch (errorValue) {
-      error.value = 'client_branches_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'client_branches_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -88,8 +89,9 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
       )
       materialsByBranch.value = { ...materialsByBranch.value, [branchId]: materials.value }
     } catch (errorValue) {
-      materialsError.value = 'client_materials_load_failed'
-      materialsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'client_materials_load_failed')
+      materialsError.value = captured.code
+      materialsTraceId.value = captured.traceId
     } finally {
       materialsLoading.value = false
     }

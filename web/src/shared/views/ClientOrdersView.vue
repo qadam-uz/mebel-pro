@@ -8,6 +8,7 @@ import {
   clientStatusPillClass,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -41,7 +42,7 @@ function reloadOrders() {
 let timer: number | undefined
 watch([status, search], () => {
   window.clearTimeout(timer)
-  timer = window.setTimeout(reloadOrders, 250)
+  timer = window.setTimeout(reloadOrders, SEARCH_DEBOUNCE_MS)
 })
 
 function nextAction(order: OrderSummary) {

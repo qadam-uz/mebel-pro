@@ -42,9 +42,22 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 14 | 7 | **24** |
-| Done | 29 | 54 | 25 | **108** |
+| Open (incl. partial) | 3 | 13 | 5 | **21** |
+| Done | 29 | 55 | 27 | **111** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B8): tech-debt small (adversarial review
+> surfaced an incomplete test mock + a pre-existing admin 403-masking bug — both
+> fixed). **CB-100** (one shared `captureApiError(error, fallback)` in
+> `api/client.ts` — 403→permission_denied, else the backend code, else fallback —
+> replacing the three divergent store variants in orders/cutting/clientCatalog;
+> admin catalog loads were folded in too so their `permission_denied` view-state
+> works; +unit test). **CB-102** (new `app/constants.ts`:
+> AUTOSAVE_DEBOUNCE_MS/SEARCH_DEBOUNCE_MS/NOTIFICATIONS_PAGE_LIMIT/MIN_PART_MM/
+> MAX_PARTS/DRAFT_LIMIT — the editor's part-min input and validator now derive from
+> one MIN_PART_MM). **CB-131** (`files.loadObjectUrl` returns a disposable
+> `{url, revoke}` so the object-URL lifetime is explicit and can't silently leak;
+> AuthFileImage owns + calls the revoke).
 
 > Progress (2026-06-18, client-finish B7): editor states (adversarial review
 > caught a real off-by-one — fixed). **CB-89** (per-row optimiser-error
@@ -396,9 +409,9 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
 | CB-99 | P3 | tech-debt | low | S | Done | Extract shared downloadBlob() (2 copies) |
-| CB-100 | P2 | tech-debt | med | S | Open | Unify captureApiError() (3 divergent variants) |
+| CB-100 | P2 | tech-debt | med | S | Done | Unify captureApiError() (3 divergent variants) |
 | CB-101 | P2 | tech-debt | med | M | Done | Typed notification payload + shared presenter |
-| CB-102 | P3 | tech-debt | low | S | Open | Centralize magic numbers (debounces, limits, 50 mm) |
+| CB-102 | P3 | tech-debt | low | S | Done | Centralize magic numbers (debounces, limits, 50 mm) |
 | CB-103 | P2 | tech-debt | med | S | Done | Fix stale AGENTS.md API-client path + phantom dirs |
 | CB-104 | P3 | tech-debt | low | S | Done | Remove dead quote surface in orders store |
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
@@ -427,7 +440,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
 | CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
 | CB-130 | P3 | testing | low | M | Open | Test edge ranking/recommendation helpers |
-| CB-131 | P3 | tech-debt | low | S | Open | files.loadObjectUrl: ownable revoke contract (leak footgun) |
+| CB-131 | P3 | tech-debt | low | S | Done | files.loadObjectUrl: ownable revoke contract (leak footgun) |
 | CB-132 | P2 | ux-flow | med | S | Done | Login phone/OTP inputs reject non-numeric typing (user-found) |
 | CB-133 | P2 | design-parity | med | S | Done | Login errors → client-banner + SVG icon + danger/warn tone split (user-review) |
 | CB-134 | P2 | i18n-copy | med | S | Done | Login: `novalidate` + JS guards → Uzbek alerts, not native English validation (user-found) |

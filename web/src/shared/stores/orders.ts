@@ -1,7 +1,14 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiErrorCode, apiTraceId, withQuery } from '@/shared/api/client'
+import {
+  ApiError,
+  api,
+  apiErrorCode,
+  apiTraceId,
+  captureApiError,
+  withQuery,
+} from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
@@ -158,12 +165,9 @@ export const useOrdersStore = defineStore('orders', () => {
   const downloadTraceId = ref<string | null>(null)
 
   function captureError(errorValue: unknown, fallback: string) {
-    if (errorValue instanceof ApiError && errorValue.status === 403)
-      error.value = 'permission_denied'
-    else if (errorValue instanceof ApiError && typeof errorValue.body === 'object') {
-      error.value = String((errorValue.body as { code?: unknown }).code ?? fallback)
-    } else error.value = fallback
-    traceId.value = apiTraceId(errorValue)
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
   }
 
   async function quoteForDraft(draftId: string, branchId: string) {

@@ -23,6 +23,18 @@ vi.mock('@/shared/api/client', () => {
       }
       return null
     },
+    captureApiError: (error: unknown, fallback: string) => {
+      const traceId =
+        error instanceof ApiError && typeof error.body === 'object' && error.body
+          ? ((error.body as { trace_id?: unknown }).trace_id ?? null)
+          : null
+      if (error instanceof ApiError) {
+        if (error.status === 403) return { code: 'permission_denied', traceId }
+        const code = (error.body as { code?: unknown })?.code
+        return { code: typeof code === 'string' ? code : fallback, traceId }
+      }
+      return { code: fallback, traceId }
+    },
     api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
     withQuery: (path: string, params: Record<string, unknown>) => {
       const search = new URLSearchParams()

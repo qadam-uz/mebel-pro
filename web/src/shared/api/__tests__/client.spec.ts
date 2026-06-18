@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api, apiTraceId, configureSession, withQuery } from '@/shared/api/client'
+import {
+  ApiError,
+  api,
+  apiTraceId,
+  captureApiError,
+  configureSession,
+  withQuery,
+} from '@/shared/api/client'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -141,6 +148,22 @@ describe('shared API client', () => {
       status: 401,
     })
     expect(onExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('captureApiError maps 403, preserves the backend code, else falls back (CB-100)', () => {
+    expect(captureApiError(new ApiError(403, { code: 'whatever' }), 'fb')).toEqual({
+      code: 'permission_denied',
+      traceId: null,
+    })
+    expect(captureApiError(new ApiError(409, { code: 'order_version_conflict' }), 'fb')).toEqual({
+      code: 'order_version_conflict',
+      traceId: null,
+    })
+    expect(captureApiError(new ApiError(500, { trace_id: 'tr-9' }), 'fb')).toEqual({
+      code: 'fb',
+      traceId: 'tr-9',
+    })
+    expect(captureApiError(new Error('network'), 'fb')).toEqual({ code: 'fb', traceId: null })
   })
 
   it('builds query strings, keeping false/0 but dropping null/undefined/"" (CB-98)', () => {

@@ -20,9 +20,12 @@ const props = withDefaults(
 const files = useFilesStore()
 const src = ref<string | null>(null)
 const failed = ref(false)
+// We own the object URL's lifetime via the handle's revoke (CB-131).
+let revokeCurrent: (() => void) | null = null
 
 function revoke() {
-  if (src.value) URL.revokeObjectURL(src.value)
+  revokeCurrent?.()
+  revokeCurrent = null
   src.value = null
 }
 
@@ -33,7 +36,9 @@ watch(
     failed.value = false
     if (!fileId) return
     try {
-      src.value = await files.loadObjectUrl(fileId)
+      const handle = await files.loadObjectUrl(fileId)
+      revokeCurrent = handle.revoke
+      src.value = handle.url
     } catch {
       failed.value = true
     }

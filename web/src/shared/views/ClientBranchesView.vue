@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { formatTiyin } from '@/shared/formatters'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import {
@@ -53,7 +54,7 @@ function hours(branch: ClientBranch) {
 
 watch(search, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => void refreshBranches(), 250)
+  searchTimer = window.setTimeout(() => void refreshBranches(), SEARCH_DEBOUNCE_MS)
 })
 
 onMounted(refreshBranches)
