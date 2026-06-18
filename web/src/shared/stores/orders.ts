@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiErrorCode, apiTraceId } from '@/shared/api/client'
+import { ApiError, api, apiErrorCode, apiTraceId, withQuery } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
-import { useAuthStore } from '@/shared/stores/auth'
 
 export type OrderStatus =
   | 'new'
@@ -134,15 +134,6 @@ export interface OrderDetail extends OrderSummary {
   settlement: OrderSettlement | null
 }
 
-function withQuery(path: string, params: Record<string, string | boolean | null | undefined>) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
-  }
-  const query = search.toString()
-  return query ? `${path}?${query}` : path
-}
-
 export const clientStatusLabel: Record<OrderStatus, string> = {
   new: 'Placed',
   confirmed: 'Confirmed',
@@ -187,11 +178,6 @@ export const useOrdersStore = defineStore('orders', () => {
   const downloadingId = ref<string | null>(null)
   const downloadError = ref<string | null>(null)
   const downloadTraceId = ref<string | null>(null)
-  const auth = useAuthStore()
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   function captureError(errorValue: unknown, fallback: string) {
     if (errorValue instanceof ApiError && errorValue.status === 403)

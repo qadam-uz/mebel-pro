@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId } from '@/shared/api/client'
-import { useAuthStore } from '@/shared/stores/auth'
+import { api, apiTraceId, withQuery } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 
 export type MaterialStatus = 'active' | 'inactive'
 export type MaterialKind = 'panel' | 'edge'
@@ -204,15 +204,6 @@ export interface CatalogFilters {
   manufacturer_id?: string | null
 }
 
-function withQuery(path: string, params: Record<string, string | null | undefined>) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value) search.set(key, value)
-  }
-  const query = search.toString()
-  return query ? `${path}?${query}` : path
-}
-
 export const useAdminStore = defineStore('admin', () => {
   const workshops = ref<WorkshopSummary[]>([])
   const detail = ref<PlatformWorkshopDetail | null>(null)
@@ -236,11 +227,6 @@ export const useAdminStore = defineStore('admin', () => {
   const traceId = ref<string | null>(null)
   const catalogTraceId = ref<string | null>(null)
   const opsTraceId = ref<string | null>(null)
-  const auth = useAuthStore()
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   async function loadWorkshops() {
     loading.value = true

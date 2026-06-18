@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { api, apiTraceId } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 import { useAuthStore } from '@/shared/stores/auth'
 
 export interface NotificationItem {
@@ -24,10 +25,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const traceId = ref<string | null>(null)
   const actionError = ref<string | null>(null)
   const auth = useAuthStore()
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   async function loadUnreadCount() {
     if (!auth.accessToken) return

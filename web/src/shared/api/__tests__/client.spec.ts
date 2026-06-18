@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api, apiTraceId, configureSession } from '@/shared/api/client'
+import { ApiError, api, apiTraceId, configureSession, withQuery } from '@/shared/api/client'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -141,6 +141,13 @@ describe('shared API client', () => {
       status: 401,
     })
     expect(onExpired).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds query strings, keeping false/0 but dropping null/undefined/"" (CB-98)', () => {
+    expect(withQuery('/m', { carried_only: false, count: 0 })).toBe('/m?carried_only=false&count=0')
+    expect(withQuery('/m', { a: null, b: undefined, c: '' })).toBe('/m')
+    expect(withQuery('/m', { keep: 'yes', drop: null, flag: false })).toBe('/m?keep=yes&flag=false')
+    expect(withQuery('/m', {})).toBe('/m')
   })
 
   it('does not attempt a refresh for unauthenticated 401s (CB-08)', async () => {
