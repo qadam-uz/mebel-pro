@@ -12,6 +12,7 @@ import {
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -29,6 +30,7 @@ type DetailTab = 'overview' | 'cutting' | 'finance' | 'timeline'
 const route = useRoute()
 const rolePath = useRolePath()
 const orders = useOrdersStore()
+const toast = useToast()
 const orderId = computed(() => String(route.params.order_id))
 const isNew = computed(() => route.query.new === '1')
 const activeTab = ref<DetailTab>('overview')
@@ -135,6 +137,7 @@ async function cancelOrder() {
   try {
     await orders.cancelClientOrder(current.id, current.version, reason)
     cancelDialogOpen.value = false
+    toast.success('Buyurtma bekor qilindi.')
   } catch {
     actionError.value = orders.error ?? 'order_cancel_failed'
   }

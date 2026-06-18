@@ -10,6 +10,7 @@ import {
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
 import { materialLabel, metres, useCuttingStore } from '@/shared/stores/cutting'
@@ -22,6 +23,7 @@ const rolePath = useRolePath()
 const auth = useAuthStore()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
+const toast = useToast()
 
 const draftId = computed(() => String(route.params.draft_id))
 const step = ref<'branch' | 'checkout'>('branch')
@@ -151,18 +153,15 @@ async function loadQuotes() {
   quoteByBranch.value = {}
   quoteErrors.value = {}
   try {
-    await Promise.all(
-      activeBranches.value.map(async (branch) => {
-        try {
-          const quote = await orders.quoteForDraft(draftId.value, branch.branch_id)
-          quoteByBranch.value = { ...quoteByBranch.value, [branch.branch_id]: quote }
-        } catch {
-          quoteErrors.value = {
-            ...quoteErrors.value,
-            [branch.branch_id]: quoteErrorLabel(orders.error),
-          }
-        }
-      }),
+    // The store attributes each branch its own error code (CB-20); we only map
+    // those codes to Uzbek labels here.
+    const { quotes, errors } = await orders.quoteBranches(
+      draftId.value,
+      activeBranches.value.map((branch) => branch.branch_id),
+    )
+    quoteByBranch.value = quotes
+    quoteErrors.value = Object.fromEntries(
+      Object.entries(errors).map(([branchId, code]) => [branchId, quoteErrorLabel(code)]),
     )
   } finally {
     quotesLoading.value = false
@@ -200,6 +199,7 @@ async function placeOrder() {
       contact_name: contactName.value.trim(),
       contact_phone: normalizeUzPhone(contactPhone.value),
     })
+    toast.success('Buyurtma joylandi.')
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
     localError.value = clientErrorLabel(orders.error, 'Buyurtma yuborilmadi.')
@@ -212,6 +212,14 @@ onMounted(async () => {
   contactName.value = auth.me?.name ?? ''
   contactPhone.value = auth.me?.phone ?? '+998'
   await cutting.loadDraft(draftId.value)
+  // A draft already bound to an order can't be re-ordered — don't walk the user
+  // through the whole wizard only to fail at submit; send them to the order (CB-18).
+  const boundOrderId = cutting.currentDraft?.results.find((result) => result.order_id)?.order_id
+  if (boundOrderId) {
+    toast.warn('Bu chizma allaqachon buyurtma qilingan.')
+    await router.replace(rolePath(`/c/orders/${boundOrderId}`))
+    return
+  }
   await cutting.loadBranchOptions()
   await loadQuotes()
 })

@@ -19,6 +19,7 @@ import { grantSummary, initials } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import ToastHost from '@/shared/components/ToastHost.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -517,4 +518,6 @@ watch(
       </section>
     </main>
   </div>
+
+  <ToastHost />
 </template>

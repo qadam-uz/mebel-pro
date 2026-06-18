@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/shared/api/client'
+import { ApiError, api } from '@/shared/api/client'
 import { useAuthStore, type TokenResponse } from '@/shared/stores/auth'
 
 vi.mock('@/shared/api/client', () => {
@@ -92,5 +92,58 @@ describe('auth store', () => {
     expect(api.del).toHaveBeenCalledWith('/auth/sessions/current', { accessToken: 'access-1' })
     expect(auth.accessToken).toBeNull()
     expect(auth.me).toBeNull()
+  })
+
+  it('requests a client OTP and clears the last error (CB-110)', async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      phone: '+998901234567',
+      expires_at: '2026-06-02T10:05:00Z',
+      resend_after_seconds: 60,
+    })
+    const auth = useAuthStore()
+
+    const response = await auth.requestClientOtp('+998901234567')
+
+    expect(api.post).toHaveBeenCalledWith('/auth/client/otp/request', { phone: '+998901234567' })
+    expect(response.resend_after_seconds).toBe(60)
+    expect(auth.lastError).toBeNull()
+  })
+
+  it('keeps the session anonymous when OTP verify reports a new client (CB-110)', async () => {
+    vi.mocked(api.post).mockResolvedValue({ is_new: true })
+    const auth = useAuthStore()
+
+    const response = await auth.verifyClientOtp('+998901234567', '000000')
+
+    expect(response).toEqual({ is_new: true })
+    expect(auth.accessToken).toBeNull()
+    expect(auth.status).toBe('anonymous')
+  })
+
+  it('applies the token when OTP verify returns a session (CB-110)', async () => {
+    const clientToken: TokenResponse = {
+      ...tokenResponse,
+      me: { ...tokenResponse.me, principal_type: 'client', name: 'Mijoz' },
+    }
+    vi.mocked(api.post).mockResolvedValue(clientToken)
+    const auth = useAuthStore()
+
+    await auth.verifyClientOtp('+998901234567', '000000', 'Mijoz')
+
+    expect(auth.accessToken).toBe('access-1')
+    expect(auth.me?.principal_type).toBe('client')
+    expect(auth.isAllowedFor('client')).toBe(true)
+  })
+
+  it('maps an OTP verify failure to a last-error code + details (CB-110)', async () => {
+    vi.mocked(api.post).mockRejectedValue(
+      new ApiError(422, { code: 'invalid_code', details: { attempts_remaining: 3 } }),
+    )
+    const auth = useAuthStore()
+
+    await expect(auth.verifyClientOtp('+998901234567', '000001')).rejects.toBeInstanceOf(ApiError)
+    expect(auth.lastError).toBe('invalid_code')
+    expect(auth.lastErrorDetails).toEqual({ attempts_remaining: 3 })
+    expect(auth.status).toBe('anonymous')
   })
 })

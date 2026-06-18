@@ -225,6 +225,26 @@ export const useOrdersStore = defineStore('orders', () => {
     )
   }
 
+  // Quote a draft against many branches concurrently, capturing each branch's
+  // OWN error code in the result rather than reading the shared `error`
+  // singleton a sibling request may have overwritten (the CB-20 race). Returns
+  // a quote per successful branch and a code (or null = generic) per failed one.
+  async function quoteBranches(draftId: string, branchIds: string[]) {
+    const quotes: Record<string, OrderQuote> = {}
+    const errors: Record<string, string | null> = {}
+    await Promise.all(
+      branchIds.map(async (branchId) => {
+        try {
+          quotes[branchId] = await quoteForDraft(draftId, branchId)
+        } catch (errorValue) {
+          errors[branchId] =
+            errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null
+        }
+      }),
+    )
+    return { quotes, errors }
+  }
+
   async function createClientOrder(payload: unknown) {
     actionLoading.value = true
     try {
@@ -421,6 +441,7 @@ export const useOrdersStore = defineStore('orders', () => {
     downloadTraceId,
     loadQuote,
     quoteForDraft,
+    quoteBranches,
     createClientOrder,
     loadClientOrders,
     loadClientOrder,

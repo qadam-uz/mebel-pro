@@ -42,9 +42,20 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 7 | 49 | 24 | **80** |
-| Done | 25 | 19 | 8 | **52** |
+| Open (incl. partial) | 3 | 48 | 24 | **75** |
+| Done | 29 | 20 | 8 | **57** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R6): toast primitive + quote-attribution + auth tests.
+> **CB-14** (shared `useToast()` + `<ToastHost>` mounted in `AppShell`, bottom-centre
+> tones/auto-dismiss; wired into order placement, cancel, password change,
+> mark-all-read, and a poll-detected "new notification" toast). **CB-18** (entering
+> the order wizard on a draft already bound to an order redirects to the order with
+> a toast instead of failing at submit). **CB-20** + **CB-107** (the per-branch quote
+> fan-out moved into a testable `orders.quoteBranches` that captures each branch's
+> OWN error code — no more shared-singleton race; `orders.spec.ts` asserts A
+> survives while B/C fail with distinct codes). **CB-110** (client OTP auth path
+> unit-tested in `auth.spec.ts`: request, is_new, token-applied, error mapping).
 
 > Progress (2026-06-18, R5c): states / session / PDF batch. **CB-08** (the API
 > client now intercepts 401 on an authed call: one deduped silent `/auth/refresh`
@@ -131,13 +142,13 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
-| CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
+| CB-14 | P1 | design-parity | high | M | Done | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
 | CB-17 | P1 | states-errors | med | S | Done | Handle PDF download failures with feedback |
-| CB-18 | P1 | ux-flow | med | S | Open | Pre-check draft usability on entering order wizard |
+| CB-18 | P1 | ux-flow | med | S | Done | Pre-check draft usability on entering order wizard |
 | CB-19 | P2 | states-errors | med | M | Open | "No branch carries the set" recovery panel |
-| CB-20 | P2 | correctness-bug | med | M | Open | Per-branch quote error labeling uses real per-call error |
+| CB-20 | P2 | correctness-bug | med | M | Done | Per-branch quote error labeling uses real per-call error |
 | CB-21 | P2 | states-errors | med | M | Open | Page-level error+retry when all checkout quotes fail |
 | CB-22 | P2 | states-errors | med | M | Open | Extract shared ClientErrorState; add trace_id to notifications |
 | CB-23 | P2 | states-errors | med | M | Open | Fault-tolerant per-branch material loads (allSettled+retry) |
@@ -224,10 +235,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-104 | P3 | tech-debt | low | S | Open | Remove dead quote surface in orders store |
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
 | CB-106 | P1 | testing | high | S | Done | Regression test: notifications markRead idempotency (CB-55) |
-| CB-107 | P1 | testing | high | M | Open | Test per-branch quote error attribution (CB-20) |
+| CB-107 | P1 | testing | high | M | Done | Test per-branch quote error attribution (CB-20) |
 | CB-108 | P1 | testing | high | M | Done | Test autosave debounce + hydration guard (CB-15) |
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
-| CB-110 | P1 | testing | high | M | Open | Cover client OTP auth path in auth store |
+| CB-110 | P1 | testing | high | M | Done | Cover client OTP auth path in auth store |
 | CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Open | Order-detail Timeline: 5 client phases, not raw events |

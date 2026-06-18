@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
+import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
@@ -14,6 +15,7 @@ const notifications = useNotificationsStore()
 const router = useRouter()
 const roleConfig = useRoleConfig()
 const rolePath = useRolePath()
+const toast = useToast()
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
@@ -69,6 +71,7 @@ async function openAll() {
 async function markAllRead() {
   await notifications.markAllRead()
   await notifications.loadList()
+  toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -95,10 +98,31 @@ onMounted(() => {
   pollTimer = window.setInterval(pollUnread, POLL_INTERVAL_MS)
 })
 
+// Surface a toast when polling discovers new notifications (CB-14) — the badge
+// alone is easy to miss. We only start toasting once the session's initial count
+// has loaded (`primed`), so the unread that already existed at sign-in doesn't
+// fire a toast.
+let seenUnread = 0
+let primed = false
+watch(
+  () => notifications.unread,
+  (unread) => {
+    if (primed && unread > seenUnread) toast.success('Yangi bildirishnoma bor.')
+    seenUnread = unread
+  },
+)
+
 watch(
   () => auth.accessToken,
-  (accessToken) => {
-    if (accessToken) void notifications.loadUnreadCount()
+  async (accessToken) => {
+    primed = false
+    if (!accessToken) {
+      seenUnread = 0
+      return
+    }
+    await notifications.loadUnreadCount()
+    seenUnread = notifications.unread
+    primed = true
   },
   { immediate: true },
 )
