@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiTraceId } from '@/shared/api/client'
+import { ApiError, api, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -355,6 +355,16 @@ export const useOrdersStore = defineStore('orders', () => {
       patchOrder(order)
       return order
     } catch (errorValue) {
+      // On an optimistic-concurrency conflict the cached version is stale; refetch
+      // the order so the next attempt carries the server's current version.
+      if (apiErrorCode(errorValue) === 'order_version_conflict') {
+        const match = path.match(/\/(client|workshop)\/orders\/([^/]+)\//)
+        const orderId = match?.[2]
+        if (orderId) {
+          if (match?.[1] === 'client') await loadClientOrder(orderId)
+          else await loadWorkshopOrder(orderId)
+        }
+      }
       captureError(errorValue, 'order_action_failed')
       throw errorValue
     } finally {

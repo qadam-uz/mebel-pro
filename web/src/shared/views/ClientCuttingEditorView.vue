@@ -110,9 +110,7 @@ const optimizeDisabledHint = computed(() => {
   if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
   return ''
 })
-const notCarriedRows = computed(() =>
-  parts.value.filter((part) => rowNotCarried(part).length > 0 && part.material_source === 'shop'),
-)
+const notCarriedRows = computed(() => parts.value.filter((part) => rowNotCarried(part).length > 0))
 const chosenResult = computed(() => {
   if (!draft.value) return null
   return (
@@ -607,9 +605,14 @@ function onDocumentKeydown(event: KeyboardEvent) {
 }
 
 function bringOwn(part: CuttingPart) {
-  part.material_source = 'own'
+  // Flip only the not-carried panel/sides to "own" — sides whose tape IS carried
+  // must stay shop-sourced so we don't silently change what the client is billed.
+  const issues = rowNotCarried(part)
+  if (issues.includes('panel')) part.material_source = 'own'
   for (const side of edgeFields) {
-    if (part[side]) part[side] = { ...part[side], source: 'own' } as CuttingEdgeBand
+    if (issues.includes(side) && part[side]) {
+      part[side] = { ...part[side], source: 'own' } as CuttingEdgeBand
+    }
   }
 }
 
@@ -1131,10 +1134,20 @@ const edgePatterns: Array<{
             >
               <span class="font-black">!</span>
               <span class="min-w-0 flex-1">
-                Bu qator tanlangan ustaxonada mavjud bo'lmagan materialdan foydalanadi.
+                Bu qator
+                <b>{{ preferredBranch?.branch_name ?? 'tanlangan filial' }}</b>
+                filialida mavjud bo'lmagan materialdan foydalanadi.
               </span>
               <button type="button" class="mp-button mp-button-outline" @click="bringOwn(part)">
                 O'zim olib kelaman
+              </button>
+              <button
+                v-if="rowNotCarried(part).some((issue) => issue !== 'panel')"
+                type="button"
+                class="mp-button mp-button-outline"
+                @click="openEdgePicker(part)"
+              >
+                Boshqa krom tanlash
               </button>
             </div>
           </article>

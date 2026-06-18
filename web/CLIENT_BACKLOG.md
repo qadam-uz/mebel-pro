@@ -42,10 +42,19 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 20 | 56 | 28 | **104** |
-| Done | 12 | 12 | 4 | **28** |
+| Open (incl. partial) | 18 | 56 | 28 | **102** |
+| Done | 14 | 12 | 4 | **30** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
+> now flips only the not-carried panel/sides, a "Boshqa krom tanlash" button opens
+> the picker, the warning names the branch, and the banner count no longer drops
+> own-panel/not-carried-edge rows), **CB-11** (409 `order_version_conflict` refetches
+> the order so a retry uses the fresh version, + `orders.spec.ts`).
+> **CB-02 is blocked on the backend**, not done: the backend emits exactly one
+> notification (`inventory.low_stock`, to workshop users) — no client order
+> notifications exist yet, so there are no raw codes reaching clients to localize.
+>
 > Progress (2026-06-18, R2): 28 Done. **CB-65** (cutting SVG: normalized label
 > size + suppress tiny labels + pinch-zoom), **CB-04** (order-new pre-selects the
 > preferred branch with a "Tavsiya" chip), **CB-31** (order-detail tabs:
@@ -70,7 +79,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | ID | Pri | Cat | Sev | Eff | Status | Title |
 |----|-----|-----|-----|-----|--------|-------|
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
-| CB-02 | P1 | i18n-copy | high | M | Open | Human-readable Uzbek notification titles (+body) in bell & list |
+| CB-02 | P1 | i18n-copy | high | M | Blocked | Human-readable Uzbek notification titles (+body) in bell & list — backend emits no client notifications yet (only `inventory.low_stock` → workshop) |
 | CB-03 | P1 | ux-flow | high | M | Open | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
@@ -79,7 +88,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-08 | P1 | states-errors | high | L | Open | 401/session-expired: silent refresh then login redirect |
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
 | CB-10 | P1 | completeness-stub | high | S | Open | Poll notification unread count (~45s) |
-| CB-11 | P1 | correctness-bug | high | M | Open | 409 cancel conflict: refetch order + actionable message |
+| CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
 | CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
 | CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Open | Shared toast/snackbar primitive + wire critical events |
@@ -154,7 +163,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-83 | P2 | spec-conformance | med | S | Open | 100-part cap + blocking roll-up under the parts table |
 | CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |
 | CB-85 | P2 | spec-conformance | med | S | Open | Grain indicator on the panel chip |
-| CB-86 | P1 | spec-conformance | high | M | Open | Fix per-row recovery: scoped bring-own + pick-different-material |
+| CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
 | CB-87 | P2 | spec-conformance | med | M | Open | Material tab strip in visualiser; dimensions in legend |
 | CB-88 | P2 | spec-conformance | med | M | Open | Drafts list: branch chip + material label pre-optimise |
 | CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
