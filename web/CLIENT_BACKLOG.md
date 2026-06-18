@@ -42,10 +42,16 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 22 | 57 | 28 | **107** |
-| Done | 10 | 11 | 4 | **25** |
+| Open (incl. partial) | 20 | 56 | 28 | **104** |
+| Done | 12 | 12 | 4 | **28** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-18, R2): 28 Done. **CB-65** (cutting SVG: normalized label
+> size + suppress tiny labels + pinch-zoom), **CB-04** (order-new pre-selects the
+> preferred branch with a "Tavsiya" chip), **CB-31** (order-detail tabs:
+> tablist/tab/tabpanel roles + arrow-key navigation). Plans were produced by a
+> parallel e2e-aware analysis workflow before implementing.
+>
 > Progress (2026-06-18, editor focus): 25 Done. This session — **CB-29** (result
 > panel: "Joylashtirildi N/N" + per-edge-material metres), **CB-16** (optimize
 > failures caught + inline banner with trace), **CB-50** (Optimise disabled until
@@ -66,7 +72,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
 | CB-02 | P1 | i18n-copy | high | M | Open | Human-readable Uzbek notification titles (+body) in bell & list |
 | CB-03 | P1 | ux-flow | high | M | Open | Read-only mode + bound-order banner for confirmed drafts in editor |
-| CB-04 | P1 | ux-flow | high | S | Open | Pre-select & badge preferred branch in order-new step |
+| CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
 | CB-06 | P1 | a11y | high | M | Open | Focus-trap the cutting-editor edge-banding modal |
 | CB-07 | P1 | a11y | high | M | Open | Keyboard-operable placement rects (name + visible focus) |
@@ -93,7 +99,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
 | CB-29 | P2 | completeness-stub | med | M | Done | Per-edge-material metres + parts-placed count in result |
 | CB-30 | P2 | completeness-stub | med | S | Done | Show order notes (note_workshop/client) in Overview |
-| CB-31 | P2 | a11y | med | M | Open | Valid tablist/tab/tabpanel + keyboard on order detail |
+| CB-31 | P2 | a11y | med | M | Done | Valid tablist/tab/tabpanel + keyboard on order detail |
 | CB-32 | P2 | a11y | med | M | Open | ARIA menu keyboard ops on notifications dropdown |
 | CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
@@ -127,7 +133,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-62 | P1 | responsive | high | M | Open | Edge modal: dvh sizing + bottom-sheet on phones |
 | CB-63 | P2 | ux-flow | med | S | Open | iOS-proof modal scroll lock + overscroll containment |
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
-| CB-65 | P1 | ux-flow | high | M | Open | Cutting SVG: normalized viewBox, label threshold, zoom |
+| CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
 | CB-66 | P3 | ux-flow | low | S | Open | `scroll-margin` for #cutting-results under sticky header |
 | CB-67 | P3 | tech-debt | low | S | Open | Guard hover styles with `@media (hover:hover)` |
 | CB-68 | P2 | responsive | med | S | Open | 16px form-control font on mobile (stop iOS auto-zoom) |

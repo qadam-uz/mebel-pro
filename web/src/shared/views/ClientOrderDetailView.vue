@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -116,6 +116,23 @@ async function cancelOrder() {
 
 function switchTab(tab: DetailTab) {
   activeTab.value = tab
+}
+
+const detailTabs: DetailTab[] = ['overview', 'cutting', 'finance', 'timeline']
+function onTabKeydown(event: KeyboardEvent) {
+  const current = detailTabs.indexOf(activeTab.value)
+  let nextIndex = current
+  if (event.key === 'ArrowRight') nextIndex = (current + 1) % detailTabs.length
+  else if (event.key === 'ArrowLeft')
+    nextIndex = (current - 1 + detailTabs.length) % detailTabs.length
+  else if (event.key === 'Home') nextIndex = 0
+  else if (event.key === 'End') nextIndex = detailTabs.length - 1
+  else return
+  event.preventDefault()
+  const nextTab = detailTabs[nextIndex]
+  if (!nextTab) return
+  switchTab(nextTab)
+  void nextTick(() => document.getElementById(`tab-${nextTab}`)?.focus())
 }
 
 watch(
@@ -237,35 +254,60 @@ onMounted(() => {
         </span>
       </div>
 
-      <div class="client-tabs" role="tablist" aria-label="Buyurtma tafsilotlari">
+      <div
+        class="client-tabs"
+        role="tablist"
+        aria-label="Buyurtma tafsilotlari"
+        @keydown="onTabKeydown"
+      >
         <button
+          id="tab-overview"
           type="button"
+          role="tab"
           class="client-tab"
           :class="{ active: activeTab === 'overview' }"
+          :aria-selected="activeTab === 'overview'"
+          aria-controls="panel-overview"
+          :tabindex="activeTab === 'overview' ? 0 : -1"
           @click="switchTab('overview')"
         >
           Umumiy
         </button>
         <button
+          id="tab-cutting"
           type="button"
+          role="tab"
           class="client-tab"
           :class="{ active: activeTab === 'cutting' }"
+          :aria-selected="activeTab === 'cutting'"
+          aria-controls="panel-cutting"
+          :tabindex="activeTab === 'cutting' ? 0 : -1"
           @click="switchTab('cutting')"
         >
           Chizma
         </button>
         <button
+          id="tab-finance"
           type="button"
+          role="tab"
           class="client-tab"
           :class="{ active: activeTab === 'finance' }"
+          :aria-selected="activeTab === 'finance'"
+          aria-controls="panel-finance"
+          :tabindex="activeTab === 'finance' ? 0 : -1"
           @click="switchTab('finance')"
         >
           To'lov
         </button>
         <button
+          id="tab-timeline"
           type="button"
+          role="tab"
           class="client-tab"
           :class="{ active: activeTab === 'timeline' }"
+          :aria-selected="activeTab === 'timeline'"
+          aria-controls="panel-timeline"
+          :tabindex="activeTab === 'timeline' ? 0 : -1"
           @click="switchTab('timeline')"
         >
           Tarix
@@ -274,7 +316,14 @@ onMounted(() => {
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.85fr)]">
         <div class="min-w-0">
-          <section v-if="activeTab === 'overview'" class="grid gap-4">
+          <section
+            v-if="activeTab === 'overview'"
+            id="panel-overview"
+            role="tabpanel"
+            aria-labelledby="tab-overview"
+            tabindex="0"
+            class="grid gap-4"
+          >
             <div class="client-card">
               <div class="client-card-h"><h2>Buyurtma tarkibi</h2></div>
               <div class="client-card-b">
@@ -398,7 +447,14 @@ onMounted(() => {
             </div>
           </section>
 
-          <section v-else-if="activeTab === 'cutting'" class="client-card">
+          <section
+            v-else-if="activeTab === 'cutting'"
+            id="panel-cutting"
+            role="tabpanel"
+            aria-labelledby="tab-cutting"
+            tabindex="0"
+            class="client-card"
+          >
             <div class="client-card-h">
               <h2>Chizma</h2>
               <button
@@ -474,7 +530,14 @@ onMounted(() => {
             </div>
           </section>
 
-          <section v-else-if="activeTab === 'finance'" class="client-card">
+          <section
+            v-else-if="activeTab === 'finance'"
+            id="panel-finance"
+            role="tabpanel"
+            aria-labelledby="tab-finance"
+            tabindex="0"
+            class="client-card"
+          >
             <div class="client-card-h"><h2>To'lov</h2></div>
             <div class="client-card-b">
               <template v-if="financeOpen && order.settlement">
@@ -513,7 +576,14 @@ onMounted(() => {
             </div>
           </section>
 
-          <section v-else class="client-card">
+          <section
+            v-else
+            id="panel-timeline"
+            role="tabpanel"
+            aria-labelledby="tab-timeline"
+            tabindex="0"
+            class="client-card"
+          >
             <div class="client-card-h"><h2>Holatlar tarixi</h2></div>
             <div class="client-card-b">
               <ol class="relative ml-4 grid gap-4 border-l-2 border-hairline pl-5">

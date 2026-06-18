@@ -3,6 +3,15 @@ import { computed } from 'vue'
 
 import type { CuttingPanel, CuttingPlacement, CuttingResult } from '@/shared/stores/cutting'
 
+// The viewBox stays in raw panel mm, but a label only renders when its placement
+// is large enough at a normalized 800-unit width (mirrors the prototype): the
+// font size and the visibility threshold are expressed against that scale so a
+// 2800mm panel and a 900mm panel read the same on screen.
+const NORM_WIDTH = 800
+const LABEL_FONT = 11
+const LABEL_MIN_W = 80
+const LABEL_MIN_H = 30
+
 const props = defineProps<{
   result: CuttingResult
   panel: CuttingPanel
@@ -17,6 +26,8 @@ const material = computed(() => props.result.material_snapshots[props.panel.mate
 const panelLength = computed(() => numberSnapshot(material.value.panel_length_mm, 1000))
 const panelWidth = computed(() => numberSnapshot(material.value.panel_width_mm, 700))
 const viewBox = computed(() => `0 0 ${panelLength.value} ${panelWidth.value}`)
+const normScale = computed(() => NORM_WIDTH / panelLength.value)
+const labelFontSize = computed(() => LABEL_FONT / normScale.value)
 
 function numberSnapshot(value: unknown, fallback: number) {
   if (typeof value === 'number') return value
@@ -31,12 +42,20 @@ function svgY(placement: CuttingPlacement) {
 function label(placement: CuttingPlacement) {
   return `${placement.part_ref} #${placement.part_quantity_index}${placement.rotated ? ' R' : ''}`
 }
+
+function labelFits(placement: CuttingPlacement) {
+  return (
+    placement.length_mm * normScale.value > LABEL_MIN_W &&
+    placement.width_mm * normScale.value > LABEL_MIN_H
+  )
+}
 </script>
 
 <template>
   <svg
     class="block h-auto w-full rounded-md border border-hairline-strong bg-elevated"
     :viewBox="viewBox"
+    style="touch-action: pinch-zoom"
     role="img"
     :aria-label="`Panel ${panel.panel_index} layout`"
   >
@@ -65,10 +84,11 @@ function label(placement: CuttingPlacement) {
         @keydown.space.prevent="emit('select-placement', placement)"
       />
       <text
-        :x="placement.x_mm + 8"
-        :y="svgY(placement) + 18"
+        v-if="labelFits(placement)"
+        :x="placement.x_mm + labelFontSize * 0.5"
+        :y="svgY(placement) + labelFontSize * 1.15"
         fill="#0f172a"
-        font-size="14"
+        :font-size="labelFontSize"
         font-family="sans-serif"
       >
         {{ label(placement) }}
