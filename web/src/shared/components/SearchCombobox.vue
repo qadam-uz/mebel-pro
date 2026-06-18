@@ -14,10 +14,10 @@ const props = withDefaults(
     noResultsText?: string
   }>(),
   {
-    placeholder: 'Search',
+    placeholder: 'Qidiring',
     error: null,
     disabled: false,
-    noResultsText: 'No matching options',
+    noResultsText: "Mos variant yo'q",
   },
 )
 
