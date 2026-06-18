@@ -48,10 +48,16 @@ function destination(item: NotificationItem) {
   return notificationDestination(item, roleConfig.role)
 }
 
+// Reuse the loaded list for ~30s instead of refetching on every bell open (CB-52);
+// the unread badge is kept live by the ~45s poll regardless.
+let listLoadedAt = 0
 async function toggle() {
   open.value = !open.value
   if (open.value) {
-    await notifications.loadList()
+    if (notifications.items.length === 0 || Date.now() - listLoadedAt > 30000) {
+      await notifications.loadList()
+      listLoadedAt = Date.now()
+    }
     await nextTick()
     menuItems()[0]?.focus()
   }
@@ -124,6 +130,7 @@ async function markAllRead() {
     return
   }
   await notifications.loadList()
+  listLoadedAt = Date.now()
   toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 

@@ -105,7 +105,9 @@ async def list_drafts(
             .order_by(CuttingDraft.updated_at.desc(), CuttingDraft.created_at.desc())
         )
     ).scalars()
-    return [await _draft_response(db, draft) for draft in rows]
+    # Drafts list omits per-panel placements (CB-39) — the list cards only show
+    # waste %, panel counts, and material labels.
+    return [await _draft_response(db, draft, summary=True) for draft in rows]
 
 
 async def get_draft(
@@ -692,7 +694,12 @@ async def _delete_candidate_results(db: AsyncSession, draft_id: uuid.UUID) -> No
     await db.execute(delete(CuttingResult).where(CuttingResult.id.in_(result_ids)))
 
 
-async def _draft_response(db: AsyncSession, draft: CuttingDraft) -> CuttingDraftResponse:
+async def _draft_response(
+    db: AsyncSession,
+    draft: CuttingDraft,
+    *,
+    summary: bool = False,
+) -> CuttingDraftResponse:
     result_rows = (
         await db.execute(
             select(CuttingResult)
@@ -708,53 +715,62 @@ async def _draft_response(db: AsyncSession, draft: CuttingDraft) -> CuttingDraft
         chosen_result_id=draft.chosen_result_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
-        results=[await _result_response(db, result) for result in result_rows],
+        results=[await _result_response(db, result, summary=summary) for result in result_rows],
     )
 
 
-async def _result_response(db: AsyncSession, result: CuttingResult) -> CuttingResultResponse:
-    panel_rows = (
-        (
-            await db.execute(
-                select(CuttingPanel)
-                .where(CuttingPanel.cutting_result_id == result.id)
-                .order_by(CuttingPanel.material_id, CuttingPanel.panel_index)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    panel_ids = [panel.id for panel in panel_rows]
-    placements_by_panel: dict[uuid.UUID, list[CuttingPlacement]] = {
-        panel.id: [] for panel in panel_rows
-    }
-    if panel_ids:
-        placement_rows = (
-            await db.execute(
-                select(CuttingPlacement)
-                .where(CuttingPlacement.cutting_panel_id.in_(panel_ids))
-                .order_by(
-                    CuttingPlacement.cutting_panel_id,
-                    CuttingPlacement.part_ref,
-                    CuttingPlacement.part_quantity_index,
+async def _result_response(
+    db: AsyncSession,
+    result: CuttingResult,
+    *,
+    summary: bool = False,
+) -> CuttingResultResponse:
+    # List views (CB-39) only need the headline metrics + material_snapshots, never
+    # the per-panel placements — skip those two queries + their serialization.
+    panels: list[CuttingPanelResponse] = []
+    if not summary:
+        panel_rows = (
+            (
+                await db.execute(
+                    select(CuttingPanel)
+                    .where(CuttingPanel.cutting_result_id == result.id)
+                    .order_by(CuttingPanel.material_id, CuttingPanel.panel_index)
                 )
             )
-        ).scalars()
-        for placement in placement_rows:
-            placements_by_panel[placement.cutting_panel_id].append(placement)
-    panels = [
-        CuttingPanelResponse(
-            id=panel.id,
-            material_id=panel.material_id,
-            panel_index=panel.panel_index,
-            waste_area_mm2=panel.waste_area_mm2,
-            placements=[
-                CuttingPlacementResponse.model_validate(placement)
-                for placement in placements_by_panel[panel.id]
-            ],
+            .scalars()
+            .all()
         )
-        for panel in panel_rows
-    ]
+        panel_ids = [panel.id for panel in panel_rows]
+        placements_by_panel: dict[uuid.UUID, list[CuttingPlacement]] = {
+            panel.id: [] for panel in panel_rows
+        }
+        if panel_ids:
+            placement_rows = (
+                await db.execute(
+                    select(CuttingPlacement)
+                    .where(CuttingPlacement.cutting_panel_id.in_(panel_ids))
+                    .order_by(
+                        CuttingPlacement.cutting_panel_id,
+                        CuttingPlacement.part_ref,
+                        CuttingPlacement.part_quantity_index,
+                    )
+                )
+            ).scalars()
+            for placement in placement_rows:
+                placements_by_panel[placement.cutting_panel_id].append(placement)
+        panels = [
+            CuttingPanelResponse(
+                id=panel.id,
+                material_id=panel.material_id,
+                panel_index=panel.panel_index,
+                waste_area_mm2=panel.waste_area_mm2,
+                placements=[
+                    CuttingPlacementResponse.model_validate(placement)
+                    for placement in placements_by_panel[panel.id]
+                ],
+            )
+            for panel in panel_rows
+        ]
     return CuttingResultResponse(
         id=result.id,
         draft_id=result.draft_id,

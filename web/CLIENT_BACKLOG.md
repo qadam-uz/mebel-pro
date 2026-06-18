@@ -42,9 +42,20 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 1 | 8 | 4 | **13** |
-| Done | 31 | 60 | 28 | **119** |
+| Open (incl. partial) | 1 | 7 | 3 | **11** |
+| Done | 31 | 61 | 29 | **121** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B13): perf — drafts-summary + staleness
+> (curl-verified, reviewed; a "missing panels in editor" finding was a false alarm —
+> the editor reads `currentDraft` (full via loadDraft), never the summary list).
+> **CB-39** (`GET /client/cutting-drafts` list now serializes results in summary
+> mode — skips the per-panel + per-placement queries, `panels=[]` — while the
+> single-draft/optimize/chosen-result/SVG/PDF paths stay full; the list cards only
+> need waste %, panel counts, material labels). **CB-52** (`loadBranchOptions` reuses
+> its no-search result for ~30s so editor→checkout doesn't double-fetch; the
+> notifications bell reuses its list for ~30s on open, the ~45s unread poll keeping
+> the badge live).
 
 > Progress (2026-06-19, client-finish B12): checkout quote — batch + itemized
 > (curl-verified, adversarially reviewed; a real edge-labor reconciliation drift was
@@ -396,7 +407,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Done | Paginate client orders list |
-| CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |
+| CB-39 | P2 | performance | med | M | Done | Lightweight drafts-summary endpoint for list views |
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
 | CB-41 | P2 | completeness-stub | low | M | Done | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
@@ -409,7 +420,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
 | CB-50 | P3 | ux-flow | low | S | Done | Disable Optimise after a run until a part changes |
 | CB-51 | P3 | ux-flow | low | M | Open | Two-pane workshop+branch picker in editor pre-filter |
-| CB-52 | P3 | performance | low | S | Open | Cache/staleness reuse for home/notifications/branch-options |
+| CB-52 | P3 | performance | low | S | Done | Cache/staleness reuse for home/notifications/branch-options |
 | CB-53 | P3 | a11y | low | S | Done | Self-describing autosave live region (role=status) |
 | CB-54 | P3 | a11y | low | S | Done | AuthFileImage: required alt + localized failure label |
 | CB-55 | P3 | correctness-bug | low | S | Done | Idempotent markRead decrement (only when was unread) |

@@ -326,11 +326,27 @@ export const useCuttingStore = defineStore('cutting', () => {
     return draft
   }
 
-  async function loadBranchOptions(search?: string) {
+  // Reuse the cached branch-options for ~30s on a plain (no-search) load so the
+  // editor→checkout navigation doesn't refetch the identical list twice (CB-52).
+  // A search always fetches and invalidates the freshness window.
+  const branchOptionsLoadedAt = ref(0)
+  async function loadBranchOptions(search?: string, options: { force?: boolean } = {}) {
+    if (search) {
+      branchOptions.value = await api.get<ClientBranchOption[]>(
+        withQuery('/client/branch-options', { search }),
+        authInit(),
+      )
+      branchOptionsLoadedAt.value = 0
+      return
+    }
+    const fresh =
+      branchOptions.value.length > 0 && Date.now() - branchOptionsLoadedAt.value < 30_000
+    if (!options.force && fresh) return
     branchOptions.value = await api.get<ClientBranchOption[]>(
-      withQuery('/client/branch-options', { search }),
+      withQuery('/client/branch-options', {}),
       authInit(),
     )
+    branchOptionsLoadedAt.value = Date.now()
   }
 
   async function loadMaterials(params: {
