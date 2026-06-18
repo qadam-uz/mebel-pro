@@ -42,9 +42,20 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 13 | 5 | **21** |
-| Done | 29 | 55 | 27 | **111** |
+| Open (incl. partial) | 3 | 12 | 4 | **17** |
+| Done | 29 | 56 | 28 | **113** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B9): testing — pure-helper extraction +
+> coverage (adversarial review confirmed the tests pin behaviour; added a
+> tertiary-sort case). **CB-124** (extracted `partNotCarried(part, branchId,
+> resolvePanel, resolveEdge)` into `stores/cutting.ts` — the editor's `rowNotCarried`
+> now delegates — with a 6-case unit test: no-branch, shop-panel-not-carried,
+> own-panel-exempt, shop-edge-by-side, own-edge-exempt, all-carried). **CB-130**
+> (extracted `edgeRank`/`rankedEdges`/`recommendedEdge` into
+> `app/cuttingEdgeDisplay.ts` — the editor delegates — with unit tests for the
+> decor/colour/neither ranks, the rank→thickness→name sort, and the
+> current→remembered→top-ranked recommendation). 95 unit tests now.
 
 > Progress (2026-06-19, client-finish B8): tech-debt small (adversarial review
 > surfaced an incomplete test mock + a pre-existing admin 403-masking bug — both
@@ -433,13 +444,13 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
 | CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
 | CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
-| CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |
+| CB-124 | P2 | testing | med | M | Done | Test branch-carry recovery detection (rowNotCarried) |
 | CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
 | CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
-| CB-130 | P3 | testing | low | M | Open | Test edge ranking/recommendation helpers |
+| CB-130 | P3 | testing | low | M | Done | Test edge ranking/recommendation helpers |
 | CB-131 | P3 | tech-debt | low | S | Done | files.loadObjectUrl: ownable revoke contract (leak footgun) |
 | CB-132 | P2 | ux-flow | med | S | Done | Login phone/OTP inputs reject non-numeric typing (user-found) |
 | CB-133 | P2 | design-parity | med | S | Done | Login errors → client-banner + SVG icon + danger/warn tone split (user-review) |

@@ -173,6 +173,33 @@ export function partFitError(
   return fitsNormal || fitsRotated ? null : 'part_too_large'
 }
 
+export const EDGE_SIDES = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
+export type EdgeSide = (typeof EDGE_SIDES)[number]
+
+/**
+ * Which of a part's SHOP-sourced materials the chosen branch doesn't carry — the
+ * panel (`'panel'`) and/or each banded side. Empty when no branch is chosen or all
+ * are carried. Pure: the panel/edge resolvers are passed in, so it's unit-testable
+ * without the store (CB-124). Drives the per-row recovery banner (CB-19/CB-86).
+ */
+export function partNotCarried(
+  part: CuttingPart,
+  branchId: string | null | undefined,
+  resolvePanel: (id: string | null | undefined) => { branch_carried: boolean } | null,
+  resolveEdge: (id: string | null | undefined) => { branch_carried: boolean } | null,
+): string[] {
+  if (!branchId) return []
+  const issues: string[] = []
+  const panel = resolvePanel(part.material_id)
+  if (part.material_source === 'shop' && panel && !panel.branch_carried) issues.push('panel')
+  for (const side of EDGE_SIDES) {
+    const band = part[side]
+    const material = resolveEdge(band?.material_id)
+    if (band?.source === 'shop' && material && !material.branch_carried) issues.push(side)
+  }
+  return issues
+}
+
 export const useCuttingStore = defineStore('cutting', () => {
   const drafts = ref<CuttingDraft[]>([])
   const currentDraft = ref<CuttingDraft | null>(null)

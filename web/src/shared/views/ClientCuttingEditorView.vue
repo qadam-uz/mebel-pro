@@ -6,6 +6,7 @@ import { ApiError } from '@/shared/api/client'
 import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
 import { AUTOSAVE_DEBOUNCE_MS, MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
 import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -22,6 +23,7 @@ import {
   materialLabel,
   metres,
   partFitError,
+  partNotCarried,
   useCuttingStore,
   type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
@@ -386,16 +388,7 @@ function edgeById(id: string | null | undefined) {
 }
 
 function rowNotCarried(part: CuttingPart) {
-  if (!draft.value?.preferred_branch_id) return []
-  const issues: string[] = []
-  const panel = materialById(part.material_id)
-  if (part.material_source === 'shop' && panel && !panel.branch_carried) issues.push('panel')
-  for (const side of edgeFields) {
-    const edge = part[side]
-    const material = edgeById(edge?.material_id)
-    if (edge?.source === 'shop' && material && !material.branch_carried) issues.push(side)
-  }
-  return issues
+  return partNotCarried(part, draft.value?.preferred_branch_id, materialById, edgeById)
 }
 
 function partSizeError(part: CuttingPart): string | null {
@@ -510,34 +503,17 @@ function edgeSearchText(material: ClientCatalogMaterialOption) {
   return `${material.manufacturer_name} ${material.name} ${material.color} ${material.decor_code ?? ''} ${material.thickness_mm}`.toLowerCase()
 }
 
-function edgeRankForPart(part: CuttingPart, edge: ClientCatalogMaterialOption) {
-  const panel = materialById(part.material_id)
-  if (!panel) return 2
-  if (panel.decor_code && edge.decor_code && panel.decor_code === edge.decor_code) return 0
-  if (panel.color && edge.color && panel.color.toLowerCase() === edge.color.toLowerCase()) return 1
-  return 2
-}
-
 function rankedEdgesForPart(part: CuttingPart) {
-  return cutting.edgeOptions
-    .map((material) => ({ material, rank: edgeRankForPart(part, material) }))
-    .sort((left, right) => {
-      if (left.rank !== right.rank) return left.rank - right.rank
-      const leftThickness = Number(left.material.thickness_mm)
-      const rightThickness = Number(right.material.thickness_mm)
-      if (leftThickness !== rightThickness) return leftThickness - rightThickness
-      return `${left.material.manufacturer_name} ${left.material.name}`.localeCompare(
-        `${right.material.manufacturer_name} ${right.material.name}`,
-      )
-    })
+  return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
 }
 
 function recommendedEdgeForPart(part: CuttingPart) {
-  const current = edgePickerSelectedMaterialId.value
-  if (current) return edgeById(current)
-  const remembered = preferredEdgeId(part)
-  if (remembered) return edgeById(remembered)
-  return rankedEdgesForPart(part)[0]?.material ?? null
+  return recommendedEdge(
+    materialById(part.material_id),
+    cutting.edgeOptions,
+    edgePickerSelectedMaterialId.value,
+    preferredEdgeId(part),
+  )
 }
 
 function edgeShortLabel(
