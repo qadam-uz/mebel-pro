@@ -79,12 +79,13 @@ describe('orders store', () => {
 
     const { quotes, errors } = await store.quoteBranches('draft-1', ['A', 'B', 'C'])
 
-    // The success is not poisoned by sibling failures (the CB-20 race).
+    // The success is not poisoned by sibling failures (the CB-20 race), and each
+    // branch keeps its OWN backend code (CB-19 needs the real code, not 403→null).
     expect(quotes.A).toMatchObject({ branch_id: 'A' })
     expect(quotes.B).toBeUndefined()
     expect(quotes.C).toBeUndefined()
     expect(errors.A).toBeUndefined()
     expect(errors.B).toBe('permission_denied')
-    expect(errors.C).toBeNull()
+    expect(errors.C).toBe('materials_unavailable')
   })
 })

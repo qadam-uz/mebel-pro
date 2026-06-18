@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId } from '@/shared/api/client'
+import { api, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -57,6 +57,10 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
   const materialsError = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   const materialsTraceId = ref<string | null>(null)
+  // Per-branch material-load error/trace so one failing branch doesn't blank the
+  // whole list (CB-23).
+  const branchMaterialsError = ref<Record<string, string | null>>({})
+  const branchMaterialsTraceId = ref<Record<string, string | null>>({})
   const auth = useAuthStore()
 
   function authInit() {
@@ -114,6 +118,33 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     return rows
   }
 
+  // Load several branches' materials concurrently but fault-tolerantly: one
+  // branch failing records a per-branch error instead of rejecting the whole
+  // batch and stranding every branch on "loading" (CB-23).
+  async function loadMaterialsForBranchBatch(branchIds: string[]) {
+    const results = await Promise.allSettled(
+      branchIds.map(async (branchId) => ({
+        branchId,
+        rows: await loadMaterialsForBranch(branchId),
+      })),
+    )
+    const nextErrors = { ...branchMaterialsError.value }
+    const nextTraces = { ...branchMaterialsTraceId.value }
+    results.forEach((result, index) => {
+      const branchId = branchIds[index]
+      if (!branchId) return
+      if (result.status === 'fulfilled') {
+        nextErrors[branchId] = null
+        nextTraces[branchId] = null
+      } else {
+        nextErrors[branchId] = apiErrorCode(result.reason) ?? 'client_materials_load_failed'
+        nextTraces[branchId] = apiTraceId(result.reason)
+      }
+    })
+    branchMaterialsError.value = nextErrors
+    branchMaterialsTraceId.value = nextTraces
+  }
+
   return {
     branches,
     materials,
@@ -125,8 +156,11 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     materialsError,
     traceId,
     materialsTraceId,
+    branchMaterialsError,
+    branchMaterialsTraceId,
     loadBranches,
     loadMaterials,
     loadMaterialsForBranch,
+    loadMaterialsForBranchBatch,
   }
 })

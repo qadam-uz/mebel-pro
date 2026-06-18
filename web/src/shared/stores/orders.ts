@@ -232,17 +232,25 @@ export const useOrdersStore = defineStore('orders', () => {
   async function quoteBranches(draftId: string, branchIds: string[]) {
     const quotes: Record<string, OrderQuote> = {}
     const errors: Record<string, string | null> = {}
+    let firstErrorTraceId: string | null = null
     await Promise.all(
       branchIds.map(async (branchId) => {
         try {
           quotes[branchId] = await quoteForDraft(draftId, branchId)
         } catch (errorValue) {
+          // Preserve the real per-branch code (branch_does_not_carry_*,
+          // branch_closed, missing_*_rate) so the view can name the problem
+          // (CB-19/CB-20); fall back to the 403 mapping, then null.
           errors[branchId] =
-            errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null
+            apiErrorCode(errorValue) ??
+            (errorValue instanceof ApiError && errorValue.status === 403
+              ? 'permission_denied'
+              : null)
+          if (firstErrorTraceId === null) firstErrorTraceId = apiTraceId(errorValue)
         }
       }),
     )
-    return { quotes, errors }
+    return { quotes, errors, firstErrorTraceId }
   }
 
   async function createClientOrder(payload: unknown) {

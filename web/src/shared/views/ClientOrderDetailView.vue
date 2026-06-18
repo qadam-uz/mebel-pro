@@ -12,6 +12,7 @@ import {
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -200,19 +201,12 @@ onMounted(() => {
       <div class="client-skeleton mt-5 h-20 w-full"></div>
     </div>
 
-    <div v-else-if="orders.error" class="client-error">
-      <div class="client-error-icon">!</div>
-      <h3>Buyurtmani yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
-      <button
-        type="button"
-        class="mp-button mp-button-outline mt-4"
-        @click="orders.loadClientOrder(orderId)"
-      >
-        Qayta urinish
-      </button>
-    </div>
+    <ClientErrorState
+      v-else-if="orders.error"
+      title="Buyurtmani yuklab bo'lmadi"
+      :trace-id="orders.traceId"
+      @retry="orders.loadClientOrder(orderId)"
+    />
 
     <div v-else-if="!order" class="client-empty">
       <div class="client-empty-icon"><Icon name="box" /></div>
