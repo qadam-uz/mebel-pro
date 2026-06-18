@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId } from '@/shared/api/client'
+import { api, apiTraceId, withQuery } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 import type { Material, MaterialKind, MaterialStatus } from '@/shared/stores/admin'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 
@@ -137,15 +138,6 @@ export interface BranchMaterialFilters {
   manufacturer_id?: string | null
 }
 
-function withQuery(path: string, params: Record<string, string | boolean | null | undefined>) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
-  }
-  const query = search.toString()
-  return query ? `${path}?${query}` : path
-}
-
 export const permissionCatalog = [
   'view_dashboard',
   'manage_orders',
@@ -182,10 +174,6 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const inventoryTraceId = ref<string | null>(null)
   const auth = useAuthStore()
   let usersLoadRequestId = 0
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   function upsertUser(user: WorkshopUser) {
     users.value = [...users.value.filter((current) => current.id !== user.id), user]

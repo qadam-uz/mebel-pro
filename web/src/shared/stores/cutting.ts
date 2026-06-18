@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiTraceId } from '@/shared/api/client'
+import { ApiError, api, apiTraceId, withQuery } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
-import { useAuthStore } from '@/shared/stores/auth'
 
 export type MaterialSource = 'shop' | 'own'
 export type CuttingResultStatus = 'candidate' | 'confirmed' | 'invalidated'
@@ -130,15 +130,6 @@ export interface WorkshopCuttingPlanDetail extends WorkshopCuttingPlanSummary {
   result: CuttingResult
 }
 
-function withQuery(path: string, params: Record<string, string | boolean | null | undefined>) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
-  }
-  const query = search.toString()
-  return query ? `${path}?${query}` : path
-}
-
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
   if (!material) return "Material yo'q"
   const size =
@@ -202,11 +193,6 @@ export const useCuttingStore = defineStore('cutting', () => {
   const downloadingId = ref<string | null>(null)
   const downloadError = ref<string | null>(null)
   const downloadTraceId = ref<string | null>(null)
-  const auth = useAuthStore()
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   function captureError(errorValue: unknown, fallback: string) {
     error.value =

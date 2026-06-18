@@ -34,6 +34,22 @@ export function apiErrorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
+// Build a query string, dropping only null/undefined/empty-string — `false` and
+// `0` ARE sent (e.g. `carried_only=false`). One shared copy replaces six
+// store-local `withQuery`s, three of which used a truthy check that silently
+// dropped `false`/`0` (CB-98).
+export function withQuery(
+  path: string,
+  params: Record<string, string | number | boolean | null | undefined>,
+): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `${path}?${query}` : path
+}
+
 // Session bridge for transparent token refresh on 401 (CB-08). The app wires
 // this at bootstrap so the framework-agnostic client can ask the auth store to
 // refresh and, on failure, redirect to login — without importing the store

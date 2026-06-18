@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { api, apiTraceId } from '@/shared/api/client'
 import Icon from '@/shared/components/AppIcon.vue'
+import { authInit } from '@/shared/app/authInit'
 import { useToast } from '@/shared/composables/useToast'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -103,10 +104,8 @@ async function loadSessions() {
 
 async function loadClientProfile() {
   if (auth.me?.principal_type !== 'client') return
-  const profile = await api.get<ClientProfile>('/client/profile', { accessToken: auth.accessToken })
-  branchOptions.value = await api.get<ClientBranchOption[]>('/client/branch-options', {
-    accessToken: auth.accessToken,
-  })
+  const profile = await api.get<ClientProfile>('/client/profile', authInit())
+  branchOptions.value = await api.get<ClientBranchOption[]>('/client/branch-options', authInit())
   clientName.value = profile.name
   preferredBranchId.value = profile.preferred_branch_id
 }
@@ -122,7 +121,7 @@ async function saveClientProfile() {
         name: clientName.value,
         preferred_branch_id: preferredBranchId.value,
       },
-      { accessToken: auth.accessToken },
+      authInit(),
     )
     if (auth.me) {
       auth.me = {

@@ -42,9 +42,23 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 29 | 24 | **56** |
-| Done | 29 | 39 | 8 | **76** |
+| Open (incl. partial) | 3 | 26 | 24 | **53** |
+| Done | 29 | 42 | 8 | **79** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R11): tech-debt dedup, mapped by a parallel analysis
+> workflow (every duplicate site + exact semantics) and adversarially reviewed for
+> zero behaviour change (0 findings). **CB-98** (one shared `withQuery` in
+> `api/client.ts` replacing 6 store copies; the 3 truthy-check copies silently
+> dropped `false`/`0`, so the unified Group-A version both dedups AND fixes a
+> latent footgun — `carried_only=false` now always reaches the backend; unit
+> test added). **CB-97** (one shared `app/authInit.ts` replacing 8 per-store
+> copies + 3 inline in ProfileView; auth.ts keeps its own to avoid a self-import).
+> **CB-103** (deleted the dead `src/api/client.ts` shim — zero importers — and
+> fixed the stale `web/AGENTS.md` layout tree). **CB-100 deferred** (captureApiError
+> has 3 divergent, load-bearing variants — unifying risks changing error strings
+> views special-case). **CB-101 deferred** (notif presenter; the client part is
+> already shared from CB-126).
 
 > Progress (2026-06-18, R10): visible spec-conformance, planned by a parallel
 > e2e-aware analysis workflow + adversarially reviewed (0 findings). **CB-126**
@@ -278,13 +292,13 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-94 | P2 | tech-debt | med | M | Open | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Open | useListboxControl/useStableId composables for dropdowns |
-| CB-97 | P2 | tech-debt | med | S | Open | Single authInit()/token injection (8 copies) |
-| CB-98 | P2 | tech-debt | med | S | Open | One shared withQuery() (6 copies, divergent semantics) |
+| CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
+| CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
 | CB-99 | P3 | tech-debt | low | S | Open | Extract shared downloadBlob() (2 copies) |
 | CB-100 | P2 | tech-debt | med | S | Open | Unify captureApiError() (3 divergent variants) |
 | CB-101 | P2 | tech-debt | med | M | Open | Typed notification payload + shared presenter |
 | CB-102 | P3 | tech-debt | low | S | Open | Centralize magic numbers (debounces, limits, 50 mm) |
-| CB-103 | P2 | tech-debt | med | S | Open | Fix stale AGENTS.md API-client path + phantom dirs |
+| CB-103 | P2 | tech-debt | med | S | Done | Fix stale AGENTS.md API-client path + phantom dirs |
 | CB-104 | P3 | tech-debt | low | S | Open | Remove dead quote surface in orders store |
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
 | CB-106 | P1 | testing | high | S | Done | Regression test: notifications markRead idempotency (CB-55) |

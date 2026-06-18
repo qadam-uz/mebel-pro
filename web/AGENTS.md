@@ -89,12 +89,13 @@ web/
       admin/main.ts         # superadmin app bootstrap
       admin/routes.ts       # superadmin route inventory
     shared/                 # shared shell, views, stores, API client, primitives
+      api/client.ts         # fetch wrapper: api.get/post/put/patch/del/blob, ApiError, withQuery
+      app/                  # framework-agnostic helpers (authInit, clientUi, downloadBlob, scrollLock, …)
+      components/           # shared presentational components (+ __tests__/ colocated specs)
+      composables/          # shared composition functions (use*)
+      stores/               # Pinia stores — one file per domain (setup style)
+      views/                # route-level components (shared across roles for now)
     assets/main.css         # `@import "tailwindcss"`; @theme tokens go here
-    components/             # legacy/shared presentational components when still used
-      __tests__/            # *.spec.ts colocated unit tests
-    composables/            # shared composition functions (use*)
-    stores/                 # Pinia stores — one file per domain (setup style)
-    api/client.ts           # fetch wrapper: api.get/post/put/patch/del, ApiError
 ```
 
 ## Conventions

@@ -1,9 +1,9 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiErrorCode, apiTraceId } from '@/shared/api/client'
+import { api, apiErrorCode, apiTraceId, withQuery } from '@/shared/api/client'
+import { authInit } from '@/shared/app/authInit'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
-import { useAuthStore } from '@/shared/stores/auth'
 
 export interface ClientBranch {
   branch_id: string
@@ -37,15 +37,6 @@ export interface ClientBranchMaterial {
   display_unit: string
 }
 
-function withQuery(path: string, params: Record<string, string | null | undefined>) {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value) search.set(key, value)
-  }
-  const query = search.toString()
-  return query ? `${path}?${query}` : path
-}
-
 export const useClientCatalogStore = defineStore('clientCatalog', () => {
   const branches = ref<ClientBranch[]>([])
   const materials = ref<ClientBranchMaterial[]>([])
@@ -61,11 +52,6 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
   // whole list (CB-23).
   const branchMaterialsError = ref<Record<string, string | null>>({})
   const branchMaterialsTraceId = ref<Record<string, string | null>>({})
-  const auth = useAuthStore()
-
-  function authInit() {
-    return { accessToken: auth.accessToken }
-  }
 
   async function loadBranches(search?: string) {
     loading.value = true
