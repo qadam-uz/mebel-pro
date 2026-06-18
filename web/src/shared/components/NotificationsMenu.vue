@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
@@ -24,6 +24,8 @@ const rolePath = useRolePath()
 const toast = useToast()
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
+const menuRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLButtonElement | null>(null)
 
 const badgeText = computed(() => (notifications.unread > 9 ? '9+' : String(notifications.unread)))
 const isClient = computed(() => roleConfig.role === 'client')
@@ -63,7 +65,48 @@ function destination(item: NotificationItem) {
 
 async function toggle() {
   open.value = !open.value
-  if (open.value) await notifications.loadList()
+  if (open.value) {
+    await notifications.loadList()
+    await nextTick()
+    menuItems()[0]?.focus()
+  }
+}
+
+function closeMenu() {
+  open.value = false
+  triggerRef.value?.focus()
+}
+
+// The dropdown advertises role=menu, so wire the menu keyboard contract (CB-32):
+// Escape closes + restores focus to the bell; Up/Down/Home/End move between items.
+function menuItems(): HTMLElement[] {
+  return Array.from(
+    menuRef.value?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [],
+  )
+}
+
+function onMenuKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMenu()
+    return
+  }
+  const items = menuItems()
+  if (items.length === 0) return
+  const current = items.indexOf(document.activeElement as HTMLElement)
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    items[current < 0 ? 0 : (current + 1) % items.length]?.focus()
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    items[current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length]?.focus()
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    items[0]?.focus()
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    items[items.length - 1]?.focus()
+  }
 }
 
 async function openItem(item: NotificationItem) {
@@ -148,6 +191,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="rootRef" class="relative">
     <button
+      ref="triggerRef"
       type="button"
       :class="isClient ? 'client-icon-button' : isWorkshop ? 'workshop-bell' : 'admin-icon-button'"
       :aria-expanded="open"
@@ -184,8 +228,10 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
+      ref="menuRef"
       class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
       role="menu"
+      @keydown="onMenuKeydown"
     >
       <div class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
         <div class="font-bold text-ink">
@@ -193,6 +239,7 @@ onBeforeUnmount(() => {
         </div>
         <button
           type="button"
+          role="menuitem"
           class="text-xs font-bold text-accent"
           :disabled="notifications.unread === 0"
           @click="markAllRead"
@@ -249,6 +296,7 @@ onBeforeUnmount(() => {
       <button
         v-if="isClient || isWorkshop || isAdmin"
         type="button"
+        role="menuitem"
         class="block w-full border-t border-hairline px-4 py-3 text-center text-xs font-bold text-accent transition hover:bg-sunk"
         @click="openAll"
       >

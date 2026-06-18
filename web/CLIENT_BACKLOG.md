@@ -42,9 +42,22 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 26 | 24 | **53** |
-| Done | 29 | 42 | 8 | **79** |
+| Open (incl. partial) | 3 | 24 | 24 | **51** |
+| Done | 29 | 44 | 8 | **81** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R12): frontend a11y, planned by a parallel e2e-aware
+> analysis workflow + adversarially reviewed (0 findings). **CB-32** (the
+> notifications dropdown now honours the role=menu keyboard contract: Escape
+> closes + restores focus to the bell, Up/Down/Home/End move between menuitems,
+> opening focuses the first item; header/footer actions gain role=menuitem).
+> **CB-33** (clickable order/draft cards on Home + the orders list are now
+> keyboard-operable — `role="link"` + tabindex + Enter + aria-label + a
+> focus-visible ring; the "new"-order rows previously exposed only a Cancel
+> button to the keyboard with no way to open the order). **CB-40 deferred** — its
+> only frontend-only lever (`carried_only=true`) would break the editor's
+> show-all-catalog / not-carried recovery flow, so it needs the backend
+> limit/pagination. **CB-43/CB-63 already Done** (R7 shared scrollLock).
 
 > Progress (2026-06-18, R11): tech-debt dedup, mapped by a parallel analysis
 > workflow (every duplicate site + exact semantics) and adversarially reviewed for
@@ -227,8 +240,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-29 | P2 | completeness-stub | med | M | Done | Per-edge-material metres + parts-placed count in result |
 | CB-30 | P2 | completeness-stub | med | S | Done | Show order notes (note_workshop/client) in Overview |
 | CB-31 | P2 | a11y | med | M | Done | Valid tablist/tab/tabpanel + keyboard on order detail |
-| CB-32 | P2 | a11y | med | M | Open | ARIA menu keyboard ops on notifications dropdown |
-| CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
+| CB-32 | P2 | a11y | med | M | Done | ARIA menu keyboard ops on notifications dropdown |
+| CB-33 | P2 | a11y | med | M | Done | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
 | CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |

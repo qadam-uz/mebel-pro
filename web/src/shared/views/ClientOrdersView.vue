@@ -129,8 +129,12 @@ onMounted(() => {
       <article
         v-for="order in visibleOrders"
         :key="order.id"
-        class="client-card cursor-pointer p-5 transition hover:border-ink"
+        class="client-card cursor-pointer p-5 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+        role="link"
+        tabindex="0"
+        :aria-label="`${order.order_number} — ${order.branch_name}`"
         @click="openOrder(order)"
+        @keydown.enter="openOrder(order)"
       >
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>
