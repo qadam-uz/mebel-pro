@@ -134,26 +134,6 @@ export interface OrderDetail extends OrderSummary {
   settlement: OrderSettlement | null
 }
 
-export const clientStatusLabel: Record<OrderStatus, string> = {
-  new: 'Placed',
-  confirmed: 'Confirmed',
-  cutting: 'In production',
-  edge_banding: 'In production',
-  ready: 'Ready',
-  completed: 'Done',
-  cancelled: 'Cancelled',
-}
-
-export const workshopStatusLabel: Record<OrderStatus, string> = {
-  new: 'New',
-  confirmed: 'Confirmed',
-  cutting: 'Cutting',
-  edge_banding: 'Edge banding',
-  ready: 'Ready',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-}
-
 export const activeWorkshopStatuses: OrderStatus[] = [
   'new',
   'confirmed',
@@ -166,11 +146,9 @@ export const useOrdersStore = defineStore('orders', () => {
   const clientOrders = ref<OrderSummary[]>([])
   const workshopOrders = ref<OrderSummary[]>([])
   const currentOrder = ref<OrderDetail | null>(null)
-  const currentQuote = ref<OrderQuote | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
   const actionLoading = ref(false)
-  const quoteLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   // PDF download feedback (CB-17): id of the order currently downloading, plus a
@@ -186,22 +164,6 @@ export const useOrdersStore = defineStore('orders', () => {
       error.value = String((errorValue.body as { code?: unknown }).code ?? fallback)
     } else error.value = fallback
     traceId.value = apiTraceId(errorValue)
-  }
-
-  async function loadQuote(draftId: string, branchId: string) {
-    quoteLoading.value = true
-    error.value = null
-    traceId.value = null
-    try {
-      currentQuote.value = await quoteForDraft(draftId, branchId)
-      return currentQuote.value
-    } catch (errorValue) {
-      currentQuote.value = null
-      captureError(errorValue, 'order_quote_failed')
-      throw errorValue
-    } finally {
-      quoteLoading.value = false
-    }
   }
 
   async function quoteForDraft(draftId: string, branchId: string) {
@@ -423,17 +385,14 @@ export const useOrdersStore = defineStore('orders', () => {
     clientOrders,
     workshopOrders,
     currentOrder,
-    currentQuote,
     workerOptions,
     loading,
     actionLoading,
-    quoteLoading,
     error,
     traceId,
     downloadingId,
     downloadError,
     downloadTraceId,
-    loadQuote,
     quoteForDraft,
     quoteBranches,
     createClientOrder,

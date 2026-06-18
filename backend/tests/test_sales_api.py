@@ -511,3 +511,41 @@ async def test_discount_requires_version_and_client_cancel_only_new(
     assert stored is not None
     assert stored.cancelled_at is not None
     assert stock_tx_count == 0
+
+
+async def test_client_orders_active_filter_expands_to_status_union(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Pin the synthetic ?status=active filter (CB-119): it must expand to the
+    new/confirmed/cutting/edge_banding/ready union, not be a no-op passthrough."""
+    order, client_access, _, _, _, _ = await _placed_order(client, db_session)
+    order_id = order["id"]
+
+    def _ids(rows: list[dict[str, object]]) -> set[str]:
+        return {str(row["id"]) for row in rows}
+
+    async def _list(status_filter: str) -> list[dict[str, object]]:
+        response = await client.get(
+            "/api/v1/client/orders",
+            params={"status": status_filter},
+            headers=_auth(client_access),
+        )
+        assert response.status_code == 200
+        return list(response.json())
+
+    # A fresh order is "new" → in the active union, and excluded from the terminal tabs.
+    assert order_id in _ids(await _list("active"))
+    assert order_id not in _ids(await _list("completed"))
+    assert order_id not in _ids(await _list("cancelled"))
+
+    cancel = await client.post(
+        f"/api/v1/client/orders/{order_id}/cancel",
+        headers=_auth(client_access),
+        json={"version": order["version"], "reason": "Changed plans"},
+    )
+    assert cancel.status_code == 200
+
+    # Once cancelled it drops out of active and appears under the cancelled tab.
+    assert order_id not in _ids(await _list("active"))
+    assert order_id in _ids(await _list("cancelled"))

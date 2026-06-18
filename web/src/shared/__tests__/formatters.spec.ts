@@ -7,7 +7,6 @@ import {
   formatTiyin,
   parseDisplayQuantity,
 } from '@/shared/formatters'
-import { i18nSeed } from '@/shared/i18n'
 
 describe('shared formatters', () => {
   it('formats tiyin as UZS without fractional digits', () => {
@@ -34,9 +33,5 @@ describe('shared formatters', () => {
     expect(parseDisplayQuantity('12.5', 'm')).toBe(12500)
     expect(parseDisplayQuantity('3', 'piece')).toBe(3)
     expect(Number.isNaN(parseDisplayQuantity('abc', 'm'))).toBe(true)
-  })
-
-  it('has labels for each role app', () => {
-    expect(Object.keys(i18nSeed)).toEqual(['client', 'workshop', 'admin'])
   })
 })

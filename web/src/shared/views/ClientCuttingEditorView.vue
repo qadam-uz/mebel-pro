@@ -39,7 +39,6 @@ const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
-const entryMode = ref<'manual' | 'upload'>('manual')
 const algorithmsOpen = ref(true)
 const recoveryDismissed = ref(false)
 const activeResultId = ref<string | null>(null)
@@ -1028,11 +1027,7 @@ const edgePatterns: Array<{
               <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
                 <button
                   type="button"
-                  class="rounded-md px-3 py-2 text-sm font-bold"
-                  :class="
-                    entryMode === 'manual' ? 'bg-elevated text-ink shadow-sm' : 'text-ink-soft'
-                  "
-                  @click="entryMode = 'manual'"
+                  class="rounded-md bg-elevated px-3 py-2 text-sm font-bold text-ink shadow-sm"
                 >
                   Qo'lda
                 </button>
@@ -1040,7 +1035,6 @@ const edgePatterns: Array<{
                   type="button"
                   class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
                   disabled
-                  @click="entryMode = 'upload'"
                 >
                   Fayldan
                   <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]"
@@ -1054,15 +1048,7 @@ const edgePatterns: Array<{
             </div>
           </div>
 
-          <div v-if="entryMode === 'upload'" class="client-card-b">
-            <div class="client-empty">
-              <div class="client-empty-icon"><Icon name="upload" /></div>
-              <h3>Import hali yoqilmagan</h3>
-              <p>Hozircha qismlarni manual kiritish barqaror yo'l.</p>
-            </div>
-          </div>
-
-          <div v-else-if="parts.length === 0" class="client-card-b">
+          <div v-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="plus" /></div>
               <h3>Bu chizmada qism yo'q</h3>

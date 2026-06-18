@@ -42,9 +42,24 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 24 | 24 | **51** |
-| Done | 29 | 44 | 8 | **81** |
+| Open (incl. partial) | 3 | 23 | 19 | **45** |
+| Done | 29 | 45 | 13 | **87** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B1): cleanup & dead-code batch (branch
+> `client-finish`, planned by the parallel triage workflow + adversarially reviewed
+> — 0 real findings). **CB-58** (deleted the English `clientStatusLabel`/
+> `workshopStatusLabel` maps in `orders.ts`, the `i18nSeed` shim + its test, the
+> orphaned `DashboardView.vue`, and the `states`/`ShellState` scaffolding only it
+> consumed). **CB-104** (removed the dead `loadQuote`/`quoteLoading`/`currentQuote`
+> quote surface — `quoteBranches` is the one live path). **CB-92** (deleted the
+> unreachable `entryMode==='upload'` empty-state + the dead `@click` on the disabled
+> "Fayldan" button; the disabled-with-pill control is unchanged for the user).
+> **CB-56** (dropped the unreachable `|| total_edge_length_mm` fallback in
+> order-detail `totalEdge`). **CB-99** verified already-done (shared
+> `app/downloadBlob.ts` exists; both stores use it). **CB-119** verified already-done
+> (backend already expands `?status=active` to the 5-status union) + added a backend
+> contract test pinning it both ways.
 
 > Progress (2026-06-18, R12): frontend a11y, planned by a parallel e2e-aware
 > analysis workflow + adversarially reviewed (0 findings). **CB-32** (the
@@ -264,9 +279,9 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-53 | P3 | a11y | low | S | Open | Self-describing autosave live region (role=status) |
 | CB-54 | P3 | a11y | low | S | Open | AuthFileImage: required alt + localized failure label |
 | CB-55 | P3 | correctness-bug | low | S | Done | Idempotent markRead decrement (only when was unread) |
-| CB-56 | P3 | correctness-bug | low | S | Open ✓partial | One defined quantity for order-detail "Krom" figure |
+| CB-56 | P3 | correctness-bug | low | S | Done | One defined quantity for order-detail "Krom" figure |
 | CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
-| CB-58 | P3 | completeness-stub | low | S | Open | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
+| CB-58 | P3 | completeness-stub | low | S | Done | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
 | CB-59 | P2 | ux-flow | med | S | Done | `inputmode=numeric` on dimension/quantity inputs |
 | CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
 | CB-61 | P2 | a11y | med | S | Done | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
@@ -300,19 +315,19 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
 | CB-90 | P3 | spec-conformance | low | S | Open | Algo compare: cut-length column, algo name, closed default |
 | CB-91 | P3 | spec-conformance | low | S | Open | Name the tape in the Edges cell summary |
-| CB-92 | P3 | tech-debt | low | S | Open | Delete unreachable "Fayldan" upload empty-state branch |
+| CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Open | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Open | useListboxControl/useStableId composables for dropdowns |
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
-| CB-99 | P3 | tech-debt | low | S | Open | Extract shared downloadBlob() (2 copies) |
+| CB-99 | P3 | tech-debt | low | S | Done | Extract shared downloadBlob() (2 copies) |
 | CB-100 | P2 | tech-debt | med | S | Open | Unify captureApiError() (3 divergent variants) |
 | CB-101 | P2 | tech-debt | med | M | Open | Typed notification payload + shared presenter |
 | CB-102 | P3 | tech-debt | low | S | Open | Centralize magic numbers (debounces, limits, 50 mm) |
 | CB-103 | P2 | tech-debt | med | S | Done | Fix stale AGENTS.md API-client path + phantom dirs |
-| CB-104 | P3 | tech-debt | low | S | Open | Remove dead quote surface in orders store |
+| CB-104 | P3 | tech-debt | low | S | Done | Remove dead quote surface in orders store |
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
 | CB-106 | P1 | testing | high | S | Done | Regression test: notifications markRead idempotency (CB-55) |
 | CB-107 | P1 | testing | high | M | Done | Test per-branch quote error attribution (CB-20) |
@@ -327,7 +342,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
 | CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
 | CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
-| CB-119 | P2 | correctness-bug | low | S | Open | Orders 'active' filter: expand to status set or filter client-side |
+| CB-119 | P2 | correctness-bug | low | S | Done | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
 | CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
