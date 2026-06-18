@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -933,7 +934,7 @@ const edgePatterns: Array<{
 
         <div v-if="entryMode === 'upload'" class="client-card-b">
           <div class="client-empty">
-            <div class="client-empty-icon">↑</div>
+            <div class="client-empty-icon"><Icon name="upload" /></div>
             <h3>Import hali yoqilmagan</h3>
             <p>Hozircha qismlarni manual kiritish barqaror yo'l.</p>
           </div>
@@ -941,7 +942,7 @@ const edgePatterns: Array<{
 
         <div v-else-if="parts.length === 0" class="client-card-b">
           <div class="client-empty">
-            <div class="client-empty-icon">+</div>
+            <div class="client-empty-icon"><Icon name="plus" /></div>
             <h3>Bu chizmada qism yo'q</h3>
             <p>Kesish ro'yxatini boshlash uchun birinchi qatorni qo'shing.</p>
             <button type="button" class="mp-button mp-button-primary mt-4" @click="addRow">
@@ -1214,7 +1215,7 @@ const edgePatterns: Array<{
 
         <div v-if="!chosenResult && !optimizeError" class="client-card-b">
           <div class="client-empty">
-            <div class="client-empty-icon">∑</div>
+            <div class="client-empty-icon"><Icon name="layers" /></div>
             <h3>Optimizer natijasi yo'q</h3>
             <p>Qismlar saqlangach optimallashtirishni ishga tushiring.</p>
           </div>

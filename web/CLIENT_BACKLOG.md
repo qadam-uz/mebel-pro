@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 52 | 24 | **94** |
-| Done | 14 | 16 | 8 | **38** |
+| Open (incl. partial) | 18 | 51 | 24 | **93** |
+| Done | 14 | 17 | 8 | **39** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -112,7 +112,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-32 | P2 | a11y | med | M | Open | ARIA menu keyboard ops on notifications dropdown |
 | CB-33 | P2 | a11y | med | M | Open | Keyboard-accessible whole-card targets (home/orders) |
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
-| CB-35 | P2 | design-parity | med | M | Open | Replace letter-glyph placeholders with prototype SVG icons |
+| CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Open | Paginate client orders list |

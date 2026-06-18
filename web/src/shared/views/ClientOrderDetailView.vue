@@ -11,6 +11,7 @@ import {
   formatPercent,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
@@ -211,7 +212,7 @@ onMounted(() => {
     </div>
 
     <div v-else-if="!order" class="client-empty">
-      <div class="client-empty-icon">B</div>
+      <div class="client-empty-icon"><Icon name="box" /></div>
       <h3>Buyurtma topilmadi</h3>
       <p>Bunday raqamli buyurtma yo'q yoki sizga tegishli emas.</p>
       <RouterLink :to="rolePath('/c/orders')" class="mp-button mp-button-primary mt-4">
@@ -619,7 +620,7 @@ onMounted(() => {
                 </p>
               </template>
               <div v-else class="client-empty border-0 !p-8">
-                <div class="client-empty-icon">L</div>
+                <div class="client-empty-icon"><Icon name="layers" /></div>
                 <h3>To'lov ma'lumotlari hali yopiq</h3>
                 <p>To'lov ma'lumotlari buyurtma tayyor bo'lganda ochiladi.</p>
               </div>

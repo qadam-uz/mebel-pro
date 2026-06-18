@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatRelativeDate } from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
@@ -120,7 +121,7 @@ onMounted(() => {
       </div>
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">
-        <div class="client-empty-icon">✓</div>
+        <div class="client-empty-icon"><Icon name="inbox" /></div>
         <h3>Bildirishnoma yo'q</h3>
         <p v-if="readFilter === 'unread'">
           O'qilmagan bildirishnoma yo'q — hammasini ko'rib chiqdingiz.
