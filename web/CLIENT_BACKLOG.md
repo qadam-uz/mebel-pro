@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 18 | 53 | 24 | **95** |
-| Done | 14 | 15 | 8 | **37** |
+| Open (incl. partial) | 18 | 52 | 24 | **94** |
+| Done | 14 | 16 | 8 | **38** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-18, R3): 30 Done. **CB-86** (per-row recovery: `bringOwn()`
@@ -195,7 +195,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-115 | P2 | states-errors | med | M | Open | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Open | Order-new: split already-used vs no-chosen-result bail |
 | CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
-| CB-118 | P2 | design-parity | med | M | Open | Order-detail Krom material-vs-service split + metres |
+| CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Open | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |

@@ -62,6 +62,12 @@ const totalEdge = computed(() => {
     Object.values(current.edge_consumed_own_by_material).reduce((sum, value) => sum + value, 0)
   return consumed || current.total_edge_length_mm
 })
+const edgeCostSplit = computed(() => {
+  // No backend material/service split yet — mirror the prototype's 45/55 fallback.
+  const total = order.value?.subtotal_edge_banding_tiyin ?? 0
+  const materials = Math.round(total * 0.45)
+  return { total, materials, service: total - materials }
+})
 const financeOpen = computed(
   () =>
     Boolean(order.value?.settlement) && ['ready', 'completed'].includes(order.value?.status ?? ''),
@@ -366,15 +372,33 @@ onMounted(() => {
                     {{ formatTiyin(order.subtotal_materials_tiyin) }}
                   </div>
                 </div>
-                <div v-if="order.subtotal_edge_banding_tiyin > 0" class="client-row-item">
-                  <div>
-                    <div class="client-row-name">Krom</div>
-                    <div class="text-sm text-ink-muted">material + xizmat</div>
+                <template v-if="order.subtotal_edge_banding_tiyin > 0">
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom</div>
+                      <div class="text-sm text-ink-muted">
+                        {{ metres(totalEdge) }} · material + xizmat
+                      </div>
+                    </div>
+                    <div class="client-row-meta">
+                      {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+                    </div>
                   </div>
-                  <div class="client-row-meta">
-                    {{ formatTiyin(order.subtotal_edge_banding_tiyin) }}
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom materiali</div>
+                      <div class="text-sm text-ink-muted">lenta narxi</div>
+                    </div>
+                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
                   </div>
-                </div>
+                  <div class="client-row-item">
+                    <div>
+                      <div class="client-row-name">Krom yopishtirish xizmati</div>
+                      <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
+                    </div>
+                    <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
+                  </div>
+                </template>
                 <div v-if="order.discount_tiyin > 0" class="client-row-item">
                   <div>
                     <div class="client-row-name">Chegirma</div>
@@ -403,15 +427,20 @@ onMounted(() => {
                       formatTiyin(order.subtotal_materials_tiyin)
                     }}</span>
                   </div>
-                  <div
-                    v-if="order.subtotal_edge_banding_tiyin > 0"
-                    class="flex justify-between py-1 text-ink-soft"
-                  >
-                    <span>Krom</span
-                    ><span class="font-mono text-ink">{{
-                      formatTiyin(order.subtotal_edge_banding_tiyin)
-                    }}</span>
-                  </div>
+                  <template v-if="order.subtotal_edge_banding_tiyin > 0">
+                    <div class="flex justify-between py-1 text-ink-soft">
+                      <span>Krom materiali</span
+                      ><span class="font-mono text-ink">{{
+                        formatTiyin(edgeCostSplit.materials)
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between py-1 text-ink-soft">
+                      <span>Krom yopishtirish xizmati</span
+                      ><span class="font-mono text-ink">{{
+                        formatTiyin(edgeCostSplit.service)
+                      }}</span>
+                    </div>
+                  </template>
                   <div
                     v-if="order.discount_tiyin > 0"
                     class="flex justify-between py-1 text-success"
