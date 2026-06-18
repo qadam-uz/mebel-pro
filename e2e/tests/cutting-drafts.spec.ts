@@ -421,7 +421,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'ffd-guillotine' })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'bfd-guillotine' })).toBeVisible()
-  await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
+  // CB-87: panels are grouped under a material heading; the chip is "Panel N".
+  await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
   await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
   await expect(page.getByRole('button', { name: /Shuni tanlash|Tanlangan/ })).toHaveCount(2)

@@ -42,9 +42,22 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 36 | 24 | **63** |
-| Done | 29 | 32 | 8 | **69** |
+| Open (incl. partial) | 3 | 33 | 24 | **60** |
+| Done | 29 | 35 | 8 | **72** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R9): cutting-editor spec-conformance, planned by a parallel
+> e2e-aware analysis workflow + adversarially reviewed (0 findings). **CB-83**
+> (100-part cap: `canOptimize` blocks above 100, a roll-up banner under the parts
+> table enumerates every optimiser blocker — matches the backend `too_many_parts`
+> guard). **CB-85** (a grain-direction chip + aria-label on the panel row when the
+> material has `grain_direction`, so clients see why a part can't rotate). **CB-87**
+> (the result visualiser groups panels under a `Material · LxW · N panel` heading
+> instead of a flat chip row, and the placement legend shows each piece's
+> dimensions; e2e updated for the regrouped chips). **CB-84 deferred** — the panel
+> picker is per-row, so the manufacturer/type/thickness filter bar needs a live UX
+> placement call. **CB-89 deferred** — needs a backend change (optimiser error
+> details omit `code`/`message`, so per-row attribution can't localise yet).
 
 > Progress (2026-06-18, R8): states-errors recovery cluster, planned by a parallel
 > e2e-aware analysis workflow and adversarially reviewed before commit. **CB-22**
@@ -238,11 +251,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-80 | P3 | ux-flow | low | S | Won't | Surface OTP 5-min expiry on the code step |
 | CB-81 | P3 | i18n-copy | low | S | Open | Uzbek session-row labels ("active"/"Browser") |
 | CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
-| CB-83 | P2 | spec-conformance | med | S | Open | 100-part cap + blocking roll-up under the parts table |
+| CB-83 | P2 | spec-conformance | med | S | Done | 100-part cap + blocking roll-up under the parts table |
 | CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |
-| CB-85 | P2 | spec-conformance | med | S | Open | Grain indicator on the panel chip |
+| CB-85 | P2 | spec-conformance | med | S | Done | Grain indicator on the panel chip |
 | CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
-| CB-87 | P2 | spec-conformance | med | M | Open | Material tab strip in visualiser; dimensions in legend |
+| CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |
 | CB-88 | P2 | spec-conformance | med | M | Open | Drafts list: branch chip + material label pre-optimise |
 | CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
 | CB-90 | P3 | spec-conformance | low | S | Open | Algo compare: cut-length column, algo name, closed default |

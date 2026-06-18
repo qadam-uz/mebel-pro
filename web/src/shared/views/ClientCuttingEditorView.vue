@@ -114,18 +114,31 @@ function partsSignature(list: CuttingPart[] = parts.value) {
 const optimizedUnchanged = computed(
   () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
 )
+// docs/ref/features/cutting.md — at most 100 parts per optimisation.
+const MAX_PARTS = 100
 const canOptimize = computed(
   () =>
     !isReadOnly.value &&
     parts.value.length > 0 &&
     hasPersistableParts.value &&
+    totalQuantity.value <= MAX_PARTS &&
     !optimizedUnchanged.value,
 )
 const optimizeDisabledHint = computed(() => {
   if (parts.value.length === 0) return "Avval qism qo'shing"
   if (!hasPersistableParts.value) return "Qatorlardagi xatolarni to'g'rilang"
+  if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
   if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
   return ''
+})
+// A single roll-up of everything blocking the optimiser, shown under the table.
+const optimizeBlockers = computed(() => {
+  if (parts.value.length === 0) return []
+  const blockers: string[] = []
+  if (!hasPersistableParts.value) blockers.push("Qatorlardagi xatolarni to'g'rilang")
+  if (totalQuantity.value > MAX_PARTS)
+    blockers.push(`Jami ${totalQuantity.value} dona — bir martada ${MAX_PARTS} donadan oshmasin`)
+  return blockers
 })
 const notCarriedRows = computed(() => parts.value.filter((part) => rowNotCarried(part).length > 0))
 const chosenResult = computed(() => {
@@ -744,10 +757,33 @@ function sumRecord(record: Record<string, number> | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
 }
 
-function panelTitle(result: CuttingResult, panel: CuttingPanel) {
-  const snapshot = result.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+function snapshotDims(snapshot: Record<string, unknown> | undefined): string {
+  const length = Number(snapshot?.panel_length_mm)
+  const width = Number(snapshot?.panel_width_mm)
+  return Number.isFinite(length) && Number.isFinite(width) && length > 0 && width > 0
+    ? `${length}×${width}`
+    : ''
 }
+// Group the result's panels by material so multi-material jobs read as
+// "Material · LxW · N panel" tabs instead of an undifferentiated chip row (CB-87).
+const panelGroups = computed(() => {
+  const result = chosenResult.value
+  if (!result) return []
+  const byMaterial = new Map<string, CuttingPanel[]>()
+  for (const panel of result.panels) {
+    byMaterial.set(panel.material_id, [...(byMaterial.get(panel.material_id) ?? []), panel])
+  }
+  return [...byMaterial.entries()].map(([materialId, panels]) => {
+    const snapshot = result.material_snapshots[materialId]
+    return {
+      materialId,
+      name: String(snapshot?.name ?? 'Panel'),
+      dims: snapshotDims(snapshot),
+      count: panels.length,
+      panels,
+    }
+  })
+})
 
 function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
@@ -1058,6 +1094,14 @@ const edgePatterns: Array<{
                       class="size-5 rounded border border-hairline"
                       :style="swatchStyle(part)"
                     ></span>
+                    <span
+                      v-if="materialById(part.material_id)?.grain_direction"
+                      class="mp-chip bg-info-soft text-info"
+                      title="Tola yo'nalishi bor — bu qism burilmaydi"
+                      aria-label="Tola yo'nalishi bor — bu qism burilmaydi"
+                    >
+                      <span aria-hidden="true">↕</span> Tola
+                    </span>
                     <button
                       type="button"
                       class="mp-chip"
@@ -1246,6 +1290,11 @@ const edgePatterns: Array<{
             </article>
           </div>
 
+          <div v-if="optimizeBlockers.length" class="client-banner danger mx-5 mt-4" role="alert">
+            <span class="font-mono font-black">!</span>
+            <span>Optimallashtirib bo'lmaydi: {{ optimizeBlockers.join(' · ') }}</span>
+          </div>
+
           <div
             class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5"
           >
@@ -1409,17 +1458,25 @@ const edgePatterns: Array<{
             </section>
 
             <section class="rounded-lg border border-hairline bg-elevated p-4">
-              <div class="mb-3 flex flex-wrap gap-2">
-                <button
-                  v-for="panel in chosenResult.panels"
-                  :key="panel.id"
-                  type="button"
-                  class="mp-chip"
-                  :class="panel.id === activePanel?.id ? 'bg-accent text-white' : ''"
-                  @click="activePanelId = panel.id"
-                >
-                  {{ panelTitle(chosenResult, panel) }}
-                </button>
+              <div class="mb-3 grid gap-3">
+                <div v-for="group in panelGroups" :key="group.materialId">
+                  <p class="mb-1.5 text-xs font-bold text-ink-soft">
+                    {{ group.name }}<span v-if="group.dims"> · {{ group.dims }}</span> ·
+                    {{ group.count }} panel
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="panel in group.panels"
+                      :key="panel.id"
+                      type="button"
+                      class="mp-chip"
+                      :class="panel.id === activePanel?.id ? 'bg-accent text-white' : ''"
+                      @click="activePanelId = panel.id"
+                    >
+                      Panel {{ panel.panel_index }}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <CuttingPanelSvg
@@ -1492,6 +1549,9 @@ const edgePatterns: Array<{
                 >
                   {{ placement.part_ref }} #{{ placement.part_quantity_index }}
                   <span v-if="placement.rotated" class="font-bold">R</span>
+                  <span class="text-ink-muted"
+                    >· {{ placement.length_mm }}×{{ placement.width_mm }} mm</span
+                  >
                 </button>
               </div>
             </div>
