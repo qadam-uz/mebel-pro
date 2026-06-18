@@ -2,7 +2,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import { clientStatusLabel, clientStatusPillClass, formatRelativeDate } from '@/shared/app/clientUi'
+import {
+  clientErrorLabel,
+  clientStatusLabel,
+  clientStatusPillClass,
+  formatRelativeDate,
+} from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -191,7 +196,7 @@ onMounted(() => {
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
       <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">
-        {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
+        {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
       </p>
     </ConfirmDialog>
   </section>

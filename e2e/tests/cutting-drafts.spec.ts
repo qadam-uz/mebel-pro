@@ -423,7 +423,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('cell', { name: 'bfd-guillotine' })).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
-  await expect(page.getByText("Krom bo'linishi")).toBeVisible()
+  await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
   await expect(page.getByRole('button', { name: /Shuni tanlash|Tanlangan/ })).toHaveCount(2)
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 

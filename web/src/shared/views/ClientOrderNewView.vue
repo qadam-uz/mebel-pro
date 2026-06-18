@@ -2,7 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { formatPercent, formatPhone, isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
+import {
+  clientErrorLabel,
+  formatPercent,
+  formatPhone,
+  isUzPhone,
+  normalizeUzPhone,
+} from '@/shared/app/clientUi'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
 import { materialLabel, metres, useCuttingStore } from '@/shared/stores/cutting'
@@ -180,7 +186,7 @@ async function placeOrder() {
     })
     await router.push(rolePath(`/c/orders/${order.id}?new=1`))
   } catch {
-    localError.value = orders.error ?? 'Buyurtma yuborilmadi.'
+    localError.value = clientErrorLabel(orders.error, 'Buyurtma yuborilmadi.')
   } finally {
     placing.value = false
   }

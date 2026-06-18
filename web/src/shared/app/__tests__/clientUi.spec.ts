@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  clientErrorLabel,
   clientPhaseIndex,
   clientStatusPillClass,
   formatPercent,
@@ -41,5 +42,22 @@ describe('client UI helpers', () => {
 
   it('uses stable numeric compact dates', () => {
     expect(formatRelativeDate(new Date(2026, 5, 2, 9, 4))).toBe('02.06 09:04')
+  })
+
+  it('maps client error codes to Uzbek copy, never leaking raw codes', () => {
+    // known codes get specific Uzbek copy
+    expect(clientErrorLabel('permission_denied')).toBe("Bu amal uchun ruxsat yo'q.")
+    expect(clientErrorLabel('order_version_conflict')).toContain("o'zgardi")
+    expect(clientErrorLabel('profile_update_failed')).toContain('Profilni')
+    // unknown snake_case codes fall back to the generic Uzbek message, not the raw code
+    expect(clientErrorLabel('some_unmapped_backend_code')).toBe(
+      "Amal bajarilmadi. Qayta urinib ko'ring.",
+    )
+    expect(clientErrorLabel('some_unmapped_backend_code')).not.toContain('_')
+    // null/empty → caller fallback (default or custom)
+    expect(clientErrorLabel(null)).toBe("Amal bajarilmadi. Qayta urinib ko'ring.")
+    expect(clientErrorLabel(undefined, 'Buyurtma yuborilmadi.')).toBe('Buyurtma yuborilmadi.')
+    // an already-human sentence is returned unchanged
+    expect(clientErrorLabel('Tarmoqqa ulanib bolmadi.')).toBe('Tarmoqqa ulanib bolmadi.')
   })
 })
