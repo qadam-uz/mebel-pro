@@ -50,6 +50,12 @@ const errorText = computed(() => {
 const clientErrorText = computed(() => {
   const code = error.value
   if (!code) return null
+  if (code === 'invalid_code') {
+    const remaining = Number(auth.lastErrorDetails?.attempts_remaining)
+    return Number.isFinite(remaining) && remaining > 0
+      ? `Kod noto'g'ri. Qolgan urinishlar: ${remaining}.`
+      : "Kod noto'g'ri."
+  }
   return (
     {
       account_blocked: 'Hisobingiz bloklangan.',

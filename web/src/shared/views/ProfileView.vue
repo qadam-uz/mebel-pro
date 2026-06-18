@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { api } from '@/shared/api/client'
+import { api, apiTraceId } from '@/shared/api/client'
+import Icon from '@/shared/components/AppIcon.vue'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
@@ -43,6 +44,9 @@ const preferredBranchId = ref<string | null>(null)
 const branchOptions = ref<ClientBranchOption[]>([])
 const message = ref<string | null>(null)
 const error = ref<string | null>(null)
+const profileLoading = ref(false)
+const profileError = ref<string | null>(null)
+const profileTraceId = ref<string | null>(null)
 const isSaving = ref(false)
 const editingClientName = ref(false)
 const logoutCurrentOpen = ref(false)
@@ -186,16 +190,32 @@ function workshopPermissionLabel(permission: string) {
   return labels[permission] ?? permission
 }
 
+async function reloadProfile() {
+  profileLoading.value = true
+  profileError.value = null
+  profileTraceId.value = null
+  try {
+    await Promise.all([loadSessions(), loadClientProfile(), orders.loadClientOrders()])
+  } catch (errorValue) {
+    profileError.value = 'profile_load_failed'
+    profileTraceId.value = apiTraceId(errorValue)
+  } finally {
+    profileLoading.value = false
+  }
+}
+
 onMounted(async () => {
   if (auth.me?.principal_type === 'workshop_user' && auth.me.password_reset_required) {
     workshopProfileTab.value = 'password'
   }
-  await Promise.all([
-    loadSessions(),
-    loadClientProfile(),
-    auth.me?.principal_type === 'client' ? orders.loadClientOrders() : Promise.resolve(),
-    auth.me?.principal_type === 'workshop_user' ? workshop.loadSettings() : Promise.resolve(),
-  ])
+  if (auth.me?.principal_type === 'client') {
+    await reloadProfile()
+  } else {
+    await Promise.all([
+      loadSessions(),
+      auth.me?.principal_type === 'workshop_user' ? workshop.loadSettings() : Promise.resolve(),
+    ])
+  }
 })
 </script>
 
@@ -213,7 +233,26 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div class="grid max-w-[760px] gap-5">
+    <div v-if="profileLoading" class="grid max-w-[760px] gap-5" aria-live="polite">
+      <div class="client-card p-5">
+        <div class="client-skeleton h-4 w-1/4"></div>
+        <div class="client-skeleton mt-3 h-10 w-2/3"></div>
+        <div class="client-skeleton mt-4 h-10 w-1/2"></div>
+      </div>
+      <div class="client-card p-5"><div class="client-skeleton h-20 w-full"></div></div>
+    </div>
+
+    <div v-else-if="profileError" class="client-error">
+      <div class="client-error-icon"><Icon name="alert" /></div>
+      <h3>Profilni yuklab bo'lmadi</h3>
+      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
+      <p class="client-trace">trace_id: {{ profileTraceId ?? 'unavailable' }}</p>
+      <button type="button" class="mp-button mp-button-outline mt-4" @click="reloadProfile">
+        Qayta urinish
+      </button>
+    </div>
+
+    <div v-else class="grid max-w-[760px] gap-5">
       <section class="client-card">
         <div class="client-card-h">
           <h2>Profil</h2>
