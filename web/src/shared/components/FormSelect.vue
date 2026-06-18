@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
 const props = withDefaults(
   defineProps<{
@@ -28,6 +29,11 @@ const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
 const id = `mp-form-select-${Math.random().toString(36).slice(2)}`
+const {
+  dropUp,
+  start: startPlacement,
+  stop: stopPlacement,
+} = useDropdownPlacement(buttonRef, listRef)
 
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const activeOptionId = computed(() => {
@@ -52,11 +58,13 @@ async function openList() {
   activeIndex.value = firstEnabledIndex(currentIndex >= 0 ? currentIndex : 0)
   open.value = true
   await nextTick()
+  startPlacement()
   listRef.value?.focus()
 }
 
 function closeList(returnFocus = false) {
   open.value = false
+  stopPlacement()
   if (returnFocus) buttonRef.value?.focus()
 }
 
@@ -167,7 +175,8 @@ onBeforeUnmount(() => {
         ref="listRef"
         role="listbox"
         tabindex="0"
-        class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
         :aria-labelledby="`${id}-label`"
         :aria-activedescendant="activeOptionId"
         @keydown="onKeydown"

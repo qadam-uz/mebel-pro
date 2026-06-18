@@ -10,8 +10,10 @@ import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import type { PanelMaterialType } from '@/shared/stores/admin'
 import {
   EDGE_TRIM_MM,
   materialLabel,
@@ -79,11 +81,93 @@ const branchOptions = computed<ChoiceOption[]>(() =>
         : 'faol filial',
   })),
 )
-const panelOptions = computed(() =>
-  cutting.panelOptions.filter((material) =>
-    draft.value?.preferred_branch_id && !showAllCatalog.value ? material.branch_carried : true,
-  ),
+// Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
+// a sort — applied to the shared option list every row's panel picker draws from.
+const panelManufacturerFilter = ref<string[]>([])
+const panelTypeFilter = ref<string | null>(null)
+const panelThicknessFilter = ref<string | null>(null)
+const panelSort = ref<string | null>('relevance')
+
+const PANEL_TYPE_LABELS: Record<string, string> = {
+  dsp: 'DSP',
+  mdf: 'MDF',
+  plywood: 'Fanera',
+  natural_wood: "Tabiiy yog'och",
+  other: 'Boshqa',
+}
+const panelManufacturerChoices = computed<ChoiceOption[]>(() => {
+  const seen = new Map<string, string>()
+  for (const material of cutting.panelOptions)
+    seen.set(material.manufacturer_id, material.manufacturer_name)
+  return [...seen]
+    .map(([value, label]) => ({ value, label }))
+    .sort((left, right) => left.label.localeCompare(right.label))
+})
+const panelTypeChoices = computed<ChoiceOption[]>(() => {
+  const types = [
+    ...new Set(
+      cutting.panelOptions
+        .map((material) => material.type)
+        .filter((type): type is PanelMaterialType => type !== null),
+    ),
+  ].sort()
+  return [
+    { value: '', label: 'Barcha turlar' },
+    ...types.map((type) => ({ value: type, label: PANEL_TYPE_LABELS[type] ?? type })),
+  ]
+})
+const panelThicknessChoices = computed<ChoiceOption[]>(() => {
+  const thicknesses = [
+    ...new Set(cutting.panelOptions.map((material) => material.thickness_mm)),
+  ].sort((left, right) => Number(left) - Number(right))
+  return [
+    { value: '', label: 'Barcha qalinliklar' },
+    ...thicknesses.map((thickness) => ({ value: thickness, label: `${thickness} mm` })),
+  ]
+})
+const panelSortChoices: ChoiceOption[] = [
+  { value: 'relevance', label: 'Tartib: tavsiya' },
+  { value: 'manufacturer', label: 'Tartib: ishlab chiqaruvchi' },
+  { value: 'thickness', label: 'Tartib: qalinlik' },
+]
+const panelFiltersActive = computed(
+  () =>
+    panelManufacturerFilter.value.length > 0 ||
+    !!panelTypeFilter.value ||
+    !!panelThicknessFilter.value,
 )
+function clearPanelFilters() {
+  panelManufacturerFilter.value = []
+  panelTypeFilter.value = null
+  panelThicknessFilter.value = null
+}
+
+const panelOptions = computed(() => {
+  let list = cutting.panelOptions.filter((material) =>
+    draft.value?.preferred_branch_id && !showAllCatalog.value ? material.branch_carried : true,
+  )
+  if (panelManufacturerFilter.value.length > 0) {
+    list = list.filter((material) =>
+      panelManufacturerFilter.value.includes(material.manufacturer_id),
+    )
+  }
+  if (panelTypeFilter.value)
+    list = list.filter((material) => material.type === panelTypeFilter.value)
+  if (panelThicknessFilter.value) {
+    list = list.filter((material) => material.thickness_mm === panelThicknessFilter.value)
+  }
+  const sorted = [...list]
+  if (panelSort.value === 'manufacturer') {
+    sorted.sort((left, right) =>
+      `${left.manufacturer_name} ${left.name}`.localeCompare(
+        `${right.manufacturer_name} ${right.name}`,
+      ),
+    )
+  } else if (panelSort.value === 'thickness') {
+    sorted.sort((left, right) => Number(left.thickness_mm) - Number(right.thickness_mm))
+  }
+  return sorted
+})
 const panelChoices = computed<ChoiceOption[]>(() =>
   panelOptions.value.map((material) => ({
     value: material.id,
@@ -1059,6 +1143,36 @@ const edgePatterns: Array<{
               </div>
               <button type="button" class="mp-button mp-button-outline" @click="addRow">
                 Qism qo'shish
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="parts.length > 0"
+            class="border-b border-hairline px-4 py-3"
+            aria-label="Panel filtri"
+          >
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MultiSelectFilter
+                v-model="panelManufacturerFilter"
+                label="Ishlab chiqaruvchi"
+                :options="panelManufacturerChoices"
+              />
+              <FormSelect v-model="panelTypeFilter" label="Tur" :options="panelTypeChoices" />
+              <FormSelect
+                v-model="panelThicknessFilter"
+                label="Qalinlik"
+                :options="panelThicknessChoices"
+              />
+              <FormSelect v-model="panelSort" label="Saralash" :options="panelSortChoices" />
+            </div>
+            <div
+              v-if="panelFiltersActive"
+              class="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm"
+            >
+              <span class="text-ink-muted">{{ panelOptions.length }} ta panel ko'rsatilmoqda</span>
+              <button type="button" class="font-bold text-accent" @click="clearPanelFilters">
+                Filtrlarni tozalash
               </button>
             </div>
           </div>

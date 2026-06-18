@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 17 | 8 | **28** |
-| Done | 29 | 51 | 24 | **104** |
+| Open (incl. partial) | 3 | 15 | 8 | **26** |
+| Done | 29 | 53 | 24 | **106** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B6): editor pickers (adversarial review
+> caught 5 real bugs in the new code — all fixed). **CB-84** (a panel-filter bar
+> above the parts rows — manufacturer multi-select, type, thickness, sort — narrows
+> the shared panel options every row's picker draws from; the SearchCombobox now
+> remembers the chosen label so filtering a selected panel out no longer blanks the
+> row). **CB-64** (shared `useDropdownPlacement` composable: SearchCombobox +
+> FormSelect listboxes clamp to `min(18rem,40dvh)` with `overscroll-contain` and
+> flip ABOVE the anchor when there's no room below — fixes off-screen/clipped
+> popovers on keyboard-shrunk phones; review fixes: offsetHeight-0 fallback,
+> re-entrancy guard on the resize listeners, scroll-after-flip timing,
+> aria-activedescendant only when open).
 
 > Progress (2026-06-18, client-finish B5): editor spec-conformance small batch
 > (adversarial review — one minor scroll offset value tuned). **CB-90** (the
@@ -338,7 +350,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-61 | P2 | a11y | med | S | Done | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
 | CB-62 | P1 | responsive | high | M | Done | Edge modal: dvh sizing + bottom-sheet on phones |
 | CB-63 | P2 | ux-flow | med | S | Done | iOS-proof modal scroll lock + overscroll containment |
-| CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
+| CB-64 | P2 | ux-flow | med | M | Done | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
 | CB-66 | P3 | ux-flow | low | S | Done | `scroll-margin` for #cutting-results under sticky header |
 | CB-67 | P3 | tech-debt | low | S | Done | Guard hover styles with `@media (hover:hover)` |
@@ -358,7 +370,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-81 | P3 | i18n-copy | low | S | Done | Uzbek session-row labels ("active"/"Browser") |
 | CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
 | CB-83 | P2 | spec-conformance | med | S | Done | 100-part cap + blocking roll-up under the parts table |
-| CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |
+| CB-84 | P2 | spec-conformance | high | L | Done | Panel picker filters (manufacturer/type/thickness) + sort |
 | CB-85 | P2 | spec-conformance | med | S | Done | Grain indicator on the panel chip |
 | CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
 | CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +33,11 @@ const query = ref('')
 const open = ref(false)
 const activeIndex = ref(0)
 const id = `mp-combobox-${Math.random().toString(36).slice(2)}`
+const {
+  dropUp,
+  start: startPlacement,
+  stop: stopPlacement,
+} = useDropdownPlacement(inputRef, listRef)
 
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const filteredOptions = computed(() => {
@@ -47,8 +53,21 @@ const activeOptionId = computed(() => {
 })
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
 
+// Remember the chosen option's label so the input keeps showing it even when the
+// parent filters that option out of `options` (CB-84 panel filters) — the value
+// is still selected, so the display must not blank out.
+const rememberedLabel = ref('')
+watch(
+  selected,
+  (option) => {
+    if (option) rememberedLabel.value = option.label
+  },
+  { immediate: true },
+)
+
 function selectedLabel() {
-  return selected.value?.label ?? ''
+  if (selected.value) return selected.value.label
+  return props.modelValue ? rememberedLabel.value : ''
 }
 
 function syncQueryFromModel() {
@@ -70,11 +89,14 @@ async function openList() {
   open.value = true
   activeIndex.value = firstEnabledIndex(0)
   await nextTick()
+  startPlacement()
+  await nextTick()
   listRef.value?.scrollIntoView?.({ block: 'nearest' })
 }
 
 function closeList(returnFocus = false) {
   open.value = false
+  stopPlacement()
   syncQueryFromModel()
   if (returnFocus) inputRef.value?.focus()
 }
@@ -140,6 +162,14 @@ watch(filteredOptions, () => {
   activeIndex.value = firstEnabledIndex(0)
 })
 
+// Re-sync the displayed label when the option set changes underneath us (parent
+// filtering). selectedLabel() falls back to the remembered label, so this never
+// blanks a still-selected value.
+watch(
+  () => props.options,
+  () => syncQueryFromModel(),
+)
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
 })
@@ -165,7 +195,7 @@ onBeforeUnmount(() => {
         :disabled="disabled"
         :aria-expanded="open"
         :aria-controls="`${id}-listbox`"
-        :aria-activedescendant="activeOptionId"
+        :aria-activedescendant="open ? activeOptionId : undefined"
         :aria-describedby="errorId"
         role="combobox"
         autocomplete="off"
@@ -179,7 +209,8 @@ onBeforeUnmount(() => {
         :id="`${id}-listbox`"
         ref="listRef"
         role="listbox"
-        class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
         :aria-labelledby="`${id}-label`"
       >
         <li
