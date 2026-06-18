@@ -6,6 +6,7 @@ import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import { formatRelativeDate } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
@@ -107,18 +108,13 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-else-if="notifications.error" class="client-error">
-        <div class="client-error-icon">!</div>
-        <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
-        <p>Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring.</p>
-        <button
-          type="button"
-          class="mp-button mp-button-outline mt-4"
-          @click="notifications.loadList(50)"
-        >
-          Qayta urinish
-        </button>
-      </div>
+      <ClientErrorState
+        v-else-if="notifications.error"
+        title="Bildirishnomalarni yuklab bo'lmadi"
+        message="Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring."
+        :trace-id="notifications.traceId"
+        @retry="notifications.loadList(50)"
+      />
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">
         <div class="client-empty-icon"><Icon name="inbox" /></div>

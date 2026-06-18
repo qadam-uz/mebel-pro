@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { apiErrorCode } from '@/shared/api/client'
+import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import {
   clientErrorLabel,
   formatPercent,
@@ -10,6 +10,7 @@ import {
   pluralUz,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -23,6 +24,8 @@ const creating = ref(false)
 const createError = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const draftPendingDelete = ref<CuttingDraft | null>(null)
+const deleteError = ref<string | null>(null)
+const deleteTraceId = ref<string | null>(null)
 
 const sortedDrafts = computed(() =>
   [...cutting.drafts].sort(
@@ -87,13 +90,26 @@ function requestDeleteDraft(draft: CuttingDraft) {
   draftPendingDelete.value = draft
 }
 
+function closeDeleteDialog() {
+  draftPendingDelete.value = null
+  deleteError.value = null
+  deleteTraceId.value = null
+}
+
 async function confirmDeleteDraft() {
   const draft = draftPendingDelete.value
   if (!draft) return
   deletingId.value = draft.id
+  deleteError.value = null
+  deleteTraceId.value = null
   try {
     await cutting.deleteDraft(draft.id)
     draftPendingDelete.value = null
+  } catch (errorValue) {
+    // Keep the dialog open and surface the reason instead of leaking an
+    // unhandled rejection (CB-24).
+    deleteError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizmani o'chirib bo'lmadi.")
+    deleteTraceId.value = apiTraceId(errorValue)
   } finally {
     deletingId.value = null
   }
@@ -146,15 +162,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else-if="cutting.error" class="client-error">
-      <div class="client-error-icon">!</div>
-      <h3>Chizmalarni yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ cutting.traceId ?? 'unavailable' }}</p>
-      <button type="button" class="mp-button mp-button-outline mt-4" @click="cutting.loadDrafts">
-        Qayta urinish
-      </button>
-    </div>
+    <ClientErrorState
+      v-else-if="cutting.error"
+      title="Chizmalarni yuklab bo'lmadi"
+      :trace-id="cutting.traceId"
+      @retry="cutting.loadDrafts"
+    />
 
     <div v-else-if="sortedDrafts.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="scissors" /></div>
@@ -214,8 +227,12 @@ onMounted(() => {
       confirm-label="O'chirish"
       danger
       :busy="deletingId !== null"
-      @cancel="draftPendingDelete = null"
+      @cancel="closeDeleteDialog"
       @confirm="confirmDeleteDraft"
-    />
+    >
+      <p v-if="deleteError" class="text-sm font-bold text-danger">
+        {{ deleteError }} · trace {{ deleteTraceId ?? 'unavailable' }}
+      </p>
+    </ConfirmDialog>
   </section>
 </template>

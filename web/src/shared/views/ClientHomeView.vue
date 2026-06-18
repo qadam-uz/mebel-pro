@@ -15,6 +15,7 @@ import {
   pluralUz,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
 import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
@@ -147,15 +148,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else-if="pageError" class="client-error">
-      <div class="client-error-icon">!</div>
-      <h3>Bosh sahifani yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ traceId ?? 'unavailable' }}</p>
-      <button type="button" class="mp-button mp-button-outline mt-4" @click="reloadHome">
-        Qayta urinish
-      </button>
-    </div>
+    <ClientErrorState
+      v-else-if="pageError"
+      title="Bosh sahifani yuklab bo'lmadi"
+      :trace-id="traceId"
+      @retry="reloadHome"
+    />
 
     <template v-else>
       <div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -9,6 +9,7 @@ import {
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -33,12 +34,14 @@ const statusOptions = [
 
 const visibleOrders = computed(() => orders.clientOrders)
 
+function reloadOrders() {
+  void orders.loadClientOrders({ status: status.value, search: search.value })
+}
+
 let timer: number | undefined
 watch([status, search], () => {
   window.clearTimeout(timer)
-  timer = window.setTimeout(() => {
-    void orders.loadClientOrders({ status: status.value, search: search.value })
-  }, 250)
+  timer = window.setTimeout(reloadOrders, 250)
 })
 
 function nextAction(order: OrderSummary) {
@@ -65,6 +68,7 @@ async function confirmCancel() {
   try {
     await orders.cancelClientOrder(order.id, order.version, cancelReason.value.trim())
     orderPendingCancel.value = null
+    actionError.value = null
     await orders.loadClientOrders({ status: status.value, search: search.value })
   } catch {
     actionError.value = orders.error ?? 'order_cancel_failed'
@@ -104,19 +108,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-else-if="orders.error" class="client-error">
-      <div class="client-error-icon">!</div>
-      <h3>Buyurtmalarni yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
-      <button
-        type="button"
-        class="mp-button mp-button-outline mt-4"
-        @click="orders.loadClientOrders({ status, search })"
-      >
-        Qayta urinish
-      </button>
-    </div>
+    <ClientErrorState
+      v-else-if="orders.error"
+      title="Buyurtmalarni yuklab bo'lmadi"
+      :trace-id="orders.traceId"
+      @retry="reloadOrders"
+    />
 
     <div v-else-if="visibleOrders.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="box" /></div>

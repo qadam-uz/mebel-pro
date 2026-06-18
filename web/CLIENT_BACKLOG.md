@@ -42,9 +42,24 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 43 | 24 | **70** |
-| Done | 29 | 25 | 8 | **62** |
+| Open (incl. partial) | 3 | 36 | 24 | **63** |
+| Done | 29 | 32 | 8 | **69** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R8): states-errors recovery cluster, planned by a parallel
+> e2e-aware analysis workflow and adversarially reviewed before commit. **CB-22**
+> (shared `ClientErrorState` component; the six client views drop their hand-copied
+> error blocks; notifications view gains the missing trace). **CB-24** (DraftsView
+> delete now catches + shows the reason inline in the dialog instead of an
+> unhandled rejection; ClientOrdersView cancel clears on success). **CB-23**
+> (`clientCatalog.loadMaterialsForBranchBatch` uses `allSettled` so one failing
+> branch records its own error+retry instead of stranding the whole list).
+> **CB-21** + **CB-19** + **CB-115** (`orders.quoteBranches` now returns each
+> branch's real backend code + a trace; order-new shows a generic retryable error
+> when all branches fail for system reasons, or an aggregate recovery panel naming
+> the not-carried materials + a link back to the editor when they fail on
+> `branch_does_not_carry_*`). **CB-116** (entering the wizard on an un-optimised
+> draft redirects to the editor with a toast, distinct from the bound-draft case).
 
 > Progress (2026-06-18, R7): mobile & touch ergonomics batch. **CB-59**
 > (`inputmode="numeric"` + `enterkeyhint` on the dimension/quantity inputs → digit
@@ -159,12 +174,12 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
 | CB-17 | P1 | states-errors | med | S | Done | Handle PDF download failures with feedback |
 | CB-18 | P1 | ux-flow | med | S | Done | Pre-check draft usability on entering order wizard |
-| CB-19 | P2 | states-errors | med | M | Open | "No branch carries the set" recovery panel |
+| CB-19 | P2 | states-errors | med | M | Done | "No branch carries the set" recovery panel |
 | CB-20 | P2 | correctness-bug | med | M | Done | Per-branch quote error labeling uses real per-call error |
-| CB-21 | P2 | states-errors | med | M | Open | Page-level error+retry when all checkout quotes fail |
-| CB-22 | P2 | states-errors | med | M | Open | Extract shared ClientErrorState; add trace_id to notifications |
-| CB-23 | P2 | states-errors | med | M | Open | Fault-tolerant per-branch material loads (allSettled+retry) |
-| CB-24 | P2 | states-errors | med | M | Open | Handle cancel-order / delete-draft failures in dialogs |
+| CB-21 | P2 | states-errors | med | M | Done | Page-level error+retry when all checkout quotes fail |
+| CB-22 | P2 | states-errors | med | M | Done | Extract shared ClientErrorState; add trace_id to notifications |
+| CB-23 | P2 | states-errors | med | M | Done | Fault-tolerant per-branch material loads (allSettled+retry) |
+| CB-24 | P2 | states-errors | med | M | Done | Handle cancel-order / delete-draft failures in dialogs |
 | CB-25 | P2 | states-errors | med | M | Done | Loading + error/empty state on client profile load |
 | CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
@@ -255,8 +270,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Open | Order-detail Timeline: 5 client phases, not raw events |
 | CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |
-| CB-115 | P2 | states-errors | med | M | Open | Aggregate "no branch carries this set" empty state |
-| CB-116 | P2 | states-errors | low | M | Open | Order-new: split already-used vs no-chosen-result bail |
+| CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |
+| CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
 | CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
 | CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Open | Orders 'active' filter: expand to status set or filter client-side |

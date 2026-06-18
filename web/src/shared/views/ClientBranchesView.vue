@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { formatTiyin } from '@/shared/formatters'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import {
   useClientCatalogStore,
   type ClientBranch,
@@ -20,12 +21,16 @@ async function refreshBranches() {
   await catalog.loadBranches(search.value)
   loadingMaterials.value = true
   try {
-    await Promise.all(
-      catalog.branches.map((branch) => catalog.loadMaterialsForBranch(branch.branch_id)),
-    )
+    // allSettled inside the store — a single failing branch records its own
+    // error instead of rejecting the batch (CB-23).
+    await catalog.loadMaterialsForBranchBatch(catalog.branches.map((branch) => branch.branch_id))
   } finally {
     loadingMaterials.value = false
   }
+}
+
+async function retryBranchMaterials(branchId: string) {
+  await catalog.loadMaterialsForBranchBatch([branchId])
 }
 
 function materialLabels(branchId: string) {
@@ -93,15 +98,12 @@ onMounted(refreshBranches)
       </div>
     </div>
 
-    <div v-else-if="catalog.error" class="client-error">
-      <div class="client-error-icon">!</div>
-      <h3>Ustaxonalarni yuklab bo'lmadi</h3>
-      <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ catalog.traceId ?? 'unavailable' }}</p>
-      <button type="button" class="mp-button mp-button-outline mt-4" @click="refreshBranches">
-        Qayta urinish
-      </button>
-    </div>
+    <ClientErrorState
+      v-else-if="catalog.error"
+      title="Ustaxonalarni yuklab bo'lmadi"
+      :trace-id="catalog.traceId"
+      @retry="refreshBranches"
+    />
 
     <div v-else-if="visibleBranches.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="store" /></div>
@@ -137,6 +139,20 @@ onMounted(refreshBranches)
           </p>
           <p v-if="loadingMaterials" class="mt-2 text-sm text-ink-soft">
             Materiallar yuklanmoqda...
+          </p>
+          <p
+            v-else-if="catalog.branchMaterialsError[branch.branch_id]"
+            class="mt-2 text-sm font-bold text-danger"
+          >
+            Materiallarni yuklab bo'lmadi · trace
+            {{ catalog.branchMaterialsTraceId[branch.branch_id] ?? 'unavailable' }}
+            <button
+              type="button"
+              class="ml-2 font-bold text-accent underline"
+              @click="retryBranchMaterials(branch.branch_id)"
+            >
+              Qayta urinish
+            </button>
           </p>
           <p
             v-else-if="materialLabels(branch.branch_id).length > 0"

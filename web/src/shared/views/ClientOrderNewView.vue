@@ -10,6 +10,7 @@ import {
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
+import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
@@ -30,6 +31,8 @@ const step = ref<'branch' | 'checkout'>('branch')
 const selectedBranchId = ref<string | null>(null)
 const quoteByBranch = ref<Record<string, OrderQuote>>({})
 const quoteErrors = ref<Record<string, string>>({})
+const quoteErrorCodes = ref<Record<string, string | null>>({})
+const quotesTraceId = ref<string | null>(null)
 const quotesLoading = ref(false)
 const contactName = ref('')
 const contactPhone = ref('')
@@ -60,6 +63,37 @@ const preferredBranch = computed(() =>
       ) ?? null)
     : null,
 )
+// Every active branch failed to quote.
+const quotesFailedAll = computed(
+  () =>
+    !quotesLoading.value &&
+    activeBranches.value.length > 0 &&
+    Object.keys(quoteByBranch.value).length === 0,
+)
+const hasNotCarriedFailure = computed(() =>
+  Object.values(quoteErrorCodes.value).some(
+    (code) => code != null && NOT_CARRIED_CODES.includes(code),
+  ),
+)
+// CB-19/115: all branches failed and at least one lacks a material in the set →
+// name the materials and point back to the editor to fix them.
+const showCarryRecovery = computed(() => quotesFailedAll.value && hasNotCarriedFailure.value)
+// CB-21: all branches failed for some other reason (network/system) → a generic
+// retryable page error.
+const showQuotesError = computed(() => quotesFailedAll.value && !hasNotCarriedFailure.value)
+const draftMaterialNames = computed(() => {
+  const result = chosenResult.value
+  if (!result) return []
+  const ids = new Set<string>()
+  for (const part of result.parts_snapshot) {
+    if (part.material_id) ids.add(part.material_id)
+    for (const side of ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const) {
+      const edge = part[side]
+      if (edge?.material_id) ids.add(edge.material_id)
+    }
+  }
+  return [...ids].map((id) => materialName(id)).filter(Boolean)
+})
 const inactiveBranches = computed(() =>
   cutting.branchOptions.filter((branch) => branch.status !== 'active'),
 )
@@ -119,8 +153,15 @@ function branchTitle(
   return quote?.branch_name ?? `${fallback.workshop_name} · ${fallback.branch_name}`
 }
 
+const NOT_CARRIED_CODES = ['branch_does_not_carry_panel', 'branch_does_not_carry_edge']
+
 function quoteErrorLabel(errorCode: string | null | undefined) {
-  if (errorCode === 'permission_denied') return 'Bu ustaxona hozir tanlash uchun yopiq.'
+  if (errorCode === 'permission_denied' || errorCode === 'branch_closed')
+    return 'Bu ustaxona hozir tanlash uchun yopiq.'
+  if (errorCode && NOT_CARRIED_CODES.includes(errorCode))
+    return "Bu ustaxonada kerakli material yo'q."
+  if (errorCode === 'missing_cutting_rate' || errorCode === 'missing_edge_banding_rate')
+    return 'Bu ustaxona narxlari hali sozlanmagan.'
   return 'Bu ustaxona hozircha buyurtma qabul qila olmaydi.'
 }
 
@@ -152,14 +193,18 @@ async function loadQuotes() {
   quotesLoading.value = true
   quoteByBranch.value = {}
   quoteErrors.value = {}
+  quoteErrorCodes.value = {}
+  quotesTraceId.value = null
   try {
-    // The store attributes each branch its own error code (CB-20); we only map
-    // those codes to Uzbek labels here.
-    const { quotes, errors } = await orders.quoteBranches(
+    // The store attributes each branch its own error code (CB-20); we keep the
+    // raw codes (for the aggregate recovery states) and map to Uzbek per card.
+    const { quotes, errors, firstErrorTraceId } = await orders.quoteBranches(
       draftId.value,
       activeBranches.value.map((branch) => branch.branch_id),
     )
     quoteByBranch.value = quotes
+    quoteErrorCodes.value = errors
+    quotesTraceId.value = firstErrorTraceId
     quoteErrors.value = Object.fromEntries(
       Object.entries(errors).map(([branchId, code]) => [branchId, quoteErrorLabel(code)]),
     )
@@ -218,6 +263,13 @@ onMounted(async () => {
   if (boundOrderId) {
     toast.warn('Bu chizma allaqachon buyurtma qilingan.')
     await router.replace(rolePath(`/c/orders/${boundOrderId}`))
+    return
+  }
+  // The draft loaded but was never optimised/chosen — send the client back to
+  // the editor to pick a result instead of a dead-end empty state (CB-116).
+  if (cutting.currentDraft && !chosenResult.value) {
+    toast.warn('Avval chizmani optimallashtiring va natijani tanlang.')
+    await router.replace(rolePath(`/c/cutting/${draftId.value}`))
     return
   }
   await cutting.loadBranchOptions()
@@ -282,101 +334,127 @@ onMounted(async () => {
               <p>Hozir hech bir ustaxona mijoz buyurtmasi qabul qilmayapti.</p>
             </div>
 
-            <button
-              v-for="branch in branchRows"
-              :key="branch.branch_id"
-              type="button"
-              class="client-card w-full p-0 text-left transition hover:-translate-y-0.5 hover:border-ink-soft"
-              :class="[
-                selectedBranchId === branch.branch_id
-                  ? 'border-accent ring-2 ring-accent-tint'
-                  : '',
-                !quoteBranch(branch.branch_id)
-                  ? 'cursor-not-allowed opacity-60 hover:translate-y-0'
-                  : '',
-              ]"
-              :disabled="!quoteBranch(branch.branch_id)"
-              @click="selectBranch(branch.branch_id)"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-4 p-5">
-                <div class="min-w-0">
-                  <h2 class="font-serif text-lg font-semibold text-ink">
-                    {{ branchTitle(quoteBranch(branch.branch_id), branch) }}
-                  </h2>
-                  <span
-                    v-if="
-                      branch.branch_id === preferredBranch?.branch_id &&
+            <div v-else-if="showCarryRecovery" class="client-empty">
+              <div class="client-empty-icon"><Icon name="alert" /></div>
+              <h3>Hech bir ustaxona bu kombinatsiyaga mos kelmaydi</h3>
+              <p>
+                Bu materiallarni hozir hech qaysi faol ustaxona tashimaydi:
+                <b class="text-ink">{{ draftMaterialNames.join(' · ') }}</b
+                >. Chizmaga qaytib ushbu qismlarni "O'zim olib kelaman"ga aylantiring yoki boshqa
+                material tanlang.
+              </p>
+              <RouterLink
+                :to="rolePath(`/c/cutting/${draftId}`)"
+                class="mp-button mp-button-primary mt-4"
+              >
+                Chizmaga qaytish
+              </RouterLink>
+            </div>
+
+            <ClientErrorState
+              v-else-if="showQuotesError"
+              title="Ustaxonalardan narx olinmadi"
+              :trace-id="quotesTraceId"
+              @retry="loadQuotes"
+            />
+
+            <template v-else>
+              <button
+                v-for="branch in branchRows"
+                :key="branch.branch_id"
+                type="button"
+                class="client-card w-full p-0 text-left transition hover:-translate-y-0.5 hover:border-ink-soft"
+                :class="[
+                  selectedBranchId === branch.branch_id
+                    ? 'border-accent ring-2 ring-accent-tint'
+                    : '',
+                  !quoteBranch(branch.branch_id)
+                    ? 'cursor-not-allowed opacity-60 hover:translate-y-0'
+                    : '',
+                ]"
+                :disabled="!quoteBranch(branch.branch_id)"
+                @click="selectBranch(branch.branch_id)"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-4 p-5">
+                  <div class="min-w-0">
+                    <h2 class="font-serif text-lg font-semibold text-ink">
+                      {{ branchTitle(quoteBranch(branch.branch_id), branch) }}
+                    </h2>
+                    <span
+                      v-if="
+                        branch.branch_id === preferredBranch?.branch_id &&
+                        quoteBranch(branch.branch_id)
+                      "
+                      class="client-pill client-pill-info mt-1 inline-block"
+                    >
+                      Tavsiya — afzal filial
+                    </span>
+                    <p class="mt-1 font-mono text-xs text-ink-muted">
+                      {{
+                        quoteBranch(branch.branch_id)?.branch_address ??
+                        `${branch.workshop_name} · ${branch.branch_name}`
+                      }}
+                    </p>
+                  </div>
+                  <div class="font-mono text-2xl font-extrabold text-accent">
+                    {{
                       quoteBranch(branch.branch_id)
-                    "
-                    class="client-pill client-pill-info mt-1 inline-block"
-                  >
-                    Tavsiya — afzal filial
-                  </span>
-                  <p class="mt-1 font-mono text-xs text-ink-muted">
-                    {{
-                      quoteBranch(branch.branch_id)?.branch_address ??
-                      `${branch.workshop_name} · ${branch.branch_name}`
+                        ? formatTiyin(quoteBranch(branch.branch_id)?.total_tiyin ?? 0)
+                        : '-'
                     }}
-                  </p>
+                  </div>
                 </div>
-                <div class="font-mono text-2xl font-extrabold text-accent">
-                  {{
-                    quoteBranch(branch.branch_id)
-                      ? formatTiyin(quoteBranch(branch.branch_id)?.total_tiyin ?? 0)
-                      : '-'
-                  }}
-                </div>
-              </div>
 
-              <div class="mx-5 mb-5 rounded-md bg-sunk p-3 font-mono text-xs text-ink-soft">
-                <template v-if="quoteBranch(branch.branch_id)">
-                  <div class="flex justify-between gap-4 py-1">
-                    <span>Kesish xizmati</span>
-                    <span class="text-ink">{{
-                      formatTiyin(quoteBranch(branch.branch_id)?.subtotal_cutting_tiyin ?? 0)
-                    }}</span>
+                <div class="mx-5 mb-5 rounded-md bg-sunk p-3 font-mono text-xs text-ink-soft">
+                  <template v-if="quoteBranch(branch.branch_id)">
+                    <div class="flex justify-between gap-4 py-1">
+                      <span>Kesish xizmati</span>
+                      <span class="text-ink">{{
+                        formatTiyin(quoteBranch(branch.branch_id)?.subtotal_cutting_tiyin ?? 0)
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between gap-4 py-1">
+                      <span>Materiallar</span>
+                      <span class="text-ink">{{
+                        formatTiyin(quoteBranch(branch.branch_id)?.subtotal_materials_tiyin ?? 0)
+                      }}</span>
+                    </div>
+                    <div class="flex justify-between gap-4 py-1">
+                      <span>Krom yopishtirish</span>
+                      <span class="text-ink">{{
+                        formatTiyin(quoteBranch(branch.branch_id)?.subtotal_edge_banding_tiyin ?? 0)
+                      }}</span>
+                    </div>
+                  </template>
+                  <div v-else class="text-ink-soft">
+                    {{ quoteErrors[branch.branch_id] ?? 'Narx hisoblanmadi.' }}
                   </div>
-                  <div class="flex justify-between gap-4 py-1">
-                    <span>Materiallar</span>
-                    <span class="text-ink">{{
-                      formatTiyin(quoteBranch(branch.branch_id)?.subtotal_materials_tiyin ?? 0)
-                    }}</span>
-                  </div>
-                  <div class="flex justify-between gap-4 py-1">
-                    <span>Krom yopishtirish</span>
-                    <span class="text-ink">{{
-                      formatTiyin(quoteBranch(branch.branch_id)?.subtotal_edge_banding_tiyin ?? 0)
-                    }}</span>
-                  </div>
-                </template>
-                <div v-else class="text-ink-soft">
-                  {{ quoteErrors[branch.branch_id] ?? 'Narx hisoblanmadi.' }}
                 </div>
-              </div>
-            </button>
+              </button>
 
-            <article
-              v-for="branch in inactiveBranches"
-              :key="branch.branch_id"
-              class="client-card p-5 opacity-60"
-              aria-disabled="true"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2 class="font-serif text-lg font-semibold text-ink">
-                    {{ branch.workshop_name }} · {{ branch.branch_name }}
-                  </h2>
-                  <p class="mt-1 font-mono text-xs text-ink-muted">
-                    {{
-                      branch.status === 'temporarily_closed'
-                        ? (branch.closed_reason ?? 'vaqtincha yopiq')
-                        : 'faol emas'
-                    }}
-                  </p>
+              <article
+                v-for="branch in inactiveBranches"
+                :key="branch.branch_id"
+                class="client-card p-5 opacity-60"
+                aria-disabled="true"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 class="font-serif text-lg font-semibold text-ink">
+                      {{ branch.workshop_name }} · {{ branch.branch_name }}
+                    </h2>
+                    <p class="mt-1 font-mono text-xs text-ink-muted">
+                      {{
+                        branch.status === 'temporarily_closed'
+                          ? (branch.closed_reason ?? 'vaqtincha yopiq')
+                          : 'faol emas'
+                      }}
+                    </p>
+                  </div>
+                  <span class="client-pill client-pill-new">Yopiq</span>
                 </div>
-                <span class="client-pill client-pill-new">Yopiq</span>
-              </div>
-            </article>
+              </article>
+            </template>
           </template>
         </div>
 
