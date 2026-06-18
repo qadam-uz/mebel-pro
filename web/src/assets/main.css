@@ -532,6 +532,12 @@
     height: 24px;
   }
 
+  /* Compact family icon in notification rows (CB-126). */
+  .client-notif-icon .client-icon {
+    width: 18px;
+    height: 18px;
+  }
+
   .client-empty h3,
   .client-error h3 {
     margin: 0;
@@ -2632,6 +2638,19 @@
 
   .tl .step.done::before {
     background: var(--color-success);
+  }
+
+  /* Current phase — a hollow accent dot with a ring (CB-113). */
+  .tl .step.now::before {
+    background: var(--color-elevated);
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 5px rgb(15 118 110 / 22%);
+  }
+
+  .tl .step.now {
+    font-weight: 700;
+    color: var(--color-ink);
   }
 
   .tl .step.bad::before {

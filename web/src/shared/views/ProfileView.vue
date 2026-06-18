@@ -9,7 +9,7 @@ import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import FormSelect from '@/shared/components/FormSelect.vue'
+import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 import { useOrdersStore } from '@/shared/stores/orders'
@@ -318,12 +318,12 @@ onMounted(async () => {
               </div>
             </div>
             <div class="grid w-full max-w-md gap-2 sm:justify-items-end">
-              <FormSelect
+              <SearchCombobox
                 v-model="preferredBranchId"
                 class="w-full sm:max-w-md"
                 label="Tanlangan"
                 :options="branchChoiceOptions"
-                placeholder="Tanlanmagan"
+                placeholder="Filialni qidiring"
               />
               <div class="flex flex-wrap justify-end gap-2">
                 <button

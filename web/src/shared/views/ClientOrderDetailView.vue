@@ -666,7 +666,7 @@ onMounted(() => {
                   v-for="(label, index) in clientPhaseLabels"
                   :key="label"
                   class="step"
-                  :class="{ done: index <= clientPhaseIndex(order.status) }"
+                  :class="phaseNodeClass(index)"
                 >
                   <span v-if="phaseTimestamp(index)" class="when">{{ phaseTimestamp(index) }}</span>
                   {{ label }}

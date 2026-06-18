@@ -1,3 +1,4 @@
+import type { NotificationItem } from '@/shared/stores/notifications'
 import type { OrderStatus } from '@/shared/stores/orders'
 
 export const clientStatusLabel: Record<OrderStatus, string> = {
@@ -139,4 +140,45 @@ const CLIENT_ICON_PATHS: Record<string, string> = {
 
 export function clientIconPath(name: string): string {
   return CLIENT_ICON_PATHS[name] ?? CLIENT_ICON_PATHS.box
+}
+
+// Notification presentation (CB-126): a per-family icon + a localized one-line
+// title, so the bell never shows a raw snake/dotted event_code. Forward-compatible
+// with the order.* events the backend will add (CB-02).
+const NOTIFICATION_TITLES: Record<string, string> = {
+  'inventory.low_stock': 'Zaxira tugayapti',
+  'order.placed': 'Buyurtma joylandi',
+  'order.confirmed': 'Buyurtma tasdiqlandi',
+  'order.status_changed': "Buyurtma holati o'zgardi",
+  'order.ready': 'Buyurtma tayyor',
+  'order.cancelled': 'Buyurtma bekor qilindi',
+  'order.completed': 'Buyurtma topshirildi',
+}
+
+function payloadString(payload: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+export function clientNotificationTitle(item: NotificationItem): string {
+  return (
+    payloadString(item.payload, ['summary', 'title']) ??
+    NOTIFICATION_TITLES[item.event_code] ??
+    'Bildirishnoma'
+  )
+}
+
+export function clientNotificationBody(item: NotificationItem): string | null {
+  return payloadString(item.payload, ['body', 'detail', 'message'])
+}
+
+export function clientNotificationIconName(item: NotificationItem): string {
+  const code = item.event_code
+  if (code.startsWith('inventory')) return 'alert'
+  if (code.startsWith('cutting')) return 'scissors'
+  if (code.startsWith('order') || item.entity_type === 'order') return 'box'
+  return 'inbox'
 }

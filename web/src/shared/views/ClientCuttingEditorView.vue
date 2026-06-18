@@ -977,7 +977,12 @@ const edgePatterns: Array<{
           v-if="branchPickerOpen"
           class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
         >
-          <FormSelect v-model="selectedBranchId" label="Afzal filial" :options="branchOptions" />
+          <SearchCombobox
+            v-model="selectedBranchId"
+            label="Afzal filial"
+            :options="branchOptions"
+            placeholder="Filialni qidiring"
+          />
           <button
             type="button"
             class="mp-button mp-button-primary self-end"

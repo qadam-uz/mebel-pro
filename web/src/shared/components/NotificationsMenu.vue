@@ -3,6 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
+import {
+  clientNotificationBody,
+  clientNotificationIconName,
+  clientNotificationTitle,
+} from '@/shared/app/clientUi'
+import Icon from '@/shared/components/AppIcon.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -26,9 +32,15 @@ const isAdmin = computed(() => roleConfig.role === 'admin')
 
 function title(item: NotificationItem) {
   if (isAdmin.value) return adminNotificationTitle(item)
-  const summary = item.payload.summary
-  if (typeof summary === 'string' && summary.trim()) return summary
-  return item.event_code
+  return clientNotificationTitle(item)
+}
+
+function body(item: NotificationItem) {
+  return clientNotificationBody(item)
+}
+
+function iconName(item: NotificationItem) {
+  return clientNotificationIconName(item)
 }
 
 function destination(item: NotificationItem) {
@@ -214,14 +226,23 @@ onBeforeUnmount(() => {
           role="menuitem"
           @click="openItem(item)"
         >
-          <span class="flex items-start justify-between gap-3">
-            <span class="min-w-0">
+          <span class="flex items-start gap-3">
+            <span class="client-notif-icon mt-0.5 shrink-0 text-ink-soft" aria-hidden="true">
+              <Icon :name="iconName(item)" />
+            </span>
+            <span class="min-w-0 flex-1">
               <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
-              <span class="mt-1 block font-mono text-[11px] text-ink-muted">
-                {{ item.event_code }} · {{ formatDate(item.created_at) }}
+              <span v-if="body(item)" class="mt-0.5 block truncate text-xs text-ink-soft">
+                {{ body(item) }}
+              </span>
+              <span class="mt-1 block text-[11px] text-ink-muted">
+                {{ formatDate(item.created_at) }}
               </span>
             </span>
-            <span v-if="item.read_at === null" class="mt-1 size-2 rounded-full bg-accent"></span>
+            <span
+              v-if="item.read_at === null"
+              class="mt-1 size-2 shrink-0 rounded-full bg-accent"
+            ></span>
           </span>
         </button>
       </template>
