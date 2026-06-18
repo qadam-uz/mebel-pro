@@ -267,8 +267,12 @@ onMounted(() => {
             <article
               v-for="order in activeOrders"
               :key="order.id"
-              class="client-card cursor-pointer p-4 transition hover:border-ink"
+              class="client-card cursor-pointer p-4 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+              role="link"
+              tabindex="0"
+              :aria-label="`${order.order_number} — ${order.branch_name}`"
               @click="router.push(rolePath(`/c/orders/${order.id}`))"
+              @keydown.enter="router.push(rolePath(`/c/orders/${order.id}`))"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -355,8 +359,12 @@ onMounted(() => {
             <article
               v-for="draft in recentDrafts"
               :key="draft.id"
-              class="client-card grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 transition hover:border-ink"
+              class="client-card grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+              role="link"
+              tabindex="0"
+              :aria-label="draftTitle(draft)"
               @click="router.push(rolePath(`/c/cutting/${draft.id}`))"
+              @keydown.enter="router.push(rolePath(`/c/cutting/${draft.id}`))"
             >
               <div class="min-w-0">
                 <div class="truncate font-mono text-sm font-bold text-ink">
