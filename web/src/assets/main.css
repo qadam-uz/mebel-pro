@@ -49,6 +49,9 @@
 
   body.modal-open {
     overflow: hidden;
+    /* The shared scrollLock util also pins the body with position:fixed so iOS
+       Safari can't touch-scroll the page behind a modal (CB-63). */
+    touch-action: none;
   }
 
   ::selection {
@@ -177,6 +180,18 @@
     border-color: var(--color-accent);
   }
 
+  /* iOS Safari auto-zooms when focusing a sub-16px control; pin form controls
+     to 16px on phones so dimension/material entry doesn't jolt the page (CB-68).
+     No maximum-scale on the viewport — that would block accessibility zoom. */
+  @media (max-width: 768px) {
+    .mp-input,
+    .ep-search,
+    textarea,
+    [role='combobox'] {
+      font-size: 16px;
+    }
+  }
+
   .mp-chip {
     display: inline-flex;
     min-height: 24px;
@@ -189,6 +204,15 @@
     color: var(--color-ink-soft);
     font-size: 12px;
     font-weight: 700;
+  }
+
+  /* Tappable chips (source toggles, panel tabs) need a comfortable target on
+     touch; the informational <span class="mp-chip"> stays compact (CB-61). */
+  @media (pointer: coarse) {
+    button.mp-chip {
+      min-height: 40px;
+      padding-inline: 14px;
+    }
   }
 
   .mp-dot {
@@ -906,8 +930,8 @@
 
   .client-edge-close {
     display: grid;
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     place-items: center;
     border: 1px solid transparent;
     border-radius: 7px;
@@ -929,6 +953,8 @@
     flex-direction: column;
     gap: 14px;
     overflow-y: auto;
+    /* Don't chain scroll to the page behind the modal at the list ends (CB-63). */
+    overscroll-behavior: contain;
     padding: 16px 18px;
   }
 
@@ -1091,7 +1117,7 @@
 
   .edge-btn.h {
     width: 168px;
-    height: 32px;
+    height: 40px;
   }
 
   .edge-btn.v {
@@ -1127,6 +1153,7 @@
     display: grid;
     max-height: 300px;
     overflow-y: auto;
+    overscroll-behavior: contain;
     gap: 6px;
     padding: 2px;
   }

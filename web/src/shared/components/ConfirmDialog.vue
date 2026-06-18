@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
+import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
+
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -71,6 +73,10 @@ async function focusCancelAction() {
 watch(
   () => props.open,
   async (open) => {
+    // Freeze the page behind the dialog on mobile (CB-43); the shared lock is
+    // ref-counted so a dialog over the edge modal nests cleanly.
+    if (open) lockBodyScroll()
+    else unlockBodyScroll()
     if (open) {
       await focusCancelAction()
     } else if (previousFocus) {
@@ -82,10 +88,14 @@ watch(
 )
 
 onMounted(() => {
-  if (props.open) void focusCancelAction()
+  if (props.open) {
+    lockBodyScroll()
+    void focusCancelAction()
+  }
 })
 
 onBeforeUnmount(() => {
+  if (props.open) unlockBodyScroll()
   if (previousFocus) previousFocus.focus()
 })
 </script>

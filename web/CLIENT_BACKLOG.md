@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 48 | 24 | **75** |
-| Done | 29 | 20 | 8 | **57** |
+| Open (incl. partial) | 3 | 43 | 24 | **70** |
+| Done | 29 | 25 | 8 | **62** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, R7): mobile & touch ergonomics batch. **CB-59**
+> (`inputmode="numeric"` + `enterkeyhint` on the dimension/quantity inputs → digit
+> pad, not QWERTY). **CB-68** (form controls pinned to 16px ≤768px so iOS stops
+> auto-zooming on focus; no `maximum-scale`). **CB-43** + **CB-63** (shared
+> ref-counted `scrollLock` pins the body with `position:fixed` so iOS can't scroll
+> the page behind a modal — now used by both `ConfirmDialog` and the edge picker —
+> plus `overscroll-behavior: contain` on the modal scrollers). **CB-61** (tappable
+> chips ≥40px on coarse pointers, edge-modal close 44×44, `.edge-btn.h` 40px,
+> algorithm toggle min-44px) — only interactive `button.mp-chip` grows, the
+> informational save-state pill stays compact. The remaining 2 open P1 (CB-12/13)
+> are backend-dependent (batch quote / inline materials preview).
 
 > Progress (2026-06-18, R6): toast primitive + quote-attribution + auth tests.
 > **CB-14** (shared `useToast()` + `<ToastHost>` mounted in `AppShell`, bottom-centre
@@ -171,7 +183,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
 | CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
-| CB-43 | P2 | responsive | low | S | Open | Lock background scroll when ConfirmDialog is open |
+| CB-43 | P2 | responsive | low | S | Done | Lock background scroll when ConfirmDialog is open |
 | CB-44 | P3 | design-parity | low | S | Done | Use `.tl` timeline with done/bad states in order history |
 | CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
@@ -187,16 +199,16 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-56 | P3 | correctness-bug | low | S | Open ✓partial | One defined quantity for order-detail "Krom" figure |
 | CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
 | CB-58 | P3 | completeness-stub | low | S | Open | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
-| CB-59 | P2 | ux-flow | med | S | Open | `inputmode=numeric` on dimension/quantity inputs |
+| CB-59 | P2 | ux-flow | med | S | Done | `inputmode=numeric` on dimension/quantity inputs |
 | CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
-| CB-61 | P2 | a11y | med | S | Open | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
+| CB-61 | P2 | a11y | med | S | Done | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
 | CB-62 | P1 | responsive | high | M | Done | Edge modal: dvh sizing + bottom-sheet on phones |
-| CB-63 | P2 | ux-flow | med | S | Open | iOS-proof modal scroll lock + overscroll containment |
+| CB-63 | P2 | ux-flow | med | S | Done | iOS-proof modal scroll lock + overscroll containment |
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
 | CB-66 | P3 | ux-flow | low | S | Open | `scroll-margin` for #cutting-results under sticky header |
 | CB-67 | P3 | tech-debt | low | S | Open | Guard hover styles with `@media (hover:hover)` |
-| CB-68 | P2 | responsive | med | S | Open | 16px form-control font on mobile (stop iOS auto-zoom) |
+| CB-68 | P2 | responsive | med | S | Done | 16px form-control font on mobile (stop iOS auto-zoom) |
 | CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
 | CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
