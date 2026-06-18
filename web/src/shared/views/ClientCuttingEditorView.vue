@@ -39,7 +39,7 @@ const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
-const algorithmsOpen = ref(true)
+const algorithmsOpen = ref(false)
 const recoveryDismissed = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
@@ -335,8 +335,20 @@ function edgeCount(part: CuttingPart) {
 function edgeSummary(part: CuttingPart) {
   const count = edgeCount(part)
   if (count === 0) return "Krom yo'q"
-  if (count === 4) return '4 tomon'
-  return `${count} tomon`
+  const sides = count === 4 ? '4 tomon' : `${count} tomon`
+  // Name the tape in the visible cell, not just the hover title / 6.5px SVG text
+  // (CB-91/CB-69): one label when every banded side shares a material, else
+  // "Aralash" so a mixed row is obvious without opening the picker.
+  const materialIds = [
+    ...new Set(edgeFields.filter((side) => part[side]).map((side) => part[side]?.material_id)),
+  ]
+  if (materialIds.length === 1) {
+    const material = edgeById(materialIds[0])
+    if (material) return `${edgeShortLabel(material, true)} · ${sides}`
+  } else if (materialIds.length > 1) {
+    return `Aralash · ${sides}`
+  }
+  return sides
 }
 
 function edgeSourceSummary(part: CuttingPart) {
@@ -1316,7 +1328,7 @@ const edgePatterns: Array<{
         </section>
       </fieldset>
 
-      <section id="cutting-results" class="client-card mt-6">
+      <section id="cutting-results" class="client-card mt-6 scroll-mt-28 min-[860px]:scroll-mt-20">
         <div class="client-card-h">
           <div>
             <h2>Natija</h2>
@@ -1406,22 +1418,25 @@ const edgePatterns: Array<{
               <div
                 class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4"
               >
-                <div class="text-sm font-bold text-ink">Algoritm solishtirish</div>
+                <div class="text-sm font-bold text-ink">
+                  Algoritm: <span class="text-accent">{{ chosenResult.algorithm_name }}</span>
+                </div>
                 <button
                   type="button"
                   class="-mr-2 inline-flex min-h-11 items-center px-3 text-sm font-bold text-accent"
                   @click="algorithmsOpen = !algorithmsOpen"
                 >
-                  {{ algorithmsOpen ? 'Yopish' : 'Ochish' }}
+                  {{ algorithmsOpen ? 'Yopish' : 'Algoritmlarni solishtirish' }}
                 </button>
               </div>
               <div v-if="algorithmsOpen" class="overflow-x-auto">
                 <table class="w-full min-w-[560px] text-sm">
                   <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
                     <tr>
-                      <th class="px-4 py-3">Algorithm</th>
+                      <th class="px-4 py-3">Algoritm</th>
                       <th class="px-4 py-3">Chiqim</th>
                       <th class="px-4 py-3">Panel</th>
+                      <th class="px-4 py-3">Kesish yo'li</th>
                       <th class="px-4 py-3">Holat</th>
                     </tr>
                   </thead>
@@ -1436,6 +1451,7 @@ const edgePatterns: Array<{
                         {{ formatPercent(result.waste_percentage) }}
                       </td>
                       <td class="px-4 py-3 font-mono">{{ resultPanelCount(result) }}</td>
+                      <td class="px-4 py-3 font-mono">{{ metres(result.total_cut_length_mm) }}</td>
                       <td class="px-4 py-3">
                         <button
                           type="button"

@@ -42,9 +42,19 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 17 | 12 | **32** |
-| Done | 29 | 51 | 20 | **100** |
+| Open (incl. partial) | 3 | 17 | 8 | **28** |
+| Done | 29 | 51 | 24 | **104** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-18, client-finish B5): editor spec-conformance small batch
+> (adversarial review — one minor scroll offset value tuned). **CB-90** (the
+> algorithm comparison is collapsed by default, the chosen `algorithm_name` shows
+> in the results header, and the table gained a "Kesish yo'li" cut-length column).
+> **CB-91/CB-69** (the Edges cell now NAMES the tape — `<edgeShortLabel> · N tomon`
+> when uniform, `Aralash · N tomon` when mixed — instead of only a side count, so a
+> phone user sees which krom a row carries without opening the picker). **CB-66**
+> (`#cutting-results` gets a breakpoint-aware `scroll-margin-top` so the post-
+> optimize scroll doesn't tuck the heading under the sticky/wrapped header).
 
 > Progress (2026-06-18, client-finish B4): notifications batch (adversarial
 > review caught one real issue — a disjointed toast-then-navigate on a failed
@@ -330,10 +340,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-63 | P2 | ux-flow | med | S | Done | iOS-proof modal scroll lock + overscroll containment |
 | CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
-| CB-66 | P3 | ux-flow | low | S | Open | `scroll-margin` for #cutting-results under sticky header |
+| CB-66 | P3 | ux-flow | low | S | Done | `scroll-margin` for #cutting-results under sticky header |
 | CB-67 | P3 | tech-debt | low | S | Done | Guard hover styles with `@media (hover:hover)` |
 | CB-68 | P2 | responsive | med | S | Done | 16px form-control font on mobile (stop iOS auto-zoom) |
-| CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
+| CB-69 | P3 | ux-flow | low | S | Done | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
 | CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
 | CB-72 | P2 | design-parity | med | M | Done | Show attempts-remaining on `invalid_code` |
@@ -354,8 +364,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |
 | CB-88 | P2 | spec-conformance | med | M | Done | Drafts list: branch chip + material label pre-optimise |
 | CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
-| CB-90 | P3 | spec-conformance | low | S | Open | Algo compare: cut-length column, algo name, closed default |
-| CB-91 | P3 | spec-conformance | low | S | Open | Name the tape in the Edges cell summary |
+| CB-90 | P3 | spec-conformance | low | S | Done | Algo compare: cut-length column, algo name, closed default |
+| CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Open | Split LoginView into per-role views |
