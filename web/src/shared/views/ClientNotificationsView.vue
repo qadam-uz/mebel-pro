@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
@@ -82,18 +82,32 @@ async function openItem(item: NotificationItem) {
   await router.push(rolePath(to))
 }
 
+// 'unread' filters server-side so pagination stays accurate; 'all'/'read' load
+// the full feed and the read/unread split is applied client-side (CB-41).
+const unreadOnly = () => readFilter.value === 'unread'
+
 async function markAllRead() {
   await notifications.markAllRead()
   if (notifications.actionError) {
     toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     return
   }
-  await notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)
+  await notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
   toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
+function loadMore() {
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, notifications.items.length, unreadOnly())
+}
+
+// Changing the filter restarts pagination from offset 0 so the load-more button
+// and the loaded page reflect the active filter, not a stale full-feed page.
+watch(readFilter, () => {
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
+})
+
 onMounted(() => {
-  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
 })
 </script>
 
@@ -136,7 +150,7 @@ onMounted(() => {
         title="Bildirishnomalarni yuklab bo'lmadi"
         message="Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring."
         :trace-id="notifications.traceId"
-        @retry="notifications.loadList(NOTIFICATIONS_PAGE_LIMIT)"
+        @retry="notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())"
       />
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">
@@ -174,6 +188,16 @@ onMounted(() => {
           </span>
         </button>
       </div>
+
+      <button
+        v-if="notifications.hasMore"
+        type="button"
+        class="mp-button mp-button-outline mt-3 w-full"
+        :disabled="notifications.loading"
+        @click="loadMore"
+      >
+        Yana ko'rsatish
+      </button>
     </div>
   </section>
 </template>

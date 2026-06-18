@@ -39,6 +39,14 @@ function reloadOrders() {
   void orders.loadClientOrders({ status: status.value, search: search.value })
 }
 
+function loadMoreOrders() {
+  void orders.loadClientOrders({
+    status: status.value,
+    search: search.value,
+    offset: orders.clientOrders.length,
+  })
+}
+
 let timer: number | undefined
 watch([status, search], () => {
   window.clearTimeout(timer)
@@ -181,6 +189,16 @@ onMounted(() => {
           </RouterLink>
         </div>
       </article>
+
+      <button
+        v-if="orders.ordersHasMore"
+        type="button"
+        class="mp-button mp-button-outline w-full"
+        :disabled="orders.loading"
+        @click="loadMoreOrders"
+      >
+        Yana ko'rsatish
+      </button>
     </div>
 
     <ConfirmDialog

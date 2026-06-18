@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.modules.cutting.api import cutting_result_response, render_cutting_pdf, render_cutting_svg
@@ -50,8 +50,17 @@ async def client_orders_index(
     db: Session,
     status: str | None = None,
     search: str | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[OrderSummaryResponse]:
-    return await list_client_orders(db, principal=principal, status_filter=status, search=search)
+    return await list_client_orders(
+        db,
+        principal=principal,
+        status_filter=status,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

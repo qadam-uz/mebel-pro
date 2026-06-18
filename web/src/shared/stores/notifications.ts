@@ -36,6 +36,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   const actionError = ref<string | null>(null)
+  const hasMore = ref(false)
   const auth = useAuthStore()
 
   async function loadUnreadCount() {
@@ -52,13 +53,21 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
-  async function loadList(limit = 10) {
+  // Paginated with append (CB-41): offset 0 replaces, a higher offset appends.
+  // hasMore is inferred from a full page so the "load more" button hides at the end.
+  // unreadOnly filters server-side so pagination stays accurate under the filter.
+  async function loadList(limit = 10, offset = 0, unreadOnly = false) {
     if (!auth.accessToken) return
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      items.value = await api.get<NotificationItem[]>(`/notifications?limit=${limit}`, authInit())
+      const page = await api.get<NotificationItem[]>(
+        `/notifications?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`,
+        authInit(),
+      )
+      items.value = offset === 0 ? page : [...items.value, ...page]
+      hasMore.value = page.length === limit
     } catch (caught) {
       error.value = 'notifications_load_failed'
       traceId.value = apiTraceId(caught)
@@ -108,6 +117,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     error,
     traceId,
     actionError,
+    hasMore,
     loadUnreadCount,
     loadList,
     markRead,

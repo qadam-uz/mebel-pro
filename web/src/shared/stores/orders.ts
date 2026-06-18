@@ -10,6 +10,7 @@ import {
   withQuery,
 } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
@@ -153,6 +154,7 @@ export const activeWorkshopStatuses: OrderStatus[] = [
 
 export const useOrdersStore = defineStore('orders', () => {
   const clientOrders = ref<OrderSummary[]>([])
+  const ordersHasMore = ref(false)
   const workshopOrders = ref<OrderSummary[]>([])
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
@@ -219,15 +221,28 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
-  async function loadClientOrders(filters: { status?: string; search?: string } = {}) {
+  // Paginated with append (CB-38): offset 0 replaces, a higher offset appends the
+  // next page. ordersHasMore is inferred from a full page, so the "load more"
+  // button hides on the last page.
+  async function loadClientOrders(
+    filters: { status?: string; search?: string; offset?: number } = {},
+  ) {
+    const offset = filters.offset ?? 0
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      clientOrders.value = await api.get<OrderSummary[]>(
-        withQuery('/client/orders', filters),
+      const page = await api.get<OrderSummary[]>(
+        withQuery('/client/orders', {
+          status: filters.status,
+          search: filters.search,
+          limit: ORDERS_PAGE_LIMIT,
+          offset,
+        }),
         authInit(),
       )
+      clientOrders.value = offset === 0 ? page : [...clientOrders.value, ...page]
+      ordersHasMore.value = page.length === ORDERS_PAGE_LIMIT
     } catch (errorValue) {
       captureError(errorValue, 'client_orders_load_failed')
     } finally {
@@ -402,6 +417,7 @@ export const useOrdersStore = defineStore('orders', () => {
     quoteForDraft,
     quoteBranches,
     createClientOrder,
+    ordersHasMore,
     loadClientOrders,
     loadClientOrder,
     cancelClientOrder,

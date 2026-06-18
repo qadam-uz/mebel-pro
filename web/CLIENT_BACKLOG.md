@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 2 | 11 | 4 | **17** |
-| Done | 30 | 57 | 28 | **115** |
+| Open (incl. partial) | 2 | 9 | 4 | **15** |
+| Done | 30 | 59 | 28 | **117** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B11): pagination — additive limit/offset,
+> bare-array + load-more, curl-verified + adversarially reviewed (filter-reset and
+> Query-validator findings applied). **CB-38** (`GET /client/orders` takes
+> limit/offset (default 30, `Query` ge/le); the store appends pages — offset 0
+> replaces — with `ordersHasMore` from a full page, and ClientOrdersView shows a
+> "Yana ko'rsatish" button). **CB-41** (`GET /notifications` takes limit/offset +
+> server-side `unread_only`; the store paginates the same way, ClientNotifications
+> View loads more and RESETS to offset 0 on a filter change passing
+> `unread_only=true` for the unread tab). +pagination unit tests for both stores.
+
+
 
 > Progress (2026-06-19, client-finish B10): backend perf + spec — runtime
 > curl-verified against the hot-reloading dev backend, then adversarially reviewed
@@ -371,10 +383,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
 | CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
-| CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
+| CB-38 | P2 | performance | med | M | Done | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
-| CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
+| CB-41 | P2 | completeness-stub | low | M | Done | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Done | Lock background scroll when ConfirmDialog is open |
 | CB-44 | P3 | design-parity | low | S | Done | Use `.tl` timeline with done/bad states in order history |

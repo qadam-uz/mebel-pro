@@ -2,7 +2,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/shared/api/client'
-import { useOrdersStore, type OrderDetail } from '@/shared/stores/orders'
+import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
+import { useOrdersStore, type OrderDetail, type OrderSummary } from '@/shared/stores/orders'
 
 vi.mock('@/shared/api/client', () => {
   class ApiError extends Error {
@@ -82,6 +83,30 @@ describe('orders store', () => {
 
     expect(api.get).not.toHaveBeenCalled()
     expect(store.error).toBe('permission_denied')
+  })
+
+  it('paginates orders: offset 0 replaces, offset>0 appends, hasMore from a full page (CB-38)', async () => {
+    const store = useOrdersStore()
+    const fullPage = Array.from(
+      { length: ORDERS_PAGE_LIMIT },
+      (_, i) => ({ id: `o${i}` }) as OrderSummary,
+    )
+    vi.mocked(api.get).mockResolvedValueOnce(fullPage)
+    await store.loadClientOrders({})
+    expect(store.clientOrders).toHaveLength(ORDERS_PAGE_LIMIT)
+    expect(store.ordersHasMore).toBe(true)
+
+    // a short next page appends and clears hasMore
+    vi.mocked(api.get).mockResolvedValueOnce([{ id: 'tail' } as OrderSummary])
+    await store.loadClientOrders({ offset: ORDERS_PAGE_LIMIT })
+    expect(store.clientOrders).toHaveLength(ORDERS_PAGE_LIMIT + 1)
+    expect(store.clientOrders.at(-1)?.id).toBe('tail')
+    expect(store.ordersHasMore).toBe(false)
+
+    // offset 0 again replaces (not append)
+    vi.mocked(api.get).mockResolvedValueOnce([{ id: 'only' } as OrderSummary])
+    await store.loadClientOrders({})
+    expect(store.clientOrders).toHaveLength(1)
   })
 
   it('attributes each branch its own quote error and keeps successes (CB-20/107)', async () => {

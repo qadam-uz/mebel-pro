@@ -14,6 +14,9 @@ export const SEARCH_DEBOUNCE_MS = 250
 /** Page size for the notifications list view. */
 export const NOTIFICATIONS_PAGE_LIMIT = 50
 
+/** Page size for the client orders list (load-more). */
+export const ORDERS_PAGE_LIMIT = 30
+
 /** Minimum part length/width in mm (matches the backend part-min). */
 export const MIN_PART_MM = 50
 

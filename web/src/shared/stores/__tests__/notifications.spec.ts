@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/shared/api/client'
+import { useAuthStore } from '@/shared/stores/auth'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 vi.mock('@/shared/api/client', () => {
@@ -103,5 +104,25 @@ describe('notifications store', () => {
     expect(store.items[0].read_at).toBeNull()
     expect(store.actionError).toBe('notifications_read_all_failed')
     expect(store.traceId).toBe('tr-2')
+  })
+
+  it('paginates: offset 0 replaces, offset>0 appends, hasMore from a full page (CB-41)', async () => {
+    useAuthStore().accessToken = 'tok'
+    const store = useNotificationsStore()
+
+    vi.mocked(api.get).mockResolvedValueOnce([item('a', null), item('b', null)])
+    await store.loadList(2, 0)
+    expect(store.items).toHaveLength(2)
+    expect(store.hasMore).toBe(true)
+
+    vi.mocked(api.get).mockResolvedValueOnce([item('c', null)])
+    await store.loadList(2, 2)
+    expect(store.items.map((row) => row.id)).toEqual(['a', 'b', 'c'])
+    expect(store.hasMore).toBe(false)
+
+    // offset 0 replaces rather than appends
+    vi.mocked(api.get).mockResolvedValueOnce([item('z', null)])
+    await store.loadList(2, 0)
+    expect(store.items.map((row) => row.id)).toEqual(['z'])
   })
 })

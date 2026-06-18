@@ -249,6 +249,8 @@ async def list_client_orders(
     principal: AuthenticatedPrincipal,
     status_filter: str | None = None,
     search: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
 ) -> list[OrderSummaryResponse]:
     client = await _client(db, principal)
     query = (
@@ -257,6 +259,9 @@ async def list_client_orders(
         .order_by(Order.created_at.desc(), Order.order_number.desc())
     )
     query = _apply_order_filters(query, status_filter=status_filter, search=search)
+    # Paginate so a long history isn't re-downloaded whole (CB-38). Clamp to a sane
+    # window; the client appends pages via offset.
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
     return [await _order_response(db, order, include_detail=False) for order in rows]
 

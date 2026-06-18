@@ -17,6 +17,7 @@ async def list_notifications(
     principal: AuthenticatedPrincipal,
     unread_only: bool = False,
     limit: int = 20,
+    offset: int = 0,
 ) -> list[Notification]:
     conditions = (
         Notification.recipient_type == principal.principal_type,
@@ -25,7 +26,9 @@ async def list_notifications(
     query = select(Notification).where(*conditions).order_by(Notification.created_at.desc())
     if unread_only:
         query = query.where(Notification.read_at.is_(None))
-    query = query.limit(max(1, min(limit, 100)))
+    # Paginate (CB-41): the client appends pages via offset; the unread_only filter
+    # is applied server-side so a future "unread" toggle spans all pages.
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     return list((await db.scalars(query)).all())
 
 

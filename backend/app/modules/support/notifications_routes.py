@@ -25,12 +25,14 @@ async def notifications_index(
     db: Session,
     unread_only: bool = False,
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[NotificationResponse]:
     rows = await list_notifications(
         db,
         principal=principal,
         unread_only=unread_only,
         limit=limit,
+        offset=offset,
     )
     return [NotificationResponse.model_validate(row) for row in rows]
 
