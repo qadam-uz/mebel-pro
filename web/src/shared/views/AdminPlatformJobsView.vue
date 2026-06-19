@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore, type PlatformJobSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
@@ -14,6 +15,10 @@ const selectedJob = computed(() =>
     ? admin.jobs.find((job) => job.definition.name === selectedJobName.value)
     : null,
 )
+
+const logPanel = ref<HTMLElement | null>(null)
+const logOpen = computed(() => selectedJobName.value !== null)
+const logTrap = useFocusTrap(logPanel, logOpen, () => (selectedJobName.value = null))
 
 async function runJob(name: string) {
   runningJob.value = name
@@ -143,8 +148,16 @@ onMounted(admin.loadJobs)
     </p>
 
     <template v-if="selectedJob">
-      <div class="admin-modal-scrim" @click="selectedJobName = null"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="job-log-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="selectedJobName = null"></div>
+      <section
+        ref="logPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="job-log-title"
+        tabindex="-1"
+        @keydown="logTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="job-log-title">Ish jurnali</h3>
           <button

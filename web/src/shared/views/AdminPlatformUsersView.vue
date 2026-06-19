@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore, type PlatformUser } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -9,6 +10,10 @@ const admin = useAdminStore()
 const auth = useAuthStore()
 const modalOpen = ref(false)
 const blockModalOpen = ref(false)
+const formPanel = ref<HTMLElement | null>(null)
+const blockPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
+const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen.value = false))
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
@@ -268,8 +273,16 @@ onMounted(admin.loadPlatformUsers)
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="operator-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
+      <section
+        ref="formPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="operator-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="operator-title">{{ editingId ? 'Operator tahrirlash' : 'Yangi operator' }}</h3>
           <button
@@ -332,12 +345,15 @@ onMounted(admin.loadPlatformUsers)
     </template>
 
     <template v-if="blockModalOpen && blockTarget">
-      <div class="admin-modal-scrim" @click="blockModalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="blockModalOpen = false"></div>
       <section
+        ref="blockPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="block-user-title"
+        tabindex="-1"
+        @keydown="blockTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="block-user-title">Operatorni bloklash</h3>

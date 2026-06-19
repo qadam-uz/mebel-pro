@@ -5,12 +5,15 @@ import { RouterLink } from 'vue-router'
 import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
 const creating = ref(false)
 const modalOpen = ref(false)
+const provisionPanel = ref<HTMLElement | null>(null)
+const provisionTrap = useFocusTrap(provisionPanel, modalOpen, () => (modalOpen.value = false))
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
@@ -217,12 +220,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="provisionPanel"
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-workshop-title"
+        tabindex="-1"
+        @keydown="provisionTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="new-workshop-title">Yangi ustaxona + egasi . atomik yaratish</h3>

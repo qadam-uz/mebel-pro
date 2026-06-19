@@ -3,10 +3,14 @@ import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, dropdownOption, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore, type ErrorRecord } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const selectedId = ref<string | null>(null)
+const detailPanel = ref<HTMLElement | null>(null)
+const detailOpen = computed(() => selectedId.value !== null)
+const detailTrap = useFocusTrap(detailPanel, detailOpen, () => (selectedId.value = null))
 const resolvingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const query = ref('')
@@ -166,12 +170,15 @@ onMounted(admin.loadErrors)
     </p>
 
     <template v-if="selectedId">
-      <div class="admin-modal-scrim" @click="selectedId = null"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="selectedId = null"></div>
       <section
+        ref="detailPanel"
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="error-title"
+        tabindex="-1"
+        @keydown="detailTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="error-title">Xatolik tafsiloti</h3>

@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { adminDate, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const route = useRoute()
@@ -12,6 +13,8 @@ const rolePath = useRolePath()
 const workshopId = String(route.params.workshop_id)
 const tab = ref<'profile' | 'branches' | 'users'>('profile')
 const blockModalOpen = ref(false)
+const blockPanel = ref<HTMLElement | null>(null)
+const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen.value = false))
 const reason = ref('')
 const acting = ref(false)
 const actionError = ref<string | null>(null)
@@ -248,8 +251,16 @@ onMounted(() => admin.loadWorkshop(workshopId))
     </section>
 
     <template v-if="blockModalOpen">
-      <div class="admin-modal-scrim" @click="blockModalOpen = false"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="block-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="blockModalOpen = false"></div>
+      <section
+        ref="blockPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="block-title"
+        tabindex="-1"
+        @keydown="blockTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="block-title">Ustaxonani bloklash</h3>
           <button
