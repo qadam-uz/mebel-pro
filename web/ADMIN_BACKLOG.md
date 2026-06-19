@@ -51,9 +51,25 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 2 | 6 | **10** |
-| Done | 5 | 22 | 16 | **43** |
+| Open | 2 | 1 | 2 | **5** |
+| Done | 5 | 23 | 20 | **48** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B14): **AB-22, AB-45, AB-48, AB-49, AB-50 Done** — materials
+> parity + catalog perf + responsive. **AB-22:** the materials table gained a leading image cell
+> (`AuthFileImage`), the kind column is now a colored pill, and the create/edit modal got the
+> panel **length ≥ width** validation (inline error + blocked submit), an **edge** info banner,
+> and a **kind-locked-on-edit** disabled select + hint. _The branch-usage ("Ustaxonalar") column
+> is deferred — it needs a per-material branch count the platform read model doesn't expose
+> (backend decision)._ **AB-45 (decision):** the admin catalog is operator-curated and bounded
+> for this envelope, so filtering stays client-side over the full list (instant, no round-trips);
+> the never-passed server-side filter params + the `CatalogFilters` interface were dead and have
+> been removed (revisit with server-side paging only if the catalog grows to thousands).
+> **AB-48/49/50:** CSS — the 3-up provision/material form drops to 2-up at ≤920px before the
+> ≤620px single column; the filter-bar input is fluid (`width:100%; max-width:220px`); a
+> `.admin-table.wide` (min-width 900px) on the button-dense platform-users / materials / audit
+> tables keeps action buttons on one row. Web gate green: lint:check · format:check · typecheck ·
+> test **126** · build.
 
 > Progress (2026-06-19, admin-finish B13): **AB-17, AB-27 Done** — audit viewer + tab a11y.
 > **AB-17:** the cross-workshop audit viewer gained the spec'd **Workshop** filter (names, from a
@@ -257,7 +273,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-19 | P2 | design-parity | med | M | Done | Workshops list: inline Block/Unblock row actions (with confirm) |
 | AB-20 | P2 | design-parity | med | S | Done | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
 | AB-21 | P2 | spec-conformance | med | S | Done | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
-| AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
+| AB-22 | P2 | design-parity | med | M | Done | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
 | AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
 | AB-24 | P2 | design-parity | med | M | Done | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
 | AB-25 | P2 | design-parity | med | M | Done | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
@@ -280,12 +296,12 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-42 | P3 | spec-conformance | low | S | Done | Manufacturers: add the spec'd Country filter |
 | AB-43 | P3 | security-rbac | low | S | Done | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
 | AB-44 | P3 | performance | low | S | Done | `list_error_records` has no server-side limit — add defensive cap |
-| AB-45 | P3 | performance | low | M | Open | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
+| AB-45 | P3 | performance | low | M | Done | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
 | AB-46 | P3 | performance | low | M | Done | Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count |
 | AB-47 | P3 | a11y | low | S | Done | Empty action-column `<th></th>` needs an sr-only label |
-| AB-48 | P3 | responsive | low | S | Open | Provision modal stays 3-up between 620–920px — add a 2-up tablet step |
-| AB-49 | P3 | responsive | low | S | Open | Admin filter-bar input is fixed 220px — make it fluid |
-| AB-50 | P3 | responsive | low | S | Open | Button-dense tables hit the 680px floor → tall wrapped action rows; widen min-width |
+| AB-48 | P3 | responsive | low | S | Done | Provision modal stays 3-up between 620–920px — add a 2-up tablet step |
+| AB-49 | P3 | responsive | low | S | Done | Admin filter-bar input is fixed 220px — make it fluid |
+| AB-50 | P3 | responsive | low | S | Done | Button-dense tables hit the 680px floor → tall wrapped action rows; widen min-width |
 | AB-51 | P3 | testing | low | M | Open | E2E/unit for the cross-workshop audit viewer (filter predicate) |
 | AB-52 | P3 | testing | low | S | Open | Extend provisioning E2E with workshop unblock (only block is covered) |
 | AB-53 | P3 | testing | low | S | Done | Bind a permission-denied regression test to the AB-01 fix |
@@ -423,7 +439,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Three gaps: (1) **no per-row "revoke"** though `auth.revokeSession` exists and the workshop profile uses it — spec requires it; (2) `loadSessions` has no try/catch → a failed load falls through to the empty state "Sessiya topilmadi", falsely telling the operator they have no sessions, and `logoutCurrent`/`logoutEverywhere` set `loggingOut=true` then await with no catch → on rejection the button stays stuck disabled with no error; (3) the session pills render English "current"/"active" and `deviceLabel` falls back to "Browser" (the client fixed exactly this in CB-81 → "joriy"/"faol"/"Brauzer").
 **Fix:** Add a per-row "Yopish" revoke (hidden on the current session) calling `auth.revokeSession`; wrap `loadSessions` in try/catch with a distinct error state; wrap logout handlers, reset `loggingOut`, surface failure (or force-clear + navigate); localize the pills + `deviceLabel`.
 
-### AB-22 · Materials table/modal parity: image col, kind/status pills, dimension validation, edge/kind hints — `design-parity` · med · M
+### AB-22 · Materials table/modal parity: image col, kind/status pills, dimension validation, edge/kind hints — `design-parity` · med · M — **Done (B14)**
 
 **Files:** `AdminMaterialsView.vue:268-281` (no image column), `:289` (kind = plain text), `:300` (raw status), `:401-419` (modal lacks validations). Spec: [`platform.md`](../docs/ref/features/platform.md):39. Prototype: `materials.html:91/95/154/161`.
 **Why:** vs spec + prototype: (1) the materials table has **no image column** though `Material.image_file_id` exists and the form uploads one (spec lists image as the first column); (2) `Tur` is plain text, the prototype uses a colored pill ("Panel" / "Krom lentasi"); (3) the status cell shows raw English (AB-12); (4) the create/edit modal omits the prototype's **panel length≥width inline validation**, the **edge-banding info banner**, and the **kind-locked-on-edit hint**. The prototype's branch-usage ("Ustaxonalar") column + "Qaysi filiallarda?" action need a per-material branch count the platform read model may not expose — **data dependency**, defer unless `catalog-inventory.md` justifies the backend surface.
@@ -563,7 +579,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Risk is bounded because `ErrorRecord` rows are *grouped* by code+module (cardinality tracks distinct signatures, usually small), but there's no server ceiling — a pathological spread of distinct codes renders an arbitrarily long table.
 **Fix:** Add a defensive server-side limit (e.g. 200) ordered by spike count + a "top N shown" note. No virtualization needed at expected cardinality. (Backend change = decision.)
 
-### AB-45 · Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — `performance` · low · M
+### AB-45 · Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — `performance` · low · M — **Done (B14)**
 
 **Files:** `stores/admin.ts:200/308-352` (`CatalogFilters` + server query built), call sites `AdminMaterialsView.vue:217`/`AdminManufacturersView.vue:90/113` (called with **no args**), `:88-108`/`:27-37` (client-side `filtered`).
 **Why:** The store plumbs `search/status/kind/manufacturer_id` into the backend query, and the endpoints support `search`+`status` server-side — but every call site invokes the loaders with no filters and filters the full in-memory list locally. The whole catalog ships to the browser on every mount; the server-filter path is dead code that misleads readers.
@@ -581,19 +597,19 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The data tables end with an empty `<th></th>` over the action buttons; a screen reader gets no column name when navigating action cells.
 **Fix:** Put a visually-hidden label in the header, e.g. `<th><span class="sr-only">Amallar</span></th>` (the `.sr-only` utility is already used in these views).
 
-### AB-48 · Provision modal stays 3-up between 620–920px — add a 2-up tablet step — `responsive` · low · S
+### AB-48 · Provision modal stays 3-up between 620–920px — add a 2-up tablet step — `responsive` · low · S — **Done (B14)**
 
 **Files:** `AdminWorkshopsView.vue:240` (`.admin-form-grid.three`), `main.css:3977-3981` (only collapses to 1-up at `max-width:620px`), `:3624` (modal width `min(100% − 32px, 640px)`).
 **Why:** The 14-field provision form stays 3 columns between ~620–920px (where the ~640px modal lives), giving ~190px-wide inputs under labels like "Filial telefoni" — tight and awkward to fill on a tablet. Not broken (`minmax(0,1fr)` prevents overflow), just cramped.
 **Fix:** Add a `max-width:760px` breakpoint dropping `.admin-form-grid.three` to 2 columns before the existing 620px single-column rule. CSS-only, admin-scoped.
 
-### AB-49 · Admin filter-bar input is fixed 220px — make it fluid — `responsive` · low · S
+### AB-49 · Admin filter-bar input is fixed 220px — make it fluid — `responsive` · low · S — **Done (B14)**
 
 **Files:** `main.css:3423` (`.admin-filter-input input { width: 220px }`), `AdminWorkshopsView.vue:149`, `AdminMaterialsView.vue:232`.
 **Why:** The search input is hard-coded to 220px at every width; in drawer mode at ~320–360px it nearly fills the row and can't shrink to match narrower controls, giving a ragged filter bar. Cosmetic, not a break.
 **Fix:** `width: 100%; max-width: 220px` on the input (or `flex: 1 1 180px; min-width: 0` on `.admin-filter-input`) so it grows/shrinks gracefully. Admin-scoped class.
 
-### AB-50 · Button-dense tables hit the 680px floor → tall wrapped action rows — `responsive` · low · S
+### AB-50 · Button-dense tables hit the 680px floor → tall wrapped action rows — `responsive` · low · S — **Done (B14)**
 
 **Files:** `main.css:3340` (`.admin-table { min-width: 680px }`), `AdminPlatformUsersView.vue:194` (3–4 wrapping action buttons), Materials + Audit similar.
 **Why:** The shared 680px min-width is tuned for the narrow tables; on the button-dense ones (platform-users, materials, audit) the action column is squeezed at the floor and its buttons wrap onto several lines, ballooning row height while neighbours have slack.

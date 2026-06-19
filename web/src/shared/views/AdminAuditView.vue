@@ -216,7 +216,7 @@ onMounted(() => {
         <p>Mutating platform amallari shu yerda ko'rinadi.</p>
       </div>
       <div v-else class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
               <th>Vaqt</th>
@@ -266,7 +266,7 @@ onMounted(() => {
         <p>Status transition shu yerda ko'rinadi.</p>
       </div>
       <div v-else class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
               <th>Vaqt</th>
