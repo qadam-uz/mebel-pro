@@ -206,6 +206,8 @@ onMounted(() => {
       title="Buyurtmani bekor qilish"
       message="Buyurtma bekor qilinadi. Bu amal qaytarilmaydi."
       confirm-label="Bekor qilish"
+      cancel-label="Orqaga"
+      busy-label="Bajarilmoqda"
       danger
       :busy="orders.actionLoading"
       :confirm-disabled="cancelReason.trim().length === 0"
