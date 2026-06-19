@@ -112,14 +112,13 @@ test('admin triggers a background job run from the jobs surface', async ({ page 
   await seedPlatform(`admin-${id}`)
   await loginAsAdmin(page, `admin-${id}`)
 
-  await page.goto('/admin/platform/jobs')
+  // Navigate via the nav (auto-waits for the authenticated shell) rather than a
+  // hard goto that would drop the in-memory access token.
+  await page.getByRole('link', { name: 'Fon vazifalar' }).first().click()
 
   // The default jobs are registered on first list; run the first one.
   await page.getByRole('button', { name: /ishga tushirish|Qayta urinish/ }).first().click()
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Ishga tushirish' })
-    .click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Ishga tushirish' }).click()
   // A success or skipped toast confirms the trigger registered.
   await expect(page.getByText(/ishga tushirildi|o'tkazib yuborildi/)).toBeVisible()
 })
