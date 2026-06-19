@@ -311,6 +311,7 @@ onMounted(reloadProfile)
       title="Chiqib ketish"
       message="Mijoz kabinetidan chiqasiz."
       confirm-label="Chiqish"
+      cancel-label="Bekor qilish"
       danger
       @cancel="logoutCurrentOpen = false"
       @confirm="logoutCurrent"
@@ -320,6 +321,7 @@ onMounted(reloadProfile)
       title="Hammasi chiqsin"
       message="Barcha qurilmalardan chiqasiz."
       confirm-label="Hammasini chiqarish"
+      cancel-label="Bekor qilish"
       danger
       @cancel="logoutEverywhereOpen = false"
       @confirm="logoutEverywhere"

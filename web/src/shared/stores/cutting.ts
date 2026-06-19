@@ -359,10 +359,11 @@ export const useCuttingStore = defineStore('cutting', () => {
     branchId?: string | null
     search?: string
     carriedOnly?: boolean
+    limit?: number
     force?: boolean
   }) {
     const carriedOnly = params.carriedOnly ?? false
-    const cacheKey = `${params.kind}:${params.branchId ?? 'all'}:${params.search ?? ''}:${carriedOnly}`
+    const cacheKey = `${params.kind}:${params.branchId ?? 'all'}:${params.search ?? ''}:${carriedOnly}:${params.limit ?? ''}`
     const cached = materialsCache.get(cacheKey)
     if (!params.force && cached && Date.now() - cached.at < 30_000) {
       if (params.kind === 'panel') panelOptions.value = cached.items
@@ -377,6 +378,7 @@ export const useCuttingStore = defineStore('cutting', () => {
           branch_id: params.branchId,
           search: params.search,
           carried_only: carriedOnly,
+          limit: params.limit,
         }),
         authInit(),
       )

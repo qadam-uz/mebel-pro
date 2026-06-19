@@ -20,8 +20,6 @@ const DRAFT_CAP = 50
 const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
-const creating = ref(false)
-const createError = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const draftPendingDelete = ref<CuttingDraft | null>(null)
 const deleteError = ref<string | null>(null)
@@ -69,17 +67,10 @@ function draftTitle(draft: CuttingDraft) {
   return `${draft.id.slice(0, 8)} · ${label || 'Material tanlanmagan'}`
 }
 
-async function newCutting() {
-  creating.value = true
-  createError.value = null
-  try {
-    const draft = await cutting.createDraft()
-    await router.push(rolePath(`/c/cutting/${draft.id}`))
-  } catch (errorValue) {
-    createError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizma yaratib bo'lmadi.")
-  } finally {
-    creating.value = false
-  }
+function newCutting() {
+  // Open the editor unsaved — the draft is created on the first optimise
+  // (docs/ref/features/cutting.md). Nothing is persisted here.
+  void router.push(rolePath('/c/cutting/new'))
 }
 
 function openDraft(draft: CuttingDraft) {
@@ -138,19 +129,9 @@ onMounted(() => {
           Saqlangan chizmani oching yoki yangi chizma boshlang. Chizmalar muddatsiz saqlanadi.
         </p>
       </div>
-      <button
-        type="button"
-        class="mp-button mp-button-primary"
-        :disabled="creating"
-        @click="newCutting"
-      >
-        {{ creating ? 'Yaratilmoqda' : 'Yangi chizma' }}
+      <button type="button" class="mp-button mp-button-primary" @click="newCutting">
+        Yangi chizma
       </button>
-    </div>
-
-    <div v-if="createError" class="client-banner danger mb-4" role="alert">
-      <span class="font-mono font-black">!</span>
-      <span>{{ createError }}</span>
     </div>
 
     <div class="client-section-title">
@@ -237,6 +218,7 @@ onMounted(() => {
       title="Chizmani o'chirish"
       :message="`${pendingDeletePartCount} qismli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
       confirm-label="O'chirish"
+      cancel-label="Bekor qilish"
       danger
       :busy="deletingId !== null"
       @cancel="closeDeleteDialog"
