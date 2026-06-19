@@ -39,7 +39,7 @@ export const adminRoutes: RouteRecordRaw[] = [
     path: '/admin/catalog/manufacturers',
     name: 'admin-catalog-manufacturers',
     component: () => import('@/shared/views/AdminManufacturersView.vue'),
-    meta: { title: 'Manufacturerlar' },
+    meta: { title: 'Ishlab chiqaruvchilar' },
   },
   {
     path: '/admin/catalog/materials',
@@ -57,7 +57,7 @@ export const adminRoutes: RouteRecordRaw[] = [
     path: '/admin/platform/jobs',
     name: 'admin-platform-jobs',
     component: () => import('@/shared/views/AdminPlatformJobsView.vue'),
-    meta: { title: 'Background ish' },
+    meta: { title: 'Fon vazifalar' },
   },
   {
     path: '/admin/platform/errors',

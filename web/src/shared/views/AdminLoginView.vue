@@ -1,9 +1,23 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 
-const { config, login, password, isSubmitting, errorText, submit } = useStaffLogin()
+const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
+
+// AB-13: useStaffLogin is shared with the workshop login, so map the error CODE
+// to Uzbek locally here rather than translating the shared English text map
+// (which would change the colleague-owned workshop SPA's copy).
+const ADMIN_LOGIN_ERROR_UZ: Record<string, string> = {
+  invalid_credentials: "Login yoki parol noto'g'ri.",
+  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
+  account_blocked: 'Hisob bloklangan.',
+  network_error: "Server bilan bog'lanib bo'lmadi.",
+}
+const errorText = computed(() =>
+  error.value ? (ADMIN_LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
+)
 </script>
 
 <template>

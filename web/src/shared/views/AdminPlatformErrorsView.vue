@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { adminDateTime, dropdownOption, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import {
+  adminDateTime,
+  dropdownOption,
+  errorStatusLabel,
+  errorStatusTone,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -24,8 +29,8 @@ const moduleFilter = ref('all')
 
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha kodlar'),
-  dropdownOption('open', 'Open', 'hal qilinmagan'),
-  dropdownOption('resolved', 'Resolved', 'tasdiqlangan'),
+  dropdownOption('open', 'Ochiq', 'hal qilinmagan'),
+  dropdownOption('resolved', 'Hal qilingan', 'tasdiqlangan'),
 ]
 const moduleOptions = computed(() => [
   dropdownOption('all', 'Modul', 'barcha modullar'),
@@ -50,7 +55,7 @@ const filtered = computed(() => {
 })
 
 function contextText(value: Record<string, unknown> | null) {
-  if (!value) return 'No context'
+  if (!value) return "Kontekst yo'q"
   return JSON.stringify(value, null, 2)
 }
 
@@ -120,7 +125,7 @@ onMounted(admin.loadErrors)
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Xatolik yozilmagan</h3>
-      <p>No errors recorded - nice.</p>
+      <p>Xatolik yo'q — zo'r.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -141,7 +146,7 @@ onMounted(admin.loadErrors)
             <tr v-for="record in filtered" :key="record.id">
               <td class="nm">
                 {{ record.code }}
-                <small>{{ statusLabel(record.status) }}</small>
+                <small>{{ errorStatusLabel(record.status) }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ record.module }}</td>
               <td class="admin-right admin-mono">{{ record.count_24h }}</td>
@@ -149,11 +154,11 @@ onMounted(admin.loadErrors)
               <td class="admin-mono text-ink-muted">
                 {{ adminDateTime(record.last_occurred_at) }}
               </td>
-              <td class="max-w-[360px] truncate">{{ record.preview_message ?? 'No preview' }}</td>
+              <td class="max-w-[360px] truncate">{{ record.preview_message ?? "Tavsif yo'q" }}</td>
               <td class="admin-right">
                 <div class="flex justify-end gap-2">
                   <span class="admin-pill" :class="errorStatusTone(record.status)">
-                    {{ statusLabel(record.status) }}
+                    {{ errorStatusLabel(record.status) }}
                   </span>
                   <button
                     type="button"

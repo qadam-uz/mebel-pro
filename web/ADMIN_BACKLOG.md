@@ -51,9 +51,26 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 17 | 18 | **37** |
-| Done | 5 | 7 | 4 | **16** |
+| Open | 2 | 14 | 18 | **34** |
+| Done | 5 | 10 | 4 | **19** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B5): **AB-11, AB-12, AB-13 Done** — operator copy policy
+> (Uzbek-latin prose; English only for genuine domain/status identifiers). **AB-12:** added
+> `workshop/platformUser/material/branch/job/error StatusLabel` helpers in `adminUi.ts` and
+> routed every raw `{{ *.status }}` pill + `statusLabel(...)` call through them (Faol /
+> Bloklangan / Faol emas / OK / Muvaffaqiyatsiz / Ochiq / Hal qilingan …); deleted the dead
+> English `statusLabel`. **AB-11:** swept the mixed-language strings — nav + route-meta
+> "Manufacturerlar" → "Ishlab chiqaruvchilar", "Background ish" → "Fon vazifalar"; dashboard
+> "Failed ish"/"failed" → "Muvaffaqiyatsiz vazifalar"/"muvaffaqiyatsiz"; jobs h1/empties
+> ("Jurnal hali yo'q", "Ro'yxatdan o'tgan vazifa yo'q"); errors copy ("Kontekst yo'q",
+> "Tavsif yo'q", "Xatolik yo'q — zo'r."); manufacturer h1/headers ("Davlat"); "address unset"
+> → "manzil kiritilmagan". (The "<X> endpoint javob bermadi" nicknames were already removed by
+> AB-08.) **AB-13:** AdminLoginView maps the staff-login error **code** to Uzbek locally — the
+> shared `useStaffLogin` (also used by the colleague-owned workshop SPA) is untouched, so no
+> cross-SPA regression. Updated the admin provisioning e2e spec for the new secret modal +
+> "Bloklangan" pill (web gate + e2e `pnpm typecheck` green; full e2e run needs the Docker stack
+> — pending). Web gate green: lint:check · format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B4): **AB-15, AB-16, AB-31, AB-32, AB-33, AB-34 Done** —
 > correctness. **AB-15:** `runJob` only mirrors a **terminal** (`ok`/`failed`) result onto the
@@ -133,9 +150,9 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-08 | P2 | tech-debt | med | M | Done | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
 | AB-09 | P2 | tech-debt | med | S | Open | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
 | AB-10 | P2 | states-errors | med | M | Done | Adopt `useToast` in admin views — success + failure signals on every mutation |
-| AB-11 | P2 | i18n-copy | med | M | Open | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
-| AB-12 | P2 | i18n-copy | med | S | Open | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
-| AB-13 | P2 | i18n-copy | med | S | Open | Translate `useStaffLogin` English error map (decision: shared w/ workshop) |
+| AB-11 | P2 | i18n-copy | med | M | Done | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
+| AB-12 | P2 | i18n-copy | med | S | Done | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
+| AB-13 | P2 | i18n-copy | med | S | Done | Translate `useStaffLogin` English error map (decision: shared w/ workshop) |
 | AB-14 | P2 | correctness-bug | med | M | Open | Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" |
 | AB-15 | P2 | correctness-bug | med | S | Done | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
 | AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
@@ -244,19 +261,19 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `ToastHost` is mounted and the shared notifications menu uses it, but **no `Admin*.vue` page view imports `useToast`** (grep = 0 hits). Provision, block/unblock, reset-password, save-operator, run-job, resolve-error all complete **silently** — the only feedback is inline error banners on *failure*. For destructive/irreversible actions especially, the operator gets no positive confirmation a mutation took effect; they must infer it from a row badge or the secret card appearing. Spec: [`platform.md`](../docs/ref/features/platform.md) "result badges pair colour with text".
 **Fix:** Push `toast.success` on each completed mutation and `toast.danger` on failure (mirroring `NotificationsMenu`). Keep a shared helper but admin-scoped so other SPAs are untouched.
 
-### AB-11 · Adopt one operator-copy policy; sweep mixed-language strings — `i18n-copy` · med · M
+### AB-11 · Adopt one operator-copy policy; sweep mixed-language strings — `i18n-copy` · med · M — **Done (B5)**
 
 **Files:** `AdminDashboardView.vue:113/116/176/183/248`, `roleConfig.ts:145/152` (nav) + `:138` (dropdown), `apps/admin/routes.ts:42/60` (meta titles), and the `<X> endpoint javob bermadi` copy in `AdminWorkshopsView.vue:168`, `AdminWorkshopDetailView.vue:65`, `AdminManufacturersView.vue:128`, `AdminMaterialsView.vue:254`, `AdminPlatformJobsView.vue:58`, `AdminPlatformErrorsView.vue:104`, `AdminPlatformUsersView.vue:156`, `AdminAuditView.vue:88`, `AdminNotificationsView.vue:74`.
 **Why:** The operator surface has no coherent copy policy. Login (`AdminLoginView`) and Profile are clean Uzbek-latin, but dashboards/nav/empties mix raw English connective words — "Failed ish", "Background ish", "Manufacturerlar" (English root + Uzbek plural), "Registry/Scheduler/Monitor/Inbox/Catalog endpoint javob bermadi" (leaks internal route nicknames), bare "failed"/"monitor". No `docs/` clause forces English on admin, so this is unintentional drift ported from the unfinished prototype. The intended policy (client SPA, admin login, workshop nav in the *same* `roleConfig.ts` which is fully Uzbek): **Uzbek-latin prose; English kept only for genuine domain/status identifiers and `trace_id`.**
 **Fix:** Adopt that policy explicitly, then sweep: "Background ish" → "Fon vazifalar", "Failed ish[ yo'q]" → "Muvaffaqiyatsiz vazifa[lar][ yo'q]", "Manufacturerlar" → "Ishlab chiqaruvchilar" (nav + `routes.ts` meta in lockstep), and replace every "<X> endpoint javob bermadi" with one generic Uzbek line (drop the endpoint nicknames) — ideally centralized in `AdminErrorState` (AB-08). Update the prototype admin HTML copy in the same pass so they don't re-diverge. (Status-pill localization is AB-12; login errors AB-13.)
 
-### AB-12 · Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps — `i18n-copy` · med · S
+### AB-12 · Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps — `i18n-copy` · med · S — **Done (B5)**
 
 **Files:** `app/adminUi.ts:79` (`statusLabel` returns "no run" + underscore-replace), the raw `{{ status }}` renders at `AdminWorkshopsView.vue:201`, `AdminWorkshopDetailView.vue:82`, `AdminManufacturersView.vue:162`, `AdminMaterialsView.vue:300`, `AdminPlatformUsersView.vue:189`, `AdminDashboardView.vue:163`. Prototype: `workshops.html:111`, `manufacturers.html:120`, `platform-users.html:106`.
 **Why:** Every admin status pill renders the raw enum — `active`/`blocked`/`inactive`/`ok`/`failed`/`running`/`skipped`/`open`/`resolved` — and `statusLabel` returns the English free-text "no run" for null. The prototype consistently shows localized labels (Faol / Bloklangan / Faol emas) with a leading status **dot**. This is the most pervasive parity + i18n drift in the SPA. (`materialKindLabel` already maps `panel`→Panel/`edge`→Krom — status deserves the same.)
 **Fix:** Add `workshopStatusLabel`/`materialStatusLabel`/`platformUserStatusLabel`/`jobStatusLabel`/`errorStatusLabel` maps in `adminUi.ts`, route the raw renders through them, add the leading dot (the prototype's `.pill .pd`), and change the "no run" fallback to "ishga tushmagan". If the team decides enum values stay English for operators, document that and only fix "no run".
 
-### AB-13 · Translate `useStaffLogin` English error map (decision: shared with workshop) — `i18n-copy` · med · S
+### AB-13 · Translate `useStaffLogin` English error map (decision: shared with workshop) — `i18n-copy` · med · S — **Done (B5)**
 
 **Files:** `composables/useStaffLogin.ts:8-13` (English `STAFF_ERROR_TEXT`), `:34` ("Sign-in failed." fallback), rendered at `AdminLoginView.vue:48`.
 **Why:** `useStaffLogin` hardcodes an all-English error map ("Credentials do not match an active account.", "Account is locked. Try again later.", "Account is blocked.", "API is not reachable.") rendered verbatim on the otherwise fully-Uzbek admin login. **Cross-cutting:** the composable is shared by both the admin *and* workshop login views — workshop is a separate owner.

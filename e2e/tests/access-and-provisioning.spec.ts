@@ -166,8 +166,12 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   await provisionForm.getByLabel('Temp password').fill('OwnerTemp123')
   await provisionForm.getByRole('button', { name: 'Yaratish' }).click()
 
-  await expect(page.getByText('Share once')).toBeVisible()
-  await expect(page.getByText(`ui-${id}`, { exact: true })).toBeVisible()
+  // The one-time secret is now shown in a focus-trapped modal (AB-03); assert it,
+  // then dismiss it before navigating away.
+  const secret = page.getByRole('dialog', { name: /maxfiy ma'lumot/ })
+  await expect(secret).toBeVisible()
+  await expect(secret.getByText(`ui-${id}`, { exact: true })).toBeVisible()
+  await secret.getByRole('button', { name: /Yopdim/ }).click()
   await page
     .getByRole('row', { name: new RegExp(`Workshop ${id}`) })
     .getByRole('link', { name: 'Tafsilotlar' })
@@ -175,7 +179,7 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Ustaxonani bloklash' }).click()
   await page.getByLabel(/sabab/i).fill('E2E block')
   await page.getByRole('button', { name: 'Bloklash', exact: true }).click()
-  await expect(page.getByText('blocked').first()).toBeVisible()
+  await expect(page.getByText('Bloklangan').first()).toBeVisible()
 })
 
 test('owner changes temp password, creates staff, and saves a grant', async ({ page, request }, testInfo) => {

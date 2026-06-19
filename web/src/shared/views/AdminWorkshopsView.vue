@@ -2,7 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  dropdownOption,
+  workshopStatusLabel,
+  workshopStatusTone,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
@@ -220,14 +225,14 @@ onMounted(async () => {
             <tr v-for="workshop in filtered" :key="workshop.id">
               <td class="nm">
                 {{ workshop.name }}
-                <small>{{ workshop.code }} . {{ workshop.address ?? 'address unset' }}</small>
+                <small>{{ workshop.code }} . {{ workshop.address ?? 'manzil kiritilmagan' }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ workshop.owner_user_id.slice(0, 8) }}</td>
               <td class="admin-mono text-ink-muted">{{ workshop.phone }}</td>
               <td class="admin-mono text-ink-muted">{{ adminDate(workshop.created_at) }}</td>
               <td>
                 <span class="admin-pill" :class="workshopStatusTone(workshop.status)">
-                  {{ workshop.status }}
+                  {{ workshopStatusLabel(workshop.status) }}
                 </span>
               </td>
               <td class="admin-right">

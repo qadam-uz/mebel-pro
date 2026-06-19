@@ -2,7 +2,13 @@
 import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { adminDate, adminDateTime, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  adminDateTime,
+  errorStatusLabel,
+  errorStatusTone,
+  workshopStatusLabel,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -113,10 +119,10 @@ onMounted(loadAll)
           class="admin-kpi"
           :class="{ danger: failedJobs.length > 0 }"
         >
-          <div class="admin-kpi-label">Background ish</div>
+          <div class="admin-kpi-label">Fon vazifalar</div>
           <div class="admin-kpi-value">
             {{ failedJobs.length }}
-            <small>failed</small>
+            <small>muvaffaqiyatsiz</small>
           </div>
           <div class="admin-kpi-detail">
             <span>{{ failedJobs[0]?.definition.name ?? 'hammasi ok' }}</span>
@@ -163,7 +169,7 @@ onMounted(loadAll)
                           workshop.status === 'active' ? 'admin-pill-success' : 'admin-pill-danger'
                         "
                       >
-                        {{ workshop.status }}
+                        {{ workshopStatusLabel(workshop.status) }}
                       </span>
                     </td>
                   </tr>
@@ -176,14 +182,14 @@ onMounted(loadAll)
         <div class="grid gap-5">
           <section class="admin-card">
             <div class="admin-card-h">
-              <h2>Failed ish</h2>
+              <h2>Muvaffaqiyatsiz vazifalar</h2>
               <RouterLink :to="rolePath('/admin/platform/jobs')" class="admin-more">
                 hammasi →
               </RouterLink>
             </div>
             <div class="admin-card-b">
               <div v-if="failedJobs.length === 0" class="admin-empty">
-                <h3>Failed ish yo'q</h3>
+                <h3>Muvaffaqiyatsiz vazifa yo'q</h3>
                 <p>Scheduler oxirgi natijalari normal.</p>
               </div>
               <article
@@ -192,7 +198,7 @@ onMounted(loadAll)
                 :key="job.definition.id"
                 class="admin-row-item"
               >
-                <span class="admin-pill admin-pill-danger">failed</span>
+                <span class="admin-pill admin-pill-danger">Muvaffaqiyatsiz</span>
                 <span>
                   <b>{{ job.definition.name }}</b>
                   <small class="block text-ink-muted">
@@ -225,7 +231,7 @@ onMounted(loadAll)
                 class="admin-row-item"
               >
                 <span class="admin-pill" :class="errorStatusTone(record.status)">
-                  {{ statusLabel(record.status) }}
+                  {{ errorStatusLabel(record.status) }}
                 </span>
                 <span class="min-w-0">
                   <b class="block truncate font-mono text-xs">{{ record.code }}</b>
@@ -248,7 +254,7 @@ onMounted(loadAll)
             :to="rolePath('/admin/catalog/manufacturers')"
             class="mp-button mp-button-outline"
           >
-            Manufacturerlar . {{ admin.manufacturers.length }}
+            Ishlab chiqaruvchilar . {{ admin.manufacturers.length }}
           </RouterLink>
           <RouterLink
             :to="rolePath('/admin/catalog/materials')"

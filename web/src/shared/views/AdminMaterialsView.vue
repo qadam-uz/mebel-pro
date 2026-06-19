@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { dropdownOption, materialKindLabel, materialStatusTone } from '@/shared/app/adminUi'
+import {
+  dropdownOption,
+  materialKindLabel,
+  materialStatusLabel,
+  materialStatusTone,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -160,7 +165,7 @@ function materialSpec(material: Material) {
   if (material.kind === 'panel') {
     return `${material.type ?? 'panel'} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
   }
-  return 'edge banding . metres'
+  return 'krom · metr'
 }
 
 async function onMaterialFile(event: Event) {
@@ -336,7 +341,7 @@ onMounted(async () => {
               <td>{{ material.grain_direction ? 'bor' : '-' }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(material.status)">
-                  {{ material.status }}
+                  {{ materialStatusLabel(material.status) }}
                 </span>
               </td>
               <td class="admin-right">
