@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import { apiErrorCode } from '@/shared/api/client'
 import {
   activeClientStatuses,
-  clientErrorLabel,
   clientPhaseIndex,
   clientPhaseLabels,
   clientStatusLabel,
@@ -25,8 +23,6 @@ const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const orders = useOrdersStore()
-const creating = ref(false)
-const createError = ref<string | null>(null)
 
 const activeOrders = computed(() =>
   orders.clientOrders.filter((order) => activeClientStatuses.includes(order.status)),
@@ -49,17 +45,10 @@ const pageLoading = computed(() => cutting.loading || orders.loading)
 const pageError = computed(() => cutting.error ?? orders.error)
 const traceId = computed(() => cutting.traceId ?? orders.traceId)
 
-async function newCutting() {
-  creating.value = true
-  createError.value = null
-  try {
-    const draft = await cutting.createDraft()
-    await router.push(rolePath(`/c/cutting/${draft.id}`))
-  } catch (errorValue) {
-    createError.value = clientErrorLabel(apiErrorCode(errorValue), "Chizma yaratib bo'lmadi.")
-  } finally {
-    creating.value = false
-  }
+function newCutting() {
+  // Open the editor unsaved — the draft is created on the first optimise
+  // (docs/ref/features/cutting.md). Nothing is persisted here.
+  void router.push(rolePath('/c/cutting/new'))
 }
 
 async function reloadHome() {
@@ -123,19 +112,9 @@ onMounted(() => {
   <section>
     <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
       <h1 class="font-serif text-[26px] font-semibold leading-tight text-ink">Bosh sahifa</h1>
-      <button
-        type="button"
-        class="mp-button mp-button-primary"
-        :disabled="creating"
-        @click="newCutting"
-      >
-        {{ creating ? 'Yaratilmoqda' : 'Yangi kesim chizmasi' }}
+      <button type="button" class="mp-button mp-button-primary" @click="newCutting">
+        Yangi kesim chizmasi
       </button>
-    </div>
-
-    <div v-if="createError" class="client-banner danger mb-5" role="alert">
-      <span class="font-mono font-black">!</span>
-      <span>{{ createError }}</span>
     </div>
 
     <div v-if="pageLoading" class="grid gap-3 md:grid-cols-4" aria-live="polite">
@@ -235,7 +214,6 @@ onMounted(() => {
         <button
           type="button"
           class="mp-button bg-white text-accent hover:bg-white"
-          :disabled="creating"
           @click="newCutting"
         >
           Boshlash

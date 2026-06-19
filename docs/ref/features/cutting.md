@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-07
+updated: 2026-06-19
 order: 80
 ---
 
@@ -32,7 +32,8 @@ manufacturer's spool to load and surprises clients at the counter.
 
 A **cutting draft** is the working surface a client edits and re-optimises until they place an
 order. It's private to the client and persists indefinitely (no expiry; cap at 50 open
-drafts).
+drafts). The draft becomes a server entity on the **first optimise** — the editor opens local
+and unsaved, so abandoned/empty editors never mint a draft (see *Lifecycle*).
 
 A draft owns:
 
@@ -63,12 +64,17 @@ billed and consumed totals; `own` length is tracked separately for the cutting p
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft : client opens "New cutting"
-    draft --> draft : edit parts · run optimiser · pick algorithm
+    [*] --> editing : client opens "New cutting" (local, unsaved)
+    editing --> editing : edit parts · pick branch
+    editing --> draft : client runs the optimiser → draft created & persisted
+    draft --> draft : edit parts · re-optimise · pick algorithm
     draft --> confirmed : client places an order with the chosen result
     confirmed --> [*]
 ```
 
+- `editing` is **local and unsaved** — the editor before the first optimise. No server draft
+  exists yet, so navigating away discards the entry (the editor warns first). The draft is
+  created and persisted on the **first optimise**, which is also when autosave begins.
 - `draft` is mutable. `confirmed` is immutable and kept forever — it is the historical
   record an order points at.
 - Re-running the optimiser on a `draft` replaces all algorithm results in-place. No
@@ -76,6 +82,12 @@ stateDiagram-v2
 - On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
   the draft flips to `confirmed`. Other algorithm results from the same run are discarded at
   this point.
+
+**Why create lazily.** Minting the draft only on the first optimise keeps abandoned and empty
+editors out of the drafts list and the 50-draft cap; the accepted cost is that input before
+the first optimise isn't autosaved (the editor warns before discarding it). Revisit if clients
+report losing pre-optimise work — then back the unsaved editor with local storage, or restore
+eager creation.
 
 ### Parts and materials
 
@@ -175,9 +187,10 @@ Every optimisation run is audited.
 
 ## UX — the cutting wizard (client app)
 
-A single workspace at `/c/cutting/:id` (no stepper — one editing surface above, one results
-panel below). Entry is the client app's home **New cutting** button, which creates an empty
-draft and routes here. A secondary **My drafts** entry lists unbound drafts.
+A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first optimise; no stepper
+— one editing surface above, one results panel below). Entry is the client app's home **New
+cutting** button, which opens an empty, unsaved editor; the draft is created and persisted on
+the first **Optimise** (see *Lifecycle*). A secondary **My drafts** entry lists unbound drafts.
 
 ### Branch pre-filter (top of the editor)
 
@@ -275,7 +288,9 @@ parts wholesale; the branch pre-filter never invokes it.
 ### Run and the result panel
 
 A primary **Optimise** button below the editor. Disabled while running (5 s cap), then
-disabled until any row changes (so re-tapping doesn't re-run a stale layout).
+disabled until any row changes (so re-tapping doesn't re-run a stale layout). On a brand-new
+(unsaved) editor the first **Optimise** also creates and saves the draft before running, after
+which the URL becomes `/c/cutting/:id` and autosave takes over.
 
 On success, the panel scrolls into view with three regions:
 

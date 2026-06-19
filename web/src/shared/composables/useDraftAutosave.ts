@@ -19,6 +19,11 @@ export function useDraftAutosave<T>(opts: {
   persist: () => Promise<void>
   canPersist: () => boolean
   isReadOnly: () => boolean
+  // Suspend the whole autosave loop while false — no scheduling, no timers, no
+  // status churn. The cutting editor uses this for an unsaved (not-yet-created)
+  // draft, where there's no id to PATCH until the first optimise creates one.
+  // Defaults to always-enabled.
+  enabled?: () => boolean
   // Side effect to run when an edit schedules a save (e.g. clear a now-stale
   // row-attributed optimiser error).
   onSchedule?: () => void
@@ -39,7 +44,7 @@ export function useDraftAutosave<T>(opts: {
   })
 
   function schedule() {
-    if (hydrating || opts.isReadOnly()) return
+    if (hydrating || opts.isReadOnly() || !(opts.enabled?.() ?? true)) return
     opts.onSchedule?.()
     controller.schedule()
   }

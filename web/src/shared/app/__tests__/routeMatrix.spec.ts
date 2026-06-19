@@ -118,6 +118,7 @@ describe('role route matrix', () => {
       '/c/orders/new/:draft_id',
       '/c/orders/:order_id',
       '/c/cutting/drafts',
+      '/c/cutting/new',
       '/c/cutting/:id',
       '/c/branches',
       '/c/notifications',

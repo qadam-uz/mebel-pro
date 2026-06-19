@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
-import { ApiError } from '@/shared/api/client'
+import { ApiError, apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM, NO_BRANCH_CATALOG_LIMIT } from '@/shared/app/constants'
 import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
@@ -29,12 +29,29 @@ import {
   type CuttingPart,
   type MaterialSource,
 } from '@/shared/stores/cutting'
+import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
 const route = useRoute()
+const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
+const clientProfile = useClientProfileStore()
 const toast = useToast()
 const draftId = computed(() => String(route.params.id))
+// Unsaved editor: opened via `/c/cutting/new`, the draft has no server id yet.
+// It's created and persisted on the first optimise (docs/ref/features/cutting.md).
+const isNewDraft = computed(() => route.name === 'client-cutting-new')
+// Branch pre-filter while unsaved — held locally (no draft to PATCH); seeded from
+// the client profile default for parity with a server-created draft.
+const localBranchId = ref<string | null>(null)
+const branchTouched = ref(false)
+// A draft created by a previous failed optimise attempt — reused on retry so a
+// transient failure doesn't orphan a second empty draft.
+const pendingDraftId = ref<string | null>(null)
+const creatingDraft = ref(false)
+// Set just before the optimise→navigate transition so the unsaved-work guard
+// doesn't fire on our own navigation.
+const leavingAfterCreate = ref(false)
 const parts = ref<CuttingPart[]>([])
 const optimizeError = ref<string | null>(null)
 // Per-row optimiser-error attribution (CB-89): the backend returns
@@ -60,7 +77,10 @@ let edgeReturnFocus: HTMLElement | null = null
 // the same draft and must not clobber unsaved local edits (CB-15).
 let hydratedDraftId: string | null = null
 
-const draft = computed(() => cutting.currentDraft)
+// In unsaved mode `draft` stays null regardless of `currentDraft`, so a draft
+// minted mid-flow (createDraft sets currentDraft) never leaks into the editor
+// until we navigate to the real route, which remounts on the saved path.
+const draft = computed(() => (isNewDraft.value ? null : cutting.currentDraft))
 // A draft is bound to an order once one of its results is confirmed onto an
 // order (the backend enforces one result per order). Bound drafts are
 // read-only — editing them would fire doomed saves and contradict the order.
@@ -68,8 +88,13 @@ const boundOrderId = computed(
   () => draft.value?.results.find((result) => result.order_id)?.order_id ?? null,
 )
 const isReadOnly = computed(() => boundOrderId.value !== null)
+// The active branch pre-filter: the local pick while unsaved, the draft's saved
+// preference otherwise. Every branch-dependent read routes through this.
+const activeBranchId = computed(() =>
+  isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null),
+)
 const preferredBranch = computed(() =>
-  cutting.branchOptions.find((branch) => branch.branch_id === draft.value?.preferred_branch_id),
+  cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
 // Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
 // a sort — applied to the shared option list every row's panel picker draws from.
@@ -134,7 +159,7 @@ function clearPanelFilters() {
 
 const panelOptions = computed(() => {
   let list = cutting.panelOptions.filter((material) =>
-    draft.value?.preferred_branch_id && !showAllCatalog.value ? material.branch_carried : true,
+    activeBranchId.value && !showAllCatalog.value ? material.branch_carried : true,
   )
   if (panelManufacturerFilter.value.length > 0) {
     list = list.filter((material) =>
@@ -243,7 +268,7 @@ function edgeById(id: string | null | undefined) {
 }
 
 function rowNotCarried(part: CuttingPart) {
-  return partNotCarried(part, draft.value?.preferred_branch_id, materialById, edgeById)
+  return partNotCarried(part, activeBranchId.value, materialById, edgeById)
 }
 
 function partSizeError(part: CuttingPart): string | null {
@@ -435,6 +460,9 @@ const autosave = useDraftAutosave({
   persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
   canPersist: () => hasPersistableParts.value,
   isReadOnly: () => isReadOnly.value,
+  // Suspended while unsaved — there's no draft id to PATCH until the first
+  // optimise creates one (docs/ref/features/cutting.md).
+  enabled: () => !isNewDraft.value,
   // A row-attributed optimiser error is stale once the parts change.
   onSchedule: () => {
     optimizeRowError.value = null
@@ -444,6 +472,17 @@ const saveState = autosave.saveState
 const saveError = autosave.saveError
 
 async function setPreferredBranch(branchId: string | null) {
+  // Unsaved: there's no draft to PATCH yet — keep the pick locally and re-filter
+  // the catalog. It's persisted with the draft on the first optimise.
+  if (isNewDraft.value) {
+    localBranchId.value = branchId
+    branchTouched.value = true
+    branchPickerOpen.value = false
+    selectedBranchId.value = branchId
+    recoveryDismissed.value = false
+    await loadMaterials()
+    return
+  }
   // Surface a failure instead of an unhandled rejection that leaves the local
   // pick disagreeing with the server (CB-57).
   try {
@@ -458,17 +497,26 @@ async function setPreferredBranch(branchId: string | null) {
   await loadMaterials()
 }
 
-// Close the picker without applying — drop the pending pick back to the saved
+// Close the picker without applying — drop the pending pick back to the active
 // preference so a re-open highlights what's actually active, not an abandoned choice.
 function closeBranchPicker() {
   branchPickerOpen.value = false
-  selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+  selectedBranchId.value = activeBranchId.value
 }
 
 async function optimize() {
-  if (cutting.optimizing || !canOptimize.value) return
+  if (cutting.optimizing || creatingDraft.value || !canOptimize.value) return
   optimizeError.value = null
   optimizeRowError.value = null
+  if (isNewDraft.value) {
+    creatingDraft.value = true
+    try {
+      await optimizeNewDraft()
+    } finally {
+      creatingDraft.value = false
+    }
+    return
+  }
   // Flush any pending debounced edit so we optimize the latest parts, not a
   // stale server snapshot.
   await autosave.flush()
@@ -500,8 +548,45 @@ async function optimize() {
   target?.scrollIntoView({ behavior: 'smooth', block: failedRowRef ? 'center' : 'start' })
 }
 
+// First optimise on an unsaved editor: create the draft, persist the parts (and
+// the branch if the user changed it), optimise, then navigate to the real route
+// — which remounts the editor on the saved path with the optimised result.
+async function optimizeNewDraft() {
+  try {
+    // Reuse a draft from a previous failed attempt so a retry doesn't orphan a
+    // second empty draft.
+    if (!pendingDraftId.value) {
+      pendingDraftId.value = (await cutting.createDraft()).id
+    }
+    const id = pendingDraftId.value
+    await cutting.updateDraft(id, {
+      parts_snapshot: parts.value,
+      // Only send the branch when the user changed it — otherwise let the
+      // backend's profile-default seed stand (docs/ref/features/cutting.md).
+      ...(branchTouched.value ? { preferred_branch_id: localBranchId.value } : {}),
+    })
+    await cutting.optimizeDraft(id)
+    lastOptimizedSignature.value = partsSignature()
+    // Hand off to the saved editor; the guard must not treat this as discarding.
+    leavingAfterCreate.value = true
+    await router.replace(rolePath(`/c/cutting/${id}`))
+  } catch (errorValue) {
+    // The parts are still in local state, so the user keeps their work and can
+    // retry; the row attribution still maps because the parts are unchanged.
+    optimizeError.value = clientErrorLabel(
+      cutting.error ?? apiErrorCode(errorValue),
+      "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
+    )
+    optimizeRowError.value = optimizeRowFromError(errorValue)
+    // The error banner sits next to the optimise button, already in view — no
+    // scroll target (the results section isn't rendered while unsaved).
+  }
+}
+
 async function loadMaterials() {
-  const branchId = draft.value?.preferred_branch_id
+  // Use the active pre-filter (local pick while unsaved, draft preference
+  // otherwise) so picking a branch in the new editor scopes the catalog too.
+  const branchId = activeBranchId.value
   // CB-40: cap ONLY the unbounded no-preferred-branch load so a fresh draft doesn't
   // pull the whole catalog. A branch-scoped load stays unlimited (CB-84 filters +
   // CB-19/86 recovery need the full per-branch list client-side).
@@ -516,6 +601,10 @@ watch(
   () => cutting.currentDraft,
   (value) => {
     if (!value) return
+    // Unsaved mode owns `parts` locally and ignores `currentDraft` (which a
+    // mid-flow createDraft may set); the saved editor mounts fresh after the
+    // optimise→navigate handoff and hydrates there.
+    if (isNewDraft.value) return
     // Only mirror the server snapshot into the editable `parts` when a
     // genuinely different draft loaded. Our own saves/optimizes return the
     // same draft id; re-hydrating then would discard a keystroke made during
@@ -544,17 +633,62 @@ watch(
 )
 
 onMounted(async () => {
-  await cutting.loadDraft(draftId.value)
+  window.addEventListener('beforeunload', onBeforeUnload)
+  if (isNewDraft.value) {
+    // Unsaved editor: nothing to load. Populate the branch picker and seed the
+    // pre-filter from the client's profile default (parity with a server draft).
+    await cutting.loadBranchOptions()
+    const profile = await clientProfile.load().catch(() => null)
+    localBranchId.value = profile?.preferred_branch_id ?? null
+    selectedBranchId.value = localBranchId.value
+    await loadMaterials()
+    return
+  }
+  // Reuse an already-loaded draft (e.g. just optimised from the new editor) to
+  // avoid a load flash; otherwise fetch it.
+  if (cutting.currentDraft?.id !== draftId.value) await cutting.loadDraft(draftId.value)
   await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
   await loadMaterials()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
   void autosave.flush()
+})
+
+// Warn before discarding unsaved work — an unsaved editor with entered parts has
+// nothing persisted until the first optimise. Skipped during our own
+// optimise→navigate handoff. (ui-ux: never lose the user's work.)
+const hasUnsavedNewWork = computed(
+  () => isNewDraft.value && !leavingAfterCreate.value && parts.value.length > 0,
+)
+// In-app leave confirmation via the design-system dialog (native window.confirm
+// is banned, routeMatrix.spec). The route guard awaits the user's choice.
+const leaveDialogOpen = ref(false)
+let leaveResolve: ((allow: boolean) => void) | null = null
+
+function resolveLeave(allow: boolean) {
+  leaveDialogOpen.value = false
+  leaveResolve?.(allow)
+  leaveResolve = null
+}
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsavedNewWork.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!hasUnsavedNewWork.value) return true
+  leaveDialogOpen.value = true
+  return new Promise<boolean>((resolve) => {
+    leaveResolve = resolve
+  })
 })
 </script>
 
@@ -573,7 +707,12 @@ onBeforeUnmount(() => {
         </p>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
+        <span v-if="isNewDraft" class="mp-chip bg-info-soft text-info" role="status">
+          <span class="mp-dot" aria-hidden="true"></span>
+          Hali saqlanmagan — optimallashtirilganda saqlanadi
+        </span>
         <span
+          v-else
           class="mp-chip"
           :class="{
             'bg-success-soft text-success': saveState === 'saved',
@@ -609,7 +748,7 @@ onBeforeUnmount(() => {
       <p class="client-trace">trace {{ cutting.traceId ?? 'unavailable' }}</p>
     </section>
 
-    <template v-else-if="draft">
+    <template v-else-if="draft || isNewDraft">
       <RouterLink
         v-if="isReadOnly"
         :to="rolePath(`/c/orders/${boundOrderId}`)"
@@ -811,6 +950,20 @@ onBeforeUnmount(() => {
           </div>
 
           <div
+            v-if="isNewDraft && optimizeError"
+            class="client-banner danger mx-5 mt-4"
+            role="alert"
+          >
+            <span class="font-mono font-black">!</span>
+            <span>
+              {{ optimizeError }}
+              <span v-if="cutting.traceId" class="mt-1 block text-xs font-normal opacity-80">
+                trace {{ cutting.traceId }}
+              </span>
+            </span>
+          </div>
+
+          <div
             class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5"
           >
             <div>
@@ -827,17 +980,18 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="mp-button mp-button-primary"
-              :disabled="cutting.optimizing || !canOptimize"
+              :disabled="cutting.optimizing || creatingDraft || !canOptimize"
               :title="optimizeDisabledHint"
               @click="optimize"
             >
-              {{ cutting.optimizing ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
+              {{ cutting.optimizing || creatingDraft ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
             </button>
           </div>
         </section>
       </fieldset>
 
       <CuttingResultsSection
+        v-if="draft"
         :draft="draft"
         :optimize-error="optimizeError"
         v-model:active-result-id="activeResultId"
@@ -850,16 +1004,28 @@ onBeforeUnmount(() => {
       title="Ro'yxatni tozalash"
       :message="`Barcha ${parts.length} qator o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
       confirm-label="Tozalash"
+      cancel-label="Bekor qilish"
       danger
       @cancel="clearPartsConfirmOpen = false"
       @confirm="clearParts"
+    />
+
+    <ConfirmDialog
+      :open="leaveDialogOpen"
+      title="Saqlanmagan chizma"
+      message="Bu chizma hali saqlanmagan — optimallashtirilmaguncha kiritilgan qismlar yo'qoladi. Chiqasizmi?"
+      confirm-label="Chiqish"
+      cancel-label="Bekor qilish"
+      danger
+      @cancel="resolveLeave(false)"
+      @confirm="resolveLeave(true)"
     />
 
     <CuttingEdgePickerModal
       :part="edgePickerPart"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
-      :preferred-branch-id="draft?.preferred_branch_id ?? null"
+      :preferred-branch-id="activeBranchId"
       :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
       @apply="onEdgePickerApply"
       @close="closeEdgePicker"
