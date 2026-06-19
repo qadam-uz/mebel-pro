@@ -42,9 +42,21 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 0 | 2 | **2** |
+| Open (incl. partial) | 0 | 0 | 0 | **0** |
 | Done | 32 | 68 | 30 | **130** |
-| Won't | — | — | 2 (CB-49, CB-80) | **2** |
+| Won't | — | — | 4 (CB-49, CB-80, CB-128, CB-129) | **4** |
+
+> Progress (2026-06-19, client-finish-2 B24): **CB-128 + CB-129 → Won't** (product
+> decision, confirmed with the user against `docs/scope.md`). v1 is **pickup-only with no
+> due / estimated-ready date concept** — `scope.md` models the workshop flow as
+> verify→cut→band→ready→collected, and the `Order` model carries only *actual* transition
+> timestamps (`confirmed_at`, `cut_completed_at`, `edge_completed_at`, `completed_at`,
+> `picked_up_at`), never a forward-looking "due"/"estimated ready" field; `orders.md` has no
+> such concept either. The prototype's "olib ketish {dueAt}" (CB-128) and "Taxminiy sana"
+> (CB-129) are design-reference fragments, not scope canon. Introducing a due-date would be a
+> cross-cutting feature (a new `Order` field + a workshop UI to set it — a colleague's SPA +
+> client display), out of scope for v1. Marked Won't with rationale rather than guessing.
+> **This closes the client-SPA backlog: 0 Open, 130 Done, 4 Won't.** Doc-only change (no code).
 
 > Progress (2026-06-19, client-finish-2 B23): **CB-40 DONE** — the no-preferred-branch
 > catalog load is now capped (the headline that was blocked is resolved per the agreed
@@ -653,8 +665,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
-| CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
-| CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
+| CB-128 | P3 | design-parity | low | M | Won't | Orders-list card meta: pickup/due date not part count |
+| CB-129 | P3 | completeness-stub | low | M | Won't | Order-detail "Taxminiy sana" estimated-ready row |
 | CB-130 | P3 | testing | low | M | Done | Test edge ranking/recommendation helpers |
 | CB-131 | P3 | tech-debt | low | S | Done | files.loadObjectUrl: ownable revoke contract (leak footgun) |
 | CB-132 | P2 | ux-flow | med | S | Done | Login phone/OTP inputs reject non-numeric typing (user-found) |
@@ -1330,15 +1342,15 @@ named CB-fix and its test together.
 **Why:** Prototype `order-detail.html:133-138` cancel banner reads "Buyurtma bekor qilindi · {date}. Sabab: {reason}". Vue (`:230-237`) renders only the date with no reason, though the reason is on the cancel event (`OrderEvent.reason`, `orders.ts:55`). The client sees that it happened but not why unless they open Tarix.
 **Fix:** Find the cancel event (`to_status==='cancelled'`) in `order.events` and append "· Sabab: {reason}" when present. **Related:** CB-11, CB-24.
 
-### CB-128 · Orders-list card meta: pickup/due date not part count — `design-parity` · low · M
+### CB-128 · Orders-list card meta: pickup/due date not part count — `design-parity` · low · M — **Won't (no due-date in v1)**
 **Files:** `views/ClientOrdersView.vue`, `stores/orders.ts`
 **Why:** Prototype `orders.html:137` card meta is "{city} {name} · {placedAt} · olib ketish {dueAt}". Vue (`:140-143`) shows "{workshop} · {relativeDate} · {N} qism" — item count, never a pickup date (`OrderSummary` has no due field). On the list the client can't see when each active order is expected; the part-count substitution is lower-value at this altitude.
-**Fix:** When an estimated-ready/due date exists, append "· olib ketish {date}" to active-order meta; keep item count secondary. Shares the date-payload work with CB-112/CB-129. **Related:** CB-38.
+**Won't (B24, product decision confirmed with the user):** v1 is **pickup-only with no due / estimated-ready date** — `docs/scope.md` models the flow as verify→cut→band→ready→collected and the `Order` model carries only *actual* transition timestamps, never a forward-looking due date; `orders.md` has no such concept. The prototype's "olib ketish {dueAt}" is a design-reference fragment, not canon. A due date would be a cross-cutting feature (new `Order` field + workshop UI to set it + client display) outside v1 scope. Not built.
 
-### CB-129 ⚠ · Order-detail "Taxminiy sana" estimated-ready row — `completeness-stub` · low · M
+### CB-129 · Order-detail "Taxminiy sana" estimated-ready row — `completeness-stub` · low · M — **Won't (no due-date in v1)**
 **Files:** `views/ClientOrderDetailView.vue`, `stores/orders.ts`
-**Why:** Prototype `order-detail.html:174-186` "Olib ketish" card shows a conditional "Taxminiy sana" (estimated date) row; Vue (`:364-383`) renders only branch name/address/phone + contact — no estimated-date row, and `OrderSummary/OrderDetail` expose no due field. **⚠ depends on whether the backend has an estimated-ready date at all** — confirm before building (may be out of scope / not modeled in v1).
-**Fix:** If the backend exposes an estimated-ready date, render the conditional "Taxminiy sana" row. **Related:** CB-30, CB-112.
+**Why:** Prototype `order-detail.html:174-186` "Olib ketish" card shows a conditional "Taxminiy sana" (estimated date) row; Vue (`:364-383`) renders only branch name/address/phone + contact — no estimated-date row, and `OrderSummary/OrderDetail` expose no due field. The ⚠ "confirm before building" is now resolved.
+**Won't (B24, product decision confirmed with the user):** same rationale as CB-128 — the backend exposes no estimated-ready date in v1 (pickup-only per `docs/scope.md`; the `Order` model has only actual transition timestamps), so there is nothing to render. Adding one is a cross-cutting out-of-v1 feature. Not built.
 
 ### CB-130 · Test edge ranking/recommendation helpers — `testing` · low · M
 **Files:** `views/ClientCuttingEditorView.vue`
