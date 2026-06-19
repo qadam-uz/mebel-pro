@@ -452,6 +452,28 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
+  function reset() {
+    drafts.value = []
+    currentDraft.value = null
+    branchOptions.value = []
+    panelOptions.value = []
+    edgeOptions.value = []
+    materialsCache.clear()
+    workshopPlans.value = []
+    currentWorkshopPlan.value = null
+    loading.value = false
+    saving.value = false
+    optimizing.value = false
+    materialsLoading.value = false
+    workshopLoading.value = false
+    error.value = null
+    traceId.value = null
+    downloadingId.value = null
+    downloadError.value = null
+    downloadTraceId.value = null
+    branchOptionsLoadedAt.value = 0
+  }
+
   return {
     drafts,
     currentDraft,
@@ -483,5 +505,6 @@ export const useCuttingStore = defineStore('cutting', () => {
     loadWorkshopPlans,
     loadWorkshopPlan,
     downloadWorkshopPdf,
+    reset,
   }
 })

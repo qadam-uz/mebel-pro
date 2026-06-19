@@ -1,23 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { grantSummary, initials, permissionLabels } from '@/shared/app/workshopUi'
+import {
+  grantSummary,
+  initials,
+  permissionLabels,
+  workshopErrorMessage,
+} from '@/shared/app/workshopUi'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useToast } from '@/shared/composables/useToast'
+import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { permissionCatalog, useWorkshopStore } from '@/shared/stores/workshop'
 
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const toast = useToast()
 const rolePath = useRolePath()
+const route = useRoute()
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const createTraceId = ref<string | null>(null)
 const search = ref('')
 const branchFilter = ref('all')
 const statusFilter = ref('all')
 const selected = ref<Set<string>>(new Set())
+let usersSearchTimer: number | undefined
 const form = reactive({
   fullName: '',
   phone: '+998',
@@ -59,30 +70,41 @@ const statusOptions = [
     status: 'blocked' as const,
   },
 ]
-const filteredUsers = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  return workshop.users.filter((user) => {
-    if (statusFilter.value !== 'all' && user.status !== statusFilter.value) return false
-    if (branchFilter.value !== 'all') {
-      const inBranch =
-        user.home_branch_id === branchFilter.value ||
-        user.grants.some((grant) => grant.branch_id === branchFilter.value)
-      if (!inBranch) return false
-    }
-    if (
-      query &&
-      !user.full_name.toLowerCase().includes(query) &&
-      !user.login.toLowerCase().includes(query)
-    ) {
-      return false
-    }
-    return true
-  })
-})
-
 function branchName(id: string | null) {
   if (!id) return '—'
   return workshop.branches.find((branch) => branch.id === id)?.name ?? 'Filial'
+}
+
+function lastLoginLabel(value: string | null) {
+  return value ? formatDate(value) : "Hali yo'q"
+}
+
+function userFilters() {
+  return {
+    search: search.value.trim(),
+    branch_id: branchFilter.value === 'all' ? null : branchFilter.value,
+    status: statusFilter.value === 'all' ? null : (statusFilter.value as 'active' | 'blocked'),
+  }
+}
+
+async function refreshUsers() {
+  if (!auth.me?.is_owner) return
+  await workshop.loadUsers({ filters: userFilters() })
+}
+
+function scheduleUsersRefresh() {
+  window.clearTimeout(usersSearchTimer)
+  usersSearchTimer = window.setTimeout(() => void refreshUsers(), 250)
+}
+
+function routeSearchValue() {
+  const value = route.query.search
+  return typeof value === 'string' ? value : ''
+}
+
+function applyRouteSearch() {
+  const value = routeSearchValue()
+  if (value !== search.value) search.value = value
 }
 
 function grantKey(permission: string, branchId: string) {
@@ -97,9 +119,23 @@ function toggleGrant(permission: string, branchId: string) {
   selected.value = next
 }
 
+watch(
+  () => route.query.search,
+  () => {
+    applyRouteSearch()
+  },
+)
+
+watch(search, scheduleUsersRefresh)
+
+watch([branchFilter, statusFilter], () => {
+  void refreshUsers()
+})
+
 async function createStaff() {
   creating.value = true
   createError.value = null
+  createTraceId.value = null
   try {
     await workshop.createUser({
       full_name: form.fullName,
@@ -119,16 +155,23 @@ async function createStaff() {
     form.tempPassword = ''
     selected.value = new Set()
     showCreate.value = false
+    toast.success("Xodim qo'shildi.")
   } catch {
-    createError.value = 'user_create_failed'
+    createError.value = workshopErrorMessage(workshop.actionError ?? 'user_create_failed')
+    createTraceId.value = workshop.actionTraceId
   } finally {
     creating.value = false
   }
 }
 
 onMounted(async () => {
+  applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
-  if (auth.me?.is_owner) void workshop.loadUsers()
+  if (auth.me?.is_owner) void refreshUsers()
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(usersSearchTimer)
 })
 </script>
 
@@ -235,6 +278,7 @@ onMounted(async () => {
                       <input
                         type="checkbox"
                         class="size-4 accent-accent"
+                        :aria-label="`${permissionLabels[permission] ?? permission} — ${branch.name}`"
                         :checked="selected.has(grantKey(permission, branch.id))"
                         @change="toggleGrant(permission, branch.id)"
                       />
@@ -252,7 +296,7 @@ onMounted(async () => {
             v-if="createError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Xodim yaratilmadi.
+            {{ createError }} · trace_id: {{ createTraceId ?? 'unavailable' }}
           </p>
         </form>
       </section>
@@ -295,12 +339,13 @@ onMounted(async () => {
                 <th>Login</th>
                 <th>Asosiy filial</th>
                 <th>Ruxsatlar</th>
+                <th>Oxirgi kirish</th>
                 <th>Holat</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="user in filteredUsers" :key="user.id" class="clickable">
+              <tr v-for="user in workshop.users" :key="user.id" class="clickable">
                 <td>
                   <div class="flex min-w-0 items-center gap-3">
                     <span class="user-avatar">{{ initials(user.full_name, 'U') }}</span>
@@ -320,6 +365,7 @@ onMounted(async () => {
                     grantSummary(user.is_owner, user.grants)
                   }}</small>
                 </td>
+                <td class="num text-ink-muted">{{ lastLoginLabel(user.last_login_at) }}</td>
                 <td>
                   <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
                     <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
@@ -334,8 +380,8 @@ onMounted(async () => {
                   </RouterLink>
                 </td>
               </tr>
-              <tr v-if="filteredUsers.length === 0">
-                <td colspan="6">
+              <tr v-if="workshop.users.length === 0">
+                <td colspan="7">
                   <div class="st-empty !border-0 !py-8"><h3>Mos xodim topilmadi</h3></div>
                 </td>
               </tr>

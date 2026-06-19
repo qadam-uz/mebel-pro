@@ -6,7 +6,18 @@ const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
 const useLocalServers = !process.env.E2E_BASE_URL
 const E2E_DATABASE_URL = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const composeCommand = 'docker compose --env-file ../deploy/.env.dev.example -f ../deploy/compose.yaml'
-const backendEnv = `ENV=test OTP_DEV_CODES='["000000"]' OTP_RATE_LIMITS_ENABLED=false DATABASE_URL=${E2E_DATABASE_URL}`
+const backendEnv = [
+  'ENV=test',
+  `DATABASE_URL=${E2E_DATABASE_URL}`,
+  'MINIO_ENDPOINT_URL=http://localhost:9000',
+  'MINIO_REGION=us-east-1',
+  'MINIO_ACCESS_KEY_ID=mebel',
+  'MINIO_SECRET_ACCESS_KEY=mebel-secret',
+  'MINIO_BUCKET=mebel',
+  'MINIO_USE_SSL=false',
+  `OTP_DEV_CODES='["000000"]'`,
+  'OTP_RATE_LIMITS_ENABLED=false',
+].join(' ')
 
 export default defineConfig({
   testDir: './tests',

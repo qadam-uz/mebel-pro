@@ -202,7 +202,7 @@ test('owner changes temp password, creates staff, and saves a grant', async ({ p
   await staffForm.getByRole('button', { name: 'Yaratish' }).click()
   await expect(page.getByText('StaffTemp123')).toBeVisible()
   await page.getByRole('row', { name: /E2E Staff/ }).getByRole('link', { name: 'Tahrir' }).click()
-  await page.getByRole('button', { name: 'Ruxsatlar' }).click()
+  await page.getByRole('tab', { name: 'Ruxsatlar' }).click()
   await page.getByRole('checkbox').first().check()
   await page.getByRole('button', { name: 'Saqlash' }).click()
   await expect(page.getByRole('checkbox').first()).toBeChecked()
@@ -236,6 +236,52 @@ test('staff sees granted branch context after password change', async ({ page, r
   await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
 
   await expect(page.getByRole('button', { name: new RegExp(`Branch ${id}`) })).toBeVisible()
+})
+
+test('workshop staff direct URLs respect branch-scoped grants', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `admin-${id}`
+  await seedPlatform(adminLogin)
+  const token = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, token, id)
+  const ownerToken = await readyOwnerToken(request, setup)
+  const staffLogin = `inventory-${id}`
+  const created = await request.post('/api/v1/workshop/users', {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    data: {
+      full_name: 'Inventory Staff',
+      phone: phoneFor(id, 50),
+      login: staffLogin,
+      temp_password: 'StaffTemp123',
+      grants: [{ permission: 'manage_inventory', branch_id: setup.branch.id }],
+    },
+  })
+  expect(created.ok()).toBe(true)
+
+  await page.goto('/workshop/')
+  await page.getByLabel('Workshop code').fill(setup.code)
+  await page.getByLabel('Login').fill(staffLogin)
+  await page.getByLabel(passwordLabel).fill('StaffTemp123')
+  await page.getByRole('button', { name: continueButton }).click()
+  await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
+
+  await page.goto('/workshop/finance')
+  await expect(page).toHaveURL(/\/workshop\/?$/)
+  await expect(page.getByRole('heading', { name: 'Asosiy' })).toBeVisible()
+
+  await page.goto('/workshop/settings/users')
+  await expect(page).toHaveURL(/\/workshop\/?$/)
+
+  await page.goto('/workshop/inventory')
+  await expect(page).toHaveURL(/\/workshop\/inventory\/?$/)
+  await expect(page.getByRole('heading', { name: 'Ombor' })).toBeVisible()
+
+  await page.goto(`/workshop/branches/${setup.branch.id}`)
+  await expect(page).toHaveURL(new RegExp(`/workshop/branches/${setup.branch.id}`))
+  await expect(page.getByRole('heading', { name: new RegExp(`Branch ${id}`) })).toBeVisible()
 })
 
 test('client signs in with dev OTP and registers a name', async ({ page }, testInfo) => {

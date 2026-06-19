@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api } from '@/shared/api/client'
+import { api, apiTraceId } from '@/shared/api/client'
 import { useAuthStore } from '@/shared/stores/auth'
 
 export interface UploadedFile {
@@ -21,19 +21,22 @@ export interface UploadedFile {
 export const useFilesStore = defineStore('files', () => {
   const uploading = ref(false)
   const error = ref<string | null>(null)
+  const traceId = ref<string | null>(null)
   const auth = useAuthStore()
 
   async function upload(file: File) {
     uploading.value = true
     error.value = null
+    traceId.value = null
     const formData = new FormData()
     formData.set('upload', file)
     try {
       return await api.postForm<UploadedFile>('/files', formData, {
         accessToken: auth.accessToken,
       })
-    } catch {
+    } catch (errorValue) {
       error.value = 'file_upload_failed'
+      traceId.value = apiTraceId(errorValue)
       throw error.value
     } finally {
       uploading.value = false
@@ -52,5 +55,11 @@ export const useFilesStore = defineStore('files', () => {
     return { url, revoke: () => URL.revokeObjectURL(url) }
   }
 
-  return { uploading, error, upload, loadObjectUrl }
+  function reset() {
+    uploading.value = false
+    error.value = null
+    traceId.value = null
+  }
+
+  return { uploading, error, traceId, upload, loadObjectUrl, reset }
 })

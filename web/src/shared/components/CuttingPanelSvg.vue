@@ -64,35 +64,35 @@ function labelFits(placement: CuttingPlacement) {
       y="0"
       :width="panelLength"
       :height="panelWidth"
-      fill="white"
-      stroke="#334155"
+      fill="var(--color-elevated)"
+      stroke="var(--color-accent)"
       stroke-width="2"
     />
     <g
       v-for="placement in panel.placements"
       :key="placement.id"
       class="placement"
-      role="button"
-      tabindex="0"
-      :aria-label="label(placement)"
+      aria-hidden="true"
       @click="emit('select-placement', placement)"
-      @keydown.enter.prevent="emit('select-placement', placement)"
-      @keydown.space.prevent="emit('select-placement', placement)"
     >
       <rect
         :x="placement.x_mm"
         :y="svgY(placement)"
         :width="placement.length_mm"
         :height="placement.width_mm"
-        :fill="placement.id === activePlacementId ? '#c8e8e3' : '#dbeafe'"
-        stroke="#2563eb"
+        :fill="
+          placement.id === activePlacementId
+            ? 'var(--color-accent-tint)'
+            : 'var(--color-accent-soft)'
+        "
+        stroke="var(--color-accent)"
         stroke-width="1.5"
       />
       <text
         v-if="labelFits(placement)"
         :x="placement.x_mm + labelFontSize * 0.5"
         :y="svgY(placement) + labelFontSize * 1.15"
-        fill="#0f172a"
+        fill="var(--color-ink)"
         :font-size="labelFontSize"
         font-family="sans-serif"
         aria-hidden="true"
@@ -106,13 +106,5 @@ function labelFits(placement: CuttingPlacement) {
 <style scoped>
 .placement {
   cursor: pointer;
-  outline: none;
-}
-
-/* A clear, scale-independent focus ring for keyboard users (CB-07). */
-.placement:focus-visible rect {
-  stroke: #0f766e;
-  stroke-width: 2.5;
-  vector-effect: non-scaling-stroke;
 }
 </style>

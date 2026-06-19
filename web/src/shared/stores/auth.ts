@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia, type StoreGeneric } from 'pinia'
 
 import { ApiError, api } from '@/shared/api/client'
 import type { RoleKey } from '@/shared/app/roleConfig'
@@ -45,6 +45,10 @@ export interface SessionResponse {
   is_current: boolean
 }
 
+interface ResettableStore extends StoreGeneric {
+  reset?: () => void
+}
+
 const rolePrincipal: Record<RoleKey, PrincipalType> = {
   admin: 'platform_user',
   workshop: 'workshop_user',
@@ -82,6 +86,17 @@ export const useAuthStore = defineStore('auth', () => {
     accessToken.value = null
     me.value = null
     status.value = 'anonymous'
+    resetSessionStores()
+  }
+
+  function resetSessionStores() {
+    const pinia = getActivePinia()
+    if (!pinia) return
+    const stores = (pinia as unknown as { _s: Map<string, ResettableStore> })._s
+    for (const store of stores.values()) {
+      if (store.$id === 'auth') continue
+      store.reset?.()
+    }
   }
 
   async function restore() {

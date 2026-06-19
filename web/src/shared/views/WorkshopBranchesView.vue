@@ -4,12 +4,14 @@ import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const showCreate = ref(false)
 const creatingBranch = ref(false)
 const branchError = ref<string | null>(null)
@@ -57,6 +59,7 @@ async function createBranch() {
     branchForm.latitude = '41.2995'
     branchForm.longitude = '69.2401'
     showCreate.value = false
+    toast.success("Filial qo'shildi.")
   } catch {
     branchError.value = 'branch_create_failed'
   } finally {
@@ -221,16 +224,21 @@ onMounted(() => {
               <div class="v">{{ branch.active_orders_count }}</div>
             </div>
             <div>
-              <div class="l">Holat</div>
-              <div class="v text-base">{{ branch.status === 'active' ? 'OK' : '!' }}</div>
+              <div class="l">Past zaxira</div>
+              <div class="v" :class="{ 'text-warning': branch.low_stock_count > 0 }">
+                {{ branch.low_stock_count }}
+              </div>
+              <div v-if="branch.low_stock_count > 0" class="mt-1 text-xs font-bold text-warning">
+                Tez tekshiring
+              </div>
             </div>
             <div>
               <div class="l">Materiallar</div>
-              <div class="v text-base">Boshqarish</div>
+              <div class="v">{{ branch.material_count }}</div>
             </div>
             <div>
               <div class="l">Xodimlar</div>
-              <div class="v text-base">Ruxsatlar</div>
+              <div class="v">{{ branch.staff_count }}</div>
             </div>
           </div>
         </RouterLink>

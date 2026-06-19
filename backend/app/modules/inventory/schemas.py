@@ -82,5 +82,6 @@ class StockTransactionResponse(APIModel):
     supplier_name: str | None
     receipt_file_id: uuid.UUID | None
     actor_user_id: uuid.UUID | None
+    actor_name: str | None
     note: str | None
     created_at: datetime

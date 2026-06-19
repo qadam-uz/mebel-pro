@@ -17,6 +17,9 @@ export const NOTIFICATIONS_PAGE_LIMIT = 50
 /** Page size for the client orders list (load-more). */
 export const ORDERS_PAGE_LIMIT = 30
 
+/** Page size for stock transaction ledgers. */
+export const INVENTORY_TX_PAGE_LIMIT = 50
+
 /** Minimum part length/width in mm (matches the backend part-min). */
 export const MIN_PART_MM = 50
 

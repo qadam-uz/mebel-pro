@@ -1,5 +1,21 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+
+const orderAccess = [p.manageOrders]
+const orderDetailAccess = [p.viewDashboard, p.manageOrders, p.processProduction]
+const productionAccess = [p.processProduction, p.manageOrders]
+const financeAccess = [p.manageFinance, p.viewFinanceReports]
+const branchDetailAccess = [
+  p.viewDashboard,
+  p.manageOrders,
+  p.processProduction,
+  p.manageCatalog,
+  p.manageInventory,
+  p.manageFinance,
+  p.viewFinanceReports,
+]
+
 export const workshopRoutes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -27,103 +43,106 @@ export const workshopRoutes: RouteRecordRaw[] = [
     path: '/workshop/orders',
     name: 'workshop-orders',
     component: () => import('@/shared/views/WorkshopOrdersView.vue'),
-    meta: { title: 'Buyurtmalar' },
+    meta: { title: 'Buyurtmalar', workshopAccess: { any: orderAccess } },
   },
   {
     path: '/workshop/orders/:order_id',
     name: 'workshop-order-detail',
     component: () => import('@/shared/views/WorkshopOrderDetailView.vue'),
-    meta: { title: 'Buyurtma tafsilotlari' },
+    meta: { title: 'Buyurtma tafsilotlari', workshopAccess: { any: orderDetailAccess } },
   },
   {
     path: '/workshop/cutting',
     name: 'workshop-cutting-queue',
     component: () => import('@/shared/views/WorkshopCuttingQueueView.vue'),
-    meta: { title: 'Kesish navbati' },
+    meta: { title: 'Kesish navbati', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/banding',
     name: 'workshop-banding-queue',
     component: () => import('@/shared/views/WorkshopBandingQueueView.vue'),
-    meta: { title: 'Krom navbati' },
+    meta: { title: 'Krom navbati', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/inventory',
     name: 'workshop-inventory',
     component: () => import('@/shared/views/WorkshopInventoryView.vue'),
-    meta: { title: 'Ombor' },
+    meta: { title: 'Ombor', workshopAccess: { any: [p.manageInventory] } },
   },
   {
     path: '/workshop/catalog',
     name: 'workshop-catalog',
     component: () => import('@/shared/views/WorkshopCatalogView.vue'),
-    meta: { title: 'Material katalogi' },
+    meta: { title: 'Material katalogi', workshopAccess: { any: [p.manageCatalog] } },
   },
   {
     path: '/workshop/settings/users',
     name: 'workshop-users',
     component: () => import('@/shared/views/WorkshopUsersView.vue'),
-    meta: { title: 'Xodimlar' },
+    meta: { title: 'Xodimlar', workshopAccess: { ownerOnly: true } },
   },
   {
     path: '/workshop/settings',
     name: 'workshop-settings',
     component: () => import('@/shared/views/WorkshopSettingsView.vue'),
-    meta: { title: 'Sozlamalar' },
+    meta: { title: 'Sozlamalar', workshopAccess: { ownerOnly: true } },
   },
   {
     path: '/workshop/branches',
     name: 'workshop-branches',
     component: () => import('@/shared/views/WorkshopBranchesView.vue'),
-    meta: { title: 'Filiallar' },
+    meta: { title: 'Filiallar', workshopAccess: { ownerOnly: true } },
   },
   {
     path: '/workshop/branches/:branch_id',
     name: 'workshop-branch-detail',
     component: () => import('@/shared/views/WorkshopBranchDetailView.vue'),
-    meta: { title: 'Filial tafsilotlari' },
+    meta: {
+      title: 'Filial tafsilotlari',
+      workshopAccess: { any: branchDetailAccess, branchParam: 'branch_id' },
+    },
   },
   {
     path: '/workshop/cutting-plans',
     name: 'workshop-cutting-plans',
     component: () => import('@/shared/views/WorkshopCuttingPlansView.vue'),
-    meta: { title: 'Kesim rejalar' },
+    meta: { title: 'Kesim rejalar', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/finance',
     name: 'workshop-finance',
     component: () => import('@/shared/views/WorkshopFinanceView.vue'),
-    meta: { title: 'Hisobotlar' },
+    meta: { title: 'Hisobotlar', workshopAccess: { any: financeAccess } },
   },
   {
     path: '/workshop/finance/income',
     name: 'workshop-finance-income',
     component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
-    meta: { title: 'Tushum' },
+    meta: { title: 'Tushum', workshopAccess: { any: [p.manageFinance] } },
   },
   {
     path: '/workshop/finance/expenses',
     name: 'workshop-finance-expenses',
     component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
-    meta: { title: 'Tushum va xarajat' },
+    meta: { title: 'Tushum va xarajat', workshopAccess: { any: [p.manageFinance] } },
   },
   {
     path: '/workshop/finance/production',
     name: 'workshop-finance-production',
     component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),
-    meta: { title: 'Ishlab chiqarish hisobotlari' },
+    meta: { title: 'Ishlab chiqarish hisobotlari', workshopAccess: { any: financeAccess } },
   },
   {
     path: '/workshop/cutting-plans/:result_id',
     name: 'workshop-cutting-plan-detail',
     component: () => import('@/shared/views/WorkshopCuttingPlanDetailView.vue'),
-    meta: { title: 'Kesim reja tafsilotlari' },
+    meta: { title: 'Kesim reja tafsilotlari', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/settings/users/:user_id',
     name: 'workshop-user-detail',
     component: () => import('@/shared/views/WorkshopUserDetailView.vue'),
-    meta: { title: 'Xodim tafsilotlari' },
+    meta: { title: 'Xodim tafsilotlari', workshopAccess: { ownerOnly: true } },
   },
   {
     path: '/workshop/notifications',

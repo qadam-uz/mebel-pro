@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { initials, permissionLabels } from '@/shared/app/workshopUi'
+import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
+import AppTabs from '@/shared/components/AppTabs.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
+import FormSelect from '@/shared/components/FormSelect.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { permissionCatalog, useWorkshopStore } from '@/shared/stores/workshop'
@@ -12,13 +16,39 @@ const route = useRoute()
 const rolePath = useRolePath()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const toast = useToast()
 const userId = String(route.params.user_id)
 const activeTab = ref<'profile' | 'permissions' | 'sessions'>('profile')
+const user = computed(() => workshop.selectedUser)
+const userTabs = computed<ChoiceOption[]>(() => [
+  { value: 'profile', label: 'Profil' },
+  { value: 'permissions', label: 'Ruxsatlar' },
+  ...(user.value?.is_owner ? [] : [{ value: 'sessions', label: 'Sessiyalar' }]),
+])
 const reason = ref('')
 const actionError = ref<string | null>(null)
+const actionTraceId = ref<string | null>(null)
 const acting = ref(false)
+const profileSaving = ref(false)
+const profileError = ref<string | null>(null)
+const profileTraceId = ref<string | null>(null)
+const profileSaved = ref<string | null>(null)
 const selected = ref<Set<string>>(new Set())
-const user = computed(() => workshop.selectedUser)
+const profileForm = reactive({
+  fullName: '',
+  phone: '',
+  login: '',
+  homeBranchId: 'none',
+})
+const profileBranchOptions = computed<ChoiceOption[]>(() => [
+  { value: 'none', label: 'Biriktirilmagan' },
+  ...workshop.branches.map((branch) => ({
+    value: branch.id,
+    label: branch.name,
+    meta: branch.address,
+    disabled: branch.status !== 'active',
+  })),
+])
 const canBlock = computed(
   () => user.value?.status === 'active' && !user.value.is_owner && reason.value.trim().length > 0,
 )
@@ -47,6 +77,14 @@ function toggleGrant(permission: string, branchId: string) {
   selected.value = next
 }
 
+function syncProfileForm() {
+  if (!user.value) return
+  profileForm.fullName = user.value.full_name
+  profileForm.phone = user.value.phone
+  profileForm.login = user.value.login
+  profileForm.homeBranchId = user.value.home_branch_id ?? 'none'
+}
+
 async function load() {
   if (!auth.me?.is_owner) return
   // A transient branch-context failure must not skip loadUser and make an existing
@@ -56,16 +94,44 @@ async function load() {
   selected.value = new Set(
     user.value?.grants.map((grant) => grantKey(grant.permission, grant.branch_id)) ?? [],
   )
+  syncProfileForm()
+}
+
+async function saveProfile() {
+  if (!user.value || user.value.is_owner) return
+  profileSaving.value = true
+  profileError.value = null
+  profileTraceId.value = null
+  profileSaved.value = null
+  try {
+    await workshop.updateUser(userId, {
+      full_name: profileForm.fullName,
+      phone: profileForm.phone,
+      login: profileForm.login,
+      home_branch_id: profileForm.homeBranchId === 'none' ? null : profileForm.homeBranchId,
+    })
+    syncProfileForm()
+    profileSaved.value = 'Profil saqlandi.'
+    toast.success('Profil saqlandi.')
+  } catch {
+    profileError.value = workshopErrorMessage(workshop.actionError ?? 'user_save_failed')
+    profileTraceId.value = workshop.actionTraceId
+  } finally {
+    profileSaving.value = false
+  }
 }
 
 async function saveGrants() {
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.replaceGrants(userId, grants.value)
     await load()
+    toast.success('Ruxsatlar saqlandi.')
   } catch {
-    actionError.value = 'grants_save_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'grants_save_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
@@ -73,11 +139,14 @@ async function saveGrants() {
 
 async function resetPassword() {
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.resetPassword(userId)
+    toast.success('Vaqtinchalik parol yaratildi.')
   } catch {
-    actionError.value = 'password_reset_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'password_reset_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
@@ -86,12 +155,15 @@ async function resetPassword() {
 async function block() {
   if (!canBlock.value) return
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.blockUser(userId, reason.value)
     reason.value = ''
+    toast.success('Xodim bloklandi.')
   } catch {
-    actionError.value = 'user_block_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_block_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
@@ -100,11 +172,14 @@ async function block() {
 async function unblock() {
   if (!canUnblock.value) return
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.unblockUser(userId)
+    toast.success('Xodim faollashtirildi.')
   } catch {
-    actionError.value = 'user_unblock_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_unblock_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
@@ -112,11 +187,14 @@ async function unblock() {
 
 async function revokeAllSessions() {
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.revokeUserSessions(userId)
+    toast.success('Sessiyalar yopildi.')
   } catch {
-    actionError.value = 'sessions_revoke_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'sessions_revoke_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
@@ -124,16 +202,23 @@ async function revokeAllSessions() {
 
 async function revokeSession(sessionId: string) {
   actionError.value = null
+  actionTraceId.value = null
   acting.value = true
   try {
     await workshop.revokeUserSession(userId, sessionId)
+    toast.success('Sessiya yopildi.')
   } catch {
-    actionError.value = 'session_revoke_failed'
+    actionError.value = workshopErrorMessage(workshop.actionError ?? 'session_revoke_failed')
+    actionTraceId.value = workshop.actionTraceId
   } finally {
     acting.value = false
   }
 }
 
+watch(user, () => {
+  syncProfileForm()
+  if (user.value?.is_owner && activeTab.value === 'sessions') activeTab.value = 'profile'
+})
 onMounted(load)
 </script>
 
@@ -185,6 +270,7 @@ onMounted(load)
         </div>
         <div class="tools">
           <button
+            v-if="!user.is_owner"
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             :disabled="acting"
@@ -213,52 +299,91 @@ onMounted(load)
         </div>
       </div>
 
-      <div class="tabs">
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'profile' }"
-          type="button"
-          @click="activeTab = 'profile'"
-        >
-          Profil
-        </button>
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'permissions' }"
-          type="button"
-          @click="activeTab = 'permissions'"
-        >
-          Ruxsatlar
-        </button>
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'sessions' }"
-          type="button"
-          @click="activeTab = 'sessions'"
-        >
-          Sessiyalar
-        </button>
-      </div>
+      <AppTabs
+        v-model="activeTab"
+        id-prefix="workshop-user"
+        label="Xodim bo'limlari"
+        :tabs="userTabs"
+      />
 
-      <section v-if="activeTab === 'profile'" class="grid gap-5 lg:grid-cols-2">
+      <section
+        v-if="activeTab === 'profile'"
+        id="workshop-user-profile-panel"
+        class="grid gap-5 lg:grid-cols-2"
+        role="tabpanel"
+        aria-labelledby="workshop-user-profile-tab"
+        tabindex="0"
+      >
         <div class="card">
           <div class="card-h"><h2>Profil</h2></div>
           <div class="card-b">
-            <div class="row-item">
-              <div><div class="nm">F.I.O</div></div>
-              <div class="meta">{{ user.full_name }}</div>
-            </div>
-            <div class="row-item">
-              <div><div class="nm">Telefon</div></div>
-              <div class="meta">{{ user.phone }}</div>
-            </div>
-            <div class="row-item">
-              <div><div class="nm">Login</div></div>
-              <div class="meta">{{ user.login }}</div>
-            </div>
-            <div class="row-item">
-              <div><div class="nm">Asosiy filial</div></div>
-              <div class="meta">{{ branchName(user.home_branch_id) }}</div>
+            <form v-if="!user.is_owner" class="grid gap-3" @submit.prevent="saveProfile">
+              <label class="field">
+                <span>F.I.O</span>
+                <input
+                  v-model="profileForm.fullName"
+                  class="mp-input"
+                  autocomplete="name"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Telefon</span>
+                <input
+                  v-model="profileForm.phone"
+                  class="mp-input"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Login</span>
+                <input
+                  v-model="profileForm.login"
+                  class="mp-input"
+                  autocomplete="username"
+                  required
+                />
+              </label>
+              <FormSelect
+                v-model="profileForm.homeBranchId"
+                label="Asosiy filial"
+                :options="profileBranchOptions"
+              />
+              <button class="mp-button mp-button-primary" type="submit" :disabled="profileSaving">
+                {{ profileSaving ? 'Saqlanmoqda' : 'Profilni saqlash' }}
+              </button>
+              <p
+                v-if="profileSaved"
+                class="rounded-md bg-success-soft px-3 py-2 text-sm font-bold text-success"
+              >
+                {{ profileSaved }}
+              </p>
+              <p
+                v-if="profileError"
+                class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              >
+                {{ profileError }} · trace_id: {{ profileTraceId ?? 'unavailable' }}
+              </p>
+            </form>
+            <div v-else>
+              <div class="row-item">
+                <div><div class="nm">F.I.O</div></div>
+                <div class="meta">{{ user.full_name }}</div>
+              </div>
+              <div class="row-item">
+                <div><div class="nm">Telefon</div></div>
+                <div class="meta">{{ user.phone }}</div>
+              </div>
+              <div class="row-item">
+                <div><div class="nm">Login</div></div>
+                <div class="meta">{{ user.login }}</div>
+              </div>
+              <div class="row-item">
+                <div><div class="nm">Asosiy filial</div></div>
+                <div class="meta">{{ branchName(user.home_branch_id) }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -280,7 +405,14 @@ onMounted(load)
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'permissions'" class="card">
+      <section
+        v-else-if="activeTab === 'permissions'"
+        id="workshop-user-permissions-panel"
+        class="card"
+        role="tabpanel"
+        aria-labelledby="workshop-user-permissions-tab"
+        tabindex="0"
+      >
         <div class="card-h">
           <h2>Ruxsatlar matritsasi</h2>
           <button
@@ -317,6 +449,7 @@ onMounted(load)
                     <input
                       type="checkbox"
                       class="size-4 accent-accent"
+                      :aria-label="`${permissionLabels[permission] ?? permission} — ${branch.name}`"
                       :checked="user.is_owner || selected.has(grantKey(permission, branch.id))"
                       :disabled="user.is_owner"
                       @change="toggleGrant(permission, branch.id)"
@@ -329,7 +462,14 @@ onMounted(load)
         </div>
       </section>
 
-      <section v-else class="card">
+      <section
+        v-else
+        id="workshop-user-sessions-panel"
+        class="card"
+        role="tabpanel"
+        aria-labelledby="workshop-user-sessions-tab"
+        tabindex="0"
+      >
         <div class="card-h">
           <h2>Faol sessiyalar</h2>
           <button
@@ -377,7 +517,7 @@ onMounted(load)
         </div>
       </div>
       <div v-if="actionError" class="banner danger mt-4">
-        <div class="grow">{{ actionError }}</div>
+        <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
       </div>
     </template>
   </section>

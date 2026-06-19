@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.core.security import hash_password
@@ -239,7 +239,7 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    order, client_access, _, _, _, _ = await _placed_order(client, db_session)
+    order, client_access, owner_access, _, _, edge_id = await _placed_order(client, db_session)
     order_id = uuid.UUID(str(order["id"]))
     result_id = uuid.UUID(str(order["cutting_result_id"]))
     draft_count = await db_session.scalar(select(func.count(CuttingDraft.id)))
@@ -248,6 +248,18 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
         select(func.count(OrderItem.id)).where(OrderItem.order_id == order_id)
     )
     client_list = await client.get("/api/v1/client/orders", headers=_auth(client_access))
+    workshop_list = await client.get(
+        "/api/v1/workshop/orders?status=active",
+        headers=_auth(owner_access),
+    )
+    workshop_page_one = await client.get(
+        "/api/v1/workshop/orders?status=active&limit=1&offset=0",
+        headers=_auth(owner_access),
+    )
+    workshop_page_two = await client.get(
+        "/api/v1/workshop/orders?status=active&limit=1&offset=1",
+        headers=_auth(owner_access),
+    )
 
     assert order["status"] == "new"
     assert order["contact_name"] == "Checkout Name"
@@ -260,6 +272,14 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert order["items"][0]["edge_cost_tiyin"] == 10_000
     assert order["items"][0]["line_total_tiyin"] == 260_000
     assert order["cutting_result"]["status"] == "confirmed"
+    assert order["planned_panels"] == 1
+    planned_edge_line = order["planned_edge_lines"][0]
+    assert planned_edge_line["material_id"] == str(edge_id)
+    assert planned_edge_line["material_label"].startswith("Phase 5 Maker ")
+    assert planned_edge_line["material_label"].endswith(" Phase 5 Edge")
+    assert planned_edge_line["thickness_mm"] == "2"
+    assert planned_edge_line["color"] == "White"
+    assert planned_edge_line["consumed_mm"] == 1000
     assert result is not None
     assert result.status is CuttingResultStatus.CONFIRMED
     assert result.order_id == order_id
@@ -268,6 +288,13 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert item_count == 1
     assert client_list.status_code == 200
     assert client_list.json()[0]["id"] == str(order_id)
+    assert workshop_list.status_code == 200
+    assert workshop_list.json()[0]["planned_panels"] == 1
+    assert workshop_list.json()[0]["planned_edge_lines"][0]["consumed_mm"] == 1000
+    assert workshop_page_one.status_code == 200
+    assert [row["id"] for row in workshop_page_one.json()] == [str(order_id)]
+    assert workshop_page_two.status_code == 200
+    assert workshop_page_two.json() == []
 
 
 async def test_client_order_detail_gates_settlement_until_ready(
@@ -299,16 +326,34 @@ async def test_client_order_detail_gates_settlement_until_ready(
             "edger_user_id": str(worker.id),
         },
     )
+    cutter_queue = await client.get(
+        f"/api/v1/workshop/orders?status=active&assigned_cutter_user_id={worker.id}",
+        headers=_auth(owner_access),
+    )
+    unrelated_cutter_queue = await client.get(
+        f"/api/v1/workshop/orders?status=active&assigned_cutter_user_id={uuid.uuid4()}",
+        headers=_auth(owner_access),
+    )
     cut_done = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(owner_access),
         json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    edger_queue = await client.get(
+        f"/api/v1/workshop/orders?status=edge_banding&assigned_edger_user_id={worker.id}",
+        headers=_auth(owner_access),
     )
     ready = await client.post(
         f"/api/v1/workshop/orders/{order_id}/banding-done",
         headers=_auth(owner_access),
         json={"version": cut_done.json()["version"], "completed_by_user_id": str(worker.id)},
     )
+    assert cutter_queue.status_code == 200
+    assert [row["id"] for row in cutter_queue.json()] == [order_id]
+    assert unrelated_cutter_queue.status_code == 200
+    assert unrelated_cutter_queue.json() == []
+    assert edger_queue.status_code == 200
+    assert [row["id"] for row in edger_queue.json()] == [order_id]
     assert ready.status_code == 200
     assert ready.json()["status"] == "ready"
 
@@ -452,6 +497,26 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     assert band_done.json()["status"] == "ready"
     assert band_done.json()["edge_length_snapshot"] == {str(edge_id): 1000}
 
+    production = await client.get(
+        "/api/v1/workshop/finance/production?date_from=2020-01-01&date_to=2100-01-01",
+        headers=_auth(owner_access),
+    )
+    assert production.status_code == 200
+    production_row = production.json()["rows"][0]
+    assert production_row["user_id"] == str(worker.id)
+    assert production_row["full_name"] == "Production Worker"
+    assert production_row["panels_cut"] == 1
+    assert production_row["cut_count"] == 2
+    assert production_row["orders_banded"] == 1
+    assert production_row["edge_length_by_material"] == {str(edge_id): 1000}
+    assert production_row["edge_lines"][0]["material_id"] == str(edge_id)
+    assert production_row["edge_lines"][0]["material_label"].startswith("Phase 5 Maker ")
+    assert production_row["edge_lines"][0]["material_label"].endswith(" Phase 5 Edge")
+    assert production_row["edge_lines"][0]["thickness_mm"] == "2"
+    assert production_row["edge_lines"][0]["color"] == "White"
+    assert production_row["edge_lines"][0]["length_mm"] == 1000
+    assert production_row["edge_length_by_thickness"] == [{"thickness_mm": "2", "length_mm": 1000}]
+
     edge_on_hand = await db_session.scalar(
         select(StockItem.on_hand).where(
             StockItem.branch_id == branch_id,
@@ -492,6 +557,22 @@ async def test_discount_requires_version_and_client_cancel_only_new(
     assert discounted.json()["discount_tiyin"] == 30_000
     assert discounted.json()["total_tiyin"] == 300_000
 
+    removed_discount = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/discount",
+        headers=_auth(owner_access),
+        json={
+            "version": discounted.json()["version"],
+            "kind": "fixed",
+            "value": 0,
+            "reason": "Remove discount",
+        },
+    )
+    assert removed_discount.status_code == 200
+    assert removed_discount.json()["discount_tiyin"] == 0
+    assert removed_discount.json()["discount_reason"] is None
+    assert removed_discount.json()["discount_applied_by_user_id"] is None
+    assert removed_discount.json()["total_tiyin"] == 330_000
+
     stale_cancel = await client.post(
         f"/api/v1/client/orders/{order_id}/cancel",
         headers=_auth(client_access),
@@ -502,7 +583,7 @@ async def test_discount_requires_version_and_client_cancel_only_new(
     cancelled = await client.post(
         f"/api/v1/client/orders/{order_id}/cancel",
         headers=_auth(client_access),
-        json={"version": discounted.json()["version"], "reason": "Changed plans"},
+        json={"version": removed_discount.json()["version"], "reason": "Changed plans"},
     )
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
@@ -550,6 +631,54 @@ async def test_client_orders_active_filter_expands_to_status_union(
     # Once cancelled it drops out of active and appears under the cancelled tab.
     assert order_id not in _ids(await _list("active"))
     assert order_id in _ids(await _list("cancelled"))
+
+
+async def test_workshop_orders_date_filter_and_csv_export(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, _, branch_id, _ = await _placed_order(client, db_session)
+    today = datetime.now(UTC).date()
+    tomorrow = today + timedelta(days=1)
+
+    today_rows = await client.get(
+        "/api/v1/workshop/orders",
+        headers=_auth(owner_access),
+        params={
+            "branch_id": str(branch_id),
+            "date_from": today.isoformat(),
+            "date_to": today.isoformat(),
+        },
+    )
+    future_rows = await client.get(
+        "/api/v1/workshop/orders",
+        headers=_auth(owner_access),
+        params={
+            "branch_id": str(branch_id),
+            "date_from": tomorrow.isoformat(),
+            "date_to": tomorrow.isoformat(),
+        },
+    )
+    csv_export = await client.get(
+        "/api/v1/workshop/orders/export.csv",
+        headers=_auth(owner_access),
+        params={
+            "branch_id": str(branch_id),
+            "date_from": today.isoformat(),
+            "date_to": today.isoformat(),
+        },
+    )
+
+    assert today_rows.status_code == 200
+    assert [row["id"] for row in today_rows.json()] == [order["id"]]
+    assert future_rows.status_code == 200
+    assert future_rows.json() == []
+    assert csv_export.status_code == 200
+    assert csv_export.headers["content-type"].startswith("text/csv")
+    assert "order_number,client_name,client_phone,branch_name,status,total_tiyin,created_at" in (
+        csv_export.text
+    )
+    assert str(order["order_number"]) in csv_export.text
 
 
 async def _client_order_notifications(db: AsyncSession, order_id: str) -> list[Notification]:

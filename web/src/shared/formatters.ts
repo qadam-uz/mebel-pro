@@ -21,7 +21,7 @@ export function formatDateInputValue(value: Date): string {
 }
 
 export function formatStockQuantity(value: number, displayUnit: string): string {
-  if (displayUnit === 'm') {
+  if (displayUnit === 'm' || displayUnit === 'metre') {
     // metres use a dot decimal so 2.5 m is not misread as 2,500 m (uz-UZ uses a comma decimal)
     const metres = new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 3 })
       .format(value / 1000)
@@ -34,6 +34,6 @@ export function formatStockQuantity(value: number, displayUnit: string): string 
 export function parseDisplayQuantity(value: string, displayUnit: string): number {
   const normalized = Number(value.replace(',', '.'))
   if (!Number.isFinite(normalized)) return Number.NaN
-  if (displayUnit === 'm') return Math.round(normalized * 1000)
+  if (displayUnit === 'm' || displayUnit === 'metre') return Math.round(normalized * 1000)
   return Math.round(normalized)
 }

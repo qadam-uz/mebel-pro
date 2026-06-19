@@ -3,7 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  resolveProductionCreditUser,
+  workshopQueuePartsLine,
+} from '@/shared/app/workshopProduction'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import FormSelect from '@/shared/components/FormSelect.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useToast } from '@/shared/composables/useToast'
+import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDate, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
@@ -11,7 +20,11 @@ import { useOrdersStore, type OrderSummary } from '@/shared/stores/orders'
 const auth = useAuthStore()
 const rolePath = useRolePath()
 const orders = useOrdersStore()
+const toast = useToast()
+const permissions = useWorkshopPermissions()
 const actionError = ref<string | null>(null)
+const completedByDraft = ref<Record<string, string>>({})
+const workerOptionsByBranch = ref<Record<string, ChoiceOption[]>>({})
 
 const queueOrders = computed(() =>
   orders.workshopOrders.filter((order) => {
@@ -23,26 +36,75 @@ const queueOrders = computed(() =>
 )
 const awaiting = computed(() => queueOrders.value.filter((order) => order.status === 'confirmed'))
 const inProgress = computed(() => queueOrders.value.filter((order) => order.status === 'cutting'))
+const canProcessAny = computed(() => permissions.canAny([p.processProduction]))
+
+function canProcessOrder(order: OrderSummary) {
+  return permissions.canOnBranch(p.processProduction, order.branch_id)
+}
+
+function workerOptionsFor(branchId: string) {
+  return workerOptionsByBranch.value[branchId] ?? []
+}
+
+async function loadWorkerOptionsFor(branchIds: string[]) {
+  if (!auth.me?.is_owner) return
+  for (const branchId of new Set(branchIds)) {
+    if (workerOptionsByBranch.value[branchId]) continue
+    await orders.loadWorkers(branchId).catch(() => undefined)
+    workerOptionsByBranch.value = {
+      ...workerOptionsByBranch.value,
+      [branchId]: orders.workerOptions.map((worker) => ({
+        value: worker.id,
+        label: worker.full_name,
+        meta: worker.is_owner ? 'owner' : 'production',
+      })),
+    }
+  }
+}
+
+function seedCompletedByDrafts() {
+  const next = { ...completedByDraft.value }
+  for (const order of queueOrders.value) {
+    if (!next[order.id] && order.assigned_cutter_user_id)
+      next[order.id] = order.assigned_cutter_user_id
+  }
+  completedByDraft.value = next
+}
 
 async function refresh() {
-  await orders.loadWorkshopOrders({ status: 'active' })
+  await orders.loadWorkshopOrders({
+    status: 'active',
+    assigned_cutter_user_id: auth.me?.is_owner ? null : auth.me?.principal_id,
+    limit: 100,
+  })
+  await loadWorkerOptionsFor(queueOrders.value.map((order) => order.branch_id))
+  seedCompletedByDrafts()
 }
 
 async function complete(order: OrderSummary) {
   actionError.value = null
+  if (!canProcessOrder(order)) {
+    actionError.value = "Bu filialda ishlab chiqarishni yakunlash ruxsatingiz yo'q."
+    return
+  }
+  const completedBy = resolveProductionCreditUser(
+    order.assigned_cutter_user_id,
+    completedByDraft.value[order.id],
+    auth.me?.is_owner === true,
+  )
+  if (!completedBy) {
+    actionError.value = 'Kesishni bajargan xodimni tanlang.'
+    return
+  }
   try {
     await orders.cuttingDone(order.id, {
       version: order.version,
-      completed_by_user_id: order.assigned_cutter_user_id,
+      completed_by_user_id: completedBy,
     })
-    await refresh()
+    toast.success('Kesish yakunlandi.')
   } catch {
-    actionError.value = orders.actionError ?? 'cutting_complete_failed'
+    actionError.value = workshopErrorMessage(orders.actionError ?? 'cutting_complete_failed')
   }
-}
-
-function partsLine(order: OrderSummary) {
-  return `${order.item_count} qism${order.panels_used_snapshot ? ` · ${order.panels_used_snapshot} panel` : ''}`
 }
 
 onMounted(refresh)
@@ -78,15 +140,29 @@ onMounted(refresh)
       <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
     </section>
 
+    <section v-else-if="!canProcessAny" class="st-empty">
+      <h3>Ishlab chiqarish ruxsati yo'q</h3>
+      <p>Kesish navbatini bajarish uchun filial bo'yicha ishlab chiqarish ruxsati kerak.</p>
+    </section>
+
     <section v-else-if="queueOrders.length === 0" class="st-empty">
       <h3>Sizga tayinlangan kesish ishi yo'q</h3>
-      <p>Tasdiqlangan va sizga biriktirilgan buyurtmalar shu yerda paydo bo'ladi.</p>
+      <p>
+        Rahbar tasdiqlangan buyurtmani sizga tayinlagach, u shu navbatda ko'rinadi. Agar ustaxonada
+        ish kutayotgan bo'lsa, rahbardan tayinlashni so'rang.
+      </p>
     </section>
 
     <template v-else>
       <div v-if="actionError" class="banner danger">
         <div class="grow">
-          {{ actionError }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+          {{ actionError }}
+          <span v-if="orders.actionTraceId"> · trace {{ orders.actionTraceId }}</span>
+        </div>
+      </div>
+      <div v-if="orders.downloadError" class="banner danger">
+        <div class="grow">
+          {{ orders.downloadError }} · trace_id: {{ orders.downloadTraceId ?? 'unavailable' }}
         </div>
       </div>
 
@@ -98,13 +174,14 @@ onMounted(refresh)
           </h2>
           <div v-if="awaiting.length === 0" class="st-empty !px-4 !py-8">
             <h3>Hozir kesishni kutayotgan ishingiz yo'q</h3>
+            <p>Yangi ish rahbar tayinlagandan keyin shu ustunda chiqadi.</p>
           </div>
           <article v-for="order in awaiting" v-else :key="order.id" class="q-card">
             <div class="top">
               <div>
                 <h4>{{ order.order_number }}</h4>
                 <div class="meta">
-                  {{ order.contact_name }} · <b>{{ partsLine(order) }}</b> ·
+                  {{ order.contact_name }} · <b>{{ workshopQueuePartsLine(order) }}</b> ·
                   {{ formatDate(order.created_at) }}
                 </div>
               </div>
@@ -120,9 +197,10 @@ onMounted(refresh)
               <button
                 type="button"
                 class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                :disabled="orders.downloadingId === order.id"
                 @click="orders.downloadWorkshopPdf(order.id)"
               >
-                PDF
+                {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'PDF' }}
               </button>
             </div>
           </article>
@@ -135,13 +213,14 @@ onMounted(refresh)
           </h2>
           <div v-if="inProgress.length === 0" class="st-empty !px-4 !py-8">
             <h3>Hozir kesilayotgan ishingiz yo'q</h3>
+            <p>Boshlangan kesish ishlari shu yerda ko'rinadi.</p>
           </div>
           <article v-for="order in inProgress" v-else :key="order.id" class="q-card">
             <div class="top">
               <div>
                 <h4>{{ order.order_number }}</h4>
                 <div class="meta">
-                  {{ order.contact_name }} · <b>{{ partsLine(order) }}</b> ·
+                  {{ order.contact_name }} · <b>{{ workshopQueuePartsLine(order) }}</b> ·
                   {{ formatTiyin(order.total_tiyin) }}
                 </div>
               </div>
@@ -150,10 +229,17 @@ onMounted(refresh)
               </span>
             </div>
             <div class="act">
+              <FormSelect
+                v-if="auth.me?.is_owner"
+                v-model="completedByDraft[order.id]"
+                label="Kim bajardi"
+                :options="workerOptionsFor(order.branch_id)"
+                :disabled="workerOptionsFor(order.branch_id).length === 0"
+              />
               <button
                 type="button"
                 class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-                :disabled="orders.actionLoading"
+                :disabled="orders.actionLoading || !canProcessOrder(order)"
                 @click="complete(order)"
               >
                 Kesish tugadi
@@ -167,9 +253,10 @@ onMounted(refresh)
               <button
                 type="button"
                 class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                :disabled="orders.downloadingId === order.id"
                 @click="orders.downloadWorkshopPdf(order.id)"
               >
-                PDF
+                {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'PDF' }}
               </button>
             </div>
           </article>

@@ -471,17 +471,17 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
 
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/cutting-plans')
-  await expect(page.getByRole('heading', { name: 'Cutting plans' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesim rejalar' })).toBeVisible()
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()
-  await page.getByRole('link', { name: 'Open' }).click()
+  await page.getByRole('link', { name: 'Ochish' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Read-only cutting plan' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesim reja' })).toBeVisible()
   await expect(page.getByText(orderNumber)).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
-  await expect(page.getByText('Placements')).toBeVisible()
+  await expect(page.getByText('Joylashuvlar')).toBeVisible()
 
   const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Download PDF' }).click()
+  await page.getByRole('button', { name: 'PDF yuklab olish' }).click()
   expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
 })

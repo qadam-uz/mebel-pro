@@ -1,6 +1,7 @@
 """Workshop inventory and supplier routes."""
 
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Query, status
 
@@ -89,12 +90,20 @@ async def stock_transactions_index(
     principal: AccountReadyPrincipal,
     db: Session,
     material_id: uuid.UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[StockTransactionResponse]:
     rows = await list_transactions(
         db,
         principal=principal,
         branch_id=branch_id,
         material_id=material_id,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
     )
     return [_transaction_response(row) for row in rows]
 
@@ -210,6 +219,7 @@ def _transaction_response(row: TransactionRecord) -> StockTransactionResponse:
         supplier_name=row.supplier.name if row.supplier else None,
         receipt_file_id=tx.receipt_file_id,
         actor_user_id=tx.actor_user_id,
+        actor_name=row.actor.full_name if row.actor else None,
         note=tx.note,
         created_at=tx.created_at,
     )

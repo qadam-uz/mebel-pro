@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.core.security import hash_password
 from app.models.enums import AuthenticatedPrincipalType, Permission, UserStatus
@@ -129,6 +129,29 @@ async def test_platform_catalog_crud_and_branch_material_stock_sync(
     platform_access = await _platform_access(db_session)
     owner_access, _, branch_id, _ = await _owner_fixture(db_session)
     manufacturer_id, material_id = await _create_catalog_material(client, platform_access)
+    second_manufacturer = await client.post(
+        "/api/v1/platform/catalog/manufacturers",
+        headers=_auth(platform_access),
+        json={"name": f"Kronospan {uuid.uuid4().hex[:6]}", "country": "PL"},
+    )
+    assert second_manufacturer.status_code == 201
+    second_material = await client.post(
+        "/api/v1/platform/catalog/materials",
+        headers=_auth(platform_access),
+        json={
+            "kind": "panel",
+            "manufacturer_id": second_manufacturer.json()["id"],
+            "type": "mdf",
+            "name": "MDF White 18 mm 2800x2070",
+            "thickness_mm": "18",
+            "color": "White",
+            "decor_code": "MDF-W",
+            "panel_length_mm": 2800,
+            "panel_width_mm": 2070,
+            "grain_direction": False,
+        },
+    )
+    assert second_material.status_code == 201
     manufacturer = await client.get(
         f"/api/v1/platform/catalog/manufacturers/{manufacturer_id}",
         headers=_auth(platform_access),
@@ -148,6 +171,15 @@ async def test_platform_catalog_crud_and_branch_material_stock_sync(
         headers=_auth(owner_access),
         json={"material_id": material_id, "price_tiyin": 25500000, "min_stock": 2},
     )
+    second_branch_material = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={
+            "material_id": second_material.json()["id"],
+            "price_tiyin": 18800000,
+            "min_stock": 1,
+        },
+    )
     stock_item = await db_session.scalar(
         select(StockItem).where(
             StockItem.branch_id == branch_id,
@@ -163,15 +195,34 @@ async def test_platform_catalog_crud_and_branch_material_stock_sync(
         headers=_auth(owner_access),
         json={"min_stock": 4},
     )
+    manufacturer_filter = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials?manufacturer_id={manufacturer_id}",
+        headers=_auth(owner_access),
+    )
+    type_filter = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials?material_type=mdf",
+        headers=_auth(owner_access),
+    )
+    picker_type_filter = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/materials?material_type=dsp",
+        headers=_auth(owner_access),
+    )
 
     assert duplicate.status_code == 409
     assert picker.status_code == 200
     assert picker.json()[0]["material"]["id"] == material_id
     assert picker.json()[0]["already_selected"] is False
     assert branch_material.status_code == 201
+    assert second_branch_material.status_code == 201
     assert branch_material.json()["min_stock"] == 2
     assert edited.status_code == 200
     assert stock_item.min_stock == 4
+    assert manufacturer_filter.status_code == 200
+    assert [row["material"]["id"] for row in manufacturer_filter.json()] == [material_id]
+    assert type_filter.status_code == 200
+    assert [row["material"]["id"] for row in type_filter.json()] == [second_material.json()["id"]]
+    assert picker_type_filter.status_code == 200
+    assert {row["material"]["id"] for row in picker_type_filter.json()} == {material_id}
 
 
 async def test_material_validation_and_non_platform_rejection(
@@ -342,6 +393,24 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
         f"/api/v1/workshop/branches/{branch_id}/stock-transactions",
         headers=_auth(owner_access),
     )
+    transactions_page_one = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions?limit=1&offset=0",
+        headers=_auth(owner_access),
+    )
+    transactions_page_two = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions?limit=1&offset=1",
+        headers=_auth(owner_access),
+    )
+    today = datetime.now(UTC).date().isoformat()
+    yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+    transactions_today = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions?date_from={today}&date_to={today}",
+        headers=_auth(owner_access),
+    )
+    transactions_before_today = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-transactions?date_to={yesterday}",
+        headers=_auth(owner_access),
+    )
     owner_receipt = await client.get(
         f"/api/v1/files/{receipt.json()['id']}",
         headers=_auth(owner_access),
@@ -374,6 +443,17 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
     assert stock.json()[0]["is_low_stock"] is True
     assert transactions.status_code == 200
     assert [row["type"] for row in transactions.json()] == ["adjust", "stock_in"]
+    assert transactions.json()[0]["actor_name"] == "Workshop Owner"
+    assert transactions.json()[0]["note"] == "Stock take"
+    assert transactions.json()[1]["actor_name"] == "Workshop Owner"
+    assert transactions_page_one.status_code == 200
+    assert [row["type"] for row in transactions_page_one.json()] == ["adjust"]
+    assert transactions_page_two.status_code == 200
+    assert [row["type"] for row in transactions_page_two.json()] == ["stock_in"]
+    assert transactions_today.status_code == 200
+    assert [row["type"] for row in transactions_today.json()] == ["adjust", "stock_in"]
+    assert transactions_before_today.status_code == 200
+    assert transactions_before_today.json() == []
     assert owner_receipt.status_code == 200
     assert owner_receipt.content == b"receipt"
     assert leaked_receipt.status_code == 403

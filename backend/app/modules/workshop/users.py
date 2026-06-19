@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -94,15 +94,38 @@ async def list_users(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
+    search: str | None = None,
+    branch_id: uuid.UUID | None = None,
+    status: UserStatus | None = None,
 ) -> list[WorkshopUser]:
     workshop_id = require_workshop_owner(principal)
+    query = select(WorkshopUser).where(WorkshopUser.workshop_id == workshop_id)
+    if status is not None:
+        query = query.where(WorkshopUser.status == status)
+    normalized_search = " ".join(search.strip().split()).lower() if search else ""
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        query = query.where(
+            or_(
+                func.lower(WorkshopUser.full_name).like(pattern),
+                func.lower(WorkshopUser.login).like(pattern),
+            )
+        )
+    if branch_id is not None:
+        validated_branch_id = await _validate_home_branch(db, workshop_id, branch_id)
+        grant_exists = exists().where(
+            PermissionGrant.workshop_user_id == WorkshopUser.id,
+            PermissionGrant.branch_id == validated_branch_id,
+        )
+        query = query.where(
+            or_(
+                WorkshopUser.home_branch_id == validated_branch_id,
+                grant_exists,
+            )
+        )
     return list(
         (
-            await db.scalars(
-                select(WorkshopUser)
-                .where(WorkshopUser.workshop_id == workshop_id)
-                .order_by(WorkshopUser.is_owner.desc(), WorkshopUser.full_name)
-            )
+            await db.scalars(query.order_by(WorkshopUser.is_owner.desc(), WorkshopUser.full_name))
         ).all()
     )
 
@@ -180,7 +203,20 @@ async def update_user(
         user.full_name = _required_text(payload.full_name, "full_name_required")
     if payload.phone is not None:
         user.phone = normalize_uz_phone(payload.phone)
-    if payload.home_branch_id is not None:
+    if payload.login is not None:
+        login = _required_text(payload.login, "login_required")
+        if login.lower() != user.login.lower() and await _login_exists(
+            db,
+            workshop_id=user.workshop_id,
+            login=login,
+        ):
+            raise APIError(
+                "login_exists",
+                "Login already exists",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        user.login = login
+    if "home_branch_id" in payload.model_fields_set:
         user.home_branch_id = await _validate_home_branch(
             db,
             user.workshop_id,

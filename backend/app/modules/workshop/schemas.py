@@ -150,6 +150,9 @@ class BranchResponse(APIModel):
     status: BranchStatus
     closed_reason: str | None
     active_orders_count: int = 0
+    material_count: int = 0
+    low_stock_count: int = 0
+    staff_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -184,6 +187,7 @@ class WorkshopUserCreateRequest(BaseModel):
 class WorkshopUserPatchRequest(BaseModel):
     full_name: str | None = None
     phone: str | None = None
+    login: str | None = None
     home_branch_id: uuid.UUID | None = None
 
 
@@ -206,6 +210,7 @@ class WorkshopUserResponse(APIModel):
     status: UserStatus
     password_reset_required: bool
     created_at: datetime
+    last_login_at: datetime | None
     grants: list[PermissionGrantResponse] = Field(default_factory=list)
 
 

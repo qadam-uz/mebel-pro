@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
+import { apiTraceId } from '@/shared/api/client'
+import { useRolePath } from '@/shared/app/paths'
+import { orderPillClass, permissionLabels, workshopStatusUz } from '@/shared/app/workshopUi'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FilterDropdown from '@/shared/components/FilterDropdown.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useToast } from '@/shared/composables/useToast'
 import {
   formatDate,
   formatStockQuantity,
@@ -14,6 +20,7 @@ import {
 } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useFilesStore } from '@/shared/stores/files'
+import { useOrdersStore } from '@/shared/stores/orders'
 import {
   useWorkshopStore,
   type BranchMaterial,
@@ -22,25 +29,37 @@ import {
 } from '@/shared/stores/workshop'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const orders = useOrdersStore()
 const files = useFilesStore()
-const activeTab = ref<'materials' | 'inventory' | 'settings'>('materials')
+const toast = useToast()
+type BranchDetailTab = 'overview' | 'materials' | 'inventory' | 'settings' | 'staff' | 'orders'
+
+const activeTab = ref<BranchDetailTab>('overview')
 const branchId = computed(() => String(route.params.branch_id ?? ''))
 const loading = ref(false)
 const pageError = ref<string | null>(null)
 const pageTraceId = ref<string | null>(null)
+const staffLoadError = ref<string | null>(null)
+const ordersLoadError = ref<string | null>(null)
 const materialSaving = ref(false)
 const movementSaving = ref(false)
 const supplierSaving = ref(false)
 const settingsSaving = ref(false)
+const statusCountRefreshing = ref(false)
 const materialError = ref<string | null>(null)
 const movementError = ref<string | null>(null)
 const supplierError = ref<string | null>(null)
 const settingsError = ref<string | null>(null)
+const settingsTraceId = ref<string | null>(null)
+const settingsSuccess = ref<string | null>(null)
+const statusCountRefreshedAt = ref<string | null>(null)
 const materialFieldError = ref<string | null>(null)
 const stockInMaterialError = ref<string | null>(null)
 const stockInSupplierError = ref<string | null>(null)
+const stockInReceiptError = ref<string | null>(null)
 const adjustmentMaterialError = ref<string | null>(null)
 const branchMaterialSearch = ref('')
 const branchMaterialStatus = ref<string | null>('active')
@@ -118,6 +137,9 @@ const canManageInventory = computed(
   () => auth.me?.is_owner || contextBranch.value?.permissions.includes('manage_inventory') === true,
 )
 const canManageSettings = computed(() => auth.me?.is_owner === true)
+const canManageOrders = computed(
+  () => auth.me?.is_owner || contextBranch.value?.permissions.includes('manage_orders') === true,
+)
 const availableCatalogOptions = computed(() =>
   workshop.catalogOptions
     .filter((option) => !option.already_selected)
@@ -169,17 +191,33 @@ const supplierStatusOptions = [
   { value: 'active', label: 'Faol' },
   { value: 'inactive', label: 'Faol emas' },
 ]
-const tabs = [
-  { key: 'materials', label: 'Materiallar' },
-  { key: 'inventory', label: 'Ombor' },
-  { key: 'settings', label: 'Sozlamalar' },
-] as const
-const visibleTabs = computed(() =>
-  tabs.filter((tab) => {
-    if (tab.key === 'materials') return canManageCatalog.value
-    if (tab.key === 'inventory') return canManageInventory.value
-    return canManageSettings.value
-  }),
+const visibleTabs = computed<Array<{ key: BranchDetailTab; label: string }>>(() => {
+  const tabs: Array<{ key: BranchDetailTab; label: string }> = []
+  if (workshop.selectedBranch) tabs.push({ key: 'overview', label: 'Umumiy' })
+  if (canManageCatalog.value) {
+    tabs.push({
+      key: 'materials',
+      label: `Materiallar (${workshop.selectedBranch?.material_count ?? 0})`,
+    })
+  }
+  if (canManageInventory.value) tabs.push({ key: 'inventory', label: 'Ombor' })
+  if (canManageSettings.value) tabs.push({ key: 'settings', label: 'Sozlamalar' })
+  if (canManageSettings.value) {
+    tabs.push({
+      key: 'staff',
+      label: `Xodimlar (${workshop.selectedBranch?.staff_count ?? 0})`,
+    })
+  }
+  if (canManageOrders.value) {
+    tabs.push({
+      key: 'orders',
+      label: `Buyurtmalar (${workshop.selectedBranch?.active_orders_count ?? 0})`,
+    })
+  }
+  return tabs
+})
+const visibleTabOptions = computed<ChoiceOption[]>(() =>
+  visibleTabs.value.map((tab) => ({ value: tab.key, label: tab.label })),
 )
 
 function stockItemByMaterial(materialId: string | null): StockItem | null {
@@ -192,7 +230,34 @@ function statusFilter(value: string | null) {
 
 function selectFirstVisibleTab() {
   if (visibleTabs.value.some((tab) => tab.key === activeTab.value)) return
-  activeTab.value = visibleTabs.value[0]?.key ?? 'materials'
+  activeTab.value = visibleTabs.value[0]?.key ?? 'overview'
+}
+
+async function loadActiveTab() {
+  if (!branchId.value) return
+  if (activeTab.value === 'staff' && canManageSettings.value) {
+    staffLoadError.value = null
+    try {
+      await workshop.loadUsers({ filters: { branch_id: branchId.value } })
+      staffLoadError.value = workshop.error
+    } catch {
+      staffLoadError.value = 'staff_load_failed'
+    }
+  }
+  if (activeTab.value === 'orders' && canManageOrders.value) {
+    ordersLoadError.value = null
+    try {
+      await orders.loadWorkshopOrders({
+        branch_id: branchId.value,
+        status: 'all',
+        limit: 6,
+        offset: 0,
+      })
+      ordersLoadError.value = orders.error
+    } catch {
+      ordersLoadError.value = 'orders_load_failed'
+    }
+  }
 }
 
 async function refreshBranch() {
@@ -219,12 +284,43 @@ async function refreshBranch() {
       jobs.push(workshop.loadInventory(branchId.value))
     }
     await Promise.all(jobs)
+    await loadActiveTab()
   } catch {
     pageError.value = 'branch_detail_load_failed'
     pageTraceId.value = workshop.traceId ?? workshop.setupTraceId
   } finally {
     loading.value = false
   }
+}
+
+function workingHoursSummary(hours: Record<string, unknown>) {
+  const labels: Record<string, string> = {
+    monday: 'Du',
+    tuesday: 'Se',
+    wednesday: 'Chor',
+    thursday: 'Pay',
+    friday: 'Ju',
+    saturday: 'Sh',
+    sunday: 'Yak',
+  }
+  const rows = Object.entries(labels).map(([key, label]) => {
+    const value = hours[key]
+    const day = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+    const open = typeof day?.open === 'string' ? day.open : null
+    const close = typeof day?.close === 'string' ? day.close : null
+    return `${label}: ${open && close ? `${open}-${close}` : 'yopiq'}`
+  })
+  return rows.join(' · ')
+}
+
+function branchPermissionSummary(user: (typeof workshop.users)[number]) {
+  if (user.is_owner) return 'Egasi · barcha ruxsatlar'
+  const branchGrants = user.grants.filter((grant) => grant.branch_id === branchId.value)
+  if (branchGrants.length === 0 && user.home_branch_id === branchId.value) return 'Asosiy filial'
+  if (branchGrants.length === 0) return '—'
+  return branchGrants
+    .map((grant) => permissionLabels[grant.permission] ?? grant.permission)
+    .join(', ')
 }
 
 async function refreshMaterials() {
@@ -248,6 +344,17 @@ async function refreshInventory() {
   ])
 }
 
+async function loadMoreStockTransactions() {
+  workshop.inventoryLoading = true
+  try {
+    await workshop.loadStockTransactions(branchId.value, {
+      offset: workshop.stockTransactions.length,
+    })
+  } finally {
+    workshop.inventoryLoading = false
+  }
+}
+
 async function saveBranchMaterial() {
   materialSaving.value = true
   materialError.value = null
@@ -264,10 +371,16 @@ async function saveBranchMaterial() {
       materialForm.minStock,
       material?.kind === 'edge' ? 'm' : 'pcs',
     )
+    const price = Number(materialForm.priceTiyin)
+    if (!Number.isFinite(price) || price < 0 || !Number.isFinite(minStock) || minStock < 0) {
+      materialFieldError.value = "Narx va min zaxirani to'g'ri kiriting"
+      return
+    }
     const payload = {
-      price_tiyin: Number(materialForm.priceTiyin),
+      price_tiyin: price,
       min_stock: minStock,
     }
+    const wasEditing = Boolean(editingBranchMaterialId.value)
     if (editingBranchMaterialId.value) {
       await workshop.updateBranchMaterial(branchId.value, editingBranchMaterialId.value, payload)
     } else {
@@ -278,6 +391,7 @@ async function saveBranchMaterial() {
     }
     resetMaterialForm()
     await refreshMaterials()
+    toast.success(wasEditing ? 'Material sozlamasi saqlandi.' : "Material filialga qo'shildi.")
   } catch {
     materialError.value = 'branch_material_save_failed'
   } finally {
@@ -290,6 +404,7 @@ async function recordStockIn() {
   movementError.value = null
   stockInMaterialError.value = null
   stockInSupplierError.value = null
+  stockInReceiptError.value = null
   try {
     if (!stockInForm.materialId) {
       stockInMaterialError.value = 'Material tanlang'
@@ -305,6 +420,10 @@ async function recordStockIn() {
     }
     const item = selectedStockInItem.value
     const quantity = parseDisplayQuantity(stockInForm.quantity, item?.display_unit ?? 'pcs')
+    if (!item || !Number.isFinite(quantity) || quantity <= 0) {
+      stockInMaterialError.value = "Material va musbat miqdorni to'g'ri kiriting"
+      return
+    }
     await workshop.recordStockIn(branchId.value, {
       material_id: stockInForm.materialId,
       quantity,
@@ -324,6 +443,7 @@ async function recordStockIn() {
     stockInForm.receiptFileId = ''
     stockInForm.inlineSupplierName = ''
     await refreshInventory()
+    toast.success('Kirim yozildi.')
   } catch {
     movementError.value = 'stock_in_failed'
   } finally {
@@ -342,6 +462,10 @@ async function recordAdjustment() {
     }
     const item = selectedAdjustmentItem.value
     const quantity = parseDisplayQuantity(adjustmentForm.quantity, item?.display_unit ?? 'pcs')
+    if (!item || !Number.isFinite(quantity) || quantity === 0) {
+      adjustmentMaterialError.value = "Material va nol bo'lmagan miqdorni to'g'ri kiriting"
+      return
+    }
     await workshop.recordAdjustment(branchId.value, {
       material_id: adjustmentForm.materialId,
       quantity,
@@ -350,6 +474,7 @@ async function recordAdjustment() {
     adjustmentForm.quantity = ''
     adjustmentForm.note = ''
     await refreshInventory()
+    toast.success('Ombor tuzatishi yozildi.')
   } catch {
     movementError.value = 'adjustment_failed'
   } finally {
@@ -366,12 +491,14 @@ async function saveSupplier() {
       phone: supplierForm.phone || null,
       note: supplierForm.note || null,
     }
+    const wasEditing = Boolean(editingSupplierId.value)
     if (editingSupplierId.value) {
       await workshop.updateSupplier(branchId.value, editingSupplierId.value, payload)
     } else {
       await workshop.createSupplier(branchId.value, payload)
     }
     resetSupplierForm()
+    toast.success(wasEditing ? 'Yetkazib beruvchi saqlandi.' : "Yetkazib beruvchi qo'shildi.")
   } catch {
     supplierError.value = 'supplier_save_failed'
   } finally {
@@ -382,6 +509,8 @@ async function saveSupplier() {
 async function saveBranchSettings() {
   settingsSaving.value = true
   settingsError.value = null
+  settingsTraceId.value = null
+  settingsSuccess.value = null
   try {
     await workshop.updateBranch(branchId.value, {
       name: branchForm.name,
@@ -398,25 +527,54 @@ async function saveBranchSettings() {
         ? Number(pricingForm.edgeBandingRateTiyin)
         : null,
     })
-  } catch {
+    settingsSuccess.value = 'Filial sozlamalari saqlandi.'
+    toast.success('Filial sozlamalari saqlandi.')
+  } catch (caught) {
     settingsError.value = 'branch_settings_save_failed'
+    settingsTraceId.value = apiTraceId(caught)
   } finally {
     settingsSaving.value = false
   }
 }
 
+async function refreshBranchStatusCount() {
+  statusCountRefreshing.value = true
+  try {
+    await workshop.loadBranch(branchId.value)
+    statusCountRefreshedAt.value = new Date().toISOString()
+    return true
+  } catch (caught) {
+    settingsError.value = 'branch_load_failed'
+    settingsTraceId.value = apiTraceId(caught)
+    return false
+  } finally {
+    statusCountRefreshing.value = false
+  }
+}
+
 async function changeBranchStatus() {
+  const nextStatus = statusForm.status
+  const nextReason = statusForm.reason
   settingsSaving.value = true
   settingsError.value = null
+  settingsTraceId.value = null
+  settingsSuccess.value = null
   try {
+    if (nextStatus !== 'active') {
+      const refreshed = await refreshBranchStatusCount()
+      if (!refreshed) return
+    }
     await workshop.setBranchStatus(branchId.value, {
-      status: statusForm.status,
-      reason: statusForm.status === 'active' ? null : statusForm.reason,
+      status: nextStatus,
+      reason: nextStatus === 'active' ? null : nextReason,
     })
     statusForm.confirmed = false
     syncBranchForms()
-  } catch {
+    settingsSuccess.value = "Filial holati o'zgartirildi."
+    toast.success("Filial holati o'zgartirildi.")
+  } catch (caught) {
     settingsError.value = 'branch_status_failed'
+    settingsTraceId.value = apiTraceId(caught)
   } finally {
     settingsSaving.value = false
   }
@@ -425,8 +583,14 @@ async function changeBranchStatus() {
 async function onReceiptFile(event: Event) {
   const target = event.target
   if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
-  const uploaded = await files.upload(target.files[0])
-  stockInForm.receiptFileId = uploaded.id
+  stockInReceiptError.value = null
+  try {
+    const uploaded = await files.upload(target.files[0])
+    stockInForm.receiptFileId = uploaded.id
+    toast.success('Chek biriktirildi.')
+  } catch {
+    stockInReceiptError.value = 'Chek yuklanmadi. Qayta urinib ko`ring.'
+  }
   target.value = ''
 }
 
@@ -494,6 +658,12 @@ function formatTransactionQuantity(materialId: string, quantity: number) {
   return formatStockQuantity(quantity, stockDisplayUnit(materialId))
 }
 
+function transactionActorName(tx: (typeof workshop.stockTransactions)[number]) {
+  if (tx.actor_name) return tx.actor_name
+  if (tx.actor_user_id) return `User ${tx.actor_user_id.slice(0, 8)}`
+  return 'System'
+}
+
 function setBranchMaterialStatusWithConfirm(row: BranchMaterial) {
   const nextStatus = row.status === 'active' ? 'inactive' : 'active'
   const effect =
@@ -529,8 +699,10 @@ async function confirmStatusChange() {
   try {
     if (pending.kind === 'material') {
       await workshop.setBranchMaterialStatus(branchId.value, pending.row.id, pending.nextStatus)
+      toast.success("Material holati o'zgartirildi.")
     } else {
       await workshop.setSupplierStatus(branchId.value, pending.row.id, pending.nextStatus)
+      toast.success("Yetkazib beruvchi holati o'zgartirildi.")
     }
     pendingStatusChange.value = null
   } catch {
@@ -542,6 +714,15 @@ async function confirmStatusChange() {
 }
 
 watch(branchId, refreshBranch)
+watch(activeTab, () => {
+  void loadActiveTab()
+})
+watch(
+  () => statusForm.status,
+  (status) => {
+    if (status !== 'active') void refreshBranchStatusCount()
+  },
+)
 onMounted(refreshBranch)
 </script>
 
@@ -579,18 +760,52 @@ onMounted(refreshBranch)
       Filial sahifasini yuklab bo'lmadi. trace {{ pageTraceId ?? 'unavailable' }}
     </div>
 
-    <div v-if="visibleTabs.length > 0" class="flex flex-wrap gap-2" aria-label="Branch workspace">
-      <button
-        v-for="tab in visibleTabs"
-        :key="tab.key"
-        type="button"
-        class="mp-button min-h-10 px-4 text-sm"
-        :class="activeTab === tab.key ? 'mp-button-primary' : 'mp-button-outline'"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
+    <div
+      v-if="workshop.selectedBranch?.status === 'temporarily_closed'"
+      class="banner warn"
+      role="status"
+    >
+      <div class="grow">
+        <b>Vaqtincha yopiq</b>
+        <span v-if="workshop.selectedBranch.closed_reason">
+          · {{ workshop.selectedBranch.closed_reason }}
+        </span>
+      </div>
     </div>
+    <div v-else-if="workshop.selectedBranch?.status === 'inactive'" class="banner danger">
+      <div class="grow">
+        <b>Faol emas</b> · bu filial yangi buyurtma qabul qilmaydi. Ochiq buyurtmalar odatdagi
+        tartibda yakunlanadi.
+      </div>
+    </div>
+
+    <div v-if="workshop.selectedBranch" class="kpis">
+      <div class="kpi">
+        <div class="lbl">Faol buyurtma</div>
+        <div class="v num">{{ workshop.selectedBranch.active_orders_count }}</div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Materiallar</div>
+        <div class="v num">{{ workshop.selectedBranch.material_count }}</div>
+      </div>
+      <div class="kpi warn">
+        <div class="lbl">Past zaxira</div>
+        <div class="v num">{{ workshop.selectedBranch.low_stock_count }}</div>
+        <div v-if="workshop.selectedBranch.low_stock_count > 0" class="d">Tez tekshirish kerak</div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Xodim</div>
+        <div class="v num">{{ workshop.selectedBranch.staff_count }}</div>
+      </div>
+    </div>
+
+    <AppTabs
+      v-if="visibleTabs.length > 0"
+      v-model="activeTab"
+      id-prefix="workshop-branch"
+      label="Filial bo'limlari"
+      :tabs="visibleTabOptions"
+    />
     <div
       v-else-if="!loading && !pageError"
       class="rounded-lg bg-warning-soft p-4 font-bold text-warning"
@@ -598,7 +813,186 @@ onMounted(refreshBranch)
       Bu akkauntda filial bo'yicha ruxsat yo'q.
     </div>
 
-    <section v-if="activeTab === 'materials' && canManageCatalog" class="space-y-5">
+    <section
+      v-if="activeTab === 'overview' && workshop.selectedBranch"
+      id="workshop-branch-overview-panel"
+      class="space-y-5"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-overview-tab"
+      tabindex="0"
+    >
+      <section class="card">
+        <div class="card-h">
+          <h2>Filial haqida</h2>
+        </div>
+        <div class="card-b pt-0">
+          <div class="row-item">
+            <div>
+              <div class="nm">Manzil</div>
+            </div>
+            <div class="meta">{{ workshop.selectedBranch.address }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Telefon</div>
+            </div>
+            <div class="meta">{{ workshop.selectedBranch.phone }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Ish vaqti</div>
+            </div>
+            <div class="meta">{{ workingHoursSummary(workshop.selectedBranch.working_hours) }}</div>
+          </div>
+          <div class="row-item">
+            <div>
+              <div class="nm">Geo (lat, lng)</div>
+            </div>
+            <div class="meta">
+              {{ workshop.selectedBranch.latitude }}, {{ workshop.selectedBranch.longitude }}
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section
+      v-if="activeTab === 'staff' && canManageSettings"
+      id="workshop-branch-staff-panel"
+      class="space-y-5"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-staff-tab"
+      tabindex="0"
+    >
+      <section class="card">
+        <div class="card-h">
+          <h2>Bu filialdagi xodimlar</h2>
+          <RouterLink class="more" :to="rolePath('/workshop/settings/users')">
+            hammasi →
+          </RouterLink>
+        </div>
+        <div v-if="workshop.loading" class="card-b" aria-live="polite">
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+        </div>
+        <div v-else-if="staffLoadError" class="st-error">
+          <h3>Xodimlarni yuklab bo'lmadi</h3>
+          <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+        </div>
+        <div v-else-if="workshop.users.length === 0" class="st-empty">
+          <h3>Bu filialda xodim yo'q</h3>
+          <p>Xodim qo'shib, filial ruxsatlarini belgilang.</p>
+        </div>
+        <div v-else class="card-b p-0">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Xodim</th>
+                <th>Ruxsatlar</th>
+                <th>Holat</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in workshop.users" :key="user.id" class="clickable">
+                <td class="nm">
+                  <RouterLink :to="rolePath(`/workshop/settings/users/${user.id}`)">
+                    {{ user.full_name }}
+                  </RouterLink>
+                  <small>{{ user.login }} · {{ user.phone }}</small>
+                </td>
+                <td>
+                  <small class="text-ink">{{ branchPermissionSummary(user) }}</small>
+                </td>
+                <td>
+                  <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
+                    <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section
+      v-if="activeTab === 'orders' && canManageOrders"
+      id="workshop-branch-orders-panel"
+      class="space-y-5"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-orders-tab"
+      tabindex="0"
+    >
+      <section class="card">
+        <div class="card-h">
+          <h2>Bu filialdagi buyurtmalar</h2>
+          <RouterLink
+            class="more"
+            :to="rolePath(`/workshop/orders?branch=${workshop.selectedBranch?.id ?? branchId}`)"
+          >
+            hammasi →
+          </RouterLink>
+        </div>
+        <div v-if="orders.loading" class="card-b" aria-live="polite">
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+          <span class="sk-line"></span>
+        </div>
+        <div v-else-if="ordersLoadError" class="st-error">
+          <h3>Buyurtmalarni yuklab bo'lmadi</h3>
+          <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+        </div>
+        <div v-else-if="orders.workshopOrders.length === 0" class="st-empty">
+          <h3>Bu filialda buyurtma yo'q</h3>
+          <p>Filial tanlangach yangi buyurtmalar shu yerda ko'rinadi.</p>
+        </div>
+        <div v-else class="card-b p-0">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Mijoz</th>
+                <th>Holat</th>
+                <th class="right">Summa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="order in orders.workshopOrders.slice(0, 6)"
+                :key="order.id"
+                class="clickable"
+              >
+                <td class="id">
+                  <RouterLink :to="rolePath(`/workshop/orders/${order.id}`)">
+                    {{ order.order_number }}
+                  </RouterLink>
+                </td>
+                <td class="nm">
+                  {{ order.client_name }}
+                  <small>{{ order.client_phone }}</small>
+                </td>
+                <td>
+                  <span :class="orderPillClass(order.status)">
+                    <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+                  </span>
+                </td>
+                <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section
+      v-if="activeTab === 'materials' && canManageCatalog"
+      id="workshop-branch-materials-panel"
+      class="space-y-5"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-materials-tab"
+      tabindex="0"
+    >
       <section class="mp-surface overflow-hidden">
         <div class="border-b border-hairline px-5 py-4">
           <h2 class="font-serif text-xl font-semibold text-ink">Filial materiali qo'shish</h2>
@@ -763,7 +1157,14 @@ onMounted(refreshBranch)
       </section>
     </section>
 
-    <section v-if="activeTab === 'inventory' && canManageInventory" class="space-y-5">
+    <section
+      v-if="activeTab === 'inventory' && canManageInventory"
+      id="workshop-branch-inventory-panel"
+      class="space-y-5"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-inventory-tab"
+      tabindex="0"
+    >
       <div class="grid gap-5 xl:grid-cols-2">
         <section class="mp-surface p-5">
           <h2 class="font-serif text-xl font-semibold text-ink">Kirim</h2>
@@ -809,10 +1210,15 @@ onMounted(refreshBranch)
                 id="receipt-file"
                 type="file"
                 class="block min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 py-2 text-sm"
+                accept="image/png,image/jpeg,image/webp,application/pdf"
+                :disabled="files.uploading"
                 @change="onReceiptFile"
               />
               <p v-if="stockInForm.receiptFileId" class="mt-1 font-mono text-[11px] text-ink-muted">
                 chek {{ stockInForm.receiptFileId.slice(0, 8) }}
+              </p>
+              <p v-if="stockInReceiptError" class="mt-1 text-xs font-bold text-danger">
+                {{ stockInReceiptError }}
               </p>
             </div>
             <div>
@@ -1092,7 +1498,7 @@ onMounted(refreshBranch)
           Hali ombor tranzaksiyasi yo'q.
         </div>
         <div v-else class="overflow-x-auto">
-          <table class="min-w-[780px] w-full text-left text-sm">
+          <table class="min-w-[980px] w-full text-left text-sm">
             <thead class="bg-sunk text-xs uppercase text-ink-muted">
               <tr>
                 <th class="px-5 py-3">Sana</th>
@@ -1100,7 +1506,10 @@ onMounted(refreshBranch)
                 <th class="px-5 py-3">Turi</th>
                 <th class="px-5 py-3">Miqdor</th>
                 <th class="px-5 py-3">Qoldiq</th>
+                <th class="px-5 py-3">Buyurtma</th>
                 <th class="px-5 py-3">Yetkazib beruvchi</th>
+                <th class="px-5 py-3">Kim qildi</th>
+                <th class="px-5 py-3">Izoh</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-hairline">
@@ -1114,15 +1523,47 @@ onMounted(refreshBranch)
                 <td class="px-5 py-4 font-mono">
                   {{ formatTransactionQuantity(tx.material_id, tx.balance_after) }}
                 </td>
+                <td class="px-5 py-4 text-ink-soft">
+                  <RouterLink
+                    v-if="tx.order_id"
+                    :to="rolePath(`/workshop/orders/${tx.order_id}`)"
+                    class="font-mono text-accent no-underline"
+                  >
+                    {{ tx.order_id.slice(0, 8) }}
+                  </RouterLink>
+                  <span v-else>—</span>
+                </td>
                 <td class="px-5 py-4 text-ink-soft">{{ tx.supplier_name || 'yoq' }}</td>
+                <td class="px-5 py-4 text-ink-soft">{{ transactionActorName(tx) }}</td>
+                <td class="px-5 py-4 text-ink-soft">{{ tx.note || '—' }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div
+          v-if="workshop.stockTransactionsHasMore"
+          class="flex justify-center border-t border-hairline p-4"
+        >
+          <button
+            class="mp-button mp-button-outline min-h-10 px-4 text-sm"
+            type="button"
+            :disabled="workshop.inventoryLoading"
+            @click="loadMoreStockTransactions"
+          >
+            {{ workshop.inventoryLoading ? 'Yuklanmoqda' : "Yana ko'rsatish" }}
+          </button>
+        </div>
       </section>
     </section>
 
-    <section v-if="activeTab === 'settings' && canManageSettings" class="grid gap-5 xl:grid-cols-2">
+    <section
+      v-if="activeTab === 'settings' && canManageSettings"
+      id="workshop-branch-settings-panel"
+      class="grid gap-5 xl:grid-cols-2"
+      role="tabpanel"
+      aria-labelledby="workshop-branch-settings-tab"
+      tabindex="0"
+    >
       <section class="mp-surface p-5">
         <h2 class="font-serif text-xl font-semibold text-ink">Filial ma'lumotlari va narxlar</h2>
         <form class="mt-4 grid gap-3" @submit.prevent="saveBranchSettings">
@@ -1212,6 +1653,19 @@ onMounted(refreshBranch)
           <button class="mp-button mp-button-primary" type="submit" :disabled="settingsSaving">
             {{ settingsSaving ? 'Saqlanmoqda' : 'Filial sozlamalarini saqlash' }}
           </button>
+          <p
+            v-if="settingsError === 'branch_settings_save_failed'"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          >
+            Filial sozlamalari saqlanmadi · trace_id:
+            {{ settingsTraceId ?? 'unavailable' }}
+          </p>
+          <p
+            v-else-if="settingsSuccess === 'Filial sozlamalari saqlandi.'"
+            class="rounded-md bg-success-soft px-3 py-2 text-sm font-bold text-success"
+          >
+            {{ settingsSuccess }}
+          </p>
         </form>
       </section>
 
@@ -1240,7 +1694,12 @@ onMounted(refreshBranch)
             />
             <span>
               Mijozlarga ko'rinish o'zgarishini tasdiqlayman. Ochiq buyurtmalar soni:
-              {{ workshop.selectedBranch?.active_orders_count ?? 0 }}.
+              {{
+                statusCountRefreshing
+                  ? 'yangilanmoqda...'
+                  : (workshop.selectedBranch?.active_orders_count ?? 0)
+              }}.
+              <span v-if="statusCountRefreshedAt">Hisob submit oldidan yangilanadi.</span>
             </span>
           </label>
           <button
@@ -1251,10 +1710,17 @@ onMounted(refreshBranch)
             {{ settingsSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}
           </button>
           <p
-            v-if="settingsError"
+            v-if="settingsError === 'branch_status_failed'"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Filial sozlamalari saqlanmadi.
+            Filial holati o'zgartirilmadi · trace_id:
+            {{ settingsTraceId ?? 'unavailable' }}
+          </p>
+          <p
+            v-else-if="settingsSuccess === `Filial holati o'zgartirildi.`"
+            class="rounded-md bg-success-soft px-3 py-2 text-sm font-bold text-success"
+          >
+            {{ settingsSuccess }}
           </p>
         </form>
       </section>

@@ -1,3 +1,4 @@
+import pytest
 from app.api.deps import AccountReadyPrincipal, Principal, get_session
 from app.main import create_app
 from app.models.enums import AuthenticatedPrincipalType
@@ -144,7 +145,10 @@ async def test_account_ready_dependency_blocks_password_reset_required(
     assert allowed.json() == {"ok": "true"}
 
 
-async def test_unexpected_errors_return_generic_public_body() -> None:
+async def test_unexpected_errors_return_generic_public_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.main.settings.DEBUG", False)
     app = create_app()
 
     @app.get("/api/v1/test/boom")

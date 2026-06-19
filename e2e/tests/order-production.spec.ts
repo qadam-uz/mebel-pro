@@ -419,10 +419,13 @@ test("client places an order and workshop completes it through production queues
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
-  await workshopPage
-    .getByRole("row", { name: new RegExp(orderNumber as string) })
-    .getByRole("link", { name: "Tafsilotlar" })
+  const workshopOrderRow = workshopPage.getByRole("row", {
+    name: new RegExp(orderNumber as string),
+  });
+  await workshopOrderRow
+    .getByRole("button", { name: `${orderNumber as string} amallari` })
     .click();
+  await workshopPage.getByRole("menuitem", { name: "Tafsilotlar" }).click();
 
   await expect(
     workshopPage.getByRole("heading", { name: orderNumber as string }),

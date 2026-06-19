@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import {
   persistStoredContext,
@@ -9,13 +9,14 @@ import {
 } from '@/shared/app/contextStorage'
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
+import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import {
   adminInitials,
   adminNavMetrics,
   groupedNav,
   iconPath as adminIconPath,
 } from '@/shared/app/adminUi'
-import { grantSummary, initials } from '@/shared/app/workshopUi'
+import { grantSummary, initials, workshopStatusUz } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -23,16 +24,27 @@ import ToastHost from '@/shared/components/ToastHost.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
+import { useWorkshopSearchStore } from '@/shared/stores/workshopSearch'
 
 const config = useRoleConfig()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
 const route = useRoute()
+const router = useRouter()
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const mobileNavOpen = ref(false)
+const mobileTriggerRef = ref<HTMLButtonElement | null>(null)
+const drawerPanelRef = ref<HTMLElement | null>(null)
+const workshopSearchRootRef = ref<HTMLElement | null>(null)
+const workshopSearchInputRef = ref<HTMLInputElement | null>(null)
+const workshopSearchQuery = ref('')
+const workshopSearchOpen = ref(false)
 const docsMenuOpen = ref(false)
+let previousMobileFocus: HTMLElement | null = null
+let workshopSearchTimer: number | undefined
 const isAuthRoute = computed(() => route.meta.layout === 'auth')
 const canLoadWorkshopContext = computed(
   () =>
@@ -98,6 +110,39 @@ const visibleNav = computed<NavItem[]>(() => {
     path: rolePath,
   })
 })
+const selectedWorkshopBranch = computed(() =>
+  workshop.branches.find((branch) => branch.id === selectedContext.value),
+)
+const normalizedSearchBranchId = computed(() => selectedWorkshopBranch.value?.id ?? null)
+const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.permissions ?? []))
+const canSearchOrders = computed(
+  () =>
+    auth.me?.is_owner === true ||
+    searchPermissions.value.has('view_dashboard') ||
+    searchPermissions.value.has('manage_orders'),
+)
+const canSearchCatalog = computed(
+  () => auth.me?.is_owner === true || searchPermissions.value.has('manage_catalog'),
+)
+const canSearchInventory = computed(
+  () => auth.me?.is_owner === true || searchPermissions.value.has('manage_inventory'),
+)
+const canSearchUsers = computed(() => auth.me?.is_owner === true)
+const canSearchWorkshop = computed(
+  () =>
+    canSearchOrders.value ||
+    canSearchCatalog.value ||
+    canSearchInventory.value ||
+    canSearchUsers.value,
+)
+const workshopSearchResultCount = computed(
+  () =>
+    workshopSearch.results.orders.length +
+    workshopSearch.results.users.length +
+    workshopSearch.results.materials.length +
+    workshopSearch.results.stock.length,
+)
+const hasWorkshopSearchQuery = computed(() => workshopSearchQuery.value.trim().length >= 2)
 const groupedWorkshopNav = computed(() => {
   const groups: Array<{ label: string; items: NavItem[] }> = []
   for (const item of visibleNav.value) {
@@ -146,12 +191,129 @@ function iconPath(name: string | undefined) {
       '<path d="M16 20v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M20 20v-2a3 3 0 0 0-3-3"/><path d="M4 20v-2a3 3 0 0 1 3-3"/>',
     settings:
       '<path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path d="M4 12h2m12 0h2M12 4v2m0 12v2m-5.7-3.7 1.4-1.4m8.6-8.6 1.4-1.4m0 11.4-1.4-1.4M7.7 7.7 6.3 6.3"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    close: '<path d="m6 6 12 12M18 6 6 18"/>',
   }
   return paths[name ?? 'dashboard'] ?? paths.dashboard
 }
 
+function drawerFocusable() {
+  return Array.from(
+    drawerPanelRef.value?.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    ) ?? [],
+  ).filter((element) => !element.hasAttribute('disabled'))
+}
+
+function openMobileNav() {
+  previousMobileFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : mobileTriggerRef.value
+  mobileNavOpen.value = true
+}
+
 function closeMobileNav() {
+  if (!mobileNavOpen.value) return
   mobileNavOpen.value = false
+}
+
+function onDrawerKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobileNav()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const focusable = drawerFocusable()
+  if (focusable.length === 0) {
+    event.preventDefault()
+    drawerPanelRef.value?.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function searchDestination(path: string, query = workshopSearchQuery.value) {
+  const trimmed = query.trim()
+  const target = rolePath(path)
+  if (!trimmed) return target
+  return `${target}?search=${encodeURIComponent(trimmed)}`
+}
+
+function closeWorkshopSearch() {
+  workshopSearchOpen.value = false
+}
+
+function focusWorkshopSearch() {
+  if (config.role !== 'workshop' || isAuthRoute.value) return
+  workshopSearchOpen.value = true
+  void nextTick(() => {
+    workshopSearchInputRef.value?.focus()
+    workshopSearchInputRef.value?.select()
+  })
+}
+
+function runWorkshopSearchNow() {
+  window.clearTimeout(workshopSearchTimer)
+  if (!canSearchWorkshop.value || !hasWorkshopSearchQuery.value) {
+    workshopSearch.reset()
+    return
+  }
+  void workshopSearch.search({
+    query: workshopSearchQuery.value,
+    branchId: normalizedSearchBranchId.value,
+    includeOrders: canSearchOrders.value,
+    includeUsers: canSearchUsers.value,
+    includeCatalog: canSearchCatalog.value,
+    includeInventory: canSearchInventory.value,
+  })
+}
+
+function queueWorkshopSearch() {
+  window.clearTimeout(workshopSearchTimer)
+  if (!canSearchWorkshop.value || !hasWorkshopSearchQuery.value) {
+    workshopSearch.reset()
+    return
+  }
+  workshopSearchTimer = window.setTimeout(runWorkshopSearchNow, 220)
+}
+
+function submitWorkshopSearch() {
+  workshopSearchOpen.value = true
+  runWorkshopSearchNow()
+  const results = workshopSearch.results
+  if (workshopSearchResultCount.value !== 1) return
+  const order = results.orders[0]
+  const user = results.users[0]
+  if (order) {
+    void router.push(rolePath(`/workshop/orders/${order.id}`))
+    closeWorkshopSearch()
+  } else if (user) {
+    void router.push(rolePath(`/workshop/settings/users/${user.id}`))
+    closeWorkshopSearch()
+  }
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  if (config.role !== 'workshop' || !workshopSearchOpen.value) return
+  const target = event.target
+  if (target instanceof Node && workshopSearchRootRef.value?.contains(target)) return
+  closeWorkshopSearch()
+}
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if (config.role !== 'workshop' || isAuthRoute.value) return
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return
+  event.preventDefault()
+  focusWorkshopSearch()
 }
 
 function browserStorage() {
@@ -178,11 +340,25 @@ watch(
   { immediate: true },
 )
 
-watch(selectedContext, (value) => {
-  const storage = browserStorage()
-  if (!storage || !contextStorageKey.value) return
-  persistStoredContext(storage, contextStorageKey.value, value, dropdownOptions.value)
-})
+watch(
+  selectedContext,
+  (value) => {
+    if (config.role === 'workshop') workshop.setSelectedBranchContext(value)
+    const storage = browserStorage()
+    if (!storage || !contextStorageKey.value) return
+    persistStoredContext(storage, contextStorageKey.value, value, dropdownOptions.value)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => workshop.selectedBranchContext,
+  (value) => {
+    if (config.role !== 'workshop' || !value || selectedContext.value === value) return
+    if (!dropdownOptions.value.some((option) => option.value === value)) return
+    selectedContext.value = value
+  },
+)
 
 watch(
   canLoadWorkshopContext,
@@ -197,8 +373,55 @@ watch(
   () => {
     closeMobileNav()
     docsMenuOpen.value = false
+    closeWorkshopSearch()
   },
 )
+
+watch(
+  [
+    workshopSearchQuery,
+    normalizedSearchBranchId,
+    canSearchOrders,
+    canSearchCatalog,
+    canSearchInventory,
+    canSearchUsers,
+  ],
+  () => {
+    if (config.role !== 'workshop') return
+    queueWorkshopSearch()
+  },
+)
+
+watch(
+  mobileNavOpen,
+  async (open) => {
+    if (open) {
+      lockBodyScroll()
+      await nextTick()
+      const first = drawerFocusable()[0]
+      if (first) first.focus()
+      else drawerPanelRef.value?.focus()
+      return
+    }
+    unlockBodyScroll()
+    previousMobileFocus?.focus()
+    previousMobileFocus = null
+  },
+  { flush: 'post' },
+)
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown)
+  window.addEventListener('keydown', onGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(workshopSearchTimer)
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
+  window.removeEventListener('keydown', onGlobalKeydown)
+  if (mobileNavOpen.value) unlockBodyScroll()
+  previousMobileFocus = null
+})
 </script>
 
 <template>
@@ -287,14 +510,20 @@ watch(
       </RouterLink>
     </aside>
 
-    <div v-if="mobileNavOpen" class="workshop-drawer" role="dialog" aria-modal="true">
+    <div
+      v-if="mobileNavOpen"
+      class="workshop-drawer"
+      role="dialog"
+      aria-modal="true"
+      @keydown="onDrawerKeydown"
+    >
       <button
         class="workshop-drawer-scrim"
         type="button"
         aria-label="Menyuni yopish"
         @click="closeMobileNav"
       ></button>
-      <div class="workshop-drawer-panel">
+      <div ref="drawerPanelRef" class="workshop-drawer-panel" tabindex="-1">
         <div class="workshop-drawer-head">
           <span class="font-serif text-lg font-semibold">Mebel Pro</span>
           <button
@@ -303,7 +532,7 @@ watch(
             aria-label="Menyuni yopish"
             @click="closeMobileNav"
           >
-            ×
+            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('close')"></svg>
           </button>
         </div>
         <nav class="workshop-nav" aria-label="Mobil navigatsiya">
@@ -332,9 +561,14 @@ watch(
 
     <main class="workshop-main">
       <header class="workshop-topbar">
-        <button class="workshop-mobile-button" type="button" @click="mobileNavOpen = true">
-          <span aria-hidden="true">☰</span>
-          Menu
+        <button
+          ref="mobileTriggerRef"
+          class="workshop-mobile-button"
+          type="button"
+          @click="openMobileNav"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
+          Menyu
         </button>
 
         <ProjectDropdown
@@ -343,15 +577,157 @@ watch(
           :options="dropdownOptions"
         />
 
-        <label class="workshop-search">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <circle cx="8.5" cy="8.5" r="5.5"></circle>
-            <path d="m13 13 4 4"></path>
-          </svg>
-          <span class="sr-only">Global qidiruv</span>
-          <input placeholder="Buyurtma, mijoz, xodim yoki material..." />
-          <span class="workshop-kbd">⌘ K</span>
-        </label>
+        <div ref="workshopSearchRootRef" class="workshop-search-wrap">
+          <label class="workshop-search" for="workshop-global-search">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="8.5" cy="8.5" r="5.5"></circle>
+              <path d="m13 13 4 4"></path>
+            </svg>
+            <span class="sr-only">Global qidiruv</span>
+            <input
+              id="workshop-global-search"
+              ref="workshopSearchInputRef"
+              v-model="workshopSearchQuery"
+              placeholder="Buyurtma, mijoz, xodim yoki material..."
+              autocomplete="off"
+              :aria-expanded="workshopSearchOpen"
+              aria-controls="workshop-global-search-panel"
+              @focus="workshopSearchOpen = true"
+              @keydown.enter.prevent="submitWorkshopSearch"
+              @keydown.escape.prevent="closeWorkshopSearch"
+            />
+            <span class="workshop-kbd">⌘ K</span>
+          </label>
+
+          <div
+            v-if="workshopSearchOpen && (workshopSearchQuery || workshopSearch.loading)"
+            id="workshop-global-search-panel"
+            class="workshop-search-panel"
+            role="dialog"
+            aria-label="Qidiruv natijalari"
+          >
+            <div v-if="!canSearchWorkshop" class="workshop-search-empty">
+              Bu filial bo'yicha qidiruv uchun ruxsat yo'q.
+            </div>
+            <div v-else-if="!hasWorkshopSearchQuery" class="workshop-search-empty">
+              Kamida 2 ta belgi kiriting.
+            </div>
+            <div v-else-if="workshopSearch.loading" class="workshop-search-empty">
+              Qidirilmoqda...
+            </div>
+            <template v-else>
+              <p v-if="workshopSearch.error" class="workshop-search-error">
+                Qidiruvning bir qismi yuklanmadi.
+                <span v-if="workshopSearch.traceId">Trace: {{ workshopSearch.traceId }}</span>
+              </p>
+
+              <div v-if="workshopSearch.results.orders.length" class="workshop-search-section">
+                <div class="workshop-search-section-title">Buyurtmalar</div>
+                <RouterLink
+                  v-for="order in workshopSearch.results.orders"
+                  :key="order.id"
+                  class="workshop-search-result"
+                  :to="rolePath(`/workshop/orders/${order.id}`)"
+                  @click="closeWorkshopSearch"
+                >
+                  <span>
+                    <strong>{{ order.order_number }}</strong>
+                    <small>{{ order.client_name }} · {{ order.branch_name }}</small>
+                  </span>
+                  <em>{{ workshopStatusUz[order.status] }}</em>
+                </RouterLink>
+              </div>
+
+              <div v-if="workshopSearch.results.users.length" class="workshop-search-section">
+                <div class="workshop-search-section-title">Xodimlar</div>
+                <RouterLink
+                  v-for="user in workshopSearch.results.users"
+                  :key="user.id"
+                  class="workshop-search-result"
+                  :to="rolePath(`/workshop/settings/users/${user.id}`)"
+                  @click="closeWorkshopSearch"
+                >
+                  <span>
+                    <strong>{{ user.full_name }}</strong>
+                    <small>{{ user.login }} · {{ user.phone }}</small>
+                  </span>
+                  <em>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}</em>
+                </RouterLink>
+              </div>
+
+              <div v-if="workshopSearch.results.materials.length" class="workshop-search-section">
+                <div class="workshop-search-section-title">Material katalogi</div>
+                <RouterLink
+                  v-for="row in workshopSearch.results.materials"
+                  :key="row.id"
+                  class="workshop-search-result"
+                  :to="searchDestination('/workshop/catalog', row.material.name)"
+                  @click="closeWorkshopSearch"
+                >
+                  <span>
+                    <strong>{{ row.material.name }}</strong>
+                    <small>{{ row.material.manufacturer_name }} · {{ row.material.kind }}</small>
+                  </span>
+                  <em>{{ row.status === 'active' ? 'Faol' : 'Yashirilgan' }}</em>
+                </RouterLink>
+              </div>
+
+              <div v-if="workshopSearch.results.stock.length" class="workshop-search-section">
+                <div class="workshop-search-section-title">Ombor</div>
+                <RouterLink
+                  v-for="item in workshopSearch.results.stock"
+                  :key="item.id"
+                  class="workshop-search-result"
+                  :to="searchDestination('/workshop/inventory', item.material.name)"
+                  @click="closeWorkshopSearch"
+                >
+                  <span>
+                    <strong>{{ item.material.name }}</strong>
+                    <small>{{ item.material.manufacturer_name }} · {{ item.display_unit }}</small>
+                  </span>
+                  <em :class="{ danger: item.is_low_stock }">
+                    {{ item.is_low_stock ? 'Kam qoldi' : 'Omborda' }}
+                  </em>
+                </RouterLink>
+              </div>
+
+              <div v-if="workshopSearchResultCount === 0" class="workshop-search-empty">
+                Natija topilmadi.
+              </div>
+
+              <div class="workshop-search-shortcuts">
+                <RouterLink
+                  v-if="canSearchOrders"
+                  :to="searchDestination('/workshop/orders')"
+                  @click="closeWorkshopSearch"
+                >
+                  Buyurtmalar ro'yxatida ochish
+                </RouterLink>
+                <RouterLink
+                  v-if="canSearchCatalog"
+                  :to="searchDestination('/workshop/catalog')"
+                  @click="closeWorkshopSearch"
+                >
+                  Katalogda ochish
+                </RouterLink>
+                <RouterLink
+                  v-if="canSearchInventory"
+                  :to="searchDestination('/workshop/inventory')"
+                  @click="closeWorkshopSearch"
+                >
+                  Omborda ochish
+                </RouterLink>
+                <RouterLink
+                  v-if="canSearchUsers"
+                  :to="searchDestination('/workshop/settings/users')"
+                  @click="closeWorkshopSearch"
+                >
+                  Xodimlarda ochish
+                </RouterLink>
+              </div>
+            </template>
+          </div>
+        </div>
 
         <div class="workshop-top-actions">
           <NotificationsMenu />
@@ -451,14 +827,20 @@ watch(
       </RouterLink>
     </aside>
 
-    <div v-if="mobileNavOpen" class="admin-drawer" role="dialog" aria-modal="true">
+    <div
+      v-if="mobileNavOpen"
+      class="admin-drawer"
+      role="dialog"
+      aria-modal="true"
+      @keydown="onDrawerKeydown"
+    >
       <button
         class="admin-drawer-scrim"
         type="button"
         aria-label="Menyuni yopish"
         @click="closeMobileNav"
       ></button>
-      <div class="admin-drawer-panel">
+      <div ref="drawerPanelRef" class="admin-drawer-panel" tabindex="-1">
         <div class="admin-drawer-head">
           <span class="font-serif text-lg font-semibold">Mebel Pro</span>
           <button
@@ -496,7 +878,12 @@ watch(
 
     <main class="admin-main">
       <header class="admin-topbar">
-        <button class="admin-mobile-button" type="button" @click="mobileNavOpen = true">
+        <button
+          ref="mobileTriggerRef"
+          class="admin-mobile-button"
+          type="button"
+          @click="openMobileNav"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
           Menu
         </button>

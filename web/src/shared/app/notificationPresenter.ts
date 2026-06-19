@@ -35,14 +35,33 @@ export function notificationIconName(item: NotificationItem): string {
  * (CB-125). Behaviour matches the prior inline logic exactly.
  */
 export function notificationDestination(item: NotificationItem, role: RoleKey): string | null {
-  if (!item.entity_type || !item.entity_id) return null
-  if (item.entity_type === 'order' && role === 'client') return `/c/orders/${item.entity_id}`
-  if (item.entity_type === 'order' && role === 'workshop') {
+  if (item.entity_type === 'order' && item.entity_id && role === 'client') {
+    return `/c/orders/${item.entity_id}`
+  }
+  if (item.entity_type === 'order' && item.entity_id && role === 'workshop') {
     return `/workshop/orders/${item.entity_id}`
   }
-  if (item.entity_type === 'branch' && role === 'workshop') {
+  if (item.entity_type === 'branch' && item.entity_id && role === 'workshop') {
     return `/workshop/branches/${item.entity_id}`
   }
+  if (role === 'workshop') {
+    if (
+      item.entity_type === 'stock_item' ||
+      item.entity_type === 'stock_transaction' ||
+      item.event_code.includes('stock') ||
+      item.event_code.includes('inventory')
+    ) {
+      return '/workshop/inventory'
+    }
+    if (
+      item.entity_type === 'income' ||
+      item.entity_type === 'expense' ||
+      item.event_code.includes('finance')
+    ) {
+      return '/workshop/finance/expenses'
+    }
+  }
+  if (!item.entity_type || !item.entity_id) return null
   if (item.entity_type === 'workshop' && role === 'admin') {
     return `/admin/workshops/${item.entity_id}`
   }

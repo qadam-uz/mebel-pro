@@ -57,11 +57,19 @@ export const useClientCatalogStore = defineStore('clientCatalog', () => {
     }
   }
 
+  function reset() {
+    branches.value = []
+    loading.value = false
+    error.value = null
+    traceId.value = null
+  }
+
   return {
     branches,
     loading,
     error,
     traceId,
     loadBranches,
+    reset,
   }
 })

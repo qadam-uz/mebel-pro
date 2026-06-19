@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 from fastapi import status
 from sqlalchemy import Select, select
@@ -49,6 +49,7 @@ class TransactionRecord:
     stock_item: StockItem
     material: Material
     supplier: Supplier | None
+    actor: WorkshopUser | None
 
 
 async def ensure_stock_item_for_branch_material(
@@ -136,21 +137,42 @@ async def list_transactions(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID,
     material_id: uuid.UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[TransactionRecord]:
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
     query = (
-        select(StockTransaction, StockItem, Material, Supplier)
+        select(StockTransaction, StockItem, Material, Supplier, WorkshopUser)
         .join(StockItem, StockItem.id == StockTransaction.stock_item_id)
         .join(Material, Material.id == StockItem.material_id)
         .outerjoin(Supplier, Supplier.id == StockTransaction.supplier_id)
+        .outerjoin(WorkshopUser, WorkshopUser.id == StockTransaction.actor_user_id)
         .where(StockItem.branch_id == scope.branch_id)
         .order_by(StockTransaction.created_at.desc())
     )
     if material_id is not None:
         query = query.where(StockItem.material_id == material_id)
+    if date_from is not None:
+        query = query.where(
+            StockTransaction.created_at >= datetime.combine(date_from, time.min, tzinfo=UTC)
+        )
+    if date_to is not None:
+        query = query.where(
+            StockTransaction.created_at
+            < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        )
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     return [
-        TransactionRecord(transaction=tx, stock_item=item, material=material, supplier=supplier)
-        for tx, item, material, supplier in (await db.execute(query)).all()
+        TransactionRecord(
+            transaction=tx,
+            stock_item=item,
+            material=material,
+            supplier=supplier,
+            actor=actor,
+        )
+        for tx, item, material, supplier, actor in (await db.execute(query)).all()
     ]
 
 
@@ -342,6 +364,7 @@ async def record_stock_in(
         stock_item=item,
         material=material,
         supplier=supplier,
+        actor=await db.get(WorkshopUser, principal.principal_id),
     )
 
 
@@ -387,6 +410,7 @@ async def record_adjustment(
         stock_item=item,
         material=material,
         supplier=None,
+        actor=await db.get(WorkshopUser, principal.principal_id),
     )
 
 

@@ -20,6 +20,8 @@ const open = ref(false)
 const activeIndex = ref(0)
 const popoverStyle = ref<Record<string, string>>({})
 const listboxId = nextStableId('mp-listbox')
+const POPOVER_GUTTER = 8
+const POPOVER_MAX_HEIGHT = 288
 
 const selected = computed(
   () =>
@@ -39,10 +41,29 @@ function updatePopoverPosition() {
   const button = buttonRef.value
   if (!button) return
   const rect = button.getBoundingClientRect()
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const panelWidth = Math.min(Math.max(rect.width, 260), Math.max(160, viewportWidth - 16))
+  const listHeight = Math.min(
+    listboxRef.value?.offsetHeight || POPOVER_MAX_HEIGHT,
+    POPOVER_MAX_HEIGHT,
+  )
+  const spaceBelow = viewportHeight - rect.bottom - POPOVER_GUTTER - 6
+  const spaceAbove = rect.top - POPOVER_GUTTER - 6
+  const openUp = spaceBelow < listHeight && spaceAbove > spaceBelow
+  const maxHeight = Math.max(120, Math.min(openUp ? spaceAbove : spaceBelow, POPOVER_MAX_HEIGHT))
+  const left = Math.min(
+    Math.max(rect.left, POPOVER_GUTTER),
+    Math.max(POPOVER_GUTTER, viewportWidth - panelWidth - POPOVER_GUTTER),
+  )
+  const top = openUp
+    ? Math.max(POPOVER_GUTTER, rect.top - maxHeight - 6)
+    : Math.min(rect.bottom + 6, viewportHeight - POPOVER_GUTTER)
   popoverStyle.value = {
-    top: `${rect.bottom + window.scrollY + 6}px`,
-    left: `${rect.left + window.scrollX}px`,
-    minWidth: `${Math.max(rect.width, 260)}px`,
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${panelWidth}px`,
+    maxHeight: `${maxHeight}px`,
   }
 }
 
@@ -69,6 +90,7 @@ function choose(option: DropdownOption) {
 }
 
 function move(delta: number) {
+  if (props.options.length === 0) return
   if (!open.value) {
     void openList().then(() => {
       activeIndex.value = (activeIndex.value + delta + props.options.length) % props.options.length
@@ -112,11 +134,15 @@ function onDocumentPointerDown(event: PointerEvent) {
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('resize', updatePopoverPosition)
+  window.visualViewport?.addEventListener('resize', updatePopoverPosition)
+  window.addEventListener('scroll', updatePopoverPosition, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('resize', updatePopoverPosition)
+  window.visualViewport?.removeEventListener('resize', updatePopoverPosition)
+  window.removeEventListener('scroll', updatePopoverPosition, true)
 })
 </script>
 
@@ -164,7 +190,7 @@ onBeforeUnmount(() => {
         ref="listboxRef"
         role="listbox"
         tabindex="0"
-        class="fixed z-50 rounded-lg border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="fixed z-50 overflow-auto overscroll-contain rounded-lg border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
         :style="popoverStyle"
         :aria-label="label"
         :aria-activedescendant="activeOptionId"

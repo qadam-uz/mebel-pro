@@ -97,3 +97,28 @@ export function branchOptions(
     })),
   ]
 }
+
+export const workshopErrorMessages: Record<string, string> = {
+  permission_denied: "Bu amal uchun ruxsatingiz yo'q.",
+  order_action_failed: "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",
+  order_version_conflict:
+    "Buyurtma boshqa joyda o'zgargan. Ma'lumot yangilandi, qayta urinib ko'ring.",
+  cutting_complete_failed: "Kesishni tugatib bo'lmadi. Qayta urinib ko'ring.",
+  banding_complete_failed: "Krom ishini tugatib bo'lmadi. Qayta urinib ko'ring.",
+  expense_save_failed: "Xarajatni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
+  income_save_failed: "Tushumni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
+  ledger_void_failed: "Yozuvni bekor qilib bo'lmadi. Qayta urinib ko'ring.",
+  grants_save_failed: "Ruxsatlarni saqlab bo'lmadi. Qayta urinib ko'ring.",
+  password_reset_failed: "Parolni qaytarib bo'lmadi. Qayta urinib ko'ring.",
+  user_save_failed:
+    "Xodim profilini saqlab bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
+  user_block_failed: "Xodimni bloklab bo'lmadi. Qayta urinib ko'ring.",
+  user_unblock_failed: "Xodimni faollashtirib bo'lmadi. Qayta urinib ko'ring.",
+  sessions_revoke_failed: "Sessiyalarni yopib bo'lmadi. Qayta urinib ko'ring.",
+  session_revoke_failed: "Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.",
+}
+
+export function workshopErrorMessage(code: string | null | undefined) {
+  if (!code) return "Amal bajarilmadi. Qayta urinib ko'ring."
+  return workshopErrorMessages[code] ?? "Amal bajarilmadi. Qayta urinib ko'ring."
+}

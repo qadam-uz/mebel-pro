@@ -58,6 +58,7 @@ describe('orders store', () => {
     setActivePinia(createPinia())
     vi.mocked(api.get).mockReset()
     vi.mocked(api.post).mockReset()
+    vi.mocked(api.patch).mockReset()
   })
 
   it('refetches the order on a 409 version conflict so a retry uses the fresh version', async () => {
@@ -114,6 +115,96 @@ describe('orders store', () => {
     vi.mocked(api.get).mockResolvedValueOnce([{ id: 'only' } as OrderSummary])
     await store.loadClientOrders({})
     expect(store.clientOrders).toHaveLength(1)
+  })
+
+  it('paginates workshop orders and keeps filters in the backend query (WS-11)', async () => {
+    const store = useOrdersStore()
+    const fullPage = Array.from(
+      { length: ORDERS_PAGE_LIMIT },
+      (_, i) => ({ id: `w${i}` }) as OrderSummary,
+    )
+    vi.mocked(api.get).mockResolvedValueOnce(fullPage)
+
+    await store.loadWorkshopOrders({
+      branch_id: 'branch-1',
+      status: 'active',
+      search: 'Ali',
+      assigned_cutter_user_id: 'worker-1',
+    })
+
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringContaining('/workshop/orders?branch_id=branch-1'),
+      expect.anything(),
+    )
+    expect(vi.mocked(api.get).mock.calls[0][0]).toContain('limit=30')
+    expect(vi.mocked(api.get).mock.calls[0][0]).toContain('offset=0')
+    expect(vi.mocked(api.get).mock.calls[0][0]).toContain('assigned_cutter_user_id=worker-1')
+    expect(store.workshopOrders).toHaveLength(ORDERS_PAGE_LIMIT)
+    expect(store.workshopOrdersHasMore).toBe(true)
+
+    vi.mocked(api.get).mockResolvedValueOnce([{ id: 'tail' } as OrderSummary])
+    await store.loadWorkshopOrders({ status: 'active', offset: ORDERS_PAGE_LIMIT })
+
+    expect(store.workshopOrders).toHaveLength(ORDERS_PAGE_LIMIT + 1)
+    expect(store.workshopOrders.at(-1)?.id).toBe('tail')
+    expect(store.workshopOrdersHasMore).toBe(false)
+
+    vi.mocked(api.get).mockResolvedValueOnce([{ id: 'fresh' } as OrderSummary])
+    await store.loadWorkshopOrders({ status: 'new' })
+
+    expect(store.workshopOrders).toEqual([{ id: 'fresh' } as OrderSummary])
+  })
+
+  it('loads recent workshop orders separately from the active board list', async () => {
+    const store = useOrdersStore()
+    store.workshopOrders = [{ id: 'active-only' } as OrderSummary]
+    vi.mocked(api.get).mockResolvedValueOnce([{ id: 'completed-recent' } as OrderSummary])
+
+    await store.loadRecentWorkshopOrders({ branch_id: 'branch-1', limit: 8 })
+
+    expect(vi.mocked(api.get).mock.calls[0][0]).toBe(
+      '/workshop/orders?branch_id=branch-1&status=all&limit=8&offset=0',
+    )
+    expect(store.workshopOrders).toEqual([{ id: 'active-only' } as OrderSummary])
+    expect(store.recentWorkshopOrders).toEqual([{ id: 'completed-recent' } as OrderSummary])
+  })
+
+  it('patches workshop mutations in place without polluting client order lists', async () => {
+    const store = useOrdersStore()
+    store.clientOrders = [{ id: 'client-only' } as OrderSummary]
+    store.workshopOrders = [
+      { id: 'before', version: 1 } as OrderSummary,
+      { id: 'o1', version: 3, status: 'new' } as OrderSummary,
+      { id: 'after', version: 1 } as OrderSummary,
+    ]
+    vi.mocked(api.post).mockResolvedValueOnce({
+      id: 'o1',
+      version: 4,
+      status: 'confirmed',
+    } as OrderDetail)
+
+    await store.approve('o1', 3)
+
+    expect(store.clientOrders.map((order) => order.id)).toEqual(['client-only'])
+    expect(store.workshopOrders.map((order) => order.id)).toEqual(['before', 'o1', 'after'])
+    expect(store.workshopOrders[1]).toMatchObject({ id: 'o1', version: 4, status: 'confirmed' })
+  })
+
+  it('patches client mutations without polluting workshop order lists', async () => {
+    const store = useOrdersStore()
+    store.clientOrders = [{ id: 'o1', version: 3, status: 'new' } as OrderSummary]
+    store.workshopOrders = [{ id: 'workshop-only' } as OrderSummary]
+    vi.mocked(api.post).mockResolvedValueOnce({
+      id: 'o1',
+      version: 4,
+      status: 'cancelled',
+    } as OrderDetail)
+
+    await store.cancelClientOrder('o1', 3, 'changed')
+
+    expect(store.workshopOrders.map((order) => order.id)).toEqual(['workshop-only'])
+    expect(store.clientOrders).toHaveLength(1)
+    expect(store.clientOrders[0]).toMatchObject({ id: 'o1', version: 4, status: 'cancelled' })
   })
 
   it('maps each branch to its own quote or error from the batch endpoint (CB-12/20)', async () => {

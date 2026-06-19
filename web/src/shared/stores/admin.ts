@@ -558,6 +558,31 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  function reset() {
+    workshops.value = []
+    detail.value = null
+    overview.value = null
+    lastProvision.value = null
+    manufacturers.value = []
+    materials.value = []
+    platformUsers.value = []
+    lastPlatformUserSecret.value = null
+    jobs.value = []
+    errors.value = []
+    errorDetail.value = null
+    auditActions.value = []
+    auditStatusChanges.value = []
+    loading.value = false
+    catalogLoading.value = false
+    opsLoading.value = false
+    error.value = null
+    catalogError.value = null
+    opsError.value = null
+    traceId.value = null
+    catalogTraceId.value = null
+    opsTraceId.value = null
+  }
+
   return {
     workshops,
     detail,
@@ -607,5 +632,6 @@ export const useAdminStore = defineStore('admin', () => {
     loadErrorDetail,
     resolveError,
     loadAudit,
+    reset,
   }
 })

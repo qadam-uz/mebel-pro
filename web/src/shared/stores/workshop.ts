@@ -1,9 +1,15 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
-import type { Material, MaterialKind, MaterialStatus } from '@/shared/stores/admin'
+import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
+import type {
+  Material,
+  MaterialKind,
+  MaterialStatus,
+  PanelMaterialType,
+} from '@/shared/stores/admin'
 import { useAuthStore, type SessionResponse } from '@/shared/stores/auth'
 
 export type BranchStatus = 'active' | 'temporarily_closed' | 'inactive'
@@ -30,7 +36,14 @@ export interface WorkshopUser {
   home_branch_id: string | null
   status: 'active' | 'blocked'
   password_reset_required: boolean
+  last_login_at: string | null
   grants: Array<{ permission: string; branch_id: string }>
+}
+
+export interface WorkshopUserFilters {
+  search?: string
+  branch_id?: string | null
+  status?: WorkshopUser['status'] | null
 }
 
 export interface WorkshopSettings {
@@ -59,6 +72,9 @@ export interface ManagedBranch {
   status: BranchStatus
   closed_reason: string | null
   active_orders_count: number
+  material_count: number
+  low_stock_count: number
+  staff_count: number
   created_at: string
   updated_at: string
 }
@@ -127,8 +143,17 @@ export interface StockTransaction {
   supplier_name: string | null
   receipt_file_id: string | null
   actor_user_id: string | null
+  actor_name: string | null
   note: string | null
   created_at: string
+}
+
+export interface StockTransactionFilters {
+  material_id?: string | null
+  date_from?: string | null
+  date_to?: string | null
+  limit?: number
+  offset?: number
 }
 
 export interface BranchMaterialFilters {
@@ -136,6 +161,7 @@ export interface BranchMaterialFilters {
   kind?: MaterialKind | null
   status?: MaterialStatus | null
   manufacturer_id?: string | null
+  material_type?: PanelMaterialType | null
 }
 
 export const permissionCatalog = [
@@ -150,6 +176,7 @@ export const permissionCatalog = [
 
 export const useWorkshopStore = defineStore('workshop', () => {
   const branches = ref<BranchContextItem[]>([])
+  const selectedBranchContext = ref<string | null>(null)
   const settings = ref<WorkshopSettings | null>(null)
   const managedBranches = ref<ManagedBranch[]>([])
   const selectedBranch = ref<ManagedBranch | null>(null)
@@ -158,28 +185,48 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const branchMaterials = ref<BranchMaterial[]>([])
   const suppliers = ref<Supplier[]>([])
   const stockItems = ref<StockItem[]>([])
+  const lowStockItems = ref<StockItem[]>([])
   const stockTransactions = ref<StockTransaction[]>([])
+  const stockTransactionsHasMore = ref(false)
   const users = ref<WorkshopUser[]>([])
   const selectedUser = ref<WorkshopUser | null>(null)
   const sessions = ref<SessionResponse[]>([])
   const lastTempPassword = ref<string | null>(null)
   const loading = ref(false)
+  const catalogLoading = ref(false)
   const setupLoading = ref(false)
   const inventoryLoading = ref(false)
   const error = ref<string | null>(null)
+  const catalogError = ref<string | null>(null)
   const setupError = ref<string | null>(null)
   const inventoryError = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  const catalogTraceId = ref<string | null>(null)
   const setupTraceId = ref<string | null>(null)
   const inventoryTraceId = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
+  const actionTraceId = ref<string | null>(null)
+  const branchContextLoaded = ref(false)
   const auth = useAuthStore()
   let usersLoadRequestId = 0
+  let catalogLoadRequestId = 0
 
   function upsertUser(user: WorkshopUser) {
     users.value = [...users.value.filter((current) => current.id !== user.id), user]
   }
 
-  async function loadBranchContext() {
+  function captureAction(errorValue: unknown, fallback: string) {
+    const captured = captureApiError(errorValue, fallback)
+    actionError.value = captured.code
+    actionTraceId.value = captured.traceId
+  }
+
+  function setSelectedBranchContext(value: string | null) {
+    selectedBranchContext.value = value && value !== 'none' ? value : null
+  }
+
+  async function loadBranchContext(options: { force?: boolean } = {}) {
+    if (branchContextLoaded.value && !options.force) return
     error.value = null
     traceId.value = null
     try {
@@ -188,7 +235,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
         authInit(),
       )
       branches.value = response.branches
+      branchContextLoaded.value = true
     } catch (errorValue) {
+      branchContextLoaded.value = false
       error.value = 'branch_context_load_failed'
       traceId.value = apiTraceId(errorValue)
       throw error.value
@@ -274,7 +323,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     )
     patchManagedBranch(updated)
     selectedBranch.value = updated
-    await loadBranchContext().catch(() => undefined)
+    await loadBranchContext({ force: true }).catch(() => undefined)
     return updated
   }
 
@@ -293,20 +342,38 @@ export const useWorkshopStore = defineStore('workshop', () => {
         search: filters.search,
         kind: filters.kind,
         manufacturer_id: filters.manufacturer_id,
+        material_type: filters.material_type,
       }),
       authInit(),
     )
   }
 
   async function loadBranchMaterials(id: string, filters: BranchMaterialFilters = {}) {
-    branchMaterials.value = await api.get<BranchMaterial[]>(
-      withQuery(`/workshop/branches/${id}/materials`, {
-        search: filters.search,
-        kind: filters.kind,
-        status: filters.status,
-      }),
-      authInit(),
-    )
+    const requestId = ++catalogLoadRequestId
+    catalogLoading.value = true
+    catalogError.value = null
+    catalogTraceId.value = null
+    try {
+      const rows = await api.get<BranchMaterial[]>(
+        withQuery(`/workshop/branches/${id}/materials`, {
+          search: filters.search,
+          kind: filters.kind,
+          manufacturer_id: filters.manufacturer_id,
+          material_type: filters.material_type,
+          status: filters.status,
+        }),
+        authInit(),
+      )
+      if (requestId === catalogLoadRequestId) branchMaterials.value = rows
+    } catch (errorValue) {
+      if (requestId === catalogLoadRequestId) {
+        catalogError.value = 'catalog_load_failed'
+        catalogTraceId.value = apiTraceId(errorValue)
+      }
+      throw errorValue
+    } finally {
+      if (requestId === catalogLoadRequestId) catalogLoading.value = false
+    }
   }
 
   async function addBranchMaterial(id: string, payload: unknown) {
@@ -361,13 +428,39 @@ export const useWorkshopStore = defineStore('workshop', () => {
     )
   }
 
-  async function loadStockTransactions(id: string, materialId?: string | null) {
-    stockTransactions.value = await api.get<StockTransaction[]>(
+  async function loadLowStock(branchIds: string[]) {
+    if (branchIds.length === 0) {
+      lowStockItems.value = []
+      return
+    }
+    const pages = await Promise.all(
+      [...new Set(branchIds)].map((id) =>
+        api.get<StockItem[]>(
+          withQuery(`/workshop/branches/${id}/stock`, {
+            low_stock: true,
+          }),
+          authInit(),
+        ),
+      ),
+    )
+    lowStockItems.value = pages.flat()
+  }
+
+  async function loadStockTransactions(id: string, filters: StockTransactionFilters = {}) {
+    const limit = filters.limit ?? INVENTORY_TX_PAGE_LIMIT
+    const offset = filters.offset ?? 0
+    const page = await api.get<StockTransaction[]>(
       withQuery(`/workshop/branches/${id}/stock-transactions`, {
-        material_id: materialId,
+        material_id: filters.material_id,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        limit,
+        offset,
       }),
       authInit(),
     )
+    stockTransactions.value = offset === 0 ? page : [...stockTransactions.value, ...page]
+    stockTransactionsHasMore.value = page.length === limit
   }
 
   async function loadSuppliers(id: string, status?: SupplierStatus | null) {
@@ -389,6 +482,16 @@ export const useWorkshopStore = defineStore('workshop', () => {
     } finally {
       inventoryLoading.value = false
     }
+  }
+
+  function clearInventory() {
+    suppliers.value = []
+    stockItems.value = []
+    lowStockItems.value = []
+    stockTransactions.value = []
+    stockTransactionsHasMore.value = false
+    inventoryError.value = null
+    inventoryTraceId.value = null
   }
 
   async function createSupplier(id: string, payload: unknown) {
@@ -446,14 +549,23 @@ export const useWorkshopStore = defineStore('workshop', () => {
     return transaction
   }
 
-  async function loadUsers() {
+  async function loadUsers(
+    options: { preserveTempPassword?: boolean; filters?: WorkshopUserFilters } = {},
+  ) {
     const requestId = ++usersLoadRequestId
     loading.value = true
     error.value = null
     traceId.value = null
-    lastTempPassword.value = null
+    if (!options.preserveTempPassword) lastTempPassword.value = null
     try {
-      const loadedUsers = await api.get<WorkshopUser[]>('/workshop/users', authInit())
+      const loadedUsers = await api.get<WorkshopUser[]>(
+        withQuery('/workshop/users', {
+          search: options.filters?.search,
+          branch_id: options.filters?.branch_id,
+          status: options.filters?.status,
+        }),
+        authInit(),
+      )
       if (requestId === usersLoadRequestId) {
         users.value = loadedUsers
       }
@@ -471,16 +583,23 @@ export const useWorkshopStore = defineStore('workshop', () => {
 
   async function createUser(payload: unknown) {
     error.value = null
-    const response = await api.post<{ user: WorkshopUser; temp_password: string }>(
-      '/workshop/users',
-      payload,
-      authInit(),
-    )
-    usersLoadRequestId += 1
-    loading.value = false
-    upsertUser(response.user)
-    lastTempPassword.value = response.temp_password
-    return response
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const response = await api.post<{ user: WorkshopUser; temp_password: string }>(
+        '/workshop/users',
+        payload,
+        authInit(),
+      )
+      usersLoadRequestId += 1
+      upsertUser(response.user)
+      lastTempPassword.value = response.temp_password
+      await loadUsers({ preserveTempPassword: true })
+      return response
+    } catch (errorValue) {
+      captureAction(errorValue, 'user_create_failed')
+      throw errorValue
+    }
   }
 
   async function loadUser(id: string) {
@@ -488,11 +607,23 @@ export const useWorkshopStore = defineStore('workshop', () => {
     error.value = null
     traceId.value = null
     lastTempPassword.value = null
+    selectedUser.value = null
+    sessions.value = []
     try {
-      selectedUser.value = await api.get<WorkshopUser>(`/workshop/users/${id}`, authInit())
-      sessions.value = (
-        await api.get<{ sessions: SessionResponse[] }>(`/workshop/users/${id}/sessions`, authInit())
-      ).sessions
+      const loadedUser = await api.get<WorkshopUser>(`/workshop/users/${id}`, authInit())
+      selectedUser.value = loadedUser
+      if (!loadedUser.is_owner) {
+        try {
+          sessions.value = (
+            await api.get<{ sessions: SessionResponse[] }>(
+              `/workshop/users/${id}/sessions`,
+              authInit(),
+            )
+          ).sessions
+        } catch {
+          sessions.value = []
+        }
+      }
     } catch (errorValue) {
       error.value = 'user_load_failed'
       traceId.value = apiTraceId(errorValue)
@@ -501,57 +632,125 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
+  async function updateUser(
+    id: string,
+    payload: {
+      full_name?: string
+      phone?: string
+      login?: string
+      home_branch_id?: string | null
+    },
+  ) {
+    error.value = null
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      selectedUser.value = await api.patch<WorkshopUser>(
+        `/workshop/users/${id}`,
+        payload,
+        authInit(),
+      )
+      upsertUser(selectedUser.value)
+      return selectedUser.value
+    } catch (errorValue) {
+      captureAction(errorValue, 'user_save_failed')
+      throw errorValue
+    }
+  }
+
   async function replaceGrants(
     id: string,
     grants: Array<{ permission: string; branch_id: string }>,
   ) {
     error.value = null
-    selectedUser.value = await api.put<WorkshopUser>(
-      `/workshop/users/${id}/grants`,
-      { grants },
-      authInit(),
-    )
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      selectedUser.value = await api.put<WorkshopUser>(
+        `/workshop/users/${id}/grants`,
+        { grants },
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'grants_save_failed')
+      throw errorValue
+    }
   }
 
   async function resetPassword(id: string) {
     error.value = null
-    const response = await api.post<{ user: WorkshopUser; temp_password: string }>(
-      `/workshop/users/${id}/reset-password`,
-      undefined,
-      authInit(),
-    )
-    selectedUser.value = response.user
-    lastTempPassword.value = response.temp_password
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const response = await api.post<{ user: WorkshopUser; temp_password: string }>(
+        `/workshop/users/${id}/reset-password`,
+        undefined,
+        authInit(),
+      )
+      selectedUser.value = response.user
+      lastTempPassword.value = response.temp_password
+    } catch (errorValue) {
+      captureAction(errorValue, 'password_reset_failed')
+      throw errorValue
+    }
   }
 
   async function blockUser(id: string, reason: string) {
     error.value = null
-    selectedUser.value = await api.post<WorkshopUser>(
-      `/workshop/users/${id}/block`,
-      { reason },
-      authInit(),
-    )
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      selectedUser.value = await api.post<WorkshopUser>(
+        `/workshop/users/${id}/block`,
+        { reason },
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'user_block_failed')
+      throw errorValue
+    }
   }
 
   async function unblockUser(id: string) {
     error.value = null
-    selectedUser.value = await api.post<WorkshopUser>(
-      `/workshop/users/${id}/unblock`,
-      undefined,
-      authInit(),
-    )
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      selectedUser.value = await api.post<WorkshopUser>(
+        `/workshop/users/${id}/unblock`,
+        undefined,
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'user_unblock_failed')
+      throw errorValue
+    }
   }
 
   async function revokeUserSessions(id: string) {
     error.value = null
-    await api.del(`/workshop/users/${id}/sessions`, authInit())
-    sessions.value = []
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      await api.del(`/workshop/users/${id}/sessions`, authInit())
+      sessions.value = []
+    } catch (errorValue) {
+      captureAction(errorValue, 'sessions_revoke_failed')
+      throw errorValue
+    }
   }
 
   async function revokeUserSession(id: string, sessionId: string) {
     error.value = null
-    await api.del(`/workshop/users/${id}/sessions/${sessionId}`, authInit())
-    sessions.value = sessions.value.filter((session) => session.id !== sessionId)
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      await api.del(`/workshop/users/${id}/sessions/${sessionId}`, authInit())
+      sessions.value = sessions.value.filter((session) => session.id !== sessionId)
+    } catch (errorValue) {
+      captureAction(errorValue, 'session_revoke_failed')
+      throw errorValue
+    }
   }
 
   function patchManagedBranch(updated: ManagedBranch) {
@@ -570,8 +769,46 @@ export const useWorkshopStore = defineStore('workshop', () => {
     suppliers.value = suppliers.value.map((row) => (row.id === updated.id ? updated : row))
   }
 
+  function reset() {
+    branches.value = []
+    branchContextLoaded.value = false
+    selectedBranchContext.value = null
+    settings.value = null
+    managedBranches.value = []
+    selectedBranch.value = null
+    selectedBranchPricing.value = null
+    catalogOptions.value = []
+    branchMaterials.value = []
+    suppliers.value = []
+    stockItems.value = []
+    lowStockItems.value = []
+    stockTransactions.value = []
+    stockTransactionsHasMore.value = false
+    users.value = []
+    selectedUser.value = null
+    sessions.value = []
+    lastTempPassword.value = null
+    loading.value = false
+    catalogLoading.value = false
+    setupLoading.value = false
+    inventoryLoading.value = false
+    error.value = null
+    catalogError.value = null
+    setupError.value = null
+    inventoryError.value = null
+    traceId.value = null
+    catalogTraceId.value = null
+    setupTraceId.value = null
+    inventoryTraceId.value = null
+    actionError.value = null
+    actionTraceId.value = null
+    usersLoadRequestId += 1
+    catalogLoadRequestId += 1
+  }
+
   return {
     branches,
+    selectedBranchContext,
     settings,
     managedBranches,
     selectedBranch,
@@ -580,20 +817,28 @@ export const useWorkshopStore = defineStore('workshop', () => {
     branchMaterials,
     suppliers,
     stockItems,
+    lowStockItems,
     stockTransactions,
+    stockTransactionsHasMore,
     users,
     selectedUser,
     sessions,
     lastTempPassword,
     loading,
+    catalogLoading,
     setupLoading,
     inventoryLoading,
     error,
+    catalogError,
     setupError,
     inventoryError,
     traceId,
+    catalogTraceId,
     setupTraceId,
     inventoryTraceId,
+    actionError,
+    actionTraceId,
+    setSelectedBranchContext,
     loadBranchContext,
     loadSettings,
     updateSettings,
@@ -609,9 +854,11 @@ export const useWorkshopStore = defineStore('workshop', () => {
     updateBranchMaterial,
     setBranchMaterialStatus,
     loadStock,
+    loadLowStock,
     loadStockTransactions,
     loadSuppliers,
     loadInventory,
+    clearInventory,
     createSupplier,
     updateSupplier,
     setSupplierStatus,
@@ -620,11 +867,13 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loadUsers,
     createUser,
     loadUser,
+    updateUser,
     replaceGrants,
     resetPassword,
     blockUser,
     unblockUser,
     revokeUserSessions,
     revokeUserSession,
+    reset,
   }
 })

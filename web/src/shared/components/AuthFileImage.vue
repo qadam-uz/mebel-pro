@@ -22,6 +22,7 @@ const src = ref<string | null>(null)
 const failed = ref(false)
 // We own the object URL's lifetime via the handle's revoke (CB-131).
 let revokeCurrent: (() => void) | null = null
+let loadSeq = 0
 
 function revoke() {
   revokeCurrent?.()
@@ -32,21 +33,30 @@ function revoke() {
 watch(
   () => props.fileId,
   async (fileId) => {
+    const seq = ++loadSeq
     revoke()
     failed.value = false
     if (!fileId) return
     try {
       const handle = await files.loadObjectUrl(fileId)
+      if (seq !== loadSeq || props.fileId !== fileId) {
+        handle.revoke()
+        return
+      }
+      revokeCurrent?.()
       revokeCurrent = handle.revoke
       src.value = handle.url
     } catch {
-      failed.value = true
+      if (seq === loadSeq) failed.value = true
     }
   },
   { immediate: true },
 )
 
-onBeforeUnmount(revoke)
+onBeforeUnmount(() => {
+  loadSeq += 1
+  revoke()
+})
 </script>
 
 <template>

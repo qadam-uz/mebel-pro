@@ -1,5 +1,10 @@
 import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 
+from app.models.enums import MaterialKind, PanelMaterialType
+from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
+from app.modules.inventory.contracts import StockItem
 from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -244,6 +249,163 @@ async def test_grant_replacement_takes_effect_on_staff_next_request(
     ]
     assert after.status_code == 200
     assert after.json()["branches"][0]["permissions"] == ["process_production"]
+
+
+async def test_owner_filters_users_and_sees_last_login(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    cutter = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Cutter Filter",
+            "phone": "+998906161616",
+            "login": "cutterfilter",
+            "temp_password": "StaffTemp123",
+            "grants": [{"permission": "process_production", "branch_id": branch_id}],
+        },
+    )
+    office = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Office Filter",
+            "phone": "+998906262626",
+            "login": "officefilter",
+            "temp_password": "StaffTemp123",
+            "grants": [],
+        },
+    )
+    staff_login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={
+            "workshop_code": workshop_code,
+            "login": "cutterfilter",
+            "password": "StaffTemp123",
+        },
+    )
+    filtered = await client.get(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        params={"search": "cut", "branch_id": branch_id, "status": "active"},
+    )
+    no_branch_match = await client.get(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        params={"search": "office", "branch_id": branch_id},
+    )
+
+    assert cutter.status_code == 201
+    assert cutter.json()["user"]["last_login_at"] is None
+    assert office.status_code == 201
+    assert staff_login.status_code == 200
+    assert filtered.status_code == 200
+    assert [row["login"] for row in filtered.json()] == ["cutterfilter"]
+    assert filtered.json()[0]["last_login_at"] is not None
+    assert no_branch_match.status_code == 200
+    assert no_branch_match.json() == []
+
+
+async def test_owner_branch_response_includes_operational_counts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id, _ = await _owner_login(client, db_session)
+    manufacturer = Manufacturer(name="Count Maker", country="UZ")
+    db_session.add(manufacturer)
+    await db_session.flush()
+    material = Material(
+        kind=MaterialKind.PANEL,
+        manufacturer_id=manufacturer.id,
+        type=PanelMaterialType.DSP,
+        name="Count Panel",
+        thickness_mm=Decimal("18"),
+        color="White",
+        decor_code="COUNT-P",
+        panel_length_mm=2800,
+        panel_width_mm=2070,
+        grain_direction=False,
+    )
+    db_session.add(material)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            BranchMaterial(branch_id=uuid.UUID(branch_id), material_id=material.id, price_tiyin=1),
+            StockItem(
+                branch_id=uuid.UUID(branch_id),
+                material_id=material.id,
+                on_hand=1,
+                min_stock=2,
+                updated_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    staff = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Count Staff",
+            "phone": "+998906363636",
+            "login": "countstaff",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [{"permission": "manage_orders", "branch_id": branch_id}],
+        },
+    )
+    branches = await client.get("/api/v1/workshop/branches", headers=_auth(owner_access))
+
+    assert staff.status_code == 201
+    assert branches.status_code == 200
+    [branch] = branches.json()
+    assert branch["material_count"] == 1
+    assert branch["low_stock_count"] == 1
+    assert branch["staff_count"] == 2
+
+
+async def test_owner_updates_staff_profile_fields(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id, _ = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Editable Staff",
+            "phone": "+998906464646",
+            "login": "editable",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [],
+        },
+    )
+    user_id = created.json()["user"]["id"]
+    updated = await client.patch(
+        f"/api/v1/workshop/users/{user_id}",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Edited Staff",
+            "phone": "+998906565656",
+            "login": "edited",
+            "home_branch_id": None,
+        },
+    )
+    duplicate = await client.patch(
+        f"/api/v1/workshop/users/{user_id}",
+        headers=_auth(owner_access),
+        json={"login": "owner"},
+    )
+
+    assert created.status_code == 201
+    assert updated.status_code == 200
+    assert updated.json()["full_name"] == "Edited Staff"
+    assert updated.json()["phone"] == "+998906565656"
+    assert updated.json()["login"] == "edited"
+    assert updated.json()["home_branch_id"] is None
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "login_exists"
 
 
 async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(

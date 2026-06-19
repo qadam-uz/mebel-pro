@@ -12,13 +12,35 @@ import {
   normalizeRolePath,
   normalizeRoleRoutes,
   resolveHistoryBase,
+  roleRoutePermissionAllowed,
   roleDocumentTitle,
 } from '@/shared/app/createRoleApp'
 import { rolePath } from '@/shared/app/paths'
 import { adminConfig, clientConfig, workshopConfig } from '@/shared/app/roleConfig'
+import { workshopPermissions } from '@/shared/app/workshopPermissions'
+import type { MeResponse } from '@/shared/stores/auth'
 
 function routePaths(routes: { path: string }[]) {
   return routes.map((route) => route.path)
+}
+
+function workshopPrincipal(overrides: Partial<MeResponse> = {}): MeResponse {
+  return {
+    principal_type: 'workshop_user',
+    principal_id: 'user-1',
+    session_id: 'session-1',
+    password_reset_required: false,
+    workshop_id: 'workshop-1',
+    is_owner: false,
+    grants: [],
+    login: 'worker',
+    full_name: 'Worker',
+    phone: '+998901234567',
+    name: null,
+    preferred_branch_id: null,
+    status: 'active',
+    ...overrides,
+  }
 }
 
 function sourceFiles(dir: string): string[] {
@@ -66,6 +88,68 @@ describe('role route matrix', () => {
     expect(roleDocumentTitle(undefined, adminConfig)).toBe(
       'Platforma asosiy — Mebel Pro · Superadmin',
     )
+  })
+
+  it('enforces workshop route permission metadata without affecting other roles', () => {
+    const inventoryOnly = workshopPrincipal({
+      grants: [{ branch_id: 'branch-1', permission: workshopPermissions.manageInventory }],
+    })
+
+    expect(
+      roleRoutePermissionAllowed(
+        'workshop',
+        inventoryOnly,
+        { workshopAccess: { any: [workshopPermissions.manageInventory] } },
+        {},
+      ),
+    ).toBe(true)
+    expect(
+      roleRoutePermissionAllowed(
+        'workshop',
+        inventoryOnly,
+        { workshopAccess: { any: [workshopPermissions.manageFinance] } },
+        {},
+      ),
+    ).toBe(false)
+    expect(
+      roleRoutePermissionAllowed(
+        'workshop',
+        inventoryOnly,
+        {
+          workshopAccess: {
+            any: [workshopPermissions.manageInventory],
+            branchParam: 'branch_id',
+          },
+        },
+        { branch_id: 'branch-2' },
+      ),
+    ).toBe(false)
+    expect(
+      roleRoutePermissionAllowed('workshop', workshopPrincipal({ is_owner: true }), {
+        workshopAccess: { ownerOnly: true },
+      }),
+    ).toBe(true)
+    expect(
+      roleRoutePermissionAllowed('client', null, {
+        workshopAccess: { ownerOnly: true },
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps dashboard-only staff out of the orders board route', () => {
+    const ordersRoute = workshopRoutes.find((route) => route.path === '/workshop/orders')
+    const dashboardOnly = workshopPrincipal({
+      grants: [{ branch_id: 'branch-1', permission: workshopPermissions.viewDashboard }],
+    })
+    const orderManager = workshopPrincipal({
+      grants: [{ branch_id: 'branch-1', permission: workshopPermissions.manageOrders }],
+    })
+
+    expect(ordersRoute?.meta).toBeDefined()
+    expect(roleRoutePermissionAllowed('workshop', dashboardOnly, ordersRoute?.meta ?? {})).toBe(
+      false,
+    )
+    expect(roleRoutePermissionAllowed('workshop', orderManager, ordersRoute?.meta ?? {})).toBe(true)
   })
 
   it('keeps direct dev URLs aligned with production route inventories', () => {

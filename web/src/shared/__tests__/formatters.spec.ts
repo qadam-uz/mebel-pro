@@ -24,12 +24,14 @@ describe('shared formatters', () => {
   it('formats edge-material metres with a dot decimal, not a 1000x-misreadable comma', () => {
     expect(formatStockQuantity(18000, 'm')).toBe('18 m')
     expect(formatStockQuantity(2500, 'm')).toBe('2.5 m')
+    expect(formatStockQuantity(2500, 'metre')).toBe('2.5 m')
     expect(formatStockQuantity(2530, 'm')).toBe('2.53 m')
     expect(formatStockQuantity(12, 'piece')).toBe('12 piece')
   })
 
   it('parses display quantities back to storage units (mm for metres)', () => {
     expect(parseDisplayQuantity('12,5', 'm')).toBe(12500)
+    expect(parseDisplayQuantity('12,5', 'metre')).toBe(12500)
     expect(parseDisplayQuantity('12.5', 'm')).toBe(12500)
     expect(parseDisplayQuantity('3', 'piece')).toBe(3)
     expect(Number.isNaN(parseDisplayQuantity('abc', 'm'))).toBe(true)

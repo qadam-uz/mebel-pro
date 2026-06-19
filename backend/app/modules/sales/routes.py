@@ -1,6 +1,9 @@
 """Client and workshop order routes."""
 
 import uuid
+from csv import writer
+from datetime import date
+from io import StringIO
 
 from fastapi import APIRouter, Query, Response, status
 
@@ -160,6 +163,12 @@ async def workshop_orders_index(
     branch_id: uuid.UUID | None = None,
     status: str | None = None,
     search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    assigned_cutter_user_id: uuid.UUID | None = None,
+    assigned_edger_user_id: uuid.UUID | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[OrderSummaryResponse]:
     return await list_workshop_orders(
         db,
@@ -167,7 +176,69 @@ async def workshop_orders_index(
         branch_id=branch_id,
         status_filter=status,
         search=search,
+        date_from=date_from,
+        date_to=date_to,
+        assigned_cutter_user_id=assigned_cutter_user_id,
+        assigned_edger_user_id=assigned_edger_user_id,
+        limit=limit,
+        offset=offset,
     )
+
+
+@router.get("/workshop/orders/export.csv")
+async def workshop_orders_export_csv(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    branch_id: uuid.UUID | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    assigned_cutter_user_id: uuid.UUID | None = None,
+    assigned_edger_user_id: uuid.UUID | None = None,
+    limit: int = Query(default=1000, ge=1, le=1000),
+) -> Response:
+    rows = await list_workshop_orders(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        status_filter=status,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+        assigned_cutter_user_id=assigned_cutter_user_id,
+        assigned_edger_user_id=assigned_edger_user_id,
+        limit=limit,
+        offset=0,
+        max_limit=1000,
+    )
+    output = StringIO()
+    csv_writer = writer(output)
+    csv_writer.writerow(
+        [
+            "order_number",
+            "client_name",
+            "client_phone",
+            "branch_name",
+            "status",
+            "total_tiyin",
+            "created_at",
+        ]
+    )
+    for row in rows:
+        csv_writer.writerow(
+            [
+                row.order_number,
+                row.client_name,
+                row.client_phone,
+                row.branch_name,
+                row.status.value,
+                row.total_tiyin,
+                row.created_at.isoformat(),
+            ]
+        )
+    headers = {"Content-Disposition": 'attachment; filename="workshop-orders.csv"'}
+    return Response(output.getvalue(), media_type="text/csv; charset=utf-8", headers=headers)
 
 
 @router.get("/workshop/orders/workers", response_model=list[WorkshopWorkerOption])

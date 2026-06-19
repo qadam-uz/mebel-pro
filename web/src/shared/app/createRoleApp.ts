@@ -6,8 +6,12 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import { configureSession } from '@/shared/api/client'
 import RoleApp from '@/shared/components/RoleApp.vue'
-import { roleConfigKey, type RoleConfig } from '@/shared/app/roleConfig'
-import { useAuthStore } from '@/shared/stores/auth'
+import { roleConfigKey, type RoleConfig, type RoleKey } from '@/shared/app/roleConfig'
+import {
+  canAccessWorkshopRoute,
+  type WorkshopRouteRequirement,
+} from '@/shared/app/workshopPermissions'
+import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 
 export function resolveHistoryBase(
   localBase: string,
@@ -81,6 +85,20 @@ export function roleDocumentTitle(pageTitle: unknown, config: RoleConfig): strin
   return `${title} — ${config.productLabel} · ${config.roleLabel}`
 }
 
+export function roleRoutePermissionAllowed(
+  role: RoleKey,
+  me: MeResponse | null,
+  meta: Record<string, unknown>,
+  params: Record<string, unknown> = {},
+): boolean {
+  if (role !== 'workshop') return true
+  return canAccessWorkshopRoute(
+    me,
+    meta.workshopAccess as WorkshopRouteRequirement | null | undefined,
+    params,
+  )
+}
+
 export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], localBase: string) {
   const historyBase = resolveHistoryBase(localBase)
   const roleConfig = normalizeRoleConfig(config, localBase, historyBase)
@@ -119,6 +137,9 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
     }
     if (auth.me?.password_reset_required && to.path !== roleConfig.profilePath) {
       return { path: roleConfig.profilePath }
+    }
+    if (!roleRoutePermissionAllowed(roleConfig.role, auth.me, to.meta, to.params)) {
+      return roleConfig.homePath
     }
     return true
   })

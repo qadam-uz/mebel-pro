@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDateInputValue, formatStockQuantity, formatTiyin } from '@/shared/formatters'
 import {
   useFinanceStore,
@@ -15,6 +17,7 @@ import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const finance = useFinanceStore()
 const workshop = useWorkshopStore()
+const permissions = useWorkshopPermissions()
 const rolePath = useRolePath()
 const today = new Date()
 const dateFrom = ref(formatDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)))
@@ -22,6 +25,12 @@ const dateTo = ref(formatDateInputValue(today))
 const branchId = ref('all')
 const period = ref('month')
 
+const financePermissions = [p.manageFinance, p.viewFinanceReports]
+const canViewFinance = computed(() => permissions.canAny(financePermissions))
+const canManageFinance = computed(() => permissions.can(p.manageFinance))
+const accessibleBranches = computed(() =>
+  permissions.accessibleBranches(workshop.branches, financePermissions),
+)
 const incomeTypeLabel: Record<IncomeType, string> = {
   order_payment: "Buyurtma to'lovi",
   other: 'Boshqa tushum',
@@ -61,11 +70,11 @@ const periodOptions = [
 const branchFilterOptions = computed(() => [
   {
     value: 'all',
-    label: 'Barcha filiallar',
-    meta: `${workshop.branches.length} filial`,
+    label: permissions.isOwner.value ? 'Barcha filiallar' : 'Mening filiallarim',
+    meta: `${accessibleBranches.value.length} filial`,
     status: 'active' as const,
   },
-  ...workshop.branches.map((branch) => ({
+  ...accessibleBranches.value.map((branch) => ({
     value: branch.id,
     label: branch.name,
     meta: branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address,
@@ -85,6 +94,13 @@ const expenseBreakdown = computed(() => {
 const branchRows = computed(() => finance.summary?.branches ?? [])
 const productionRows = computed(() => finance.production?.rows.slice(0, 6) ?? [])
 const netIsPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
+
+function applyContextBranch() {
+  const contextBranchId = workshop.selectedBranchContext
+  if (!contextBranchId) return
+  if (!accessibleBranches.value.some((branch) => branch.id === contextBranchId)) return
+  branchId.value = contextBranchId
+}
 
 function branchName(id: string | null) {
   if (!id) return 'Ustaxona-keng'
@@ -113,21 +129,37 @@ function edgeLengths(value: Record<string, number>) {
 }
 
 async function refresh() {
+  if (!canViewFinance.value) return
   applyPeriod()
   const filters = {
     date_from: dateFrom.value,
     date_to: dateTo.value,
     branch_id: branchId.value === 'all' ? null : branchId.value,
   }
-  await finance.loadSummary(filters)
-  await finance.loadIncome({ ...filters, status: 'recorded' })
-  await finance.loadProduction(filters)
+  await Promise.all([
+    finance.loadSummary(filters),
+    finance.loadIncome({ ...filters, status: 'recorded' }),
+    finance.loadProduction(filters),
+  ])
 }
 
 onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
-  await refresh()
+  applyContextBranch()
+  if (canViewFinance.value) await refresh()
 })
+
+watch(branchId, (value) => {
+  if (value !== 'all') workshop.setSelectedBranchContext(value)
+  void refresh()
+})
+
+watch(
+  () => workshop.selectedBranchContext,
+  () => {
+    applyContextBranch()
+  },
+)
 </script>
 
 <template>
@@ -148,6 +180,7 @@ onMounted(async () => {
           Yangilash
         </button>
         <RouterLink
+          v-if="canManageFinance"
           :to="rolePath('/workshop/finance/expenses')"
           class="mp-button mp-button-primary min-h-9 px-3 text-xs"
         >
@@ -156,7 +189,12 @@ onMounted(async () => {
       </div>
     </div>
 
-    <section v-if="finance.loading && !finance.summary" class="card p-5" aria-live="polite">
+    <section v-if="!canViewFinance" class="st-empty">
+      <h3>Moliya hisobotiga ruxsatingiz yo'q</h3>
+      <p>Ustaxona egasidan filial bo'yicha moliya ruxsatini so'rang.</p>
+    </section>
+
+    <section v-else-if="finance.loading && !finance.summary" class="card p-5" aria-live="polite">
       <div class="grid gap-3">
         <span class="sk-line"></span>
         <span class="sk-line"></span>
@@ -305,7 +343,12 @@ onMounted(async () => {
           </section>
 
           <section class="card mt-4">
-            <div class="card-h"><h2>Xodimlar mehnati · hisobot</h2></div>
+            <div class="card-h">
+              <h2>Xodimlar mehnati · hisobot</h2>
+              <RouterLink :to="rolePath('/workshop/finance/production')" class="more"
+                >to'liq hisobot</RouterLink
+              >
+            </div>
             <div class="card-b !px-0">
               <p class="muted mx-5 my-3 text-xs">
                 Buyurtma bosqichlaridan olinadi. Hisobchi maoshni qo'lda hisoblab, xarajat sifatida
@@ -316,20 +359,34 @@ onMounted(async () => {
                   <thead>
                     <tr>
                       <th>Xodim</th>
+                      <th>Davr</th>
                       <th class="right">Panel</th>
                       <th class="right">Kesim</th>
                       <th class="right">Krom</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr v-for="row in productionRows" :key="row.user_id">
                       <td class="nm">{{ row.full_name }}</td>
+                      <td class="num text-ink-muted">{{ dateFrom }} — {{ dateTo }}</td>
                       <td class="amt">{{ row.panels_cut }}</td>
                       <td class="amt">{{ row.cut_count }}</td>
                       <td class="amt">{{ edgeLengths(row.edge_length_by_material) }}</td>
+                      <td class="right">
+                        <RouterLink
+                          :to="{
+                            path: rolePath('/workshop/finance/expenses'),
+                            query: { preset: 'salary', worker: row.full_name },
+                          }"
+                          class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                        >
+                          Maosh yozish
+                        </RouterLink>
+                      </td>
                     </tr>
                     <tr v-if="productionRows.length === 0">
-                      <td colspan="4">
+                      <td colspan="6">
                         <div class="st-empty !border-0 !py-8">
                           <h3>Bu davrda ishlab chiqarish yo'q</h3>
                         </div>

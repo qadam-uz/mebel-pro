@@ -238,6 +238,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/branches')
   await page.getByRole('link', { name: new RegExp(`Catalog Branch ${id}`) }).click()
+  await page.getByRole('tab', { name: /Materiallar/ }).click()
 
   const addMaterial = page
     .getByRole('heading', { name: "Filial materiali qo'shish" })
@@ -250,7 +251,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await addMaterial.getByRole('button', { name: "Material qo'shish" }).click()
   await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Ombor' }).click()
+  await page.getByRole('tab', { name: 'Ombor' }).click()
   const stockIn = page.getByRole('heading', { name: 'Kirim' }).locator('xpath=ancestor::section[1]')
   await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
@@ -335,6 +336,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await expect(page.getByRole('link', { name: 'Filiallar' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Xodimlar' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Materiallar' })).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Ombor' }).click()
   await expect(page.getByRole('heading', { name: 'Kirim' })).toBeVisible()
 })
 

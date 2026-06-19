@@ -36,7 +36,7 @@ const totalPanels = computed(() =>
 
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
-  return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+  return `${String(snapshot?.name ?? 'Panel materiali')} · ${panel.panel_index}`
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -54,9 +54,9 @@ onMounted(async () => {
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <RouterLink :to="rolePath('/workshop/cutting-plans')" class="text-sm font-bold text-accent">
-          Cutting plans
+          Kesim rejalar
         </RouterLink>
-        <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Read-only cutting plan</h1>
+        <h1 class="mt-2 font-serif text-3xl font-semibold text-ink">Kesim reja</h1>
         <p v-if="plan" class="mt-2 text-base text-ink-soft">
           {{ plan.order_number }} · {{ plan.algorithm_name }}
         </p>
@@ -67,41 +67,41 @@ onMounted(async () => {
         class="mp-button mp-button-primary"
         @click="cutting.downloadWorkshopPdf(plan.id)"
       >
-        Download PDF
+        PDF yuklab olish
       </button>
     </div>
 
     <section v-if="cutting.workshopLoading" class="mp-surface p-5" aria-live="polite">
-      Loading cutting plan
+      Kesim reja yuklanmoqda
     </section>
     <section v-else-if="cutting.error === 'permission_denied'" class="mp-surface p-5 text-warning">
-      <div class="font-extrabold">Permission denied</div>
-      <p class="mt-1 text-sm">This account cannot open workshop cutting plans.</p>
+      <div class="font-extrabold">Ruxsat yo'q</div>
+      <p class="mt-1 text-sm">Bu akkaunt ustaxona kesim rejalarini ocha olmaydi.</p>
     </section>
     <section v-else-if="cutting.error" class="mp-surface p-5 text-danger">
-      Cutting plan could not be loaded. trace {{ cutting.traceId ?? 'unavailable' }}
+      Kesim rejani yuklab bo'lmadi. trace {{ cutting.traceId ?? 'unavailable' }}
     </section>
 
     <template v-else-if="plan && result">
       <section class="grid gap-3 sm:grid-cols-4">
         <div class="rounded-md bg-sunk p-3">
-          <div class="text-xs font-bold uppercase text-ink-muted">Waste</div>
+          <div class="text-xs font-bold uppercase text-ink-muted">Chiqindi</div>
           <div class="mt-1 text-xl font-extrabold text-ink">
             {{ (Number(result.waste_percentage) * 100).toFixed(2) }}%
           </div>
         </div>
         <div class="rounded-md bg-sunk p-3">
-          <div class="text-xs font-bold uppercase text-ink-muted">Panels</div>
+          <div class="text-xs font-bold uppercase text-ink-muted">Panel</div>
           <div class="mt-1 text-xl font-extrabold text-ink">{{ totalPanels }}</div>
         </div>
         <div class="rounded-md bg-sunk p-3">
-          <div class="text-xs font-bold uppercase text-ink-muted">Edge</div>
+          <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
           <div class="mt-1 text-xl font-extrabold text-ink">
             {{ metres(result.total_edge_length_mm) }}
           </div>
         </div>
         <div class="rounded-md bg-sunk p-3">
-          <div class="text-xs font-bold uppercase text-ink-muted">Cut length</div>
+          <div class="text-xs font-bold uppercase text-ink-muted">Kesim uzunligi</div>
           <div class="mt-1 text-xl font-extrabold text-ink">
             {{ metres(result.total_cut_length_mm) }}
           </div>
@@ -133,7 +133,7 @@ onMounted(async () => {
         </div>
 
         <aside v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
-          <h2 class="text-sm font-extrabold text-ink">Placements</h2>
+          <h2 class="text-sm font-extrabold text-ink">Joylashuvlar</h2>
           <div class="mt-3 grid gap-2">
             <button
               v-for="placement in activePanel.placements"
@@ -150,5 +150,15 @@ onMounted(async () => {
         </aside>
       </section>
     </template>
+
+    <section v-else class="st-empty">
+      <h3>Kesim reja topilmadi</h3>
+      <p>
+        Reja o'chirilgan bo'lishi yoki bu buyurtmaga kesim natijasi biriktirilmagan bo'lishi mumkin.
+      </p>
+      <RouterLink :to="rolePath('/workshop/cutting-plans')" class="mp-button mp-button-outline">
+        Kesim rejalariga qaytish
+      </RouterLink>
+    </section>
   </section>
 </template>

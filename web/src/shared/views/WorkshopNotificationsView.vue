@@ -3,13 +3,19 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
+import {
+  workshopNotificationDestination,
+  workshopNotificationMatchesFilter,
+} from '@/shared/app/workshopNotifications'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
 const router = useRouter()
 const rolePath = useRolePath()
+const toast = useToast()
 const filter = ref('all')
 
 const filterOptions = [
@@ -21,11 +27,7 @@ const filterOptions = [
 ]
 
 const filtered = computed(() =>
-  notifications.items.filter((item) => {
-    if (filter.value === 'unread') return item.read_at === null
-    if (filter.value === 'all') return true
-    return item.event_code.includes(filter.value) || item.entity_type === filter.value
-  }),
+  notifications.items.filter((item) => workshopNotificationMatchesFilter(item, filter.value)),
 )
 
 function title(item: NotificationItem) {
@@ -40,20 +42,40 @@ function body(item: NotificationItem) {
 }
 
 function destination(item: NotificationItem) {
-  if (item.entity_type === 'order' && item.entity_id) return `/workshop/orders/${item.entity_id}`
-  if (item.entity_type === 'branch' && item.entity_id) return `/workshop/branches/${item.entity_id}`
-  return null
+  return workshopNotificationDestination(item)
 }
 
 async function openItem(item: NotificationItem) {
-  if (item.read_at === null) await notifications.markRead(item.id)
   const to = destination(item)
-  if (to) await router.push(rolePath(to))
+  if (!to) {
+    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    return
+  }
+  if (item.read_at === null) {
+    await notifications.markRead(item.id)
+    if (notifications.actionError) {
+      toast.danger(
+        `Bildirishnomani o'qilgan deb belgilab bo'lmadi · trace_id: ${
+          notifications.traceId ?? 'unavailable'
+        }`,
+      )
+    }
+  }
+  await router.push(rolePath(to))
 }
 
 async function markAll() {
   await notifications.markAllRead()
+  if (notifications.actionError) {
+    toast.danger(
+      `Hammasini o'qilgan deb belgilab bo'lmadi · trace_id: ${
+        notifications.traceId ?? 'unavailable'
+      }`,
+    )
+    return
+  }
   await notifications.loadList(50)
+  toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
 onMounted(() => {
@@ -79,6 +101,12 @@ onMounted(() => {
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
     </div>
 
+    <div v-if="notifications.actionError" class="banner danger mb-4 max-w-[800px]">
+      <div class="grow">
+        Amal bajarilmadi · trace_id: {{ notifications.traceId ?? 'unavailable' }}
+      </div>
+    </div>
+
     <div v-if="notifications.loading" class="card max-w-[800px] p-5" aria-live="polite">
       <span class="sk-line"></span>
       <span class="sk-line mt-3"></span>
@@ -87,7 +115,10 @@ onMounted(() => {
 
     <div v-else-if="notifications.error" class="st-error max-w-[800px]">
       <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
-      <p>Asosiy ma'lumotlar tegishli sahifalarda baribir mavjud.</p>
+      <p>
+        Asosiy ma'lumotlar tegishli sahifalarda baribir mavjud. trace_id:
+        {{ notifications.traceId ?? 'unavailable' }}
+      </p>
     </div>
 
     <div v-else-if="filtered.length === 0" class="st-empty max-w-[800px]">

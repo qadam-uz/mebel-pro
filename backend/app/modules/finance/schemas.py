@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel
 
@@ -99,6 +100,11 @@ class FinanceBranchSummary(APIModel):
     net_tiyin: int
 
 
+class FinanceDailyIncome(APIModel):
+    day: date
+    income_tiyin: int
+
+
 class FinanceSummaryResponse(APIModel):
     date_from: date
     date_to: date
@@ -109,6 +115,20 @@ class FinanceSummaryResponse(APIModel):
     expense_by_category: dict[ExpenseCategory, int]
     salary_expense_tiyin: int
     branches: list[FinanceBranchSummary]
+    daily_income: list[FinanceDailyIncome]
+
+
+class WorkerProductionEdgeLine(APIModel):
+    material_id: uuid.UUID
+    material_label: str
+    thickness_mm: Decimal | None = None
+    color: str | None = None
+    length_mm: int
+
+
+class WorkerProductionThicknessLine(APIModel):
+    thickness_mm: Decimal | None = None
+    length_mm: int
 
 
 class WorkerProductionRow(APIModel):
@@ -118,6 +138,8 @@ class WorkerProductionRow(APIModel):
     cut_count: int
     orders_banded: int
     edge_length_by_material: dict[str, int]
+    edge_lines: list[WorkerProductionEdgeLine]
+    edge_length_by_thickness: list[WorkerProductionThicknessLine]
 
 
 class WorkerProductionResponse(APIModel):

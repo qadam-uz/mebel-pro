@@ -111,6 +111,16 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  function reset() {
+    unread.value = 0
+    items.value = []
+    loading.value = false
+    error.value = null
+    traceId.value = null
+    actionError.value = null
+    hasMore.value = false
+  }
+
   return {
     unread,
     items,
@@ -123,5 +133,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     loadList,
     markRead,
     markAllRead,
+    reset,
   }
 })

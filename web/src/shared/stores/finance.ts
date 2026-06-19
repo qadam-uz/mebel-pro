@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 
 export type IncomeType = 'order_payment' | 'other'
@@ -75,6 +75,7 @@ export interface FinanceSummary {
   expense_by_category: Record<ExpenseCategory, number>
   salary_expense_tiyin: number
   branches: FinanceBranchSummary[]
+  daily_income: Array<{ day: string; income_tiyin: number }>
 }
 
 export interface WorkerProductionRow {
@@ -84,6 +85,21 @@ export interface WorkerProductionRow {
   cut_count: number
   orders_banded: number
   edge_length_by_material: Record<string, number>
+  edge_lines: WorkerProductionEdgeLine[]
+  edge_length_by_thickness: WorkerProductionThicknessLine[]
+}
+
+export interface WorkerProductionEdgeLine {
+  material_id: string
+  material_label: string
+  thickness_mm: string | null
+  color: string | null
+  length_mm: number
+}
+
+export interface WorkerProductionThicknessLine {
+  thickness_mm: string | null
+  length_mm: number
 }
 
 export interface WorkerProduction {
@@ -100,10 +116,18 @@ export const useFinanceStore = defineStore('finance', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
+  const actionTraceId = ref<string | null>(null)
 
   function capture(errorValue: unknown, fallback: string) {
     error.value = fallback
     traceId.value = apiTraceId(errorValue)
+  }
+
+  function captureAction(errorValue: unknown, fallback: string) {
+    const captured = captureApiError(errorValue, fallback)
+    actionError.value = captured.code
+    actionTraceId.value = captured.traceId
   }
 
   async function loadSummary(filters: {
@@ -152,19 +176,46 @@ export const useFinanceStore = defineStore('finance', () => {
   }
 
   async function createIncome(payload: unknown) {
-    const created = await api.post<Income>('/workshop/finance/income', payload, authInit())
-    incomes.value = [created, ...incomes.value]
-    return created
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const created = await api.post<Income>('/workshop/finance/income', payload, authInit())
+      incomes.value = [created, ...incomes.value]
+      return created
+    } catch (errorValue) {
+      captureAction(errorValue, 'income_save_failed')
+      throw errorValue
+    }
+  }
+
+  async function updateIncome(id: string, payload: unknown) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const updated = await api.patch<Income>(`/workshop/finance/income/${id}`, payload, authInit())
+      incomes.value = incomes.value.map((row) => (row.id === id ? updated : row))
+      return updated
+    } catch (errorValue) {
+      captureAction(errorValue, 'income_save_failed')
+      throw errorValue
+    }
   }
 
   async function voidIncome(id: string, reason: string) {
-    const updated = await api.post<Income>(
-      `/workshop/finance/income/${id}/void`,
-      { reason },
-      authInit(),
-    )
-    incomes.value = incomes.value.map((row) => (row.id === id ? updated : row))
-    return updated
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const updated = await api.post<Income>(
+        `/workshop/finance/income/${id}/void`,
+        { reason },
+        authInit(),
+      )
+      incomes.value = incomes.value.map((row) => (row.id === id ? updated : row))
+      return updated
+    } catch (errorValue) {
+      captureAction(errorValue, 'ledger_void_failed')
+      throw errorValue
+    }
   }
 
   async function loadExpenses(filters: {
@@ -192,19 +243,50 @@ export const useFinanceStore = defineStore('finance', () => {
   }
 
   async function createExpense(payload: unknown) {
-    const created = await api.post<Expense>('/workshop/finance/expenses', payload, authInit())
-    expenses.value = [created, ...expenses.value]
-    return created
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const created = await api.post<Expense>('/workshop/finance/expenses', payload, authInit())
+      expenses.value = [created, ...expenses.value]
+      return created
+    } catch (errorValue) {
+      captureAction(errorValue, 'expense_save_failed')
+      throw errorValue
+    }
+  }
+
+  async function updateExpense(id: string, payload: unknown) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const updated = await api.patch<Expense>(
+        `/workshop/finance/expenses/${id}`,
+        payload,
+        authInit(),
+      )
+      expenses.value = expenses.value.map((row) => (row.id === id ? updated : row))
+      return updated
+    } catch (errorValue) {
+      captureAction(errorValue, 'expense_save_failed')
+      throw errorValue
+    }
   }
 
   async function voidExpense(id: string, reason: string) {
-    const updated = await api.post<Expense>(
-      `/workshop/finance/expenses/${id}/void`,
-      { reason },
-      authInit(),
-    )
-    expenses.value = expenses.value.map((row) => (row.id === id ? updated : row))
-    return updated
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const updated = await api.post<Expense>(
+        `/workshop/finance/expenses/${id}/void`,
+        { reason },
+        authInit(),
+      )
+      expenses.value = expenses.value.map((row) => (row.id === id ? updated : row))
+      return updated
+    } catch (errorValue) {
+      captureAction(errorValue, 'ledger_void_failed')
+      throw errorValue
+    }
   }
 
   async function loadProduction(filters: {
@@ -227,6 +309,18 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  function reset() {
+    summary.value = null
+    incomes.value = []
+    expenses.value = []
+    production.value = null
+    loading.value = false
+    error.value = null
+    traceId.value = null
+    actionError.value = null
+    actionTraceId.value = null
+  }
+
   return {
     summary,
     incomes,
@@ -235,13 +329,18 @@ export const useFinanceStore = defineStore('finance', () => {
     loading,
     error,
     traceId,
+    actionError,
+    actionTraceId,
     loadSummary,
     loadIncome,
     createIncome,
+    updateIncome,
     voidIncome,
     loadExpenses,
     createExpense,
+    updateExpense,
     voidExpense,
     loadProduction,
+    reset,
   }
 })

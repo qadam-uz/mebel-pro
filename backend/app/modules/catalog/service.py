@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.models.enums import AuthenticatedPrincipalType, MaterialKind, MaterialStatus, Permission
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    MaterialKind,
+    MaterialStatus,
+    PanelMaterialType,
+    Permission,
+)
 from app.modules.access.api import BranchScope, resolve_branch_scope
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.catalog.schemas import (
@@ -196,6 +202,7 @@ async def list_materials(
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
+        material_type=None,
         status_filter=status_filter,
     )
     return [
@@ -384,6 +391,7 @@ async def list_branch_catalog_options(
     search: str | None = None,
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
+    material_type: PanelMaterialType | None = None,
 ) -> list[BranchCatalogOption]:
     _require_workshop_user(principal)
     scope = await resolve_branch_scope(
@@ -415,6 +423,7 @@ async def list_branch_catalog_options(
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
+        material_type=material_type,
         status_filter=None,
     )
     return [
@@ -434,6 +443,8 @@ async def list_branch_materials(
     branch_id: uuid.UUID,
     search: str | None = None,
     kind: MaterialKind | None = None,
+    manufacturer_id: uuid.UUID | None = None,
+    material_type: PanelMaterialType | None = None,
     status_filter: MaterialStatus | None = None,
 ) -> list[BranchMaterialRecord]:
     _require_workshop_user(principal)
@@ -456,7 +467,8 @@ async def list_branch_materials(
         query,
         search=search,
         kind=kind,
-        manufacturer_id=None,
+        manufacturer_id=manufacturer_id,
+        material_type=material_type,
         status_filter=None,
     )
     return [
@@ -723,12 +735,15 @@ def _material_filters(
     search: str | None,
     kind: MaterialKind | None,
     manufacturer_id: uuid.UUID | None,
+    material_type: PanelMaterialType | None,
     status_filter: MaterialStatus | None,
 ) -> Any:
     if kind is not None:
         query = query.where(Material.kind == kind)
     if manufacturer_id is not None:
         query = query.where(Material.manufacturer_id == manufacturer_id)
+    if material_type is not None:
+        query = query.where(Material.type == material_type)
     if status_filter is not None:
         query = query.where(Material.status == status_filter)
     normalized = _optional_text(search)

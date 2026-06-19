@@ -5,9 +5,12 @@ from __future__ import annotations
 import math
 import re
 import uuid
-from collections.abc import Sequence
+from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from dataclasses import field as dataclass_field
+from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from fastapi import status
@@ -32,7 +35,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import can_access_branch
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Material
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
 from app.modules.cutting.api import cutting_result_response
 from app.modules.cutting.contracts import (
     CuttingDraft,
@@ -50,6 +53,7 @@ from app.modules.sales.schemas import (
     EdgePriceLine,
     MaterialPriceLine,
     OrderDetailResponse,
+    OrderEdgeMaterialDemand,
     OrderItemResponse,
     OrderQuoteResponse,
     OrderSettlementResponse,
@@ -123,6 +127,15 @@ class FinanceOrderTarget:
 
 
 @dataclass(frozen=True)
+class EdgeMaterialProductionLine:
+    material_id: uuid.UUID
+    material_label: str
+    thickness_mm: Decimal | None
+    color: str | None
+    length_mm: int
+
+
+@dataclass(frozen=True)
 class WorkerProductionRecord:
     user_id: uuid.UUID
     full_name: str
@@ -130,6 +143,8 @@ class WorkerProductionRecord:
     cut_count: int
     orders_banded: int
     edge_length_by_material: dict[str, int]
+    edge_lines: tuple[EdgeMaterialProductionLine, ...] = ()
+    edge_length_by_thickness: dict[str, int] = dataclass_field(default_factory=dict)
 
 
 async def place_client_order(
@@ -326,7 +341,7 @@ async def list_client_orders(
     # window; the client appends pages via offset.
     query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
-    return [await _order_response(db, order, include_detail=False) for order in rows]
+    return await _order_summary_responses(db, rows)
 
 
 async def get_client_order(
@@ -402,13 +417,34 @@ async def list_workshop_orders(
     branch_id: uuid.UUID | None = None,
     status_filter: str | None = None,
     search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    assigned_cutter_user_id: uuid.UUID | None = None,
+    assigned_edger_user_id: uuid.UUID | None = None,
+    limit: int = 30,
+    offset: int = 0,
+    max_limit: int = 100,
 ) -> list[OrderSummaryResponse]:
     _require_workshop(principal)
     query = select(Order).order_by(Order.created_at.desc(), Order.order_number.desc())
     query = _apply_workshop_order_scope(query, principal, branch_id=branch_id)
-    query = _apply_order_filters(query, status_filter=status_filter, search=search)
+    query = _apply_order_filters(
+        query,
+        status_filter=status_filter,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if assigned_cutter_user_id is not None:
+        query = query.where(Order.assigned_cutter_user_id == assigned_cutter_user_id)
+    if assigned_edger_user_id is not None:
+        query = query.where(Order.assigned_edger_user_id == assigned_edger_user_id)
+    # Keep the summary builder's per-order enrichment bounded. A fuller batch
+    # summary path can still replace this later, but the API no longer downloads
+    # or enriches an unbounded order history.
+    query = query.limit(max(1, min(limit, max_limit))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
-    return [await _order_response(db, order, include_detail=False) for order in rows]
+    return await _order_summary_responses(db, rows)
 
 
 async def get_order_finance_target(
@@ -521,7 +557,82 @@ async def list_worker_production_records(
                 edge_length_by_material=dict(row.edge_length_by_material),
             )
         )
+    material_meta = await _edge_material_meta(db, rows.values())
+    for row in list(rows.values()):
+        edge_lines = _production_edge_lines(row.edge_length_by_material, material_meta)
+        replace(
+            WorkerProductionRecord(
+                user_id=row.user_id,
+                full_name=row.full_name,
+                panels_cut=row.panels_cut,
+                cut_count=row.cut_count,
+                orders_banded=row.orders_banded,
+                edge_length_by_material=dict(row.edge_length_by_material),
+                edge_lines=tuple(edge_lines),
+                edge_length_by_thickness=_edge_length_by_thickness(edge_lines),
+            )
+        )
     return sorted(rows.values(), key=lambda row: row.full_name)
+
+
+async def _edge_material_meta(
+    db: AsyncSession,
+    rows: Iterable[WorkerProductionRecord],
+) -> dict[str, tuple[str, Decimal | None, str | None]]:
+    material_ids = {
+        uuid.UUID(material_id)
+        for row in rows
+        for material_id in row.edge_length_by_material
+        if material_id
+    }
+    if not material_ids:
+        return {}
+    result = await db.execute(
+        select(Material, Manufacturer)
+        .join(Manufacturer, Material.manufacturer_id == Manufacturer.id)
+        .where(Material.id.in_(material_ids))
+    )
+    return {
+        str(material.id): (
+            _material_label(
+                {"manufacturer_name": manufacturer.name, "name": material.name},
+                fallback=f"Material {str(material.id)[:8]}",
+            ),
+            _normalized_decimal(material.thickness_mm),
+            material.color,
+        )
+        for material, manufacturer in result.all()
+    }
+
+
+def _production_edge_lines(
+    edge_length_by_material: dict[str, int],
+    material_meta: dict[str, tuple[str, Decimal | None, str | None]],
+) -> list[EdgeMaterialProductionLine]:
+    lines: list[EdgeMaterialProductionLine] = []
+    for material_id, length in sorted(edge_length_by_material.items()):
+        meta = material_meta.get(material_id)
+        label, thickness_mm, color = (
+            meta if meta is not None else (f"Material {material_id[:8]}", None, None)
+        )
+        lines.append(
+            EdgeMaterialProductionLine(
+                material_id=uuid.UUID(material_id),
+                material_label=label,
+                thickness_mm=thickness_mm,
+                color=color,
+                length_mm=int(length),
+            )
+        )
+    return lines
+
+
+def _edge_length_by_thickness(lines: Sequence[EdgeMaterialProductionLine]) -> dict[str, int]:
+    by_thickness: dict[str, int] = {}
+    for line in lines:
+        key = str(line.thickness_mm) if line.thickness_mm is not None else "unknown"
+        by_thickness[key] = by_thickness.get(key, 0) + line.length_mm
+    return by_thickness
 
 
 async def get_workshop_order(
@@ -906,8 +1017,12 @@ async def apply_discount(
     if discount > subtotal:
         raise APIError("invalid_discount", "Discount cannot exceed subtotal")
     order.discount_tiyin = discount
-    order.discount_reason = reason
-    order.discount_applied_by_user_id = principal.principal_id
+    if discount == 0:
+        order.discount_reason = None
+        order.discount_applied_by_user_id = None
+    else:
+        order.discount_reason = reason
+        order.discount_applied_by_user_id = principal.principal_id
     order.total_tiyin = subtotal - discount
     _bump_order(order)
     await record_action(
@@ -1148,25 +1263,117 @@ async def _append_order_event(
     await db.flush()
 
 
-async def _order_response(
+async def _order_summary_responses(
     db: AsyncSession,
-    order: Order,
-    *,
-    include_detail: bool,
-    settlement_visible: bool = True,
-) -> OrderDetailResponse | OrderSummaryResponse:
-    client = await db.get(Client, order.client_id)
-    branch = await db.get(Branch, order.branch_id)
-    workshop = await db.get(Workshop, order.workshop_id)
-    if client is None or branch is None or workshop is None:
-        raise APIError("order_scope_missing", "Order scope is incomplete", status_code=500)
-    items = (
+    orders: Sequence[Order],
+) -> list[OrderSummaryResponse]:
+    if not orders:
+        return []
+
+    client_ids = {order.client_id for order in orders}
+    branch_ids = {order.branch_id for order in orders}
+    workshop_ids = {order.workshop_id for order in orders}
+    result_ids = {order.cutting_result_id for order in orders}
+    order_ids = [order.id for order in orders]
+
+    clients = {
+        row.id: row
+        for row in (await db.scalars(select(Client).where(Client.id.in_(client_ids)))).all()
+    }
+    branches = {
+        row.id: row
+        for row in (await db.scalars(select(Branch).where(Branch.id.in_(branch_ids)))).all()
+    }
+    workshops = {
+        row.id: row
+        for row in (await db.scalars(select(Workshop).where(Workshop.id.in_(workshop_ids)))).all()
+    }
+    results = {
+        row.id: row
+        for row in (
+            await db.scalars(select(CuttingResult).where(CuttingResult.id.in_(result_ids)))
+        ).all()
+    }
+    items_by_order: dict[uuid.UUID, list[OrderItem]] = defaultdict(list)
+    item_rows = (
         await db.scalars(
-            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id)
+            select(OrderItem).where(OrderItem.order_id.in_(order_ids)).order_by(OrderItem.id)
         )
     ).all()
-    warnings = await _stock_warnings(db, order)
-    base = {
+    for item in item_rows:
+        items_by_order[item.order_id].append(item)
+
+    demands_by_order: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    demanded_material_ids: set[uuid.UUID] = set()
+    demanded_branch_ids: set[uuid.UUID] = set()
+    for order in orders:
+        demands = _stock_demands_for_order_summary(order, results.get(order.cutting_result_id))
+        if not demands:
+            continue
+        demands_by_order[order.id] = demands
+        demanded_material_ids.update(demands)
+        demanded_branch_ids.add(order.branch_id)
+
+    stock_by_branch_material: dict[tuple[uuid.UUID, uuid.UUID], StockItem] = {}
+    materials: dict[uuid.UUID, Material] = {}
+    if demanded_material_ids:
+        materials = {
+            row.id: row
+            for row in (
+                await db.scalars(select(Material).where(Material.id.in_(demanded_material_ids)))
+            ).all()
+        }
+        stock_rows = (
+            await db.scalars(
+                select(StockItem).where(
+                    StockItem.branch_id.in_(demanded_branch_ids),
+                    StockItem.material_id.in_(demanded_material_ids),
+                )
+            )
+        ).all()
+        stock_by_branch_material = {(item.branch_id, item.material_id): item for item in stock_rows}
+
+    responses: list[OrderSummaryResponse] = []
+    for order in orders:
+        client = clients.get(order.client_id)
+        branch = branches.get(order.branch_id)
+        workshop = workshops.get(order.workshop_id)
+        if client is None or branch is None or workshop is None:
+            raise APIError("order_scope_missing", "Order scope is incomplete", status_code=500)
+        items = items_by_order.get(order.id, [])
+        result = results.get(order.cutting_result_id)
+        responses.append(
+            OrderSummaryResponse(
+                **_order_summary_base(
+                    order=order,
+                    client=client,
+                    branch=branch,
+                    workshop=workshop,
+                    items=items,
+                    result=result,
+                    stock_warnings=_stock_warnings_from_demands(
+                        branch_id=order.branch_id,
+                        demands=demands_by_order.get(order.id, {}),
+                        stock_by_branch_material=stock_by_branch_material,
+                        materials=materials,
+                    ),
+                )
+            )
+        )
+    return responses
+
+
+def _order_summary_base(
+    *,
+    order: Order,
+    client: Client,
+    branch: Branch,
+    workshop: Workshop,
+    items: Sequence[OrderItem],
+    result: CuttingResult | None,
+    stock_warnings: list[OrderStockWarning],
+) -> dict[str, Any]:
+    return {
         "id": order.id,
         "order_number": order.order_number,
         "client_id": order.client_id,
@@ -1211,8 +1418,40 @@ async def _order_response(
         "updated_at": order.updated_at,
         "item_count": sum(item.quantity for item in items),
         "has_banding": _items_have_banding(items),
-        "stock_warnings": warnings,
+        "planned_panels": _planned_panels(result),
+        "planned_edge_lines": _planned_edge_lines(result),
+        "stock_warnings": stock_warnings,
     }
+
+
+async def _order_response(
+    db: AsyncSession,
+    order: Order,
+    *,
+    include_detail: bool,
+    settlement_visible: bool = True,
+) -> OrderDetailResponse | OrderSummaryResponse:
+    client = await db.get(Client, order.client_id)
+    branch = await db.get(Branch, order.branch_id)
+    workshop = await db.get(Workshop, order.workshop_id)
+    if client is None or branch is None or workshop is None:
+        raise APIError("order_scope_missing", "Order scope is incomplete", status_code=500)
+    items = (
+        await db.scalars(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id)
+        )
+    ).all()
+    warnings = await _stock_warnings(db, order)
+    result = await db.get(CuttingResult, order.cutting_result_id)
+    base = _order_summary_base(
+        order=order,
+        client=client,
+        branch=branch,
+        workshop=workshop,
+        items=items,
+        result=result,
+        stock_warnings=warnings,
+    )
     if not include_detail:
         return OrderSummaryResponse(**base)
     events = (
@@ -1222,7 +1461,6 @@ async def _order_response(
             .order_by(OrderStatusEvent.changed_at.asc(), OrderStatusEvent.id.asc())
         )
     ).all()
-    result = await db.get(CuttingResult, order.cutting_result_id)
     return OrderDetailResponse(
         **base,
         items=[OrderItemResponse.model_validate(item) for item in items],
@@ -1249,6 +1487,63 @@ def _client_settlement_visible(status_value: OrderStatus) -> bool:
     return status_value in {OrderStatus.READY, OrderStatus.COMPLETED}
 
 
+def _planned_panels(result: CuttingResult | None) -> int:
+    if result is None:
+        return 0
+    return sum(int(value) for value in result.panels_used_by_material.values())
+
+
+def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialDemand]:
+    if result is None:
+        return []
+    lines: list[OrderEdgeMaterialDemand] = []
+    for material_id, consumed_mm in sorted(result.edge_consumed_shop_by_material.items()):
+        snapshot = result.material_snapshots.get(material_id, {})
+        lines.append(
+            OrderEdgeMaterialDemand(
+                material_id=uuid.UUID(material_id),
+                material_label=_material_label(
+                    snapshot,
+                    fallback=f"Material {material_id[:8]}",
+                ),
+                thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
+                color=_snapshot_text(snapshot.get("color")),
+                consumed_mm=int(consumed_mm),
+            )
+        )
+    return lines
+
+
+def _material_label(snapshot: dict[str, Any], *, fallback: str = "Material") -> str:
+    manufacturer = _snapshot_text(snapshot.get("manufacturer_name")) or ""
+    name = _snapshot_text(snapshot.get("name")) or ""
+    label = f"{manufacturer} {name}".strip()
+    return label or fallback
+
+
+def _snapshot_decimal(value: object) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return _normalized_decimal(Decimal(str(value)))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _normalized_decimal(value: Decimal) -> Decimal:
+    normalized = value.normalize()
+    if normalized == normalized.to_integral():
+        return normalized.quantize(Decimal(1))
+    return normalized
+
+
+def _snapshot_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
     recorded = int(
         await db.scalar(
@@ -1267,17 +1562,8 @@ async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementRe
 
 
 async def _stock_warnings(db: AsyncSession, order: Order) -> list[OrderStockWarning]:
-    if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED, OrderStatus.READY}:
-        return []
     result = await db.get(CuttingResult, order.cutting_result_id)
-    if result is None:
-        return []
-    demands: dict[uuid.UUID, int] = {}
-    if order.cut_completed_at is None:
-        demands.update(_panel_stock_demands(result))
-    if order.edge_completed_at is None:
-        for material_id, quantity in _edge_stock_demands(result).items():
-            demands[material_id] = demands.get(material_id, 0) + quantity
+    demands = _stock_demands_for_order_summary(order, result)
     if not demands:
         return []
     rows = (
@@ -1291,9 +1577,50 @@ async def _stock_warnings(db: AsyncSession, order: Order) -> list[OrderStockWarn
         )
     ).all()
     by_material = {item.material_id: (item, material) for item, material in rows}
+    stock_by_branch_material = {
+        (order.branch_id, item.material_id): item for item, material in rows
+    }
+    materials = {material.id: material for item, material in rows}
+    return _stock_warnings_from_demands(
+        branch_id=order.branch_id,
+        demands=demands,
+        stock_by_branch_material=stock_by_branch_material,
+        materials=materials,
+        by_material=by_material,
+    )
+
+
+def _stock_demands_for_order_summary(
+    order: Order,
+    result: CuttingResult | None,
+) -> dict[uuid.UUID, int]:
+    if result is None:
+        return {}
+    if order.status in {OrderStatus.CANCELLED, OrderStatus.COMPLETED, OrderStatus.READY}:
+        return {}
+    demands: dict[uuid.UUID, int] = {}
+    if order.cut_completed_at is None:
+        demands.update(_panel_stock_demands(result))
+    if order.edge_completed_at is None:
+        for material_id, quantity in _edge_stock_demands(result).items():
+            demands[material_id] = demands.get(material_id, 0) + quantity
+    return demands
+
+
+def _stock_warnings_from_demands(
+    *,
+    branch_id: uuid.UUID,
+    demands: dict[uuid.UUID, int],
+    stock_by_branch_material: dict[tuple[uuid.UUID, uuid.UUID], StockItem],
+    materials: dict[uuid.UUID, Material],
+    by_material: dict[uuid.UUID, tuple[StockItem | None, Material | None]] | None = None,
+) -> list[OrderStockWarning]:
     warnings: list[OrderStockWarning] = []
     for material_id, required in demands.items():
-        item, material = by_material.get(material_id, (None, None))
+        item = stock_by_branch_material.get((branch_id, material_id))
+        material = materials.get(material_id)
+        if by_material is not None:
+            item, material = by_material.get(material_id, (item, material))
         on_hand = item.on_hand if item is not None else 0
         min_stock = item.min_stock if item is not None else 0
         projected = on_hand - required
@@ -1685,7 +2012,21 @@ def _apply_workshop_order_scope(
     return query.where(Order.branch_id.in_(branch_ids))
 
 
-def _apply_order_filters(query: Any, *, status_filter: str | None, search: str | None) -> Any:
+def _apply_order_filters(
+    query: Any,
+    *,
+    status_filter: str | None,
+    search: str | None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> Any:
+    if date_from and date_to and date_from > date_to:
+        raise APIError("invalid_date_range", "date_from must be before date_to")
+    if date_from:
+        query = query.where(Order.created_at >= datetime.combine(date_from, time.min, tzinfo=UTC))
+    if date_to:
+        end_exclusive = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        query = query.where(Order.created_at < end_exclusive)
     if status_filter and status_filter != "all":
         if status_filter == "active":
             query = query.where(
@@ -1897,6 +2238,9 @@ def _bump_order(order: Order) -> None:
 
 async def _next_order_number(db: AsyncSession, now: datetime) -> str:
     prefix = f"ORD-{now.year}-"
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"orders:{prefix}"))))
     count = await db.scalar(
         select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
     )

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -134,6 +135,14 @@ class OrderStockWarning(APIModel):
     projected_after: int
 
 
+class OrderEdgeMaterialDemand(APIModel):
+    material_id: uuid.UUID
+    material_label: str
+    thickness_mm: Decimal | None = None
+    color: str | None = None
+    consumed_mm: int
+
+
 class OrderSettlementResponse(APIModel):
     total_tiyin: int
     recorded_tiyin: int
@@ -192,6 +201,8 @@ class OrderSummaryResponse(APIModel):
     updated_at: datetime
     item_count: int
     has_banding: bool
+    planned_panels: int = 0
+    planned_edge_lines: list[OrderEdgeMaterialDemand] = Field(default_factory=list)
     stock_warnings: list[OrderStockWarning] = Field(default_factory=list)
 
 

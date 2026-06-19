@@ -29,11 +29,17 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
       item('Kesish navbati', input.path('/workshop/cutting'), 'Ishlab chiqarish', 'scissors'),
     )
     nav.push(item('Krom navbati', input.path('/workshop/banding'), 'Ishlab chiqarish', 'layers'))
+    nav.push(
+      item('Kesim rejalar', input.path('/workshop/cutting-plans'), 'Ishlab chiqarish', 'grid'),
+    )
     nav.push(item('Ombor', input.path('/workshop/inventory'), 'Resurslar', 'box'))
     nav.push(item('Material katalogi', input.path('/workshop/catalog'), 'Resurslar', 'grid'))
     nav.push(item('Hisobotlar', input.path('/workshop/finance'), 'Moliya', 'chart'))
     nav.push(
       item('Tushum va xarajat', input.path('/workshop/finance/expenses'), 'Moliya', 'wallet'),
+    )
+    nav.push(
+      item('Xodimlar mehnati', input.path('/workshop/finance/production'), 'Moliya', 'users'),
     )
     nav.push(item('Filiallar', input.path('/workshop/branches'), 'Tizim', 'store'))
     nav.push(item('Xodimlar', input.path('/workshop/settings/users'), 'Tizim', 'users'))
@@ -47,7 +53,7 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     return nav
   }
 
-  if (hasAny(selectedBranch, ['view_dashboard', 'manage_orders'])) {
+  if (hasAny(selectedBranch, ['manage_orders'])) {
     nav.push(item('Buyurtmalar', input.path('/workshop/orders'), 'Boshqaruv', 'orders'))
   }
   if (hasAny(selectedBranch, ['process_production'])) {
@@ -55,6 +61,9 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
       item('Kesish navbati', input.path('/workshop/cutting'), 'Ishlab chiqarish', 'scissors'),
     )
     nav.push(item('Krom navbati', input.path('/workshop/banding'), 'Ishlab chiqarish', 'layers'))
+    nav.push(
+      item('Kesim rejalar', input.path('/workshop/cutting-plans'), 'Ishlab chiqarish', 'grid'),
+    )
   }
   if (hasAny(selectedBranch, ['manage_inventory'])) {
     nav.push(item('Ombor', input.path('/workshop/inventory'), 'Resurslar', 'box'))
@@ -66,6 +75,9 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     nav.push(item('Hisobotlar', input.path('/workshop/finance'), 'Moliya', 'chart'))
     nav.push(
       item('Tushum va xarajat', input.path('/workshop/finance/expenses'), 'Moliya', 'wallet'),
+    )
+    nav.push(
+      item('Xodimlar mehnati', input.path('/workshop/finance/production'), 'Moliya', 'users'),
     )
   }
   return nav

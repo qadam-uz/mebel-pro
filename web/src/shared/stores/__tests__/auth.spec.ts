@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/shared/api/client'
 import { useAuthStore, type TokenResponse } from '@/shared/stores/auth'
+import { useFinanceStore } from '@/shared/stores/finance'
+import { useNotificationsStore } from '@/shared/stores/notifications'
+import { useOrdersStore } from '@/shared/stores/orders'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 vi.mock('@/shared/api/client', () => {
   class ApiError extends Error {
@@ -92,6 +96,35 @@ describe('auth store', () => {
     expect(api.del).toHaveBeenCalledWith('/auth/sessions/current', { accessToken: 'access-1' })
     expect(auth.accessToken).toBeNull()
     expect(auth.me).toBeNull()
+  })
+
+  it('resets session-bearing stores on logout so shared devices do not retain tenant data', async () => {
+    vi.mocked(api.post).mockResolvedValue(tokenResponse)
+    vi.mocked(api.del).mockResolvedValue('')
+    const auth = useAuthStore()
+    const workshop = useWorkshopStore()
+    const orders = useOrdersStore()
+    const finance = useFinanceStore()
+    const notifications = useNotificationsStore()
+    await auth.platformLogin('admin', 'Admin123')
+
+    workshop.users = [{ id: 'staff-1', full_name: 'Staff' } as never]
+    workshop.lastTempPassword = 'Temp123'
+    orders.workshopOrders = [{ id: 'order-1' } as never]
+    orders.clientOrders = [{ id: 'client-order-1' } as never]
+    finance.incomes = [{ id: 'income-1' } as never]
+    notifications.items = [{ id: 'notification-1' } as never]
+    notifications.unread = 1
+
+    await auth.logoutCurrent()
+
+    expect(workshop.users).toEqual([])
+    expect(workshop.lastTempPassword).toBeNull()
+    expect(orders.workshopOrders).toEqual([])
+    expect(orders.clientOrders).toEqual([])
+    expect(finance.incomes).toEqual([])
+    expect(notifications.items).toEqual([])
+    expect(notifications.unread).toBe(0)
   })
 
   it('requests a client OTP and clears the last error (CB-110)', async () => {

@@ -32,5 +32,10 @@ export const useClientProfileStore = defineStore('clientProfile', () => {
     return await api.patch<ClientProfile>('/client/profile', payload, authInit())
   }
 
-  return { profile, branchOptions, load, patch }
+  function reset() {
+    profile.value = null
+    branchOptions.value = []
+  }
+
+  return { profile, branchOptions, load, patch, reset }
 })

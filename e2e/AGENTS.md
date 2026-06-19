@@ -30,8 +30,10 @@ pnpm typecheck               # tsc --noEmit
 `playwright.config.ts`:
 - `baseURL` = `E2E_BASE_URL` env var, else `http://localhost:5173`.
 - When `E2E_BASE_URL` is **unset**, Playwright's `webServer` boots the local stack:
-  1. `uv --directory ../backend run fastapi dev app/main.py --port 8000` (needs uv + a reachable Postgres — `docker compose -f ../deploy/compose.yaml up -d postgres`),
-  2. `pnpm --dir ../web dev` (Vite on :5173, which proxies `/api` → :8000).
+  1. Docker Compose starts Postgres + MinIO, creates the MinIO bucket, recreates the
+     `mebel_e2e` database, migrates it, then runs
+     `uv --directory ../backend run fastapi dev app/main.py --port 8000`.
+  2. `pnpm --dir ../web dev` runs Vite on :5173, which proxies `/api` → :8000.
   `reuseExistingServer` is on locally, so if you already have them running it won't double-start.
 - Set `E2E_BASE_URL=https://staging.example.com pnpm test` to run against a deployed environment (no servers booted).
 - `CI` env: retries=2, single worker, `github` + `html` reporters, `forbidOnly`.

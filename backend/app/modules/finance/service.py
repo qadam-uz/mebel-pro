@@ -2,7 +2,8 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 from fastapi import status
 from sqlalchemy import func, select
@@ -24,15 +25,24 @@ from app.modules.finance.schemas import (
     ExpenseCreateRequest,
     ExpensePatchRequest,
     FinanceBranchSummary,
+    FinanceDailyIncome,
     FinanceSummaryResponse,
     IncomeCreateRequest,
     IncomePatchRequest,
     VoidLedgerRequest,
+    WorkerProductionEdgeLine,
     WorkerProductionResponse,
     WorkerProductionRow,
+    WorkerProductionThicknessLine,
 )
 from app.modules.sales.api import get_order_finance_target, list_worker_production_records
-from app.modules.support.api import record_action, record_status_change
+from app.modules.support.api import (
+    RECEIPT_CONTENT_TYPES,
+    attach_file,
+    record_action,
+    record_status_change,
+    replace_attached_file,
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +101,7 @@ async def create_income(
     payload: IncomeCreateRequest,
 ) -> Income:
     _positive_amount(payload.amount_tiyin)
+    _not_future(payload.received_on)
     workshop_id = _workshop_principal_id(principal)
     branch_id = payload.branch_id
     order_id = payload.order_id
@@ -133,6 +144,14 @@ async def create_income(
     )
     db.add(income)
     await db.flush()
+    income.receipt_file_id = await attach_file(
+        db,
+        principal=principal,
+        file_id=payload.receipt_file_id,
+        entity_type="income",
+        entity_id=income.id,
+        allowed_content_types=RECEIPT_CONTENT_TYPES,
+    )
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -180,11 +199,20 @@ async def update_income(
     if payload.method is not None:
         income.method = payload.method
     if payload.received_on is not None:
+        _not_future(payload.received_on)
         income.received_on = payload.received_on
     if "note" in payload.model_fields_set:
         income.note = _optional_text(payload.note)
     if "receipt_file_id" in payload.model_fields_set:
-        income.receipt_file_id = payload.receipt_file_id
+        income.receipt_file_id = await replace_attached_file(
+            db,
+            principal=principal,
+            file_id=payload.receipt_file_id,
+            current_file_id=income.receipt_file_id,
+            entity_type="income",
+            entity_id=income.id,
+            allowed_content_types=RECEIPT_CONTENT_TYPES,
+        )
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -286,6 +314,7 @@ async def create_expense(
     payload: ExpenseCreateRequest,
 ) -> Expense:
     _positive_amount(payload.amount_tiyin)
+    _not_future(payload.incurred_on)
     scope = await _write_scope(db, principal=principal, branch_id=payload.branch_id)
     expense = Expense(
         workshop_id=scope.workshop_id,
@@ -301,6 +330,14 @@ async def create_expense(
     )
     db.add(expense)
     await db.flush()
+    expense.receipt_file_id = await attach_file(
+        db,
+        principal=principal,
+        file_id=payload.receipt_file_id,
+        entity_type="expense",
+        entity_id=expense.id,
+        allowed_content_types=RECEIPT_CONTENT_TYPES,
+    )
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -334,13 +371,22 @@ async def update_expense(
         _positive_amount(payload.amount_tiyin)
         expense.amount_tiyin = payload.amount_tiyin
     if payload.incurred_on is not None:
+        _not_future(payload.incurred_on)
         expense.incurred_on = payload.incurred_on
     if payload.description is not None:
         expense.description = _required_text(payload.description, "description_required")
     if "vendor" in payload.model_fields_set:
         expense.vendor = _optional_text(payload.vendor)
     if "receipt_file_id" in payload.model_fields_set:
-        expense.receipt_file_id = payload.receipt_file_id
+        expense.receipt_file_id = await replace_attached_file(
+            db,
+            principal=principal,
+            file_id=payload.receipt_file_id,
+            current_file_id=expense.receipt_file_id,
+            entity_type="expense",
+            entity_id=expense.id,
+            allowed_content_types=RECEIPT_CONTENT_TYPES,
+        )
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -469,6 +515,12 @@ async def finance_summary(
         )
         for row in branches
     ]
+    daily_income_by_date = {
+        date_from + timedelta(days=offset): 0 for offset in range((date_to - date_from).days + 1)
+    }
+    for row in incomes:
+        if row.status is LedgerStatus.RECORDED and row.received_on in daily_income_by_date:
+            daily_income_by_date[row.received_on] += row.amount_tiyin
     return FinanceSummaryResponse(
         date_from=date_from,
         date_to=date_to,
@@ -479,6 +531,10 @@ async def finance_summary(
         expense_by_category=expense_by_category,
         salary_expense_tiyin=expense_by_category[ExpenseCategory.SALARY],
         branches=branches,
+        daily_income=[
+            FinanceDailyIncome(day=day, income_tiyin=amount)
+            for day, amount in daily_income_by_date.items()
+        ],
     )
 
 
@@ -509,10 +565,36 @@ async def worker_production(
                 cut_count=row.cut_count,
                 orders_banded=row.orders_banded,
                 edge_length_by_material=row.edge_length_by_material,
+                edge_lines=[
+                    WorkerProductionEdgeLine(
+                        material_id=line.material_id,
+                        material_label=line.material_label,
+                        thickness_mm=line.thickness_mm,
+                        color=line.color,
+                        length_mm=line.length_mm,
+                    )
+                    for line in row.edge_lines
+                ],
+                edge_length_by_thickness=[
+                    WorkerProductionThicknessLine(
+                        thickness_mm=_thickness_value(thickness),
+                        length_mm=length,
+                    )
+                    for thickness, length in sorted(row.edge_length_by_thickness.items())
+                ],
             )
             for row in records
         ],
     )
+
+
+def _thickness_value(value: str) -> Decimal | None:
+    if value == "unknown":
+        return None
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        return None
 
 
 async def _read_scope(
@@ -698,6 +780,11 @@ def _require_recorded(status_value: LedgerStatus) -> None:
 def _positive_amount(value: int) -> None:
     if value <= 0:
         raise APIError("invalid_amount", "Amount must be positive")
+
+
+def _not_future(value: date) -> None:
+    if value > datetime.now(UTC).date():
+        raise APIError("future_date_not_allowed", "Ledger date cannot be in the future")
 
 
 def _validate_amount_filters(min_amount_tiyin: int | None, max_amount_tiyin: int | None) -> None:

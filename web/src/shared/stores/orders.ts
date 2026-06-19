@@ -97,6 +97,14 @@ export interface OrderStockWarning {
   projected_after: number
 }
 
+export interface OrderEdgeMaterialDemand {
+  material_id: string
+  material_label: string
+  thickness_mm: string | null
+  color: string | null
+  consumed_mm: number
+}
+
 export interface OrderSettlement {
   total_tiyin: number
   recorded_tiyin: number
@@ -108,6 +116,18 @@ export interface WorkshopWorkerOption {
   full_name: string
   is_owner: boolean
   home_branch_id: string | null
+}
+
+export interface WorkshopOrderFilters {
+  branch_id?: string | null
+  status?: string
+  search?: string
+  date_from?: string | null
+  date_to?: string | null
+  assigned_cutter_user_id?: string | null
+  assigned_edger_user_id?: string | null
+  limit?: number
+  offset?: number
 }
 
 export interface OrderSummary {
@@ -155,6 +175,8 @@ export interface OrderSummary {
   updated_at: string
   item_count: number
   has_banding: boolean
+  planned_panels: number
+  planned_edge_lines: OrderEdgeMaterialDemand[]
   stock_warnings: OrderStockWarning[]
 }
 
@@ -177,6 +199,8 @@ export const useOrdersStore = defineStore('orders', () => {
   const clientOrders = ref<OrderSummary[]>([])
   const ordersHasMore = ref(false)
   const workshopOrders = ref<OrderSummary[]>([])
+  const recentWorkshopOrders = ref<OrderSummary[]>([])
+  const workshopOrdersHasMore = ref(false)
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
@@ -291,15 +315,73 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/client/orders/${id}/cancel`, { version, reason })
   }
 
-  async function loadWorkshopOrders(
-    filters: { branch_id?: string | null; status?: string; search?: string } = {},
-  ) {
+  async function loadWorkshopOrders(filters: WorkshopOrderFilters = {}) {
+    const limit = filters.limit ?? ORDERS_PAGE_LIMIT
+    const offset = filters.offset ?? 0
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      workshopOrders.value = await api.get<OrderSummary[]>(
-        withQuery('/workshop/orders', filters),
+      const page = await api.get<OrderSummary[]>(
+        withQuery('/workshop/orders', {
+          branch_id: filters.branch_id,
+          status: filters.status,
+          search: filters.search,
+          date_from: filters.date_from,
+          date_to: filters.date_to,
+          assigned_cutter_user_id: filters.assigned_cutter_user_id,
+          assigned_edger_user_id: filters.assigned_edger_user_id,
+          limit,
+          offset,
+        }),
+        authInit(),
+      )
+      workshopOrders.value = offset === 0 ? page : [...workshopOrders.value, ...page]
+      workshopOrdersHasMore.value = page.length === limit
+    } catch (errorValue) {
+      captureError(errorValue, 'workshop_orders_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function downloadWorkshopOrdersCsv(
+    filters: Omit<WorkshopOrderFilters, 'limit' | 'offset'>,
+    filename = 'workshop-orders.csv',
+  ) {
+    await downloadBlob(
+      withQuery('/workshop/orders/export.csv', {
+        branch_id: filters.branch_id,
+        status: filters.status,
+        search: filters.search,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        assigned_cutter_user_id: filters.assigned_cutter_user_id,
+        assigned_edger_user_id: filters.assigned_edger_user_id,
+      }),
+      filename,
+      authInit(),
+    )
+  }
+
+  async function loadRecentWorkshopOrders(
+    filters: {
+      branch_id?: string | null
+      limit?: number
+    } = {},
+  ) {
+    const limit = filters.limit ?? 8
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      recentWorkshopOrders.value = await api.get<OrderSummary[]>(
+        withQuery('/workshop/orders', {
+          branch_id: filters.branch_id,
+          status: 'all',
+          limit,
+          offset: 0,
+        }),
         authInit(),
       )
     } catch (errorValue) {
@@ -390,13 +472,19 @@ export const useOrdersStore = defineStore('orders', () => {
     actionLoading.value = true
     actionError.value = null
     actionTraceId.value = null
+    const scope = path.startsWith('/client/')
+      ? 'client'
+      : path.startsWith('/workshop/')
+        ? 'workshop'
+        : 'unknown'
     try {
       const order =
         method === 'post'
           ? await api.post<OrderDetail>(path, payload, authInit())
           : await api.patch<OrderDetail>(path, payload, authInit())
       currentOrder.value = order
-      patchOrder(order)
+      if (scope === 'client') patchClientOrder(order)
+      else if (scope === 'workshop') patchWorkshopOrder(order)
       return order
     } catch (errorValue) {
       // On an optimistic-concurrency conflict the cached version is stale; refetch
@@ -418,9 +506,20 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
-  function patchOrder(order: OrderSummary) {
-    clientOrders.value = [order, ...clientOrders.value.filter((item) => item.id !== order.id)]
-    workshopOrders.value = [order, ...workshopOrders.value.filter((item) => item.id !== order.id)]
+  function replaceOrPrependOrder(list: OrderSummary[], order: OrderSummary) {
+    const index = list.findIndex((item) => item.id === order.id)
+    if (index === -1) return [order, ...list]
+    const next = [...list]
+    next[index] = order
+    return next
+  }
+
+  function patchClientOrder(order: OrderSummary) {
+    clientOrders.value = replaceOrPrependOrder(clientOrders.value, order)
+  }
+
+  function patchWorkshopOrder(order: OrderSummary) {
+    workshopOrders.value = replaceOrPrependOrder(workshopOrders.value, order)
   }
 
   async function downloadPdf(path: string, filename: string, id: string) {
@@ -437,9 +536,30 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
+  function reset() {
+    clientOrders.value = []
+    ordersHasMore.value = false
+    workshopOrders.value = []
+    recentWorkshopOrders.value = []
+    workshopOrdersHasMore.value = false
+    currentOrder.value = null
+    workerOptions.value = []
+    loading.value = false
+    actionLoading.value = false
+    error.value = null
+    traceId.value = null
+    actionError.value = null
+    actionTraceId.value = null
+    downloadingId.value = null
+    downloadError.value = null
+    downloadTraceId.value = null
+  }
+
   return {
     clientOrders,
     workshopOrders,
+    recentWorkshopOrders,
+    workshopOrdersHasMore,
     currentOrder,
     workerOptions,
     loading,
@@ -459,6 +579,8 @@ export const useOrdersStore = defineStore('orders', () => {
     loadClientOrder,
     cancelClientOrder,
     loadWorkshopOrders,
+    downloadWorkshopOrdersCsv,
+    loadRecentWorkshopOrders,
     loadWorkshopOrder,
     loadWorkers,
     approve,
@@ -472,5 +594,6 @@ export const useOrdersStore = defineStore('orders', () => {
     updateNote,
     downloadClientPdf,
     downloadWorkshopPdf,
+    reset,
   }
 })

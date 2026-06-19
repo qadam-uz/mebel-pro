@@ -26,6 +26,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import can_access_branch
 from app.modules.catalog.contracts import BranchMaterial, Material
+from app.modules.finance.contracts import Expense, Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.support.contracts import File as StoredFile
 from app.modules.workshop.contracts import Branch, Workshop
@@ -250,6 +251,17 @@ async def get_file_for_read(
         )
     ):
         return row
+    if (
+        row.entity_type in {"income", "expense"}
+        and row.entity_id is not None
+        and await _can_read_finance_file(
+            db,
+            principal=principal,
+            entity_type=row.entity_type,
+            entity_id=row.entity_id,
+        )
+    ):
+        return row
     raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
 
@@ -391,4 +403,35 @@ async def _can_read_stock_transaction_file(
         workshop_id=branch.workshop_id,
         branch_id=stock_item.branch_id,
         permission=Permission.MANAGE_INVENTORY,
+    )
+
+
+async def _can_read_finance_file(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    entity_type: str,
+    entity_id: uuid.UUID,
+) -> bool:
+    if principal.principal_type is not AuthenticatedPrincipalType.WORKSHOP_USER:
+        return False
+    row = (
+        await db.get(Income, entity_id)
+        if entity_type == "income"
+        else await db.get(Expense, entity_id)
+    )
+    if row is None or principal.workshop_id != row.workshop_id:
+        return False
+    if row.branch_id is None:
+        return principal.is_owner
+    return can_access_branch(
+        principal,
+        workshop_id=row.workshop_id,
+        branch_id=row.branch_id,
+        permission=Permission.MANAGE_FINANCE,
+    ) or can_access_branch(
+        principal,
+        workshop_id=row.workshop_id,
+        branch_id=row.branch_id,
+        permission=Permission.VIEW_FINANCE_REPORTS,
     )

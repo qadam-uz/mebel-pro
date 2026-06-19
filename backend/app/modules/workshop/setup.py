@@ -1,18 +1,22 @@
 """Workshop profile, branch, and pricing setup use cases."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.models.enums import BranchStatus
+from app.models.enums import BranchStatus, OrderStatus
 from app.modules.access.api import normalize_uz_phone
-from app.modules.catalog.contracts import BranchPricing
+from app.modules.access.contracts import PermissionGrant, WorkshopUser
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing
+from app.modules.inventory.contracts import StockItem
+from app.modules.sales.contracts import Order
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
     record_action,
@@ -29,6 +33,14 @@ from app.modules.workshop.schemas import (
     dump_working_hours,
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
+
+
+@dataclass(frozen=True)
+class BranchOperationalCounts:
+    active_orders: int = 0
+    materials: int = 0
+    low_stock: int = 0
+    staff: int = 0
 
 
 async def get_settings(
@@ -92,6 +104,86 @@ async def list_branches(
             )
         ).all()
     )
+
+
+async def branch_operational_counts(
+    db: AsyncSession,
+    branch_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, BranchOperationalCounts]:
+    ids = list(dict.fromkeys(branch_ids))
+    if not ids:
+        return {}
+    active_orders: dict[uuid.UUID, int] = {}
+    material_counts: dict[uuid.UUID, int] = {}
+    low_stock_counts: dict[uuid.UUID, int] = {}
+    staff_by_branch: dict[uuid.UUID, set[uuid.UUID]] = {branch_id: set() for branch_id in ids}
+
+    order_rows = (
+        await db.execute(
+            select(Order.branch_id, func.count(Order.id))
+            .where(
+                Order.branch_id.in_(ids),
+                ~Order.status.in_([OrderStatus.COMPLETED, OrderStatus.CANCELLED]),
+            )
+            .group_by(Order.branch_id)
+        )
+    ).all()
+    for branch_id, count in order_rows:
+        active_orders[branch_id] = int(count)
+
+    material_rows = (
+        await db.execute(
+            select(BranchMaterial.branch_id, func.count(BranchMaterial.id))
+            .where(BranchMaterial.branch_id.in_(ids))
+            .group_by(BranchMaterial.branch_id)
+        )
+    ).all()
+    for branch_id, count in material_rows:
+        material_counts[branch_id] = int(count)
+
+    low_stock_rows = (
+        await db.execute(
+            select(StockItem.branch_id, func.count(StockItem.id))
+            .where(
+                StockItem.branch_id.in_(ids),
+                StockItem.on_hand <= StockItem.min_stock,
+            )
+            .group_by(StockItem.branch_id)
+        )
+    ).all()
+    for branch_id, count in low_stock_rows:
+        low_stock_counts[branch_id] = int(count)
+
+    home_rows = (
+        await db.execute(
+            select(WorkshopUser.home_branch_id, WorkshopUser.id).where(
+                WorkshopUser.home_branch_id.in_(ids)
+            )
+        )
+    ).all()
+    for branch_id, user_id in home_rows:
+        if branch_id in staff_by_branch:
+            staff_by_branch[branch_id].add(user_id)
+
+    grant_rows = (
+        await db.execute(
+            select(PermissionGrant.branch_id, PermissionGrant.workshop_user_id).where(
+                PermissionGrant.branch_id.in_(ids)
+            )
+        )
+    ).all()
+    for branch_id, user_id in grant_rows:
+        staff_by_branch[branch_id].add(user_id)
+
+    return {
+        branch_id: BranchOperationalCounts(
+            active_orders=active_orders.get(branch_id, 0),
+            materials=material_counts.get(branch_id, 0),
+            low_stock=low_stock_counts.get(branch_id, 0),
+            staff=len(staff_by_branch.get(branch_id, set())),
+        )
+        for branch_id in ids
+    }
 
 
 async def create_branch(
@@ -283,10 +375,6 @@ async def _owner_branch(
     if branch is None or branch.workshop_id != workshop_id:
         raise APIError("branch_not_found", "Branch not found", status_code=404)
     return branch
-
-
-def active_orders_count(_: Branch) -> int:
-    return 0
 
 
 def _validate_coordinates(latitude: Decimal, longitude: Decimal) -> None:

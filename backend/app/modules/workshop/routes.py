@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, status
 
 from app.api.deps import AccountReadyPrincipal, Session
+from app.models.enums import UserStatus
 from app.modules.access.schemas import PermissionGrantResponse, SessionResponse
 from app.modules.workshop.api import (
     block_user,
@@ -63,8 +64,17 @@ async def branch_context_route(
 async def users_index(
     principal: AccountReadyPrincipal,
     db: Session,
+    search: str | None = None,
+    branch_id: uuid.UUID | None = None,
+    status: UserStatus | None = None,
 ) -> list[WorkshopUserResponse]:
-    rows = await list_users(db, principal=principal)
+    rows = await list_users(
+        db,
+        principal=principal,
+        search=search,
+        branch_id=branch_id,
+        status=status,
+    )
     return [await _user_response(db, row) for row in rows]
 
 
@@ -220,6 +230,7 @@ async def _user_response(db: Session, user: object) -> WorkshopUserResponse:
         status=user.status,
         password_reset_required=user.password_reset_required,
         created_at=user.created_at,
+        last_login_at=user.last_login_at,
         grants=[
             PermissionGrantResponse(permission=grant.permission, branch_id=grant.branch_id)
             for grant in grants

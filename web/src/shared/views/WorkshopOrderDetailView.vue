@@ -1,15 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  discountDraftFromOrder,
+  parseDiscountDraft,
+  productionTimelineDetails,
+  type WorkshopDiscountKind,
+} from '@/shared/app/workshopOrderDetail'
+import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useToast } from '@/shared/composables/useToast'
+import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDate, formatTiyin } from '@/shared/formatters'
-import { useOrdersStore, type OrderItem, type OrderStockWarning } from '@/shared/stores/orders'
+import { useAuthStore } from '@/shared/stores/auth'
+import {
+  useOrdersStore,
+  type OrderDetail,
+  type OrderEvent,
+  type OrderItem,
+  type OrderStockWarning,
+} from '@/shared/stores/orders'
 import {
   metres,
   type CuttingPanel,
@@ -19,25 +36,65 @@ import {
 
 const route = useRoute()
 const rolePath = useRolePath()
+const auth = useAuthStore()
+const permissions = useWorkshopPermissions()
+const toast = useToast()
 const orders = useOrdersStore()
 const orderId = computed(() => String(route.params.order_id))
 const cutterId = ref<string | null>(null)
 const edgerId = ref<string | null>(null)
 const completedById = ref<string | null>(null)
 const noteDraft = ref('')
-const discountKind = ref('fixed')
+const discountKind = ref<WorkshopDiscountKind>('fixed')
 const discountValue = ref('')
 const discountReason = ref('')
 const activeTab = ref<'overview' | 'cutting' | 'timeline'>('overview')
 const actionError = ref<string | null>(null)
+const actionTraceId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const reasonDialogAction = ref<'revert' | 'cancel' | null>(null)
 const reasonDraft = ref('')
 const markCollectedOpen = ref(false)
+const actionPanel = ref<HTMLElement | null>(null)
+const discountPanel = ref<HTMLElement | null>(null)
+const discountValueInput = ref<HTMLInputElement | null>(null)
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
+const canManageOrders = computed(() =>
+  permissions.canOnBranch(p.manageOrders, order.value?.branch_id),
+)
+const canProcessProduction = computed(() =>
+  permissions.canOnBranch(p.processProduction, order.value?.branch_id),
+)
+const canCompleteCutting = computed(() => {
+  const current = order.value
+  if (!current) return false
+  return (
+    canManageOrders.value ||
+    (canProcessProduction.value && current.assigned_cutter_user_id === auth.me?.principal_id)
+  )
+})
+const canCompleteBanding = computed(() => {
+  const current = order.value
+  if (!current) return false
+  return (
+    canManageOrders.value ||
+    (canProcessProduction.value && current.assigned_edger_user_id === auth.me?.principal_id)
+  )
+})
+const canViewSettlement = computed(() =>
+  permissions.canAnyOnBranch([p.manageFinance, p.viewFinanceReports], order.value?.branch_id),
+)
+const hasLifecycleAction = computed(() => {
+  const current = order.value
+  if (!current) return false
+  if (['new', 'confirmed', 'ready'].includes(current.status)) return canManageOrders.value
+  if (current.status === 'cutting') return canManageOrders.value || canCompleteCutting.value
+  if (current.status === 'edge_banding') return canManageOrders.value || canCompleteBanding.value
+  return false
+})
 const workerOptions = computed<ChoiceOption[]>(() =>
   orders.workerOptions.map((worker) => ({
     value: worker.id,
@@ -58,9 +115,38 @@ const totalPanels = computed(() =>
     : 0,
 )
 const discountOptions: ChoiceOption[] = [
-  { value: 'fixed', label: 'Fixed', meta: 'value in tiyin' },
-  { value: 'percent', label: 'Percent', meta: '0-100 percent' },
+  { value: 'fixed', label: "So'm", meta: "aniq chegirma so'mda" },
+  { value: 'percent', label: 'Foiz', meta: '0-100 foiz' },
 ]
+const orderTabs: ChoiceOption[] = [
+  { value: 'overview', label: 'Umumiy' },
+  { value: 'cutting', label: 'Chizma' },
+  { value: 'timeline', label: 'Tarix' },
+]
+const discountButtonLabel = computed(() =>
+  order.value?.discount_tiyin ? 'Chegirmani yangilash' : "Chegirma qo'shish",
+)
+const revertTargetLabel = computed(() => {
+  const current = order.value
+  if (!current) return ''
+  if (current.status === 'cutting') return 'tasdiqlangan holatiga'
+  if (current.status === 'edge_banding') return 'kesishga'
+  if (current.status === 'ready') return current.has_banding ? 'kromga' : 'kesishga'
+  return ''
+})
+const revertButtonLabel = computed(() =>
+  revertTargetLabel.value ? `${revertTargetLabel.value} qaytarish` : 'Bir qadam orqaga',
+)
+const canSubmitCuttingCompletion = computed(() => {
+  const current = order.value
+  if (!current || !canCompleteCutting.value) return false
+  return Boolean(completedById.value || current.assigned_cutter_user_id)
+})
+const canSubmitBandingCompletion = computed(() => {
+  const current = order.value
+  if (!current || !canCompleteBanding.value) return false
+  return Boolean(completedById.value || current.assigned_edger_user_id)
+})
 
 function snapshotName(item: OrderItem) {
   const value = item.material_snapshot.name
@@ -68,19 +154,52 @@ function snapshotName(item: OrderItem) {
 }
 
 function edgeSummary(item: OrderItem) {
-  const sides = [
-    ['T', item.edge_top],
-    ['B', item.edge_bottom],
-    ['L', item.edge_left],
-    ['R', item.edge_right],
-  ]
-    .filter(([, edge]) => edge)
-    .map(([side, edge]) => {
-      const data = edge as Record<string, unknown>
-      const source = data.source === 'own' ? ' · mijoz' : ''
-      return `${side}${source}`
-    })
+  const sides = edgeSideDetails(item)
   return sides.length > 0 ? `Krom · ${sides.join(' · ')}` : 'krom yoq'
+}
+
+function edgeSideDetails(item: OrderItem) {
+  return [
+    { label: 'Yuqori', edge: item.edge_top, length: item.length_mm },
+    { label: 'Past', edge: item.edge_bottom, length: item.length_mm },
+    { label: 'Chap', edge: item.edge_left, length: item.width_mm },
+    { label: "O'ng", edge: item.edge_right, length: item.width_mm },
+  ]
+    .filter((side) => side.edge)
+    .map((side) => {
+      const data = side.edge as Record<string, unknown>
+      const snapshot =
+        data.snapshot && typeof data.snapshot === 'object'
+          ? (data.snapshot as Record<string, unknown>)
+          : {}
+      const thickness =
+        snapshot.thickness_mm || snapshot.thickness || snapshot.size_mm
+          ? `${snapshot.thickness_mm ?? snapshot.thickness ?? snapshot.size_mm} mm`
+          : 'qalinlik yo‘q'
+      const color =
+        typeof snapshot.color === 'string' && snapshot.color ? ` · ${snapshot.color}` : ''
+      const material =
+        typeof snapshot.name === 'string' && snapshot.name ? ` · ${snapshot.name}` : ''
+      const source = data.source === 'own' ? ' · mijoz materiali' : ''
+      return `${side.label}: ${thickness}${color}${material} · ${metres(side.length * item.quantity)}${source}`
+    })
+}
+
+function edgeMaterialTotal(current: OrderDetail) {
+  return current.items.reduce((sum, item) => sum + item.edge_cost_tiyin, 0)
+}
+
+function edgeServiceTotal(current: OrderDetail) {
+  return Math.max(current.subtotal_edge_banding_tiyin - edgeMaterialTotal(current), 0)
+}
+
+function edgeConsumedTotal(current: OrderDetail) {
+  return current.planned_edge_lines.reduce((sum, line) => sum + line.consumed_mm, 0)
+}
+
+function orderDueLabel(current: OrderDetail) {
+  const dueAt = (current as OrderDetail & { due_at?: string | null }).due_at
+  return dueAt ? formatDate(dueAt) : 'belgilanmagan'
 }
 
 function workerName(id: string | null) {
@@ -88,6 +207,10 @@ function workerName(id: string | null) {
   return (
     orders.workerOptions.find((worker) => worker.id === id)?.full_name ?? `user ${id.slice(0, 8)}`
   )
+}
+
+function timelineProductionDetails(event: OrderEvent) {
+  return productionTimelineDetails(event, (id) => workerName(id))
 }
 
 function warningQuantity(
@@ -113,121 +236,223 @@ async function loadDetail() {
   if (current) await orders.loadWorkers(current.branch_id).catch(() => undefined)
 }
 
-async function run(action: () => Promise<unknown>) {
+async function run(action: () => Promise<unknown>, successMessage?: string) {
   actionError.value = null
+  actionTraceId.value = null
   try {
     await action()
+    if (successMessage) toast.success(successMessage)
     return true
   } catch {
-    actionError.value = orders.actionError ?? 'order_action_failed'
+    actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
+    actionTraceId.value = orders.actionTraceId
     return false
   }
 }
 
+async function focusFirstField(panel: () => HTMLElement | null) {
+  await nextTick()
+  const current = panel()
+  current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  const field = current?.querySelector<HTMLElement>(
+    'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [role="combobox"]:not([aria-disabled="true"])',
+  )
+  field?.focus({ preventScroll: true })
+}
+
 async function approve() {
   const current = order.value
-  if (!current) return
-  await run(() => orders.approve(current.id, current.version))
+  if (!current || !canManageOrders.value) return
+  const ok = await run(() => orders.approve(current.id, current.version), 'Buyurtma tasdiqlandi.')
+  if (ok) void focusFirstField(() => actionPanel.value)
 }
 
 async function assignWorkers() {
   const current = order.value
-  if (!current) return
+  if (!current || !canManageOrders.value) return
   if (!cutterId.value) {
-    actionError.value = 'Choose a cutter.'
+    actionError.value = 'Kesuvchini tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
     return
   }
   if (current.has_banding && !edgerId.value) {
-    actionError.value = 'Choose an edge bander.'
+    actionError.value = 'Krom yopishtiruvchini tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
     return
   }
-  await run(() =>
-    orders.assign(current.id, {
-      version: current.version,
-      cutter_user_id: cutterId.value,
-      edger_user_id: current.has_banding ? edgerId.value : null,
-    }),
+  await run(
+    () =>
+      orders.assign(current.id, {
+        version: current.version,
+        cutter_user_id: cutterId.value,
+        edger_user_id: current.has_banding ? edgerId.value : null,
+      }),
+    'Xodimlar tayinlandi.',
+  )
+}
+
+async function assignCutterOnly() {
+  const current = order.value
+  if (!current || !canManageOrders.value) return
+  if (!cutterId.value) {
+    actionError.value = 'Kesuvchini tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
+    return
+  }
+  await run(
+    () =>
+      orders.assign(current.id, {
+        version: current.version,
+        cutter_user_id: cutterId.value,
+        edger_user_id: null,
+      }),
+    'Kesuvchi saqlandi.',
+  )
+}
+
+async function assignEdgerOnly() {
+  const current = order.value
+  if (!current || !canManageOrders.value || !current.has_banding) return
+  if (!edgerId.value) {
+    actionError.value = 'Krom yopishtiruvchini tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
+    return
+  }
+  await run(
+    () =>
+      orders.assign(current.id, {
+        version: current.version,
+        cutter_user_id: null,
+        edger_user_id: edgerId.value,
+      }),
+    'Kromchi saqlandi.',
   )
 }
 
 async function completeCutting() {
   const current = order.value
-  if (!current) return
-  await run(() =>
-    orders.cuttingDone(current.id, {
-      version: current.version,
-      completed_by_user_id: completedById.value || current.assigned_cutter_user_id,
-    }),
+  if (!current || !canCompleteCutting.value) return
+  const completedBy = completedById.value || current.assigned_cutter_user_id
+  if (!completedBy) {
+    actionError.value = 'Kesishni bajargan xodimni tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
+    return
+  }
+  await run(
+    () =>
+      orders.cuttingDone(current.id, {
+        version: current.version,
+        completed_by_user_id: completedBy,
+      }),
+    'Kesish yakunlandi.',
   )
 }
 
 async function completeBanding() {
   const current = order.value
-  if (!current) return
-  await run(() =>
-    orders.bandingDone(current.id, {
-      version: current.version,
-      completed_by_user_id: completedById.value || current.assigned_edger_user_id,
-    }),
+  if (!current || !canCompleteBanding.value) return
+  const completedBy = completedById.value || current.assigned_edger_user_id
+  if (!completedBy) {
+    actionError.value = 'Krom ishini bajargan xodimni tanlang.'
+    actionTraceId.value = null
+    void focusFirstField(() => actionPanel.value)
+    return
+  }
+  await run(
+    () =>
+      orders.bandingDone(current.id, {
+        version: current.version,
+        completed_by_user_id: completedBy,
+      }),
+    'Krom yakunlandi.',
   )
 }
 
 async function markCollected() {
   const current = order.value
-  if (!current) return
-  const ok = await run(() => orders.markCollected(current.id, current.version))
+  if (!current || !canManageOrders.value) return
+  const ok = await run(
+    () => orders.markCollected(current.id, current.version),
+    'Buyurtma topshirildi.',
+  )
   if (ok) markCollectedOpen.value = false
 }
 
 function requestRevertOrder() {
-  reasonDraft.value = 'Production correction'
+  if (!canManageOrders.value) return
+  reasonDraft.value = 'Ishlab chiqarish tuzatishi'
   reasonDialogAction.value = 'revert'
 }
 
 function requestCancelOrder() {
+  if (!canManageOrders.value) return
   reasonDraft.value = 'Workshop cancelled by request'
   reasonDialogAction.value = 'cancel'
 }
 
 async function confirmReasonedAction() {
   const current = order.value
-  if (!current) return
+  if (!current || !canManageOrders.value) return
   const action = reasonDialogAction.value
   const reason = reasonDraft.value.trim()
   if (!action || !reason) return
   const ok =
     action === 'revert'
-      ? await run(() => orders.revert(current.id, current.version, reason))
-      : await run(() => orders.cancelWorkshopOrder(current.id, current.version, reason))
+      ? await run(() => orders.revert(current.id, current.version, reason), 'Buyurtma qaytarildi.')
+      : await run(
+          () => orders.cancelWorkshopOrder(current.id, current.version, reason),
+          'Buyurtma bekor qilindi.',
+        )
   if (ok) reasonDialogAction.value = null
 }
 
 async function applyDiscount() {
   const current = order.value
-  if (!current) return
-  const value = Number(discountValue.value)
-  if (!Number.isInteger(value) || value < 0) {
-    actionError.value = 'Enter a non-negative integer discount value.'
+  if (!current || !canManageOrders.value) return
+  const parsed = parseDiscountDraft(discountKind.value, discountValue.value, discountReason.value)
+  if (!parsed.ok) {
+    actionError.value = parsed.message
+    actionTraceId.value = null
+    void nextTick(() => {
+      discountPanel.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      discountValueInput.value?.focus({ preventScroll: true })
+    })
     return
   }
-  if (!discountReason.value.trim()) {
-    actionError.value = 'Enter a discount reason.'
-    return
-  }
-  await run(() =>
-    orders.discount(current.id, {
-      version: current.version,
-      kind: discountKind.value === 'percent' ? 'percent' : 'fixed',
-      value,
-      reason: discountReason.value,
-    }),
+  await run(
+    () =>
+      orders.discount(current.id, {
+        version: current.version,
+        ...parsed.payload,
+      }),
+    'Chegirma saqlandi.',
+  )
+}
+
+async function removeDiscount() {
+  const current = order.value
+  if (!current || !canManageOrders.value || current.discount_tiyin <= 0) return
+  await run(
+    () =>
+      orders.discount(current.id, {
+        version: current.version,
+        kind: 'fixed',
+        value: 0,
+        reason: 'Chegirma olib tashlandi',
+      }),
+    'Chegirma olib tashlandi.',
   )
 }
 
 async function saveNote() {
   const current = order.value
   if (!current) return
-  await run(() => orders.updateNote(current.id, noteDraft.value.trim() || null))
+  await run(() => orders.updateNote(current.id, noteDraft.value.trim() || null), 'Izoh saqlandi.')
 }
 
 watch(
@@ -239,7 +464,10 @@ watch(
     completedById.value =
       value.status === 'edge_banding' ? value.assigned_edger_user_id : value.assigned_cutter_user_id
     noteDraft.value = value.note_workshop ?? ''
-    if (value.discount_tiyin > 0) discountValue.value = String(value.discount_tiyin)
+    const discountDraft = discountDraftFromOrder(value)
+    discountKind.value = discountDraft.kind
+    discountValue.value = discountDraft.value
+    discountReason.value = discountDraft.reason
   },
   { immediate: true },
 )
@@ -297,6 +525,9 @@ onMounted(loadDetail)
             >Mijoz: <b class="text-ink">{{ order.contact_name }}</b> ·
             {{ order.contact_phone }}</span
           >
+          <span
+            >Muddat: <b class="text-ink">{{ orderDueLabel(order) }}</b></span
+          >
           <span class="font-mono text-ink-muted">{{ formatTiyin(order.total_tiyin) }}</span>
         </div>
         <div class="actions">
@@ -317,43 +548,35 @@ onMounted(loadDetail)
           <button
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            :disabled="orders.downloadingId === order.id"
             @click="orders.downloadWorkshopPdf(order.id)"
           >
-            Chizma PDF
+            {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'Chizma PDF' }}
           </button>
         </div>
       </div>
 
-      <div class="tabs">
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'overview' }"
-          type="button"
-          @click="activeTab = 'overview'"
-        >
-          Umumiy
-        </button>
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'cutting' }"
-          type="button"
-          @click="activeTab = 'cutting'"
-        >
-          Chizma
-        </button>
-        <button
-          class="tab"
-          :class="{ on: activeTab === 'timeline' }"
-          type="button"
-          @click="activeTab = 'timeline'"
-        >
-          Tarix
-        </button>
-      </div>
+      <p v-if="orders.downloadError" class="rounded-md bg-danger-soft p-3 text-sm text-danger">
+        {{ orders.downloadError }} · trace_id: {{ orders.downloadTraceId ?? 'unavailable' }}
+      </p>
+
+      <AppTabs
+        v-model="activeTab"
+        id-prefix="workshop-order"
+        label="Buyurtma bo'limlari"
+        :tabs="orderTabs"
+      />
 
       <div class="od-grid">
         <main class="min-w-0">
-          <section v-if="activeTab === 'overview'" class="grid gap-4">
+          <section
+            v-if="activeTab === 'overview'"
+            id="workshop-order-overview-panel"
+            class="grid gap-4"
+            role="tabpanel"
+            aria-labelledby="workshop-order-overview-tab"
+            tabindex="0"
+          >
             <div v-if="order.stock_warnings.length > 0" class="banner warn">
               <div class="grow">
                 Kesishdan keyin past zaxira:
@@ -382,8 +605,37 @@ onMounted(loadDetail)
                       >{{ item.material_source === 'own' ? 'mijoz paneli' : 'ustaxona paneli' }} ·
                       {{ edgeSummary(item) }}</small
                     >
+                    <ul v-if="edgeSideDetails(item).length > 0" class="mt-2 grid gap-1">
+                      <li
+                        v-for="detail in edgeSideDetails(item)"
+                        :key="detail"
+                        class="text-xs text-ink-muted"
+                      >
+                        {{ detail }}
+                      </li>
+                    </ul>
                   </div>
                   <div class="meta">{{ item.quantity }} dona</div>
+                </div>
+                <div
+                  v-if="order.planned_edge_lines.length > 0"
+                  class="mt-4 border-t border-hairline pt-4"
+                >
+                  <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Krom sarfi</div>
+                  <div
+                    v-for="line in order.planned_edge_lines"
+                    :key="line.material_id"
+                    class="row-item"
+                  >
+                    <div>
+                      <div class="nm">{{ line.material_label }}</div>
+                      <small class="text-ink-muted">
+                        {{ line.thickness_mm ? `${line.thickness_mm} mm` : 'qalinlik yo‘q' }}
+                        <span v-if="line.color"> · {{ line.color }}</span>
+                      </small>
+                    </div>
+                    <div class="meta">{{ metres(line.consumed_mm) }}</div>
+                  </div>
                 </div>
                 <div v-if="order.items.length === 0" class="st-empty !border-0 !py-8">
                   <h3>Chizma qismi yo'q</h3>
@@ -407,7 +659,7 @@ onMounted(loadDetail)
                     <div class="nm">Krom</div>
                     <small class="text-ink-muted">{{
                       order.subtotal_edge_banding_tiyin > 0
-                        ? 'material + xizmat'
+                        ? `${metres(edgeConsumedTotal(order))} · material + xizmat`
                         : "bu buyurtmada krom yo'q"
                     }}</small>
                   </div>
@@ -418,6 +670,20 @@ onMounted(loadDetail)
                         : '—'
                     }}
                   </div>
+                </div>
+                <div v-if="order.subtotal_edge_banding_tiyin > 0" class="row-item">
+                  <div>
+                    <div class="nm">Krom materiali</div>
+                    <small class="text-ink-muted">xom ashyo · lenta narxi</small>
+                  </div>
+                  <div class="meta">{{ formatTiyin(edgeMaterialTotal(order)) }}</div>
+                </div>
+                <div v-if="order.subtotal_edge_banding_tiyin > 0" class="row-item">
+                  <div>
+                    <div class="nm">Krom yopishtirish xizmati</div>
+                    <small class="text-ink-muted">ish haqi · metr bo'yicha</small>
+                  </div>
+                  <div class="meta">{{ formatTiyin(edgeServiceTotal(order)) }}</div>
                 </div>
                 <div v-if="order.discount_tiyin > 0" class="row-item">
                   <div>
@@ -433,7 +699,7 @@ onMounted(loadDetail)
               </div>
             </section>
 
-            <section v-if="order.settlement" class="card">
+            <section v-if="order.settlement && canViewSettlement" class="card">
               <div class="card-h">
                 <h2>To'lov holati <span class="pill p-dn ml-1">faqat o'qish</span></h2>
               </div>
@@ -527,7 +793,14 @@ onMounted(loadDetail)
             </section>
           </section>
 
-          <section v-else-if="activeTab === 'cutting'" class="card">
+          <section
+            v-else-if="activeTab === 'cutting'"
+            id="workshop-order-cutting-panel"
+            class="card"
+            role="tabpanel"
+            aria-labelledby="workshop-order-cutting-tab"
+            tabindex="0"
+          >
             <div class="card-h"><h2>Chizma rejasi</h2></div>
             <div v-if="!result" class="card-b">
               <div class="st-empty !border-0 !py-8"><h3>Chizma biriktirilmagan</h3></div>
@@ -580,9 +853,10 @@ onMounted(loadDetail)
                 <button
                   type="button"
                   class="mp-button mp-button-outline w-full"
+                  :disabled="orders.downloadingId === order.id"
                   @click="orders.downloadWorkshopPdf(order.id)"
                 >
-                  Chizma (PDF)
+                  {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'Chizma (PDF)' }}
                 </button>
               </div>
               <aside v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
@@ -606,7 +880,14 @@ onMounted(loadDetail)
             </div>
           </section>
 
-          <section v-else class="card">
+          <section
+            v-else
+            id="workshop-order-timeline-panel"
+            class="card"
+            role="tabpanel"
+            aria-labelledby="workshop-order-timeline-tab"
+            tabindex="0"
+          >
             <div class="card-h"><h2>Holat tarixi</h2></div>
             <div class="card-b">
               <div v-if="order.events.length === 0" class="st-empty !border-0 !py-8">
@@ -624,6 +905,13 @@ onMounted(loadDetail)
                   <span class="text-ink-muted">→</span>
                   {{ workshopStatusUz[event.to_status] }}
                   <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
+                  <span
+                    v-for="detail in timelineProductionDetails(event)"
+                    :key="detail"
+                    class="block text-ink-soft"
+                  >
+                    {{ detail }}
+                  </span>
                 </li>
               </ol>
             </div>
@@ -644,6 +932,14 @@ onMounted(loadDetail)
               <span>Krom</span
               ><span class="num">{{ formatTiyin(order.subtotal_edge_banding_tiyin) }}</span>
             </div>
+            <div v-if="order.subtotal_edge_banding_tiyin > 0" class="r text-xs text-ink-muted">
+              <span>Krom materiali</span
+              ><span class="num">{{ formatTiyin(edgeMaterialTotal(order)) }}</span>
+            </div>
+            <div v-if="order.subtotal_edge_banding_tiyin > 0" class="r text-xs text-ink-muted">
+              <span>Krom xizmati</span
+              ><span class="num">{{ formatTiyin(edgeServiceTotal(order)) }}</span>
+            </div>
             <div v-if="order.discount_tiyin > 0" class="r">
               <span>Chegirma</span
               ><span class="num">- {{ formatTiyin(order.discount_tiyin) }}</span>
@@ -653,11 +949,11 @@ onMounted(loadDetail)
             </div>
           </section>
 
-          <section class="card">
+          <section ref="actionPanel" class="card">
             <div class="card-h"><h2>Amallar</h2></div>
             <div class="card-b grid gap-3">
               <button
-                v-if="order.status === 'new'"
+                v-if="order.status === 'new' && canManageOrders"
                 type="button"
                 class="mp-button mp-button-primary w-full"
                 :disabled="orders.actionLoading"
@@ -666,7 +962,7 @@ onMounted(loadDetail)
                 Tasdiqlash
               </button>
 
-              <template v-else-if="order.status === 'confirmed'">
+              <template v-else-if="order.status === 'confirmed' && canManageOrders">
                 <FormSelect
                   v-model="cutterId"
                   label="Kesuvchi"
@@ -681,6 +977,15 @@ onMounted(loadDetail)
                   :disabled="workerOptions.length === 0"
                 />
                 <button
+                  v-if="order.has_banding"
+                  type="button"
+                  class="mp-button mp-button-outline w-full"
+                  :disabled="orders.actionLoading || !edgerId"
+                  @click="assignEdgerOnly"
+                >
+                  Kromchini saqlash
+                </button>
+                <button
                   type="button"
                   class="mp-button mp-button-primary w-full"
                   :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
@@ -690,34 +995,68 @@ onMounted(loadDetail)
                 </button>
               </template>
 
-              <template v-else-if="order.status === 'cutting'">
+              <template v-else-if="order.status === 'cutting' && canCompleteCutting">
+                <template v-if="canManageOrders">
+                  <FormSelect
+                    v-model="cutterId"
+                    label="Kesuvchi"
+                    :options="workerOptions"
+                    :disabled="workerOptions.length === 0"
+                  />
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline w-full"
+                    :disabled="orders.actionLoading || !cutterId"
+                    @click="assignCutterOnly"
+                  >
+                    Kesuvchini saqlash
+                  </button>
+                </template>
                 <FormSelect
-                  v-if="workerOptions.length > 0"
+                  v-if="canManageOrders"
                   v-model="completedById"
                   label="Kim bajardi"
                   :options="workerOptions"
+                  :disabled="workerOptions.length === 0"
                 />
                 <button
                   type="button"
                   class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading"
+                  :disabled="orders.actionLoading || !canSubmitCuttingCompletion"
                   @click="completeCutting"
                 >
                   Kesish tugadi
                 </button>
               </template>
 
-              <template v-else-if="order.status === 'edge_banding'">
+              <template v-else-if="order.status === 'edge_banding' && canCompleteBanding">
+                <template v-if="canManageOrders">
+                  <FormSelect
+                    v-model="edgerId"
+                    label="Krom yopishtiruvchi"
+                    :options="workerOptions"
+                    :disabled="workerOptions.length === 0"
+                  />
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline w-full"
+                    :disabled="orders.actionLoading || !edgerId"
+                    @click="assignEdgerOnly"
+                  >
+                    Kromchini saqlash
+                  </button>
+                </template>
                 <FormSelect
-                  v-if="workerOptions.length > 0"
+                  v-if="canManageOrders"
                   v-model="completedById"
                   label="Kim bajardi"
                   :options="workerOptions"
+                  :disabled="workerOptions.length === 0"
                 />
                 <button
                   type="button"
                   class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading"
+                  :disabled="orders.actionLoading || !canSubmitBandingCompletion"
                   @click="completeBanding"
                 >
                   Krom tugadi
@@ -725,7 +1064,7 @@ onMounted(loadDetail)
               </template>
 
               <button
-                v-else-if="order.status === 'ready'"
+                v-else-if="order.status === 'ready' && canManageOrders"
                 type="button"
                 class="mp-button mp-button-primary w-full"
                 :disabled="orders.actionLoading"
@@ -740,18 +1079,26 @@ onMounted(loadDetail)
               >
                 Bu holatda ishlab chiqarish amali yo'q.
               </p>
+              <p
+                v-else-if="!hasLifecycleAction"
+                class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
+              >
+                Bu buyurtma siz uchun faqat o'qish holatida.
+              </p>
 
               <button
-                v-if="['cutting', 'edge_banding', 'ready'].includes(order.status)"
+                v-if="
+                  canManageOrders && ['cutting', 'edge_banding', 'ready'].includes(order.status)
+                "
                 type="button"
                 class="mp-button mp-button-outline w-full"
                 :disabled="orders.actionLoading"
                 @click="requestRevertOrder"
               >
-                Bir qadam orqaga
+                {{ revertButtonLabel }}
               </button>
               <button
-                v-if="!['completed', 'cancelled'].includes(order.status)"
+                v-if="canManageOrders && !['completed', 'cancelled'].includes(order.status)"
                 type="button"
                 class="mp-button mp-button-outline w-full text-danger"
                 :disabled="orders.actionLoading"
@@ -760,30 +1107,57 @@ onMounted(loadDetail)
                 Buyurtmani bekor qilish
               </button>
               <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm text-danger">
-                {{ actionError }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+                {{ actionError }}
+                <span v-if="actionTraceId"> · trace {{ actionTraceId }}</span>
               </p>
             </div>
           </section>
 
-          <section v-if="order.status === 'new' || order.status === 'confirmed'" class="card">
+          <section
+            v-if="canManageOrders && (order.status === 'new' || order.status === 'confirmed')"
+            ref="discountPanel"
+            class="card"
+          >
             <div class="card-h"><h2>Chegirma</h2></div>
             <div class="card-b grid gap-3">
+              <p
+                v-if="order.discount_tiyin > 0"
+                class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
+              >
+                Hozirgi chegirma: {{ formatTiyin(order.discount_tiyin) }}. O'zgartirish uchun tur va
+                qiymatni qayta kiriting.
+              </p>
               <FormSelect v-model="discountKind" label="Turi" :options="discountOptions" />
               <label class="field !mb-0"
                 ><span>Qiymat</span
-                ><input v-model="discountValue" class="mp-input" inputmode="numeric"
+                ><input
+                  ref="discountValueInput"
+                  v-model="discountValue"
+                  class="mp-input"
+                  inputmode="numeric"
               /></label>
               <label class="field !mb-0"
                 ><span>Sabab</span><input v-model="discountReason" class="mp-input"
               /></label>
-              <button
-                type="button"
-                class="mp-button mp-button-outline"
-                :disabled="orders.actionLoading"
-                @click="applyDiscount"
-              >
-                Chegirma qo'shish
-              </button>
+              <div class="grid gap-2">
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline w-full whitespace-normal text-center leading-tight"
+                  :disabled="orders.actionLoading"
+                  @click="applyDiscount"
+                >
+                  {{ discountButtonLabel }}
+                </button>
+                <button
+                  v-if="order.discount_tiyin > 0"
+                  type="button"
+                  class="mp-button mp-button-outline w-full whitespace-normal text-center leading-tight text-danger"
+                  :disabled="orders.actionLoading"
+                  @click="removeDiscount"
+                >
+                  Chegirmani olib tashlash
+                </button>
+              </div>
             </div>
           </section>
 
@@ -815,7 +1189,7 @@ onMounted(loadDetail)
       :title="reasonDialogAction === 'revert' ? 'Buyurtmani qaytarish' : 'Buyurtmani bekor qilish'"
       :message="
         reasonDialogAction === 'revert'
-          ? 'Buyurtma bir qadam orqaga qaytadi. Sababni yozing.'
+          ? `Buyurtma ${revertTargetLabel} qaytadi. Sababni yozing.`
           : 'Buyurtma yopiladi. Bekor qilish sababini yozing.'
       "
       :confirm-label="reasonDialogAction === 'revert' ? 'Qaytarish' : 'Bekor qilish'"

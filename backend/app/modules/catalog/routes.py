@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import AccountReadyPrincipal, Session
-from app.models.enums import MaterialKind, MaterialStatus
+from app.models.enums import MaterialKind, MaterialStatus, PanelMaterialType
 from app.modules.catalog.api import (
     BranchCatalogOption,
     BranchMaterialRecord,
@@ -244,6 +244,7 @@ async def workshop_catalog_options_index(
     search: str | None = None,
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
+    material_type: PanelMaterialType | None = None,
 ) -> list[BranchCatalogMaterialOption]:
     rows = await list_branch_catalog_options(
         db,
@@ -252,6 +253,7 @@ async def workshop_catalog_options_index(
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
+        material_type=material_type,
     )
     return [_branch_catalog_option_response(row) for row in rows]
 
@@ -266,6 +268,8 @@ async def workshop_branch_materials_index(
     db: Session,
     search: str | None = None,
     kind: MaterialKind | None = None,
+    manufacturer_id: uuid.UUID | None = None,
+    material_type: PanelMaterialType | None = None,
     status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
 ) -> list[BranchMaterialResponse]:
     rows = await list_branch_materials(
@@ -274,6 +278,8 @@ async def workshop_branch_materials_index(
         branch_id=branch_id,
         search=search,
         kind=kind,
+        manufacturer_id=manufacturer_id,
+        material_type=material_type,
         status_filter=status_filter,
     )
     return [_branch_material_response(row) for row in rows]
