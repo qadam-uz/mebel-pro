@@ -9,6 +9,7 @@ import {
   dropdownOption,
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useNotificationsStore } from '@/shared/stores/notifications'
 
@@ -63,16 +64,18 @@ onMounted(() => {
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
     </div>
 
-    <section v-if="notifications.loading" class="admin-card p-5">
+    <section v-if="notifications.loading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="notifications.error" class="admin-error">
-      <h3>Bildirishnomalar yuklanmadi</h3>
-      <p>Inbox endpoint vaqtincha javob bermadi.</p>
-    </section>
+    <AdminErrorState
+      v-else-if="notifications.error"
+      :code="notifications.error"
+      title="Bildirishnomalar yuklanmadi"
+      @retry="notifications.loadList(100)"
+    />
 
     <section v-else-if="rows.length === 0" class="admin-empty">
       <h3>Yangilik yo'q</h3>

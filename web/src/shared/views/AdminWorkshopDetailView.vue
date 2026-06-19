@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { adminDate, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -68,13 +69,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <div class="admin-skeleton-line w-2/5"></div>
   </section>
 
-  <section v-else-if="admin.error" class="admin-error">
-    <h3>Ustaxona yuklanmadi</h3>
-    <p>
-      Detail endpoint javob bermadi.
-      <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-    </p>
-  </section>
+  <AdminErrorState
+    v-else-if="admin.error"
+    :code="admin.error"
+    :trace-id="admin.traceId"
+    title="Ustaxona yuklanmadi"
+    @retry="admin.loadWorkshop(workshopId)"
+  />
 
   <section v-else-if="admin.detail">
     <RouterLink :to="rolePath('/admin/workshops')" class="admin-back">← Ustaxonalar</RouterLink>
@@ -114,6 +115,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <p
       v-if="actionError"
       class="mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Amal bajarilmadi.
     </p>

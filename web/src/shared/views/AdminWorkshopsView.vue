@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -189,13 +190,13 @@ onMounted(async () => {
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.error" class="admin-error">
-      <h3>Ustaxonalar yuklanmadi</h3>
-      <p>
-        Registry endpoint javob bermadi.
-        <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.error"
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Ustaxonalar yuklanmadi"
+      @retry="admin.loadWorkshops"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Ustaxona topilmadi</h3>

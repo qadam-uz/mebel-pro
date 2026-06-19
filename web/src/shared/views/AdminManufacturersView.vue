@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { dropdownOption, materialStatusTone } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -135,21 +136,19 @@ onMounted(async () => {
       </button>
     </div>
 
-    <section v-if="admin.catalogLoading" class="admin-card p-5">
+    <section v-if="admin.catalogLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.catalogError" class="admin-error">
-      <h3>Manufacturerlar yuklanmadi</h3>
-      <p>
-        Catalog endpoint javob bermadi.
-        <span v-if="admin.catalogTraceId" class="admin-mono">
-          trace {{ admin.catalogTraceId }}
-        </span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.catalogError"
+      :code="admin.catalogError"
+      :trace-id="admin.catalogTraceId"
+      title="Manufacturerlar yuklanmadi"
+      @retry="admin.loadManufacturers()"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Manufacturer yo'q</h3>

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, dropdownOption, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -103,19 +104,19 @@ onMounted(admin.loadErrors)
       <ProjectDropdown v-model="moduleFilter" label="Module" :options="moduleOptions" />
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Xatoliklar yuklanmadi</h3>
-      <p>
-        Monitor endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Xatoliklar yuklanmadi"
+      @retry="admin.loadErrors"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Xatolik yozilmagan</h3>
@@ -172,6 +173,7 @@ onMounted(admin.loadErrors)
     <p
       v-if="actionError"
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Error action bajarilmadi.
     </p>
