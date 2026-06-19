@@ -1381,4 +1381,9 @@ named CB-fix and its test together.
 **Why:** The client-login inputs carried HTML `required`, so submitting an empty field (e.g. empty name on the "Tanishib olaylik" step) fired the **browser's native validation popup in English** before any app code ran — CB-79's whitespace guard only caught spaces, not the empty case (the browser blocked submit first).
 **Fix (done):** Added `novalidate` to all three client-login forms (`required` kept for screen-reader semantics) so validation flows through the app's JS + the Uzbek `client-banner` alert (CB-133). Added a `clientStep === 'code'` guard requiring 6 digits before calling the API; empty phone/name/code now show "Telefon raqami noto'g'ri…" / "Ismingizni kiriting." / "Kod noto'g'ri." Verified gate green.
 
+### CB-135 · Drop the redundant phone-input helper line on client login — `i18n-copy` · low · S · **Done**
+**Files:** `views/ClientLoginView.vue`
+**Why:** The phone step already says "Telefon raqamingizni kiriting — Telegram orqali tasdiqlash kodi yuboramiz." in the subtitle; the extra helper span under the input ("Telegram o'rnatilgan raqamni kiriting — kod o'sha raqamning Telegram'iga keladi.") repeated the same point and added vertical noise above the action.
+**Fix (done):** Removed the helper `<span>` under the phone input. User-found during live review. No test/e2e referenced the string; web gate green.
+
 > **Also fixed (infra, not a SPA-backlog item):** the Docker dev API proxy. `vite.config.ts` hardcoded the `/api` proxy target to `localhost:8000`, which inside the web container points at itself, not the backend → every `/api` call failed as `network_error` ("API bilan aloqa yo'q"). Made the target env-driven (`API_PROXY_TARGET`, default `localhost:8000`) and set `API_PROXY_TARGET=http://backend:8000` in `deploy/compose.yaml`. `:5173/api/*` now reaches the backend.

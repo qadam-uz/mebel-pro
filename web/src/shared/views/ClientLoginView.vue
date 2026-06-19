@@ -193,9 +193,6 @@ async function resendOtp() {
             required
             @input="sanitizePhone"
           />
-          <span class="mt-1 block text-xs text-ink-muted">
-            Telegram o'rnatilgan raqamni kiriting — kod o'sha raqamning Telegram'iga keladi.
-          </span>
         </label>
 
         <div v-if="clientErrorText" class="client-banner" :class="errorTone">
