@@ -74,13 +74,15 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <div class="admin-skeleton-line w-2/5"></div>
   </section>
 
-  <AdminErrorState
-    v-else-if="admin.error"
-    :code="admin.error"
-    :trace-id="admin.traceId"
-    title="Ustaxona yuklanmadi"
-    @retry="admin.loadWorkshop(workshopId)"
-  />
+  <div v-else-if="admin.error">
+    <RouterLink :to="rolePath('/admin/workshops')" class="admin-back">← Ustaxonalar</RouterLink>
+    <AdminErrorState
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Ustaxona yuklanmadi"
+      @retry="admin.loadWorkshop(workshopId)"
+    />
+  </div>
 
   <section v-else-if="admin.detail">
     <RouterLink :to="rolePath('/admin/workshops')" class="admin-back">← Ustaxonalar</RouterLink>
@@ -116,6 +118,15 @@ onMounted(() => admin.loadWorkshop(workshopId))
         </button>
       </div>
     </div>
+
+    <p
+      v-if="admin.detail.workshop.status === 'blocked'"
+      class="mb-4 rounded-md bg-danger-soft px-4 py-3 text-sm font-bold text-danger"
+      role="alert"
+    >
+      Bu ustaxona bloklangan — ochiq buyurtmalar muzlatilgan, xodimlar kira olmaydi. Blokdan
+      chiqarilganda sessiyalar avtomatik tiklanmaydi.
+    </p>
 
     <p
       v-if="actionError"
@@ -158,6 +169,10 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <span class="sub">faqat ko'rish . operator tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
+        <p class="mb-4 rounded-md border border-hairline bg-sunk px-3 py-2 text-xs text-ink-soft">
+          Operator faqat provisioning, bloklash va blokdan chiqarish amallarini bajaradi — ustaxona
+          profili va egasi ma'lumotlari ustaxona egasining mas'uliyatida.
+        </p>
         <dl class="grid gap-4 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Nomi</dt>

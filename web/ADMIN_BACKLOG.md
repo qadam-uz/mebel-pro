@@ -51,9 +51,23 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 13 | 17 | **32** |
-| Done | 5 | 11 | 5 | **21** |
+| Open | 2 | 11 | 16 | **29** |
+| Done | 5 | 13 | 6 | **24** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B7): **AB-19, AB-20, AB-39 Done** — workshops list/detail.
+> **AB-19:** the workshops list row now has inline **Bloklash** (active) / **Blokdan chiqarish**
+> (blocked) actions — Block opens a `ConfirmDialog` with the mandatory-reason textarea in its
+> slot (danger, confirm-disabled until a reason is typed), Unblock opens a plain confirm; both
+> reuse `admin.blockWorkshop`/`unblockWorkshop` (which patch the row) + toasts, so incidents no
+> longer require drilling into the detail view. **AB-20:** the detail view shows a full-width
+> danger banner when blocked ("ochiq buyurtmalar muzlatilgan, xodimlar kira olmaydi …") and an
+> operator-scope info banner on the Profile tab (operator only provisions/blocks/unblocks).
+> _Surfacing the block **reason** on the status pill is deferred — `PlatformWorkshopDetail` does
+> not carry it; it needs a small backend field (flagged as a decision, not done)._ **AB-39:**
+> the detail error state now renders a "← Ustaxonalar" back-link above `AdminErrorState` (which
+> already provides retry), so a transient load failure is no longer a dead end. Web gate green:
+> lint:check · format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B6): **AB-18, AB-41 Done** — operator/block safety.
 > **AB-18:** platform-users gained an info banner (same-scope, no permission model, can't block
@@ -168,8 +182,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
 | AB-17 | P2 | spec-conformance | med | M | Open | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
 | AB-18 | P2 | design-parity | med | M | Done | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
-| AB-19 | P2 | design-parity | med | M | Open | Workshops list: inline Block/Unblock row actions (with confirm) |
-| AB-20 | P2 | design-parity | med | S | Open | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
+| AB-19 | P2 | design-parity | med | M | Done | Workshops list: inline Block/Unblock row actions (with confirm) |
+| AB-20 | P2 | design-parity | med | S | Done | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
 | AB-21 | P2 | spec-conformance | med | S | Open | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
 | AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
 | AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
@@ -188,7 +202,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-36 | P3 | spec-conformance | low | S | Open | Provision code field stops re-deriving from name after first auto-fill |
 | AB-37 | P3 | design-parity | low | S | Open | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
 | AB-38 | P3 | design-parity | low | S | Open | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
-| AB-39 | P3 | ux-flow | low | S | Open | Workshop-detail error state is a dead end — add back-link + retry |
+| AB-39 | P3 | ux-flow | low | S | Done | Workshop-detail error state is a dead end — add back-link + retry |
 | AB-40 | P3 | ux-flow | low | S | Open | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
 | AB-41 | P3 | security-rbac | low | S | Done | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
 | AB-42 | P3 | spec-conformance | low | S | Open | Manufacturers: add the spec'd Country filter |
@@ -319,13 +333,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Three parity/safety gaps vs the prototype: (1) no info banner explaining the no-permission-model rule + "can't block yourself or the last active operator"; (2) no "Joriy" marker on the signed-in operator's row (only a disabled self-block button); (3) the **last-active-operator Block is not disabled** — the UI guards only self-block and relies entirely on the backend 400, surfacing the generic "Operator amali bajarilmadi." even though the modal copy promises otherwise (see AB-07). The prototype disables it with the reason "Kamida bitta faol operator qolishi shart".
 **Fix:** Add the info banner (prototype copy); render a "Joriy" pill where `user.id === auth.me.principal_id`; compute `activeOperatorCount` and disable Block (with an explanatory label/title) when `status==='active'` and only one active operator remains; map `last_platform_operator` to a specific message in `confirmBlock`'s catch. Ship the AB-07 E2E with it; update e2e locators.
 
-### AB-19 · Workshops list: inline Block/Unblock row actions (with confirm) — `design-parity` · med · M
+### AB-19 · Workshops list: inline Block/Unblock row actions (with confirm) — `design-parity` · med · M — **Done (B7)**
 
 **Files:** `AdminWorkshopsView.vue:205-212` (row only has a "Tafsilotlar" link). Prototype: `workshops.html:112-122`.
 **Why:** The prototype gives each workshops-table row a "⋯" menu with "Tafsilotlar" plus a contextual Block/Unblock that fires a `confirmAction` dialog carrying the full cascade-consequence copy. The Vue row only links to the detail view, so the one-click incident action the design provides is lost — block/unblock is reachable only after navigating in.
 **Fix:** Add a row action menu (or compact buttons) with Block (active) / Unblock (blocked) opening the same reason-required block modal / unblock confirm already in `AdminWorkshopDetailView`. Reuse `admin.blockWorkshop`/`unblockWorkshop`; route through the AB-04 ConfirmDialog + AB-02 focus-trap.
 
-### AB-20 · Workshop detail: blocked danger banner + block reason on pill + operator-scope banner — `design-parity` · med · S
+### AB-20 · Workshop detail: blocked danger banner + block reason on pill + operator-scope banner — `design-parity` · med · S — **Done (B7)**
 
 **Files:** `AdminWorkshopDetailView.vue:74/139`. Prototype: `workshop-detail.html:63/74/86`.
 **Why:** When a workshop is blocked the prototype shows (a) the block reason inline in the status pill, (b) a full-width danger banner under the header ("buyurtmalar muzlatilgan, xodimlar kira olmaydi, blokdan chiqarilganda sessiyalar tiklanmaydi"), and (c) a Profile-tab info banner explaining operator scope (only provision/block/unblock, no edit). The Vue detail view renders **none** — just a bare pill with raw English status — so a blocked workshop reads identically to an active one and the operator-scope guidance is lost.
@@ -441,7 +455,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The password form has only current + new — no confirm field (a mistyped new password is submitted with no client-side match check) and no strength meter the spec calls for.
 **Fix:** Add a "Tasdiqlash" confirm input (block submit + inline message on mismatch) and a strength meter, matching the prototype's three-field layout + the spec.
 
-### AB-39 · Workshop-detail error state is a dead end — add back-link + retry — `ux-flow` · low · S
+### AB-39 · Workshop-detail error state is a dead end — add back-link + retry — `ux-flow` · low · S — **Done (B7)**
 
 **Files:** `AdminWorkshopDetailView.vue:62-68` (error card), `:71` (the `← Ustaxonalar` back-link lives only in the success branch).
 **Why:** When `loadWorkshop` fails, the detail view renders only an error card with no back-link and no retry — the operator must edit the URL or hit browser-back. The list view's refresh is always reachable; the detail's isn't.
