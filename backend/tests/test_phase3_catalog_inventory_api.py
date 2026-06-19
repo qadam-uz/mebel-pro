@@ -646,3 +646,30 @@ async def test_material_image_visibility_follows_client_branch_visibility(
     assert visible_image.status_code == 200
     assert visible_image.content == b"material-image"
     assert hidden_after_deactivate.status_code == 403
+
+
+async def test_platform_materials_list_reports_branch_usage_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # AB-22: the platform materials list reports how many distinct branches carry
+    # each material — 0 before any branch selects it, 1 after one branch does.
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    _, material_id = await _create_catalog_material(client, platform_access)
+
+    before = await client.get("/api/v1/platform/catalog/materials", headers=_auth(platform_access))
+    assert before.status_code == 200
+    row_before = next(m for m in before.json() if m["id"] == material_id)
+    assert row_before["branch_usage_count"] == 0
+
+    selection = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/materials",
+        headers=_auth(owner_access),
+        json={"material_id": material_id, "price_tiyin": 25_500_000, "min_stock": 2},
+    )
+    assert selection.status_code == 201
+
+    after = await client.get("/api/v1/platform/catalog/materials", headers=_auth(platform_access))
+    row_after = next(m for m in after.json() if m["id"] == material_id)
+    assert row_after["branch_usage_count"] == 1

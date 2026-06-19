@@ -42,6 +42,7 @@ from app.modules.support.api import (
 class MaterialRecord:
     material: Material
     manufacturer: Manufacturer
+    branch_usage_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -192,10 +193,13 @@ async def list_materials(
     status_filter: MaterialStatus | None = None,
 ) -> list[MaterialRecord]:
     require_platform_operator(principal)
+    # AB-22: aggregate a distinct-branch usage count per material via a LEFT JOIN
+    # over BranchMaterial (catalog-owned), so the platform list can show how many
+    # branches carry each material without a denormalized column.
     query = (
-        select(Material, Manufacturer)
+        select(Material, Manufacturer, func.count(func.distinct(BranchMaterial.branch_id)))
         .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
-        .order_by(Manufacturer.name, Material.name)
+        .outerjoin(BranchMaterial, BranchMaterial.material_id == Material.id)
     )
     query = _material_filters(
         query,
@@ -205,9 +209,14 @@ async def list_materials(
         material_type=None,
         status_filter=status_filter,
     )
+    query = query.group_by(Material.id, Manufacturer.id).order_by(Manufacturer.name, Material.name)
     return [
-        MaterialRecord(material=material, manufacturer=manufacturer)
-        for material, manufacturer in (await db.execute(query)).all()
+        MaterialRecord(
+            material=material,
+            manufacturer=manufacturer,
+            branch_usage_count=int(usage or 0),
+        )
+        for material, manufacturer, usage in (await db.execute(query)).all()
     ]
 
 

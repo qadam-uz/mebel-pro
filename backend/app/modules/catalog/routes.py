@@ -362,7 +362,9 @@ async def workshop_branch_materials_deactivate(
 
 
 def _material_response(record: MaterialRecord) -> MaterialResponse:
-    return material_response_from_models(record.material, record.manufacturer)
+    return material_response_from_models(
+        record.material, record.manufacturer, record.branch_usage_count
+    )
 
 
 def _branch_catalog_option_response(row: BranchCatalogOption) -> BranchCatalogMaterialOption:

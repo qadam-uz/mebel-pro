@@ -21,6 +21,7 @@ from app.modules.platform.api import (
     list_platform_users,
     list_workshops,
     provision_workshop,
+    reopen_error_record,
     require_platform_operator,
     reset_platform_user_password,
     resolve_error_record,
@@ -49,6 +50,7 @@ from app.modules.platform.schemas import (
     ProvisionWorkshopRequest,
     ProvisionWorkshopResponse,
     StatusChangeLogResponse,
+    WorkshopListItem,
     WorkshopSummary,
     WorkshopUserSummary,
 )
@@ -67,14 +69,21 @@ async def overview_show(
     return PlatformOverviewResponse.model_validate(overview)
 
 
-@router.get("/workshops", response_model=list[WorkshopSummary])
+@router.get("/workshops", response_model=list[WorkshopListItem])
 async def workshops_index(
     principal: AccountReadyPrincipal,
     db: Session,
-) -> list[WorkshopSummary]:
+) -> list[WorkshopListItem]:
     require_platform_operator(principal)
     rows = await list_workshops(db)
-    return [WorkshopSummary.model_validate(row) for row in rows]
+    return [
+        WorkshopListItem(
+            **WorkshopSummary.model_validate(row.workshop).model_dump(),
+            owner_login=row.owner_login,
+            branch_count=row.branch_count,
+        )
+        for row in rows
+    ]
 
 
 @router.post(
@@ -103,11 +112,12 @@ async def workshops_show(
     db: Session,
 ) -> PlatformWorkshopDetail:
     require_platform_operator(principal)
-    workshop, branches, owner = await get_workshop_detail(db, workshop_id=workshop_id)
+    detail = await get_workshop_detail(db, workshop_id=workshop_id)
     return PlatformWorkshopDetail(
-        workshop=WorkshopSummary.model_validate(workshop),
-        branches=[BranchSummary.model_validate(branch) for branch in branches],
-        owner=WorkshopUserSummary.model_validate(owner),
+        workshop=WorkshopSummary.model_validate(detail.workshop),
+        branches=[BranchSummary.model_validate(branch) for branch in detail.branches],
+        owner=WorkshopUserSummary.model_validate(detail.owner),
+        block_reason=detail.block_reason,
     )
 
 
@@ -202,6 +212,16 @@ async def errors_resolve(
     db: Session,
 ) -> ErrorRecordSummary:
     row = await resolve_error_record(db, principal=principal, record_id=record_id)
+    return ErrorRecordSummary.model_validate(row)
+
+
+@router.post("/errors/{record_id}/reopen", response_model=ErrorRecordSummary)
+async def errors_reopen(
+    record_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> ErrorRecordSummary:
+    row = await reopen_error_record(db, principal=principal, record_id=record_id)
     return ErrorRecordSummary.model_validate(row)
 
 

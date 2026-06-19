@@ -32,6 +32,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Create the user without forcing a first-login password change.",
     )
 
+    seed_error = subcommands.add_parser(
+        "seed-error-record",
+        help="Record an application error so the monitor has a row to act on (E2E).",
+    )
+    seed_error.add_argument("--code", required=True)
+    seed_error.add_argument("--module", default="e2e")
+    seed_error.add_argument("--message", default="Seeded error record for E2E")
+
     args = parser.parse_args(argv)
     if args.command == "seed-platform-user":
         asyncio.run(
@@ -43,6 +51,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 password_reset_required=not args.no_password_reset_required,
             )
         )
+    elif args.command == "seed-error-record":
+        asyncio.run(_seed_error_record(code=args.code, module=args.module, message=args.message))
 
 
 async def _seed_platform_user(
@@ -88,6 +98,25 @@ async def _seed_platform_user(
                 }
             )
         )
+
+
+async def _seed_error_record(*, code: str, module: str, message: str) -> None:
+    from app.models import import_all_models
+    from app.modules.platform.api import record_application_error
+
+    # ErrorOccurrence carries FKs to workshops / platform_users, so the full model
+    # registry must be loaded before the mapper resolves those relationships.
+    import_all_models()
+    async with SessionLocal() as db:
+        record = await record_application_error(
+            db,
+            code=code,
+            module=module,
+            message=message,
+            trace_id=f"e2e-{code}",
+        )
+        await db.commit()
+        print(json.dumps({"status": "created", "id": str(record.id), "code": record.code}))
 
 
 if __name__ == "__main__":
