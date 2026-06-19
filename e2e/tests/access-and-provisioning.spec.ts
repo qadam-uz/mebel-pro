@@ -180,6 +180,10 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   await page.getByLabel(/sabab/i).fill('E2E block')
   await page.getByRole('button', { name: 'Bloklash', exact: true }).click()
   await expect(page.getByText('Bloklangan').first()).toBeVisible()
+
+  // AB-52: complete the lifecycle round-trip through the UI — unblock restores active.
+  await page.getByRole('button', { name: 'Blokdan chiqarish' }).click()
+  await expect(page.getByText('Faol').first()).toBeVisible()
 })
 
 test('owner changes temp password, creates staff, and saves a grant', async ({ page, request }, testInfo) => {

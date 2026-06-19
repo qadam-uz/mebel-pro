@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { adminDateTime, dropdownOption } from '@/shared/app/adminUi'
+import {
+  adminDateTime,
+  auditActionFields,
+  auditStatusFields,
+  dropdownOption,
+  matchesNeedle,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -46,32 +52,22 @@ function withinWindow(timestamp: string): boolean {
   return Date.now() - new Date(timestamp).getTime() <= windowMs
 }
 
-const filteredActions = computed(() => {
-  const needle = query.value.trim().toLowerCase()
-  return admin.auditActions.filter((row) => {
+const filteredActions = computed(() =>
+  admin.auditActions.filter((row) => {
     if (workshopFilter.value !== 'all' && row.workshop_id !== workshopFilter.value) return false
     if (entityFilter.value !== 'all' && row.entity_type !== entityFilter.value) return false
     if (!withinWindow(row.created_at)) return false
-    if (!needle) return true
-    return [row.action, row.entity_type ?? '', row.entity_id ?? '', row.summary ?? '', row.trace_id]
-      .join(' ')
-      .toLowerCase()
-      .includes(needle)
-  })
-})
-const filteredStatus = computed(() => {
-  const needle = query.value.trim().toLowerCase()
-  return admin.auditStatusChanges.filter((row) => {
+    return matchesNeedle(auditActionFields(row), query.value)
+  }),
+)
+const filteredStatus = computed(() =>
+  admin.auditStatusChanges.filter((row) => {
     if (workshopFilter.value !== 'all' && row.workshop_id !== workshopFilter.value) return false
     if (entityFilter.value !== 'all' && row.entity_type !== entityFilter.value) return false
     if (!withinWindow(row.changed_at)) return false
-    if (!needle) return true
-    return [row.entity_type, row.entity_id, row.from_status ?? '', row.to_status, row.reason ?? '']
-      .join(' ')
-      .toLowerCase()
-      .includes(needle)
-  })
-})
+    return matchesNeedle(auditStatusFields(row), query.value)
+  }),
+)
 
 // A full page back means there may be more rows server-side (the 50-row default
 // is the silent cap AB-17 makes visible/extendable).
