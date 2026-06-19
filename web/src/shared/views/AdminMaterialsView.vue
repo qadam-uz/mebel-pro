@@ -5,6 +5,7 @@ import { dropdownOption, materialKindLabel, materialStatusTone } from '@/shared/
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import {
   useAdminStore,
   type Material,
@@ -18,6 +19,14 @@ const admin = useAdminStore()
 const files = useFilesStore()
 const modalOpen = ref(false)
 const manufacturerModalOpen = ref(false)
+const formPanel = ref<HTMLElement | null>(null)
+const inlineMfrPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
+const inlineMfrTrap = useFocusTrap(
+  inlineMfrPanel,
+  manufacturerModalOpen,
+  () => (manufacturerModalOpen.value = false),
+)
 const saving = ref(false)
 const manufacturerSaving = ref(false)
 const actionId = ref<string | null>(null)
@@ -329,12 +338,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="formPanel"
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="material-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="material-title">{{ editingId ? 'Material tahrirlash' : 'Yangi material' }}</h3>
@@ -449,12 +461,19 @@ onMounted(async () => {
     </template>
 
     <template v-if="manufacturerModalOpen">
-      <div class="admin-modal-scrim" @click="manufacturerModalOpen = false"></div>
+      <div
+        class="admin-modal-scrim"
+        aria-hidden="true"
+        @click="manufacturerModalOpen = false"
+      ></div>
       <section
+        ref="inlineMfrPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="inline-mfr-title"
+        tabindex="-1"
+        @keydown="inlineMfrTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="inline-mfr-title">Yangi manufacturer</h3>

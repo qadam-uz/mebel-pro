@@ -3,10 +3,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { dropdownOption, materialStatusTone } from '@/shared/app/adminUi'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useAdminStore, type Manufacturer, type MaterialStatus } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const modalOpen = ref(false)
+const formPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
@@ -195,12 +198,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="formPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="manufacturer-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="manufacturer-title">

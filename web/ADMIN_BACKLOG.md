@@ -51,16 +51,30 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 7 | 24 | 22 | **53** |
-| Done | 0 | 0 | 0 | **0** |
+| Open | 6 | 24 | 22 | **52** |
+| Done | 1 | 0 | 0 | **1** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B1): **AB-02 Done** — dialog focus management.
+> Added `composables/useFocusTrap.ts` (move focus in on open, trap Tab/Shift-Tab, Escape to
+> close, return focus to the opener on close; ref-counted body-scroll lock — mirrors the proven
+> `ConfirmDialog` contract that `access-management.md` mandates). Wired it into all **9**
+> hand-rolled `.admin-modal` dialogs across 6 views — provision (AdminWorkshopsView),
+> block-workshop (AdminWorkshopDetailView), create/edit-operator + block-operator
+> (AdminPlatformUsersView), manufacturer create/edit (AdminManufacturersView), material
+> create/edit + inline-manufacturer (AdminMaterialsView), job-log (AdminPlatformJobsView),
+> error-detail (AdminPlatformErrorsView) — each panel got `ref`/`tabindex="-1"`/`@keydown`, and
+> every scrim got `aria-hidden="true"`. Web gate green: lint:check · format:check · typecheck ·
+> test **120** · build. Browser focus-order verification is deferred to an e2e a11y assertion
+> (no browser here); the logic is a direct port of the gate-covered `ConfirmDialog` pattern.
+> Related a11y items (AB-27 tabs, AB-28 live regions, AB-47 sr-only th) stay in B8.
 
 ## Index
 
 | id | P | category | sev | eff | status | one-line |
 |---|---|---|---|---|---|---|
 | AB-01 | P1 | states-errors | high | M | Open | Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state |
-| AB-02 | P1 | a11y | high | M | Open | Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog |
+| AB-02 | P1 | a11y | high | M | Done | Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog |
 | AB-03 | P1 | security-rbac | high | M | Open | One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss (secret modal) |
 | AB-04 | P1 | ux-flow | high | M | Open | Gate privileged state-changing actions behind ConfirmDialog w/ Uzbek labels (run-job, reset-pw, resolve, activate/deactivate) |
 | AB-05 | P1 | states-errors | high | S | Open | Material image-upload failure is swallowed (unhandled rejection, no feedback) |
@@ -124,7 +138,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Only `loadManufacturers`/`loadMaterials` run errors through `captureApiError` (→ 403 becomes `permission_denied`). The other loaders — `loadWorkshops`, `loadOverview`, `loadWorkshop`, `loadPlatformUsers`, `loadJobs`, `loadErrors`, `loadAudit` — hardcode a generic `<area>_load_failed` and discard the 403. **No view renders a permission-denied branch at all** (the only one that does, `AdminCatalogView.vue:243`, is dead/unrouted — see AB-09). So an operator whose account is blocked/downgraded mid-session sees a misleading "endpoint javob bermadi / trace …" infrastructure error on every privileged screen — including the operator registry — instead of "access revoked, re-authenticate". This masks an RBAC condition as an outage. Spec: [`platform.md`](../docs/ref/features/platform.md) "error on every page"; [`access-patterns.md`](../docs/access-patterns.md) platform-operator scope.
 **Fix:** Route all 8 loaders through `captureApiError(err, '<area>_load_failed')` (one-line each), capturing `code` + `traceId`. Render a distinct `permission_denied`/`password_reset_required` state (e.g. "Kirish bekor qilingan — qayta kiring") ahead of the generic error block — ideally via the shared `AdminErrorState` (AB-08). Ship the regression test (AB-53) with it.
 
-### AB-02 · Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog — `a11y` · high · M
+### AB-02 · Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog — `a11y` · high · M — **Done (B1)**
 
 **Files:** every hand-rolled `<section class="admin-modal" role="dialog" aria-modal="true">` — `AdminWorkshopsView.vue:219`, `AdminPlatformUsersView.vue:270/334`, `AdminWorkshopDetailView.vue:250`, `AdminManufacturersView.vue:197`, `AdminMaterialsView.vue:331/451`, `AdminPlatformJobsView.vue:145`, `AdminPlatformErrorsView.vue:168`. Reference: `components/ConfirmDialog.vue:40-103` (already implements the contract).
 **Why:** Every admin dialog is hand-rolled with **no focus management**: focus stays on the trigger behind the scrim on open, Tab/Shift-Tab walks out to the table behind, focus is never restored to the trigger on close, and Escape isn't handled (only a scrim `@click` + icon button). This is a direct, explicit violation of [`access-management.md`](../docs/ref/features/access-management.md) ("All provisioning, create-user, reset-password, and block dialogs move focus into the dialog, trap focus while open, and return focus to the trigger on close"). No admin view uses the shared `ConfirmDialog` (which already does this correctly).
