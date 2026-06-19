@@ -51,9 +51,19 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 14 | 18 | **34** |
-| Done | 5 | 10 | 4 | **19** |
+| Open | 2 | 13 | 17 | **32** |
+| Done | 5 | 11 | 5 | **21** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B6): **AB-18, AB-41 Done** — operator/block safety.
+> **AB-18:** platform-users gained an info banner (same-scope, no permission model, can't block
+> self/last operator), a "Joriy" pill on the signed-in operator's row, a `blockDisabledReason`
+> that disables Block for **both** self and the last active operator (with the reason as the
+> label/title), and `confirmBlock` now maps the `last_platform_operator` 400 to a specific
+> message instead of the generic failure. **AB-41:** both block dialogs (workshop + operator)
+> use destructive (`bg-danger`) confirm styling and state that **unblocking does not restore
+> sessions**; the workshop dialog's English "Staff/Clients" became "Xodimlar/Mijozlar". Web gate
+> green: lint:check · format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B5): **AB-11, AB-12, AB-13 Done** — operator copy policy
 > (Uzbek-latin prose; English only for genuine domain/status identifiers). **AB-12:** added
@@ -157,7 +167,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-15 | P2 | correctness-bug | med | S | Done | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
 | AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
 | AB-17 | P2 | spec-conformance | med | M | Open | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
-| AB-18 | P2 | design-parity | med | M | Open | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
+| AB-18 | P2 | design-parity | med | M | Done | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
 | AB-19 | P2 | design-parity | med | M | Open | Workshops list: inline Block/Unblock row actions (with confirm) |
 | AB-20 | P2 | design-parity | med | S | Open | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
 | AB-21 | P2 | spec-conformance | med | S | Open | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
@@ -180,7 +190,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-38 | P3 | design-parity | low | S | Open | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
 | AB-39 | P3 | ux-flow | low | S | Open | Workshop-detail error state is a dead end — add back-link + retry |
 | AB-40 | P3 | ux-flow | low | S | Open | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
-| AB-41 | P3 | security-rbac | low | S | Open | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
+| AB-41 | P3 | security-rbac | low | S | Done | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
 | AB-42 | P3 | spec-conformance | low | S | Open | Manufacturers: add the spec'd Country filter |
 | AB-43 | P3 | security-rbac | low | S | Open | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
 | AB-44 | P3 | performance | low | S | Open | `list_error_records` has no server-side limit — add defensive cap |
@@ -303,7 +313,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The cross-workshop superadmin audit viewer offers only a single text box (+ a dead CSV button, AB-09-style stub at `:57`). It's missing the spec'd filter set — most importantly the **workshop filter**, the defining affordance of a cross-workshop viewer — plus module / date-range / action-family (actions tab) and entity / from→to (status tab). The store fetches both feeds **unlimited-but-defaulted-to-50** with no pagination, no "load more", and no truncation hint, so older audit history is permanently unreachable from the UI — an append-only log you can't page through is functionally incomplete. The status tab also shows raw `from → to` instead of the prototype's localized transition + order link.
 **Fix:** Add Workshop + Module + date-range filters (and entity/from→to on the status tab); plumb an explicit `limit` (and `before`/offset) through `loadAudit` with a "Load older" control + "showing latest N" hint; map status codes through a shared label helper; either implement the CSV export (client-side serialization of the loaded rows via the existing `downloadBlob`) with feedback, or remove the button.
 
-### AB-18 · Platform-users: last-operator Block guard + error mapping + 'Joriy' marker + operator-model banner — `design-parity` · med · M
+### AB-18 · Platform-users: last-operator Block guard + error mapping + 'Joriy' marker + operator-model banner — `design-parity` · med · M — **Done (B6)**
 
 **Files:** `AdminPlatformUsersView.vue:127/180/210-219/357`, `:97-110` (`confirmBlock` catch). Prototype: `platform-users.html:29-32/90-118`.
 **Why:** Three parity/safety gaps vs the prototype: (1) no info banner explaining the no-permission-model rule + "can't block yourself or the last active operator"; (2) no "Joriy" marker on the signed-in operator's row (only a disabled self-block button); (3) the **last-active-operator Block is not disabled** — the UI guards only self-block and relies entirely on the backend 400, surfacing the generic "Operator amali bajarilmadi." even though the modal copy promises otherwise (see AB-07). The prototype disables it with the reason "Kamida bitta faol operator qolishi shart".
@@ -443,7 +453,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The empty card ("Material yo'q — Manufacturer qo'shing, keyin … material yarating") has no button and no link to the manufacturers screen, and conflates the truly-empty case with filtered-to-zero — a first-time operator reading it may not connect it to the page-head create button.
 **Fix:** Distinguish "no materials at all" (show a "Yangi material" CTA + link to manufacturers) from "filtered to zero" (offer "clear filters"), mirroring the prototype's filter-aware empty copy.
 
-### AB-41 · Workshop block: second confirm + destructive styling + "unblock won't restore sessions" note — `security-rbac` · low · S
+### AB-41 · Workshop block: second confirm + destructive styling + "unblock won't restore sessions" note — `security-rbac` · low · S — **Done (B6)**
 
 **Files:** `AdminWorkshopDetailView.vue:250-292` (`canBlock` only requires a non-empty reason; confirm button is `mp-button-primary`, not destructive), and apply to `AdminPlatformUsersView.vue:353-379`. Spec: [`access-patterns.md`](../docs/access-patterns.md) (block cascade), [`access-management.md`](../docs/ref/features/access-management.md) ("Unblocking does NOT restore sessions").
 **Why:** `block_workshop` is a hard cascade (revoke all owner/staff sessions + freeze open orders), yet the only friction is a mandatory reason and one primary-styled submit — a mis-click on the wrong workshop is one stroke from cutting off a tenant. The dialog also never states that unblocking won't restore sessions (a spec consequence operators should know), and the in-dialog confirm isn't destructive-styled.

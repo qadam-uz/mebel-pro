@@ -288,8 +288,8 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <form @submit.prevent="block">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
-              Staff sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Clients
-              bloklanmaydi.
+              Xodimlar sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Mijozlarga
+              ta'sir qilmaydi. Blokdan chiqarilganda sessiyalar avtomatik tiklanmaydi.
             </p>
             <label class="admin-field" for="block-reason">
               <span>Majburiy sabab</span>
@@ -306,7 +306,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </button>
             <button
               type="submit"
-              class="mp-button mp-button-primary"
+              class="mp-button bg-danger text-white"
               :disabled="!canBlock || acting"
             >
               {{ acting ? 'Bloklanmoqda' : 'Bloklash' }}

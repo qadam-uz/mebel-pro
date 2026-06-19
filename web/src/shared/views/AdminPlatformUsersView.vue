@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
+import { apiErrorCode } from '@/shared/api/client'
 import {
   adminDateTime,
   platformUserStatusLabel,
@@ -32,6 +33,24 @@ const editingId = ref<string | null>(null)
 const blockTarget = ref<PlatformUser | null>(null)
 const blockReason = ref('')
 const query = ref('')
+
+const activeOperatorCount = computed(
+  () => admin.platformUsers.filter((user) => user.status === 'active').length,
+)
+
+// AB-18: the server refuses to block the operator themselves or the last active
+// operator; reflect both in the UI (disabled with a reason) instead of letting
+// the click 400 into a generic failure.
+function blockDisabledReason(user: PlatformUser): string | null {
+  if (user.id === auth.me?.principal_id) return "O'zini bloklab bo'lmaydi"
+  if (user.status === 'active' && activeOperatorCount.value <= 1)
+    return "Oxirgi faol operatorni bloklab bo'lmaydi"
+  return null
+}
+
+function isCurrentOperator(user: PlatformUser): boolean {
+  return user.id === auth.me?.principal_id
+}
 
 const secretRows = computed(() => {
   const secret = admin.lastPlatformUserSecret
@@ -150,9 +169,13 @@ async function confirmBlock() {
     blockModalOpen.value = false
     blockTarget.value = null
     toast.success('Operator bloklandi')
-  } catch {
+  } catch (blockErr) {
     actionError.value = 'platform_user_block_failed'
-    toast.danger("Operatorni bloklab bo'lmadi")
+    toast.danger(
+      apiErrorCode(blockErr) === 'last_platform_operator'
+        ? "Oxirgi faol operatorni bloklab bo'lmaydi"
+        : "Operatorni bloklab bo'lmadi",
+    )
   } finally {
     actionId.value = null
   }
@@ -184,6 +207,11 @@ onMounted(admin.loadPlatformUsers)
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">Yangi operator</button>
     </div>
+
+    <p class="mb-4 rounded-md border border-hairline bg-sunk px-4 py-3 text-sm text-ink-soft">
+      Platforma operatorlari bir xil scope-ga ega — alohida ruxsat modeli yo'q. O'zingizni yoki
+      oxirgi faol operatorni bloklab bo'lmaysiz.
+    </p>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
@@ -231,6 +259,9 @@ onMounted(admin.loadPlatformUsers)
             <tr v-for="user in filtered" :key="user.id">
               <td class="nm">
                 {{ user.full_name }}
+                <span v-if="isCurrentOperator(user)" class="admin-pill admin-pill-info ml-2">
+                  Joriy
+                </span>
                 <small>{{ user.id.slice(0, 8) }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ user.login }}</td>
@@ -262,12 +293,11 @@ onMounted(admin.loadPlatformUsers)
                     v-if="user.status === 'active'"
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
-                    :disabled="user.id === auth.me?.principal_id"
+                    :disabled="blockDisabledReason(user) !== null || actionId === user.id"
+                    :title="blockDisabledReason(user) ?? undefined"
                     @click="askBlock(user)"
                   >
-                    {{
-                      user.id === auth.me?.principal_id ? "O'zini bloklab bo'lmaydi" : 'Bloklash'
-                    }}
+                    {{ blockDisabledReason(user) ?? 'Bloklash' }}
                   </button>
                   <button
                     v-else
@@ -412,8 +442,8 @@ onMounted(admin.loadPlatformUsers)
         <form @submit.prevent="confirmBlock">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
-              {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Oxirgi faol operator
-              bloklanmaydi.
+              {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Blokdan chiqarilganda
+              sessiyalar avtomatik tiklanmaydi — operator qaytadan kiradi.
             </p>
             <label class="admin-field" for="op-block-reason">
               <span>Majburiy sabab</span>
@@ -430,7 +460,7 @@ onMounted(admin.loadPlatformUsers)
             </button>
             <button
               type="submit"
-              class="mp-button mp-button-primary"
+              class="mp-button bg-danger text-white"
               :disabled="!blockReason.trim() || actionId === blockTarget.id"
             >
               Bloklash
