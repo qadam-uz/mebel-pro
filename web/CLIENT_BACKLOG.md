@@ -46,6 +46,16 @@ file tracks *fixes/polish* against the current Vue implementation.
 | Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-19, client-finish B18): **CB-93 (in progress)** — editor
+> decomposition, seam 3 of 5. Extracted the autosave wiring into
+> `composables/useDraftAutosave.ts` (status mirror + don't-persist gate + the deep
+> `parts` watch + the CB-15 `hydrate()` guard, wrapping the already-tested
+> `autosaveController`); +5 unit tests (debounce, coalesce, read-only no-op,
+> hydrate-no-save, onSchedule). The editor now consumes it via one `useDraftAutosave`
+> call. (Seams already done: `autosaveController.ts` + `cuttingEdgeDisplay.ts` pure
+> modules. Remaining: CuttingResultsSection / CuttingPartRow / CuttingEdgePickerModal
+> component extractions.) Web gate 109 tests + editor e2e green.
+
 > Progress (2026-06-19, client-finish B17): **CB-51** — two-pane branch pre-filter.
 > The editor's flat "workshop · branch" SearchCombobox is replaced by a new
 > `components/CuttingBranchPicker.vue` (workshops left, the chosen workshop's branches

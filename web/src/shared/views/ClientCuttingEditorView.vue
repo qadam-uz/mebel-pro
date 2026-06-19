@@ -3,10 +3,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/shared/api/client'
-import { createAutosaveController } from '@/shared/app/autosaveController'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
-import { AUTOSAVE_DEBOUNCE_MS, MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
+import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -41,8 +41,6 @@ const cutting = useCuttingStore()
 const toast = useToast()
 const draftId = computed(() => String(route.params.id))
 const parts = ref<CuttingPart[]>([])
-const saveState = ref<'saved' | 'saving' | 'error' | 'editing'>('saved')
-const saveError = ref<string | null>(null)
 const optimizeError = ref<string | null>(null)
 // Per-row optimiser-error attribution (CB-89): the backend returns
 // details {part_ref, row_index} on a part-specific failure, so flag THAT row
@@ -69,7 +67,6 @@ const edgePickerSearch = ref('')
 const edgePickerThickness = ref<string | null>('all')
 const edgeDialogRef = ref<HTMLElement | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
-let hydrating = false
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
 // the same draft and must not clobber unsaved local edits (CB-15).
@@ -809,27 +806,22 @@ function bringOwn(part: CuttingPart) {
   }
 }
 
-// Debounced autosave (700ms). The timing core lives in the framework-agnostic
-// `autosaveController` (unit-tested in autosaveController.spec.ts — CB-108); we
-// only mirror its status onto `saveState`/`saveError` and feed it the gate:
-// don't persist incomplete/out-of-bounds rows (they surface their own inline
-// validation) or a read-only bound draft.
-const autosave = createAutosaveController({
-  delayMs: AUTOSAVE_DEBOUNCE_MS,
+// Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
+// the deep `parts` watch, and the CB-15 hydration guard all live in the
+// `useDraftAutosave` composable (CB-93 seam). The gate skips incomplete/out-of-bounds
+// rows (they show their own inline validation) and a read-only bound draft.
+const autosave = useDraftAutosave({
+  parts,
   persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
-  canPersist: () => hasPersistableParts.value && !isReadOnly.value,
-  onStatus: (status) => {
-    saveState.value = status
-    saveError.value = status === 'error' ? "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring." : null
+  canPersist: () => hasPersistableParts.value,
+  isReadOnly: () => isReadOnly.value,
+  // A row-attributed optimiser error is stale once the parts change.
+  onSchedule: () => {
+    optimizeRowError.value = null
   },
 })
-
-function scheduleSave() {
-  if (hydrating || isReadOnly.value) return
-  // A row-attributed optimiser error is stale once the parts change.
-  optimizeRowError.value = null
-  autosave.schedule()
-}
+const saveState = autosave.saveState
+const saveError = autosave.saveError
 
 async function setPreferredBranch(branchId: string | null) {
   // Surface a failure instead of an unhandled rejection that leaves the local
@@ -962,12 +954,9 @@ watch(
     // the round-trip (CB-15). Result-derived state below always tracks the
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
-      hydrating = true
-      parts.value = value.parts_snapshot.map((part) => ({ ...part }))
-      hydratedDraftId = value.id
-      autosave.markSaved()
-      nextTick(() => {
-        hydrating = false
+      autosave.hydrate(() => {
+        parts.value = value.parts_snapshot.map((part) => ({ ...part }))
+        hydratedDraftId = value.id
       })
     }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
@@ -985,8 +974,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(parts, scheduleSave, { deep: true })
 
 onMounted(async () => {
   document.addEventListener('keydown', onDocumentKeydown)
