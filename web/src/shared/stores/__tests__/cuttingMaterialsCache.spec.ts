@@ -45,4 +45,16 @@ describe('cutting store loadMaterials cache (CB-40)', () => {
 
     expect(api.get).toHaveBeenCalledTimes(4)
   })
+
+  it('passes a limit only when capping the no-branch load, keyed distinctly (CB-40)', async () => {
+    const store = useCuttingStore()
+    vi.mocked(api.get).mockResolvedValue(list('m1'))
+
+    await store.loadMaterials({ kind: 'panel', limit: 60 }) // no branch, capped
+    await store.loadMaterials({ kind: 'panel' }) // no branch, uncapped → distinct cache key
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(String(vi.mocked(api.get).mock.calls[0][0])).toContain('limit=60')
+    expect(String(vi.mocked(api.get).mock.calls[1][0])).not.toContain('limit=')
+  })
 })

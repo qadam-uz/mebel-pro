@@ -4,7 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { ApiError } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
-import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { MAX_PARTS, MIN_PART_MM, NO_BRANCH_CATALOG_LIMIT } from '@/shared/app/constants'
 import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
@@ -501,17 +501,14 @@ async function optimize() {
 }
 
 async function loadMaterials() {
+  const branchId = draft.value?.preferred_branch_id
+  // CB-40: cap ONLY the unbounded no-preferred-branch load so a fresh draft doesn't
+  // pull the whole catalog. A branch-scoped load stays unlimited (CB-84 filters +
+  // CB-19/86 recovery need the full per-branch list client-side).
+  const limit = branchId ? undefined : NO_BRANCH_CATALOG_LIMIT
   await Promise.all([
-    cutting.loadMaterials({
-      kind: 'panel',
-      branchId: draft.value?.preferred_branch_id,
-      carriedOnly: false,
-    }),
-    cutting.loadMaterials({
-      kind: 'edge',
-      branchId: draft.value?.preferred_branch_id,
-      carriedOnly: false,
-    }),
+    cutting.loadMaterials({ kind: 'panel', branchId, carriedOnly: false, limit }),
+    cutting.loadMaterials({ kind: 'edge', branchId, carriedOnly: false, limit }),
   ])
 }
 
@@ -662,6 +659,10 @@ onBeforeUnmount(() => {
           >
             Tozalash
           </button>
+          <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
+            Filial tanlanmagani uchun faqat dastlabki {{ NO_BRANCH_CATALOG_LIMIT }} ta material
+            ko'rsatilmoqda — to'liq katalog uchun ustaxona tanlang.
+          </p>
         </section>
 
         <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">

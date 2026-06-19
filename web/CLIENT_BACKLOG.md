@@ -42,9 +42,24 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 1 | 2 | **3** |
-| Done | 32 | 67 | 30 | **129** |
+| Open (incl. partial) | 0 | 0 | 2 | **2** |
+| Done | 32 | 68 | 30 | **130** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish-2 B23): **CB-40 DONE** — the no-preferred-branch
+> catalog load is now capped (the headline that was blocked is resolved per the agreed
+> approach: keep CB-84's client-side filtering, cap ONLY the unbounded load). Backend:
+> `GET /client/catalog/materials` takes an optional `limit` (`Query(ge=1, le=200)`) applied
+> with the existing deterministic `ORDER BY manufacturer, name`, so a branch-scoped load
+> stays unlimited (CB-84 filters + CB-19/86 not-carried recovery still get the full
+> per-branch list) and only the whole-catalog load is bounded. Frontend: the editor passes
+> `limit=NO_BRANCH_CATALOG_LIMIT` (60) to `loadMaterials` **only when no preferred branch is
+> set** (both panel + edge), the store keys its cache on the limit, and a one-line note under
+> the catalog-filter banner tells the user only the first 60 show and to pick a workshop for
+> the full catalog. +1 backend test (limit caps + 422 on `limit=0`), +1 store test (limit
+> passed only when capping, distinct cache key). Both gates green (web format/lint/typecheck/
+> test 119/build; backend ruff/format/mypy/pytest 119+2-skip). The branch-selected e2e path is
+> unaffected (the editor always has a branch before the picker is used). **CB-40 is Done.**
 
 > Progress (2026-06-19, client-finish-2 B22): **CB-93 DONE** — component extraction 3 of 3.
 > Extracted the ~450-line edge-banding modal into `components/CuttingEdgePickerModal.vue`,
@@ -550,7 +565,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Done | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Done | Lightweight drafts-summary endpoint for list views |
-| CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
+| CB-40 | P2 | performance | med | M | Done | Scope/paginate editor catalog loads (not whole catalog) |
 | CB-41 | P2 | completeness-stub | low | M | Done | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Done | Lock background scroll when ConfirmDialog is open |
@@ -884,11 +899,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `cutting.ts:181-192` `loadDrafts` fetches all drafts with no params, and `CuttingDraft` embeds full `results[]` incl. `parts_snapshot`, `material_snapshots`, per-panel placements (`:48-84`), so each list card carries its whole optimization payload. `DRAFT_CAP=50` is display-only (`DraftsView.vue:10,119`); `ClientHomeView.vue:58` reloads the full list for 4 recent.
 **Fix:** Add a drafts-summary endpoint (or `?fields=`/`?limit=`) omitting `results.panels/placements`; home requests only the few summaries it renders.
 
-### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Partial (B19); rest blocked on a CB-84 decision**
-**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`
+### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Done (B19 caching + B23 cap)**
+**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`, `app/constants.ts`, `backend/app/modules/cutting/{routes,service}.py`
 **Why:** `loadMaterials` returned the whole per-branch (or whole-catalog, for a new draft) list with no cache, re-downloading identical payloads on remount / branch flip-back; the full arrays also drive client-side filtering + re-rank.
 **Done (B19):** `cutting.loadMaterials` caches by `(kind, branch, search, carried_only)` with ~30s freshness + a `force` bypass — kills the redundant re-fetches (+2 unit tests).
-**Blocked (needs a decision):** the headline "don't load the whole catalog" via server-side search + a page limit **conflicts with CB-84** (the client-side filter bar — manufacturer/type/thickness multi-select + sort — operates over the full `panelOptions` list) and the CB-19/86 not-carried recovery (needs the full per-branch list to detect un-carried materials). Moving filtering+pagination server-side would rework/undo CB-84, so it needs a product/design call: keep CB-84's client-side filtering (accept full per-branch loads, now cached) **or** invest in server-side filtering+pagination (re-doing CB-84). Surfaced rather than guessed.
+**Done (B23, the headline):** resolved per the agreed approach (keep CB-84's client-side filtering; cap ONLY the unbounded load, not move filtering server-side). The backend `GET /client/catalog/materials` takes an optional `limit` (`Query(ge=1, le=200)`) applied with the existing deterministic `ORDER BY manufacturer, name`; the editor passes `limit=NO_BRANCH_CATALOG_LIMIT` (60) **only when no preferred branch is set** (both panel + edge). A branch-scoped load stays unlimited, so CB-84's filter bar and CB-19/86's not-carried recovery still get the full per-branch list client-side; only the otherwise-unbounded whole-catalog load on a fresh draft is bounded. The store keys its cache on the limit; a one-line note under the catalog-filter banner nudges the user to pick a workshop for the full catalog. +1 backend test, +1 store test.
 
 ### CB-41 · Paginate notifications page; server-side unread filter — `completeness-stub` · low · M
 **Files:** `views/ClientNotificationsView.vue`, `stores/notifications.ts`

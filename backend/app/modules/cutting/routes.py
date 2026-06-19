@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import MaterialKind
@@ -143,6 +143,7 @@ async def client_catalog_materials_index(
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
     carried_only: bool = True,
+    limit: int | None = Query(default=None, ge=1, le=200),
 ) -> list[ClientCatalogMaterialOption]:
     return await client_catalog_materials(
         db,
@@ -152,6 +153,7 @@ async def client_catalog_materials_index(
         search=search,
         manufacturer_id=manufacturer_id,
         carried_only=carried_only,
+        limit=limit,
     )
 
 
