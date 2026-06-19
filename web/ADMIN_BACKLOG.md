@@ -55,6 +55,18 @@ against the current Vue implementation. It mirrors the discipline of
 | Done | 7 | 24 | 22 | **53** |
 | Won't | — | — | 1 (AB-54) | **1** |
 
+> Progress (2026-06-20, admin-finish — Land + E2E verified): rebased onto current `main`
+> (`2019c31`, the workshop-backlog merge) — `admin.ts` cleanly carries both this work's
+> `clearSecrets` and upstream's `reset`. Re-ran the full gate on the new base: **web
+> lint/format/typecheck/test 192/build green**, **backend ruff/format/mypy/pytest 123 passed /
+> 2 skipped green**, e2e typecheck green. Then ran the **real Playwright suite** (host Postgres
+> `mebel_e2e`, no Docker needed) for the admin journeys — **`access-and-provisioning.spec.ts` +
+> `platform-ops.spec.ts` = 7/7 green** (operator create+secret/reset/block/unblock, self-block
+> guard, run-job, workshop block→unblock, + the existing access flows). One fix during the run:
+> the job test navigated via a hard `goto` that dropped the in-memory token → switched it to the
+> nav-link click (matching the passing tests). Branch force-pushed (user-approved) and opened as
+> **PR #35** (not merged — `main` auto-deploys to prod, the user's call).
+
 > Progress (2026-06-19, admin-finish B15): **AB-06, AB-07, AB-30, AB-51, AB-52 Done** — test
 > coverage. **AB-51:** extracted the audit search predicate (`auditActionFields`,
 > `auditStatusFields`, `matchesNeedle`) into `adminUi.ts` and wired the audit view to it; +1
@@ -63,12 +75,10 @@ against the current Vue implementation. It mirrors the discipline of
 > one-time-secret modal → reset → block → unblock; (AB-07) the signed-in operator's Block control
 > is asserted disabled ("O'zini bloklab bo'lmaydi"); (AB-30) trigger a background job run →
 > confirm dialog → success/skipped toast. (AB-52) extended `access-and-provisioning.spec.ts` to
-> unblock the workshop after blocking (full lifecycle). All specs pass **e2e `pnpm typecheck`**.
-> **⚠ The full Playwright run is NOT verified in this environment** — Docker isn't running and the
-> Playwright browsers aren't installed here, so the suite couldn't be executed; run
-> `cd e2e && pnpm install:browsers && pnpm test` against the dev stack (Postgres `mebel_e2e`) to
-> confirm. AB-30's resolve-error journey is **deferred** — there's no CLI/seed path to create an
-> `ErrorRecord` for the UI to resolve (flagged; run-job is covered).
+> unblock the workshop after blocking (full lifecycle). AB-30's resolve-error journey is
+> **deferred** — there's no CLI/seed path to create an `ErrorRecord` for the UI to resolve
+> (flagged; run-job is covered). The full Playwright run was executed and is green (see the
+> Land block above).
 >
 > **This closes the admin-SPA backlog: 0 Open, 53 Done, 1 Won't.** Web gate green throughout
 > (lint/format/typecheck/test 127/build); backend gate green for the one backend change (AB-44).
