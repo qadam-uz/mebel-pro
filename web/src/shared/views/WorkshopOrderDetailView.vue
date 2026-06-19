@@ -119,7 +119,7 @@ async function run(action: () => Promise<unknown>) {
     await action()
     return true
   } catch {
-    actionError.value = orders.error ?? 'order_action_failed'
+    actionError.value = orders.actionError ?? 'order_action_failed'
     return false
   }
 }
@@ -760,7 +760,7 @@ onMounted(loadDetail)
                 Buyurtmani bekor qilish
               </button>
               <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm text-danger">
-                {{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}
+                {{ actionError }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
               </p>
             </div>
           </section>

@@ -183,6 +183,11 @@ export const useOrdersStore = defineStore('orders', () => {
   const actionLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  // Action (mutate) failures are kept separate from load failures: a cancel/approve
+  // 409 must surface inline, NOT collapse the whole detail page to its load-error
+  // state (the page gates on `error`). Views read these for the inline message.
+  const actionError = ref<string | null>(null)
+  const actionTraceId = ref<string | null>(null)
   // PDF download feedback (CB-17): id of the order currently downloading, plus a
   // transient error + trace for the last failed download.
   const downloadingId = ref<string | null>(null)
@@ -193,6 +198,12 @@ export const useOrdersStore = defineStore('orders', () => {
     const captured = captureApiError(errorValue, fallback)
     error.value = captured.code
     traceId.value = captured.traceId
+  }
+
+  function captureActionError(errorValue: unknown, fallback: string) {
+    const captured = captureApiError(errorValue, fallback)
+    actionError.value = captured.code
+    actionTraceId.value = captured.traceId
   }
 
   async function quoteForDraft(draftId: string, branchId: string) {
@@ -377,8 +388,8 @@ export const useOrdersStore = defineStore('orders', () => {
 
   async function mutate(path: string, payload: unknown, method: 'post' | 'patch' = 'post') {
     actionLoading.value = true
-    error.value = null
-    traceId.value = null
+    actionError.value = null
+    actionTraceId.value = null
     try {
       const order =
         method === 'post'
@@ -389,7 +400,9 @@ export const useOrdersStore = defineStore('orders', () => {
       return order
     } catch (errorValue) {
       // On an optimistic-concurrency conflict the cached version is stale; refetch
-      // the order so the next attempt carries the server's current version.
+      // the order so the next attempt carries the server's current version. The
+      // refetch owns `error`/`traceId`; the conflict itself goes to actionError so
+      // the page stays on the (now fresh) order instead of its load-error state.
       if (apiErrorCode(errorValue) === 'order_version_conflict') {
         const match = path.match(/\/(client|workshop)\/orders\/([^/]+)\//)
         const orderId = match?.[2]
@@ -398,7 +411,7 @@ export const useOrdersStore = defineStore('orders', () => {
           else await loadWorkshopOrder(orderId)
         }
       }
-      captureError(errorValue, 'order_action_failed')
+      captureActionError(errorValue, 'order_action_failed')
       throw errorValue
     } finally {
       actionLoading.value = false
@@ -433,6 +446,8 @@ export const useOrdersStore = defineStore('orders', () => {
     actionLoading,
     error,
     traceId,
+    actionError,
+    actionTraceId,
     downloadingId,
     downloadError,
     downloadTraceId,

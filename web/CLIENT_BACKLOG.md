@@ -42,9 +42,30 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 4 | 3 | **7** |
-| Done | 32 | 64 | 29 | **125** |
+| Open (incl. partial) | 0 | 2 | 3 | **5** |
+| Done | 32 | 66 | 29 | **127** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B16): **E2E batch — CB-122 + CB-123** (run
+> locally against the dev stack; both green). New `e2e/tests/helpers.ts` (shared
+> seeding + API order placement + client OTP login) and two specs.
+> **CB-122** (cancel + 409 recovery) writing the test surfaced a **real client bug**:
+> on a cancel 409 the store wrote the shared `error` ref, and the detail view gates
+> its whole page on `orders.error`, so the page collapsed to "Buyurtmani yuklab
+> bo'lmadi" (the order had actually loaded) with a stuck-open dialog instead of an
+> inline "holati o'zgardi" recovery. Fixed by splitting action errors from load
+> errors: `orders.actionError`/`actionTraceId` + `captureActionError`; `mutate` now
+> writes those (the 409 refetch still owns `error`). Updated all mutate-result
+> consumers: ClientOrderDetailView, WorkshopOrderDetailView, ClientOrdersView; +2
+> store unit-test assertions (action error set, page `error` stays null).
+> **CB-123** (notifications open/mark-read/badge) validates the CB-02 emission end to
+> end: bell badge → dropdown localized title + "Buyurtma № …" body (no raw code) →
+> open row → navigate + unread clears. Added an `aria-label` to the bell dropdown
+> (`menuLabel`) — the `role="menu"` had no accessible name (a11y gap the spec wants).
+> Gates: web lint/format/typecheck/test(104)/build + e2e typecheck, both specs pass.
+> NOTE: the two order-creating specs must run serially (CI already sets `workers:1`);
+> placing two orders concurrently collides on `uq_orders_order_number` (a latent
+> backend order-number concurrency gap, out of scope here — flagged separately).
 
 > Progress (2026-06-19, client-finish B15): **CB-02 unblocked + shipped** — the
 > backend now emits client order notifications, so the (already-built) bell + list
@@ -516,8 +537,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-119 | P2 | correctness-bug | low | S | Done | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
-| CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
-| CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
+| CB-122 | P2 | testing | med | L | Done | E2E: client order cancel + 409 recovery (found+fixed a real 409 page-collapse bug) |
+| CB-123 | P2 | testing | med | L | Done | E2E: client notifications (open/mark-read/badge) — needed CB-02 emission; added menu aria-label |
 | CB-124 | P2 | testing | med | M | Done | Test branch-carry recovery detection (rowNotCarried) |
 | CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
@@ -1158,15 +1179,15 @@ named CB-fix and its test together.
 **Why:** `partIsInvalid` (`:221-231`) and `hasPersistableParts` (`:81-85`) enforce only lower bounds (≥50, qty≥1) + finiteness; no upper cap (CB-82) or row/quantity cap (CB-83), inputs set only `min`. No test exercises these predicates, so CB-82/83's caps would have no test pinning their thresholds.
 **Fix:** Extract the predicates into a pure helper; unit-test the boundary matrix (49/50, 0/1, NaN, and post-CB-82/83 the max-dimension + 100-row/total-quantity caps). **Related:** CB-82, CB-83, CB-09.
 
-### CB-122 · E2E: client order cancel + 409 recovery — `testing` · med · L
-**Files:** `e2e/tests/`, `views/ClientOrderDetailView.vue`, `stores/orders.ts`
+### CB-122 · E2E: client order cancel + 409 recovery — `testing` · med · L — **Done (B16)**
+**Files:** `e2e/tests/client-order-cancel.spec.ts`, `e2e/tests/helpers.ts`, `stores/orders.ts`, `views/ClientOrderDetailView.vue`, `views/WorkshopOrderDetailView.vue`, `views/ClientOrdersView.vue`
 **Why:** Verified: the e2e suite (access/catalog/cutting/order-production/smoke) covers login, optimize+PDF, placement+production, but **no spec cancels an order** — neither the dialog, the toast, nor the 409 path (CB-11). Client-initiated cancellation (core v1) and its conflict recovery can break end-to-end uncaught.
-**Fix:** E2E: place (reuse order-production seeding), cancel with reason, see cancelled+toast; second case mutates server-side first → UI hits 409 + recovery message. Playwright (seed via API). **Related:** CB-11, CB-24, CB-14.
+**Fix (shipped):** `client-order-cancel.spec.ts` places an order via the API, then a workshop discount bumps the version so the open page is stale → the client cancel hits a 409 → asserts the inline "holati o'zgardi" recovery → retries → cancelled + status pill. Writing it exposed a real bug: `mutate` wrote the shared `error` ref and the detail view gates the whole page on `orders.error`, so a 409 collapsed the page to its load-error state. Fixed by splitting `actionError`/`actionTraceId` from load `error`; updated the three mutate-result consumers + 2 store unit assertions. **Related:** CB-11, CB-24, CB-14.
 
-### CB-123 · E2E: client notifications — `testing` · med · L
-**Files:** `e2e/tests/`, `views/ClientNotificationsView.vue`, `stores/notifications.ts`
-**Why:** Verified: the notifications store and ClientNotificationsView are never touched by any e2e — order-production ends at the completed order, never the notification it generates. Notifications are the client's only async order-ready channel, so a broken badge/list/mark-read ships unnoticed.
-**Fix:** E2E: drive an order to emit a client notification, then assert the bell badge, open list, mark one read (decrements), mark all read (clears). Keep the idempotency arithmetic in CB-106's unit spec. **Related:** CB-10, CB-26, CB-02, CB-41.
+### CB-123 · E2E: client notifications — `testing` · med · L — **Done (B16)**
+**Files:** `e2e/tests/client-notifications.spec.ts`, `e2e/tests/helpers.ts`, `components/NotificationsMenu.vue`
+**Why:** Verified: the notifications store and ClientNotificationsView are never touched by any e2e — order-production ends at the completed order, never the notification it generates. Notifications are the client's only async order-ready channel, so a broken badge/list/mark-read ships unnoticed. (Was blocked on CB-02 — there were no client notifications to test until B15.)
+**Fix (shipped):** `client-notifications.spec.ts` places an order via API, has the workshop approve it (emits an `order.confirmed` client notification, CB-02), logs the client in, and asserts the bell badge count → opens the dropdown → the localized title "Buyurtma tasdiqlandi" + the "Buyurtma № …" body (never the raw event_code) → opening the row navigates to the order and clears the unread badge. Also added an `aria-label` to the `role="menu"` dropdown (it had no accessible name — a notifications.md a11y requirement, and needed for the role-based locator). **Related:** CB-10, CB-26, CB-02, CB-41.
 
 ### CB-124 · Test branch-carry recovery detection — `testing` · med · M
 **Files:** `views/ClientCuttingEditorView.vue`

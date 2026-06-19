@@ -75,7 +75,10 @@ describe('orders store', () => {
 
     expect(api.get).toHaveBeenCalledWith('/client/orders/o1', expect.anything())
     expect(store.currentOrder?.version).toBe(5)
-    expect(store.error).toBe('order_version_conflict')
+    // The conflict surfaces as an ACTION error, not the page-level load error —
+    // otherwise the detail view collapses to "could not load order" (CB-122).
+    expect(store.actionError).toBe('order_version_conflict')
+    expect(store.error).toBeNull()
   })
 
   it('does not refetch on a non-conflict error', async () => {
@@ -85,7 +88,8 @@ describe('orders store', () => {
     await expect(store.cancelClientOrder('o1', 3, 'reason')).rejects.toBeInstanceOf(ApiError)
 
     expect(api.get).not.toHaveBeenCalled()
-    expect(store.error).toBe('permission_denied')
+    expect(store.actionError).toBe('permission_denied')
+    expect(store.error).toBeNull()
   })
 
   it('paginates orders: offset 0 replaces, offset>0 appends, hasMore from a full page (CB-38)', async () => {

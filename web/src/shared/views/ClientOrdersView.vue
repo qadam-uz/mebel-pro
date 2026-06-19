@@ -80,7 +80,7 @@ async function confirmCancel() {
     actionError.value = null
     await orders.loadClientOrders({ status: status.value, search: search.value })
   } catch {
-    actionError.value = orders.error ?? 'order_cancel_failed'
+    actionError.value = orders.actionError ?? 'order_cancel_failed'
   }
 }
 
@@ -217,7 +217,7 @@ onMounted(() => {
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
       <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">
-        {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
+        {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
       </p>
     </ConfirmDialog>
   </section>

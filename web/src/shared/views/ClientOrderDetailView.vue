@@ -145,7 +145,7 @@ async function cancelOrder() {
     cancelDialogOpen.value = false
     toast.success('Buyurtma bekor qilindi.')
   } catch {
-    actionError.value = orders.error ?? 'order_cancel_failed'
+    actionError.value = orders.actionError ?? 'order_cancel_failed'
   }
 }
 
@@ -748,7 +748,7 @@ onMounted(() => {
           </section>
 
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
-            {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
+            {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
           </p>
         </aside>
       </div>

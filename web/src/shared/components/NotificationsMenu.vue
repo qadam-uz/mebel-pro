@@ -31,6 +31,11 @@ const badgeText = computed(() => (notifications.unread > 9 ? '9+' : String(notif
 const isClient = computed(() => roleConfig.role === 'client')
 const isWorkshop = computed(() => roleConfig.role === 'workshop')
 const isAdmin = computed(() => roleConfig.role === 'admin')
+// Accessible name for the dropdown + its header (notifications.md: a proper menu
+// with a descriptive name), localized for the Uzbek-facing client/workshop apps.
+const menuLabel = computed(() =>
+  isClient.value || isWorkshop.value || isAdmin.value ? 'Bildirishnomalar' : 'Notifications',
+)
 
 function title(item: NotificationItem) {
   return notificationTitle(item, roleConfig.role)
@@ -236,12 +241,11 @@ onBeforeUnmount(() => {
       ref="menuRef"
       class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
       role="menu"
+      :aria-label="menuLabel"
       @keydown="onMenuKeydown"
     >
       <div class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div class="font-bold text-ink">
-          {{ isClient || isWorkshop || isAdmin ? 'Bildirishnomalar' : 'Notifications' }}
-        </div>
+        <div class="font-bold text-ink">{{ menuLabel }}</div>
         <button
           type="button"
           role="menuitem"
