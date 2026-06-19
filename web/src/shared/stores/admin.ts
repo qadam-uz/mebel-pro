@@ -431,6 +431,11 @@ export const useAdminStore = defineStore('admin', () => {
 
   function patchManufacturer(updated: Manufacturer) {
     manufacturers.value = manufacturers.value.map((row) => (row.id === updated.id ? updated : row))
+    // AB-16: materials carry a denormalized manufacturer_name; refresh it so a
+    // rename doesn't leave stale labels on the cached materials list/filter.
+    materials.value = materials.value.map((row) =>
+      row.manufacturer_id === updated.id ? { ...row, manufacturer_name: updated.name } : row,
+    )
   }
 
   function patchMaterial(updated: Material) {
@@ -458,7 +463,12 @@ export const useAdminStore = defineStore('admin', () => {
       payload,
       authInit(),
     )
-    platformUsers.value = [lastPlatformUserSecret.value.user, ...platformUsers.value]
+    // AB-34: the list is server-sorted by (status, full_name); insert the new
+    // user in that order rather than unshifting, so it doesn't jump to the top
+    // and then visibly relocate after the next reload.
+    platformUsers.value = [...platformUsers.value, lastPlatformUserSecret.value.user].sort(
+      (a, b) => a.status.localeCompare(b.status) || a.full_name.localeCompare(b.full_name),
+    )
     return lastPlatformUserSecret.value
   }
 
@@ -521,8 +531,14 @@ export const useAdminStore = defineStore('admin', () => {
     const run = await api.post<JobRun>(`/platform/jobs/${name}/run`, undefined, authInit())
     const row = jobs.value.find((job) => job.definition.name === name)
     if (row) {
-      row.definition.last_run_at = run.started_at
-      row.definition.last_result = run.status
+      // AB-15: a `skipped` run (job already running) does NOT update the
+      // definition's last_run_at/last_result server-side, so only mirror a
+      // terminal result optimistically — otherwise we'd overwrite a real
+      // `failed` with `skipped` and silently drop it from the dashboard KPI.
+      if (run.status === 'ok' || run.status === 'failed') {
+        row.definition.last_run_at = run.started_at
+        row.definition.last_result = run.status
+      }
       row.recent_runs = [run, ...row.recent_runs].slice(0, 5)
     }
     return run
@@ -568,20 +584,20 @@ export const useAdminStore = defineStore('admin', () => {
     opsLoading.value = true
     opsError.value = null
     opsTraceId.value = null
-    try {
-      const [actions, statusChanges] = await Promise.all([
-        api.get<ActionLog[]>('/platform/audit/actions', authInit()),
-        api.get<StatusChangeLog[]>('/platform/audit/status-changes', authInit()),
-      ])
-      auditActions.value = actions
-      auditStatusChanges.value = statusChanges
-    } catch (errorValue) {
-      const captured = captureApiError(errorValue, 'audit_load_failed')
+    // AB-32: settle each feed independently so a transient failure on ONE feed
+    // doesn't blank both tabs; only show the full-screen error when both fail.
+    const [actionsResult, statusResult] = await Promise.allSettled([
+      api.get<ActionLog[]>('/platform/audit/actions', authInit()),
+      api.get<StatusChangeLog[]>('/platform/audit/status-changes', authInit()),
+    ])
+    if (actionsResult.status === 'fulfilled') auditActions.value = actionsResult.value
+    if (statusResult.status === 'fulfilled') auditStatusChanges.value = statusResult.value
+    if (actionsResult.status === 'rejected' && statusResult.status === 'rejected') {
+      const captured = captureApiError(actionsResult.reason, 'audit_load_failed')
       opsError.value = captured.code
       opsTraceId.value = captured.traceId
-    } finally {
-      opsLoading.value = false
     }
+    opsLoading.value = false
   }
 
   function reset() {
