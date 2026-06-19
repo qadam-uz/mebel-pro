@@ -148,7 +148,11 @@ onMounted(loadSessions)
 
     <div class="admin-tabs" role="tablist" aria-label="Profil bo'limlari">
       <button
+        id="pf-tab-profile"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'profile'"
+        aria-controls="pf-panel-profile"
         class="admin-tab"
         :class="{ on: tab === 'profile' }"
         @click="tab = 'profile'"
@@ -156,7 +160,11 @@ onMounted(loadSessions)
         Profil
       </button>
       <button
+        id="pf-tab-password"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'password'"
+        aria-controls="pf-panel-password"
         class="admin-tab"
         :class="{ on: tab === 'password' }"
         @click="tab = 'password'"
@@ -164,7 +172,11 @@ onMounted(loadSessions)
         Parol
       </button>
       <button
+        id="pf-tab-sessions"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'sessions'"
+        aria-controls="pf-panel-sessions"
         class="admin-tab"
         :class="{ on: tab === 'sessions' }"
         @click="tab = 'sessions'"
@@ -173,7 +185,13 @@ onMounted(loadSessions)
       </button>
     </div>
 
-    <section v-if="tab === 'profile'" class="admin-card max-w-[640px]">
+    <section
+      v-if="tab === 'profile'"
+      id="pf-panel-profile"
+      role="tabpanel"
+      aria-labelledby="pf-tab-profile"
+      class="admin-card max-w-[640px]"
+    >
       <div class="admin-card-h">
         <h2>Profil</h2>
         <span class="sub">read-only . operator o'z profilini tahrirlamaydi</span>
@@ -188,7 +206,13 @@ onMounted(loadSessions)
       </div>
     </section>
 
-    <section v-else-if="tab === 'password'" class="admin-card max-w-[520px]">
+    <section
+      v-else-if="tab === 'password'"
+      id="pf-panel-password"
+      role="tabpanel"
+      aria-labelledby="pf-tab-password"
+      class="admin-card max-w-[520px]"
+    >
       <div class="admin-card-h">
         <h2>Parolni o'zgartirish</h2>
       </div>
@@ -246,7 +270,13 @@ onMounted(loadSessions)
       </form>
     </section>
 
-    <section v-else class="admin-card max-w-[720px]">
+    <section
+      v-else
+      id="pf-panel-sessions"
+      role="tabpanel"
+      aria-labelledby="pf-tab-sessions"
+      class="admin-card max-w-[720px]"
+    >
       <div class="admin-card-h">
         <h2>Faol sessiyalar</h2>
         <button

@@ -138,7 +138,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
 
     <div class="admin-tabs" role="tablist" aria-label="Ustaxona tafsilotlari">
       <button
+        id="ws-tab-profile"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'profile'"
+        aria-controls="ws-panel-profile"
         class="admin-tab"
         :class="{ on: tab === 'profile' }"
         @click="tab = 'profile'"
@@ -146,7 +150,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
         Profil
       </button>
       <button
+        id="ws-tab-branches"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'branches'"
+        aria-controls="ws-panel-branches"
         class="admin-tab"
         :class="{ on: tab === 'branches' }"
         @click="tab = 'branches'"
@@ -154,7 +162,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
         Filiallar
       </button>
       <button
+        id="ws-tab-users"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'users'"
+        aria-controls="ws-panel-users"
         class="admin-tab"
         :class="{ on: tab === 'users' }"
         @click="tab = 'users'"
@@ -163,7 +175,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </button>
     </div>
 
-    <section v-if="tab === 'profile'" class="admin-card max-w-[720px]">
+    <section
+      v-if="tab === 'profile'"
+      id="ws-panel-profile"
+      role="tabpanel"
+      aria-labelledby="ws-tab-profile"
+      class="admin-card max-w-[720px]"
+    >
       <div class="admin-card-h">
         <h2>Ustaxona profili</h2>
         <span class="sub">faqat ko'rish . operator tahrirlamaydi</span>
@@ -213,7 +231,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
     </section>
 
-    <section v-else-if="tab === 'branches'" class="admin-card">
+    <section
+      v-else-if="tab === 'branches'"
+      id="ws-panel-branches"
+      role="tabpanel"
+      aria-labelledby="ws-tab-branches"
+      class="admin-card"
+    >
       <div class="admin-card-h">
         <h2>Filiallar (read-only)</h2>
       </div>
@@ -253,7 +277,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
     </section>
 
-    <section v-else class="admin-card">
+    <section
+      v-else
+      id="ws-panel-users"
+      role="tabpanel"
+      aria-labelledby="ws-tab-users"
+      class="admin-card"
+    >
       <div class="admin-card-h">
         <h2>Xodimlar (read-only)</h2>
         <span class="sub">rol yo'q - is_owner + berilgan ruxsatlar</span>
