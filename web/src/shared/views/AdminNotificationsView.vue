@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
@@ -11,10 +11,12 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
-import { useNotificationsStore } from '@/shared/stores/notifications'
+import { useToast } from '@/shared/composables/useToast'
+import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const filter = ref('all')
 const markingId = ref<string | null>(null)
 const filterOptions = [
@@ -29,18 +31,38 @@ const rows = computed(() => {
   return notifications.items
 })
 
+// AB-24: a colored kind tile so a failed-job vs error-spike alert is
+// distinguishable at a glance (the inbox's whole purpose).
+function kindMeta(item: NotificationItem) {
+  if (item.event_code.includes('job')) return { letter: 'J', cls: 'bg-warning-soft text-warning' }
+  if (item.event_code.includes('error')) return { letter: 'E', cls: 'bg-danger-soft text-danger' }
+  return { letter: '•', cls: 'bg-sunk text-ink-muted' }
+}
+
 async function markRead(id: string) {
   markingId.value = id
   try {
     await notifications.markRead(id)
+    if (notifications.actionError) toast.danger("Belgilab bo'lmadi")
   } finally {
     markingId.value = null
   }
 }
 
+async function markAll() {
+  await notifications.markAllRead()
+  if (notifications.actionError) toast.danger("Belgilab bo'lmadi")
+  else toast.success("Hammasi o'qilgan deb belgilandi")
+}
+
+let pollTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   void notifications.loadList(100)
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') void notifications.loadUnreadCount()
+  }, 45000)
 })
+onBeforeUnmount(() => clearInterval(pollTimer))
 </script>
 
 <template>
@@ -54,7 +76,7 @@ onMounted(() => {
         type="button"
         class="mp-button mp-button-outline"
         :disabled="notifications.unread === 0"
-        @click="notifications.markAllRead"
+        @click="markAll"
       >
         Hammasini o'qilgan
       </button>
@@ -84,12 +106,18 @@ onMounted(() => {
 
     <section v-else class="admin-card">
       <div class="admin-card-b py-2">
-        <article v-for="item in rows" :key="item.id" class="admin-row-item">
+        <article
+          v-for="item in rows"
+          :key="item.id"
+          class="admin-row-item"
+          :class="{ 'border-l-2 border-accent pl-2': item.read_at === null }"
+        >
           <span
-            class="admin-pill"
-            :class="item.read_at === null ? 'admin-pill-warning' : 'admin-pill-muted'"
+            class="flex size-8 shrink-0 items-center justify-center rounded-md text-sm font-extrabold"
+            :class="kindMeta(item).cls"
+            aria-hidden="true"
           >
-            {{ item.read_at === null ? 'new' : 'read' }}
+            {{ kindMeta(item).letter }}
           </span>
           <span class="min-w-0">
             <RouterLink
@@ -99,7 +127,7 @@ onMounted(() => {
               {{ adminNotificationTitle(item) }}
             </RouterLink>
             <small class="block truncate text-ink-muted">
-              {{ item.event_code }} . {{ adminDateTime(item.created_at) }}
+              {{ adminDateTime(item.created_at) }}
             </small>
           </span>
           <button
