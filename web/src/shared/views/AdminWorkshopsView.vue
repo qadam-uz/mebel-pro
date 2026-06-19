@@ -264,7 +264,7 @@ onMounted(async () => {
               <th>Telefon</th>
               <th>Yaratildi</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>

@@ -99,7 +99,7 @@ onMounted(admin.loadJobs)
               <th>Oxirgi ishlashi</th>
               <th>Natija</th>
               <th>Xulosa</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
