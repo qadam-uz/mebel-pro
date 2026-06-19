@@ -51,9 +51,24 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 9 | 14 | **25** |
-| Done | 5 | 15 | 8 | **28** |
+| Open | 2 | 8 | 10 | **20** |
+| Done | 5 | 16 | 12 | **33** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B9): **AB-14, AB-35, AB-36, AB-37, AB-46 Done** — dashboard
+> + provisioning. **AB-14/AB-46:** the dashboard now loads only the four feeds it renders
+> (overview, workshops, jobs, errors) **sequentially**, snapshotting each result — a single
+> failed sub-load raises a non-fatal "Ba'zi bo'limlarni yangilab bo'lmadi" banner instead of
+> being silently lost to the shared loading/error refs (no more false "healthy"); it no longer
+> pre-pulls the full catalog/operator lists just for counts (the resource-card manufacturer/
+> material counts were dropped — adding them to the `overview` read model is the proper backend
+> follow-up). **AB-37:** the dashboard failed-job card gained a "Qayta" re-run button
+> (`admin.runJob`, skip-aware). _Owner-login (vs UUID slice) and the Filial count column are
+> deferred — both need fields the `WorkshopSummary` list read model doesn't expose (backend
+> decision)._ **AB-35:** the Tashkent default coordinates are now one `DEFAULT_WORKSHOP_GEO`
+> constant, not a duplicated literal. **AB-36:** the provision Code field stops re-deriving from
+> the name once the operator edits it (`codeTouched`). Web gate green: lint:check ·
+> format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B8): **AB-09, AB-29, AB-42, AB-40 Done** — catalog cleanup.
 > **AB-09:** deleted the dead orphan `AdminCatalogView.vue` (660 lines, unrouted) and corrected
@@ -190,7 +205,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-11 | P2 | i18n-copy | med | M | Done | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
 | AB-12 | P2 | i18n-copy | med | S | Done | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
 | AB-13 | P2 | i18n-copy | med | S | Done | Translate `useStaffLogin` English error map (decision: shared w/ workshop) |
-| AB-14 | P2 | correctness-bug | med | M | Open | Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" |
+| AB-14 | P2 | correctness-bug | med | M | Done | Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" |
 | AB-15 | P2 | correctness-bug | med | S | Done | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
 | AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
 | AB-17 | P2 | spec-conformance | med | M | Open | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
@@ -211,9 +226,9 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-32 | P3 | correctness-bug | low | S | Done | `loadAudit` Promise.all → allSettled (partial-failure blanks both tabs) |
 | AB-33 | P3 | correctness-bug | low | M | Done | Job `definition.running` disable-guard is dead (backend never sets it) — wire or drop |
 | AB-34 | P3 | correctness-bug | low | S | Done | `createPlatformUser` unshift breaks server `(status, name)` sort until reload |
-| AB-35 | P3 | completeness-stub | low | S | Open | Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI |
-| AB-36 | P3 | spec-conformance | low | S | Open | Provision code field stops re-deriving from name after first auto-fill |
-| AB-37 | P3 | design-parity | low | S | Open | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
+| AB-35 | P3 | completeness-stub | low | S | Done | Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI |
+| AB-36 | P3 | spec-conformance | low | S | Done | Provision code field stops re-deriving from name after first auto-fill |
+| AB-37 | P3 | design-parity | low | S | Done | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
 | AB-38 | P3 | design-parity | low | S | Open | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
 | AB-39 | P3 | ux-flow | low | S | Done | Workshop-detail error state is a dead end — add back-link + retry |
 | AB-40 | P3 | ux-flow | low | S | Done | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
@@ -222,7 +237,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-43 | P3 | security-rbac | low | S | Open | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
 | AB-44 | P3 | performance | low | S | Open | `list_error_records` has no server-side limit — add defensive cap |
 | AB-45 | P3 | performance | low | M | Open | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
-| AB-46 | P3 | performance | low | M | Open | Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count |
+| AB-46 | P3 | performance | low | M | Done | Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count |
 | AB-47 | P3 | a11y | low | S | Open | Empty action-column `<th></th>` needs an sr-only label |
 | AB-48 | P3 | responsive | low | S | Open | Provision modal stays 3-up between 620–920px — add a 2-up tablet step |
 | AB-49 | P3 | responsive | low | S | Open | Admin filter-bar input is fixed 220px — make it fluid |
@@ -316,7 +331,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `useStaffLogin` hardcodes an all-English error map ("Credentials do not match an active account.", "Account is locked. Try again later.", "Account is blocked.", "API is not reachable.") rendered verbatim on the otherwise fully-Uzbek admin login. **Cross-cutting:** the composable is shared by both the admin *and* workshop login views — workshop is a separate owner.
 **Fix (decision):** Translate to Uzbek-latin to match the admin login (the workshop login is also Uzbek per `roleConfig.ts`). Because it's shared, confirm with the workshop owner; if workshop must differ, parameterize the message map by `config.role` so admin gets Uzbek without touching workshop copy.
 
-### AB-14 · Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" — `correctness-bug` · med · M
+### AB-14 · Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" — `correctness-bug` · med · M — **Done (B9)**
 
 **Files:** `AdminDashboardView.vue:20-23/25-35`, `stores/admin.ts:221-227` (single `loading`/`error`/`traceId` triple), `:245-257/482-519`.
 **Why:** `onMounted` fires a 7-way `Promise.all`. `loadOverview`/`loadWorkshops`/`loadWorkshop` all mutate the **same** `error`/`loading`/`traceId`; `loadJobs`/`loadErrors`/`loadPlatformUsers` all mutate the **same** `opsError`/`opsLoading`/`opsTraceId`. Running concurrently makes the flags last-writer-wins: each one's `error=null`/`loading=false` clobbers its siblings'. The view gates `isLoading`/`hasError` on `!overview.value`, so a *successful overview hides any other loader's failure* — if jobs or errors 403/fail, the dashboard renders normally and those sections show their empty states ("Failed ish yo'q", "Xatolik yozilmagan") as if all-clear. That's a **false "healthy" signal on a health dashboard**, and a surfaced `traceId` may belong to a different request than the failure.
@@ -444,19 +459,19 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `createPlatformUser` prepends the new user, but the list is server-sorted by `(status, full_name)`. The new active user jumps to the top out of alphabetical order and, after a "Yangilash" reload, silently relocates — a visible reorder jump. (`provision`/`createManufacturer`/`createMaterial` prepend to created_at-desc lists and stay consistent; only platform users are mis-ordered.)
 **Fix:** After `createPlatformUser`, re-fetch the list, or insert at the position consistent with `(status, full_name)` instead of always unshifting.
 
-### AB-35 · Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI — `completeness-stub` · low · S
+### AB-35 · Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI — `completeness-stub` · low · S — **Done (B9)**
 
 **Files:** `AdminWorkshopsView.vue:25-26` (initial form), `:79-80` (resetForm), `:50-60` (`defaultWorkingHours` hardcoded 09:00–18:00).
 **Why:** The form seeds `latitude '41.2995' / longitude '69.2401'` (Tashkent center) in two duplicated literals (drift risk), submitted verbatim as the new branch's coordinates if unchanged — silently placing unrelated workshops at one point, with no map/geocode picker. Branch `working_hours` (a spec'd provisioning input, [`access-management.md`](../docs/ref/features/access-management.md):154) is also hardcoded with no UI.
 **Fix:** Hoist the coordinates to a single named constant (or leave the fields blank and require entry); de-dupe the literal. Optionally add a light map/geocode picker and surface working-hours inputs (or make lat/lon optional if the backend can default them).
 
-### AB-36 · Provision code field stops re-deriving from name after first auto-fill — `spec-conformance` · low · S
+### AB-36 · Provision code field stops re-deriving from name after first auto-fill — `spec-conformance` · low · S — **Done (B9)**
 
 **Files:** `AdminWorkshopsView.vue:123-128` (`if (!form.code) form.code = codeFromName(name)`), `:245-247`. Spec: [`access-management.md`](../docs/ref/features/access-management.md):181-182 ("auto-generates from the workshop name and stays editable").
 **Why:** The code auto-fills from the name only while `form.code` is empty; once auto-filled, a later name change leaves a **stale** auto-code (the field is editable, so it's mostly within spec — borderline).
 **Fix:** Track a "manually touched" flag; while untouched, keep re-deriving from the name on each change (set the flag only on real user input to the code field).
 
-### AB-37 · Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card — `design-parity` · low · S
+### AB-37 · Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card — `design-parity` · low · S — **Done (B9)**
 
 **Files:** `AdminDashboardView.vue:18/126-171` (owner = `owner_user_id.slice(0,8)`; no branch col; raw status), `:174-204` (failed-job card = plain rows, no re-run). Spec: [`platform.md`](../docs/ref/features/platform.md):102-103. Prototype: `dashboard.html:89/97-105`.
 **Why:** "Recent provisioning" renders the owner as an opaque UUID slice (the list summary lacks the owner login), the recent-workshops table drops the prototype's Filial (branch count) column and shows raw English status, and the "Failed ish" panel lists failed jobs as plain rows with no error summary and **no re-run** — losing the incident-landing shortcut the design provides.
@@ -510,7 +525,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The store plumbs `search/status/kind/manufacturer_id` into the backend query, and the endpoints support `search`+`status` server-side — but every call site invokes the loaders with no filters and filters the full in-memory list locally. The whole catalog ships to the browser on every mount; the server-filter path is dead code that misleads readers.
 **Fix:** Either (a) wire the filter refs into a debounced watcher calling `loadMaterials({...})` so filtering is server-paged (safer as the master catalog grows), or (b) delete the unused filter params to match the client-side reality. Pick one.
 
-### AB-46 · Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count — `performance` · low · M
+### AB-46 · Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count — `performance` · low · M — **Done (B9)**
 
 **Files:** `AdminDashboardView.vue:25-35` (7-way fan-out incl. full `loadManufacturers`+`loadMaterials`+`loadPlatformUsers` just for `.length`), `AdminMaterialsView.vue:217`/`AdminManufacturersView.vue:90`/`AdminPlatformErrorsView.vue:71`/`AdminPlatformUsersView.vue:124` (unconditional reload on mount).
 **Why:** The dashboard pre-pulls two full catalog lists + the operator list to render them as single counts (`AdminDashboardView.vue:248-257`) — and `overview` already carries `platform_users_active`. Then every destination view re-fetches the same data unconditionally, so dashboard → materials → manufacturers re-downloads manufacturers+materials three times in seconds. No request is shared or memoized.

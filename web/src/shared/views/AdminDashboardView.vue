@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
@@ -11,10 +11,12 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 
 const today = adminDate(new Date().toISOString())
 const failedJobs = computed(() =>
@@ -28,17 +30,37 @@ const isLoading = computed(
   () => admin.loading && !overview.value && admin.workshops.length === 0 && admin.jobs.length === 0,
 )
 const hasError = computed(() => admin.error && !overview.value)
+const partialFailure = ref(false)
+const running = ref(false)
 
+// AB-14 / AB-46: the dashboard only needs overview + workshops + jobs + errors
+// (the operator count comes from `overview`, so the full catalog/operator lists
+// are no longer pre-pulled here). Run the loads sequentially and snapshot each
+// result so a single failed sub-load surfaces a non-fatal banner instead of
+// being lost to the shared loading/error refs (no concurrent clobber).
 async function loadAll() {
-  await Promise.all([
-    admin.loadOverview(),
-    admin.loadWorkshops(),
-    admin.loadJobs(),
-    admin.loadErrors(),
-    admin.loadPlatformUsers(),
-    admin.loadManufacturers(),
-    admin.loadMaterials(),
-  ])
+  partialFailure.value = false
+  await admin.loadOverview()
+  if (admin.error) partialFailure.value = true
+  await admin.loadWorkshops()
+  if (admin.error) partialFailure.value = true
+  await admin.loadJobs()
+  if (admin.opsError) partialFailure.value = true
+  await admin.loadErrors()
+  if (admin.opsError) partialFailure.value = true
+}
+
+async function rerun(name: string) {
+  running.value = true
+  try {
+    const run = await admin.runJob(name)
+    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    else toast.success('Ish qayta ishga tushirildi')
+  } catch {
+    toast.danger('Ish ishga tushmadi')
+  } finally {
+    running.value = false
+  }
 }
 
 onMounted(loadAll)
@@ -75,6 +97,15 @@ onMounted(loadAll)
     />
 
     <template v-else>
+      <p
+        v-if="partialFailure"
+        class="mb-4 rounded-md bg-warning-soft px-4 py-3 text-sm font-bold text-warning"
+        role="alert"
+      >
+        Ba'zi bo'limlarni yangilab bo'lmadi — ko'rsatilgan ma'lumotlar to'liq bo'lmasligi mumkin.
+        <button type="button" class="ml-2 underline" @click="loadAll">Qayta urinish</button>
+      </p>
+
       <div class="admin-kpis">
         <RouterLink :to="rolePath('/admin/workshops')" class="admin-kpi">
           <div class="admin-kpi-label">Faol ustaxonalar</div>
@@ -205,9 +236,14 @@ onMounted(loadAll)
                     {{ adminDateTime(job.definition.last_run_at) }}
                   </small>
                 </span>
-                <RouterLink :to="rolePath('/admin/platform/jobs')" class="admin-more">
-                  ko'rish →
-                </RouterLink>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                  :disabled="running"
+                  @click="rerun(job.definition.name)"
+                >
+                  Qayta
+                </button>
               </article>
             </div>
           </section>
@@ -254,13 +290,13 @@ onMounted(loadAll)
             :to="rolePath('/admin/catalog/manufacturers')"
             class="mp-button mp-button-outline"
           >
-            Ishlab chiqaruvchilar . {{ admin.manufacturers.length }}
+            Ishlab chiqaruvchilar
           </RouterLink>
           <RouterLink
             :to="rolePath('/admin/catalog/materials')"
             class="mp-button mp-button-outline"
           >
-            Materiallar . {{ admin.materials.length }}
+            Materiallar
           </RouterLink>
           <RouterLink :to="rolePath('/admin/platform/users')" class="mp-button mp-button-outline">
             Operatorlar . {{ overview?.platform_users_active ?? 0 }}
