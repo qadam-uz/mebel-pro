@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { useAuthStore } from '@/shared/stores/auth'
 
@@ -254,8 +254,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       workshops.value = await api.get<WorkshopSummary[]>('/platform/workshops', authInit())
     } catch (errorValue) {
-      error.value = 'workshops_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'workshops_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -268,8 +269,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       overview.value = await api.get<PlatformOverview>('/platform/overview', authInit())
     } catch (errorValue) {
-      error.value = 'overview_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'overview_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -282,8 +284,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       detail.value = await api.get<PlatformWorkshopDetail>(`/platform/workshops/${id}`, authInit())
     } catch (errorValue) {
-      error.value = 'workshop_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'workshop_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -441,8 +444,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       platformUsers.value = await api.get<PlatformUser[]>('/platform/users', authInit())
     } catch (errorValue) {
-      opsError.value = 'platform_users_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'platform_users_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
@@ -505,8 +509,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       jobs.value = await api.get<PlatformJobSummary[]>('/platform/jobs', authInit())
     } catch (errorValue) {
-      opsError.value = 'jobs_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'jobs_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
@@ -530,8 +535,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       errors.value = await api.get<ErrorRecord[]>('/platform/errors', authInit())
     } catch (errorValue) {
-      opsError.value = 'errors_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'errors_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
@@ -570,8 +576,9 @@ export const useAdminStore = defineStore('admin', () => {
       auditActions.value = actions
       auditStatusChanges.value = statusChanges
     } catch (errorValue) {
-      opsError.value = 'audit_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'audit_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }

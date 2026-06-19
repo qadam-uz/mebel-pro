@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
@@ -76,19 +77,19 @@ onMounted(admin.loadAudit)
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Audit log yuklanmadi</h3>
-      <p>
-        Audit endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Audit log yuklanmadi"
+      @retry="admin.loadAudit"
+    />
 
     <section v-else-if="tab === 'actions'" class="admin-card">
       <div v-if="filteredActions.length === 0" class="admin-empty m-5">

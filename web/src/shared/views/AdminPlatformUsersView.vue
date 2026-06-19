@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -190,19 +191,19 @@ onMounted(admin.loadPlatformUsers)
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Operatorlar yuklanmadi</h3>
-      <p>
-        Platform users endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Operatorlar yuklanmadi"
+      @retry="admin.loadPlatformUsers"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Operator topilmadi</h3>
@@ -284,6 +285,7 @@ onMounted(admin.loadPlatformUsers)
     <p
       v-if="actionError"
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Operator amali bajarilmadi.
     </p>

@@ -51,9 +51,24 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 3 | 22 | 22 | **47** |
-| Done | 4 | 2 | 0 | **6** |
+| Open | 2 | 20 | 21 | **43** |
+| Done | 5 | 4 | 1 | **10** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B3): **AB-01, AB-08, AB-28, AB-53 Done** — error/states
+> foundation. New `components/AdminErrorState.vue` (title + trace + **Qayta urinish** retry +
+> a dedicated permission-denied variant) replaces the 10 hand-copied `admin-error` blocks
+> across every admin view, so the leaked "<X> endpoint javob bermadi" nicknames are gone, every
+> failed load is retryable, and a 403 now reads "Kirish cheklangan — chiqib, qaytadan kiring"
+> (AB-08). **AB-01:** the 7 remaining store loaders (workshops, overview, workshop, platform
+> users, jobs, errors, audit) now run their error through `captureApiError`, so a revoked
+> operator's 403 surfaces as `permission_denied` everywhere instead of a generic outage;
+> `apiTraceId` is dropped from the import (now unused). **AB-28:** `AdminErrorState` carries
+> `role="alert"`, the top-level action-failure notices (platform-users / jobs / errors /
+> workshop-detail) gained `role="alert"`, and every loading skeleton now has
+> `aria-live="polite"`. **AB-53:** new `stores/__tests__/admin.spec.ts` pins 403 →
+> `permission_denied` (and a non-403 keeping its generic code) for the loaders. Web gate green:
+> lint:check · format:check · typecheck · test **123** · build.
 
 > Progress (2026-06-19, admin-finish B2): **AB-03, AB-04, AB-05, AB-10, AB-23 Done** —
 > privileged-action safety + feedback. New `app/clipboard.ts` (`copyText`) and
@@ -92,14 +107,14 @@ against the current Vue implementation. It mirrors the discipline of
 
 | id | P | category | sev | eff | status | one-line |
 |---|---|---|---|---|---|---|
-| AB-01 | P1 | states-errors | high | M | Open | Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state |
+| AB-01 | P1 | states-errors | high | M | Done | Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state |
 | AB-02 | P1 | a11y | high | M | Done | Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog |
 | AB-03 | P1 | security-rbac | high | M | Done | One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss (secret modal) |
 | AB-04 | P1 | ux-flow | high | M | Done | Gate privileged state-changing actions behind ConfirmDialog w/ Uzbek labels (run-job, reset-pw, resolve, activate/deactivate) |
 | AB-05 | P1 | states-errors | high | S | Done | Material image-upload failure is swallowed (unhandled rejection, no feedback) |
 | AB-06 | P1 | testing | high | M | Open | E2E: platform-user lifecycle (create+secret, reset, block, unblock) |
 | AB-07 | P1 | testing | high | S | Open | E2E + UI guard: last-active-operator / self-block can't lock the platform out |
-| AB-08 | P2 | tech-debt | med | M | Open | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
+| AB-08 | P2 | tech-debt | med | M | Done | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
 | AB-09 | P2 | tech-debt | med | S | Open | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
 | AB-10 | P2 | states-errors | med | M | Done | Adopt `useToast` in admin views — success + failure signals on every mutation |
 | AB-11 | P2 | i18n-copy | med | M | Open | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
@@ -119,7 +134,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-25 | P2 | design-parity | med | M | Open | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
 | AB-26 | P2 | spec-conformance | med | M | Open | Error monitor: add count-threshold + time-range filters |
 | AB-27 | P2 | a11y | med | S | Open | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
-| AB-28 | P2 | a11y | med | S | Open | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
+| AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
 | AB-29 | P2 | tech-debt | med | M | Open | Type the 7 `payload: unknown` store mutators with request DTOs |
 | AB-30 | P2 | testing | med | M | Open | E2E: run-job + resolve-error operator journeys |
 | AB-31 | P2 | testing | med | S | Open | Vitest: admin store `runJob` optimistic merge (find-by-name, prepend, slice-5) |
@@ -144,14 +159,14 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-50 | P3 | responsive | low | S | Open | Button-dense tables hit the 680px floor → tall wrapped action rows; widen min-width |
 | AB-51 | P3 | testing | low | M | Open | E2E/unit for the cross-workshop audit viewer (filter predicate) |
 | AB-52 | P3 | testing | low | S | Open | Extend provisioning E2E with workshop unblock (only block is covered) |
-| AB-53 | P3 | testing | low | S | Open | Bind a permission-denied regression test to the AB-01 fix |
+| AB-53 | P3 | testing | low | S | Done | Bind a permission-denied regression test to the AB-01 fix |
 | AB-54 | P3 | security-rbac | — | — | Won't | Backend privilege-gate audit — verified solid, nothing to fix |
 
 ---
 
 ## P1 — do first (security-adjacent, destructive-path correctness, blocking a11y)
 
-### AB-01 · Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state — `states-errors` · high · M
+### AB-01 · Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state — `states-errors` · high · M — **Done (B3)**
 
 **Files:** `stores/admin.ts:238/252/266/425/489/514/554` (the 7 hardcoded `*_load_failed` catches) vs `:323/346` (catalog uses `captureApiError`); every `Admin*.vue` error block.
 **Why:** Only `loadManufacturers`/`loadMaterials` run errors through `captureApiError` (→ 403 becomes `permission_denied`). The other loaders — `loadWorkshops`, `loadOverview`, `loadWorkshop`, `loadPlatformUsers`, `loadJobs`, `loadErrors`, `loadAudit` — hardcode a generic `<area>_load_failed` and discard the 403. **No view renders a permission-denied branch at all** (the only one that does, `AdminCatalogView.vue:243`, is dead/unrouted — see AB-09). So an operator whose account is blocked/downgraded mid-session sees a misleading "endpoint javob bermadi / trace …" infrastructure error on every privileged screen — including the operator registry — instead of "access revoked, re-authenticate". This masks an RBAC condition as an outage. Spec: [`platform.md`](../docs/ref/features/platform.md) "error on every page"; [`access-patterns.md`](../docs/access-patterns.md) platform-operator scope.
@@ -195,7 +210,7 @@ against the current Vue implementation. It mirrors the discipline of
 
 ## P2 — important
 
-### AB-08 · Extract shared `AdminErrorState` / empty / skeleton (retry + permission-denied) — `tech-debt` · med · M
+### AB-08 · Extract shared `AdminErrorState` / empty / skeleton (retry + permission-denied) — `tech-debt` · med · M — **Done (B3)**
 
 **Files:** the hand-copied 3-block scaffold across `AdminAuditView.vue:79`, `AdminMaterialsView.vue:245`, `AdminManufacturersView.vue:119`, `AdminPlatformUsersView.vue:147`, `AdminPlatformJobsView.vue:49`, `AdminPlatformErrorsView.vue:95`, `AdminNotificationsView.vue:66`, `AdminWorkshopDetailView.vue:62`, `AdminDashboardView.vue:60`. Reference: `components/ClientErrorState.vue` (the client's solution, CB-22).
 **Why:** The loading-skeleton / `admin-error` / `admin-empty` blocks are duplicated verbatim ~9×. Two concrete regressions follow: (a) every error block hardcodes "<X> endpoint javob bermadi", so the copy can't be fixed in one place (AB-11), and (b) unlike `ClientErrorState`, the admin error blocks have **no retry button** — a failed load strands the operator. The client already solved exactly this.
@@ -315,7 +330,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Each tab strip declares `role="tablist"` on the container but the buttons are plain `<button class="admin-tab">` — no `role="tab"`, no `aria-selected`, no `aria-controls`, and the revealed panels have no `role="tabpanel"`/`aria-labelledby`. A screen reader announces a tablist containing no tabs; the active tab is conveyed by colour only; arrow-key roving is absent.
 **Fix:** Add `role="tab"` + `:aria-selected` + `:id`/`:aria-controls` to each tab button and `role="tabpanel"`/`:aria-labelledby` to each panel; implement roving tabindex + arrow-key navigation per the WAI-ARIA tabs pattern. Extract a small `AdminTabs` helper to apply identically across the three views.
 
-### AB-28 · Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` — `a11y` · med · S
+### AB-28 · Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` — `a11y` · med · S — **Done (B3)**
 
 **Files:** the `admin-error` blocks (`AdminWorkshopsView.vue:165`, `AdminPlatformUsersView.vue:153`, `AdminPlatformErrorsView.vue:101`, `AdminPlatformJobsView.vue:55`, `AdminWorkshopDetailView.vue:62`) and the action-failure `<p>` notices (`AdminPlatformUsersView.vue:238`, `AdminPlatformErrorsView.vue:161`, `AdminPlatformJobsView.vue:138`, `AdminWorkshopDetailView.vue:105`); inconsistent skeleton `aria-live` (`Workshops:159`/`Dashboard:52` have it; `PlatformUsers:147`/`PlatformErrors:95`/`PlatformJobs:49`/`Manufacturers:119`/`Materials:245` don't).
 **Why:** Error states swap in with no live-region announcement — a screen-reader operator who triggers a block/reset/run and gets a silent failure receives no aural signal. (Success/info already go through `ToastHost`, a correct `aria-live="polite"` region.)
@@ -467,7 +482,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The admin E2E asserts a workshop is "blocked" but never unblocks it — a one-sided lifecycle assertion. The unblock path is wired but never exercised through the UI (backend covers it at the API).
 **Fix:** Extend the test: after "blocked", click the unblock control and assert status returns to "active" — completing the lifecycle round-trip.
 
-### AB-53 · Bind a permission-denied regression test to the AB-01 fix — `testing` · low · S
+### AB-53 · Bind a permission-denied regression test to the AB-01 fix — `testing` · low · S — **Done (B3)**
 
 **Files:** `stores/admin.ts` loaders; an E2E for the no-access render.
 **Why:** No test pins the 403-handling behaviour either way (only catalog preserves `permission_denied`, and the only view rendering it is dead). A regression guard should ship **with** AB-01, not standalone.

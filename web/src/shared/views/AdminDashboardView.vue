@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import { adminDate, adminDateTime, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
@@ -22,7 +23,7 @@ const isLoading = computed(
 )
 const hasError = computed(() => admin.error && !overview.value)
 
-onMounted(async () => {
+async function loadAll() {
   await Promise.all([
     admin.loadOverview(),
     admin.loadWorkshops(),
@@ -32,7 +33,9 @@ onMounted(async () => {
     admin.loadManufacturers(),
     admin.loadMaterials(),
   ])
-})
+}
+
+onMounted(loadAll)
 </script>
 
 <template>
@@ -57,13 +60,13 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-else-if="hasError" class="admin-error">
-      <h3>Platforma ma'lumotlari yuklanmadi</h3>
-      <p>
-        API javob bermadi.
-        <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="hasError"
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Platforma ma'lumotlari yuklanmadi"
+      @retry="loadAll"
+    />
 
     <template v-else>
       <div class="admin-kpis">

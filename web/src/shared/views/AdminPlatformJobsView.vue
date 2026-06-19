@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
@@ -67,19 +68,19 @@ onMounted(admin.loadJobs)
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Background ish yuklanmadi</h3>
-      <p>
-        Scheduler endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Background ish yuklanmadi"
+      @retry="admin.loadJobs"
+    />
 
     <section v-else-if="admin.jobs.length === 0" class="admin-empty">
       <h3>Registered job yo'q</h3>
@@ -159,6 +160,7 @@ onMounted(admin.loadJobs)
     <p
       v-if="runError"
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Job ishga tushmadi.
     </p>
