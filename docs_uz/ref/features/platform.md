@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-20
 order: 70
 ---
 
@@ -38,9 +38,12 @@ Operators per-branch prices yoki stock edit qilmaydi — bu workshop territory.
   status dropdown, country dropdown. Empty: "No manufacturers yet — add one before
   adding materials."
 - **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
-  type/thickness, colour/decor, panel size (for panels), status, action menu. Filters:
+  type/thickness, colour/decor, panel size (for panels), status, **branch-usage count**
+  (materialni nechta distinct branch olib yuradi), action menu. Filters:
   kind dropdown (`panel` / `edge`), manufacturer dropdown (multi-select), type dropdown,
-  thickness dropdown, status dropdown.
+  thickness dropdown, status dropdown. Per-material "qaysi branchlar olib yuradi?" drill-down
+  planned follow-up — u cross-module branch lookup talab qiladi, shuning uchun v1 faqat
+  countni ship qiladi.
   **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
   Manufacturers dialog without leaving this page; spec fields per the kind). Row
   actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
@@ -77,7 +80,8 @@ Backend application errors record qiladi. Monitor ularni **code bo'yicha group**
 counts (24 h / 7 d), last occurrence, preview message. Operators single code ichiga drill
 qilib full message, stack trace, request / context details (sensitive fields write timeda
 masked), trace ids, va known bo'lsa affected workshops / usersni ko'radi — va codeni
-resolved deb mark qiladi.
+resolved deb mark qiladi. Resolved code recur qilsa **reopen** qilinishi mumkin —
+re-triage uchun qaytadan open holatiga o'tadi.
 
 Error spike (codening 24 h counti threshold crossing qilsa) platform operatorsni notify
 qiladi.
@@ -103,7 +107,8 @@ creation path.
 ## UX (superadmin app)
 
 - **Dashboard** (`/admin`) — platform health at a glance: workshop / branch / client counts,
-  recent provisioning, job + error status. U **workshop financials** olib yurmaydi —
+  recent-workshops list (name, **owner login**, **branch count**, status), job + error status.
+  U **workshop financials** olib yurmaydi —
   operators health va incidentsni monitor qiladi, workshop money emas
   ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollups
   operator scope out, shuning uchun per-workshop yoki platform revenue figure bu yerda yo'q.
@@ -120,8 +125,9 @@ creation path.
   rows highlighted.
 - **Errors** (`/admin/platform/errors`) — table: code, module, count (24 h / 7 d), last
   occurrence, preview message, action menu. Detail modal: full message, stack, masked context,
-  affected workshops / users, trace ids; "Resolve" → confirm. Filters: module, code, time
-  range, count threshold. Empty: "No errors recorded — nice."
+  affected workshops / users, trace ids; "Resolve" → confirm, va allaqachon resolved code
+  uchun "Reopen". Filters: module, code, time range, count threshold. Empty: "No errors
+  recorded — nice."
 - **Platform users** (`/admin/platform/users`) — table: name, login, phone, status, last
   login, action menu (Edit · Reset password → one-time-secret confirmation · Block /
   Unblock). "+ Platform user" → dialog (fields + auto / manual temp password).

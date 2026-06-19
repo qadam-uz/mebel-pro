@@ -34,13 +34,16 @@ settings'ni edit qilish.
 
 ### UX (superadmin app)
 
-- **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge,
-  created, branches count, orders-30d count. Status filter; name search;
-  **+ Workshop** (provisioning access-management'da). Empty: "No workshops yet."
+- **Workshops list** (`/admin/workshops`) — table: name, owner login, branch count, phone,
+  created, status badge. Status filter; name search;
+  **+ Workshop** (provisioning access-management'da). Empty: "No workshops yet." (Owner bu
+  yerda login bilan identify qilinadi — stable operational handle; detail view full owner
+  contactni olib yuradi.)
 - **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (read-only),
   **Branches** (read-only list), **Block** (mandatory reason bilan block / unblock;
   destructive-styled; staff sessions revoke qilinishi va open order'lar freeze bo'lishi haqida
-  ogohlantiradi).
+  ogohlantiradi). Workshop blocked bo'lganda, detail **block timeda captured reason**ni danger
+  banner ichida ko'rsatadi.
 
 ### UX (workshop app)
 

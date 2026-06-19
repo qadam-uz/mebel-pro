@@ -31,12 +31,16 @@ editing settings.
 
 ### UX (superadmin app)
 
-- **Workshops list** (`/admin/workshops`) — table: name, owner (name + phone), status badge,
-  created, branches count, orders-30d count. Status filter; name search;
-  **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet."
+- **Workshops list** (`/admin/workshops`) — table: name, owner login, branch count, phone,
+  created, status badge. Status filter; name search;
+  **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." (The
+  owner is identified by login here — the stable operational handle; the detail view carries
+  the full owner contact.)
 - **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (read-only),
   **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
-  destructive-styled; warns that staff sessions are revoked and open orders freeze).
+  destructive-styled; warns that staff sessions are revoked and open orders freeze). When the
+  workshop is blocked, the detail shows the **reason captured at block time** in the danger
+  banner.
 
 ### UX (workshop app)
 
