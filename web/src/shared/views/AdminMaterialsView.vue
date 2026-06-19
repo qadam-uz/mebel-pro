@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import {
   dropdownOption,
@@ -7,6 +8,7 @@ import {
   materialStatusLabel,
   materialStatusTone,
 } from '@/shared/app/adminUi'
+import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -26,6 +28,7 @@ import { useFilesStore } from '@/shared/stores/files'
 const admin = useAdminStore()
 const files = useFilesStore()
 const toast = useToast()
+const rolePath = useRolePath()
 const modalOpen = ref(false)
 const manufacturerModalOpen = ref(false)
 const uploadError = ref<string | null>(null)
@@ -126,6 +129,13 @@ const filtered = computed(() => {
       .includes(needle)
   })
 })
+
+function clearFilters() {
+  search.value = ''
+  statusFilter.value = 'all'
+  kindFilter.value = 'all'
+  manufacturerFilter.value = 'all'
+}
 
 function openCreate() {
   editingId.value = null
@@ -302,8 +312,28 @@ onMounted(async () => {
     />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
-      <h3>Material yo'q</h3>
-      <p>Manufacturer qo'shing, keyin panel yoki krom material yarating.</p>
+      <template v-if="admin.materials.length === 0">
+        <h3>Material yo'q</h3>
+        <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki krom material yarating.</p>
+        <div class="mt-3 flex flex-wrap justify-center gap-2">
+          <button type="button" class="admin-primary-action" @click="openCreate">
+            Yangi material
+          </button>
+          <RouterLink
+            :to="rolePath('/admin/catalog/manufacturers')"
+            class="mp-button mp-button-outline"
+          >
+            Ishlab chiqaruvchilar
+          </RouterLink>
+        </div>
+      </template>
+      <template v-else>
+        <h3>Filtrlarga mos material yo'q</h3>
+        <p>Filtrlarni o'zgartiring yoki tozalang.</p>
+        <button type="button" class="mp-button mp-button-outline mt-3" @click="clearFilters">
+          Filtrlarni tozalash
+        </button>
+      </template>
     </section>
 
     <section v-else class="admin-card">

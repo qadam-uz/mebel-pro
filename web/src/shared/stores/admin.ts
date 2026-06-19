@@ -205,6 +205,53 @@ export interface CatalogFilters {
   manufacturer_id?: string | null
 }
 
+// AB-29: typed request payloads for the privileged write paths (was `unknown`).
+export interface ProvisionWorkshopRequest {
+  workshop: { name: string; code: string | null; phone: string; address: string | null }
+  branch: {
+    name: string
+    address: string
+    phone: string
+    latitude: string
+    longitude: string
+    working_hours: Record<string, { open: string | null; close: string | null }>
+  }
+  owner: { full_name: string; login: string; phone: string }
+  temp_password?: string
+}
+
+export interface ManufacturerWriteRequest {
+  name: string
+  country: string | null
+  note: string | null
+}
+
+export interface MaterialWriteRequest {
+  kind: MaterialKind
+  manufacturer_id: string
+  type: PanelMaterialType | null
+  name: string
+  thickness_mm: string
+  color: string
+  decor_code: string | null
+  panel_length_mm: number | null
+  panel_width_mm: number | null
+  grain_direction: boolean | null
+  image_file_id: string | null
+}
+
+export interface PlatformUserCreateRequest {
+  full_name: string
+  login: string
+  phone: string
+  temp_password: string | null
+}
+
+export interface PlatformUserUpdateRequest {
+  full_name?: string
+  phone?: string
+}
+
 export const useAdminStore = defineStore('admin', () => {
   const workshops = ref<WorkshopSummary[]>([])
   const detail = ref<PlatformWorkshopDetail | null>(null)
@@ -292,7 +339,7 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function provision(payload: unknown) {
+  async function provision(payload: ProvisionWorkshopRequest) {
     lastProvision.value = await api.post<ProvisionWorkshopResponse>(
       '/platform/workshops',
       payload,
@@ -340,8 +387,9 @@ export const useAdminStore = defineStore('admin', () => {
         authInit(),
       )
     } catch (errorValue) {
-      // Preserve a 403 as permission_denied so AdminCatalogView's no-access state
-      // can trigger, instead of masking it as a generic load failure (CB-100).
+      // Preserve a 403 as permission_denied so AdminManufacturersView /
+      // AdminMaterialsView render the no-access AdminErrorState (AB-01/AB-08),
+      // instead of masking it as a generic load failure (CB-100).
       const captured = captureApiError(errorValue, 'manufacturers_load_failed')
       catalogError.value = captured.code
       catalogTraceId.value = captured.traceId
@@ -373,7 +421,7 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function createManufacturer(payload: unknown) {
+  async function createManufacturer(payload: ManufacturerWriteRequest) {
     const created = await api.post<Manufacturer>(
       '/platform/catalog/manufacturers',
       payload,
@@ -383,7 +431,7 @@ export const useAdminStore = defineStore('admin', () => {
     return created
   }
 
-  async function updateManufacturer(id: string, payload: unknown) {
+  async function updateManufacturer(id: string, payload: ManufacturerWriteRequest) {
     const updated = await api.patch<Manufacturer>(
       `/platform/catalog/manufacturers/${id}`,
       payload,
@@ -403,13 +451,13 @@ export const useAdminStore = defineStore('admin', () => {
     return updated
   }
 
-  async function createMaterial(payload: unknown) {
+  async function createMaterial(payload: MaterialWriteRequest) {
     const created = await api.post<Material>('/platform/catalog/materials', payload, authInit())
     materials.value = [created, ...materials.value]
     return created
   }
 
-  async function updateMaterial(id: string, payload: unknown) {
+  async function updateMaterial(id: string, payload: MaterialWriteRequest) {
     const updated = await api.patch<Material>(
       `/platform/catalog/materials/${id}`,
       payload,
@@ -457,7 +505,7 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function createPlatformUser(payload: unknown) {
+  async function createPlatformUser(payload: PlatformUserCreateRequest) {
     lastPlatformUserSecret.value = await api.post<PlatformUserTempPasswordResponse>(
       '/platform/users',
       payload,
@@ -472,7 +520,7 @@ export const useAdminStore = defineStore('admin', () => {
     return lastPlatformUserSecret.value
   }
 
-  async function updatePlatformUser(id: string, payload: unknown) {
+  async function updatePlatformUser(id: string, payload: PlatformUserUpdateRequest) {
     const updated = await api.patch<PlatformUser>(`/platform/users/${id}`, payload, authInit())
     patchPlatformUser(updated)
     return updated

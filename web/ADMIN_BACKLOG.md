@@ -51,9 +51,22 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 11 | 16 | **29** |
-| Done | 5 | 13 | 6 | **24** |
+| Open | 2 | 9 | 14 | **25** |
+| Done | 5 | 15 | 8 | **28** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B8): **AB-09, AB-29, AB-42, AB-40 Done** — catalog cleanup.
+> **AB-09:** deleted the dead orphan `AdminCatalogView.vue` (660 lines, unrouted) and corrected
+> the stale `admin.ts` comment to point at the live `AdminManufacturersView`/`AdminMaterialsView`
+> permission-denied handling. **AB-29:** defined typed request DTOs
+> (`ProvisionWorkshopRequest`, `ManufacturerWriteRequest`, `MaterialWriteRequest`,
+> `PlatformUserCreate/UpdateRequest`) and replaced `payload: unknown` on all 7 store write
+> actions, so the privileged write paths are now compiler-checked end to end. **AB-42:** added
+> the spec'd Country `ProjectDropdown` to the manufacturers filter bar (built from distinct
+> countries, folded into the filter). **AB-40:** the materials empty state now distinguishes
+> truly-empty (a "Yangi material" CTA + link to manufacturers) from filtered-to-zero
+> ("Filtrlarni tozalash"). Web gate green: lint:check · format:check · typecheck · test **126** ·
+> build.
 
 > Progress (2026-06-19, admin-finish B7): **AB-19, AB-20, AB-39 Done** — workshops list/detail.
 > **AB-19:** the workshops list row now has inline **Bloklash** (active) / **Blokdan chiqarish**
@@ -172,7 +185,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-06 | P1 | testing | high | M | Open | E2E: platform-user lifecycle (create+secret, reset, block, unblock) |
 | AB-07 | P1 | testing | high | S | Open | E2E + UI guard: last-active-operator / self-block can't lock the platform out |
 | AB-08 | P2 | tech-debt | med | M | Done | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
-| AB-09 | P2 | tech-debt | med | S | Open | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
+| AB-09 | P2 | tech-debt | med | S | Done | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
 | AB-10 | P2 | states-errors | med | M | Done | Adopt `useToast` in admin views — success + failure signals on every mutation |
 | AB-11 | P2 | i18n-copy | med | M | Done | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
 | AB-12 | P2 | i18n-copy | med | S | Done | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
@@ -192,7 +205,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-26 | P2 | spec-conformance | med | M | Open | Error monitor: add count-threshold + time-range filters |
 | AB-27 | P2 | a11y | med | S | Open | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
 | AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
-| AB-29 | P2 | tech-debt | med | M | Open | Type the 7 `payload: unknown` store mutators with request DTOs |
+| AB-29 | P2 | tech-debt | med | M | Done | Type the 7 `payload: unknown` store mutators with request DTOs |
 | AB-30 | P2 | testing | med | M | Open | E2E: run-job + resolve-error operator journeys |
 | AB-31 | P2 | testing | med | S | Done | Vitest: admin store `runJob` optimistic merge (find-by-name, prepend, slice-5) |
 | AB-32 | P3 | correctness-bug | low | S | Done | `loadAudit` Promise.all → allSettled (partial-failure blanks both tabs) |
@@ -203,9 +216,9 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-37 | P3 | design-parity | low | S | Open | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
 | AB-38 | P3 | design-parity | low | S | Open | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
 | AB-39 | P3 | ux-flow | low | S | Done | Workshop-detail error state is a dead end — add back-link + retry |
-| AB-40 | P3 | ux-flow | low | S | Open | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
+| AB-40 | P3 | ux-flow | low | S | Done | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
 | AB-41 | P3 | security-rbac | low | S | Done | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
-| AB-42 | P3 | spec-conformance | low | S | Open | Manufacturers: add the spec'd Country filter |
+| AB-42 | P3 | spec-conformance | low | S | Done | Manufacturers: add the spec'd Country filter |
 | AB-43 | P3 | security-rbac | low | S | Open | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
 | AB-44 | P3 | performance | low | S | Open | `list_error_records` has no server-side limit — add defensive cap |
 | AB-45 | P3 | performance | low | M | Open | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
@@ -273,7 +286,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The loading-skeleton / `admin-error` / `admin-empty` blocks are duplicated verbatim ~9×. Two concrete regressions follow: (a) every error block hardcodes "<X> endpoint javob bermadi", so the copy can't be fixed in one place (AB-11), and (b) unlike `ClientErrorState`, the admin error blocks have **no retry button** — a failed load strands the operator. The client already solved exactly this.
 **Fix:** Add `AdminErrorState` (title + traceId + `retry` emit + a `permission_denied` variant) and small `AdminEmpty`/`AdminSkeleton` helpers; replace the inline blocks. This becomes the single home for the AB-01 no-access state and the missing retry.
 
-### AB-09 · Delete dead orphan `AdminCatalogView.vue` + fix the stale comment — `tech-debt` · med · S
+### AB-09 · Delete dead orphan `AdminCatalogView.vue` + fix the stale comment — `tech-debt` · med · S — **Done (B8)**
 
 **Files:** `web/src/shared/views/AdminCatalogView.vue` (660 lines, ~23.5 KB), `stores/admin.ts:321-322` (the only reference — a comment).
 **Why:** `AdminCatalogView.vue` is never imported or routed (`routes.ts` maps `/admin/catalog/{manufacturers,materials}` to `AdminManufacturersView`/`AdminMaterialsView`; `/admin/catalog` redirects to materials). A repo-wide grep finds exactly one reference: a comment at `admin.ts:321` ("so AdminCatalogView's no-access state can trigger"). The dead view *does* contain a real `permission_denied` state (`AdminCatalogView.vue:243`) — but it's unreachable, and the comment misleads readers about where that handling lives (it lives nowhere live — see AB-01).
@@ -393,7 +406,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Error states swap in with no live-region announcement — a screen-reader operator who triggers a block/reset/run and gets a silent failure receives no aural signal. (Success/info already go through `ToastHost`, a correct `aria-live="polite"` region.)
 **Fix:** Add `role="alert"` to the action-failure notices and `role="status"`/`aria-live="polite"` to the load-error sections; standardize `aria-live="polite"` on all loading skeletons. Routing failures through the AB-10 toast channel (already a live region) is an acceptable alternative.
 
-### AB-29 · Type the 7 `payload: unknown` store mutators with request DTOs — `tech-debt` · med · M
+### AB-29 · Type the 7 `payload: unknown` store mutators with request DTOs — `tech-debt` · med · M — **Done (B8)**
 
 **Files:** `stores/admin.ts:273` (`provision`), `:354` (`createManufacturer`), `:364` (`updateManufacturer`), `:384` (`createMaterial`), `:390` (`updateMaterial`), `:432` (`createPlatformUser`), `:442` (`updatePlatformUser`).
 **Why:** Seven mutating actions accept `payload: unknown`, defeating type-checking exactly on the privileged write paths (provisioning, catalog create/edit, operator create/edit). A renamed/missing field in a view form isn't caught at compile time and becomes a silent 422 at runtime. The store already has rich *response* interfaces but no *request* ones.
@@ -461,7 +474,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** When `loadWorkshop` fails, the detail view renders only an error card with no back-link and no retry — the operator must edit the URL or hit browser-back. The list view's refresh is always reachable; the detail's isn't.
 **Fix:** Add a back-to-list link + a retry button to the error state (folds into `AdminErrorState`'s retry emit, AB-08).
 
-### AB-40 · Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero — `ux-flow` · low · S
+### AB-40 · Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero — `ux-flow` · low · S — **Done (B8)**
 
 **Files:** `AdminMaterialsView.vue:261-264`.
 **Why:** The empty card ("Material yo'q — Manufacturer qo'shing, keyin … material yarating") has no button and no link to the manufacturers screen, and conflates the truly-empty case with filtered-to-zero — a first-time operator reading it may not connect it to the page-head create button.
@@ -473,7 +486,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `block_workshop` is a hard cascade (revoke all owner/staff sessions + freeze open orders), yet the only friction is a mandatory reason and one primary-styled submit — a mis-click on the wrong workshop is one stroke from cutting off a tenant. The dialog also never states that unblocking won't restore sessions (a spec consequence operators should know), and the in-dialog confirm isn't destructive-styled.
 **Fix:** Style the confirm as destructive; add the "unblock won't restore sessions" line; consider a type-to-confirm of the workshop code for the cascade. Apply the same destructive styling to the operator block dialog. Keep the mandatory reason.
 
-### AB-42 · Manufacturers: add the spec'd Country filter — `spec-conformance` · low · S
+### AB-42 · Manufacturers: add the spec'd Country filter — `spec-conformance` · low · S — **Done (B8)**
 
 **Files:** `AdminManufacturersView.vue:104-117` (search + status only). Spec: [`platform.md`](../docs/ref/features/platform.md):37 ("Filters: status dropdown, country dropdown"). Prototype: `manufacturers.html:32-34`.
 **Why:** The spec and prototype both call for a Country filter on the manufacturers list; the Vue filter bar has only search + status.
