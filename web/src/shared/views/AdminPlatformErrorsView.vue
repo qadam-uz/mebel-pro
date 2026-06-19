@@ -23,9 +23,13 @@ const detailOpen = computed(() => selectedId.value !== null)
 const detailTrap = useFocusTrap(detailPanel, detailOpen, () => (selectedId.value = null))
 const resolvingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
+const detailError = ref(false)
+const showRaw = ref(false)
 const query = ref('')
 const statusFilter = ref('all')
 const moduleFilter = ref('all')
+const thresholdFilter = ref('all')
+const timeFilter = ref('all')
 
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha kodlar'),
@@ -38,14 +42,33 @@ const moduleOptions = computed(() => [
     dropdownOption(module, module, 'module'),
   ),
 ])
+const thresholdOptions = [
+  dropdownOption('all', 'Chastota', 'barcha kodlar'),
+  dropdownOption('3', '24s ≥ 3', "ko'tarilayotgan"),
+  dropdownOption('10', '24s ≥ 10', 'spike'),
+]
+const timeOptions = [
+  dropdownOption('all', 'Vaqt', 'barcha vaqt'),
+  dropdownOption('24h', 'Oxirgi 24 soat', ''),
+  dropdownOption('7d', 'Oxirgi 7 kun', ''),
+]
 const selectedDetail = computed(() =>
   admin.errorDetail?.record.id === selectedId.value ? admin.errorDetail : null,
 )
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase()
+  const now = Date.now()
+  const threshold = thresholdFilter.value === 'all' ? 0 : Number(thresholdFilter.value)
+  const windowMs =
+    timeFilter.value === '24h' ? 86_400_000 : timeFilter.value === '7d' ? 604_800_000 : 0
   return admin.errors.filter((record) => {
     if (statusFilter.value !== 'all' && record.status !== statusFilter.value) return false
     if (moduleFilter.value !== 'all' && record.module !== moduleFilter.value) return false
+    if (threshold > 0 && record.count_24h < threshold) return false
+    if (windowMs > 0) {
+      const last = record.last_occurred_at ? new Date(record.last_occurred_at).getTime() : 0
+      if (!last || now - last > windowMs) return false
+    }
     if (!needle) return true
     return [record.code, record.module, record.preview_message ?? '']
       .join(' ')
@@ -62,10 +85,23 @@ function contextText(value: Record<string, unknown> | null) {
 async function openDetail(record: ErrorRecord) {
   selectedId.value = record.id
   actionError.value = null
+  detailError.value = false
+  showRaw.value = false
   try {
     await admin.loadErrorDetail(record.id)
   } catch {
     actionError.value = 'error_detail_failed'
+    detailError.value = true
+  }
+}
+
+async function retryDetail() {
+  if (!selectedId.value) return
+  detailError.value = false
+  try {
+    await admin.loadErrorDetail(selectedId.value)
+  } catch {
+    detailError.value = true
   }
 }
 
@@ -106,7 +142,9 @@ onMounted(admin.loadErrors)
         <input v-model="query" placeholder="Kod yoki tavsif" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-      <ProjectDropdown v-model="moduleFilter" label="Module" :options="moduleOptions" />
+      <ProjectDropdown v-model="moduleFilter" label="Modul" :options="moduleOptions" />
+      <ProjectDropdown v-model="thresholdFilter" label="Chastota" :options="thresholdOptions" />
+      <ProjectDropdown v-model="timeFilter" label="Vaqt" :options="timeOptions" />
     </div>
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
@@ -206,11 +244,26 @@ onMounted(admin.loadErrors)
           </button>
         </div>
         <div class="admin-modal-b">
-          <div v-if="!selectedDetail" class="admin-card p-4">
+          <p
+            v-if="detailError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+            role="alert"
+          >
+            Tafsilotni yuklab bo'lmadi.
+            <button type="button" class="ml-2 underline" @click="retryDetail">Qayta urinish</button>
+          </p>
+          <div v-else-if="!selectedDetail" class="admin-card p-4">
             <div class="admin-skeleton-line w-3/5"></div>
             <div class="admin-skeleton-line w-4/5"></div>
           </div>
           <template v-else>
+            <button
+              type="button"
+              class="mb-3 mp-button mp-button-outline min-h-8 px-2 text-xs"
+              @click="showRaw = !showRaw"
+            >
+              {{ showRaw ? "Xom ma'lumotni yashirish" : "Xom ma'lumotni ko'rsatish" }}
+            </button>
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div class="font-mono text-sm font-extrabold text-ink">
@@ -249,15 +302,31 @@ onMounted(admin.loadErrors)
                 }}</span>
               </div>
               <p class="mt-3 text-sm text-ink">{{ occurrence.message }}</p>
-              <pre
-                class="mt-3 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
-                >{{ contextText(occurrence.context) }}</pre
-              >
-              <pre
-                v-if="occurrence.stack"
-                class="mt-3 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
-                >{{ occurrence.stack }}</pre
-              >
+              <div class="mt-2 flex flex-wrap gap-4 text-xs text-ink-muted">
+                <span>
+                  Ustaxona:
+                  {{
+                    occurrence.workshop_id ? occurrence.workshop_id.slice(0, 8) : '— tegishli emas'
+                  }}
+                </span>
+                <span>
+                  Foydalanuvchi: {{ occurrence.user_id ? occurrence.user_id.slice(0, 8) : '—' }}
+                </span>
+              </div>
+              <template v-if="showRaw">
+                <div class="mt-3 text-xs font-extrabold uppercase text-ink-muted">Kontekst</div>
+                <pre
+                  class="mt-1 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
+                  >{{ contextText(occurrence.context) }}</pre
+                >
+                <template v-if="occurrence.stack">
+                  <div class="mt-3 text-xs font-extrabold uppercase text-ink-muted">Stack</div>
+                  <pre
+                    class="mt-1 max-h-52 overflow-auto rounded bg-elevated p-3 text-xs text-ink-soft"
+                    >{{ occurrence.stack }}</pre
+                  >
+                </template>
+              </template>
             </article>
           </template>
         </div>

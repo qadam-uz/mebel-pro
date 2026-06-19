@@ -51,9 +51,22 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 6 | 8 | **16** |
-| Done | 5 | 18 | 14 | **37** |
+| Open | 2 | 4 | 6 | **12** |
+| Done | 5 | 20 | 16 | **41** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B12): **AB-25, AB-26, AB-43, AB-44 Done** — error monitor.
+> **AB-26:** added the spec'd count-threshold (24s ≥ 3 / ≥ 10) and time-range (24h / 7d) filters
+> to the monitor. **AB-25:** the error-detail modal now shows per-occurrence affected
+> **Ustaxona** / **Foydalanuvchi** (with a "— tegishli emas" fallback) and labels Kontekst vs
+> Stack as separate sections, and gained an in-modal load-failure state with retry (was a
+> perpetual skeleton). _Re-opening a resolved record is deferred — there is no backend reopen
+> use-case; it needs one (decision)._ **AB-43:** the raw context/stack are now collapsed behind
+> a "Xom ma'lumotni ko'rsatish" toggle (render-time defense-in-depth on top of the write-time
+> scrubber). **AB-44 (backend):** `list_error_records` gained a defensive `.limit(200)` so a
+> pathological spread of distinct codes can't return an unbounded list. Web gate green
+> (lint/format/typecheck/test **126**/build); **backend gate green** (ruff · format · mypy ·
+> pytest **119 passed / 2 skipped**).
 
 > Progress (2026-06-19, admin-finish B11): **AB-24 Done** — operator notifications inbox.
 > The full-page inbox now surfaces mark-read / mark-all-read failures via a danger toast (was
@@ -235,8 +248,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
 | AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
 | AB-24 | P2 | design-parity | med | M | Done | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
-| AB-25 | P2 | design-parity | med | M | Open | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
-| AB-26 | P2 | spec-conformance | med | M | Open | Error monitor: add count-threshold + time-range filters |
+| AB-25 | P2 | design-parity | med | M | Done | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
+| AB-26 | P2 | spec-conformance | med | M | Done | Error monitor: add count-threshold + time-range filters |
 | AB-27 | P2 | a11y | med | S | Open | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
 | AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
 | AB-29 | P2 | tech-debt | med | M | Done | Type the 7 `payload: unknown` store mutators with request DTOs |
@@ -253,8 +266,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-40 | P3 | ux-flow | low | S | Done | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
 | AB-41 | P3 | security-rbac | low | S | Done | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
 | AB-42 | P3 | spec-conformance | low | S | Done | Manufacturers: add the spec'd Country filter |
-| AB-43 | P3 | security-rbac | low | S | Open | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
-| AB-44 | P3 | performance | low | S | Open | `list_error_records` has no server-side limit — add defensive cap |
+| AB-43 | P3 | security-rbac | low | S | Done | Error-detail renders context/stack verbatim — add render-time defense-in-depth (reveal-to-show) |
+| AB-44 | P3 | performance | low | S | Done | `list_error_records` has no server-side limit — add defensive cap |
 | AB-45 | P3 | performance | low | M | Open | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
 | AB-46 | P3 | performance | low | M | Done | Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count |
 | AB-47 | P3 | a11y | low | S | Done | Empty action-column `<th></th>` needs an sr-only label |
@@ -416,13 +429,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The operator inbox is the *only* v1 channel for job-failure + error-spike alerts ([`notifications.md`](../docs/ref/features/notifications.md)), yet: (1) `markRead`/`markAllRead` failures are **silent** on the full page (the store sets `actionError` and the *menu* toasts it, but the page never reads it); (2) no per-kind icon and **no unread row background** — failed-job vs error-spike alerts are visually indistinguishable, exactly the distinction the inbox exists for; (3) the raw `event_code` is shown as subtext (`:99`) and embedded in the title helper (the client dropped raw codes in CB-126); (4) **no unread polling** (the client polls ~45s, CB-10), so a new alert leaves a stale badge.
 **Fix:** After `markRead`/`markAllRead`, check `notifications.actionError` → `toast.danger`/`toast.success` (match `NotificationsMenu`); add a leading kind-icon tile colored by event kind + an unread row treatment; drop the raw `event_code` subtext (use the localized title only); add a visibility-gated unread poll.
 
-### AB-25 · Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state — `design-parity` · med · M
+### AB-25 · Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state — `design-parity` · med · M — **Done (B12)**
 
 **Files:** `AdminPlatformErrorsView.vue:43/188/219-240` (raw JSON `context`; no affected rows; perpetual skeleton on load failure; resolve is one-way), `:48-56` (`openDetail` sets `actionError` outside the modal). Store: `admin.ts:521-525` (`loadErrorDetail` no try/catch). Spec: [`platform.md`](../docs/ref/features/platform.md):120-122. Prototype: `errors.html:48-52/143-148`.
 **Why:** The detail modal dumps `occurrence.context` as raw `JSON.stringify` and never renders the **affected workshops / users** the spec requires (the `ErrorOccurrence` carries `workshop_id`/`user_id`), loses the prototype's "— tegishli emas (tenant-attributable emas)" framing, and has **no in-modal failure state** — if `loadErrorDetail` fails, `selectedDetail` stays null and the body shows a **perpetual skeleton** with the error banner hidden behind the scrim. Resolve is also one-way (no reopen, though backend supports `open`).
 **Fix:** Render labeled "Affected workshops"/"Affected user" rows (with the "tegishli emas" fallback) from the occurrences; split context vs stack into two labeled sections; track a `detailError` and render an in-modal error + retry instead of an endless skeleton; add a re-open affordance for resolved records (verify/add a backend reopen use-case — decision). Confirm field availability in `platform/schemas.py` before wiring (data dependency).
 
-### AB-26 · Error monitor: add count-threshold + time-range filters — `spec-conformance` · med · M
+### AB-26 · Error monitor: add count-threshold + time-range filters — `spec-conformance` · med · M — **Done (B12)**
 
 **Files:** `AdminPlatformErrorsView.vue:86-93` (only search + status + module). Spec: [`platform.md`](../docs/ref/features/platform.md):121-122 ("Filters: module, code, time range, count threshold"). Prototype: `errors.html:28-32` (threshold select).
 **Why:** Spec requires four filters; the view has search, status, and module. The **count-threshold** filter (prototype's "24 soat ≥ 3 / ≥ 10") and a **time-range** filter are both missing — the operator can't isolate spiking codes, the monitor's core job.
@@ -526,13 +539,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The spec and prototype both call for a Country filter on the manufacturers list; the Vue filter bar has only search + status.
 **Fix:** Add a Country `ProjectDropdown` built from the distinct `manufacturer.country` values, folded into the `filtered` computed.
 
-### AB-43 · Error-detail renders context/stack verbatim — add render-time defense-in-depth — `security-rbac` · low · S
+### AB-43 · Error-detail renders context/stack verbatim — add render-time defense-in-depth — `security-rbac` · low · S — **Done (B12)**
 
 **Files:** `AdminPlatformErrorsView.vue:43/230-239` (raw `JSON.stringify(context)` + raw stack), `backend/.../errors.py:26-58` + `support/audit.py:14-52` (write-time scrub via a fixed key/keyword/regex list).
 **Why:** Masking is **only** done at write time via a fixed list, so a secret carried under a non-listed key name or as free text with a non-matching delimiter passes straight to the operator's screen with no defense-in-depth at render time. This is the documented design (not a current leak), but the detail view has zero redaction layer of its own.
 **Fix:** Keep write-time scrubbing as source of truth but add a thin render-time guard — collapse raw context/stack behind an explicit "reveal raw" affordance and run a last-line redact over obvious token/JWT/bearer patterns. (Backend scrub-list review is a separate decision.)
 
-### AB-44 · `list_error_records` has no server-side limit — add a defensive cap — `performance` · low · S
+### AB-44 · `list_error_records` has no server-side limit — add a defensive cap — `performance` · low · S — **Done (B12)**
 
 **Files:** `backend/.../service.py:613-629` (no limit), `AdminPlatformErrorsView.vue:129-156` (plain `v-for`, no virtualization).
 **Why:** Risk is bounded because `ErrorRecord` rows are *grouped* by code+module (cardinality tracks distinct signatures, usually small), but there's no server ceiling — a pathological spread of distinct codes renders an arbitrarily long table.

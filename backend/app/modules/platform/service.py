@@ -627,6 +627,10 @@ async def list_error_records(
         query = query.where(ErrorRecord.status == status_filter)
     if module is not None:
         query = query.where(ErrorRecord.module == module)
+    # AB-44: ErrorRecord rows are grouped per code+module so cardinality is small
+    # in practice, but cap the result defensively so a pathological spread of
+    # distinct codes can't return an unbounded list to the monitor.
+    query = query.limit(200)
     return list((await db.scalars(query)).all())
 
 
