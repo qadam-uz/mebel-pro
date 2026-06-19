@@ -50,6 +50,31 @@ async function seedPlatform(login: string) {
   )
 }
 
+async function seedErrorRecord(code: string) {
+  await execFileAsync(
+    'uv',
+    [
+      '--directory',
+      '../backend',
+      'run',
+      'python',
+      '-m',
+      'app.cli',
+      'seed-error-record',
+      '--code',
+      code,
+      '--module',
+      'e2e',
+      '--message',
+      'E2E seeded error',
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl, OTP_DEV_CODES: '["000000"]' },
+    },
+  )
+}
+
 async function loginAsAdmin(page: Page, login: string) {
   await page.goto('/admin/')
   await page.getByLabel('Login').fill(login)
@@ -121,4 +146,32 @@ test('admin triggers a background job run from the jobs surface', async ({ page 
   await page.getByRole('dialog').getByRole('button', { name: 'Ishga tushirish' }).click()
   // A success or skipped toast confirms the trigger registered.
   await expect(page.getByText(/ishga tushirildi|o'tkazib yuborildi/)).toBeVisible()
+})
+
+test('admin resolves then reopens an error record', async ({ page }, testInfo) => {
+  // AB-25 / AB-30: the error monitor lets an operator resolve a code and, when it
+  // recurs, reopen it — both through the detail modal.
+  const id = runId(testInfo)
+  const code = `e2e.err_${id}`
+  await seedPlatform(`admin-${id}`)
+  await seedErrorRecord(code)
+  await loginAsAdmin(page, `admin-${id}`)
+
+  await page.getByRole('link', { name: 'Xatolik monitor' }).first().click()
+  const row = page.getByRole('row').filter({ hasText: code })
+  await expect(row).toBeVisible()
+  await row.getByRole('button', { name: 'Tafsilotlar' }).click()
+
+  // Resolve via the confirm dialog → the reopen affordance replaces it.
+  await page.getByRole('button', { name: 'Tasdiqlash (resolve)' }).click()
+  await page
+    .getByRole('dialog', { name: 'Xatolikni tasdiqlash' })
+    .getByRole('button', { name: 'Tasdiqlash' })
+    .click()
+  const reopen = page.getByRole('button', { name: 'Qayta ochish' })
+  await expect(reopen).toBeVisible()
+
+  // Reopen → the record flips back to open and the resolve affordance returns.
+  await reopen.click()
+  await expect(page.getByRole('button', { name: 'Tasdiqlash (resolve)' })).toBeVisible()
 })
