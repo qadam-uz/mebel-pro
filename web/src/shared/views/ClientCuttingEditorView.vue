@@ -5,22 +5,14 @@ import { RouterLink, useRoute } from 'vue-router'
 import { ApiError } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
-import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
-import {
-  colorForMaterial,
-  edgeFields,
-  edgeSearchText,
-  edgeShortLabel,
-  edgeTinyLabel,
-  type EdgeField,
-} from '@/shared/app/cuttingDisplay'
+import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
-import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
+import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -62,11 +54,6 @@ const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
 const edgePickerPart = ref<CuttingPart | null>(null)
-const edgePickerState = ref<Record<EdgeField, CuttingEdgeBand | null>>(blankEdgeState())
-const edgePickerSource = ref<MaterialSource>('shop')
-const edgePickerSearch = ref('')
-const edgePickerThickness = ref<string | null>('all')
-const edgeDialogRef = ref<HTMLElement | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
@@ -232,64 +219,6 @@ const totalQuantity = computed(() =>
 const showRecovery = computed(
   () => !isReadOnly.value && !recoveryDismissed.value && notCarriedRows.value.length > 0,
 )
-const edgePickerOpen = computed(() => edgePickerPart.value !== null)
-const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
-  const values = [...new Set(cutting.edgeOptions.map((material) => material.thickness_mm))]
-    .filter(Boolean)
-    .sort((left, right) => Number(left) - Number(right))
-  return [
-    { value: 'all', label: 'Hamma qalinlik', meta: 'Barcha kromlar' },
-    ...values.map((value) => ({ value, label: `${value} mm`, meta: 'Qalinlik' })),
-  ]
-})
-const edgePickerMaterials = computed(() => {
-  const part = edgePickerPart.value
-  if (!part) return []
-  const query = edgePickerSearch.value.trim().toLowerCase()
-  return rankedEdgesForPart(part)
-    .filter(({ material }) =>
-      edgePickerThickness.value && edgePickerThickness.value !== 'all'
-        ? material.thickness_mm === edgePickerThickness.value
-        : true,
-    )
-    .filter(({ material }) => {
-      if (!query) return true
-      return edgeSearchText(material).includes(query)
-    })
-})
-const edgePickerActiveSides = computed(() => bandedEdgeFields(edgePickerState.value))
-const edgePickerPatternKey = computed(() => {
-  const active = edgePickerActiveSides.value
-  return (
-    edgePatterns.find(
-      (pattern) =>
-        pattern.sides.length === active.length &&
-        pattern.sides.every((side) => active.includes(side)),
-    )?.key ?? null
-  )
-})
-const edgePickerSelectedMaterialId = computed(() => {
-  const first = edgePickerActiveSides.value
-    .map((side) => edgePickerState.value[side]?.material_id)
-    .find(Boolean)
-  return first ?? null
-})
-const edgePickerBranchNote = computed(() => {
-  if (!draft.value?.preferred_branch_id) return null
-  const missing = new Map<string, string>()
-  for (const side of edgeFields) {
-    const edge = edgePickerState.value[side]
-    if (!edge || edge.source === 'own') continue
-    const material = edgeById(edge.material_id)
-    if (material && !material.branch_carried) {
-      missing.set(material.id, edgeShortLabel(material, true))
-    }
-  }
-  if (!missing.size) return null
-  const branch = preferredBranch.value?.branch_name ?? 'tanlangan filial'
-  return `${branch} filialida ${[...missing.values()].join(' · ')} hozir mavjud emas. Manbani "O'zim olib kelaman" qiling yoki boshqa krom tanlang.`
-})
-
 function blankPart(): CuttingPart {
   return {
     part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}`,
@@ -298,15 +227,6 @@ function blankPart(): CuttingPart {
     length_mm: 100,
     width_mm: 100,
     quantity: 1,
-    edge_top: null,
-    edge_bottom: null,
-    edge_left: null,
-    edge_right: null,
-  }
-}
-
-function blankEdgeState(): Record<EdgeField, CuttingEdgeBand | null> {
-  return {
     edge_top: null,
     edge_bottom: null,
     edge_left: null,
@@ -402,23 +322,6 @@ function rowHasError(part: CuttingPart, index: number): boolean {
   return partIsInvalid(part) || rowOptimizeError(part, index) !== null
 }
 
-function rankedEdgesForPart(part: CuttingPart) {
-  return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
-}
-
-function recommendedEdgeForPart(part: CuttingPart) {
-  return recommendedEdge(
-    materialById(part.material_id),
-    cutting.edgeOptions,
-    edgePickerSelectedMaterialId.value,
-    preferredEdgeId(part),
-  )
-}
-
-function pickerSideLabel(side: EdgeField) {
-  return edgeTinyLabel(edgeById(edgePickerState.value[side]?.material_id))
-}
-
 function saveLabel() {
   // Self-describing for SR users (CB-53): the autosave chip is a role=status live
   // region, so the announced text must stand on its own, not a bare "Saqlangan".
@@ -472,16 +375,6 @@ function setPanel(part: CuttingPart, value: string | null) {
   part.material_id = value ?? ''
 }
 
-function firstEdgeId(part: CuttingPart) {
-  return (
-    part.edge_top?.material_id ??
-    part.edge_bottom?.material_id ??
-    part.edge_left?.material_id ??
-    part.edge_right?.material_id ??
-    null
-  )
-}
-
 function preferredEdgeId(part: CuttingPart) {
   return preferredEdgeByPart.value[part.part_ref] ?? null
 }
@@ -493,159 +386,32 @@ function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
   preferredEdgeByPart.value = next
 }
 
-function commonEdgeSource(part: CuttingPart): MaterialSource {
-  return (
-    part.edge_top?.source ??
-    part.edge_bottom?.source ??
-    part.edge_left?.source ??
-    part.edge_right?.source ??
-    'shop'
-  )
-}
-
-function cloneEdgeStateFromPart(part: CuttingPart) {
-  return {
-    edge_top: part.edge_top ? { ...part.edge_top } : null,
-    edge_bottom: part.edge_bottom ? { ...part.edge_bottom } : null,
-    edge_left: part.edge_left ? { ...part.edge_left } : null,
-    edge_right: part.edge_right ? { ...part.edge_right } : null,
-  }
-}
-
-function bandedEdgeFields(state: Record<EdgeField, CuttingEdgeBand | null>) {
-  return edgeFields.filter((side) => state[side])
-}
-
 function openEdgePicker(part: CuttingPart, event?: Event) {
+  // The modal seeds its own working selection from `part`; the editor only records
+  // which part is open and the element to restore focus to on close.
   edgePickerPart.value = part
-  edgePickerState.value = cloneEdgeStateFromPart(part)
-  const active = bandedEdgeFields(edgePickerState.value)
-  edgePickerSource.value =
-    active.length > 0 && active.every((side) => edgePickerState.value[side]?.source === 'own')
-      ? 'own'
-      : commonEdgeSource(part)
-  edgePickerSearch.value = ''
-  edgePickerThickness.value = 'all'
   edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  void nextTick(() => edgeDialogRef.value?.focus())
 }
 
-function closeEdgePicker(returnFocus = true) {
+function closeEdgePicker() {
   edgePickerPart.value = null
-  edgePickerState.value = blankEdgeState()
-  edgePickerSearch.value = ''
-  edgePickerThickness.value = 'all'
-  if (returnFocus) edgeReturnFocus?.focus()
+  edgeReturnFocus?.focus()
   edgeReturnFocus = null
 }
 
-function applyEdgePicker() {
+function onEdgePickerApply(payload: {
+  edges: Record<EdgeField, CuttingEdgeBand | null>
+  rememberedMaterialId: string | null
+}) {
   const part = edgePickerPart.value
-  if (!part) {
-    closeEdgePicker(false)
-    return
+  if (part) {
+    part.edge_top = payload.edges.edge_top
+    part.edge_bottom = payload.edges.edge_bottom
+    part.edge_left = payload.edges.edge_left
+    part.edge_right = payload.edges.edge_right
+    rememberEdgeMaterial(part, payload.rememberedMaterialId)
   }
-  part.edge_top = edgePickerState.value.edge_top ? { ...edgePickerState.value.edge_top } : null
-  part.edge_bottom = edgePickerState.value.edge_bottom
-    ? { ...edgePickerState.value.edge_bottom }
-    : null
-  part.edge_left = edgePickerState.value.edge_left ? { ...edgePickerState.value.edge_left } : null
-  part.edge_right = edgePickerState.value.edge_right
-    ? { ...edgePickerState.value.edge_right }
-    : null
-  const materialId = firstEdgeId(part)
-  rememberEdgeMaterial(part, materialId)
   closeEdgePicker()
-}
-
-function applyEdgePattern(key: string) {
-  const part = edgePickerPart.value
-  if (!part) return
-  const pattern = edgePatterns.find((item) => item.key === key)
-  if (!pattern) return
-  if (pattern.sides.length === 0) {
-    edgePickerState.value = blankEdgeState()
-    return
-  }
-  const fallback = recommendedEdgeForPart(part)
-  if (!fallback) return
-  const next = blankEdgeState()
-  for (const side of pattern.sides) {
-    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
-  }
-  edgePickerState.value = next
-}
-
-function togglePickerSide(side: EdgeField) {
-  const part = edgePickerPart.value
-  if (!part) return
-  const next = { ...edgePickerState.value }
-  if (next[side]) {
-    next[side] = null
-  } else {
-    const fallback = recommendedEdgeForPart(part)
-    if (!fallback) return
-    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
-  }
-  edgePickerState.value = next
-}
-
-function setPickerSource(source: MaterialSource) {
-  edgePickerSource.value = source
-  const next = { ...edgePickerState.value }
-  for (const side of edgeFields) {
-    if (next[side]) next[side] = { ...next[side], source }
-  }
-  edgePickerState.value = next
-}
-
-function selectPickerMaterial(materialId: string) {
-  const active = edgePickerActiveSides.value
-  const targetSides = active.length ? active : edgeFields
-  const next = { ...edgePickerState.value }
-  for (const side of targetSides) {
-    next[side] = { material_id: materialId, source: edgePickerSource.value }
-  }
-  edgePickerState.value = next
-}
-
-const EDGE_FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
-// Trap Tab/Shift-Tab inside the edge modal so keyboard/SR users can't reach the
-// obscured part rows behind the scrim (CB-06; mirrors ConfirmDialog).
-function trapEdgeFocus(event: KeyboardEvent) {
-  const root = edgeDialogRef.value
-  if (!root) return
-  const focusable = Array.from(root.querySelectorAll<HTMLElement>(EDGE_FOCUSABLE)).filter(
-    (element) => element.getClientRects().length > 0,
-  )
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (!first || !last) {
-    event.preventDefault()
-    root.focus()
-    return
-  }
-  const active = document.activeElement
-  if (event.shiftKey) {
-    if (active === first || active === root) {
-      event.preventDefault()
-      last.focus()
-    }
-  } else if (active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (!edgePickerOpen.value) return
-  if (event.key === 'Escape') {
-    closeEdgePicker()
-    return
-  }
-  if (event.key === 'Tab') trapEdgeFocus(event)
 }
 
 function bringOwn(part: CuttingPart) {
@@ -781,7 +547,6 @@ watch(
 )
 
 onMounted(async () => {
-  document.addEventListener('keydown', onDocumentKeydown)
   await cutting.loadDraft(draftId.value)
   await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
@@ -789,35 +554,11 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onDocumentKeydown)
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
   void autosave.flush()
-  if (edgePickerOpen.value) unlockBodyScroll()
 })
-
-watch(edgePickerOpen, (open) => {
-  if (open) lockBodyScroll()
-  else unlockBodyScroll()
-})
-
-const edgePatterns: Array<{
-  key: string
-  label: string
-  hint: string
-  sides: EdgeField[]
-}> = [
-  { key: 'none', label: 'Hech qaysi', hint: 'Krom olib tashlanadi', sides: [] },
-  { key: 'all', label: 'Hamma tomon', hint: "Ko'p ishlatiladi", sides: [...edgeFields] },
-  {
-    key: 'tb',
-    label: 'Yuqori + pastki',
-    hint: 'Uzun tomonlar',
-    sides: ['edge_top', 'edge_bottom'],
-  },
-  { key: 'lr', label: "Chap + o'ng", hint: 'Yon tomonlar', sides: ['edge_left', 'edge_right'] },
-]
 </script>
 
 <template>
@@ -1113,184 +854,14 @@ const edgePatterns: Array<{
       @confirm="clearParts"
     />
 
-    <template v-if="edgePickerPart">
-      <div class="client-modal-scrim" @click="closeEdgePicker()"></div>
-      <section
-        ref="edgeDialogRef"
-        class="client-edge-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edge-picker-title"
-        tabindex="-1"
-      >
-        <div class="client-edge-modal-h">
-          <h3 id="edge-picker-title">
-            Krom yopishtirish — qism #{{ parts.findIndex((part) => part === edgePickerPart) + 1 }}
-          </h3>
-          <button
-            type="button"
-            class="client-edge-close"
-            aria-label="Krom oynasini yopish"
-            @click="closeEdgePicker()"
-          >
-            ×
-          </button>
-        </div>
-
-        <div class="client-edge-modal-b">
-          <p class="ep-help">
-            {{
-              edgePickerMaterials.some((item) => item.rank < 2)
-                ? "Mos kromlar ro'yxatda yuqorida turadi; kerak bo'lsa rang yoki qalinlik bo'yicha tanlang."
-                : "Bu panel uchun mos krom topilmadi; katalogdan rang yoki qalinlik bo'yicha tanlang."
-            }}
-          </p>
-
-          <div class="ep-patterns" aria-label="Krom tomoni shablonlari">
-            <button
-              v-for="pattern in edgePatterns"
-              :key="pattern.key"
-              type="button"
-              class="ep-pattern"
-              :class="{ on: edgePickerPatternKey === pattern.key }"
-              :disabled="pattern.sides.length > 0 && !recommendedEdgeForPart(edgePickerPart)"
-              @click="applyEdgePattern(pattern.key)"
-            >
-              <span class="nm">{{ pattern.label }}</span>
-              <span class="meta">{{ pattern.hint }}</span>
-            </button>
-          </div>
-
-          <div class="edge-diagram" aria-label="Krom tomonlari">
-            <span class="lbl">Yuqori</span>
-            <button
-              type="button"
-              class="edge-btn h"
-              :class="{
-                set: Boolean(edgePickerState.edge_top),
-                own: edgePickerState.edge_top?.source === 'own',
-              }"
-              :aria-pressed="Boolean(edgePickerState.edge_top)"
-              @click="togglePickerSide('edge_top')"
-            >
-              {{ edgePickerState.edge_top ? pickerSideLabel('edge_top') : '-' }}
-            </button>
-            <div class="mid">
-              <button
-                type="button"
-                class="edge-btn v"
-                :class="{
-                  set: Boolean(edgePickerState.edge_left),
-                  own: edgePickerState.edge_left?.source === 'own',
-                }"
-                :aria-pressed="Boolean(edgePickerState.edge_left)"
-                @click="togglePickerSide('edge_left')"
-              >
-                {{ edgePickerState.edge_left ? pickerSideLabel('edge_left') : '-' }}
-              </button>
-              <div class="panel">Qism</div>
-              <button
-                type="button"
-                class="edge-btn v"
-                :class="{
-                  set: Boolean(edgePickerState.edge_right),
-                  own: edgePickerState.edge_right?.source === 'own',
-                }"
-                :aria-pressed="Boolean(edgePickerState.edge_right)"
-                @click="togglePickerSide('edge_right')"
-              >
-                {{ edgePickerState.edge_right ? pickerSideLabel('edge_right') : '-' }}
-              </button>
-            </div>
-            <button
-              type="button"
-              class="edge-btn h"
-              :class="{
-                set: Boolean(edgePickerState.edge_bottom),
-                own: edgePickerState.edge_bottom?.source === 'own',
-              }"
-              :aria-pressed="Boolean(edgePickerState.edge_bottom)"
-              @click="togglePickerSide('edge_bottom')"
-            >
-              {{ edgePickerState.edge_bottom ? pickerSideLabel('edge_bottom') : '-' }}
-            </button>
-            <span class="lbl">Pastki</span>
-          </div>
-
-          <div class="ep-source">
-            <button
-              type="button"
-              :class="{ on: edgePickerSource === 'shop' }"
-              :aria-pressed="edgePickerSource === 'shop'"
-              @click="setPickerSource('shop')"
-            >
-              <span class="nm">Ustaxonadan</span>
-              <span class="meta">Krom narxga qo'shiladi</span>
-            </button>
-            <button
-              type="button"
-              :class="{ on: edgePickerSource === 'own' }"
-              :aria-pressed="edgePickerSource === 'own'"
-              @click="setPickerSource('own')"
-            >
-              <span class="nm">O'zim olib kelaman</span>
-              <span class="meta">Faqat yopishtirish xizmati</span>
-            </button>
-          </div>
-
-          <div class="ep-tools">
-            <input
-              v-model="edgePickerSearch"
-              class="ep-search"
-              type="search"
-              placeholder="Krom nomi, decor yoki rang..."
-              aria-label="Krom qidirish"
-            />
-            <FormSelect
-              v-model="edgePickerThickness"
-              class="picker-select"
-              label="Qalinlik"
-              :options="edgeThicknessOptions"
-            />
-            <div class="ep-edge-list">
-              <button
-                v-for="{ material, rank } in edgePickerMaterials"
-                :key="material.id"
-                type="button"
-                class="ep-edge-opt"
-                :class="{ on: edgePickerSelectedMaterialId === material.id }"
-                @click="selectPickerMaterial(material.id)"
-              >
-                <span class="rad" aria-hidden="true"></span>
-                <span class="sw" :style="{ background: colorForMaterial(material.color) }"></span>
-                <span class="lab">
-                  <span class="nm">
-                    {{ edgeShortLabel(material) }}
-                    <span v-if="rank < 2" class="fav">Mos</span>
-                  </span>
-                  <span class="meta">{{ material.name }}</span>
-                </span>
-                <span class="thk">{{ material.thickness_mm }} mm</span>
-              </button>
-              <div v-if="edgePickerMaterials.length === 0" class="ep-empty">
-                Mos krom topilmadi. Qidiruv yoki qalinlikni o'zgartiring.
-              </div>
-            </div>
-            <div v-if="edgePickerBranchNote" class="ep-branch-note">
-              {{ edgePickerBranchNote }}
-            </div>
-          </div>
-        </div>
-
-        <div class="client-edge-modal-f">
-          <button type="button" class="mp-button mp-button-outline" @click="closeEdgePicker()">
-            Bekor qilish
-          </button>
-          <button type="button" class="mp-button mp-button-primary" @click="applyEdgePicker">
-            Qo'llash
-          </button>
-        </div>
-      </section>
-    </template>
+    <CuttingEdgePickerModal
+      :part="edgePickerPart"
+      :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
+      :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
+      :preferred-branch-id="draft?.preferred_branch_id ?? null"
+      :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+      @apply="onEdgePickerApply"
+      @close="closeEdgePicker"
+    />
   </section>
 </template>

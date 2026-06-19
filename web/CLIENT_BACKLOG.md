@@ -42,9 +42,28 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 2 | 2 | **4** |
-| Done | 32 | 66 | 30 | **128** |
+| Open (incl. partial) | 0 | 1 | 2 | **3** |
+| Done | 32 | 67 | 30 | **129** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish-2 B22): **CB-93 DONE** — component extraction 3 of 3.
+> Extracted the ~450-line edge-banding modal into `components/CuttingEdgePickerModal.vue`,
+> the last and most coupled seam. The editor now owns only WHICH part is open
+> (`edgePickerPart`) + the preferred-edge memory + focus-return (it captured the trigger
+> element); the dialog owns its own working selection (sides/source/search/thickness), the
+> recommended-edge ranking, the Tab focus-trap, the Escape handler, and the body
+> scroll-lock. It **emits** `apply({edges, rememberedMaterialId})` (the editor writes the
+> bands onto the part + remembers the material via `onEdgePickerApply`) and `close`, so it
+> never mutates the part. Open/close are driven by the `part` prop (a watch seeds the
+> selection + locks the body on open, undoes it on close). Byte-faithful: the dialog
+> `role`/`aria-labelledby`, the title "Krom yopishtirish — qism #N", pattern buttons
+> ("Yuqori + pastki" …), "Krom qidirish", the edge list, "Qo'llash"/"Bekor qilish", and
+> the Escape/Tab/scrim behaviour are preserved; the e2e `chooseEdgeBanding` flow
+> (the pricing-critical path) is unchanged. **Editor: 1296 → 867 lines — CB-93 took the
+> view from 1952 → 867 (−1085, 56%), across CuttingResultsSection + CuttingPartRow +
+> CuttingEdgePickerModal + the shared `app/cuttingDisplay.ts`.** Web gate green
+> (format/lint/typecheck/test 118/build); editor e2e (cutting-drafts + order-production)
+> verified. **CB-93 is Done.**
 
 > Progress (2026-06-19, client-finish-2 B21): **CB-93 — component extraction 2 of 3**
 > (still in progress). Extracted one parts-table row into a new presentational
@@ -584,7 +603,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-90 | P3 | spec-conformance | low | S | Done | Algo compare: cut-length column, algo name, closed default |
 | CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
-| CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
+| CB-93 | P2 | tech-debt | high | L | Done | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Done | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Done | useListboxControl/useStableId composables for dropdowns |
@@ -970,14 +989,14 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Files:** `views/ClientCuttingEditorView.vue`
 **Why:** A ~1900-line view holding five separable concerns. Every cutting-flow change lands in one giant file.
 **Done:** the two pure modules — `cuttingEdgeDisplay.ts` (edge ranking/label/colour, unit-tested) and `autosaveController.ts` (debounce/flush core, CB-108) — plus **B18: `composables/useDraftAutosave.ts`** (the autosave wiring: status mirror, don't-persist gate, deep `parts` watch, CB-15 hydrate guard; +5 unit tests). That's the clean logic seam.
-**Remaining (deliberately not rushed):** of the three TEMPLATE-component extractions,
-**`CuttingResultsSection.vue` (B20) and `CuttingPartRow.vue` (B21) are now done** — the latter
-also pulled the shared pure display helpers into a tested `app/cuttingDisplay.ts`. The one left is
-**`CuttingEdgePickerModal.vue`** — the most coupled (`edgePickerState` = 39 refs across the modal's
-~450 lines of computeds/mutators/template, and edge-banding drives pricing). The e2e suite covers
-only the happy path, so a blind big-bang risks the core cut→order flow for zero user-facing change.
-Per this item's own "incremental, one seam per PR" guidance, the last component is its own
-carefully-reviewed commit, after which CB-93 is Done.
+**Done (client-finish-2 B20–B22):** all five seams have landed. The two pure modules
+(`cuttingEdgeDisplay.ts`, `autosaveController.ts`) + the `useDraftAutosave` composable shipped
+earlier; this session extracted the three template components — **`CuttingResultsSection.vue`**
+(B20), **`CuttingPartRow.vue`** + the shared **`app/cuttingDisplay.ts`** (B21), and
+**`CuttingEdgePickerModal.vue`** (B22, the most coupled). Each was a behaviour-preserving,
+gate-verified, adversarially-reviewed commit. The view went **1952 → 867 lines (−1085, 56%)**; the
+editor now composes four focused units instead of one monolith, and every e2e selector + the
+pricing-critical edge-banding flow are unchanged.
 
 ### CB-94 · Split LoginView into per-role views — `tech-debt` · med · M
 **Files:** `views/LoginView.vue`, `apps/*/routes.ts`
