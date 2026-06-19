@@ -42,9 +42,18 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 1 | 5 | 3 | **9** |
-| Done | 31 | 63 | 29 | **123** |
+| Open (incl. partial) | 1 | 4 | 3 | **8** |
+| Done | 31 | 64 | 29 | **124** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B14): tech-debt — ProfileView split, gate green,
+> adversarial review clean (0 findings). **CB-95** (the 683-line `ProfileView.vue` that
+> branched on `principal_type` is gone; `/c/profile` → new `ClientProfileView.vue`,
+> `/workshop/profile` → new `WorkshopProfileView.vue`. Shared sessions+revoke/logout
+> extracted to `composables/useSessions.ts`; client profile fetch/patch to
+> `stores/clientProfile.ts`; `ClientBranchOption` now imported from the cutting store
+> instead of being redefined per-view. Behaviour is byte-faithful to the original —
+> both routes preserved, the e2e URL assertion still holds.)
 
 > Progress (2026-06-19, client-finish B13): perf — drafts-summary + staleness
 > (curl-verified, reviewed; a "missing panels in editor" finding was a false alarm —
@@ -463,7 +472,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
-| CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
+| CB-95 | P2 | tech-debt | med | M | Done | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Done | useListboxControl/useStableId composables for dropdowns |
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |

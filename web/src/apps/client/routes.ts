@@ -20,7 +20,7 @@ export const clientRoutes: RouteRecordRaw[] = [
   {
     path: '/c/profile',
     name: 'client-profile',
-    component: () => import('@/shared/views/ProfileView.vue'),
+    component: () => import('@/shared/views/ClientProfileView.vue'),
     meta: { title: 'Profil' },
   },
   {
