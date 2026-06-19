@@ -1,8 +1,9 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { useAuthStore } from '@/shared/stores/auth'
 
 export type MaterialStatus = 'active' | 'inactive'
 export type MaterialKind = 'panel' | 'edge'
@@ -227,6 +228,24 @@ export const useAdminStore = defineStore('admin', () => {
   const traceId = ref<string | null>(null)
   const catalogTraceId = ref<string | null>(null)
   const opsTraceId = ref<string | null>(null)
+
+  // AB-03: the one-time provision / temp-password secrets must not outlive the
+  // session. They linger on `lastProvision` / `lastPlatformUserSecret` so a view
+  // can render them once; clear them explicitly (modal close / unmount) and,
+  // defensively, the moment auth is dropped (logout / "log out everywhere" /
+  // session-expiry all null the access token).
+  function clearSecrets() {
+    lastProvision.value = null
+    lastPlatformUserSecret.value = null
+  }
+
+  const auth = useAuthStore()
+  watch(
+    () => auth.accessToken,
+    (token) => {
+      if (!token) clearSecrets()
+    },
+  )
 
   async function loadWorkshops() {
     loading.value = true
@@ -587,6 +606,7 @@ export const useAdminStore = defineStore('admin', () => {
     workshops,
     detail,
     overview,
+    clearSecrets,
     lastProvision,
     manufacturers,
     materials,

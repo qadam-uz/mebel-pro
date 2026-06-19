@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformUser } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
 const admin = useAdminStore()
 const auth = useAuthStore()
+const toast = useToast()
 const modalOpen = ref(false)
 const blockModalOpen = ref(false)
+const secretOpen = ref(false)
+const resetTarget = ref<PlatformUser | null>(null)
 const formPanel = ref<HTMLElement | null>(null)
 const blockPanel = ref<HTMLElement | null>(null)
 const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
@@ -21,6 +27,22 @@ const editingId = ref<string | null>(null)
 const blockTarget = ref<PlatformUser | null>(null)
 const blockReason = ref('')
 const query = ref('')
+
+const secretRows = computed(() => {
+  const secret = admin.lastPlatformUserSecret
+  if (!secret) return []
+  return [
+    { label: 'Operator', value: secret.user.login },
+    { label: 'Temp password', value: secret.temp_password },
+  ]
+})
+
+function closeSecret() {
+  secretOpen.value = false
+  admin.clearSecrets()
+}
+
+onBeforeUnmount(() => admin.clearSecrets())
 const form = reactive({
   fullName: '',
   login: '',
@@ -65,6 +87,8 @@ async function saveUser() {
         full_name: form.fullName,
         phone: form.phone,
       })
+      modalOpen.value = false
+      toast.success('Operator yangilandi')
     } else {
       await admin.createPlatformUser({
         full_name: form.fullName,
@@ -72,22 +96,35 @@ async function saveUser() {
         phone: form.phone,
         temp_password: form.tempPassword || null,
       })
+      modalOpen.value = false
+      secretOpen.value = true
+      toast.success('Operator yaratildi')
     }
-    modalOpen.value = false
   } catch {
     actionError.value = 'platform_user_save_failed'
+    toast.danger('Operator amali bajarilmadi')
   } finally {
     saving.value = false
   }
 }
 
-async function resetPassword(id: string) {
-  actionId.value = id
+function askReset(user: PlatformUser) {
+  resetTarget.value = user
+}
+
+async function confirmReset() {
+  const target = resetTarget.value
+  if (!target) return
+  actionId.value = target.id
   actionError.value = null
   try {
-    await admin.resetPlatformUserPassword(id)
+    await admin.resetPlatformUserPassword(target.id)
+    resetTarget.value = null
+    secretOpen.value = true
+    toast.success('Yangi vaqtinchalik parol yaratildi')
   } catch {
     actionError.value = 'platform_user_reset_failed'
+    toast.danger("Parolni qaytarib bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -107,8 +144,10 @@ async function confirmBlock() {
     await admin.blockPlatformUser(blockTarget.value.id, blockReason.value)
     blockModalOpen.value = false
     blockTarget.value = null
+    toast.success('Operator bloklandi')
   } catch {
     actionError.value = 'platform_user_block_failed'
+    toast.danger("Operatorni bloklab bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -119,8 +158,10 @@ async function unblock(id: string) {
   actionError.value = null
   try {
     await admin.unblockPlatformUser(id)
+    toast.success('Operator blokdan chiqarildi')
   } catch {
     actionError.value = 'platform_user_unblock_failed'
+    toast.danger("Operatorni blokdan chiqarib bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -208,7 +249,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
-                    @click="resetPassword(user.id)"
+                    @click="askReset(user)"
                   >
                     Parol qaytarish
                   </button>
@@ -247,30 +288,26 @@ onMounted(admin.loadPlatformUsers)
       Operator amali bajarilmadi.
     </p>
 
-    <section v-if="admin.lastPlatformUserSecret" class="admin-card mt-5 max-w-[620px]">
-      <div class="admin-card-h">
-        <h2>One-time secret</h2>
-        <span class="sub">temp password faqat shu yerda ko'rsatiladi</span>
-      </div>
-      <div class="admin-card-b">
-        <div class="admin-secret-box">
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Operator</span>
-              <span class="admin-secret-value">{{ admin.lastPlatformUserSecret.user.login }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Temp password</span>
-              <span class="admin-secret-value">{{
-                admin.lastPlatformUserSecret.temp_password
-              }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <AdminSecretModal
+      :open="secretOpen && !!admin.lastPlatformUserSecret"
+      title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
+      intro="Login va vaqtinchalik parolni operatorga yetkazing. Operator birinchi kirishda uni almashtiradi."
+      :rows="secretRows"
+      @close="closeSecret"
+    />
+
+    <ConfirmDialog
+      :open="resetTarget !== null"
+      title="Parolni qaytarish"
+      :message="`${resetTarget?.full_name ?? ''} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
+      confirm-label="Parolni qaytarish"
+      busy-label="Qaytarilmoqda"
+      cancel-label="Bekor qilish"
+      :busy="actionId === resetTarget?.id"
+      danger
+      @confirm="confirmReset"
+      @cancel="resetTarget = null"
+    />
 
     <template v-if="modalOpen">
       <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>

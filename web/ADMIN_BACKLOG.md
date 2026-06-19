@@ -51,9 +51,28 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 6 | 24 | 22 | **52** |
-| Done | 1 | 0 | 0 | **1** |
+| Open | 3 | 22 | 22 | **47** |
+| Done | 4 | 2 | 0 | **6** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B2): **AB-03, AB-04, AB-05, AB-10, AB-23 Done** —
+> privileged-action safety + feedback. New `app/clipboard.ts` (`copyText`) and
+> `components/AdminSecretModal.vue` — a focus-trapped one-time-secret modal with a warning
+> banner, per-row **Nusxa** copy, **Hammasini nusxalash**, and **Yopdim · saqladim** dismiss.
+> **AB-03:** store gained `clearSecrets()` + a watch on `auth.accessToken` → clears
+> `lastProvision`/`lastPlatformUserSecret` the moment auth drops (logout / log-out-everywhere /
+> session-expiry); the two views drive the secret modal from those refs and clear on close +
+> `onBeforeUnmount`, so the temp password no longer lingers in the store or re-renders on
+> revisit. **AB-04:** added `ConfirmDialog` (explicit Uzbek confirm/dismiss/busy labels) before
+> run-job/retry (off-schedule trigger), reset-password (warns sessions are revoked, `danger`),
+> error-resolve, and manufacturer/material activate-deactivate (deactivate names the
+> client-facing consequence per `platform.md`). **AB-10:** wired `useToast` success/failure
+> across provision, block/unblock workshop, create/edit/reset/block/unblock operator, run-job,
+> resolve-error, and catalog save/toggle. **AB-05:** `onMaterialFile` now try/catches the
+> upload (toast + reset the input + `uploadError` banner) and gained a thumbnail-id "Olib
+> tashlash" remove control. **AB-23:** the swallowed catalog toggle failures now surface a
+> danger toast. Web gate green: lint:check · format:check · typecheck · test **120** · build.
+> Browser/visual + e2e locator updates for the new dialogs land with the AB-06/07/30 e2e batch.
 
 > Progress (2026-06-19, admin-finish B1): **AB-02 Done** — dialog focus management.
 > Added `composables/useFocusTrap.ts` (move focus in on open, trap Tab/Shift-Tab, Escape to
@@ -75,14 +94,14 @@ against the current Vue implementation. It mirrors the discipline of
 |---|---|---|---|---|---|---|
 | AB-01 | P1 | states-errors | high | M | Open | Route all 8 store loaders through `captureApiError` + render a dedicated permission-denied (403) state |
 | AB-02 | P1 | a11y | high | M | Done | Focus-trap / focus-into / focus-return / Escape on every admin-modal dialog |
-| AB-03 | P1 | security-rbac | high | M | Open | One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss (secret modal) |
-| AB-04 | P1 | ux-flow | high | M | Open | Gate privileged state-changing actions behind ConfirmDialog w/ Uzbek labels (run-job, reset-pw, resolve, activate/deactivate) |
-| AB-05 | P1 | states-errors | high | S | Open | Material image-upload failure is swallowed (unhandled rejection, no feedback) |
+| AB-03 | P1 | security-rbac | high | M | Done | One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss (secret modal) |
+| AB-04 | P1 | ux-flow | high | M | Done | Gate privileged state-changing actions behind ConfirmDialog w/ Uzbek labels (run-job, reset-pw, resolve, activate/deactivate) |
+| AB-05 | P1 | states-errors | high | S | Done | Material image-upload failure is swallowed (unhandled rejection, no feedback) |
 | AB-06 | P1 | testing | high | M | Open | E2E: platform-user lifecycle (create+secret, reset, block, unblock) |
 | AB-07 | P1 | testing | high | S | Open | E2E + UI guard: last-active-operator / self-block can't lock the platform out |
 | AB-08 | P2 | tech-debt | med | M | Open | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
 | AB-09 | P2 | tech-debt | med | S | Open | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
-| AB-10 | P2 | states-errors | med | M | Open | Adopt `useToast` in admin views — success + failure signals on every mutation |
+| AB-10 | P2 | states-errors | med | M | Done | Adopt `useToast` in admin views — success + failure signals on every mutation |
 | AB-11 | P2 | i18n-copy | med | M | Open | Adopt one operator-copy policy; sweep mixed-language strings (dashboard/nav/route-meta/error copy) |
 | AB-12 | P2 | i18n-copy | med | S | Open | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
 | AB-13 | P2 | i18n-copy | med | S | Open | Translate `useStaffLogin` English error map (decision: shared w/ workshop) |
@@ -95,7 +114,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-20 | P2 | design-parity | med | S | Open | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
 | AB-21 | P2 | spec-conformance | med | S | Open | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
 | AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
-| AB-23 | P2 | states-errors | med | S | Open | Catalog activate/deactivate failures swallowed — surface failure signal |
+| AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
 | AB-24 | P2 | design-parity | med | M | Open | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
 | AB-25 | P2 | design-parity | med | M | Open | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
 | AB-26 | P2 | spec-conformance | med | M | Open | Error monitor: add count-threshold + time-range filters |
@@ -144,19 +163,19 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Every admin dialog is hand-rolled with **no focus management**: focus stays on the trigger behind the scrim on open, Tab/Shift-Tab walks out to the table behind, focus is never restored to the trigger on close, and Escape isn't handled (only a scrim `@click` + icon button). This is a direct, explicit violation of [`access-management.md`](../docs/ref/features/access-management.md) ("All provisioning, create-user, reset-password, and block dialogs move focus into the dialog, trap focus while open, and return focus to the trigger on close"). No admin view uses the shared `ConfirmDialog` (which already does this correctly).
 **Fix:** Extract the trap/return/Escape logic from `ConfirmDialog.vue` into a shared `composables/useFocusTrap(panelRef, open)` and wire it into every admin-modal; on open focus the first field (or close button for read-only log/detail dialogs), on close restore focus to the opener, add an Escape handler, mark the scrim `aria-hidden="true"`. Admin-only views → no client/workshop regression. (Folds in AB-47-adjacent scrim a11y.)
 
-### AB-03 · One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss — `security-rbac` · high · M
+### AB-03 · One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss — `security-rbac` · high · M — **Done (B2)**
 
 **Files:** `stores/admin.ts:211` (`lastProvision`), `:215` (`lastPlatformUserSecret`) — assigned in `provision`/`createPlatformUser`/`resetPlatformUserPassword`, **never cleared anywhere**; `AdminWorkshopsView.vue:336-363`, `AdminPlatformUsersView.vue:245-268` (inline "Share once" / "One-time secret" cards). Prototype: `assets/app.js:504` `showSecret()`, `workshops.html:131`, `platform-users.html:163`.
 **Why:** The admin store is a Pinia singleton living for the whole SPA session; `lastProvision`/`lastPlatformUserSecret` are set but never nulled (grep confirms only the assignments), so the cleartext temp password keeps re-rendering in the "Share once" card every time the operator revisits `/admin/workshops` or `/admin/platform/users`, and **survives `auth.clear()`/logout** (logout never touches the admin store). The UI claims "shown once" but it persists until a hard reload. There is also **no copy button** (spec mandates one) and **no dismiss** — operators must hand-select the single most consequential value in provisioning (a mis-copied owner password locks the new owner out). The prototype uses a focus-trapped secret modal with per-row "Nusxa" + "Hammasini nusxalash" + "Yopdim · saqladim".
 **Fix:** Build a shared `AdminSecretModal` (warning banner, per-row copy via `navigator.clipboard`, copy-all, "Yopdim · saqladim" close) triggered from the two store refs; add `clearLastProvision()`/`clearLastPlatformUserSecret()` and call them on modal close, on view unmount, **and in the auth `clear()`/logout path**. At minimum, never let the secret outlive the session.
 
-### AB-04 · Gate privileged state-changing actions behind ConfirmDialog with Uzbek labels — `ux-flow` · high · M
+### AB-04 · Gate privileged state-changing actions behind ConfirmDialog with Uzbek labels — `ux-flow` · high · M — **Done (B2)**
 
 **Files:** `AdminPlatformJobsView.vue:116` (run/retry), `AdminPlatformUsersView.vue:202` (reset-password), `AdminPlatformErrorsView.vue:202` (resolve), `AdminManufacturersView.vue:176` + `AdminMaterialsView.vue:313` (activate/deactivate). Prototype: `jobs.html:79-81`, `platform-users.html:171-186`, `errors.html:129`, `manufacturers.html:127-129`.
 **Why:** Five consequential operator actions fire immediately on click with **no confirmation**, violating [`platform.md`](../docs/ref/features/platform.md) "confirmation on every state-changing action" and the prototype's `confirmAction(...)` gating. Worst cases: **reset-password** silently invalidates the operator's sessions in one click, **run-job** triggers an off-schedule background job, and **activate/deactivate** mutates the client-facing catalog with no "names the consequence" copy the spec quotes verbatim ("Existing branch selections of this material will be hidden from clients."). No admin view currently imports `ConfirmDialog`.
 **Fix:** Wrap each in the shared `ConfirmDialog` with **explicit Uzbek `confirm`/`dismiss`/`busy` labels** (the dialog defaults are English) matching the prototype copy. Reset-password → confirm then present the new temp password via AB-03's secret modal. (Activate/deactivate failure handling is AB-23; error-resolve reopen + affected context is AB-25.)
 
-### AB-05 · Material image-upload failure is swallowed — unhandled rejection, no feedback — `states-errors` · high · S
+### AB-05 · Material image-upload failure is swallowed — unhandled rejection, no feedback — `states-errors` · high · S — **Done (B2)**
 
 **Files:** `AdminMaterialsView.vue:151-156` (`onMaterialFile`), `:429` (only `files.uploading` shown), `stores/files.ts:31-41` (`upload` sets `error='file_upload_failed'` and **re-throws**).
 **Why:** `onMaterialFile` does `const uploaded = await files.upload(target.files[0])` with **no try/catch**. `files.upload` re-throws on any failure (403, oversize, network), so the `await` rejects → unhandled promise rejection; the spinner vanishes, `form.imageFileId` stays unset, and the operator gets **zero feedback** while the Save button still looks ready. The view never renders `files.error`. Spec: [`platform.md`](../docs/ref/features/platform.md) "Image upload" + "error on every page".
@@ -188,7 +207,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `AdminCatalogView.vue` is never imported or routed (`routes.ts` maps `/admin/catalog/{manufacturers,materials}` to `AdminManufacturersView`/`AdminMaterialsView`; `/admin/catalog` redirects to materials). A repo-wide grep finds exactly one reference: a comment at `admin.ts:321` ("so AdminCatalogView's no-access state can trigger"). The dead view *does* contain a real `permission_denied` state (`AdminCatalogView.vue:243`) — but it's unreachable, and the comment misleads readers about where that handling lives (it lives nowhere live — see AB-01).
 **Fix:** Delete the file and update the `admin.ts` comment to point at the live `AdminManufacturersView`/`AdminMaterialsView` permission-denied handling (added in AB-01/AB-08). Verify no dynamic-import string references it.
 
-### AB-10 · Adopt `useToast` in admin views — success + failure signals on every mutation — `states-errors` · med · M
+### AB-10 · Adopt `useToast` in admin views — success + failure signals on every mutation — `states-errors` · med · M — **Done (B2)**
 
 **Files:** `components/AppShell.vue:526` (`ToastHost` already mounted), `components/NotificationsMenu.vue:131-139` (already uses `toast.success`/`toast.danger`); admin views push nothing — `AdminWorkshopsView.vue:87-121`, `AdminWorkshopDetailView.vue:24-50`, `AdminPlatformUsersView.vue:54-122`, `AdminPlatformErrorsView.vue:58-69`.
 **Why:** `ToastHost` is mounted and the shared notifications menu uses it, but **no `Admin*.vue` page view imports `useToast`** (grep = 0 hits). Provision, block/unblock, reset-password, save-operator, run-job, resolve-error all complete **silently** — the only feedback is inline error banners on *failure*. For destructive/irreversible actions especially, the operator gets no positive confirmation a mutation took effect; they must infer it from a row badge or the secret card appearing. Spec: [`platform.md`](../docs/ref/features/platform.md) "result badges pair colour with text".
@@ -266,7 +285,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** vs spec + prototype: (1) the materials table has **no image column** though `Material.image_file_id` exists and the form uploads one (spec lists image as the first column); (2) `Tur` is plain text, the prototype uses a colored pill ("Panel" / "Krom lentasi"); (3) the status cell shows raw English (AB-12); (4) the create/edit modal omits the prototype's **panel length≥width inline validation**, the **edge-banding info banner**, and the **kind-locked-on-edit hint**. The prototype's branch-usage ("Ustaxonalar") column + "Qaysi filiallarda?" action need a per-material branch count the platform read model may not expose — **data dependency**, defer unless `catalog-inventory.md` justifies the backend surface.
 **Fix:** Add a leading image cell (thumbnail via files store / `image_file_id`, placeholder when unset); render kind as a colored pill + status via the AB-12 label pill; add the length≥width validation + edge info banner + kind-locked hint to the modal. Branch-usage column only if/when the backend exposes the count (decision vs `catalog-inventory.md`).
 
-### AB-23 · Catalog activate/deactivate failures swallowed — surface a failure signal — `states-errors` · med · S
+### AB-23 · Catalog activate/deactivate failures swallowed — surface a failure signal — `states-errors` · med · S — **Done (B2)**
 
 **Files:** `AdminManufacturersView.vue:80-87`, `AdminMaterialsView.vue:207-214` (`setStatus` is try/finally, **no catch**).
 **Why:** Both `setStatus` handlers can reject (403, conflict) but only `finally`-clear `actionId` — there's no error ref, banner, or toast. The operator clicks "Faollashtirish"/"Faol emas qilish", the row simply doesn't change, and nothing explains why. (The missing *confirm* is AB-04; this is the missing *failure* signal.)

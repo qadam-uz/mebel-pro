@@ -1,19 +1,40 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const creating = ref(false)
 const modalOpen = ref(false)
+const secretOpen = ref(false)
 const provisionPanel = ref<HTMLElement | null>(null)
 const provisionTrap = useFocusTrap(provisionPanel, modalOpen, () => (modalOpen.value = false))
+
+const secretRows = computed(() => {
+  const provision = admin.lastProvision
+  if (!provision) return []
+  return [
+    { label: 'Workshop code', value: provision.workshop.code },
+    { label: 'Owner login', value: provision.owner.login },
+    { label: 'Temp password', value: provision.temp_password },
+  ]
+})
+
+function closeSecret() {
+  secretOpen.value = false
+  admin.clearSecrets()
+}
+
+onBeforeUnmount(() => admin.clearSecrets())
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
@@ -115,9 +136,12 @@ async function createWorkshop() {
     })
     resetForm()
     modalOpen.value = false
+    secretOpen.value = true
+    toast.success('Ustaxona yaratildi')
     await admin.loadOverview()
   } catch {
     createError.value = 'workshop_create_failed'
+    toast.danger('Ustaxona yaratilmadi')
   } finally {
     creating.value = false
   }
@@ -339,33 +363,12 @@ onMounted(async () => {
       </section>
     </template>
 
-    <section v-if="admin.lastProvision" class="admin-card mt-5 max-w-[720px]">
-      <div class="admin-card-h">
-        <h2>Share once</h2>
-        <span class="sub">temp password shu oynada bir marta ko'rsatiladi</span>
-      </div>
-      <div class="admin-card-b">
-        <div class="admin-secret-box">
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Workshop code</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.workshop.code }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Owner login</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.owner.login }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Temp password</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.temp_password }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <AdminSecretModal
+      :open="secretOpen && !!admin.lastProvision"
+      title="Ustaxona yaratildi — bir martalik maxfiy ma'lumot"
+      intro="Workshop code va owner login bilan birga vaqtinchalik parolni egasiga yetkazing."
+      :rows="secretRows"
+      @close="closeSecret"
+    />
   </section>
 </template>

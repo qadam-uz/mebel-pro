@@ -2,10 +2,12 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { dropdownOption, materialKindLabel, materialStatusTone } from '@/shared/app/adminUi'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import {
   useAdminStore,
   type Material,
@@ -17,8 +19,11 @@ import { useFilesStore } from '@/shared/stores/files'
 
 const admin = useAdminStore()
 const files = useFilesStore()
+const toast = useToast()
 const modalOpen = ref(false)
 const manufacturerModalOpen = ref(false)
+const uploadError = ref<string | null>(null)
+const statusTarget = ref<{ row: Material; status: MaterialStatus } | null>(null)
 const formPanel = ref<HTMLElement | null>(null)
 const inlineMfrPanel = ref<HTMLElement | null>(null)
 const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
@@ -160,8 +165,21 @@ function materialSpec(material: Material) {
 async function onMaterialFile(event: Event) {
   const target = event.target
   if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
-  const uploaded = await files.upload(target.files[0])
-  form.imageFileId = uploaded.id
+  uploadError.value = null
+  try {
+    const uploaded = await files.upload(target.files[0])
+    form.imageFileId = uploaded.id
+    toast.success('Rasm yuklandi')
+  } catch {
+    uploadError.value = 'image_upload_failed'
+    toast.danger("Rasmni yuklab bo'lmadi")
+    target.value = ''
+  }
+}
+
+function removeImage() {
+  form.imageFileId = null
+  uploadError.value = null
 }
 
 async function save() {
@@ -185,8 +203,10 @@ async function save() {
     if (editingId.value) await admin.updateMaterial(editingId.value, payload)
     else await admin.createMaterial(payload)
     modalOpen.value = false
+    toast.success(editingId.value ? 'Material yangilandi' : "Material qo'shildi")
   } catch {
     saveError.value = 'material_save_failed'
+    toast.danger('Material saqlanmadi')
   } finally {
     saving.value = false
   }
@@ -213,10 +233,20 @@ async function saveInlineManufacturer() {
   }
 }
 
-async function setStatus(row: Material, status: MaterialStatus) {
-  actionId.value = row.id
+function askStatus(row: Material, status: MaterialStatus) {
+  statusTarget.value = { row, status }
+}
+
+async function confirmStatus() {
+  const target = statusTarget.value
+  if (!target) return
+  statusTarget.value = null
+  actionId.value = target.row.id
   try {
-    await admin.setMaterialStatus(row.id, status)
+    await admin.setMaterialStatus(target.row.id, target.status)
+    toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
+  } catch {
+    toast.danger('Amal bajarilmadi')
   } finally {
     actionId.value = null
   }
@@ -324,7 +354,7 @@ onMounted(async () => {
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === material.id"
                     @click="
-                      setStatus(material, material.status === 'active' ? 'inactive' : 'active')
+                      askStatus(material, material.status === 'active' ? 'inactive' : 'active')
                     "
                   >
                     {{ material.status === 'active' ? 'Faol emas qilish' : 'Faollashtirish' }}
@@ -431,15 +461,29 @@ onMounted(async () => {
                 </label>
               </template>
               <label class="admin-field admin-full" for="mat-image">
-                <span>Image</span>
+                <span>Rasm</span>
                 <input id="mat-image" type="file" accept="image/*" @change="onMaterialFile" />
-                <span v-if="form.imageFileId" class="admin-mono text-ink-muted">
-                  file {{ form.imageFileId.slice(0, 8) }}
+                <span v-if="form.imageFileId" class="flex items-center gap-2 text-ink-muted">
+                  <span class="admin-mono">file {{ form.imageFileId.slice(0, 8) }}</span>
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                    @click="removeImage"
+                  >
+                    Olib tashlash
+                  </button>
                 </span>
               </label>
             </div>
-            <p v-if="files.uploading" class="mt-3 text-sm font-bold text-info">
-              Image yuklanmoqda...
+            <p v-if="files.uploading" class="mt-3 text-sm font-bold text-info" aria-live="polite">
+              Rasm yuklanmoqda...
+            </p>
+            <p
+              v-if="uploadError"
+              class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring.
             </p>
             <p
               v-if="saveError"
@@ -528,5 +572,21 @@ onMounted(async () => {
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="statusTarget !== null"
+      :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
+      :message="
+        statusTarget?.status === 'inactive'
+          ? `${statusTarget?.row.name} faol emas qilinadi — uni filiallarning yangi tanlovlaridan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va filial tanlovida ko'rinadi.`
+      "
+      confirm-label="Tasdiqlash"
+      cancel-label="Bekor qilish"
+      :danger="statusTarget?.status === 'inactive'"
+      :busy="actionId === statusTarget?.row.id"
+      @confirm="confirmStatus"
+      @cancel="statusTarget = null"
+    />
   </section>
 </template>
