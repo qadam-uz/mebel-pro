@@ -783,7 +783,12 @@ def _positive_amount(value: int) -> None:
 
 
 def _not_future(value: date) -> None:
-    if value > datetime.now(UTC).date():
+    # Ledger dates are picked in the actor's local calendar (the platform runs in
+    # Uzbekistan, UTC+5), which can read a day ahead of UTC just after local
+    # midnight. Compare against the furthest-ahead real-world local date (max TZ
+    # offset is +14h) so a genuine same-day entry is never wrongly rejected as
+    # "future"; a true future date (tomorrow onward, anywhere) is still refused.
+    if value > (datetime.now(UTC) + timedelta(hours=14)).date():
         raise APIError("future_date_not_allowed", "Ledger date cannot be in the future")
 
 
