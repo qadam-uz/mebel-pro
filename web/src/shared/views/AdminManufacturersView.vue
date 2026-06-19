@@ -32,10 +32,18 @@ const statusOptions = [
   dropdownOption('active', 'Faol', "yangi material uchun ko'rinadi"),
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
+const countryFilter = ref('all')
+const countryOptions = computed(() => [
+  dropdownOption('all', 'Davlat', 'barcha davlatlar'),
+  ...Array.from(
+    new Set(admin.manufacturers.map((row) => row.country).filter((c): c is string => !!c)),
+  ).map((country) => dropdownOption(country, country, '')),
+])
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
   return admin.manufacturers.filter((manufacturer) => {
     if (statusFilter.value !== 'all' && manufacturer.status !== statusFilter.value) return false
+    if (countryFilter.value !== 'all' && manufacturer.country !== countryFilter.value) return false
     if (!needle) return true
     return [manufacturer.name, manufacturer.country ?? '', manufacturer.note ?? '']
       .join(' ')
@@ -129,6 +137,7 @@ onMounted(async () => {
         <input v-model="search" placeholder="Manufacturer nomi" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      <ProjectDropdown v-model="countryFilter" label="Davlat" :options="countryOptions" />
       <button
         type="button"
         class="mp-button mp-button-outline"
