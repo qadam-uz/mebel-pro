@@ -10,6 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -129,6 +130,15 @@ const filtered = computed(() => {
       .includes(needle)
   })
 })
+
+// AB-22: panels must have length >= width (the cut grain/orientation assumption).
+const dimensionError = computed(
+  () =>
+    form.kind === 'panel' &&
+    Number(form.panelLengthMm) > 0 &&
+    Number(form.panelWidthMm) > 0 &&
+    Number(form.panelLengthMm) < Number(form.panelWidthMm),
+)
 
 function clearFilters() {
   search.value = ''
@@ -338,11 +348,12 @@ onMounted(async () => {
 
     <section v-else class="admin-card">
       <div class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
+              <th><span class="sr-only">Rasm</span></th>
               <th>Material</th>
-              <th>Manufacturer</th>
+              <th>Ishlab chiqaruvchi</th>
               <th>Tur</th>
               <th>Turi / o'lcham</th>
               <th>Qalinligi</th>
@@ -354,12 +365,26 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="material in filtered" :key="material.id">
+              <td>
+                <AuthFileImage
+                  :file-id="material.image_file_id"
+                  :alt="material.name"
+                  class="size-9 rounded-md object-cover"
+                />
+              </td>
               <td class="nm">
                 {{ material.name }}
-                <small>{{ material.color }} . {{ material.decor_code ?? 'decor yoq' }}</small>
+                <small>{{ material.color }} . {{ material.decor_code ?? "dekor yo'q" }}</small>
               </td>
               <td>{{ material.manufacturer_name }}</td>
-              <td>{{ materialKindLabel(material.kind) }}</td>
+              <td>
+                <span
+                  class="admin-pill"
+                  :class="material.kind === 'panel' ? 'admin-pill-success' : 'admin-pill-info'"
+                >
+                  {{ materialKindLabel(material.kind) }}
+                </span>
+              </td>
               <td>{{ materialSpec(material) }}</td>
               <td class="admin-mono">{{ material.thickness_mm }} mm</td>
               <td class="admin-mono">
@@ -428,16 +453,27 @@ onMounted(async () => {
             <div class="admin-form-grid three">
               <FormSelect
                 v-model="form.kind"
-                label="Kind"
+                label="Tur"
                 :options="materialKindOptions"
                 class="admin-full"
+                :disabled="!!editingId"
               />
+              <p v-if="editingId" class="admin-full text-xs text-ink-muted">
+                Tahrirlashda material turini o'zgartirib bo'lmaydi.
+              </p>
+              <p
+                v-if="form.kind === 'edge'"
+                class="admin-full rounded-md bg-sunk px-3 py-2 text-xs text-ink-soft"
+              >
+                Krom material metr hisobida o'lchanadi — panel o'lchami va tola yo'nalishi
+                qo'llanmaydi.
+              </p>
               <div class="admin-full grid gap-2 md:grid-cols-[1fr_auto]">
                 <FormSelect
                   v-model="form.manufacturerId"
-                  label="Manufacturer"
+                  label="Ishlab chiqaruvchi"
                   :options="manufacturerChoiceOptions"
-                  placeholder="Manufacturer tanlang"
+                  placeholder="Ishlab chiqaruvchini tanlang"
                 />
                 <button
                   type="button"
@@ -483,6 +519,13 @@ onMounted(async () => {
                   <span>Eni, mm</span>
                   <input id="mat-wid" v-model="form.panelWidthMm" inputmode="numeric" required />
                 </label>
+                <p
+                  v-if="dimensionError"
+                  class="admin-full text-xs font-bold text-danger"
+                  role="alert"
+                >
+                  Uzunlik enidan kichik bo'lmasligi kerak.
+                </p>
                 <label
                   class="flex min-h-11 items-center gap-3 self-end rounded-md border border-hairline-strong px-3 text-sm font-bold"
                 >
@@ -530,7 +573,11 @@ onMounted(async () => {
             <button type="button" class="mp-button mp-button-outline" @click="modalOpen = false">
               Bekor
             </button>
-            <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
+            <button
+              type="submit"
+              class="mp-button mp-button-primary"
+              :disabled="saving || dimensionError"
+            >
               {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
             </button>
           </div>

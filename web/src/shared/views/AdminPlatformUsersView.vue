@@ -244,7 +244,7 @@ onMounted(admin.loadPlatformUsers)
 
     <section v-else class="admin-card">
       <div class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
               <th>Operator</th>

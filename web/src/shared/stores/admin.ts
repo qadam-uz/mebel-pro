@@ -198,13 +198,6 @@ export interface StatusChangeLog {
   changed_at: string
 }
 
-export interface CatalogFilters {
-  search?: string
-  status?: MaterialStatus | null
-  kind?: MaterialKind | null
-  manufacturer_id?: string | null
-}
-
 // AB-29: typed request payloads for the privileged write paths (was `unknown`).
 export interface ProvisionWorkshopRequest {
   workshop: { name: string; code: string | null; phone: string; address: string | null }
@@ -374,16 +367,18 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadManufacturers(filters: CatalogFilters = {}) {
+  // AB-45: the platform catalog is operator-curated and bounded for this
+  // envelope, so the views filter the full list client-side (instant, no
+  // per-keystroke round-trips). The previously-plumbed-but-never-passed
+  // server-side filter params were dead/misleading and have been removed; if the
+  // catalog ever grows to thousands, reintroduce server-side paging.
+  async function loadManufacturers() {
     catalogLoading.value = true
     catalogError.value = null
     catalogTraceId.value = null
     try {
       manufacturers.value = await api.get<Manufacturer[]>(
-        withQuery('/platform/catalog/manufacturers', {
-          search: filters.search,
-          status: filters.status,
-        }),
+        '/platform/catalog/manufacturers',
         authInit(),
       )
     } catch (errorValue) {
@@ -398,20 +393,12 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadMaterials(filters: CatalogFilters = {}) {
+  async function loadMaterials() {
     catalogLoading.value = true
     catalogError.value = null
     catalogTraceId.value = null
     try {
-      materials.value = await api.get<Material[]>(
-        withQuery('/platform/catalog/materials', {
-          search: filters.search,
-          status: filters.status,
-          kind: filters.kind,
-          manufacturer_id: filters.manufacturer_id,
-        }),
-        authInit(),
-      )
+      materials.value = await api.get<Material[]>('/platform/catalog/materials', authInit())
     } catch (errorValue) {
       const captured = captureApiError(errorValue, 'materials_load_failed')
       catalogError.value = captured.code
