@@ -51,9 +51,17 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 7 | 8 | **17** |
-| Done | 5 | 17 | 14 | **36** |
+| Open | 2 | 6 | 8 | **16** |
+| Done | 5 | 18 | 14 | **37** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B11): **AB-24 Done** — operator notifications inbox.
+> The full-page inbox now surfaces mark-read / mark-all-read failures via a danger toast (was
+> silent), gives each row a colored kind tile (J = job-failure / E = error-spike, the exact
+> distinction the inbox exists for), marks unread rows with an accent left-border, drops the raw
+> `event_code` subtext (the localized title is enough), and polls `loadUnreadCount` every ~45s
+> while the tab is visible so the badge no longer goes stale. Web gate green: lint:check ·
+> format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B10): **AB-21, AB-38, AB-47 Done** — profile + a11y.
 > **AB-21:** the profile Sessions tab gained a per-row "Yopish" revoke (hidden on the current
@@ -226,7 +234,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-21 | P2 | spec-conformance | med | S | Done | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
 | AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
 | AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
-| AB-24 | P2 | design-parity | med | M | Open | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
+| AB-24 | P2 | design-parity | med | M | Done | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
 | AB-25 | P2 | design-parity | med | M | Open | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
 | AB-26 | P2 | spec-conformance | med | M | Open | Error monitor: add count-threshold + time-range filters |
 | AB-27 | P2 | a11y | med | S | Open | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
@@ -402,7 +410,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Both `setStatus` handlers can reject (403, conflict) but only `finally`-clear `actionId` — there's no error ref, banner, or toast. The operator clicks "Faollashtirish"/"Faol emas qilish", the row simply doesn't change, and nothing explains why. (The missing *confirm* is AB-04; this is the missing *failure* signal.)
 **Fix:** Add a catch that surfaces a visible action error (banner or AB-10 `toast.danger`) for both handlers.
 
-### AB-24 · Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll — `design-parity` · med · M
+### AB-24 · Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll — `design-parity` · med · M — **Done (B11)**
 
 **Files:** `AdminNotificationsView.vue:31-38` (`markRead` no catch), `:56-57` (`markAllRead` inline, no result handling), `:82-113` (generic pill, raw `event_code` subtext at `:99`, no kind icon, no unread bg, no poll). Store: `notifications.ts:94/109` (sets `actionError`); `NotificationsMenu.vue:131-139` checks it; `adminUi.ts:132-138` (`adminNotificationTitle` embeds `event_code`). Prototype: `notifications.html:15-23/78-86`.
 **Why:** The operator inbox is the *only* v1 channel for job-failure + error-spike alerts ([`notifications.md`](../docs/ref/features/notifications.md)), yet: (1) `markRead`/`markAllRead` failures are **silent** on the full page (the store sets `actionError` and the *menu* toasts it, but the page never reads it); (2) no per-kind icon and **no unread row background** — failed-job vs error-spike alerts are visually indistinguishable, exactly the distinction the inbox exists for; (3) the raw `event_code` is shown as subtext (`:99`) and embedded in the title helper (the client dropped raw codes in CB-126); (4) **no unread polling** (the client polls ~45s, CB-10), so a new alert leaves a stale badge.
