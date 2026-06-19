@@ -205,7 +205,10 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   await page.getByRole('link', { name: 'Materiallar' }).first().click()
   await expect(page.getByRole('heading', { name: 'Platforma material katalogi' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Yangi material' }).click()
+  // On a fresh catalog the empty state also renders a "Yangi material" CTA, so
+  // target the always-present page-header action (first in DOM order) — keeps
+  // this deterministic whether or not the catalog already has rows.
+  await page.getByRole('button', { name: 'Yangi material' }).first().click()
   const materialDialog = page.getByRole('dialog', { name: 'Yangi material' })
   await materialDialog.getByRole('button', { name: 'Inline manufacturer' }).click()
   const manufacturerDialog = page.getByRole('dialog', { name: 'Yangi manufacturer' })
