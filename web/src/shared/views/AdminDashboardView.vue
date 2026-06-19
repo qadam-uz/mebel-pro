@@ -179,6 +179,7 @@ onMounted(loadAll)
                   <tr>
                     <th>Ustaxona</th>
                     <th>Egasi</th>
+                    <th>Filiallar</th>
                     <th>Yaratildi</th>
                     <th>Holat</th>
                   </tr>
@@ -189,9 +190,8 @@ onMounted(loadAll)
                       {{ workshop.name }}
                       <small>{{ workshop.code }}</small>
                     </td>
-                    <td class="admin-mono text-ink-muted">
-                      {{ workshop.owner_user_id.slice(0, 8) }}
-                    </td>
+                    <td class="admin-mono text-ink-muted">{{ workshop.owner_login }}</td>
+                    <td class="admin-mono text-ink-muted">{{ workshop.branch_count }}</td>
                     <td class="admin-mono text-ink-muted">{{ adminDate(workshop.created_at) }}</td>
                     <td>
                       <span

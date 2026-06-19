@@ -360,6 +360,7 @@ onMounted(async () => {
               <th>Panel o'lchami</th>
               <th>Tola</th>
               <th>Holat</th>
+              <th>Ustaxonalar</th>
               <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
@@ -399,6 +400,7 @@ onMounted(async () => {
                   {{ materialStatusLabel(material.status) }}
                 </span>
               </td>
+              <td class="admin-mono">{{ material.branch_usage_count }}</td>
               <td class="admin-right">
                 <div class="flex justify-end gap-2">
                   <button
