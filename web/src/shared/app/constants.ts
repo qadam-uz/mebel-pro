@@ -25,3 +25,13 @@ export const MAX_PARTS = 100
 
 /** Saved-drafts cap per client (matches backend DRAFT_LIMIT). */
 export const DRAFT_LIMIT = 50
+
+/**
+ * Cap for the editor's catalog load when NO preferred branch is set (CB-40). A
+ * branch-scoped load stays unlimited (CB-84 filters + CB-19/86 recovery need the
+ * full per-branch list); only the otherwise-unbounded whole-catalog load on a
+ * no-branch draft is capped, so a fresh draft doesn't pull every material. The
+ * editor nudges the user to pick a branch for the full catalog. The backend
+ * bounds the `limit` query at le=200.
+ */
+export const NO_BRANCH_CATALOG_LIMIT = 60

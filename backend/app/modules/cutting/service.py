@@ -340,6 +340,7 @@ async def client_catalog_materials(
     search: str | None = None,
     manufacturer_id: uuid.UUID | None = None,
     carried_only: bool = True,
+    limit: int | None = None,
 ) -> list[ClientCatalogMaterialOption]:
     require_client(principal)
     if branch_id is not None:
@@ -378,6 +379,12 @@ async def client_catalog_materials(
                 Manufacturer.name.ilike(pattern),
             )
         )
+    # Cap the result set when asked (CB-40) — the client passes a limit only for the
+    # unbounded no-preferred-branch load, so a fresh draft doesn't pull the whole
+    # catalog. A branch-scoped load stays unlimited (CB-84 filters + CB-19/86 recovery
+    # need the full per-branch list client-side). Deterministic with the ORDER BY above.
+    if limit is not None:
+        query = query.limit(limit)
     rows = (await db.execute(query)).all()
     return [
         ClientCatalogMaterialOption(

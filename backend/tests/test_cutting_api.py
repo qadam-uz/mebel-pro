@@ -323,6 +323,36 @@ async def test_client_cutting_material_picker_marks_branch_carried_materials(
     assert by_id[str(other_panel.id)]["price_tiyin"] is None
 
 
+async def test_client_catalog_materials_limit_caps_the_no_branch_load(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # CB-40: a no-preferred-branch load can be capped so a fresh draft does not pull
+    # the whole catalog; the cap is deterministic (ordered by manufacturer, name).
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, _, other_panel = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session)
+
+    uncapped = await client.get(
+        "/api/v1/client/catalog/materials?kind=panel",
+        headers=_auth(access),
+    )
+    capped = await client.get(
+        "/api/v1/client/catalog/materials?kind=panel&limit=1",
+        headers=_auth(access),
+    )
+    bad_limit = await client.get(
+        "/api/v1/client/catalog/materials?kind=panel&limit=0",
+        headers=_auth(access),
+    )
+
+    assert uncapped.status_code == 200
+    assert {row["id"] for row in uncapped.json()} == {str(panel.id), str(other_panel.id)}
+    assert capped.status_code == 200
+    assert len(capped.json()) == 1
+    assert bad_limit.status_code == 422
+
+
 async def test_workshop_cutting_plans_are_order_bound_and_branch_scoped(
     client: AsyncClient,
     db_session: AsyncSession,

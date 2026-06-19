@@ -42,9 +42,95 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 2 | 2 | **4** |
-| Done | 32 | 66 | 30 | **128** |
-| Won't | — | — | 2 (CB-49, CB-80) | **2** |
+| Open (incl. partial) | 0 | 0 | 0 | **0** |
+| Done | 32 | 68 | 30 | **130** |
+| Won't | — | — | 4 (CB-49, CB-80, CB-128, CB-129) | **4** |
+
+> Progress (2026-06-19, client-finish-2 B24): **CB-128 + CB-129 → Won't** (product
+> decision, confirmed with the user against `docs/scope.md`). v1 is **pickup-only with no
+> due / estimated-ready date concept** — `scope.md` models the workshop flow as
+> verify→cut→band→ready→collected, and the `Order` model carries only *actual* transition
+> timestamps (`confirmed_at`, `cut_completed_at`, `edge_completed_at`, `completed_at`,
+> `picked_up_at`), never a forward-looking "due"/"estimated ready" field; `orders.md` has no
+> such concept either. The prototype's "olib ketish {dueAt}" (CB-128) and "Taxminiy sana"
+> (CB-129) are design-reference fragments, not scope canon. Introducing a due-date would be a
+> cross-cutting feature (a new `Order` field + a workshop UI to set it — a colleague's SPA +
+> client display), out of scope for v1. Marked Won't with rationale rather than guessing.
+> **This closes the client-SPA backlog: 0 Open, 130 Done, 4 Won't.** Doc-only change (no code).
+
+> Progress (2026-06-19, client-finish-2 B23): **CB-40 DONE** — the no-preferred-branch
+> catalog load is now capped (the headline that was blocked is resolved per the agreed
+> approach: keep CB-84's client-side filtering, cap ONLY the unbounded load). Backend:
+> `GET /client/catalog/materials` takes an optional `limit` (`Query(ge=1, le=200)`) applied
+> with the existing deterministic `ORDER BY manufacturer, name`, so a branch-scoped load
+> stays unlimited (CB-84 filters + CB-19/86 not-carried recovery still get the full
+> per-branch list) and only the whole-catalog load is bounded. Frontend: the editor passes
+> `limit=NO_BRANCH_CATALOG_LIMIT` (60) to `loadMaterials` **only when no preferred branch is
+> set** (both panel + edge), the store keys its cache on the limit, and a one-line note under
+> the catalog-filter banner tells the user only the first 60 show and to pick a workshop for
+> the full catalog. +1 backend test (limit caps + 422 on `limit=0`), +1 store test (limit
+> passed only when capping, distinct cache key). Both gates green (web format/lint/typecheck/
+> test 119/build; backend ruff/format/mypy/pytest 119+2-skip). The branch-selected e2e path is
+> unaffected (the editor always has a branch before the picker is used). **CB-40 is Done.**
+
+> Progress (2026-06-19, client-finish-2 B22): **CB-93 DONE** — component extraction 3 of 3.
+> Extracted the ~450-line edge-banding modal into `components/CuttingEdgePickerModal.vue`,
+> the last and most coupled seam. The editor now owns only WHICH part is open
+> (`edgePickerPart`) + the preferred-edge memory + focus-return (it captured the trigger
+> element); the dialog owns its own working selection (sides/source/search/thickness), the
+> recommended-edge ranking, the Tab focus-trap, the Escape handler, and the body
+> scroll-lock. It **emits** `apply({edges, rememberedMaterialId})` (the editor writes the
+> bands onto the part + remembers the material via `onEdgePickerApply`) and `close`, so it
+> never mutates the part. Open/close are driven by the `part` prop (a watch seeds the
+> selection + locks the body on open, undoes it on close). Byte-faithful: the dialog
+> `role`/`aria-labelledby`, the title "Krom yopishtirish — qism #N", pattern buttons
+> ("Yuqori + pastki" …), "Krom qidirish", the edge list, "Qo'llash"/"Bekor qilish", and
+> the Escape/Tab/scrim behaviour are preserved; the e2e `chooseEdgeBanding` flow
+> (the pricing-critical path) is unchanged. **Editor: 1296 → 867 lines — CB-93 took the
+> view from 1952 → 867 (−1085, 56%), across CuttingResultsSection + CuttingPartRow +
+> CuttingEdgePickerModal + the shared `app/cuttingDisplay.ts`.** Web gate green
+> (format/lint/typecheck/test 118/build); editor e2e (cutting-drafts + order-production)
+> verified. **CB-93 is Done.**
+
+> Progress (2026-06-19, client-finish-2 B21): **CB-93 — component extraction 2 of 3**
+> (still in progress). Extracted one parts-table row into a new presentational
+> `components/CuttingPartRow.vue` and the pure display helpers it (and the edge modal)
+> share into a new tested module `app/cuttingDisplay.ts` (`edgeFields`, `sideLabels`,
+> `colorForMaterial`, `edgeShortLabel`, `edgeTinyLabel`, `edgeSearchText`; +7 unit
+> tests). The editor stays the single owner of `parts`, validation, and every mutation —
+> the row receives `part`/`index`/validation props and **emits** granular edits
+> (`update:length|width|quantity|material|source`, `duplicate`/`delete`/`open-edge-picker`/
+> `bring-own`), so it never mutates the `part` prop (`vue/no-mutating-props`); the three
+> dimension inputs use writable computeds with `v-model.number` to preserve the original
+> loose-number semantics exactly. Byte-faithful: `id="part-row-${ref}"` (optimize()'s
+> per-row scroll target), the edge SVG, all aria-labels (Panel materiali / Uzunlik
+> millimetr / Eni millimetr / Soni / "Qism #N kromini tahrirlash"), and the four
+> validation/recovery blocks are preserved. **Editor: 1604 → 1296 lines.** Web gate green
+> (format/lint/typecheck/test 118/build). A 4-lens adversarial review came back clean
+> (helper-equivalence / template-parity / reactivity-deadcode = 0 findings); its lone
+> "writable-setter typed `number` but `v-model.number` can pass a string" note was
+> **refuted** — that is the pre-existing looseness of the `number`-typed `part` fields,
+> typecheck is green, and typing it "honestly" as `string` would instead break the
+> parent's assignment to `part.length_mm`.
+
+> Progress (2026-06-19, client-finish-2 B20): **CB-93 — component extraction 1 of 3**
+> (still in progress). Extracted the optimizer-RESULTS surface into a new
+> `components/CuttingResultsSection.vue` (KPI tiles, algorithm-comparison table, the
+> per-material panel strip + SVG visualiser, the krom/placement aside, order/PDF
+> actions). `chosenResult` and all its derived computeds were used ONLY by the results
+> section, so they move wholesale into the child; the editor keeps
+> `activeResultId`/`activePanelId` (driven by `optimize()` + the draft watch) and binds
+> them as v-models, passing the parent-owned `optimizeError` as a prop. Behaviour is
+> byte-faithful — the root keeps `id="cutting-results"` (optimize()'s scroll target) and
+> every e2e selector (Natija / Buyurtma berish / Algoritmlarni solishtirish / Shuni
+> tanlash / PDF yuklab olish / Panel N / Joylashtirildi) is preserved. **Editor:
+> 1952 → 1604 lines.** Web gate green (format/lint/typecheck/test 111/build); editor e2e
+> selectors verified. A 4-lens adversarial review's findings (a "removed null guard on
+> `draft`" crash risk + the `props.draft.id` vs route-param `choose()` call) were
+> assessed and **refuted**: the child only mounts inside `v-else-if="draft"` (so
+> `props.draft` is never null while mounted — Vue unmounts synchronously when it goes
+> null), typecheck is green via v-else-if narrowing, and `choose()` correctly targets the
+> draft that owns the clicked result.
 
 > Progress (2026-06-19, client-finish B19): **CB-40 (caching shipped; pagination
 > deferred)** — `cutting.loadMaterials` now caches by `(kind, branch, search,
@@ -491,7 +577,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
 | CB-38 | P2 | performance | med | M | Done | Paginate client orders list |
 | CB-39 | P2 | performance | med | M | Done | Lightweight drafts-summary endpoint for list views |
-| CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
+| CB-40 | P2 | performance | med | M | Done | Scope/paginate editor catalog loads (not whole catalog) |
 | CB-41 | P2 | completeness-stub | low | M | Done | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Done | Lock background scroll when ConfirmDialog is open |
@@ -544,7 +630,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-90 | P3 | spec-conformance | low | S | Done | Algo compare: cut-length column, algo name, closed default |
 | CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
-| CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
+| CB-93 | P2 | tech-debt | high | L | Done | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Done | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Done | useListboxControl/useStableId composables for dropdowns |
@@ -579,8 +665,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
-| CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
-| CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
+| CB-128 | P3 | design-parity | low | M | Won't | Orders-list card meta: pickup/due date not part count |
+| CB-129 | P3 | completeness-stub | low | M | Won't | Order-detail "Taxminiy sana" estimated-ready row |
 | CB-130 | P3 | testing | low | M | Done | Test edge ranking/recommendation helpers |
 | CB-131 | P3 | tech-debt | low | S | Done | files.loadObjectUrl: ownable revoke contract (leak footgun) |
 | CB-132 | P2 | ux-flow | med | S | Done | Login phone/OTP inputs reject non-numeric typing (user-found) |
@@ -825,11 +911,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `cutting.ts:181-192` `loadDrafts` fetches all drafts with no params, and `CuttingDraft` embeds full `results[]` incl. `parts_snapshot`, `material_snapshots`, per-panel placements (`:48-84`), so each list card carries its whole optimization payload. `DRAFT_CAP=50` is display-only (`DraftsView.vue:10,119`); `ClientHomeView.vue:58` reloads the full list for 4 recent.
 **Fix:** Add a drafts-summary endpoint (or `?fields=`/`?limit=`) omitting `results.panels/placements`; home requests only the few summaries it renders.
 
-### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Partial (B19); rest blocked on a CB-84 decision**
-**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`
+### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Done (B19 caching + B23 cap)**
+**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`, `app/constants.ts`, `backend/app/modules/cutting/{routes,service}.py`
 **Why:** `loadMaterials` returned the whole per-branch (or whole-catalog, for a new draft) list with no cache, re-downloading identical payloads on remount / branch flip-back; the full arrays also drive client-side filtering + re-rank.
 **Done (B19):** `cutting.loadMaterials` caches by `(kind, branch, search, carried_only)` with ~30s freshness + a `force` bypass — kills the redundant re-fetches (+2 unit tests).
-**Blocked (needs a decision):** the headline "don't load the whole catalog" via server-side search + a page limit **conflicts with CB-84** (the client-side filter bar — manufacturer/type/thickness multi-select + sort — operates over the full `panelOptions` list) and the CB-19/86 not-carried recovery (needs the full per-branch list to detect un-carried materials). Moving filtering+pagination server-side would rework/undo CB-84, so it needs a product/design call: keep CB-84's client-side filtering (accept full per-branch loads, now cached) **or** invest in server-side filtering+pagination (re-doing CB-84). Surfaced rather than guessed.
+**Done (B23, the headline):** resolved per the agreed approach (keep CB-84's client-side filtering; cap ONLY the unbounded load, not move filtering server-side). The backend `GET /client/catalog/materials` takes an optional `limit` (`Query(ge=1, le=200)`) applied with the existing deterministic `ORDER BY manufacturer, name`; the editor passes `limit=NO_BRANCH_CATALOG_LIMIT` (60) **only when no preferred branch is set** (both panel + edge). A branch-scoped load stays unlimited, so CB-84's filter bar and CB-19/86's not-carried recovery still get the full per-branch list client-side; only the otherwise-unbounded whole-catalog load on a fresh draft is bounded. The store keys its cache on the limit; a one-line note under the catalog-filter banner nudges the user to pick a workshop for the full catalog. +1 backend test, +1 store test.
 
 ### CB-41 · Paginate notifications page; server-side unread filter — `completeness-stub` · low · M
 **Files:** `views/ClientNotificationsView.vue`, `stores/notifications.ts`
@@ -930,7 +1016,14 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Files:** `views/ClientCuttingEditorView.vue`
 **Why:** A ~1900-line view holding five separable concerns. Every cutting-flow change lands in one giant file.
 **Done:** the two pure modules — `cuttingEdgeDisplay.ts` (edge ranking/label/colour, unit-tested) and `autosaveController.ts` (debounce/flush core, CB-108) — plus **B18: `composables/useDraftAutosave.ts`** (the autosave wiring: status mirror, don't-persist gate, deep `parts` watch, CB-15 hydrate guard; +5 unit tests). That's the clean logic seam.
-**Remaining (deliberately not rushed):** the three TEMPLATE-component extractions — `CuttingResultsSection.vue`, `CuttingPartRow.vue`, `CuttingEdgePickerModal.vue`. These are tightly coupled to parent state woven through the view (`chosenResult` = 24 refs threads the results section + its ~12 derived computeds; `edgePickerState` = 39 refs across the modal's ~450 lines of computeds/mutators/template, and edge-banding drives pricing). The e2e suite covers only the happy path, so a blind big-bang risks the core cut→order flow for zero user-facing change. Per this item's own "incremental, one seam per PR" guidance, each remaining component should be its own carefully-reviewed PR. (An exact extraction map for `CuttingResultsSection` — template range, the read-vs-mutated state, the emits, the imports, the v-model candidates — was produced and is in this session's notes.)
+**Done (client-finish-2 B20–B22):** all five seams have landed. The two pure modules
+(`cuttingEdgeDisplay.ts`, `autosaveController.ts`) + the `useDraftAutosave` composable shipped
+earlier; this session extracted the three template components — **`CuttingResultsSection.vue`**
+(B20), **`CuttingPartRow.vue`** + the shared **`app/cuttingDisplay.ts`** (B21), and
+**`CuttingEdgePickerModal.vue`** (B22, the most coupled). Each was a behaviour-preserving,
+gate-verified, adversarially-reviewed commit. The view went **1952 → 867 lines (−1085, 56%)**; the
+editor now composes four focused units instead of one monolith, and every e2e selector + the
+pricing-critical edge-banding flow are unchanged.
 
 ### CB-94 · Split LoginView into per-role views — `tech-debt` · med · M
 **Files:** `views/LoginView.vue`, `apps/*/routes.ts`
@@ -1249,15 +1342,15 @@ named CB-fix and its test together.
 **Why:** Prototype `order-detail.html:133-138` cancel banner reads "Buyurtma bekor qilindi · {date}. Sabab: {reason}". Vue (`:230-237`) renders only the date with no reason, though the reason is on the cancel event (`OrderEvent.reason`, `orders.ts:55`). The client sees that it happened but not why unless they open Tarix.
 **Fix:** Find the cancel event (`to_status==='cancelled'`) in `order.events` and append "· Sabab: {reason}" when present. **Related:** CB-11, CB-24.
 
-### CB-128 · Orders-list card meta: pickup/due date not part count — `design-parity` · low · M
+### CB-128 · Orders-list card meta: pickup/due date not part count — `design-parity` · low · M — **Won't (no due-date in v1)**
 **Files:** `views/ClientOrdersView.vue`, `stores/orders.ts`
 **Why:** Prototype `orders.html:137` card meta is "{city} {name} · {placedAt} · olib ketish {dueAt}". Vue (`:140-143`) shows "{workshop} · {relativeDate} · {N} qism" — item count, never a pickup date (`OrderSummary` has no due field). On the list the client can't see when each active order is expected; the part-count substitution is lower-value at this altitude.
-**Fix:** When an estimated-ready/due date exists, append "· olib ketish {date}" to active-order meta; keep item count secondary. Shares the date-payload work with CB-112/CB-129. **Related:** CB-38.
+**Won't (B24, product decision confirmed with the user):** v1 is **pickup-only with no due / estimated-ready date** — `docs/scope.md` models the flow as verify→cut→band→ready→collected and the `Order` model carries only *actual* transition timestamps, never a forward-looking due date; `orders.md` has no such concept. The prototype's "olib ketish {dueAt}" is a design-reference fragment, not canon. A due date would be a cross-cutting feature (new `Order` field + workshop UI to set it + client display) outside v1 scope. Not built.
 
-### CB-129 ⚠ · Order-detail "Taxminiy sana" estimated-ready row — `completeness-stub` · low · M
+### CB-129 · Order-detail "Taxminiy sana" estimated-ready row — `completeness-stub` · low · M — **Won't (no due-date in v1)**
 **Files:** `views/ClientOrderDetailView.vue`, `stores/orders.ts`
-**Why:** Prototype `order-detail.html:174-186` "Olib ketish" card shows a conditional "Taxminiy sana" (estimated date) row; Vue (`:364-383`) renders only branch name/address/phone + contact — no estimated-date row, and `OrderSummary/OrderDetail` expose no due field. **⚠ depends on whether the backend has an estimated-ready date at all** — confirm before building (may be out of scope / not modeled in v1).
-**Fix:** If the backend exposes an estimated-ready date, render the conditional "Taxminiy sana" row. **Related:** CB-30, CB-112.
+**Why:** Prototype `order-detail.html:174-186` "Olib ketish" card shows a conditional "Taxminiy sana" (estimated date) row; Vue (`:364-383`) renders only branch name/address/phone + contact — no estimated-date row, and `OrderSummary/OrderDetail` expose no due field. The ⚠ "confirm before building" is now resolved.
+**Won't (B24, product decision confirmed with the user):** same rationale as CB-128 — the backend exposes no estimated-ready date in v1 (pickup-only per `docs/scope.md`; the `Order` model has only actual transition timestamps), so there is nothing to render. Adding one is a cross-cutting out-of-v1 feature. Not built.
 
 ### CB-130 · Test edge ranking/recommendation helpers — `testing` · low · M
 **Files:** `views/ClientCuttingEditorView.vue`
@@ -1287,5 +1380,10 @@ named CB-fix and its test together.
 **Files:** `views/LoginView.vue`
 **Why:** The client-login inputs carried HTML `required`, so submitting an empty field (e.g. empty name on the "Tanishib olaylik" step) fired the **browser's native validation popup in English** before any app code ran — CB-79's whitespace guard only caught spaces, not the empty case (the browser blocked submit first).
 **Fix (done):** Added `novalidate` to all three client-login forms (`required` kept for screen-reader semantics) so validation flows through the app's JS + the Uzbek `client-banner` alert (CB-133). Added a `clientStep === 'code'` guard requiring 6 digits before calling the API; empty phone/name/code now show "Telefon raqami noto'g'ri…" / "Ismingizni kiriting." / "Kod noto'g'ri." Verified gate green.
+
+### CB-135 · Drop the redundant phone-input helper line on client login — `i18n-copy` · low · S · **Done**
+**Files:** `views/ClientLoginView.vue`
+**Why:** The phone step already says "Telefon raqamingizni kiriting — Telegram orqali tasdiqlash kodi yuboramiz." in the subtitle; the extra helper span under the input ("Telegram o'rnatilgan raqamni kiriting — kod o'sha raqamning Telegram'iga keladi.") repeated the same point and added vertical noise above the action.
+**Fix (done):** Removed the helper `<span>` under the phone input. User-found during live review. No test/e2e referenced the string; web gate green.
 
 > **Also fixed (infra, not a SPA-backlog item):** the Docker dev API proxy. `vite.config.ts` hardcoded the `/api` proxy target to `localhost:8000`, which inside the web container points at itself, not the backend → every `/api` call failed as `network_error` ("API bilan aloqa yo'q"). Made the target env-driven (`API_PROXY_TARGET`, default `localhost:8000`) and set `API_PROXY_TARGET=http://backend:8000` in `deploy/compose.yaml`. `:5173/api/*` now reaches the backend.
