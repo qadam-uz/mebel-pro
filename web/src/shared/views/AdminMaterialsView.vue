@@ -349,7 +349,7 @@ onMounted(async () => {
               <th>Panel o'lchami</th>
               <th>Tola</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>

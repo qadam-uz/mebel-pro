@@ -139,7 +139,7 @@ onMounted(admin.loadErrors)
               <th class="admin-right">7 kun</th>
               <th>Oxirgi</th>
               <th>Tavsif</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>

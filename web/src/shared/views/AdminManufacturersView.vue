@@ -176,7 +176,7 @@ onMounted(async () => {
               <th class="admin-right">Materiallar</th>
               <th>Holat</th>
               <th>Izoh</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>

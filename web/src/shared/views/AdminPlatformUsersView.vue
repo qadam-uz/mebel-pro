@@ -252,7 +252,7 @@ onMounted(admin.loadPlatformUsers)
               <th>Telefon</th>
               <th>Oxirgi kirish</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>

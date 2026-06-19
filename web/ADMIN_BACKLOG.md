@@ -51,9 +51,20 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 8 | 10 | **20** |
-| Done | 5 | 16 | 12 | **33** |
+| Open | 2 | 7 | 8 | **17** |
+| Done | 5 | 17 | 14 | **36** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B10): **AB-21, AB-38, AB-47 Done** — profile + a11y.
+> **AB-21:** the profile Sessions tab gained a per-row "Yopish" revoke (hidden on the current
+> session, via `auth.revokeSession`), a distinct load-failure state with retry (was a misleading
+> "no sessions" empty state), try/catch on both logout handlers (reset the stuck button + toast
+> on failure), and localized pills ("joriy"/"faol", `deviceLabel` fallback "Brauzer"); the
+> profile rows now read "Ruxsat doirasi"/"Holat" (Faol/Bloklangan)/"Sessiya". **AB-38:** the
+> password tab added a "Tasdiqlash" confirm field (blocks submit on mismatch with an inline
+> alert) and a lightweight strength meter. **AB-47:** the six data tables' empty action-column
+> `<th>` now carries a visually-hidden "Amallar" label. Web gate green: lint:check ·
+> format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B9): **AB-14, AB-35, AB-36, AB-37, AB-46 Done** — dashboard
 > + provisioning. **AB-14/AB-46:** the dashboard now loads only the four feeds it renders
@@ -212,7 +223,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-18 | P2 | design-parity | med | M | Done | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
 | AB-19 | P2 | design-parity | med | M | Done | Workshops list: inline Block/Unblock row actions (with confirm) |
 | AB-20 | P2 | design-parity | med | S | Done | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
-| AB-21 | P2 | spec-conformance | med | S | Open | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
+| AB-21 | P2 | spec-conformance | med | S | Done | Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills |
 | AB-22 | P2 | design-parity | med | M | Open | Materials table/modal parity: image col, kind/status pills, dim validation, edge/kind hints |
 | AB-23 | P2 | states-errors | med | S | Done | Catalog activate/deactivate failures swallowed — surface failure signal |
 | AB-24 | P2 | design-parity | med | M | Open | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
@@ -229,7 +240,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-35 | P3 | completeness-stub | low | S | Done | Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI |
 | AB-36 | P3 | spec-conformance | low | S | Done | Provision code field stops re-deriving from name after first auto-fill |
 | AB-37 | P3 | design-parity | low | S | Done | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
-| AB-38 | P3 | design-parity | low | S | Open | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
+| AB-38 | P3 | design-parity | low | S | Done | Profile password tab: add 'Tasdiqlash' confirm field + strength meter |
 | AB-39 | P3 | ux-flow | low | S | Done | Workshop-detail error state is a dead end — add back-link + retry |
 | AB-40 | P3 | ux-flow | low | S | Done | Materials empty-state: add CTA + distinguish no-data vs filtered-to-zero |
 | AB-41 | P3 | security-rbac | low | S | Done | Workshop block: second confirm + destructive button styling + "unblock won't restore sessions" note |
@@ -238,7 +249,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-44 | P3 | performance | low | S | Open | `list_error_records` has no server-side limit — add defensive cap |
 | AB-45 | P3 | performance | low | M | Open | Catalog views fetch full list + filter client-side; `CatalogFilters` server plumbing unused — wire or delete |
 | AB-46 | P3 | performance | low | M | Done | Every view refetches on mount (no staleness guard); dashboard pre-pulls full catalog for a count |
-| AB-47 | P3 | a11y | low | S | Open | Empty action-column `<th></th>` needs an sr-only label |
+| AB-47 | P3 | a11y | low | S | Done | Empty action-column `<th></th>` needs an sr-only label |
 | AB-48 | P3 | responsive | low | S | Open | Provision modal stays 3-up between 620–920px — add a 2-up tablet step |
 | AB-49 | P3 | responsive | low | S | Open | Admin filter-bar input is fixed 220px — make it fluid |
 | AB-50 | P3 | responsive | low | S | Open | Button-dense tables hit the 680px floor → tall wrapped action rows; widen min-width |
@@ -373,7 +384,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** When a workshop is blocked the prototype shows (a) the block reason inline in the status pill, (b) a full-width danger banner under the header ("buyurtmalar muzlatilgan, xodimlar kira olmaydi, blokdan chiqarilganda sessiyalar tiklanmaydi"), and (c) a Profile-tab info banner explaining operator scope (only provision/block/unblock, no edit). The Vue detail view renders **none** — just a bare pill with raw English status — so a blocked workshop reads identically to an active one and the operator-scope guidance is lost.
 **Fix:** Add a `v-if="status==='blocked'"` danger banner with the prototype copy, surface the block reason near the status pill (needs the reason on the detail response — confirm `PlatformWorkshopDetail` carries it; flag a small backend add if not), and add the read-only operator-scope info banner to the Profile tab.
 
-### AB-21 · Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills — `spec-conformance` · med · S
+### AB-21 · Profile sessions: per-row revoke + load-failure state + logout error handling + localize pills — `spec-conformance` · med · S — **Done (B10)**
 
 **Files:** `AdminProfileView.vue:29-37` (`deviceLabel` fallback "Browser"; `loadSessions` no try/catch), `:55-65` (logout handlers no try/catch), `:186-206` (sessions list; pills render "current"/"active"). Store: `auth.ts` `revokeSession(id)` already exists (CB-114). Spec: [`access-management.md`](../docs/ref/features/access-management.md) "Sessions list (current marker, 'revoke' per row, 'log out everywhere')".
 **Why:** Three gaps: (1) **no per-row "revoke"** though `auth.revokeSession` exists and the workshop profile uses it — spec requires it; (2) `loadSessions` has no try/catch → a failed load falls through to the empty state "Sessiya topilmadi", falsely telling the operator they have no sessions, and `logoutCurrent`/`logoutEverywhere` set `loggingOut=true` then await with no catch → on rejection the button stays stuck disabled with no error; (3) the session pills render English "current"/"active" and `deviceLabel` falls back to "Browser" (the client fixed exactly this in CB-81 → "joriy"/"faol"/"Brauzer").
@@ -477,7 +488,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** "Recent provisioning" renders the owner as an opaque UUID slice (the list summary lacks the owner login), the recent-workshops table drops the prototype's Filial (branch count) column and shows raw English status, and the "Failed ish" panel lists failed jobs as plain rows with no error summary and **no re-run** — losing the incident-landing shortcut the design provides.
 **Fix:** Surface the owner login (needs it on the list summary — small backend add, or read from detail), add a Filial count column, localize the status pill (AB-12), and add a "Qaytadan ishga tushirish" button on the failed-job card calling `admin.runJob` (gated like AB-04).
 
-### AB-38 · Profile password tab: add 'Tasdiqlash' confirm field + strength meter — `design-parity` · low · S
+### AB-38 · Profile password tab: add 'Tasdiqlash' confirm field + strength meter — `design-parity` · low · S — **Done (B10)**
 
 **Files:** `AdminProfileView.vue:143-167` (only current + new). Spec: [`access-management.md`](../docs/ref/features/access-management.md):78 ("Change password (strength meter)"). Prototype: `profile.html:52-54` (three fields).
 **Why:** The password form has only current + new — no confirm field (a mistyped new password is submitted with no client-side match check) and no strength meter the spec calls for.
@@ -531,7 +542,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The dashboard pre-pulls two full catalog lists + the operator list to render them as single counts (`AdminDashboardView.vue:248-257`) — and `overview` already carries `platform_users_active`. Then every destination view re-fetches the same data unconditionally, so dashboard → materials → manufacturers re-downloads manufacturers+materials three times in seconds. No request is shared or memoized.
 **Fix:** Add a lightweight per-resource staleness guard in the store (`loadedAt` + `maxAge` ~30s, skip if fresh) or load only when the array is empty / explicitly refreshed; drop the dashboard's `loadManufacturers`/`loadMaterials` (it only needs their counts — use `overview` where possible).
 
-### AB-47 · Empty action-column `<th></th>` needs an sr-only label — `a11y` · low · S
+### AB-47 · Empty action-column `<th></th>` needs an sr-only label — `a11y` · low · S — **Done (B10)**
 
 **Files:** `AdminWorkshopsView.vue:188`, `AdminPlatformUsersView.vue:176`, `AdminManufacturersView.vue:150`, `AdminMaterialsView.vue:279`, `AdminPlatformJobsView.vue:78`, `AdminPlatformErrorsView.vue:126`.
 **Why:** The data tables end with an empty `<th></th>` over the action buttons; a screen reader gets no column name when navigating action cells.
