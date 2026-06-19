@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import { firstEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 
 const props = defineProps<{
@@ -17,7 +18,7 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
-const id = `mp-multi-filter-${Math.random().toString(36).slice(2)}`
+const id = nextStableId('mp-multi-filter')
 
 const selectedOptions = computed(() =>
   props.options.filter((option) => props.modelValue.includes(option.value)),
@@ -56,7 +57,9 @@ function move(direction: number) {
     void openList()
     return
   }
-  activeIndex.value = (activeIndex.value + direction + props.options.length) % props.options.length
+  // Skip disabled options instead of landing on them (CB-96).
+  const next = firstEnabledIndex(props.options, activeIndex.value + direction, direction)
+  if (next >= 0) activeIndex.value = next
 }
 
 function onKeydown(event: KeyboardEvent) {

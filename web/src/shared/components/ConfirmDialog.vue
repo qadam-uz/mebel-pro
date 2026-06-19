@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
+import { nextStableId } from '@/shared/app/listboxNav'
 
 const props = withDefaults(
   defineProps<{
@@ -31,7 +32,7 @@ const emit = defineEmits<{
 const panelRef = ref<HTMLElement | null>(null)
 const cancelButtonRef = ref<HTMLButtonElement | null>(null)
 const slots = useSlots()
-const id = `mp-confirm-${Math.random().toString(36).slice(2)}`
+const id = nextStableId('mp-confirm')
 let previousFocus: HTMLElement | null = null
 
 function focusableButtons() {

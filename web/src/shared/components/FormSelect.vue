@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
@@ -28,7 +29,7 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
-const id = `mp-form-select-${Math.random().toString(36).slice(2)}`
+const id = nextStableId('mp-form-select')
 const {
   dropUp,
   start: startPlacement,
@@ -44,12 +45,7 @@ const buttonText = computed(() => selected.value?.label ?? props.placeholder)
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
 
 function firstEnabledIndex(start = 0, direction = 1) {
-  if (props.options.length === 0) return -1
-  for (let offset = 0; offset < props.options.length; offset += 1) {
-    const index = (start + offset * direction + props.options.length) % props.options.length
-    if (!props.options[index]?.disabled) return index
-  }
-  return -1
+  return findEnabledIndex(props.options, start, direction)
 }
 
 async function openList() {

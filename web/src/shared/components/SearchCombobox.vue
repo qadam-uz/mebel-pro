@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
@@ -32,7 +33,7 @@ const listRef = ref<HTMLUListElement | null>(null)
 const query = ref('')
 const open = ref(false)
 const activeIndex = ref(0)
-const id = `mp-combobox-${Math.random().toString(36).slice(2)}`
+const id = nextStableId('mp-combobox')
 const {
   dropUp,
   start: startPlacement,
@@ -75,13 +76,7 @@ function syncQueryFromModel() {
 }
 
 function firstEnabledIndex(start = 0, direction = 1) {
-  if (filteredOptions.value.length === 0) return -1
-  for (let offset = 0; offset < filteredOptions.value.length; offset += 1) {
-    const index =
-      (start + offset * direction + filteredOptions.value.length) % filteredOptions.value.length
-    if (!filteredOptions.value[index]?.disabled) return index
-  }
-  return -1
+  return findEnabledIndex(filteredOptions.value, start, direction)
 }
 
 async function openList() {

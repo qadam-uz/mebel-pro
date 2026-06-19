@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 1 | 6 | 3 | **10** |
-| Done | 31 | 62 | 29 | **122** |
+| Open (incl. partial) | 1 | 5 | 3 | **9** |
+| Done | 31 | 63 | 29 | **123** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-19, client-finish B13): perf — drafts-summary + staleness
@@ -464,7 +464,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
 | CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
-| CB-96 | P2 | tech-debt | med | M | Open | useListboxControl/useStableId composables for dropdowns |
+| CB-96 | P2 | tech-debt | med | M | Done | useListboxControl/useStableId composables for dropdowns |
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
 | CB-99 | P3 | tech-debt | low | S | Done | Extract shared downloadBlob() (2 copies) |

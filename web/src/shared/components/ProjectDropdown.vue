@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import { nextStableId } from '@/shared/app/listboxNav'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 
 const props = defineProps<{
@@ -18,7 +19,7 @@ const listboxRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
 const popoverStyle = ref<Record<string, string>>({})
-const listboxId = `mp-listbox-${Math.random().toString(36).slice(2)}`
+const listboxId = nextStableId('mp-listbox')
 
 const selected = computed(
   () =>
