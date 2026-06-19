@@ -46,6 +46,18 @@ file tracks *fixes/polish* against the current Vue implementation.
 | Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-19, client-finish B19): **CB-40 (caching shipped; pagination
+> deferred)** — `cutting.loadMaterials` now caches by `(kind, branch, search,
+> carried_only)` with ~30s freshness + a `force` bypass (mirrors the CB-52
+> branch-options cache), so the editor stops re-downloading an identical catalog on
+> remount / branch flip-back; +2 store unit tests. **The headline "don't load the
+> whole catalog" via server-side search + page limit is NOT done — it conflicts with
+> the shipped CB-84 client-side filter bar (manufacturer/type/thickness + sort over
+> the full list) and the CB-19/86 not-carried recovery, both of which need the full
+> per-branch list client-side. Moving filtering server-side would undo CB-84, so it
+> needs a product/design decision (surfaced, not guessed).** Web gate 111 tests +
+> editor e2e green.
+
 > Progress (2026-06-19, client-finish B18): **CB-93 (in progress)** — editor
 > decomposition, seam 3 of 5. Extracted the autosave wiring into
 > `composables/useDraftAutosave.ts` (status mirror + don't-persist gate + the deep
@@ -813,10 +825,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `cutting.ts:181-192` `loadDrafts` fetches all drafts with no params, and `CuttingDraft` embeds full `results[]` incl. `parts_snapshot`, `material_snapshots`, per-panel placements (`:48-84`), so each list card carries its whole optimization payload. `DRAFT_CAP=50` is display-only (`DraftsView.vue:10,119`); `ClientHomeView.vue:58` reloads the full list for 4 recent.
 **Fix:** Add a drafts-summary endpoint (or `?fields=`/`?limit=`) omitting `results.panels/placements`; home requests only the few summaries it renders.
 
-### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M
-**Files:** `views/ClientCuttingEditorView.vue`, `stores/cutting.ts`, `backend/app/modules/sales/routes.py`
-**Why:** `ClientCuttingEditorView.vue:596-609` `loadMaterials` calls panel+edge with `carriedOnly:false` and `branchId = preferred_branch_id` (undefined for a new draft), so `GET /client/catalog/materials` returns the entire platform catalog (`cutting.ts:284-307`, no limit). Full arrays drive client-side filtering + re-rank on every edge-picker open; `setPreferredBranch` (`:572-578`) re-downloads identical lists with no per-branch cache.
-**Fix:** Default the query to the draft's branch (or `carried_only`), add server-side search-driven loading + a page limit (fetch more only on search / "show all"), cache by `(kind, branchId)`.
+### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Partial (B19); rest blocked on a CB-84 decision**
+**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`
+**Why:** `loadMaterials` returned the whole per-branch (or whole-catalog, for a new draft) list with no cache, re-downloading identical payloads on remount / branch flip-back; the full arrays also drive client-side filtering + re-rank.
+**Done (B19):** `cutting.loadMaterials` caches by `(kind, branch, search, carried_only)` with ~30s freshness + a `force` bypass — kills the redundant re-fetches (+2 unit tests).
+**Blocked (needs a decision):** the headline "don't load the whole catalog" via server-side search + a page limit **conflicts with CB-84** (the client-side filter bar — manufacturer/type/thickness multi-select + sort — operates over the full `panelOptions` list) and the CB-19/86 not-carried recovery (needs the full per-branch list to detect un-carried materials). Moving filtering+pagination server-side would rework/undo CB-84, so it needs a product/design call: keep CB-84's client-side filtering (accept full per-branch loads, now cached) **or** invest in server-side filtering+pagination (re-doing CB-84). Surfaced rather than guessed.
 
 ### CB-41 · Paginate notifications page; server-side unread filter — `completeness-stub` · low · M
 **Files:** `views/ClientNotificationsView.vue`, `stores/notifications.ts`

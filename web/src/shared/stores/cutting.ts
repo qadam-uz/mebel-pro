@@ -207,6 +207,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   const branchOptions = ref<ClientBranchOption[]>([])
   const panelOptions = ref<ClientCatalogMaterialOption[]>([])
   const edgeOptions = ref<ClientCatalogMaterialOption[]>([])
+  // Per-(kind, branch, …) catalog cache (CB-40): the editor re-requests the same
+  // material list on remount and when the branch flips back, and the full list
+  // drives client-side filtering — so reuse a recent result instead of re-fetching
+  // an identical payload. Keyed by the full query; ~30s freshness like branch-options.
+  const materialsCache = new Map<string, { at: number; items: ClientCatalogMaterialOption[] }>()
   const workshopPlans = ref<WorkshopCuttingPlanSummary[]>([])
   const currentWorkshopPlan = ref<WorkshopCuttingPlanDetail | null>(null)
   const loading = ref(false)
@@ -354,7 +359,16 @@ export const useCuttingStore = defineStore('cutting', () => {
     branchId?: string | null
     search?: string
     carriedOnly?: boolean
+    force?: boolean
   }) {
+    const carriedOnly = params.carriedOnly ?? false
+    const cacheKey = `${params.kind}:${params.branchId ?? 'all'}:${params.search ?? ''}:${carriedOnly}`
+    const cached = materialsCache.get(cacheKey)
+    if (!params.force && cached && Date.now() - cached.at < 30_000) {
+      if (params.kind === 'panel') panelOptions.value = cached.items
+      else edgeOptions.value = cached.items
+      return cached.items
+    }
     materialsLoading.value = true
     try {
       const materials = await api.get<ClientCatalogMaterialOption[]>(
@@ -362,10 +376,11 @@ export const useCuttingStore = defineStore('cutting', () => {
           kind: params.kind,
           branch_id: params.branchId,
           search: params.search,
-          carried_only: params.carriedOnly ?? false,
+          carried_only: carriedOnly,
         }),
         authInit(),
       )
+      materialsCache.set(cacheKey, { at: Date.now(), items: materials })
       if (params.kind === 'panel') panelOptions.value = materials
       else edgeOptions.value = materials
       return materials
