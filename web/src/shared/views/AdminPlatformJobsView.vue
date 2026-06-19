@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import { adminDateTime, jobStatusLabel, jobStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -62,7 +62,7 @@ onMounted(admin.loadJobs)
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Background ish . scheduler</h1>
+        <h1>Fon vazifalar</h1>
         <p class="sub">In-process scheduler holati, oxirgi natija va manual trigger.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
@@ -80,12 +80,12 @@ onMounted(admin.loadJobs)
       v-else-if="admin.opsError"
       :code="admin.opsError"
       :trace-id="admin.opsTraceId"
-      title="Background ish yuklanmadi"
+      title="Fon vazifalar yuklanmadi"
       @retry="admin.loadJobs"
     />
 
     <section v-else-if="admin.jobs.length === 0" class="admin-empty">
-      <h3>Registered job yo'q</h3>
+      <h3>Ro'yxatdan o'tgan vazifa yo'q</h3>
       <p>Default scheduler jobs bootstrap qilingandan keyin ko'rinadi.</p>
     </section>
 
@@ -118,14 +118,14 @@ onMounted(admin.loadJobs)
               </td>
               <td>
                 <span class="admin-pill" :class="jobStatusTone(job.definition.last_result)">
-                  {{ statusLabel(job.definition.last_result) }}
+                  {{ jobStatusLabel(job.definition.last_result) }}
                 </span>
               </td>
               <td class="max-w-[360px] truncate">
                 {{
                   job.recent_runs[0]?.brief_log ??
                   job.recent_runs[0]?.error_message ??
-                  'Jurnal hali yoq'
+                  "Jurnal hali yo'q"
                 }}
               </td>
               <td class="admin-right">
@@ -203,12 +203,12 @@ onMounted(admin.loadJobs)
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <span class="admin-pill" :class="jobStatusTone(run.status)">
-                {{ statusLabel(run.status) }}
+                {{ jobStatusLabel(run.status) }}
               </span>
               <span class="admin-mono text-ink-muted">{{ adminDateTime(run.started_at) }}</span>
             </div>
             <p class="mt-3 text-sm text-ink">
-              {{ run.brief_log ?? run.error_message ?? 'No log' }}
+              {{ run.brief_log ?? run.error_message ?? "Jurnal yo'q" }}
             </p>
             <p v-if="run.trace_id" class="mt-2 admin-mono text-ink-muted">
               trace {{ run.trace_id }}

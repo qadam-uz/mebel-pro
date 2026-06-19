@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
-import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDateTime,
+  platformUserStatusLabel,
+  platformUserStatusTone,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -234,7 +238,7 @@ onMounted(admin.loadPlatformUsers)
               <td class="admin-mono text-ink-muted">{{ adminDateTime(user.last_login_at) }}</td>
               <td>
                 <span class="admin-pill" :class="platformUserStatusTone(user.status)">
-                  {{ user.status }}
+                  {{ platformUserStatusLabel(user.status) }}
                 </span>
               </td>
               <td class="admin-right">

@@ -2,7 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { adminDate, workshopStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  branchStatusLabel,
+  workshopStatusLabel,
+  workshopStatusTone,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -90,7 +95,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
       <div class="admin-page-tools">
         <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
-          {{ admin.detail.workshop.status }}
+          {{ workshopStatusLabel(admin.detail.workshop.status) }}
         </span>
         <button
           v-if="admin.detail.workshop.status === 'active'"
@@ -185,7 +190,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Holat</dt>
             <dd class="mt-1">
               <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
-                {{ admin.detail.workshop.status }}
+                {{ workshopStatusLabel(admin.detail.workshop.status) }}
               </span>
             </dd>
           </div>
@@ -223,7 +228,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
                       branch.status === 'active' ? 'admin-pill-success' : 'admin-pill-warning'
                     "
                   >
-                    {{ branch.status }}
+                    {{ branchStatusLabel(branch.status) }}
                   </span>
                 </td>
               </tr>

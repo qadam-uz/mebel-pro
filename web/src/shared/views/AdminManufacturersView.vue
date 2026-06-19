@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { dropdownOption, materialStatusTone } from '@/shared/app/adminUi'
+import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -115,10 +115,12 @@ onMounted(async () => {
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Manufacturerlar</h1>
+        <h1>Ishlab chiqaruvchilar</h1>
         <p class="sub">Platforma material katalogidagi brand va ishlab chiqaruvchilar.</p>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">Manufacturer</button>
+      <button type="button" class="admin-primary-action" @click="openCreate">
+        Ishlab chiqaruvchi
+      </button>
     </div>
 
     <div class="admin-filters">
@@ -146,13 +148,13 @@ onMounted(async () => {
       v-else-if="admin.catalogError"
       :code="admin.catalogError"
       :trace-id="admin.catalogTraceId"
-      title="Manufacturerlar yuklanmadi"
+      title="Ishlab chiqaruvchilar yuklanmadi"
       @retry="admin.loadManufacturers()"
     />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
-      <h3>Manufacturer yo'q</h3>
-      <p>Material yaratishdan oldin manufacturer qo'shing.</p>
+      <h3>Ishlab chiqaruvchi yo'q</h3>
+      <p>Material yaratishdan oldin ishlab chiqaruvchi qo'shing.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -160,8 +162,8 @@ onMounted(async () => {
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Manufacturer</th>
-              <th>Country</th>
+              <th>Ishlab chiqaruvchi</th>
+              <th>Davlat</th>
               <th class="admin-right">Materiallar</th>
               <th>Holat</th>
               <th>Izoh</th>
@@ -178,7 +180,7 @@ onMounted(async () => {
               <td class="admin-right admin-mono">{{ materialCount(manufacturer.id) }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(manufacturer.status)">
-                  {{ manufacturer.status }}
+                  {{ materialStatusLabel(manufacturer.status) }}
                 </span>
               </td>
               <td class="max-w-[280px] truncate text-ink-muted">{{ manufacturer.note ?? '-' }}</td>
