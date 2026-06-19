@@ -51,9 +51,21 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 4 | 6 | **12** |
-| Done | 5 | 20 | 16 | **41** |
+| Open | 2 | 2 | 6 | **10** |
+| Done | 5 | 22 | 16 | **43** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B13): **AB-17, AB-27 Done** — audit viewer + tab a11y.
+> **AB-17:** the cross-workshop audit viewer gained the spec'd **Workshop** filter (names, from a
+> one-time `loadWorkshops`), an **Obyekt turi** (entity-type) filter, and a **Vaqt** (24h/7d)
+> filter; the dead "CSV" button now exports the active tab's filtered rows as a UTF-8 CSV
+> (client-side Blob download); the silent 50-row cap is now visible + extendable via "Ko'proq
+> yuklash" (store `loadAudit(limit)` plumbs an explicit limit, capped at the backend's 200) with
+> a "N ta yozuv · eng so'nggi {limit} tagacha" hint; the status tab shows the workshop name and
+> localized headers. **AB-27:** the tab strips on Audit, Workshop-detail and Profile now use real
+> `role="tab"` + `aria-selected` + `aria-controls`, with `role="tabpanel"` + `aria-labelledby`
+> panels (the buttons stay natively Tab-focusable; arrow-key roving is a minor remaining nicety).
+> Web gate green: lint:check · format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B12): **AB-25, AB-26, AB-43, AB-44 Done** — error monitor.
 > **AB-26:** added the spec'd count-threshold (24s ≥ 3 / ≥ 10) and time-range (24h / 7d) filters
@@ -240,7 +252,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-14 | P2 | correctness-bug | med | M | Done | Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" |
 | AB-15 | P2 | correctness-bug | med | S | Done | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
 | AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
-| AB-17 | P2 | spec-conformance | med | M | Open | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
+| AB-17 | P2 | spec-conformance | med | M | Done | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
 | AB-18 | P2 | design-parity | med | M | Done | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
 | AB-19 | P2 | design-parity | med | M | Done | Workshops list: inline Block/Unblock row actions (with confirm) |
 | AB-20 | P2 | design-parity | med | S | Done | Workshop detail: blocked danger banner + block reason on pill + operator-scope info banner |
@@ -250,7 +262,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-24 | P2 | design-parity | med | M | Done | Admin notifications: surface mark-read failures + per-kind icon + unread bg + drop raw `event_code` + poll |
 | AB-25 | P2 | design-parity | med | M | Done | Error-detail modal: affected workshops/users + split context/stack + reopen + in-modal failure state |
 | AB-26 | P2 | spec-conformance | med | M | Done | Error monitor: add count-threshold + time-range filters |
-| AB-27 | P2 | a11y | med | S | Open | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
+| AB-27 | P2 | a11y | med | S | Done | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
 | AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
 | AB-29 | P2 | tech-debt | med | M | Done | Type the 7 `payload: unknown` store mutators with request DTOs |
 | AB-30 | P2 | testing | med | M | Open | E2E: run-job + resolve-error operator journeys |
@@ -381,7 +393,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `Material` carries a denormalized `manufacturer_name` (`admin.ts:69`). `patchManufacturer` only updates the `manufacturers` array — it never refreshes `materials[].manufacturer_name`. After an operator renames a manufacturer, the Materials table and the Materials manufacturer filter keep showing the **old** name (the store is a session-long singleton, so it persists across navigation) until a full materials reload.
 **Fix:** In `patchManufacturer`, also map `materials.value` and refresh `manufacturer_name` for rows whose `manufacturer_id === updated.id`; or have `updateManufacturer` trigger `loadMaterials()` when materials are already loaded.
 
-### AB-17 · Audit viewer: spec'd filters + pagination + wire/remove CSV — `spec-conformance` · med · M
+### AB-17 · Audit viewer: spec'd filters + pagination + wire/remove CSV — `spec-conformance` · med · M — **Done (B13)**
 
 **Files:** `AdminAuditView.vue:52-58` (only free-text search + a no-op CSV button), `:37`/`stores/admin.ts:547-549` (`loadAudit` sends no `limit`), `backend/.../routes.py:284-291/304-311` (`limit` default 50, `le=200`). Spec: [`workshop.md`](../docs/ref/features/workshop.md) (owns the cross-workshop audit viewer). Prototype: `audit.html:29-34/117-131`.
 **Why:** The cross-workshop superadmin audit viewer offers only a single text box (+ a dead CSV button, AB-09-style stub at `:57`). It's missing the spec'd filter set — most importantly the **workshop filter**, the defining affordance of a cross-workshop viewer — plus module / date-range / action-family (actions tab) and entity / from→to (status tab). The store fetches both feeds **unlimited-but-defaulted-to-50** with no pagination, no "load more", and no truncation hint, so older audit history is permanently unreachable from the UI — an append-only log you can't page through is functionally incomplete. The status tab also shows raw `from → to` instead of the prototype's localized transition + order link.
@@ -441,7 +453,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Spec requires four filters; the view has search, status, and module. The **count-threshold** filter (prototype's "24 soat ≥ 3 / ≥ 10") and a **time-range** filter are both missing — the operator can't isolate spiking codes, the monitor's core job.
 **Fix:** Add a count-threshold dropdown filtering on `count_24h` (≥3 / ≥10, matching the prototype) and a time-range control; consider a dedicated code filter for parity (currently folded into the text query).
 
-### AB-27 · Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus — `a11y` · med · S
+### AB-27 · Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus — `a11y` · med · S — **Done (B13)**
 
 **Files:** `AdminWorkshopDetailView.vue:112`, `AdminProfileView.vue:97`, `AdminAuditView.vue:60`.
 **Why:** Each tab strip declares `role="tablist"` on the container but the buttons are plain `<button class="admin-tab">` — no `role="tab"`, no `aria-selected`, no `aria-controls`, and the revealed panels have no `role="tabpanel"`/`aria-labelledby`. A screen reader announces a tablist containing no tabs; the active tab is conveyed by colour only; arrow-key roving is absent.

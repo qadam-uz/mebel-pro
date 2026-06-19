@@ -628,15 +628,20 @@ export const useAdminStore = defineStore('admin', () => {
     errors.value = errors.value.map((row) => (row.id === updated.id ? updated : row))
   }
 
-  async function loadAudit() {
+  async function loadAudit(limit = 50) {
     opsLoading.value = true
     opsError.value = null
     opsTraceId.value = null
     // AB-32: settle each feed independently so a transient failure on ONE feed
     // doesn't blank both tabs; only show the full-screen error when both fail.
+    // AB-17: an explicit limit (capped at the backend's 200) so the silent 50-row
+    // default can be extended via "load more".
     const [actionsResult, statusResult] = await Promise.allSettled([
-      api.get<ActionLog[]>('/platform/audit/actions', authInit()),
-      api.get<StatusChangeLog[]>('/platform/audit/status-changes', authInit()),
+      api.get<ActionLog[]>(withQuery('/platform/audit/actions', { limit }), authInit()),
+      api.get<StatusChangeLog[]>(
+        withQuery('/platform/audit/status-changes', { limit }),
+        authInit(),
+      ),
     ])
     if (actionsResult.status === 'fulfilled') auditActions.value = actionsResult.value
     if (statusResult.status === 'fulfilled') auditStatusChanges.value = statusResult.value
