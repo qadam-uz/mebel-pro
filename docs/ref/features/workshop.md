@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-20
 order: 40
 ---
 
@@ -103,6 +103,9 @@ yet (the logs are still recorded against their workshop).
   affected entity where one exists. Read-only; no workshop scoping.
 - States: loading (skeleton rows), empty, error (with `trace_id`); the `details` expander
   reveals masked JSON.
+- Export & paging: the loaded page exports to CSV; the list loads the latest N rows with a
+  "load more" control to page further back, since the append-only history is otherwise only
+  reachable as its newest slice.
 
 ## Edge cases
 

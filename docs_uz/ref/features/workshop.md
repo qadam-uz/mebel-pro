@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-20
 order: 40
 ---
 
@@ -108,6 +108,9 @@ yo'q** (log'lar baribir ularning workshop'iga qarshi yoziladi).
   bo'lsa ta'sirlangan entity'ga link qiladi. Read-only; workshop scoping yo'q.
 - States: loading (skeleton row'lar), empty, error (`trace_id` bilan); `details` expander
   masked JSON'ni ochib beradi.
+- Export & paging: yuklangan sahifa CSV'ga eksport qilinadi; ro'yxat eng so'nggi N row'ni
+  yuklaydi va orqaga ko'proq sahifalash uchun "load more" control beradi, chunki append-only
+  history aks holda faqat eng yangi slice sifatida yetib boriladi.
 
 ## Edge cases
 
