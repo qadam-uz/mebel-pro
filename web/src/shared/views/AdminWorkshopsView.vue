@@ -84,6 +84,11 @@ onBeforeUnmount(() => admin.clearSecrets())
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
+// AB-35: placeholder default coordinates (Tashkent centre) in one place, not a
+// magic literal duplicated across the initial form and resetForm.
+const DEFAULT_WORKSHOP_GEO = { latitude: '41.2995', longitude: '69.2401' }
+// AB-36: once the operator edits the code, stop re-deriving it from the name.
+const codeTouched = ref(false)
 const form = reactive({
   name: '',
   code: '',
@@ -92,8 +97,8 @@ const form = reactive({
   branchName: '',
   branchAddress: '',
   branchPhone: '+998',
-  latitude: '41.2995',
-  longitude: '69.2401',
+  latitude: DEFAULT_WORKSHOP_GEO.latitude,
+  longitude: DEFAULT_WORKSHOP_GEO.longitude,
   ownerName: '',
   ownerLogin: '',
   ownerPhone: '+998',
@@ -146,12 +151,13 @@ function resetForm() {
   form.branchName = ''
   form.branchAddress = ''
   form.branchPhone = '+998'
-  form.latitude = '41.2995'
-  form.longitude = '69.2401'
+  form.latitude = DEFAULT_WORKSHOP_GEO.latitude
+  form.longitude = DEFAULT_WORKSHOP_GEO.longitude
   form.ownerName = ''
   form.ownerLogin = ''
   form.ownerPhone = '+998'
   form.tempPassword = ''
+  codeTouched.value = false
 }
 
 async function createWorkshop() {
@@ -196,7 +202,7 @@ async function createWorkshop() {
 watch(
   () => form.name,
   (name) => {
-    if (!form.code) form.code = codeFromName(name)
+    if (!codeTouched.value) form.code = codeFromName(name)
     if (!form.branchName) form.branchName = name ? 'Asosiy filial' : ''
   },
 )
@@ -338,7 +344,13 @@ onMounted(async () => {
               </label>
               <label class="admin-field" for="w-code">
                 <span>Workshop code</span>
-                <input id="w-code" v-model="form.code" autocomplete="off" required />
+                <input
+                  id="w-code"
+                  v-model="form.code"
+                  autocomplete="off"
+                  required
+                  @input="codeTouched = true"
+                />
               </label>
               <label class="admin-field" for="w-phone">
                 <span>Telefon</span>
