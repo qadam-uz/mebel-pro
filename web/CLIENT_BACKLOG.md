@@ -46,6 +46,25 @@ file tracks *fixes/polish* against the current Vue implementation.
 | Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-19, client-finish-2 B20): **CB-93 — component extraction 1 of 3**
+> (still in progress). Extracted the optimizer-RESULTS surface into a new
+> `components/CuttingResultsSection.vue` (KPI tiles, algorithm-comparison table, the
+> per-material panel strip + SVG visualiser, the krom/placement aside, order/PDF
+> actions). `chosenResult` and all its derived computeds were used ONLY by the results
+> section, so they move wholesale into the child; the editor keeps
+> `activeResultId`/`activePanelId` (driven by `optimize()` + the draft watch) and binds
+> them as v-models, passing the parent-owned `optimizeError` as a prop. Behaviour is
+> byte-faithful — the root keeps `id="cutting-results"` (optimize()'s scroll target) and
+> every e2e selector (Natija / Buyurtma berish / Algoritmlarni solishtirish / Shuni
+> tanlash / PDF yuklab olish / Panel N / Joylashtirildi) is preserved. **Editor:
+> 1952 → 1604 lines.** Web gate green (format/lint/typecheck/test 111/build); editor e2e
+> selectors verified. A 4-lens adversarial review's findings (a "removed null guard on
+> `draft`" crash risk + the `props.draft.id` vs route-param `choose()` call) were
+> assessed and **refuted**: the child only mounts inside `v-else-if="draft"` (so
+> `props.draft` is never null while mounted — Vue unmounts synchronously when it goes
+> null), typecheck is green via v-else-if narrowing, and `choose()` correctly targets the
+> draft that owns the clicked result.
+
 > Progress (2026-06-19, client-finish B19): **CB-40 (caching shipped; pagination
 > deferred)** — `cutting.loadMaterials` now caches by `(kind, branch, search,
 > carried_only)` with ~30s freshness + a `force` bypass (mirrors the CB-52
@@ -930,7 +949,16 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Files:** `views/ClientCuttingEditorView.vue`
 **Why:** A ~1900-line view holding five separable concerns. Every cutting-flow change lands in one giant file.
 **Done:** the two pure modules — `cuttingEdgeDisplay.ts` (edge ranking/label/colour, unit-tested) and `autosaveController.ts` (debounce/flush core, CB-108) — plus **B18: `composables/useDraftAutosave.ts`** (the autosave wiring: status mirror, don't-persist gate, deep `parts` watch, CB-15 hydrate guard; +5 unit tests). That's the clean logic seam.
-**Remaining (deliberately not rushed):** the three TEMPLATE-component extractions — `CuttingResultsSection.vue`, `CuttingPartRow.vue`, `CuttingEdgePickerModal.vue`. These are tightly coupled to parent state woven through the view (`chosenResult` = 24 refs threads the results section + its ~12 derived computeds; `edgePickerState` = 39 refs across the modal's ~450 lines of computeds/mutators/template, and edge-banding drives pricing). The e2e suite covers only the happy path, so a blind big-bang risks the core cut→order flow for zero user-facing change. Per this item's own "incremental, one seam per PR" guidance, each remaining component should be its own carefully-reviewed PR. (An exact extraction map for `CuttingResultsSection` — template range, the read-vs-mutated state, the emits, the imports, the v-model candidates — was produced and is in this session's notes.)
+**Remaining (deliberately not rushed):** of the three TEMPLATE-component extractions,
+**`CuttingResultsSection.vue` is now done** (client-finish-2 B20 — `chosenResult` + its ~12
+derived computeds moved wholesale; `activeResultId`/`activePanelId` v-models, `optimizeError`
+prop). The two left are **`CuttingPartRow.vue`** and **`CuttingEdgePickerModal.vue`**. These are
+tightly coupled to parent state woven through the view (the parts row mutates `part` directly via
+`v-model` — must become granular emits to satisfy `vue/no-mutating-props`; `edgePickerState` = 39
+refs across the modal's ~450 lines of computeds/mutators/template, and edge-banding drives pricing).
+The e2e suite covers only the happy path, so a blind big-bang risks the core cut→order flow for zero
+user-facing change. Per this item's own "incremental, one seam per PR" guidance, each remaining
+component is its own carefully-reviewed commit.
 
 ### CB-94 · Split LoginView into per-role views — `tech-debt` · med · M
 **Files:** `views/LoginView.vue`, `apps/*/routes.ts`
