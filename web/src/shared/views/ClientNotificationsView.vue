@@ -48,10 +48,10 @@ function title(item: NotificationItem) {
 }
 
 function body(item: NotificationItem) {
-  return (
-    notificationBody(item) ??
-    (item.entity_type === 'order' ? "Buyurtma holati o'zgardi." : 'Yangi xabar mavjud.')
-  )
+  // Defer entirely to the shared presenter so the page and the bell render the same
+  // body for the same notification (CB-101); the template hides the line when null
+  // instead of forcing a generic fallback the bell never shows.
+  return notificationBody(item)
 }
 
 function iconName(item: NotificationItem) {
@@ -181,7 +181,7 @@ onMounted(() => {
           </span>
           <span class="min-w-0">
             <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
-            <span class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
+            <span v-if="body(item)" class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
           </span>
           <span class="font-mono text-xs text-ink-muted max-[480px]:col-start-2 max-[480px]:mt-1">
             {{ formatRelativeDate(item.created_at) }}

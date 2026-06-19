@@ -65,6 +65,7 @@ from app.modules.sales.schemas import (
     WorkshopWorkerOption,
 )
 from app.modules.support.api import record_action, record_status_change
+from app.modules.support.contracts import Notification
 from app.modules.workshop.contracts import Branch, Workshop
 
 PHONE_RE = re.compile(r"^\+998\d{9}$")
@@ -75,6 +76,19 @@ WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
         Permission.PROCESS_PRODUCTION,
     }
 )
+
+# Client inbox event per destination status (notifications.md: "for the client, an
+# order status change"). The client SPA renders these codes into localized titles
+# (web clientUi NOTIFICATION_TITLES); the payload carries denormalized order data.
+# NEW is absent — that is the client placing their own order, not a notifiable change.
+_CLIENT_ORDER_EVENT_CODE: dict[OrderStatus, str] = {
+    OrderStatus.CONFIRMED: "order.confirmed",
+    OrderStatus.CUTTING: "order.status_changed",
+    OrderStatus.EDGE_BANDING: "order.status_changed",
+    OrderStatus.READY: "order.ready",
+    OrderStatus.COMPLETED: "order.completed",
+    OrderStatus.CANCELLED: "order.cancelled",
+}
 
 
 @dataclass(frozen=True)
@@ -1060,6 +1074,50 @@ async def _transition(
         reason=reason,
         action_log_id=action.id,
     )
+    _notify_client_of_status(
+        db, principal=principal, order=order, from_status=from_status, to_status=to_status
+    )
+
+
+def _notify_client_of_status(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order: Order,
+    from_status: OrderStatus,
+    to_status: OrderStatus,
+) -> None:
+    """Fan one inbox row to the order's client on a status change (CB-02).
+
+    Skipped when the client themselves drove the change (e.g. a self-cancel) — they
+    don't need to be told about their own action — and for transitions with no
+    client-facing event code. Recipient/payload follow the generic Notification
+    model; the client SPA already maps these event codes to localized titles.
+    """
+    event_code = _CLIENT_ORDER_EVENT_CODE.get(to_status)
+    if event_code is None:
+        return
+    actor_is_the_client = (
+        principal.principal_type is AuthenticatedPrincipalType.CLIENT
+        and principal.principal_id == order.client_id
+    )
+    if actor_is_the_client:
+        return
+    db.add(
+        Notification(
+            recipient_type=AuthenticatedPrincipalType.CLIENT,
+            recipient_id=order.client_id,
+            event_code=event_code,
+            entity_type="order",
+            entity_id=order.id,
+            payload={
+                "order_number": order.order_number,
+                "from_status": from_status.value,
+                "to_status": to_status.value,
+            },
+            created_at=datetime.now(UTC),
+        )
+    )
 
 
 async def _append_order_event(
@@ -1318,22 +1376,21 @@ async def _price_result(
         )
         for material_id, quantity in panel_demands.items()
     ]
-    edge_lines = [
-        EdgePriceLine(
-            material_id=material_id,
-            material_name=_line_name(material_id),
-            consumed_mm=edge_demands[material_id],
-            material_cost_tiyin=_millimetre_price(
-                edge_demands[material_id], branch_materials[material_id].price_tiyin
-            ),
-            service_cost_tiyin=_millimetre_price(edge_demands[material_id], edge_rate),
-            line_total_tiyin=(
-                _millimetre_price(edge_demands[material_id], branch_materials[material_id].price_tiyin)
-                + _millimetre_price(edge_demands[material_id], edge_rate)
-            ),
+    edge_lines = []
+    for material_id in edge_demands:
+        mm = edge_demands[material_id]
+        material_cost = _millimetre_price(mm, branch_materials[material_id].price_tiyin)
+        service_cost = _millimetre_price(mm, edge_rate)
+        edge_lines.append(
+            EdgePriceLine(
+                material_id=material_id,
+                material_name=_line_name(material_id),
+                consumed_mm=mm,
+                material_cost_tiyin=material_cost,
+                service_cost_tiyin=service_cost,
+                line_total_tiyin=material_cost + service_cost,
+            )
         )
-        for material_id in edge_demands
-    ]
     return PricingSnapshot(
         subtotal_cutting_tiyin=subtotal_cutting,
         subtotal_materials_tiyin=subtotal_materials,

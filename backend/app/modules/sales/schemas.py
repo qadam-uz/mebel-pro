@@ -48,7 +48,7 @@ class OrderQuoteResponse(APIModel):
     subtotal_edge_banding_tiyin: int
     total_tiyin: int
     # Itemized breakdown so the card/checkout can show how the price is built
-    # (CB-117): cutting = panels_used × cutting_rate, plus per-material/per-edge lines.
+    # (CB-117): cutting = panels_used * cutting_rate, plus per-material/per-edge lines.
     panels_used: int
     cutting_rate_tiyin: int
     material_lines: list[MaterialPriceLine]

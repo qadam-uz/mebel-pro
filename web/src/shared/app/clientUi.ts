@@ -182,7 +182,12 @@ export function clientNotificationTitle(item: NotificationItem): string {
 }
 
 export function clientNotificationBody(item: NotificationItem): string | null {
-  return payloadString(item.payload, ['body', 'detail', 'message'])
+  const explicit = payloadString(item.payload, ['body', 'detail', 'message'])
+  if (explicit) return explicit
+  // Order events (CB-02) carry a denormalized order_number but no prose body —
+  // surface it so the row identifies which order changed, not just that one did.
+  const orderNumber = payloadString(item.payload, ['order_number'])
+  return orderNumber ? `Buyurtma № ${orderNumber}` : null
 }
 
 export function clientNotificationIconName(item: NotificationItem): string {

@@ -42,9 +42,26 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 1 | 4 | 3 | **8** |
-| Done | 31 | 64 | 29 | **124** |
+| Open (incl. partial) | 0 | 4 | 3 | **7** |
+| Done | 32 | 64 | 29 | **125** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B15): **CB-02 unblocked + shipped** — the
+> backend now emits client order notifications, so the (already-built) bell + list
+> finally have rows to render. Backend: `sales/service._transition` (the single seam
+> every workshop status change funnels through) fans one `Notification` row to the
+> order's client — `event_code` mapped per destination status (`order.confirmed` /
+> `order.status_changed` / `order.ready` / `order.completed` / `order.cancelled`),
+> `entity_type=order`, payload `{order_number, from_status, to_status}`. A client
+> cancelling their OWN order is not self-notified; a workshop cancel does notify them;
+> placing a new order (NEW) emits nothing. Frontend: `clientNotificationBody` now
+> surfaces the denormalized `order_number` ("Buyurtma № …") when there is no prose
+> body. Both gates run locally and pass — **backend** ruff+format+mypy+pytest (118
+> passed; also fixed two pre-existing CB-117 lint errors — an ambiguous `×` and a
+> >100-char edge-line that were silently failing CI), **web** lint+format+typecheck+
+> test (104)+build. +2 backend tests (transition-notifies-client, self-cancel-doesn't /
+> workshop-cancel-does), +1 frontend presenter test. This also unblocks **CB-123**
+> (E2E notifications, which needed real emission).
 
 > Progress (2026-06-19, client-finish B14): tech-debt — ProfileView split, gate green,
 > adversarial review clean (0 findings). **CB-95** (the 683-line `ProfileView.vue` that
@@ -379,7 +396,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | ID | Pri | Cat | Sev | Eff | Status | Title |
 |----|-----|-----|-----|-----|--------|-------|
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
-| CB-02 | P1 | i18n-copy | high | M | Blocked | Human-readable Uzbek notification titles (+body) in bell & list — backend emits no client notifications yet (only `inventory.low_stock` → workshop) |
+| CB-02 | P1 | i18n-copy | high | M | Done | Human-readable Uzbek notification titles (+body) in bell & list — backend now emits `order.*` client notifications on every status change |
 | CB-03 | P1 | ux-flow | high | M | Done | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
@@ -522,10 +539,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `orders.ts` `captureError` sets `error.value` to the raw backend code, rendered verbatim at the highest-stakes moments — `ClientOrdersView.vue:194` `{{ actionError }} · trace …`, `ClientOrderDetailView.vue:586`, `ClientOrderNewView.vue:565`. `ProfileView.vue:123` sets `error.value='profile_update_failed'` shown raw at `:307`; `ClientCuttingEditorView.vue:558/568` hardcode English save errors shown at `:1051`. An Uzbek customer sees English machine codes (`order_cancel_failed`, `permission_denied`) right when placing/cancelling.
 **Fix:** Add a shared `orderErrorLabel(code)` Uzbek map (mirror the existing `quoteErrorLabel` `ClientOrderNewView.vue:106` and `LoginView` `clientErrorText`), pass store errors through it, fall back to a generic "Amal bajarilmadi. Qayta urinib ko'ring.", and Uzbek-ify the two hardcoded save strings.
 
-### CB-02 · Human-readable Uzbek notification titles (+body) in bell & list — `i18n-copy` · high · M
-**Files:** `components/NotificationsMenu.vue`, `views/ClientNotificationsView.vue`, `app/clientUi.ts`
-**Why:** `NotificationsMenu.vue:183` always renders the raw code (`{{ item.event_code }} · {{ formatDate }}`) and `title()` falls back to `event_code` (`:29`); `ClientNotificationsView.vue:33` same. Buyers see snake_case like `order_status_changed` — a parity regression vs the prototype (`client-shell.js:19,53`). Bell also omits the body line the list already computes.
-**Fix:** Add `clientNotificationTitle(item)` + reuse `body()` in `clientUi.ts` (mirror `adminNotificationTitle`); use in both `NotificationsMenu.title()` and the list; render a muted body line in the bell; drop the raw code sub-line.
+### CB-02 · Human-readable Uzbek notification titles (+body) in bell & list — `i18n-copy` · high · M — **Done (B15)**
+**Files:** `backend sales/service.py` (emission), `app/clientUi.ts`, `stores/notifications.ts`; renders through the existing `components/NotificationsMenu.vue` + `views/ClientNotificationsView.vue` + `app/notificationPresenter.ts`.
+**Why:** The frontend title/body/icon presenter (`clientNotificationTitle` + `NOTIFICATION_TITLES` map + presenter) was already built in CB-126/CB-101, so the bell never shows a raw code. The real blocker was that the **backend emitted no client notifications at all** (only `inventory.low_stock` → workshop), so there were no `order.*` rows to render.
+**Fix (shipped):** Backend `_transition` now fans one `Notification` to `order.client_id` on every status change — `event_code` mapped per destination status, `entity_type=order`, payload `{order_number, from_status, to_status}` — skipping the case where the client drove the change themselves. Frontend `clientNotificationBody` surfaces the denormalized `order_number` as the body when no prose body exists. Covered by backend tests (`test_workshop_status_changes_notify_the_client`, `test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does`) and a frontend presenter test.
 
 ### CB-03 · Read-only mode + bound-order banner for confirmed drafts in editor — `ux-flow` · high · M
 **Files:** `views/ClientCuttingEditorView.vue`, `stores/cutting.ts`

@@ -14,6 +14,7 @@ export interface NotificationPayload {
   body?: unknown
   detail?: unknown
   message?: unknown
+  order_number?: unknown
   [key: string]: unknown
 }
 
