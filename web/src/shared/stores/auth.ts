@@ -218,6 +218,12 @@ export const useAuthStore = defineStore('auth', () => {
     clear()
   }
 
+  // Revoke ONE other session by id (CB-114). Throws on failure so the caller can
+  // roll back its optimistic UI removal; never touches the current session here.
+  async function revokeSession(sessionId: string) {
+    await api.del(`/auth/sessions/${sessionId}`, authInit())
+  }
+
   function authInit() {
     return { accessToken: accessToken.value }
   }
@@ -242,5 +248,6 @@ export const useAuthStore = defineStore('auth', () => {
     fetchSessions,
     logoutCurrent,
     logoutEverywhere,
+    revokeSession,
   }
 })

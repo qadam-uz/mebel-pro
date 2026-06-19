@@ -1,8 +1,16 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiErrorCode, apiTraceId, withQuery } from '@/shared/api/client'
+import {
+  ApiError,
+  api,
+  apiErrorCode,
+  apiTraceId,
+  captureApiError,
+  withQuery,
+} from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
@@ -21,10 +29,32 @@ export interface OrderQuote {
   branch_name: string
   branch_address: string
   branch_phone: string
+  today_hours: { open: string | null; close: string | null }
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
   total_tiyin: number
+  panels_used: number
+  cutting_rate_tiyin: number
+  material_lines: MaterialPriceLine[]
+  edge_lines: EdgePriceLine[]
+}
+
+export interface MaterialPriceLine {
+  material_id: string
+  material_name: string
+  panels_used: number
+  unit_price_tiyin: number
+  line_total_tiyin: number
+}
+
+export interface EdgePriceLine {
+  material_id: string
+  material_name: string
+  consumed_mm: number
+  material_cost_tiyin: number
+  service_cost_tiyin: number
+  line_total_tiyin: number
 }
 
 export interface OrderItem {
@@ -94,6 +124,7 @@ export interface OrderSummary {
   branch_name: string
   branch_address: string
   branch_phone: string
+  today_hours: { open: string | null; close: string | null }
   cutting_result_id: string
   status: OrderStatus
   version: number
@@ -144,6 +175,7 @@ export const activeWorkshopStatuses: OrderStatus[] = [
 
 export const useOrdersStore = defineStore('orders', () => {
   const clientOrders = ref<OrderSummary[]>([])
+  const ordersHasMore = ref(false)
   const workshopOrders = ref<OrderSummary[]>([])
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
@@ -151,6 +183,11 @@ export const useOrdersStore = defineStore('orders', () => {
   const actionLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
+  // Action (mutate) failures are kept separate from load failures: a cancel/approve
+  // 409 must surface inline, NOT collapse the whole detail page to its load-error
+  // state (the page gates on `error`). Views read these for the inline message.
+  const actionError = ref<string | null>(null)
+  const actionTraceId = ref<string | null>(null)
   // PDF download feedback (CB-17): id of the order currently downloading, plus a
   // transient error + trace for the last failed download.
   const downloadingId = ref<string | null>(null)
@@ -158,12 +195,15 @@ export const useOrdersStore = defineStore('orders', () => {
   const downloadTraceId = ref<string | null>(null)
 
   function captureError(errorValue: unknown, fallback: string) {
-    if (errorValue instanceof ApiError && errorValue.status === 403)
-      error.value = 'permission_denied'
-    else if (errorValue instanceof ApiError && typeof errorValue.body === 'object') {
-      error.value = String((errorValue.body as { code?: unknown }).code ?? fallback)
-    } else error.value = fallback
-    traceId.value = apiTraceId(errorValue)
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
+  }
+
+  function captureActionError(errorValue: unknown, fallback: string) {
+    const captured = captureApiError(errorValue, fallback)
+    actionError.value = captured.code
+    actionTraceId.value = captured.traceId
   }
 
   async function quoteForDraft(draftId: string, branchId: string) {
@@ -173,32 +213,33 @@ export const useOrdersStore = defineStore('orders', () => {
     )
   }
 
-  // Quote a draft against many branches concurrently, capturing each branch's
-  // OWN error code in the result rather than reading the shared `error`
-  // singleton a sibling request may have overwritten (the CB-20 race). Returns
-  // a quote per successful branch and a code (or null = generic) per failed one.
+  // Quote a draft against many branches in ONE request (CB-12) — the backend
+  // prices the validated result once and returns each branch's own quote or error
+  // code (branch_does_not_carry_*, branch_closed, missing_*_rate), so the view can
+  // still name each failure (CB-19/CB-20) without N round-trips. On a whole-request
+  // failure (network/auth) every branch is marked with the generic code + trace.
   async function quoteBranches(draftId: string, branchIds: string[]) {
-    const quotes: Record<string, OrderQuote> = {}
-    const errors: Record<string, string | null> = {}
-    let firstErrorTraceId: string | null = null
-    await Promise.all(
-      branchIds.map(async (branchId) => {
-        try {
-          quotes[branchId] = await quoteForDraft(draftId, branchId)
-        } catch (errorValue) {
-          // Preserve the real per-branch code (branch_does_not_carry_*,
-          // branch_closed, missing_*_rate) so the view can name the problem
-          // (CB-19/CB-20); fall back to the 403 mapping, then null.
-          errors[branchId] =
-            apiErrorCode(errorValue) ??
-            (errorValue instanceof ApiError && errorValue.status === 403
-              ? 'permission_denied'
-              : null)
-          if (firstErrorTraceId === null) firstErrorTraceId = apiTraceId(errorValue)
-        }
-      }),
-    )
-    return { quotes, errors, firstErrorTraceId }
+    if (branchIds.length === 0) {
+      return { quotes: {} as Record<string, OrderQuote>, errors: {}, firstErrorTraceId: null }
+    }
+    try {
+      const response = await api.post<{
+        quotes: Record<string, OrderQuote>
+        errors: Record<string, string | null>
+      }>('/client/orders/quote/batch', { draft_id: draftId, branch_ids: branchIds }, authInit())
+      return { quotes: response.quotes, errors: response.errors, firstErrorTraceId: null }
+    } catch (errorValue) {
+      const code =
+        apiErrorCode(errorValue) ??
+        (errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null)
+      const errors: Record<string, string | null> = {}
+      for (const branchId of branchIds) errors[branchId] = code
+      return {
+        quotes: {} as Record<string, OrderQuote>,
+        errors,
+        firstErrorTraceId: apiTraceId(errorValue),
+      }
+    }
   }
 
   async function createClientOrder(payload: unknown) {
@@ -213,15 +254,28 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
-  async function loadClientOrders(filters: { status?: string; search?: string } = {}) {
+  // Paginated with append (CB-38): offset 0 replaces, a higher offset appends the
+  // next page. ordersHasMore is inferred from a full page, so the "load more"
+  // button hides on the last page.
+  async function loadClientOrders(
+    filters: { status?: string; search?: string; offset?: number } = {},
+  ) {
+    const offset = filters.offset ?? 0
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      clientOrders.value = await api.get<OrderSummary[]>(
-        withQuery('/client/orders', filters),
+      const page = await api.get<OrderSummary[]>(
+        withQuery('/client/orders', {
+          status: filters.status,
+          search: filters.search,
+          limit: ORDERS_PAGE_LIMIT,
+          offset,
+        }),
         authInit(),
       )
+      clientOrders.value = offset === 0 ? page : [...clientOrders.value, ...page]
+      ordersHasMore.value = page.length === ORDERS_PAGE_LIMIT
     } catch (errorValue) {
       captureError(errorValue, 'client_orders_load_failed')
     } finally {
@@ -334,8 +388,8 @@ export const useOrdersStore = defineStore('orders', () => {
 
   async function mutate(path: string, payload: unknown, method: 'post' | 'patch' = 'post') {
     actionLoading.value = true
-    error.value = null
-    traceId.value = null
+    actionError.value = null
+    actionTraceId.value = null
     try {
       const order =
         method === 'post'
@@ -346,7 +400,9 @@ export const useOrdersStore = defineStore('orders', () => {
       return order
     } catch (errorValue) {
       // On an optimistic-concurrency conflict the cached version is stale; refetch
-      // the order so the next attempt carries the server's current version.
+      // the order so the next attempt carries the server's current version. The
+      // refetch owns `error`/`traceId`; the conflict itself goes to actionError so
+      // the page stays on the (now fresh) order instead of its load-error state.
       if (apiErrorCode(errorValue) === 'order_version_conflict') {
         const match = path.match(/\/(client|workshop)\/orders\/([^/]+)\//)
         const orderId = match?.[2]
@@ -355,7 +411,7 @@ export const useOrdersStore = defineStore('orders', () => {
           else await loadWorkshopOrder(orderId)
         }
       }
-      captureError(errorValue, 'order_action_failed')
+      captureActionError(errorValue, 'order_action_failed')
       throw errorValue
     } finally {
       actionLoading.value = false
@@ -390,12 +446,15 @@ export const useOrdersStore = defineStore('orders', () => {
     actionLoading,
     error,
     traceId,
+    actionError,
+    actionTraceId,
     downloadingId,
     downloadError,
     downloadTraceId,
     quoteForDraft,
     quoteBranches,
     createClientOrder,
+    ordersHasMore,
     loadClientOrders,
     loadClientOrder,
     cancelClientOrder,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { partFitError } from '@/shared/stores/cutting'
+import { partFitError, partNotCarried, type CuttingPart } from '@/shared/stores/cutting'
 
 // usable area with the default 10mm edge trim on a 2750×1830 panel = 2730 × 1810
 const panel = (grain: boolean | null) => ({
@@ -40,5 +40,89 @@ describe('partFitError (part vs panel usable area)', () => {
       }),
     ).toBeNull()
     expect(partFitError(Number.NaN, 1000, panel(false))).toBeNull()
+  })
+})
+
+describe('partNotCarried (branch-carry recovery detection, CB-124)', () => {
+  const makePart = (overrides: Partial<CuttingPart> = {}): CuttingPart => ({
+    part_ref: 'p1',
+    material_id: 'panel-ok',
+    material_source: 'shop',
+    length_mm: 100,
+    width_mm: 100,
+    quantity: 1,
+    edge_top: null,
+    edge_bottom: null,
+    edge_left: null,
+    edge_right: null,
+    ...overrides,
+  })
+  const resolvePanel = (id: string | null | undefined) =>
+    id === 'panel-ok'
+      ? { branch_carried: true }
+      : id === 'panel-no'
+        ? { branch_carried: false }
+        : null
+  const resolveEdge = (id: string | null | undefined) =>
+    id === 'edge-ok'
+      ? { branch_carried: true }
+      : id === 'edge-no'
+        ? { branch_carried: false }
+        : null
+
+  it('returns [] when no branch is chosen', () => {
+    expect(
+      partNotCarried(makePart({ material_id: 'panel-no' }), null, resolvePanel, resolveEdge),
+    ).toEqual([])
+  })
+
+  it('flags a shop panel the branch does not carry', () => {
+    expect(
+      partNotCarried(makePart({ material_id: 'panel-no' }), 'b1', resolvePanel, resolveEdge),
+    ).toEqual(['panel'])
+  })
+
+  it('does not flag an own-sourced panel even if not carried', () => {
+    expect(
+      partNotCarried(
+        makePart({ material_id: 'panel-no', material_source: 'own' }),
+        'b1',
+        resolvePanel,
+        resolveEdge,
+      ),
+    ).toEqual([])
+  })
+
+  it('flags an uncarried shop edge on a carried panel, by side', () => {
+    expect(
+      partNotCarried(
+        makePart({ edge_top: { material_id: 'edge-no', source: 'shop' } }),
+        'b1',
+        resolvePanel,
+        resolveEdge,
+      ),
+    ).toEqual(['edge_top'])
+  })
+
+  it('does not flag an own-sourced edge', () => {
+    expect(
+      partNotCarried(
+        makePart({ edge_left: { material_id: 'edge-no', source: 'own' } }),
+        'b1',
+        resolvePanel,
+        resolveEdge,
+      ),
+    ).toEqual([])
+  })
+
+  it('returns [] when panel and all edges are carried', () => {
+    expect(
+      partNotCarried(
+        makePart({ edge_top: { material_id: 'edge-ok', source: 'shop' } }),
+        'b1',
+        resolvePanel,
+        resolveEdge,
+      ),
+    ).toEqual([])
   })
 })

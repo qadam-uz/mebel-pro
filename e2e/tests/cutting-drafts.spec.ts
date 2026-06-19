@@ -403,9 +403,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
-  // CB-76: the preferred-branch picker is now a searchable combobox.
-  await page.getByRole('combobox', { name: 'Afzal filial' }).click()
-  await page.getByRole('option', { name: new RegExp(`Cutting Workshop ${id}`) }).click()
+  // CB-51: the preferred-branch picker is a two-pane workshop→branch picker.
+  await page.getByRole('button', { name: new RegExp(`Cutting Workshop ${id}`) }).click()
+  await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
   await page.getByRole('button', { name: "Qo'llash" }).click()
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
@@ -420,6 +420,8 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await page.getByRole('button', { name: 'Optimallashtirish' }).click()
 
   await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  // The algorithm comparison is collapsed behind a link by default — expand it.
+  await page.getByRole('button', { name: 'Algoritmlarni solishtirish' }).click()
   await expect(page.getByRole('cell', { name: 'ffd-guillotine' })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'bfd-guillotine' })).toBeVisible()
   // CB-87: panels are grouped under a material heading; the chip is "Panel N".

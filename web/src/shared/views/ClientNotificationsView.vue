@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import { formatRelativeDate } from '@/shared/app/clientUi'
+import { NOTIFICATIONS_PAGE_LIMIT } from '@/shared/app/constants'
 import {
-  clientNotificationBody,
-  clientNotificationIconName,
-  clientNotificationTitle,
-  formatRelativeDate,
-} from '@/shared/app/clientUi'
+  notificationBody,
+  notificationDestination,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 const notifications = useNotificationsStore()
 const router = useRouter()
 const rolePath = useRolePath()
+const toast = useToast()
 const readFilter = ref<'all' | 'unread' | 'read'>('all')
 
 function goBack() {
@@ -40,18 +44,18 @@ const visibleItems = computed(() =>
 )
 
 function title(item: NotificationItem) {
-  return clientNotificationTitle(item)
+  return notificationTitle(item, 'client')
 }
 
 function body(item: NotificationItem) {
-  return (
-    clientNotificationBody(item) ??
-    (item.entity_type === 'order' ? "Buyurtma holati o'zgardi." : 'Yangi xabar mavjud.')
-  )
+  // Defer entirely to the shared presenter so the page and the bell render the same
+  // body for the same notification (CB-101); the template hides the line when null
+  // instead of forcing a generic fallback the bell never shows.
+  return notificationBody(item)
 }
 
 function iconName(item: NotificationItem) {
-  return clientNotificationIconName(item)
+  return notificationIconName(item)
 }
 
 function iconClass(item: NotificationItem) {
@@ -61,23 +65,49 @@ function iconClass(item: NotificationItem) {
 }
 
 function destination(item: NotificationItem) {
-  if (item.entity_type === 'order' && item.entity_id) return `/c/orders/${item.entity_id}`
-  return null
+  return notificationDestination(item, 'client')
 }
 
 async function openItem(item: NotificationItem) {
-  if (item.read_at === null) await notifications.markRead(item.id)
   const to = destination(item)
-  if (to) await router.push(rolePath(to))
+  if (!to) {
+    // No viewable target — keep it unread and tell the user rather than a dead tap (CB-125).
+    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    return
+  }
+  // markRead is best-effort: opening the order is the intent, so navigate
+  // regardless. A failure leaves the row unread (the badge stays) as its own
+  // feedback — no disjointed toast-then-navigate.
+  if (item.read_at === null) await notifications.markRead(item.id)
+  await router.push(rolePath(to))
 }
+
+// 'unread' filters server-side so pagination stays accurate; 'all'/'read' load
+// the full feed and the read/unread split is applied client-side (CB-41).
+const unreadOnly = () => readFilter.value === 'unread'
 
 async function markAllRead() {
   await notifications.markAllRead()
-  await notifications.loadList(50)
+  if (notifications.actionError) {
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
+  await notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
+  toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
+function loadMore() {
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, notifications.items.length, unreadOnly())
+}
+
+// Changing the filter restarts pagination from offset 0 so the load-more button
+// and the loaded page reflect the active filter, not a stale full-feed page.
+watch(readFilter, () => {
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
+})
+
 onMounted(() => {
-  void notifications.loadList(50)
+  void notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())
 })
 </script>
 
@@ -104,7 +134,7 @@ onMounted(() => {
         <div
           v-for="item in 5"
           :key="item"
-          class="client-card grid grid-cols-[38px_1fr_64px] gap-4 p-4"
+          class="client-card grid grid-cols-[38px_minmax(0,1fr)_auto] gap-4 p-4 max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
         >
           <div class="client-skeleton h-[38px]"></div>
           <div>
@@ -120,7 +150,7 @@ onMounted(() => {
         title="Bildirishnomalarni yuklab bo'lmadi"
         message="Ulanishda xatolik. Birozdan so'ng qayta urinib ko'ring."
         :trace-id="notifications.traceId"
-        @retry="notifications.loadList(50)"
+        @retry="notifications.loadList(NOTIFICATIONS_PAGE_LIMIT, 0, unreadOnly())"
       />
 
       <div v-else-if="visibleItems.length === 0" class="client-empty">
@@ -138,7 +168,7 @@ onMounted(() => {
           v-for="item in visibleItems"
           :key="item.id"
           type="button"
-          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left transition hover:border-ink"
+          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left transition hover:border-ink max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
           :class="item.read_at === null ? 'bg-accent-soft border-accent-tint' : ''"
           @click="openItem(item)"
         >
@@ -151,13 +181,23 @@ onMounted(() => {
           </span>
           <span class="min-w-0">
             <span class="block truncate text-sm font-bold text-ink">{{ title(item) }}</span>
-            <span class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
+            <span v-if="body(item)" class="mt-1 block text-sm text-ink-soft">{{ body(item) }}</span>
           </span>
-          <span class="font-mono text-xs text-ink-muted">
+          <span class="font-mono text-xs text-ink-muted max-[480px]:col-start-2 max-[480px]:mt-1">
             {{ formatRelativeDate(item.created_at) }}
           </span>
         </button>
       </div>
+
+      <button
+        v-if="notifications.hasMore"
+        type="button"
+        class="mp-button mp-button-outline mt-3 w-full"
+        :disabled="notifications.loading"
+        @click="loadMore"
+      >
+        Yana ko'rsatish
+      </button>
     </div>
   </section>
 </template>

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 
 export type MaterialStatus = 'active' | 'inactive'
@@ -318,8 +318,11 @@ export const useAdminStore = defineStore('admin', () => {
         authInit(),
       )
     } catch (errorValue) {
-      catalogError.value = 'manufacturers_load_failed'
-      catalogTraceId.value = apiTraceId(errorValue)
+      // Preserve a 403 as permission_denied so AdminCatalogView's no-access state
+      // can trigger, instead of masking it as a generic load failure (CB-100).
+      const captured = captureApiError(errorValue, 'manufacturers_load_failed')
+      catalogError.value = captured.code
+      catalogTraceId.value = captured.traceId
     } finally {
       catalogLoading.value = false
     }
@@ -340,8 +343,9 @@ export const useAdminStore = defineStore('admin', () => {
         authInit(),
       )
     } catch (errorValue) {
-      catalogError.value = 'materials_load_failed'
-      catalogTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'materials_load_failed')
+      catalogError.value = captured.code
+      catalogTraceId.value = captured.traceId
     } finally {
       catalogLoading.value = false
     }

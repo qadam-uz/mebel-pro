@@ -1,3 +1,4 @@
+import { DRAFT_LIMIT } from '@/shared/app/constants'
 import type { NotificationItem } from '@/shared/stores/notifications'
 import type { OrderStatus } from '@/shared/stores/orders'
 
@@ -97,7 +98,8 @@ const CLIENT_ERROR_LABELS: Record<string, string> = {
   branch_does_not_carry_edge: "Bu filialda kerakli krom materiali yo'q.",
   part_too_large: 'Qism panel uchun juda katta.',
   part_too_small: 'Qism juda kichik.',
-  draft_limit_exceeded: "Saqlangan chizmalar chegarasi (50) to'ldi — eskisini o'chiring.",
+  draft_limit_exceeded: `Saqlangan chizmalar chegarasi (${DRAFT_LIMIT}) to'ldi — eskisini o'chiring.`,
+  invalid_name: 'Ismingizni kiriting.',
   profile_update_failed: "Profilni saqlab bo'lmadi. Qayta urinib ko'ring.",
   password_change_failed: "Parolni o'zgartirib bo'lmadi. Qayta urinib ko'ring.",
 }
@@ -122,6 +124,14 @@ export function clientErrorLabel(
 
 export function pluralUz(count: number, label: string): string {
   return `${new Intl.NumberFormat('uz-UZ').format(count)} ${label}`
+}
+
+/** Today's "09:00–18:00" working window, or "Bugun yopiq" when closed (CB-112). */
+export function formatTodayHours(
+  hours: { open: string | null; close: string | null } | null | undefined,
+): string {
+  if (!hours || !hours.open || !hours.close) return 'Bugun yopiq'
+  return `${hours.open}–${hours.close}`
 }
 
 const CLIENT_ICON_PATHS: Record<string, string> = {
@@ -172,7 +182,12 @@ export function clientNotificationTitle(item: NotificationItem): string {
 }
 
 export function clientNotificationBody(item: NotificationItem): string | null {
-  return payloadString(item.payload, ['body', 'detail', 'message'])
+  const explicit = payloadString(item.payload, ['body', 'detail', 'message'])
+  if (explicit) return explicit
+  // Order events (CB-02) carry a denormalized order_number but no prose body —
+  // surface it so the row identifies which order changed, not just that one did.
+  const orderNumber = payloadString(item.payload, ['order_number'])
+  return orderNumber ? `Buyurtma № ${orderNumber}` : null
 }
 
 export function clientNotificationIconName(item: NotificationItem): string {

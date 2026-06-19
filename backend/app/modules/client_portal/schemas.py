@@ -29,6 +29,15 @@ class ClientBranchOption(APIModel):
     branch_name: str
     status: BranchStatus
     closed_reason: str | None
+    today_hours: dict[str, str | None]
+
+
+class ClientBranchMaterialPreview(APIModel):
+    id: uuid.UUID
+    manufacturer_name: str
+    name: str
+    price_tiyin: int
+    display_unit: str
 
 
 class ClientBranchResponse(APIModel):
@@ -44,6 +53,10 @@ class ClientBranchResponse(APIModel):
     working_hours: dict[str, object]
     status: BranchStatus
     closed_reason: str | None
+    # Inline material preview so the branches list needs ONE request, not 1+N
+    # (CB-13). materials_total is the full carried-material count for the "+N".
+    materials_preview: list[ClientBranchMaterialPreview]
+    materials_total: int
 
 
 class ClientBranchMaterialResponse(APIModel):

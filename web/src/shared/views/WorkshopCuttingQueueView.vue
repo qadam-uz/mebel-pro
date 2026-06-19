@@ -37,7 +37,7 @@ async function complete(order: OrderSummary) {
     })
     await refresh()
   } catch {
-    actionError.value = orders.error ?? 'cutting_complete_failed'
+    actionError.value = orders.actionError ?? 'cutting_complete_failed'
   }
 }
 
@@ -85,7 +85,9 @@ onMounted(refresh)
 
     <template v-else>
       <div v-if="actionError" class="banner danger">
-        <div class="grow">{{ actionError }} · trace {{ orders.traceId ?? 'unavailable' }}</div>
+        <div class="grow">
+          {{ actionError }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+        </div>
       </div>
 
       <div class="queue-grid">

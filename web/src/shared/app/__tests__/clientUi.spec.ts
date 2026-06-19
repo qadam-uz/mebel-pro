@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   clientErrorLabel,
+  clientNotificationBody,
+  clientNotificationIconName,
+  clientNotificationTitle,
   clientPhaseIndex,
   clientStatusPillClass,
   formatPercent,
@@ -9,6 +12,22 @@ import {
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
+import type { NotificationItem } from '@/shared/stores/notifications'
+
+function notification(overrides: Partial<NotificationItem>): NotificationItem {
+  return {
+    id: 'n1',
+    recipient_type: 'client',
+    recipient_id: 'c1',
+    event_code: 'order.confirmed',
+    entity_type: 'order',
+    entity_id: 'o1',
+    payload: {},
+    created_at: '2026-06-19T09:00:00Z',
+    read_at: null,
+    ...overrides,
+  }
+}
 
 describe('client UI helpers', () => {
   it('normalizes and validates Uzbek phone numbers', () => {
@@ -59,5 +78,49 @@ describe('client UI helpers', () => {
     expect(clientErrorLabel(undefined, 'Buyurtma yuborilmadi.')).toBe('Buyurtma yuborilmadi.')
     // an already-human sentence is returned unchanged
     expect(clientErrorLabel('Tarmoqqa ulanib bolmadi.')).toBe('Tarmoqqa ulanib bolmadi.')
+  })
+
+  it('presents order notifications with localized titles and an order-number body (CB-02)', () => {
+    // event_code → Uzbek title; never the raw code
+    expect(clientNotificationTitle(notification({ event_code: 'order.confirmed' }))).toBe(
+      'Buyurtma tasdiqlandi',
+    )
+    expect(clientNotificationTitle(notification({ event_code: 'order.ready' }))).toBe(
+      'Buyurtma tayyor',
+    )
+    expect(clientNotificationTitle(notification({ event_code: 'order.status_changed' }))).toBe(
+      "Buyurtma holati o'zgardi",
+    )
+    // an unknown code never leaks; falls back to the generic title
+    const unknown = clientNotificationTitle(notification({ event_code: 'order.weird_new_code' }))
+    expect(unknown).toBe('Bildirishnoma')
+    expect(unknown).not.toContain('_')
+    // an explicit summary in the payload wins over the static map
+    expect(
+      clientNotificationTitle(
+        notification({ event_code: 'order.confirmed', payload: { summary: 'Custom' } }),
+      ),
+    ).toBe('Custom')
+
+    // body: denormalized order_number is surfaced when there is no prose body
+    expect(clientNotificationBody(notification({ payload: { order_number: 'A-1023' } }))).toBe(
+      'Buyurtma № A-1023',
+    )
+    // an explicit body wins over the order-number fallback
+    expect(
+      clientNotificationBody(
+        notification({ payload: { order_number: 'A-1023', body: 'Tayyor bo`ldi' } }),
+      ),
+    ).toBe('Tayyor bo`ldi')
+    // no body and no order_number → null (row shows title only)
+    expect(clientNotificationBody(notification({ payload: {} }))).toBeNull()
+
+    // icon family resolves from the event code / entity
+    expect(clientNotificationIconName(notification({ event_code: 'order.ready' }))).toBe('box')
+    expect(
+      clientNotificationIconName(
+        notification({ event_code: 'inventory.low_stock', entity_type: 'stock_item' }),
+      ),
+    ).toBe('alert')
   })
 })

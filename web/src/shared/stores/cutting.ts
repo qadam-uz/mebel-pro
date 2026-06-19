@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, api, apiTraceId, withQuery } from '@/shared/api/client'
+import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
@@ -110,6 +110,7 @@ export interface ClientBranchOption {
   branch_name: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
+  today_hours: { open: string | null; close: string | null }
 }
 
 export interface WorkshopCuttingPlanSummary {
@@ -173,12 +174,44 @@ export function partFitError(
   return fitsNormal || fitsRotated ? null : 'part_too_large'
 }
 
+export const EDGE_SIDES = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
+export type EdgeSide = (typeof EDGE_SIDES)[number]
+
+/**
+ * Which of a part's SHOP-sourced materials the chosen branch doesn't carry — the
+ * panel (`'panel'`) and/or each banded side. Empty when no branch is chosen or all
+ * are carried. Pure: the panel/edge resolvers are passed in, so it's unit-testable
+ * without the store (CB-124). Drives the per-row recovery banner (CB-19/CB-86).
+ */
+export function partNotCarried(
+  part: CuttingPart,
+  branchId: string | null | undefined,
+  resolvePanel: (id: string | null | undefined) => { branch_carried: boolean } | null,
+  resolveEdge: (id: string | null | undefined) => { branch_carried: boolean } | null,
+): string[] {
+  if (!branchId) return []
+  const issues: string[] = []
+  const panel = resolvePanel(part.material_id)
+  if (part.material_source === 'shop' && panel && !panel.branch_carried) issues.push('panel')
+  for (const side of EDGE_SIDES) {
+    const band = part[side]
+    const material = resolveEdge(band?.material_id)
+    if (band?.source === 'shop' && material && !material.branch_carried) issues.push(side)
+  }
+  return issues
+}
+
 export const useCuttingStore = defineStore('cutting', () => {
   const drafts = ref<CuttingDraft[]>([])
   const currentDraft = ref<CuttingDraft | null>(null)
   const branchOptions = ref<ClientBranchOption[]>([])
   const panelOptions = ref<ClientCatalogMaterialOption[]>([])
   const edgeOptions = ref<ClientCatalogMaterialOption[]>([])
+  // Per-(kind, branch, …) catalog cache (CB-40): the editor re-requests the same
+  // material list on remount and when the branch flips back, and the full list
+  // drives client-side filtering — so reuse a recent result instead of re-fetching
+  // an identical payload. Keyed by the full query; ~30s freshness like branch-options.
+  const materialsCache = new Map<string, { at: number; items: ClientCatalogMaterialOption[] }>()
   const workshopPlans = ref<WorkshopCuttingPlanSummary[]>([])
   const currentWorkshopPlan = ref<WorkshopCuttingPlanDetail | null>(null)
   const loading = ref(false)
@@ -195,9 +228,11 @@ export const useCuttingStore = defineStore('cutting', () => {
   const downloadTraceId = ref<string | null>(null)
 
   function captureError(errorValue: unknown, fallback: string) {
-    error.value =
-      errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : fallback
-    traceId.value = apiTraceId(errorValue)
+    // Canonical capture (CB-100): 403 → permission_denied, else the backend code
+    // is preserved (previously this collapsed every non-403 to the fallback).
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
   }
 
   async function loadDrafts() {
@@ -296,11 +331,27 @@ export const useCuttingStore = defineStore('cutting', () => {
     return draft
   }
 
-  async function loadBranchOptions(search?: string) {
+  // Reuse the cached branch-options for ~30s on a plain (no-search) load so the
+  // editor→checkout navigation doesn't refetch the identical list twice (CB-52).
+  // A search always fetches and invalidates the freshness window.
+  const branchOptionsLoadedAt = ref(0)
+  async function loadBranchOptions(search?: string, options: { force?: boolean } = {}) {
+    if (search) {
+      branchOptions.value = await api.get<ClientBranchOption[]>(
+        withQuery('/client/branch-options', { search }),
+        authInit(),
+      )
+      branchOptionsLoadedAt.value = 0
+      return
+    }
+    const fresh =
+      branchOptions.value.length > 0 && Date.now() - branchOptionsLoadedAt.value < 30_000
+    if (!options.force && fresh) return
     branchOptions.value = await api.get<ClientBranchOption[]>(
-      withQuery('/client/branch-options', { search }),
+      withQuery('/client/branch-options', {}),
       authInit(),
     )
+    branchOptionsLoadedAt.value = Date.now()
   }
 
   async function loadMaterials(params: {
@@ -308,7 +359,16 @@ export const useCuttingStore = defineStore('cutting', () => {
     branchId?: string | null
     search?: string
     carriedOnly?: boolean
+    force?: boolean
   }) {
+    const carriedOnly = params.carriedOnly ?? false
+    const cacheKey = `${params.kind}:${params.branchId ?? 'all'}:${params.search ?? ''}:${carriedOnly}`
+    const cached = materialsCache.get(cacheKey)
+    if (!params.force && cached && Date.now() - cached.at < 30_000) {
+      if (params.kind === 'panel') panelOptions.value = cached.items
+      else edgeOptions.value = cached.items
+      return cached.items
+    }
     materialsLoading.value = true
     try {
       const materials = await api.get<ClientCatalogMaterialOption[]>(
@@ -316,10 +376,11 @@ export const useCuttingStore = defineStore('cutting', () => {
           kind: params.kind,
           branch_id: params.branchId,
           search: params.search,
-          carried_only: params.carriedOnly ?? false,
+          carried_only: carriedOnly,
         }),
         authInit(),
       )
+      materialsCache.set(cacheKey, { at: Date.now(), items: materials })
       if (params.kind === 'panel') panelOptions.value = materials
       else edgeOptions.value = materials
       return materials

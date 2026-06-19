@@ -5,6 +5,19 @@ import { api, apiTraceId } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { useAuthStore } from '@/shared/stores/auth'
 
+// The known, presenter-relevant keys of a notification payload (CB-101). The
+// index signature keeps it assignable from the raw backend JSON while giving the
+// shared presenter typed access to the strings it actually reads.
+export interface NotificationPayload {
+  summary?: unknown
+  title?: unknown
+  body?: unknown
+  detail?: unknown
+  message?: unknown
+  order_number?: unknown
+  [key: string]: unknown
+}
+
 export interface NotificationItem {
   id: string
   recipient_type: 'platform_user' | 'workshop_user' | 'client'
@@ -12,7 +25,7 @@ export interface NotificationItem {
   event_code: string
   entity_type: string | null
   entity_id: string | null
-  payload: Record<string, unknown>
+  payload: NotificationPayload
   created_at: string
   read_at: string | null
 }
@@ -24,6 +37,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   const actionError = ref<string | null>(null)
+  const hasMore = ref(false)
   const auth = useAuthStore()
 
   async function loadUnreadCount() {
@@ -40,13 +54,21 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
-  async function loadList(limit = 10) {
+  // Paginated with append (CB-41): offset 0 replaces, a higher offset appends.
+  // hasMore is inferred from a full page so the "load more" button hides at the end.
+  // unreadOnly filters server-side so pagination stays accurate under the filter.
+  async function loadList(limit = 10, offset = 0, unreadOnly = false) {
     if (!auth.accessToken) return
     loading.value = true
     error.value = null
     traceId.value = null
     try {
-      items.value = await api.get<NotificationItem[]>(`/notifications?limit=${limit}`, authInit())
+      const page = await api.get<NotificationItem[]>(
+        `/notifications?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`,
+        authInit(),
+      )
+      items.value = offset === 0 ? page : [...items.value, ...page]
+      hasMore.value = page.length === limit
     } catch (caught) {
       error.value = 'notifications_load_failed'
       traceId.value = apiTraceId(caught)
@@ -96,6 +118,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     error,
     traceId,
     actionError,
+    hasMore,
     loadUnreadCount,
     loadList,
     markRead,

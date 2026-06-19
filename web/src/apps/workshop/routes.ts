@@ -8,7 +8,7 @@ export const workshopRoutes: RouteRecordRaw[] = [
   {
     path: '/auth/login',
     name: 'workshop-login',
-    component: () => import('@/shared/views/LoginView.vue'),
+    component: () => import('@/shared/views/WorkshopLoginView.vue'),
     meta: { layout: 'auth', title: 'Kirish' },
   },
   {
@@ -20,7 +20,7 @@ export const workshopRoutes: RouteRecordRaw[] = [
   {
     path: '/workshop/profile',
     name: 'workshop-profile',
-    component: () => import('@/shared/views/ProfileView.vue'),
+    component: () => import('@/shared/views/WorkshopProfileView.vue'),
     meta: { title: 'Mening profilim' },
   },
   {

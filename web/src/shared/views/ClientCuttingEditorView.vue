@@ -2,21 +2,29 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { createAutosaveController } from '@/shared/app/autosaveController'
+import { ApiError } from '@/shared/api/client'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
+import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
+import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import type { PanelMaterialType } from '@/shared/stores/admin'
 import {
   EDGE_TRIM_MM,
   materialLabel,
   metres,
   partFitError,
+  partNotCarried,
   useCuttingStore,
   type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
@@ -30,16 +38,23 @@ import {
 const route = useRoute()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
+const toast = useToast()
 const draftId = computed(() => String(route.params.id))
 const parts = ref<CuttingPart[]>([])
-const saveState = ref<'saved' | 'saving' | 'error' | 'editing'>('saved')
-const saveError = ref<string | null>(null)
 const optimizeError = ref<string | null>(null)
+// Per-row optimiser-error attribution (CB-89): the backend returns
+// details {part_ref, row_index} on a part-specific failure, so flag THAT row
+// rather than only a single opaque banner.
+const optimizeRowError = ref<{
+  partRef: string | null
+  rowIndex: number | null
+  message: string
+} | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
-const algorithmsOpen = ref(true)
+const algorithmsOpen = ref(false)
 const recoveryDismissed = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
@@ -52,7 +67,6 @@ const edgePickerSearch = ref('')
 const edgePickerThickness = ref<string | null>('all')
 const edgeDialogRef = ref<HTMLElement | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
-let hydrating = false
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
 // the same draft and must not clobber unsaved local edits (CB-15).
@@ -69,21 +83,93 @@ const isReadOnly = computed(() => boundOrderId.value !== null)
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === draft.value?.preferred_branch_id),
 )
-const branchOptions = computed<ChoiceOption[]>(() =>
-  cutting.branchOptions.map((branch) => ({
-    value: branch.branch_id,
-    label: `${branch.workshop_name} · ${branch.branch_name}`,
-    meta:
-      branch.status === 'temporarily_closed'
-        ? (branch.closed_reason ?? 'vaqtincha yopiq')
-        : 'faol filial',
-  })),
+// Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
+// a sort — applied to the shared option list every row's panel picker draws from.
+const panelManufacturerFilter = ref<string[]>([])
+const panelTypeFilter = ref<string | null>(null)
+const panelThicknessFilter = ref<string | null>(null)
+const panelSort = ref<string | null>('relevance')
+
+const PANEL_TYPE_LABELS: Record<string, string> = {
+  dsp: 'DSP',
+  mdf: 'MDF',
+  plywood: 'Fanera',
+  natural_wood: "Tabiiy yog'och",
+  other: 'Boshqa',
+}
+const panelManufacturerChoices = computed<ChoiceOption[]>(() => {
+  const seen = new Map<string, string>()
+  for (const material of cutting.panelOptions)
+    seen.set(material.manufacturer_id, material.manufacturer_name)
+  return [...seen]
+    .map(([value, label]) => ({ value, label }))
+    .sort((left, right) => left.label.localeCompare(right.label))
+})
+const panelTypeChoices = computed<ChoiceOption[]>(() => {
+  const types = [
+    ...new Set(
+      cutting.panelOptions
+        .map((material) => material.type)
+        .filter((type): type is PanelMaterialType => type !== null),
+    ),
+  ].sort()
+  return [
+    { value: '', label: 'Barcha turlar' },
+    ...types.map((type) => ({ value: type, label: PANEL_TYPE_LABELS[type] ?? type })),
+  ]
+})
+const panelThicknessChoices = computed<ChoiceOption[]>(() => {
+  const thicknesses = [
+    ...new Set(cutting.panelOptions.map((material) => material.thickness_mm)),
+  ].sort((left, right) => Number(left) - Number(right))
+  return [
+    { value: '', label: 'Barcha qalinliklar' },
+    ...thicknesses.map((thickness) => ({ value: thickness, label: `${thickness} mm` })),
+  ]
+})
+const panelSortChoices: ChoiceOption[] = [
+  { value: 'relevance', label: 'Tartib: tavsiya' },
+  { value: 'manufacturer', label: 'Tartib: ishlab chiqaruvchi' },
+  { value: 'thickness', label: 'Tartib: qalinlik' },
+]
+const panelFiltersActive = computed(
+  () =>
+    panelManufacturerFilter.value.length > 0 ||
+    !!panelTypeFilter.value ||
+    !!panelThicknessFilter.value,
 )
-const panelOptions = computed(() =>
-  cutting.panelOptions.filter((material) =>
+function clearPanelFilters() {
+  panelManufacturerFilter.value = []
+  panelTypeFilter.value = null
+  panelThicknessFilter.value = null
+}
+
+const panelOptions = computed(() => {
+  let list = cutting.panelOptions.filter((material) =>
     draft.value?.preferred_branch_id && !showAllCatalog.value ? material.branch_carried : true,
-  ),
-)
+  )
+  if (panelManufacturerFilter.value.length > 0) {
+    list = list.filter((material) =>
+      panelManufacturerFilter.value.includes(material.manufacturer_id),
+    )
+  }
+  if (panelTypeFilter.value)
+    list = list.filter((material) => material.type === panelTypeFilter.value)
+  if (panelThicknessFilter.value) {
+    list = list.filter((material) => material.thickness_mm === panelThicknessFilter.value)
+  }
+  const sorted = [...list]
+  if (panelSort.value === 'manufacturer') {
+    sorted.sort((left, right) =>
+      `${left.manufacturer_name} ${left.name}`.localeCompare(
+        `${right.manufacturer_name} ${right.name}`,
+      ),
+    )
+  } else if (panelSort.value === 'thickness') {
+    sorted.sort((left, right) => Number(left.thickness_mm) - Number(right.thickness_mm))
+  }
+  return sorted
+})
 const panelChoices = computed<ChoiceOption[]>(() =>
   panelOptions.value.map((material) => ({
     value: material.id,
@@ -113,8 +199,7 @@ function partsSignature(list: CuttingPart[] = parts.value) {
 const optimizedUnchanged = computed(
   () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
 )
-// docs/ref/features/cutting.md — at most 100 parts per optimisation.
-const MAX_PARTS = 100
+// docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
 const canOptimize = computed(
   () =>
     !isReadOnly.value &&
@@ -291,16 +376,7 @@ function edgeById(id: string | null | undefined) {
 }
 
 function rowNotCarried(part: CuttingPart) {
-  if (!draft.value?.preferred_branch_id) return []
-  const issues: string[] = []
-  const panel = materialById(part.material_id)
-  if (part.material_source === 'shop' && panel && !panel.branch_carried) issues.push('panel')
-  for (const side of edgeFields) {
-    const edge = part[side]
-    const material = edgeById(edge?.material_id)
-    if (edge?.source === 'shop' && material && !material.branch_carried) issues.push(side)
-  }
-  return issues
+  return partNotCarried(part, draft.value?.preferred_branch_id, materialById, edgeById)
 }
 
 function partSizeError(part: CuttingPart): string | null {
@@ -315,17 +391,68 @@ function partSizeError(part: CuttingPart): string | null {
   return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${EDGE_TRIM_MM} mm chetki qirqim).`
 }
 
+// A chosen panel id that no longer resolves in the loaded catalog — e.g. the
+// material was deactivated while the draft sat (CB-89). Only meaningful once the
+// catalog has loaded, so an empty list (mid-load) never false-flags.
+function rowMaterialMissing(part: CuttingPart): boolean {
+  if (cutting.panelOptions.length === 0) return false
+  return !!part.material_id && !materialById(part.material_id)
+}
+
 function partIsInvalid(part: CuttingPart) {
   return (
     !part.material_id ||
-    part.length_mm < 50 ||
-    part.width_mm < 50 ||
+    rowMaterialMissing(part) ||
+    part.length_mm < MIN_PART_MM ||
+    part.width_mm < MIN_PART_MM ||
     part.quantity < 1 ||
     !Number.isFinite(Number(part.length_mm)) ||
     !Number.isFinite(Number(part.width_mm)) ||
     !Number.isFinite(Number(part.quantity)) ||
     partSizeError(part) !== null
   )
+}
+
+function optimizeRowMessage(code: string | undefined): string {
+  if (code === 'part_too_large')
+    return "Bu qism panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
+  if (code === 'impossible_grain')
+    return "Tola yo'nalishi bu qismni joylashtirishga to'sqinlik qiladi."
+  if (code === 'material_not_found')
+    return "Bu qatordagi material endi katalogda yo'q — boshqasini tanlang."
+  return "Bu qatorni optimallashtirib bo'lmadi."
+}
+
+function optimizeRowFromError(errorValue: unknown) {
+  if (
+    !(errorValue instanceof ApiError) ||
+    typeof errorValue.body !== 'object' ||
+    !errorValue.body
+  ) {
+    return null
+  }
+  const body = errorValue.body as {
+    code?: string
+    details?: { part_ref?: unknown; row_index?: unknown }
+  }
+  const details = body.details
+  if (!details) return null
+  const partRef = typeof details.part_ref === 'string' ? details.part_ref : null
+  const rowIndex = typeof details.row_index === 'number' ? details.row_index : null
+  if (partRef === null && rowIndex === null) return null
+  return { partRef, rowIndex, message: optimizeRowMessage(body.code) }
+}
+
+function rowOptimizeError(part: CuttingPart, index: number): string | null {
+  const error = optimizeRowError.value
+  if (!error) return null
+  if (error.partRef !== null) return part.part_ref === error.partRef ? error.message : null
+  // Backend row_index is 1-indexed (enumerate(parts, start=1)); the array is 0-indexed.
+  return error.rowIndex === index + 1 ? error.message : null
+}
+
+function rowHasError(part: CuttingPart, index: number): boolean {
+  return partIsInvalid(part) || rowOptimizeError(part, index) !== null
 }
 
 function edgeCount(part: CuttingPart) {
@@ -335,8 +462,20 @@ function edgeCount(part: CuttingPart) {
 function edgeSummary(part: CuttingPart) {
   const count = edgeCount(part)
   if (count === 0) return "Krom yo'q"
-  if (count === 4) return '4 tomon'
-  return `${count} tomon`
+  const sides = count === 4 ? '4 tomon' : `${count} tomon`
+  // Name the tape in the visible cell, not just the hover title / 6.5px SVG text
+  // (CB-91/CB-69): one label when every banded side shares a material, else
+  // "Aralash" so a mixed row is obvious without opening the picker.
+  const materialIds = [
+    ...new Set(edgeFields.filter((side) => part[side]).map((side) => part[side]?.material_id)),
+  ]
+  if (materialIds.length === 1) {
+    const material = edgeById(materialIds[0])
+    if (material) return `${edgeShortLabel(material, true)} · ${sides}`
+  } else if (materialIds.length > 1) {
+    return `Aralash · ${sides}`
+  }
+  return sides
 }
 
 function edgeSourceSummary(part: CuttingPart) {
@@ -352,34 +491,17 @@ function edgeSearchText(material: ClientCatalogMaterialOption) {
   return `${material.manufacturer_name} ${material.name} ${material.color} ${material.decor_code ?? ''} ${material.thickness_mm}`.toLowerCase()
 }
 
-function edgeRankForPart(part: CuttingPart, edge: ClientCatalogMaterialOption) {
-  const panel = materialById(part.material_id)
-  if (!panel) return 2
-  if (panel.decor_code && edge.decor_code && panel.decor_code === edge.decor_code) return 0
-  if (panel.color && edge.color && panel.color.toLowerCase() === edge.color.toLowerCase()) return 1
-  return 2
-}
-
 function rankedEdgesForPart(part: CuttingPart) {
-  return cutting.edgeOptions
-    .map((material) => ({ material, rank: edgeRankForPart(part, material) }))
-    .sort((left, right) => {
-      if (left.rank !== right.rank) return left.rank - right.rank
-      const leftThickness = Number(left.material.thickness_mm)
-      const rightThickness = Number(right.material.thickness_mm)
-      if (leftThickness !== rightThickness) return leftThickness - rightThickness
-      return `${left.material.manufacturer_name} ${left.material.name}`.localeCompare(
-        `${right.material.manufacturer_name} ${right.material.name}`,
-      )
-    })
+  return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
 }
 
 function recommendedEdgeForPart(part: CuttingPart) {
-  const current = edgePickerSelectedMaterialId.value
-  if (current) return edgeById(current)
-  const remembered = preferredEdgeId(part)
-  if (remembered) return edgeById(remembered)
-  return rankedEdgesForPart(part)[0]?.material ?? null
+  return recommendedEdge(
+    materialById(part.material_id),
+    cutting.edgeOptions,
+    edgePickerSelectedMaterialId.value,
+    preferredEdgeId(part),
+  )
 }
 
 function edgeShortLabel(
@@ -444,10 +566,12 @@ function resultPanelCount(result: CuttingResult) {
 }
 
 function saveLabel() {
-  if (saveState.value === 'saved') return 'Saqlangan'
-  if (saveState.value === 'saving') return 'Saqlanmoqda'
+  // Self-describing for SR users (CB-53): the autosave chip is a role=status live
+  // region, so the announced text must stand on its own, not a bare "Saqlangan".
+  if (saveState.value === 'saved') return 'Chizma saqlandi'
+  if (saveState.value === 'saving') return 'Chizma saqlanmoqda'
   if (saveState.value === 'editing') return 'Tahrirlanmoqda'
-  return 'Saqlash xatosi'
+  return "Saqlash xatosi — qayta urinib ko'ring"
 }
 
 function addRow() {
@@ -682,57 +806,89 @@ function bringOwn(part: CuttingPart) {
   }
 }
 
-// Debounced autosave (700ms). The timing core lives in the framework-agnostic
-// `autosaveController` (unit-tested in autosaveController.spec.ts — CB-108); we
-// only mirror its status onto `saveState`/`saveError` and feed it the gate:
-// don't persist incomplete/out-of-bounds rows (they surface their own inline
-// validation) or a read-only bound draft.
-const autosave = createAutosaveController({
+// Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
+// the deep `parts` watch, and the CB-15 hydration guard all live in the
+// `useDraftAutosave` composable (CB-93 seam). The gate skips incomplete/out-of-bounds
+// rows (they show their own inline validation) and a read-only bound draft.
+const autosave = useDraftAutosave({
+  parts,
   persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
-  canPersist: () => hasPersistableParts.value && !isReadOnly.value,
-  onStatus: (status) => {
-    saveState.value = status
-    saveError.value = status === 'error' ? "Chizmani saqlab bo'lmadi. Qayta urinib ko'ring." : null
+  canPersist: () => hasPersistableParts.value,
+  isReadOnly: () => isReadOnly.value,
+  // A row-attributed optimiser error is stale once the parts change.
+  onSchedule: () => {
+    optimizeRowError.value = null
   },
 })
-
-function scheduleSave() {
-  if (hydrating || isReadOnly.value) return
-  autosave.schedule()
-}
+const saveState = autosave.saveState
+const saveError = autosave.saveError
 
 async function setPreferredBranch(branchId: string | null) {
-  await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
+  // Surface a failure instead of an unhandled rejection that leaves the local
+  // pick disagreeing with the server (CB-57).
+  try {
+    await cutting.updateDraft(draftId.value, { preferred_branch_id: branchId })
+  } catch {
+    toast.danger("Afzal filialni saqlab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   branchPickerOpen.value = false
   selectedBranchId.value = branchId
   recoveryDismissed.value = false
   await loadMaterials()
 }
 
+// Close the picker without applying — drop the pending pick back to the saved
+// preference so a re-open highlights what's actually active, not an abandoned choice.
+function closeBranchPicker() {
+  branchPickerOpen.value = false
+  selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+}
+
 async function optimize() {
   if (cutting.optimizing || !canOptimize.value) return
   optimizeError.value = null
+  optimizeRowError.value = null
   // Flush any pending debounced edit so we optimize the latest parts, not a
   // stale server snapshot.
   await autosave.flush()
   if (saveState.value === 'error') return
+  let failedRowRef: string | null = null
   try {
     const updated = await cutting.optimizeDraft(draftId.value)
     activeResultId.value = updated.chosen_result_id
     activePanelId.value = updated.results[0]?.panels[0]?.id ?? null
     lastOptimizedSignature.value = partsSignature()
-  } catch {
+  } catch (errorValue) {
     optimizeError.value = clientErrorLabel(
       cutting.error,
       "Optimallashtirishda xatolik. Qayta urinib ko'ring.",
     )
+    optimizeRowError.value = optimizeRowFromError(errorValue)
+    if (optimizeRowError.value?.partRef) failedRowRef = optimizeRowError.value.partRef
+    else if (optimizeRowError.value?.rowIndex != null) {
+      // row_index is 1-indexed (backend enumerate start=1) → 0-indexed array.
+      failedRowRef = parts.value[optimizeRowError.value.rowIndex - 1]?.part_ref ?? null
+    }
   }
   await nextTick()
-  document.getElementById('cutting-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // On a row-attributed failure, scroll the offending row into view; otherwise
+  // the results section (CB-89).
+  const target = failedRowRef
+    ? document.getElementById(`part-row-${failedRowRef}`)
+    : document.getElementById('cutting-results')
+  target?.scrollIntoView({ behavior: 'smooth', block: failedRowRef ? 'center' : 'start' })
 }
 
 async function choose(result: CuttingResult) {
-  await cutting.chooseResult(draftId.value, result.id)
+  // chooseResult can throw (stale/invalidated result, network) — surface it
+  // rather than silently leaving the chosen result out of sync (CB-57).
+  try {
+    await cutting.chooseResult(draftId.value, result.id)
+  } catch {
+    toast.danger("Natijani tanlab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   activeResultId.value = result.id
   activePanelId.value = result.panels[0]?.id ?? null
 }
@@ -798,12 +954,9 @@ watch(
     // the round-trip (CB-15). Result-derived state below always tracks the
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
-      hydrating = true
-      parts.value = value.parts_snapshot.map((part) => ({ ...part }))
-      hydratedDraftId = value.id
-      autosave.markSaved()
-      nextTick(() => {
-        hydrating = false
+      autosave.hydrate(() => {
+        parts.value = value.parts_snapshot.map((part) => ({ ...part }))
+        hydratedDraftId = value.id
       })
     }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
@@ -815,12 +968,12 @@ watch(
       value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
       value.results[0]?.panels[0]?.id ??
       null
-    selectedBranchId.value = value.preferred_branch_id
+    // Don't clobber a pending pick while the picker is open (e.g. a debounced
+    // autosave round-trips mid-selection); mirror the saved preference otherwise.
+    if (!branchPickerOpen.value) selectedBranchId.value = value.preferred_branch_id
   },
   { immediate: true },
 )
-
-watch(parts, scheduleSave, { deep: true })
 
 onMounted(async () => {
   document.addEventListener('keydown', onDocumentKeydown)
@@ -892,6 +1045,7 @@ const edgePatterns: Array<{
             'bg-info-soft text-info': saveState === 'saving' || saveState === 'editing',
             'bg-danger-soft text-danger': saveState === 'error',
           }"
+          role="status"
           aria-live="polite"
         >
           <span class="mp-dot" aria-hidden="true"></span>
@@ -972,23 +1126,21 @@ const edgePatterns: Array<{
           </button>
         </section>
 
-        <section
-          v-if="branchPickerOpen"
-          class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
-        >
-          <SearchCombobox
-            v-model="selectedBranchId"
-            label="Afzal filial"
-            :options="branchOptions"
-            placeholder="Filialni qidiring"
-          />
-          <button
-            type="button"
-            class="mp-button mp-button-primary self-end"
-            @click="setPreferredBranch(selectedBranchId)"
-          >
-            Qo'llash
-          </button>
+        <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
+          <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
+          <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
+              Bekor qilish
+            </button>
+            <button
+              type="button"
+              class="mp-button mp-button-primary"
+              :disabled="!selectedBranchId"
+              @click="setPreferredBranch(selectedBranchId)"
+            >
+              Qo'llash
+            </button>
+          </div>
         </section>
 
         <section v-if="showRecovery" class="client-banner warn">
@@ -1048,6 +1200,36 @@ const edgePatterns: Array<{
             </div>
           </div>
 
+          <div
+            v-if="parts.length > 0"
+            class="border-b border-hairline px-4 py-3"
+            aria-label="Panel filtri"
+          >
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MultiSelectFilter
+                v-model="panelManufacturerFilter"
+                label="Ishlab chiqaruvchi"
+                :options="panelManufacturerChoices"
+              />
+              <FormSelect v-model="panelTypeFilter" label="Tur" :options="panelTypeChoices" />
+              <FormSelect
+                v-model="panelThicknessFilter"
+                label="Qalinlik"
+                :options="panelThicknessChoices"
+              />
+              <FormSelect v-model="panelSort" label="Saralash" :options="panelSortChoices" />
+            </div>
+            <div
+              v-if="panelFiltersActive"
+              class="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm"
+            >
+              <span class="text-ink-muted">{{ panelOptions.length }} ta panel ko'rsatilmoqda</span>
+              <button type="button" class="font-bold text-accent" @click="clearPanelFilters">
+                Filtrlarni tozalash
+              </button>
+            </div>
+          </div>
+
           <div v-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="plus" /></div>
@@ -1062,9 +1244,10 @@ const edgePatterns: Array<{
           <div v-else class="grid gap-3 p-4">
             <article
               v-for="(part, index) in parts"
+              :id="`part-row-${part.part_ref}`"
               :key="part.part_ref"
               class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
-              :class="partIsInvalid(part) ? 'border-danger-soft' : 'border-hairline'"
+              :class="rowHasError(part, index) ? 'border-danger-soft' : 'border-hairline'"
             >
               <div
                 class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
@@ -1121,11 +1304,13 @@ const edgePatterns: Array<{
                     <input
                       v-model.number="part.length_mm"
                       type="number"
-                      min="50"
+                      :min="MIN_PART_MM"
                       inputmode="numeric"
                       enterkeyhint="next"
                       class="mp-input font-mono"
-                      :class="part.length_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      :class="
+                        part.length_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
+                      "
                       aria-label="Uzunlik millimetr"
                     />
                   </label>
@@ -1135,11 +1320,13 @@ const edgePatterns: Array<{
                     <input
                       v-model.number="part.width_mm"
                       type="number"
-                      min="50"
+                      :min="MIN_PART_MM"
                       inputmode="numeric"
                       enterkeyhint="next"
                       class="mp-input font-mono"
-                      :class="part.width_mm < 50 || partSizeError(part) ? 'border-danger' : ''"
+                      :class="
+                        part.width_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
+                      "
                       aria-label="Eni millimetr"
                     />
                   </label>
@@ -1256,6 +1443,22 @@ const edgePatterns: Array<{
                 <span>{{ partSizeError(part) }}</span>
               </p>
 
+              <p
+                v-if="rowMaterialMissing(part)"
+                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+              >
+                <span aria-hidden="true">!</span>
+                <span>Bu qatordagi panel materiali endi katalogda yo'q — boshqasini tanlang.</span>
+              </p>
+
+              <p
+                v-if="rowOptimizeError(part, index)"
+                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
+              >
+                <span aria-hidden="true">!</span>
+                <span>{{ rowOptimizeError(part, index) }}</span>
+              </p>
+
               <div
                 v-if="rowNotCarried(part).length"
                 class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
@@ -1313,7 +1516,7 @@ const edgePatterns: Array<{
         </section>
       </fieldset>
 
-      <section id="cutting-results" class="client-card mt-6">
+      <section id="cutting-results" class="client-card mt-6 scroll-mt-28 min-[860px]:scroll-mt-20">
         <div class="client-card-h">
           <div>
             <h2>Natija</h2>
@@ -1403,22 +1606,25 @@ const edgePatterns: Array<{
               <div
                 class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4"
               >
-                <div class="text-sm font-bold text-ink">Algoritm solishtirish</div>
+                <div class="text-sm font-bold text-ink">
+                  Algoritm: <span class="text-accent">{{ chosenResult.algorithm_name }}</span>
+                </div>
                 <button
                   type="button"
                   class="-mr-2 inline-flex min-h-11 items-center px-3 text-sm font-bold text-accent"
                   @click="algorithmsOpen = !algorithmsOpen"
                 >
-                  {{ algorithmsOpen ? 'Yopish' : 'Ochish' }}
+                  {{ algorithmsOpen ? 'Yopish' : 'Algoritmlarni solishtirish' }}
                 </button>
               </div>
               <div v-if="algorithmsOpen" class="overflow-x-auto">
                 <table class="w-full min-w-[560px] text-sm">
                   <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
                     <tr>
-                      <th class="px-4 py-3">Algorithm</th>
+                      <th class="px-4 py-3">Algoritm</th>
                       <th class="px-4 py-3">Chiqim</th>
                       <th class="px-4 py-3">Panel</th>
+                      <th class="px-4 py-3">Kesish yo'li</th>
                       <th class="px-4 py-3">Holat</th>
                     </tr>
                   </thead>
@@ -1433,6 +1639,7 @@ const edgePatterns: Array<{
                         {{ formatPercent(result.waste_percentage) }}
                       </td>
                       <td class="px-4 py-3 font-mono">{{ resultPanelCount(result) }}</td>
+                      <td class="px-4 py-3 font-mono">{{ metres(result.total_cut_length_mm) }}</td>
                       <td class="px-4 py-3">
                         <button
                           type="button"

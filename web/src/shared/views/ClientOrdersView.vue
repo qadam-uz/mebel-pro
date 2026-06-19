@@ -8,6 +8,7 @@ import {
   clientStatusPillClass,
   formatRelativeDate,
 } from '@/shared/app/clientUi'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -38,10 +39,18 @@ function reloadOrders() {
   void orders.loadClientOrders({ status: status.value, search: search.value })
 }
 
+function loadMoreOrders() {
+  void orders.loadClientOrders({
+    status: status.value,
+    search: search.value,
+    offset: orders.clientOrders.length,
+  })
+}
+
 let timer: number | undefined
 watch([status, search], () => {
   window.clearTimeout(timer)
-  timer = window.setTimeout(reloadOrders, 250)
+  timer = window.setTimeout(reloadOrders, SEARCH_DEBOUNCE_MS)
 })
 
 function nextAction(order: OrderSummary) {
@@ -71,7 +80,7 @@ async function confirmCancel() {
     actionError.value = null
     await orders.loadClientOrders({ status: status.value, search: search.value })
   } catch {
-    actionError.value = orders.error ?? 'order_cancel_failed'
+    actionError.value = orders.actionError ?? 'order_cancel_failed'
   }
 }
 
@@ -180,6 +189,16 @@ onMounted(() => {
           </RouterLink>
         </div>
       </article>
+
+      <button
+        v-if="orders.ordersHasMore"
+        type="button"
+        class="mp-button mp-button-outline w-full"
+        :disabled="orders.loading"
+        @click="loadMoreOrders"
+      >
+        Yana ko'rsatish
+      </button>
     </div>
 
     <ConfirmDialog
@@ -198,7 +217,7 @@ onMounted(() => {
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
       <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">
-        {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
+        {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
       </p>
     </ConfirmDialog>
   </section>

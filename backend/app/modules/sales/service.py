@@ -45,7 +45,10 @@ from app.modules.inventory.api import consume_order_stock, restore_order_stock
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order, OrderCancellation, OrderItem, OrderStatusEvent
 from app.modules.sales.schemas import (
+    BatchOrderQuoteResponse,
     ClientOrderCreateRequest,
+    EdgePriceLine,
+    MaterialPriceLine,
     OrderDetailResponse,
     OrderItemResponse,
     OrderQuoteResponse,
@@ -62,6 +65,7 @@ from app.modules.sales.schemas import (
     WorkshopWorkerOption,
 )
 from app.modules.support.api import record_action, record_status_change
+from app.modules.support.contracts import Notification
 from app.modules.workshop.contracts import Branch, Workshop
 
 PHONE_RE = re.compile(r"^\+998\d{9}$")
@@ -72,6 +76,19 @@ WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
         Permission.PROCESS_PRODUCTION,
     }
 )
+
+# Client inbox event per destination status (notifications.md: "for the client, an
+# order status change"). The client SPA renders these codes into localized titles
+# (web clientUi NOTIFICATION_TITLES); the payload carries denormalized order data.
+# NEW is absent — that is the client placing their own order, not a notifiable change.
+_CLIENT_ORDER_EVENT_CODE: dict[OrderStatus, str] = {
+    OrderStatus.CONFIRMED: "order.confirmed",
+    OrderStatus.CUTTING: "order.status_changed",
+    OrderStatus.EDGE_BANDING: "order.status_changed",
+    OrderStatus.READY: "order.ready",
+    OrderStatus.COMPLETED: "order.completed",
+    OrderStatus.CANCELLED: "order.cancelled",
+}
 
 
 @dataclass(frozen=True)
@@ -90,6 +107,11 @@ class PricingSnapshot:
     subtotal_edge_banding_tiyin: int
     total_tiyin: int
     priced_parts: list[PricedPart]
+    # Itemized quote breakdown (CB-117) — only consumed by the quote response.
+    panels_used: int
+    cutting_rate_tiyin: int
+    material_lines: list[MaterialPriceLine]
+    edge_lines: list[EdgePriceLine]
 
 
 @dataclass(frozen=True)
@@ -229,17 +251,59 @@ async def quote_client_order(
         draft_id=draft_id,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
+    return _build_quote_response(draft_id, branch, pricing)
+
+
+def _build_quote_response(
+    draft_id: uuid.UUID,
+    branch: Branch,
+    pricing: PricingSnapshot,
+) -> OrderQuoteResponse:
     return OrderQuoteResponse(
         draft_id=draft_id,
         branch_id=branch.id,
         branch_name=branch.name,
         branch_address=branch.address,
         branch_phone=branch.phone,
+        today_hours=branch.today_hours(),
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         total_tiyin=pricing.total_tiyin,
+        panels_used=pricing.panels_used,
+        cutting_rate_tiyin=pricing.cutting_rate_tiyin,
+        material_lines=pricing.material_lines,
+        edge_lines=pricing.edge_lines,
     )
+
+
+async def quote_client_order_batch(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    draft_id: uuid.UUID,
+    branch_ids: list[uuid.UUID],
+) -> BatchOrderQuoteResponse:
+    """Quote one draft against many branches in a single request (CB-12), pricing
+    the validated result once and capturing each branch's own error code so the
+    client no longer fans out N requests."""
+    client = await _client(db, principal)
+    _, result = await _client_orderable_draft_result(
+        db,
+        client_id=client.id,
+        draft_id=draft_id,
+    )
+    quotes: dict[str, OrderQuoteResponse] = {}
+    errors: dict[str, str | None] = {}
+    for branch_id in branch_ids:
+        key = str(branch_id)
+        try:
+            branch, _ = await _active_branch_for_order(db, branch_id)
+            pricing = await _price_result(db, branch_id=branch.id, result=result)
+            quotes[key] = _build_quote_response(draft_id, branch, pricing)
+        except APIError as exc:
+            errors[key] = exc.code
+    return BatchOrderQuoteResponse(quotes=quotes, errors=errors)
 
 
 async def list_client_orders(
@@ -248,6 +312,8 @@ async def list_client_orders(
     principal: AuthenticatedPrincipal,
     status_filter: str | None = None,
     search: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
 ) -> list[OrderSummaryResponse]:
     client = await _client(db, principal)
     query = (
@@ -256,6 +322,9 @@ async def list_client_orders(
         .order_by(Order.created_at.desc(), Order.order_number.desc())
     )
     query = _apply_order_filters(query, status_filter=status_filter, search=search)
+    # Paginate so a long history isn't re-downloaded whole (CB-38). Clamp to a sane
+    # window; the client appends pages via offset.
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
     return [await _order_response(db, order, include_detail=False) for order in rows]
 
@@ -1005,6 +1074,50 @@ async def _transition(
         reason=reason,
         action_log_id=action.id,
     )
+    _notify_client_of_status(
+        db, principal=principal, order=order, from_status=from_status, to_status=to_status
+    )
+
+
+def _notify_client_of_status(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order: Order,
+    from_status: OrderStatus,
+    to_status: OrderStatus,
+) -> None:
+    """Fan one inbox row to the order's client on a status change (CB-02).
+
+    Skipped when the client themselves drove the change (e.g. a self-cancel) — they
+    don't need to be told about their own action — and for transitions with no
+    client-facing event code. Recipient/payload follow the generic Notification
+    model; the client SPA already maps these event codes to localized titles.
+    """
+    event_code = _CLIENT_ORDER_EVENT_CODE.get(to_status)
+    if event_code is None:
+        return
+    actor_is_the_client = (
+        principal.principal_type is AuthenticatedPrincipalType.CLIENT
+        and principal.principal_id == order.client_id
+    )
+    if actor_is_the_client:
+        return
+    db.add(
+        Notification(
+            recipient_type=AuthenticatedPrincipalType.CLIENT,
+            recipient_id=order.client_id,
+            event_code=event_code,
+            entity_type="order",
+            entity_id=order.id,
+            payload={
+                "order_number": order.order_number,
+                "from_status": from_status.value,
+                "to_status": to_status.value,
+            },
+            created_at=datetime.now(UTC),
+        )
+    )
 
 
 async def _append_order_event(
@@ -1067,6 +1180,7 @@ async def _order_response(
         "branch_name": branch.name,
         "branch_address": branch.address,
         "branch_phone": branch.phone,
+        "today_hours": branch.today_hours(),
         "cutting_result_id": order.cutting_result_id,
         "status": order.status,
         "version": order.version,
@@ -1234,19 +1348,59 @@ async def _price_result(
         _millimetre_price(edge_demands[material_id], branch_materials[material_id].price_tiyin)
         for material_id in edge_demands
     )
-    edge_labor_total = _millimetre_price(
-        sum(edge_demands.values()),
-        int(pricing.edge_banding_rate_tiyin or 0),
+    # Sum per-material labor (not _millimetre_price of the global sum): integer
+    # floor-division isn't distributive, so per-material must be summed for the
+    # itemized edge_lines (CB-117) to reconcile exactly with this subtotal.
+    edge_labor_total = sum(
+        _millimetre_price(edge_demands[material_id], int(pricing.edge_banding_rate_tiyin or 0))
+        for material_id in edge_demands
     )
     priced_parts = _priced_parts(result, branch_materials)
     subtotal_edge = edge_material_total + edge_labor_total
     total = subtotal_cutting + subtotal_materials + subtotal_edge
+    edge_rate = int(pricing.edge_banding_rate_tiyin or 0)
+
+    def _line_name(material_id: uuid.UUID) -> str:
+        snapshot = result.material_snapshots.get(str(material_id), {})
+        manufacturer = str(snapshot.get("manufacturer_name", "")).strip()
+        name = str(snapshot.get("name", "")).strip()
+        return f"{manufacturer} {name}".strip() or "Material"
+
+    material_lines = [
+        MaterialPriceLine(
+            material_id=material_id,
+            material_name=_line_name(material_id),
+            panels_used=quantity,
+            unit_price_tiyin=branch_materials[material_id].price_tiyin,
+            line_total_tiyin=branch_materials[material_id].price_tiyin * quantity,
+        )
+        for material_id, quantity in panel_demands.items()
+    ]
+    edge_lines = []
+    for material_id in edge_demands:
+        mm = edge_demands[material_id]
+        material_cost = _millimetre_price(mm, branch_materials[material_id].price_tiyin)
+        service_cost = _millimetre_price(mm, edge_rate)
+        edge_lines.append(
+            EdgePriceLine(
+                material_id=material_id,
+                material_name=_line_name(material_id),
+                consumed_mm=mm,
+                material_cost_tiyin=material_cost,
+                service_cost_tiyin=service_cost,
+                line_total_tiyin=material_cost + service_cost,
+            )
+        )
     return PricingSnapshot(
         subtotal_cutting_tiyin=subtotal_cutting,
         subtotal_materials_tiyin=subtotal_materials,
         subtotal_edge_banding_tiyin=subtotal_edge,
         total_tiyin=total,
         priced_parts=priced_parts,
+        panels_used=sum(int(value) for value in result.panels_used_by_material.values()),
+        cutting_rate_tiyin=int(pricing.cutting_rate_tiyin),
+        material_lines=material_lines,
+        edge_lines=edge_lines,
     )
 
 

@@ -3,14 +3,16 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { useFilesStore } from '@/shared/stores/files'
 
+// `alt` is required: a meaningful image without alt is hidden from assistive
+// tech, and the load-failure fallback needs it to announce what was missing
+// (CB-54). Pass an empty string explicitly for a purely decorative image.
 const props = withDefaults(
   defineProps<{
     fileId: string | null
-    alt?: string
+    alt: string
     class?: string
   }>(),
   {
-    alt: '',
     class: '',
   },
 )
@@ -18,9 +20,12 @@ const props = withDefaults(
 const files = useFilesStore()
 const src = ref<string | null>(null)
 const failed = ref(false)
+// We own the object URL's lifetime via the handle's revoke (CB-131).
+let revokeCurrent: (() => void) | null = null
 
 function revoke() {
-  if (src.value) URL.revokeObjectURL(src.value)
+  revokeCurrent?.()
+  revokeCurrent = null
   src.value = null
 }
 
@@ -31,7 +36,9 @@ watch(
     failed.value = false
     if (!fileId) return
     try {
-      src.value = await files.loadObjectUrl(fileId)
+      const handle = await files.loadObjectUrl(fileId)
+      revokeCurrent = handle.revoke
+      src.value = handle.url
     } catch {
       failed.value = true
     }
@@ -47,8 +54,10 @@ onBeforeUnmount(revoke)
   <span
     v-else-if="failed"
     :class="props.class"
+    role="img"
+    :aria-label="alt ? `${alt} — rasmni yuklab bo'lmadi` : 'Rasmni yuklab bo\'lmadi'"
     class="grid place-items-center bg-sunk text-xs text-ink-muted"
   >
-    image
+    Rasm yo'q
   </span>
 </template>

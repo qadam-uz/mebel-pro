@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.modules.cutting.api import cutting_result_response, render_cutting_pdf, render_cutting_svg
@@ -24,10 +24,13 @@ from app.modules.sales.api import (
     mark_collected,
     place_client_order,
     quote_client_order,
+    quote_client_order_batch,
     revert_order,
     update_workshop_note,
 )
 from app.modules.sales.schemas import (
+    BatchOrderQuoteRequest,
+    BatchOrderQuoteResponse,
     ClientOrderCreateRequest,
     OrderDetailResponse,
     OrderQuoteResponse,
@@ -50,8 +53,17 @@ async def client_orders_index(
     db: Session,
     status: str | None = None,
     search: str | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[OrderSummaryResponse]:
-    return await list_client_orders(db, principal=principal, status_filter=status, search=search)
+    return await list_client_orders(
+        db,
+        principal=principal,
+        status_filter=status,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
@@ -79,6 +91,20 @@ async def client_orders_quote(
         principal=principal,
         draft_id=draft_id,
         branch_id=branch_id,
+    )
+
+
+@router.post("/client/orders/quote/batch", response_model=BatchOrderQuoteResponse)
+async def client_orders_quote_batch(
+    payload: BatchOrderQuoteRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> BatchOrderQuoteResponse:
+    return await quote_client_order_batch(
+        db,
+        principal=principal,
+        draft_id=payload.draft_id,
+        branch_ids=payload.branch_ids,
     )
 
 

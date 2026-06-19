@@ -22,6 +22,7 @@ from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.sales.contracts import Order, OrderItem
+from app.modules.support.contracts import Notification
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -549,3 +550,101 @@ async def test_client_orders_active_filter_expands_to_status_union(
     # Once cancelled it drops out of active and appears under the cancelled tab.
     assert order_id not in _ids(await _list("active"))
     assert order_id in _ids(await _list("cancelled"))
+
+
+async def _client_order_notifications(db: AsyncSession, order_id: str) -> list[Notification]:
+    rows = await db.scalars(
+        select(Notification)
+        .where(
+            Notification.recipient_type == AuthenticatedPrincipalType.CLIENT,
+            Notification.entity_type == "order",
+            Notification.entity_id == uuid.UUID(order_id),
+        )
+        .order_by(Notification.created_at)
+    )
+    return list(rows.all())
+
+
+async def test_workshop_status_changes_notify_the_client(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """CB-02: every workshop-driven status change fans one inbox row to the order's
+    client, carrying the status + denormalized order number. Placing the order
+    (client's own action) emits nothing."""
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    # The client placing their own order is not a notifiable change.
+    assert await _client_order_notifications(db_session, order_id) == []
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assert approved.status_code == 200
+
+    after_approve = await _client_order_notifications(db_session, order_id)
+    assert [n.event_code for n in after_approve] == ["order.confirmed"]
+    assert after_approve[0].payload["order_number"] == order["order_number"]
+    assert after_approve[0].payload["to_status"] == "confirmed"
+
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    band_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/banding-done",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    assert band_done.json()["status"] == "ready"
+
+    codes = [n.event_code for n in await _client_order_notifications(db_session, order_id)]
+    assert codes == [
+        "order.confirmed",  # approve
+        "order.status_changed",  # assign → cutting
+        "order.status_changed",  # cutting-done → edge_banding
+        "order.ready",  # banding-done → ready
+    ]
+
+
+async def test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """CB-02: a client cancelling their own order is their own action — no inbox row
+    for them. A workshop cancelling the client's order does notify the client."""
+    self_cancel, self_client_access, _, _, _, _ = await _placed_order(client, db_session)
+    self_id = self_cancel["id"]
+    cancelled = await client.post(
+        f"/api/v1/client/orders/{self_id}/cancel",
+        headers=_auth(self_client_access),
+        json={"version": self_cancel["version"], "reason": "Changed plans"},
+    )
+    assert cancelled.status_code == 200
+    assert await _client_order_notifications(db_session, self_id) == []
+
+    shop_cancel, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    shop_id = shop_cancel["id"]
+    shop_cancelled = await client.post(
+        f"/api/v1/workshop/orders/{shop_id}/cancel",
+        headers=_auth(owner_access),
+        json={"version": shop_cancel["version"], "reason": "Out of stock"},
+    )
+    assert shop_cancelled.status_code == 200
+    notifications = await _client_order_notifications(db_session, shop_id)
+    assert [n.event_code for n in notifications] == ["order.cancelled"]
+    assert notifications[0].payload["to_status"] == "cancelled"

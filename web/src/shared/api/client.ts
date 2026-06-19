@@ -34,6 +34,24 @@ export function apiErrorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
+/**
+ * Canonical error capture for stores (CB-100): a 403 always maps to
+ * `permission_denied`; otherwise the backend `code` is preserved so the UI's
+ * translation layer (`clientErrorLabel`) can show a specific message, falling back
+ * to `fallback` for non-ApiError failures or a code-less body. Replaces three
+ * divergent per-store variants, one of which dropped the backend code entirely.
+ */
+export function captureApiError(
+  error: unknown,
+  fallback: string,
+): { code: string; traceId: string | null } {
+  let code = fallback
+  if (error instanceof ApiError) {
+    code = error.status === 403 ? 'permission_denied' : (apiErrorCode(error) ?? fallback)
+  }
+  return { code, traceId: apiTraceId(error) }
+}
+
 // Build a query string, dropping only null/undefined/empty-string — `false` and
 // `0` ARE sent (e.g. `carried_only=false`). One shared copy replaces six
 // store-local `withQuery`s, three of which used a truthy check that silently

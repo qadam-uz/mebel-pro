@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/shared/api/client'
+import { useAuthStore } from '@/shared/stores/auth'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
 vi.mock('@/shared/api/client', () => {
@@ -90,5 +91,38 @@ describe('notifications store', () => {
     expect(store.unread).toBe(0)
     expect(store.items[0].read_at).not.toBeNull()
     expect(store.items[1].read_at).toBe('2026-06-01T01:00:00Z')
+  })
+
+  it('captures a markAllRead failure without zeroing the badge or stamping rows', async () => {
+    const store = useNotificationsStore()
+    store.items = [item('a', null)]
+    store.unread = 1
+    vi.mocked(api.post).mockRejectedValueOnce(new ApiError(500, { trace_id: 'tr-2' }))
+
+    await expect(store.markAllRead()).resolves.toBeUndefined()
+    expect(store.unread).toBe(1)
+    expect(store.items[0].read_at).toBeNull()
+    expect(store.actionError).toBe('notifications_read_all_failed')
+    expect(store.traceId).toBe('tr-2')
+  })
+
+  it('paginates: offset 0 replaces, offset>0 appends, hasMore from a full page (CB-41)', async () => {
+    useAuthStore().accessToken = 'tok'
+    const store = useNotificationsStore()
+
+    vi.mocked(api.get).mockResolvedValueOnce([item('a', null), item('b', null)])
+    await store.loadList(2, 0)
+    expect(store.items).toHaveLength(2)
+    expect(store.hasMore).toBe(true)
+
+    vi.mocked(api.get).mockResolvedValueOnce([item('c', null)])
+    await store.loadList(2, 2)
+    expect(store.items.map((row) => row.id)).toEqual(['a', 'b', 'c'])
+    expect(store.hasMore).toBe(false)
+
+    // offset 0 replaces rather than appends
+    vi.mocked(api.get).mockResolvedValueOnce([item('z', null)])
+    await store.loadList(2, 0)
+    expect(store.items.map((row) => row.id)).toEqual(['z'])
   })
 })

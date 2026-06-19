@@ -42,9 +42,237 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 3 | 23 | 19 | **45** |
-| Done | 29 | 45 | 13 | **87** |
+| Open (incl. partial) | 0 | 2 | 2 | **4** |
+| Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B19): **CB-40 (caching shipped; pagination
+> deferred)** — `cutting.loadMaterials` now caches by `(kind, branch, search,
+> carried_only)` with ~30s freshness + a `force` bypass (mirrors the CB-52
+> branch-options cache), so the editor stops re-downloading an identical catalog on
+> remount / branch flip-back; +2 store unit tests. **The headline "don't load the
+> whole catalog" via server-side search + page limit is NOT done — it conflicts with
+> the shipped CB-84 client-side filter bar (manufacturer/type/thickness + sort over
+> the full list) and the CB-19/86 not-carried recovery, both of which need the full
+> per-branch list client-side. Moving filtering server-side would undo CB-84, so it
+> needs a product/design decision (surfaced, not guessed).** Web gate 111 tests +
+> editor e2e green.
+
+> Progress (2026-06-19, client-finish B18): **CB-93 (in progress)** — editor
+> decomposition, seam 3 of 5. Extracted the autosave wiring into
+> `composables/useDraftAutosave.ts` (status mirror + don't-persist gate + the deep
+> `parts` watch + the CB-15 `hydrate()` guard, wrapping the already-tested
+> `autosaveController`); +5 unit tests (debounce, coalesce, read-only no-op,
+> hydrate-no-save, onSchedule). The editor now consumes it via one `useDraftAutosave`
+> call. (Seams already done: `autosaveController.ts` + `cuttingEdgeDisplay.ts` pure
+> modules. Remaining: CuttingResultsSection / CuttingPartRow / CuttingEdgePickerModal
+> component extractions.) Web gate 109 tests + editor e2e green.
+
+> Progress (2026-06-19, client-finish B17): **CB-51** — two-pane branch pre-filter.
+> The editor's flat "workshop · branch" SearchCombobox is replaced by a new
+> `components/CuttingBranchPicker.vue` (workshops left, the chosen workshop's branches
+> right, per cutting.md §"Branch pre-filter") with status chips + today-hours;
+> `temporarily_closed` branches stay selectable (CB-77). Editor wiring: removed the
+> dead `branchOptions` ChoiceOption computed, added a "Bekor qilish" that resets the
+> pending pick to the saved preference (`closeBranchPicker`), Qo'llash still calls
+> `setPreferredBranch` (→ loadMaterials + recovery re-eval). Updated the editor-picker
+> step in `order-production.spec` + `cutting-drafts.spec`, and fixed a **pre-existing
+> stale e2e assertion** in cutting-drafts (the algorithm-comparison table is collapsed
+> behind "Algoritmlarni solishtirish" now — the test never expanded it; classic e2e
+> drift). **Full e2e suite green (17/17)** + web gate (lint/format/typecheck/test 104/
+> build).
+
+> Progress (2026-06-19, client-finish B16): **E2E batch — CB-122 + CB-123** (run
+> locally against the dev stack; both green). New `e2e/tests/helpers.ts` (shared
+> seeding + API order placement + client OTP login) and two specs.
+> **CB-122** (cancel + 409 recovery) writing the test surfaced a **real client bug**:
+> on a cancel 409 the store wrote the shared `error` ref, and the detail view gates
+> its whole page on `orders.error`, so the page collapsed to "Buyurtmani yuklab
+> bo'lmadi" (the order had actually loaded) with a stuck-open dialog instead of an
+> inline "holati o'zgardi" recovery. Fixed by splitting action errors from load
+> errors: `orders.actionError`/`actionTraceId` + `captureActionError`; `mutate` now
+> writes those (the 409 refetch still owns `error`). Updated all mutate-result
+> consumers: ClientOrderDetailView, WorkshopOrderDetailView, ClientOrdersView; +2
+> store unit-test assertions (action error set, page `error` stays null).
+> **CB-123** (notifications open/mark-read/badge) validates the CB-02 emission end to
+> end: bell badge → dropdown localized title + "Buyurtma № …" body (no raw code) →
+> open row → navigate + unread clears. Added an `aria-label` to the bell dropdown
+> (`menuLabel`) — the `role="menu"` had no accessible name (a11y gap the spec wants).
+> Gates: web lint/format/typecheck/test(104)/build + e2e typecheck, both specs pass.
+> NOTE: the two order-creating specs must run serially (CI already sets `workers:1`);
+> placing two orders concurrently collides on `uq_orders_order_number` (a latent
+> backend order-number concurrency gap, out of scope here — flagged separately).
+
+> Progress (2026-06-19, client-finish B15): **CB-02 unblocked + shipped** — the
+> backend now emits client order notifications, so the (already-built) bell + list
+> finally have rows to render. Backend: `sales/service._transition` (the single seam
+> every workshop status change funnels through) fans one `Notification` row to the
+> order's client — `event_code` mapped per destination status (`order.confirmed` /
+> `order.status_changed` / `order.ready` / `order.completed` / `order.cancelled`),
+> `entity_type=order`, payload `{order_number, from_status, to_status}`. A client
+> cancelling their OWN order is not self-notified; a workshop cancel does notify them;
+> placing a new order (NEW) emits nothing. Frontend: `clientNotificationBody` now
+> surfaces the denormalized `order_number` ("Buyurtma № …") when there is no prose
+> body. Both gates run locally and pass — **backend** ruff+format+mypy+pytest (118
+> passed; also fixed two pre-existing CB-117 lint errors — an ambiguous `×` and a
+> >100-char edge-line that were silently failing CI), **web** lint+format+typecheck+
+> test (104)+build. +2 backend tests (transition-notifies-client, self-cancel-doesn't /
+> workshop-cancel-does), +1 frontend presenter test. This also unblocks **CB-123**
+> (E2E notifications, which needed real emission).
+
+> Progress (2026-06-19, client-finish B14): tech-debt — ProfileView split, gate green,
+> adversarial review clean (0 findings). **CB-95** (the 683-line `ProfileView.vue` that
+> branched on `principal_type` is gone; `/c/profile` → new `ClientProfileView.vue`,
+> `/workshop/profile` → new `WorkshopProfileView.vue`. Shared sessions+revoke/logout
+> extracted to `composables/useSessions.ts`; client profile fetch/patch to
+> `stores/clientProfile.ts`; `ClientBranchOption` now imported from the cutting store
+> instead of being redefined per-view. Behaviour is byte-faithful to the original —
+> both routes preserved, the e2e URL assertion still holds.)
+
+> Progress (2026-06-19, client-finish B13): perf — drafts-summary + staleness
+> (curl-verified, reviewed; a "missing panels in editor" finding was a false alarm —
+> the editor reads `currentDraft` (full via loadDraft), never the summary list).
+> **CB-39** (`GET /client/cutting-drafts` list now serializes results in summary
+> mode — skips the per-panel + per-placement queries, `panels=[]` — while the
+> single-draft/optimize/chosen-result/SVG/PDF paths stay full; the list cards only
+> need waste %, panel counts, material labels). **CB-52** (`loadBranchOptions` reuses
+> its no-search result for ~30s so editor→checkout doesn't double-fetch; the
+> notifications bell reuses its list for ~30s on open, the ~45s unread poll keeping
+> the badge live).
+
+> Progress (2026-06-19, client-finish B12): checkout quote — batch + itemized
+> (curl-verified, adversarially reviewed; a real edge-labor reconciliation drift was
+> found and fixed). **CB-12** (new POST `/client/orders/quote/batch` prices the draft
+> against all branches in ONE request, returning per-branch quote/error;
+> `orders.quoteBranches` now does one POST instead of N GETs, same return contract;
+> +2 store tests). **CB-117** (`OrderQuoteResponse` gained `panels_used`,
+> `cutting_rate_tiyin`, `material_lines`, `edge_lines`; the checkout review shows an
+> itemized breakdown — cutting = N panel × rate, per-material lines, per-edge
+> material+service — and the branch card a per-panel hint). The per-edge labor is now
+> summed per-material so the itemized lines reconcile exactly with the subtotals
+> (integer floor-division isn't distributive).
+
+> Progress (2026-06-19, client-finish B11): pagination — additive limit/offset,
+> bare-array + load-more, curl-verified + adversarially reviewed (filter-reset and
+> Query-validator findings applied). **CB-38** (`GET /client/orders` takes
+> limit/offset (default 30, `Query` ge/le); the store appends pages — offset 0
+> replaces — with `ordersHasMore` from a full page, and ClientOrdersView shows a
+> "Yana ko'rsatish" button). **CB-41** (`GET /notifications` takes limit/offset +
+> server-side `unread_only`; the store paginates the same way, ClientNotifications
+> View loads more and RESETS to offset 0 on a filter change passing
+> `unread_only=true` for the unread tab). +pagination unit tests for both stores.
+
+
+
+> Progress (2026-06-19, client-finish B10): backend perf + spec — runtime
+> curl-verified against the hot-reloading dev backend, then adversarially reviewed
+> (a "+N overflow" finding was a false alarm — the `total > 4` guard makes
+> `total − 4` correct). **CB-13** (the branches list is now ONE request: the
+> backend attaches a top-6 `materials_preview` + `materials_total` per branch via a
+> single grouped query, and the per-branch materials N+1 — the CB-23
+> fault-tolerant batch machinery — was removed from `clientCatalog.ts` as dead
+> code, 154→67 lines). **CB-112** (a `Branch.today_hours()` method feeds a new
+> `today_hours {open,close}` field on `ClientBranchOption` / `OrderQuoteResponse` /
+> `OrderSummaryResponse`; the client renders "Bugun: 09:00–18:00 / Bugun yopiq" on
+> the order-new branch cards, the Review pickup block, and the order-detail pickup
+> card). Backend verified via CI (no local uv); +a branch-options regression test.
+
+> Progress (2026-06-19, client-finish B9): testing — pure-helper extraction +
+> coverage (adversarial review confirmed the tests pin behaviour; added a
+> tertiary-sort case). **CB-124** (extracted `partNotCarried(part, branchId,
+> resolvePanel, resolveEdge)` into `stores/cutting.ts` — the editor's `rowNotCarried`
+> now delegates — with a 6-case unit test: no-branch, shop-panel-not-carried,
+> own-panel-exempt, shop-edge-by-side, own-edge-exempt, all-carried). **CB-130**
+> (extracted `edgeRank`/`rankedEdges`/`recommendedEdge` into
+> `app/cuttingEdgeDisplay.ts` — the editor delegates — with unit tests for the
+> decor/colour/neither ranks, the rank→thickness→name sort, and the
+> current→remembered→top-ranked recommendation). 95 unit tests now.
+
+> Progress (2026-06-19, client-finish B8): tech-debt small (adversarial review
+> surfaced an incomplete test mock + a pre-existing admin 403-masking bug — both
+> fixed). **CB-100** (one shared `captureApiError(error, fallback)` in
+> `api/client.ts` — 403→permission_denied, else the backend code, else fallback —
+> replacing the three divergent store variants in orders/cutting/clientCatalog;
+> admin catalog loads were folded in too so their `permission_denied` view-state
+> works; +unit test). **CB-102** (new `app/constants.ts`:
+> AUTOSAVE_DEBOUNCE_MS/SEARCH_DEBOUNCE_MS/NOTIFICATIONS_PAGE_LIMIT/MIN_PART_MM/
+> MAX_PARTS/DRAFT_LIMIT — the editor's part-min input and validator now derive from
+> one MIN_PART_MM). **CB-131** (`files.loadObjectUrl` returns a disposable
+> `{url, revoke}` so the object-URL lifetime is explicit and can't silently leak;
+> AuthFileImage owns + calls the revoke).
+
+> Progress (2026-06-18, client-finish B7): editor states (adversarial review
+> caught a real off-by-one — fixed). **CB-89** (per-row optimiser-error
+> attribution: optimize()'s catch parses the backend `details {part_ref,
+> row_index}` and flags THAT row with a localized message + scrolls it into view,
+> instead of one opaque banner; a chosen panel id that no longer resolves once the
+> catalog loads is flagged as stale via `rowMaterialMissing`; backend `row_index`
+> is 1-indexed — the fallback now offsets correctly). **CB-57** (`choose()` and
+> `setPreferredBranch()` catch failures and show a danger toast + early-return
+> instead of an unhandled rejection that left the local pick out of sync).
+
+> Progress (2026-06-18, client-finish B6): editor pickers (adversarial review
+> caught 5 real bugs in the new code — all fixed). **CB-84** (a panel-filter bar
+> above the parts rows — manufacturer multi-select, type, thickness, sort — narrows
+> the shared panel options every row's picker draws from; the SearchCombobox now
+> remembers the chosen label so filtering a selected panel out no longer blanks the
+> row). **CB-64** (shared `useDropdownPlacement` composable: SearchCombobox +
+> FormSelect listboxes clamp to `min(18rem,40dvh)` with `overscroll-contain` and
+> flip ABOVE the anchor when there's no room below — fixes off-screen/clipped
+> popovers on keyboard-shrunk phones; review fixes: offsetHeight-0 fallback,
+> re-entrancy guard on the resize listeners, scroll-after-flip timing,
+> aria-activedescendant only when open).
+
+> Progress (2026-06-18, client-finish B5): editor spec-conformance small batch
+> (adversarial review — one minor scroll offset value tuned). **CB-90** (the
+> algorithm comparison is collapsed by default, the chosen `algorithm_name` shows
+> in the results header, and the table gained a "Kesish yo'li" cut-length column).
+> **CB-91/CB-69** (the Edges cell now NAMES the tape — `<edgeShortLabel> · N tomon`
+> when uniform, `Aralash · N tomon` when mixed — instead of only a side count, so a
+> phone user sees which krom a row carries without opening the picker). **CB-66**
+> (`#cutting-results` gets a breakpoint-aware `scroll-margin-top` so the post-
+> optimize scroll doesn't tuck the heading under the sticky/wrapped header).
+
+> Progress (2026-06-18, client-finish B4): notifications batch (adversarial
+> review caught one real issue — a disjointed toast-then-navigate on a failed
+> per-item mark-read — fixed by navigating regardless and dropping the toast, the
+> unread badge being the feedback). **CB-101** (new shared
+> `app/notificationPresenter.ts` — role-aware `notificationTitle/Body/IconName/
+> Destination` — replaces the per-component helper-picking in both the bell and the
+> page; `NotificationItem.payload` is now a typed `NotificationPayload`). **CB-26**
+> (`markAllRead` failures surface a danger toast + early-return in both surfaces;
+> the store already mutated only after the API resolved, so no rollback was needed;
+> +a markAllRead-failure store test). **CB-125** (a null-destination notification
+> now shows a "ochib bo'lmaydi" toast and stays unread instead of a silent dead tap).
+
+> Progress (2026-06-18, client-finish B3): profile & auth batch (adversarial
+> review — 0 actionable findings). **CB-78** (the profile name form now PATCHes
+> only `{name}` and the branch row only `{preferred_branch_id}` via a shared
+> `patchProfile` helper — saving a branch no longer persists a half-typed name;
+> the backend already treats an absent key as unchanged). **CB-77** (closed
+> branches are selectable in the preferred-branch picker — a closure is temporary,
+> the preference durable — and a stale-preference note shows when the saved branch
+> no longer appears in the options). **CB-79** (backend `verify_otp_code` now
+> raises `name_required` when a name is supplied but blank, while a truly-absent
+> name still returns `is_new` for the registration step; +backend test). **CB-114**
+> (`auth.revokeSession(id)` → `DELETE /auth/sessions/{id}` + a per-row "Yopish"
+> button with optimistic removal + rollback in both the client and workshop session
+> lists).
+
+> Progress (2026-06-18, client-finish B2): a11y & polish batch (adversarially
+> reviewed — the only actionable finding was adding a nav-structure test, applied).
+> **CB-37** (dropped the 5th "Profil" nav item; Profil now lives only in the user
+> pill — reachable at all sizes — and the two `display:none` mobile hacks are gone;
+> the pill gained an `aria-label`; a routeMatrix test pins the 4 client nav labels).
+> **CB-48** (aligned the branches/notifications skeleton grids to the real rows and
+> added a `≤480px` stacking variant so the status pill / timestamp drop below the
+> content instead of being squeezed). **CB-53** (autosave chip is now a
+> `role="status"` live region with self-describing text — "Chizma saqlandi" etc.).
+> **CB-54** (`AuthFileImage` `alt` is required; the load-failure fallback is a
+> localized `role="img"` with an `aria-label` naming the intended alt). **CB-67**
+> (wrapped the 5 selection-like `:hover` rules in `@media (hover: hover)` so a tap no
+> longer leaves the Krom button / edge options stuck-highlighted on touch).
+> **CB-81** ("active"→"faol", "Browser"→"Brauzer" in the session rows).
 
 > Progress (2026-06-18, client-finish B1): cleanup & dead-code batch (branch
 > `client-finish`, planned by the parallel triage workflow + adversarially reviewed
@@ -225,7 +453,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | ID | Pri | Cat | Sev | Eff | Status | Title |
 |----|-----|-----|-----|-----|--------|-------|
 | CB-01 | P1 | i18n-copy | high | M | Done | Translate raw backend error codes to Uzbek (order/profile/cutting-save) |
-| CB-02 | P1 | i18n-copy | high | M | Blocked | Human-readable Uzbek notification titles (+body) in bell & list — backend emits no client notifications yet (only `inventory.low_stock` → workshop) |
+| CB-02 | P1 | i18n-copy | high | M | Done | Human-readable Uzbek notification titles (+body) in bell & list — backend now emits `order.*` client notifications on every status change |
 | CB-03 | P1 | ux-flow | high | M | Done | Read-only mode + bound-order banner for confirmed drafts in editor |
 | CB-04 | P1 | ux-flow | high | S | Done | Pre-select & badge preferred branch in order-new step |
 | CB-05 | P1 | a11y | high | S | Done | Set client SPA `<html lang="uz">` |
@@ -235,8 +463,8 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-09 | P1 | states-errors | high | S | Done | Surface createDraft failures incl. 50-draft cap |
 | CB-10 | P1 | completeness-stub | high | S | Done | Poll notification unread count (~45s) |
 | CB-11 | P1 | correctness-bug | high | M | Done | 409 cancel conflict: refetch order + actionable message |
-| CB-12 | P1 | performance | high | M | Open | Batch checkout quote instead of per-branch fan-out |
-| CB-13 | P1 | performance | high | M | Open | Kill per-branch materials N+1 on Branches list |
+| CB-12 | P1 | performance | high | M | Done | Batch checkout quote instead of per-branch fan-out |
+| CB-13 | P1 | performance | high | M | Done | Kill per-branch materials N+1 on Branches list |
 | CB-14 | P1 | design-parity | high | M | Done | Shared toast/snackbar primitive + wire critical events |
 | CB-15 | P1 | correctness-bug | med | M | Done | Flush autosave on unmount; stop clobbering edits mid-optimize |
 | CB-16 | P1 | states-errors | med | S | Done | Surface optimize failures inline (+trace_id) |
@@ -249,7 +477,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-23 | P2 | states-errors | med | M | Done | Fault-tolerant per-branch material loads (allSettled+retry) |
 | CB-24 | P2 | states-errors | med | M | Done | Handle cancel-order / delete-draft failures in dialogs |
 | CB-25 | P2 | states-errors | med | M | Done | Loading + error/empty state on client profile load |
-| CB-26 | P2 | states-errors | med | S | Partial | Rollback + surface failures on mark-read / mark-all-read |
+| CB-26 | P2 | states-errors | med | S | Done | Rollback + surface failures on mark-read / mark-all-read |
 | CB-27 | P2 | correctness-bug | med | S | Done | normalizeUzPhone must insert +998 (fixes display) |
 | CB-28 | P2 | correctness-bug | med | S | Done | formatPercent: always ×100 the 0..1 fraction |
 | CB-29 | P2 | completeness-stub | med | M | Done | Per-edge-material metres + parts-placed count in result |
@@ -260,39 +488,39 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-34 | P2 | a11y | med | S | Done | Raise `--color-ink-muted` to WCAG AA contrast |
 | CB-35 | P2 | design-parity | med | M | Done | Replace letter-glyph placeholders with prototype SVG icons |
 | CB-36 | P2 | design-parity | med | S | Done | Add line icons to client header nav |
-| CB-37 | P2 | design-parity | med | S | Open | Drop 5th "Profil" nav item; fix mobile profile reach |
-| CB-38 | P2 | performance | med | M | Open | Paginate client orders list |
-| CB-39 | P2 | performance | med | M | Open | Lightweight drafts-summary endpoint for list views |
+| CB-37 | P2 | design-parity | med | S | Done | Drop 5th "Profil" nav item; fix mobile profile reach |
+| CB-38 | P2 | performance | med | M | Done | Paginate client orders list |
+| CB-39 | P2 | performance | med | M | Done | Lightweight drafts-summary endpoint for list views |
 | CB-40 | P2 | performance | med | M | Open | Scope/paginate editor catalog loads (not whole catalog) |
-| CB-41 | P2 | completeness-stub | low | M | Open | Paginate notifications page; server-side unread filter |
+| CB-41 | P2 | completeness-stub | low | M | Done | Paginate notifications page; server-side unread filter |
 | CB-42 | P2 | i18n-copy | med | S | Done | Localize English fallbacks (pickers/summary/SearchCombobox) |
 | CB-43 | P2 | responsive | low | S | Done | Lock background scroll when ConfirmDialog is open |
 | CB-44 | P3 | design-parity | low | S | Done | Use `.tl` timeline with done/bad states in order history |
 | CB-45 | P3 | design-parity | low | S | Done | Recolor branches info banner from warn-yellow to neutral |
 | CB-46 | P3 | design-parity | low | S | Done | Full 5-phase model on home active-order progress |
 | CB-47 | P3 | ux-flow | low | S | Done | Reliable home back-target on notifications/profile |
-| CB-48 | P3 | responsive | low | S | Open ✓partial | Stack branches/notifications rows on small phones |
+| CB-48 | P3 | responsive | low | S | Done | Stack branches/notifications rows on small phones |
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
 | CB-50 | P3 | ux-flow | low | S | Done | Disable Optimise after a run until a part changes |
-| CB-51 | P3 | ux-flow | low | M | Open | Two-pane workshop+branch picker in editor pre-filter |
-| CB-52 | P3 | performance | low | S | Open | Cache/staleness reuse for home/notifications/branch-options |
-| CB-53 | P3 | a11y | low | S | Open | Self-describing autosave live region (role=status) |
-| CB-54 | P3 | a11y | low | S | Open | AuthFileImage: required alt + localized failure label |
+| CB-51 | P3 | ux-flow | low | M | Done | Two-pane workshop+branch picker in editor pre-filter |
+| CB-52 | P3 | performance | low | S | Done | Cache/staleness reuse for home/notifications/branch-options |
+| CB-53 | P3 | a11y | low | S | Done | Self-describing autosave live region (role=status) |
+| CB-54 | P3 | a11y | low | S | Done | AuthFileImage: required alt + localized failure label |
 | CB-55 | P3 | correctness-bug | low | S | Done | Idempotent markRead decrement (only when was unread) |
 | CB-56 | P3 | correctness-bug | low | S | Done | One defined quantity for order-detail "Krom" figure |
-| CB-57 | P3 | states-errors | low | M | Open | Error feedback for chooseResult / preferred-branch save |
+| CB-57 | P3 | states-errors | low | M | Done | Error feedback for chooseResult / preferred-branch save |
 | CB-58 | P3 | completeness-stub | low | S | Done | Remove dead dupes (English status maps, i18nSeed, DashboardView) |
 | CB-59 | P2 | ux-flow | med | S | Done | `inputmode=numeric` on dimension/quantity inputs |
 | CB-60 | P1 | design-parity | high | M | Done | Port prototype's compact phone layout for part rows |
 | CB-61 | P2 | a11y | med | S | Done | Raise sub-44px touch targets (chips, panel tabs, modal buttons) |
 | CB-62 | P1 | responsive | high | M | Done | Edge modal: dvh sizing + bottom-sheet on phones |
 | CB-63 | P2 | ux-flow | med | S | Done | iOS-proof modal scroll lock + overscroll containment |
-| CB-64 | P2 | ux-flow | med | M | Open | Keyboard/container-aware combobox & select popovers |
+| CB-64 | P2 | ux-flow | med | M | Done | Keyboard/container-aware combobox & select popovers |
 | CB-65 | P1 | ux-flow | high | M | Done | Cutting SVG: normalized viewBox, label threshold, zoom |
-| CB-66 | P3 | ux-flow | low | S | Open | `scroll-margin` for #cutting-results under sticky header |
-| CB-67 | P3 | tech-debt | low | S | Open | Guard hover styles with `@media (hover:hover)` |
+| CB-66 | P3 | ux-flow | low | S | Done | `scroll-margin` for #cutting-results under sticky header |
+| CB-67 | P3 | tech-debt | low | S | Done | Guard hover styles with `@media (hover:hover)` |
 | CB-68 | P2 | responsive | med | S | Done | 16px form-control font on mobile (stop iOS auto-zoom) |
-| CB-69 | P3 | ux-flow | low | S | Open | Per-side krom details visible on touch (not title-only) |
+| CB-69 | P3 | ux-flow | low | S | Done | Per-side krom details visible on touch (not title-only) |
 | CB-70 | P1 | security | high | S | Done | Gate the dev OTP hint "000000" to dev builds |
 | CB-71 | P2 | states-errors | med | M | Done | Honor 429 `retry_after_seconds` with live resend countdown |
 | CB-72 | P2 | design-parity | med | M | Done | Show attempts-remaining on `invalid_code` |
@@ -300,32 +528,32 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-74 | P3 | i18n-copy | low | S | Done | Add `account_blocked` to client login error map |
 | CB-75 | P1 | security | med | S | Done | Block protocol-relative `?redirect` (open redirect) |
 | CB-76 | P2 | spec-conformance | med | M | Done | Searchable preferred-branch selector |
-| CB-77 | P3 | spec-conformance | low | S | Open | Selectable temporarily_closed branches; stale-pref state |
-| CB-78 | P3 | correctness-bug | low | S | Open | Split profile PATCH payloads (branch save vs name form) |
-| CB-79 | P2 | correctness-bug | med | S | Partial | Reject whitespace-only name on registration step |
+| CB-77 | P3 | spec-conformance | low | S | Done | Selectable temporarily_closed branches; stale-pref state |
+| CB-78 | P3 | correctness-bug | low | S | Done | Split profile PATCH payloads (branch save vs name form) |
+| CB-79 | P2 | correctness-bug | med | S | Done | Reject whitespace-only name on registration step |
 | CB-80 | P3 | ux-flow | low | S | Won't | Surface OTP 5-min expiry on the code step |
-| CB-81 | P3 | i18n-copy | low | S | Open | Uzbek session-row labels ("active"/"Browser") |
+| CB-81 | P3 | i18n-copy | low | S | Done | Uzbek session-row labels ("active"/"Browser") |
 | CB-82 | P1 | spec-conformance | high | M | Done | Validate part max against panel − 2× edge trim |
 | CB-83 | P2 | spec-conformance | med | S | Done | 100-part cap + blocking roll-up under the parts table |
-| CB-84 | P2 | spec-conformance | high | L | Open | Panel picker filters (manufacturer/type/thickness) + sort |
+| CB-84 | P2 | spec-conformance | high | L | Done | Panel picker filters (manufacturer/type/thickness) + sort |
 | CB-85 | P2 | spec-conformance | med | S | Done | Grain indicator on the panel chip |
 | CB-86 | P1 | spec-conformance | high | M | Done | Fix per-row recovery: scoped bring-own + pick-different-material |
 | CB-87 | P2 | spec-conformance | med | M | Done | Material tab strip in visualiser; dimensions in legend |
 | CB-88 | P2 | spec-conformance | med | M | Done | Drafts list: branch chip + material label pre-optimise |
-| CB-89 | P2 | spec-conformance | med | L | Open | Per-row attribution of optimiser/stale-catalog errors |
-| CB-90 | P3 | spec-conformance | low | S | Open | Algo compare: cut-length column, algo name, closed default |
-| CB-91 | P3 | spec-conformance | low | S | Open | Name the tape in the Edges cell summary |
+| CB-89 | P2 | spec-conformance | med | L | Done | Per-row attribution of optimiser/stale-catalog errors |
+| CB-90 | P3 | spec-conformance | low | S | Done | Algo compare: cut-length column, algo name, closed default |
+| CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
-| CB-94 | P2 | tech-debt | med | M | Open | Split LoginView into per-role views |
-| CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
-| CB-96 | P2 | tech-debt | med | M | Open | useListboxControl/useStableId composables for dropdowns |
+| CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
+| CB-95 | P2 | tech-debt | med | M | Done | Split ProfileView; dedupe ClientBranchOption type |
+| CB-96 | P2 | tech-debt | med | M | Done | useListboxControl/useStableId composables for dropdowns |
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
 | CB-98 | P2 | tech-debt | med | S | Done | One shared withQuery() (6 copies, divergent semantics) |
 | CB-99 | P3 | tech-debt | low | S | Done | Extract shared downloadBlob() (2 copies) |
-| CB-100 | P2 | tech-debt | med | S | Open | Unify captureApiError() (3 divergent variants) |
-| CB-101 | P2 | tech-debt | med | M | Open | Typed notification payload + shared presenter |
-| CB-102 | P3 | tech-debt | low | S | Open | Centralize magic numbers (debounces, limits, 50 mm) |
+| CB-100 | P2 | tech-debt | med | S | Done | Unify captureApiError() (3 divergent variants) |
+| CB-101 | P2 | tech-debt | med | M | Done | Typed notification payload + shared presenter |
+| CB-102 | P3 | tech-debt | low | S | Done | Centralize magic numbers (debounces, limits, 50 mm) |
 | CB-103 | P2 | tech-debt | med | S | Done | Fix stale AGENTS.md API-client path + phantom dirs |
 | CB-104 | P3 | tech-debt | low | S | Done | Remove dead quote surface in orders store |
 | CB-105 | P1 | testing | high | S | Done | Regression test: normalizeUzPhone (ships w/ CB-27) |
@@ -335,26 +563,26 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-109 | P1 | testing | high | S | Done | Test login redirect guard rejects external (CB-75) |
 | CB-110 | P1 | testing | high | M | Done | Cover client OTP auth path in auth store |
 | CB-111 | P1 | states-errors | med | S | Done | PDF download: async revoke + attach anchor (silent fail) |
-| CB-112 | P2 | spec-conformance | med | M | Open | Branch working hours in picker / Review / Pickup |
+| CB-112 | P2 | spec-conformance | med | M | Done | Branch working hours in picker / Review / Pickup |
 | CB-113 | P2 | spec-conformance | med | M | Done | Order-detail Timeline: 5 client phases, not raw events |
-| CB-114 | P2 | completeness-stub | med | M | Open | Per-session revoke ("Yopish") in profile sessions |
+| CB-114 | P2 | completeness-stub | med | M | Done | Per-session revoke ("Yopish") in profile sessions |
 | CB-115 | P2 | states-errors | med | M | Done | Aggregate "no branch carries this set" empty state |
 | CB-116 | P2 | states-errors | low | M | Done | Order-new: split already-used vs no-chosen-result bail |
-| CB-117 | P2 | design-parity | med | L | Open | Itemized branch-card / checkout price lines |
+| CB-117 | P2 | design-parity | med | L | Done | Itemized branch-card / checkout price lines |
 | CB-118 | P2 | design-parity | med | M | Done | Order-detail Krom material-vs-service split + metres |
 | CB-119 | P2 | correctness-bug | low | S | Done | Orders 'active' filter: expand to status set or filter client-side |
 | CB-120 | P2 | testing | med | S | Done | Pin formatPercent boundary (ships w/ CB-28) |
 | CB-121 | P2 | testing | med | M | Done | Test part validation bounds (ships w/ CB-82/83) |
-| CB-122 | P2 | testing | med | L | Open | E2E: client order cancel + 409 recovery |
-| CB-123 | P2 | testing | med | L | Open | E2E: client notifications (open/mark-read/badge) |
-| CB-124 | P2 | testing | med | M | Open | Test branch-carry recovery detection (rowNotCarried) |
-| CB-125 | P2 | states-errors | low | S | Open | Null-destination notification: "not available", not silent |
+| CB-122 | P2 | testing | med | L | Done | E2E: client order cancel + 409 recovery (found+fixed a real 409 page-collapse bug) |
+| CB-123 | P2 | testing | med | L | Done | E2E: client notifications (open/mark-read/badge) — needed CB-02 emission; added menu aria-label |
+| CB-124 | P2 | testing | med | M | Done | Test branch-carry recovery detection (rowNotCarried) |
+| CB-125 | P2 | states-errors | low | S | Done | Null-destination notification: "not available", not silent |
 | CB-126 | P2 | spec-conformance | low | S | Done | Bell rows: event-family icon, drop raw event_code subtext |
 | CB-127 | P3 | completeness-stub | low | S | Done | Cancelled banner shows cancellation reason |
 | CB-128 | P3 | design-parity | low | M | Open | Orders-list card meta: pickup/due date not part count |
 | CB-129 | P3 | completeness-stub | low | M | Open ⚠ | Order-detail "Taxminiy sana" estimated-ready row |
-| CB-130 | P3 | testing | low | M | Open | Test edge ranking/recommendation helpers |
-| CB-131 | P3 | tech-debt | low | S | Open | files.loadObjectUrl: ownable revoke contract (leak footgun) |
+| CB-130 | P3 | testing | low | M | Done | Test edge ranking/recommendation helpers |
+| CB-131 | P3 | tech-debt | low | S | Done | files.loadObjectUrl: ownable revoke contract (leak footgun) |
 | CB-132 | P2 | ux-flow | med | S | Done | Login phone/OTP inputs reject non-numeric typing (user-found) |
 | CB-133 | P2 | design-parity | med | S | Done | Login errors → client-banner + SVG icon + danger/warn tone split (user-review) |
 | CB-134 | P2 | i18n-copy | med | S | Done | Login: `novalidate` + JS guards → Uzbek alerts, not native English validation (user-found) |
@@ -368,10 +596,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `orders.ts` `captureError` sets `error.value` to the raw backend code, rendered verbatim at the highest-stakes moments — `ClientOrdersView.vue:194` `{{ actionError }} · trace …`, `ClientOrderDetailView.vue:586`, `ClientOrderNewView.vue:565`. `ProfileView.vue:123` sets `error.value='profile_update_failed'` shown raw at `:307`; `ClientCuttingEditorView.vue:558/568` hardcode English save errors shown at `:1051`. An Uzbek customer sees English machine codes (`order_cancel_failed`, `permission_denied`) right when placing/cancelling.
 **Fix:** Add a shared `orderErrorLabel(code)` Uzbek map (mirror the existing `quoteErrorLabel` `ClientOrderNewView.vue:106` and `LoginView` `clientErrorText`), pass store errors through it, fall back to a generic "Amal bajarilmadi. Qayta urinib ko'ring.", and Uzbek-ify the two hardcoded save strings.
 
-### CB-02 · Human-readable Uzbek notification titles (+body) in bell & list — `i18n-copy` · high · M
-**Files:** `components/NotificationsMenu.vue`, `views/ClientNotificationsView.vue`, `app/clientUi.ts`
-**Why:** `NotificationsMenu.vue:183` always renders the raw code (`{{ item.event_code }} · {{ formatDate }}`) and `title()` falls back to `event_code` (`:29`); `ClientNotificationsView.vue:33` same. Buyers see snake_case like `order_status_changed` — a parity regression vs the prototype (`client-shell.js:19,53`). Bell also omits the body line the list already computes.
-**Fix:** Add `clientNotificationTitle(item)` + reuse `body()` in `clientUi.ts` (mirror `adminNotificationTitle`); use in both `NotificationsMenu.title()` and the list; render a muted body line in the bell; drop the raw code sub-line.
+### CB-02 · Human-readable Uzbek notification titles (+body) in bell & list — `i18n-copy` · high · M — **Done (B15)**
+**Files:** `backend sales/service.py` (emission), `app/clientUi.ts`, `stores/notifications.ts`; renders through the existing `components/NotificationsMenu.vue` + `views/ClientNotificationsView.vue` + `app/notificationPresenter.ts`.
+**Why:** The frontend title/body/icon presenter (`clientNotificationTitle` + `NOTIFICATION_TITLES` map + presenter) was already built in CB-126/CB-101, so the bell never shows a raw code. The real blocker was that the **backend emitted no client notifications at all** (only `inventory.low_stock` → workshop), so there were no `order.*` rows to render.
+**Fix (shipped):** Backend `_transition` now fans one `Notification` to `order.client_id` on every status change — `event_code` mapped per destination status, `entity_type=order`, payload `{order_number, from_status, to_status}` — skipping the case where the client drove the change themselves. Frontend `clientNotificationBody` surfaces the denormalized `order_number` as the body when no prose body exists. Covered by backend tests (`test_workshop_status_changes_notify_the_client`, `test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does`) and a frontend presenter test.
 
 ### CB-03 · Read-only mode + bound-order banner for confirmed drafts in editor — `ux-flow` · high · M
 **Files:** `views/ClientCuttingEditorView.vue`, `stores/cutting.ts`
@@ -597,10 +825,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** `cutting.ts:181-192` `loadDrafts` fetches all drafts with no params, and `CuttingDraft` embeds full `results[]` incl. `parts_snapshot`, `material_snapshots`, per-panel placements (`:48-84`), so each list card carries its whole optimization payload. `DRAFT_CAP=50` is display-only (`DraftsView.vue:10,119`); `ClientHomeView.vue:58` reloads the full list for 4 recent.
 **Fix:** Add a drafts-summary endpoint (or `?fields=`/`?limit=`) omitting `results.panels/placements`; home requests only the few summaries it renders.
 
-### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M
-**Files:** `views/ClientCuttingEditorView.vue`, `stores/cutting.ts`, `backend/app/modules/sales/routes.py`
-**Why:** `ClientCuttingEditorView.vue:596-609` `loadMaterials` calls panel+edge with `carriedOnly:false` and `branchId = preferred_branch_id` (undefined for a new draft), so `GET /client/catalog/materials` returns the entire platform catalog (`cutting.ts:284-307`, no limit). Full arrays drive client-side filtering + re-rank on every edge-picker open; `setPreferredBranch` (`:572-578`) re-downloads identical lists with no per-branch cache.
-**Fix:** Default the query to the draft's branch (or `carried_only`), add server-side search-driven loading + a page limit (fetch more only on search / "show all"), cache by `(kind, branchId)`.
+### CB-40 · Scope/paginate editor catalog loads (not whole catalog) — `performance` · med · M — **Partial (B19); rest blocked on a CB-84 decision**
+**Files:** `stores/cutting.ts`, `views/ClientCuttingEditorView.vue`
+**Why:** `loadMaterials` returned the whole per-branch (or whole-catalog, for a new draft) list with no cache, re-downloading identical payloads on remount / branch flip-back; the full arrays also drive client-side filtering + re-rank.
+**Done (B19):** `cutting.loadMaterials` caches by `(kind, branch, search, carried_only)` with ~30s freshness + a `force` bypass — kills the redundant re-fetches (+2 unit tests).
+**Blocked (needs a decision):** the headline "don't load the whole catalog" via server-side search + a page limit **conflicts with CB-84** (the client-side filter bar — manufacturer/type/thickness multi-select + sort — operates over the full `panelOptions` list) and the CB-19/86 not-carried recovery (needs the full per-branch list to detect un-carried materials). Moving filtering+pagination server-side would rework/undo CB-84, so it needs a product/design call: keep CB-84's client-side filtering (accept full per-branch loads, now cached) **or** invest in server-side filtering+pagination (re-doing CB-84). Surfaced rather than guessed.
 
 ### CB-41 · Paginate notifications page; server-side unread filter — `completeness-stub` · low · M
 **Files:** `views/ClientNotificationsView.vue`, `stores/notifications.ts`
@@ -697,10 +926,11 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** Spec `cutting.md:334-340,348-351,360-363`: material_not_found/impossible_grain/part_too_large **flag the offending row**; a catalog change while a draft sits flags the row on next open; a deactivated edge material clears that side with a one-tap replacement. Today `partIsInvalid()` checks only emptiness/mins — an unresolvable material_id shows no flag; `optimizeDraft` collapses every failure into one 'cutting_optimize_failed' string with no part_ref mapping; no on-open stale scan exists. On a 30-row draft the client bisects rows by hand. (Distinct from CB-16 — that adds the generic inline error surface; this is per-row attribution.)
 **Fix:** On open, mark rows whose material/edge ids don't resolve (danger border + replacement affordance); parse the optimiser error's part reference (extend backend details with part_ref if absent), set a per-row error naming the limit, scroll the first offender into view.
 
-### CB-93 · Decompose ClientCuttingEditorView along five seams — `tech-debt` · high · L
+### CB-93 · Decompose ClientCuttingEditorView along five seams — `tech-debt` · high · L — **3 of 5 seams done; 3 component extractions remain (careful, one-PR-each)**
 **Files:** `views/ClientCuttingEditorView.vue`
-**Why:** 1438 lines holding five separable concerns: edge-picker modal (state `:43-49`, computeds `:118-174`, mutators `:430-545`, template `:1258-1436` — ~450 self-contained lines); parts-table rows (template `:865-1046` incl. a 50-line inline SVG preview); results/algorithms section (`:1072-1245`); autosave machinery (`:547-570,624-644`); pure edge ranking/label/color helpers (`:253-342`). Every cutting-flow change — and CB-03/15/16/50/82/86/89 — lands in one giant file.
-**Fix:** Incremental extraction, one seam per PR: CuttingEdgePickerModal.vue, CuttingPartRow.vue, CuttingResultsSection.vue, useDraftAutosave() composable (natural home for CB-15/50), cuttingEdgeDisplay.ts pure module (unit-testable without mounting).
+**Why:** A ~1900-line view holding five separable concerns. Every cutting-flow change lands in one giant file.
+**Done:** the two pure modules — `cuttingEdgeDisplay.ts` (edge ranking/label/colour, unit-tested) and `autosaveController.ts` (debounce/flush core, CB-108) — plus **B18: `composables/useDraftAutosave.ts`** (the autosave wiring: status mirror, don't-persist gate, deep `parts` watch, CB-15 hydrate guard; +5 unit tests). That's the clean logic seam.
+**Remaining (deliberately not rushed):** the three TEMPLATE-component extractions — `CuttingResultsSection.vue`, `CuttingPartRow.vue`, `CuttingEdgePickerModal.vue`. These are tightly coupled to parent state woven through the view (`chosenResult` = 24 refs threads the results section + its ~12 derived computeds; `edgePickerState` = 39 refs across the modal's ~450 lines of computeds/mutators/template, and edge-banding drives pricing). The e2e suite covers only the happy path, so a blind big-bang risks the core cut→order flow for zero user-facing change. Per this item's own "incremental, one seam per PR" guidance, each remaining component should be its own carefully-reviewed PR. (An exact extraction map for `CuttingResultsSection` — template range, the read-vs-mutated state, the emits, the imports, the v-model candidates — was produced and is in this session's notes.)
 
 ### CB-94 · Split LoginView into per-role views — `tech-debt` · med · M
 **Files:** `views/LoginView.vue`, `apps/*/routes.ts`
@@ -780,10 +1010,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** Optimise is disabled only while `cutting.optimizing || parts.length===0` (`:1064`), so after a successful run it's immediately re-clickable on identical input — encouraging redundant slow re-runs. `cutting.md` §"result panel" wants it disabled until a row changes.
 **Fix:** Track a "dirty since last optimise" flag (true on any change, false after success) and add to `:disabled`.
 
-### CB-51 · Two-pane workshop+branch picker in editor pre-filter — `ux-flow` · low · M
-**Files:** `views/ClientCuttingEditorView.vue`
-**Why:** The branch pre-filter is a flat `FormSelect` of every branch as "workshop · branch" (`:773-785`, `branchOptions` `:57-66`) with no grouping; `temporarily_closed` distinguished only by a meta string. `cutting.md` §"Branch pre-filter" specifies a two-pane workshop-left/branches-right picker.
-**Fix:** Replace the flat select with a two-pane picker grouping branches under their workshop, marking `temporarily_closed`, keeping `setPreferredBranch` wiring.
+### CB-51 · Two-pane workshop+branch picker in editor pre-filter — `ux-flow` · low · M — **Done (B17)**
+**Files:** `components/CuttingBranchPicker.vue` (new), `views/ClientCuttingEditorView.vue`
+**Why:** The branch pre-filter was a flat `SearchCombobox` of every branch as "workshop · branch" with no grouping; `temporarily_closed` distinguished only by a meta string. `cutting.md` §"Branch pre-filter" specifies a two-pane workshop-left/branches-right picker.
+**Fix (shipped):** New `CuttingBranchPicker.vue` — workshops on the left (grouped by `workshop_id` with a branch count), the chosen workshop's branches on the right with a faol/vaqtincha-yopiq status chip + today-hours; selecting a branch v-models `selectedBranchId`, `Qo'llash` applies via the unchanged `setPreferredBranch` wiring (→ loadMaterials + not-carried recovery re-eval), `temporarily_closed` stays selectable (CB-77). Removed the dead flat-list `branchOptions` computed. Verified by the full e2e suite (order-production + cutting-drafts picker steps rewritten for the two panes).
 
 ### CB-52 · Cache/staleness reuse for home/notifications/branch-options — `performance` · low · S
 **Files:** `views/ClientHomeView.vue`, `components/NotificationsMenu.vue`, `ClientOrderNewView.vue`, `stores/cutting.ts`
@@ -987,15 +1217,15 @@ named CB-fix and its test together.
 **Why:** `partIsInvalid` (`:221-231`) and `hasPersistableParts` (`:81-85`) enforce only lower bounds (≥50, qty≥1) + finiteness; no upper cap (CB-82) or row/quantity cap (CB-83), inputs set only `min`. No test exercises these predicates, so CB-82/83's caps would have no test pinning their thresholds.
 **Fix:** Extract the predicates into a pure helper; unit-test the boundary matrix (49/50, 0/1, NaN, and post-CB-82/83 the max-dimension + 100-row/total-quantity caps). **Related:** CB-82, CB-83, CB-09.
 
-### CB-122 · E2E: client order cancel + 409 recovery — `testing` · med · L
-**Files:** `e2e/tests/`, `views/ClientOrderDetailView.vue`, `stores/orders.ts`
+### CB-122 · E2E: client order cancel + 409 recovery — `testing` · med · L — **Done (B16)**
+**Files:** `e2e/tests/client-order-cancel.spec.ts`, `e2e/tests/helpers.ts`, `stores/orders.ts`, `views/ClientOrderDetailView.vue`, `views/WorkshopOrderDetailView.vue`, `views/ClientOrdersView.vue`
 **Why:** Verified: the e2e suite (access/catalog/cutting/order-production/smoke) covers login, optimize+PDF, placement+production, but **no spec cancels an order** — neither the dialog, the toast, nor the 409 path (CB-11). Client-initiated cancellation (core v1) and its conflict recovery can break end-to-end uncaught.
-**Fix:** E2E: place (reuse order-production seeding), cancel with reason, see cancelled+toast; second case mutates server-side first → UI hits 409 + recovery message. Playwright (seed via API). **Related:** CB-11, CB-24, CB-14.
+**Fix (shipped):** `client-order-cancel.spec.ts` places an order via the API, then a workshop discount bumps the version so the open page is stale → the client cancel hits a 409 → asserts the inline "holati o'zgardi" recovery → retries → cancelled + status pill. Writing it exposed a real bug: `mutate` wrote the shared `error` ref and the detail view gates the whole page on `orders.error`, so a 409 collapsed the page to its load-error state. Fixed by splitting `actionError`/`actionTraceId` from load `error`; updated the three mutate-result consumers + 2 store unit assertions. **Related:** CB-11, CB-24, CB-14.
 
-### CB-123 · E2E: client notifications — `testing` · med · L
-**Files:** `e2e/tests/`, `views/ClientNotificationsView.vue`, `stores/notifications.ts`
-**Why:** Verified: the notifications store and ClientNotificationsView are never touched by any e2e — order-production ends at the completed order, never the notification it generates. Notifications are the client's only async order-ready channel, so a broken badge/list/mark-read ships unnoticed.
-**Fix:** E2E: drive an order to emit a client notification, then assert the bell badge, open list, mark one read (decrements), mark all read (clears). Keep the idempotency arithmetic in CB-106's unit spec. **Related:** CB-10, CB-26, CB-02, CB-41.
+### CB-123 · E2E: client notifications — `testing` · med · L — **Done (B16)**
+**Files:** `e2e/tests/client-notifications.spec.ts`, `e2e/tests/helpers.ts`, `components/NotificationsMenu.vue`
+**Why:** Verified: the notifications store and ClientNotificationsView are never touched by any e2e — order-production ends at the completed order, never the notification it generates. Notifications are the client's only async order-ready channel, so a broken badge/list/mark-read ships unnoticed. (Was blocked on CB-02 — there were no client notifications to test until B15.)
+**Fix (shipped):** `client-notifications.spec.ts` places an order via API, has the workshop approve it (emits an `order.confirmed` client notification, CB-02), logs the client in, and asserts the bell badge count → opens the dropdown → the localized title "Buyurtma tasdiqlandi" + the "Buyurtma № …" body (never the raw event_code) → opening the row navigates to the order and clears the unread badge. Also added an `aria-label` to the `role="menu"` dropdown (it had no accessible name — a notifications.md a11y requirement, and needed for the role-based locator). **Related:** CB-10, CB-26, CB-02, CB-41.
 
 ### CB-124 · Test branch-carry recovery detection — `testing` · med · M
 **Files:** `views/ClientCuttingEditorView.vue`

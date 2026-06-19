@@ -40,11 +40,16 @@ export const useFilesStore = defineStore('files', () => {
     }
   }
 
-  async function loadObjectUrl(fileId: string) {
+  // Returns a disposable handle, not a bare URL string (CB-131): the object URL
+  // pins the decoded blob until revoked, so the caller MUST call `revoke()` when
+  // the image is gone (e.g. onBeforeUnmount). Returning the revoke makes that
+  // ownership contract explicit and impossible to forget silently.
+  async function loadObjectUrl(fileId: string): Promise<{ url: string; revoke: () => void }> {
     const blob = await api.blob(`/files/${fileId}`, {
       accessToken: auth.accessToken,
     })
-    return URL.createObjectURL(blob)
+    const url = URL.createObjectURL(blob)
+    return { url, revoke: () => URL.revokeObjectURL(url) }
   }
 
   return { uploading, error, upload, loadObjectUrl }

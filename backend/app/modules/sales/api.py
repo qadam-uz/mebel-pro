@@ -24,6 +24,7 @@ from app.modules.sales.service import (
     mark_collected,
     place_client_order,
     quote_client_order,
+    quote_client_order_batch,
     revert_order,
     update_workshop_note,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "mark_collected",
     "place_client_order",
     "quote_client_order",
+    "quote_client_order_batch",
     "revert_order",
     "update_workshop_note",
 ]

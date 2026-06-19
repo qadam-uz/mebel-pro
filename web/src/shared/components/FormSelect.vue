@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { firstEnabledIndex as findEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
 const props = withDefaults(
   defineProps<{
@@ -27,7 +29,12 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
-const id = `mp-form-select-${Math.random().toString(36).slice(2)}`
+const id = nextStableId('mp-form-select')
+const {
+  dropUp,
+  start: startPlacement,
+  stop: stopPlacement,
+} = useDropdownPlacement(buttonRef, listRef)
 
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const activeOptionId = computed(() => {
@@ -38,12 +45,7 @@ const buttonText = computed(() => selected.value?.label ?? props.placeholder)
 const errorId = computed(() => (props.error ? `${id}-error` : undefined))
 
 function firstEnabledIndex(start = 0, direction = 1) {
-  if (props.options.length === 0) return -1
-  for (let offset = 0; offset < props.options.length; offset += 1) {
-    const index = (start + offset * direction + props.options.length) % props.options.length
-    if (!props.options[index]?.disabled) return index
-  }
-  return -1
+  return findEnabledIndex(props.options, start, direction)
 }
 
 async function openList() {
@@ -52,11 +54,13 @@ async function openList() {
   activeIndex.value = firstEnabledIndex(currentIndex >= 0 ? currentIndex : 0)
   open.value = true
   await nextTick()
+  startPlacement()
   listRef.value?.focus()
 }
 
 function closeList(returnFocus = false) {
   open.value = false
+  stopPlacement()
   if (returnFocus) buttonRef.value?.focus()
 }
 
@@ -167,7 +171,8 @@ onBeforeUnmount(() => {
         ref="listRef"
         role="listbox"
         tabindex="0"
-        class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+        :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
         :aria-labelledby="`${id}-label`"
         :aria-activedescendant="activeOptionId"
         @keydown="onKeydown"

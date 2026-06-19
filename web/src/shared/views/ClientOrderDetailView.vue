@@ -10,6 +10,7 @@ import {
   clientStatusPillClass,
   formatPercent,
   formatRelativeDate,
+  formatTodayHours,
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -144,7 +145,7 @@ async function cancelOrder() {
     cancelDialogOpen.value = false
     toast.success('Buyurtma bekor qilindi.')
   } catch {
-    actionError.value = orders.error ?? 'order_cancel_failed'
+    actionError.value = orders.actionError ?? 'order_cancel_failed'
   }
 }
 
@@ -473,6 +474,9 @@ onMounted(() => {
                       {{ order.workshop_name }} · {{ order.branch_name }}
                     </div>
                     <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
+                    <div class="mt-1 text-sm text-ink-soft">
+                      Bugun: {{ formatTodayHours(order.today_hours) }}
+                    </div>
                   </div>
                   <div class="client-row-meta">{{ order.branch_phone }}</div>
                 </div>
@@ -744,7 +748,7 @@ onMounted(() => {
           </section>
 
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
-            {{ clientErrorLabel(actionError) }} · trace {{ orders.traceId ?? 'unavailable' }}
+            {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
           </p>
         </aside>
       </div>

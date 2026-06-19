@@ -19,16 +19,52 @@ class ClientOrderCreateRequest(BaseModel):
     note_client: str | None = None
 
 
+class MaterialPriceLine(APIModel):
+    material_id: uuid.UUID
+    material_name: str
+    panels_used: int
+    unit_price_tiyin: int
+    line_total_tiyin: int
+
+
+class EdgePriceLine(APIModel):
+    material_id: uuid.UUID
+    material_name: str
+    consumed_mm: int
+    material_cost_tiyin: int
+    service_cost_tiyin: int
+    line_total_tiyin: int
+
+
 class OrderQuoteResponse(APIModel):
     draft_id: uuid.UUID
     branch_id: uuid.UUID
     branch_name: str
     branch_address: str
     branch_phone: str
+    today_hours: dict[str, str | None]
     subtotal_cutting_tiyin: int
     subtotal_materials_tiyin: int
     subtotal_edge_banding_tiyin: int
     total_tiyin: int
+    # Itemized breakdown so the card/checkout can show how the price is built
+    # (CB-117): cutting = panels_used * cutting_rate, plus per-material/per-edge lines.
+    panels_used: int
+    cutting_rate_tiyin: int
+    material_lines: list[MaterialPriceLine]
+    edge_lines: list[EdgePriceLine]
+
+
+class BatchOrderQuoteRequest(BaseModel):
+    draft_id: uuid.UUID
+    branch_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+
+
+class BatchOrderQuoteResponse(APIModel):
+    # Per-branch quote keyed by branch_id; errors carries a code (or null) per
+    # branch that failed, so the client attributes each failure correctly (CB-12).
+    quotes: dict[str, OrderQuoteResponse]
+    errors: dict[str, str | None]
 
 
 class VersionedRequest(BaseModel):
@@ -125,6 +161,7 @@ class OrderSummaryResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
+    today_hours: dict[str, str | None]
     cutting_result_id: uuid.UUID
     status: OrderStatus
     version: int

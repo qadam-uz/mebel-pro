@@ -70,7 +70,6 @@ export const clientConfig: RoleConfig = {
     { label: 'Chizmalar', to: '/c/cutting/drafts', icon: 'scissors' },
     { label: 'Buyurtmalar', to: '/c/orders', icon: 'orders' },
     { label: 'Ustaxonalar', to: '/c/branches', icon: 'store' },
-    { label: 'Profil', to: '/c/profile', icon: 'users' },
   ],
 }
 

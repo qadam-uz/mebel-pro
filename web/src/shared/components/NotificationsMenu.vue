@@ -2,12 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { adminNotificationDestination, adminNotificationTitle } from '@/shared/app/adminUi'
 import {
-  clientNotificationBody,
-  clientNotificationIconName,
-  clientNotificationTitle,
-} from '@/shared/app/clientUi'
+  notificationBody,
+  notificationDestination,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
@@ -31,42 +31,38 @@ const badgeText = computed(() => (notifications.unread > 9 ? '9+' : String(notif
 const isClient = computed(() => roleConfig.role === 'client')
 const isWorkshop = computed(() => roleConfig.role === 'workshop')
 const isAdmin = computed(() => roleConfig.role === 'admin')
+// Accessible name for the dropdown + its header (notifications.md: a proper menu
+// with a descriptive name), localized for the Uzbek-facing client/workshop apps.
+const menuLabel = computed(() =>
+  isClient.value || isWorkshop.value || isAdmin.value ? 'Bildirishnomalar' : 'Notifications',
+)
 
 function title(item: NotificationItem) {
-  if (isAdmin.value) return adminNotificationTitle(item)
-  return clientNotificationTitle(item)
+  return notificationTitle(item, roleConfig.role)
 }
 
 function body(item: NotificationItem) {
-  return clientNotificationBody(item)
+  return notificationBody(item)
 }
 
 function iconName(item: NotificationItem) {
-  return clientNotificationIconName(item)
+  return notificationIconName(item)
 }
 
 function destination(item: NotificationItem) {
-  if (!item.entity_type || !item.entity_id) return null
-  if (item.entity_type === 'order' && roleConfig.role === 'client') {
-    return `/c/orders/${item.entity_id}`
-  }
-  if (item.entity_type === 'order' && roleConfig.role === 'workshop') {
-    return `/workshop/orders/${item.entity_id}`
-  }
-  if (item.entity_type === 'branch' && roleConfig.role === 'workshop') {
-    return `/workshop/branches/${item.entity_id}`
-  }
-  if (item.entity_type === 'workshop' && roleConfig.role === 'admin') {
-    return `/admin/workshops/${item.entity_id}`
-  }
-  if (roleConfig.role === 'admin') return adminNotificationDestination(item)
-  return null
+  return notificationDestination(item, roleConfig.role)
 }
 
+// Reuse the loaded list for ~30s instead of refetching on every bell open (CB-52);
+// the unread badge is kept live by the ~45s poll regardless.
+let listLoadedAt = 0
 async function toggle() {
   open.value = !open.value
   if (open.value) {
-    await notifications.loadList()
+    if (notifications.items.length === 0 || Date.now() - listLoadedAt > 30000) {
+      await notifications.loadList()
+      listLoadedAt = Date.now()
+    }
     await nextTick()
     menuItems()[0]?.focus()
   }
@@ -110,10 +106,19 @@ function onMenuKeydown(event: KeyboardEvent) {
 }
 
 async function openItem(item: NotificationItem) {
-  if (item.read_at === null) await notifications.markRead(item.id)
   const to = destination(item)
+  if (!to) {
+    // No viewable target (entity gone / not visible): don't silently mark read —
+    // tell the user and keep the row unread (CB-125).
+    toast.warn("Bu bildirishnoma ochib bo'lmaydi.")
+    return
+  }
+  // markRead is best-effort: opening the entity is the user's intent, so navigate
+  // regardless. A failure leaves the row unread (the badge stays) — that is its own
+  // feedback, with no disjointed toast-then-navigate.
+  if (item.read_at === null) await notifications.markRead(item.id)
   open.value = false
-  if (to) await router.push(rolePath(to))
+  await router.push(rolePath(to))
 }
 
 async function openAll() {
@@ -125,7 +130,12 @@ async function openAll() {
 
 async function markAllRead() {
   await notifications.markAllRead()
+  if (notifications.actionError) {
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
+    return
+  }
   await notifications.loadList()
+  listLoadedAt = Date.now()
   toast.success("Hammasi o'qilgan deb belgilandi.")
 }
 
@@ -231,12 +241,11 @@ onBeforeUnmount(() => {
       ref="menuRef"
       class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
       role="menu"
+      :aria-label="menuLabel"
       @keydown="onMenuKeydown"
     >
       <div class="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div class="font-bold text-ink">
-          {{ isClient || isWorkshop || isAdmin ? 'Bildirishnomalar' : 'Notifications' }}
-        </div>
+        <div class="font-bold text-ink">{{ menuLabel }}</div>
         <button
           type="button"
           role="menuitem"

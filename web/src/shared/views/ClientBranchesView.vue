@@ -2,43 +2,32 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { formatTiyin } from '@/shared/formatters'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import {
   useClientCatalogStore,
   type ClientBranch,
-  type ClientBranchMaterial,
+  type ClientBranchMaterialPreview,
 } from '@/shared/stores/clientCatalog'
 
 const catalog = useClientCatalogStore()
 const search = ref('')
-const loadingMaterials = ref(false)
 let searchTimer: number | undefined
 
 const visibleBranches = computed(() => catalog.branches)
 
 async function refreshBranches() {
+  // One request now — the branch payload carries an inline material preview
+  // (CB-13), so the old per-branch materials N+1 is gone.
   await catalog.loadBranches(search.value)
-  loadingMaterials.value = true
-  try {
-    // allSettled inside the store — a single failing branch records its own
-    // error instead of rejecting the batch (CB-23).
-    await catalog.loadMaterialsForBranchBatch(catalog.branches.map((branch) => branch.branch_id))
-  } finally {
-    loadingMaterials.value = false
-  }
 }
 
-async function retryBranchMaterials(branchId: string) {
-  await catalog.loadMaterialsForBranchBatch([branchId])
+function materialLabels(branch: ClientBranch) {
+  return branch.materials_preview.map(materialTitle)
 }
 
-function materialLabels(branchId: string) {
-  const rows = catalog.materialsByBranch[branchId] ?? []
-  return rows.map(materialTitle)
-}
-
-function materialTitle(material: ClientBranchMaterial) {
+function materialTitle(material: ClientBranchMaterialPreview) {
   const name = material.name.split('·')[0].trim()
   const price = formatTiyin(material.price_tiyin)
   return `${material.manufacturer_name} ${name} · ${price}/${material.display_unit}`
@@ -53,7 +42,7 @@ function hours(branch: ClientBranch) {
 
 watch(search, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => void refreshBranches(), 250)
+  searchTimer = window.setTimeout(() => void refreshBranches(), SEARCH_DEBOUNCE_MS)
 })
 
 onMounted(refreshBranches)
@@ -86,7 +75,7 @@ onMounted(refreshBranches)
       <div
         v-for="item in 4"
         :key="item"
-        class="client-card grid grid-cols-[50px_1fr_auto] gap-4 p-5"
+        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
       >
         <div class="client-skeleton size-[50px]"></div>
         <div>
@@ -115,7 +104,7 @@ onMounted(refreshBranches)
       <article
         v-for="branch in visibleBranches"
         :key="branch.branch_id"
-        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5"
+        class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
         :class="branch.status !== 'active' ? 'opacity-70' : ''"
       >
         <div
@@ -137,34 +126,12 @@ onMounted(refreshBranches)
           <p class="mt-1 font-mono text-xs text-ink-muted">
             {{ branch.address }} · {{ hours(branch) }} · {{ branch.phone }}
           </p>
-          <p v-if="loadingMaterials" class="mt-2 text-sm text-ink-soft">
-            Materiallar yuklanmoqda...
-          </p>
-          <p
-            v-else-if="catalog.branchMaterialsError[branch.branch_id]"
-            class="mt-2 text-sm font-bold text-danger"
-          >
-            Materiallarni yuklab bo'lmadi · trace
-            {{ catalog.branchMaterialsTraceId[branch.branch_id] ?? 'unavailable' }}
-            <button
-              type="button"
-              class="ml-2 font-bold text-accent underline"
-              @click="retryBranchMaterials(branch.branch_id)"
-            >
-              Qayta urinish
-            </button>
-          </p>
-          <p
-            v-else-if="materialLabels(branch.branch_id).length > 0"
-            class="mt-2 text-sm text-ink-soft"
-          >
+          <p v-if="branch.materials_total > 0" class="mt-2 text-sm text-ink-soft">
             Materiallar:
             <b class="font-semibold text-ink">
-              {{ materialLabels(branch.branch_id).slice(0, 4).join(' · ') }}
+              {{ materialLabels(branch).slice(0, 4).join(' · ') }}
             </b>
-            <span v-if="materialLabels(branch.branch_id).length > 4">
-              +{{ materialLabels(branch.branch_id).length - 4 }}
-            </span>
+            <span v-if="branch.materials_total > 4"> +{{ branch.materials_total - 4 }} </span>
           </p>
           <p v-else class="mt-2 text-sm text-ink-soft">Ochiq materiallar ko'rsatilmagan.</p>
           <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
@@ -173,7 +140,7 @@ onMounted(refreshBranches)
         </div>
 
         <span
-          class="client-pill"
+          class="client-pill max-[480px]:col-span-2 max-[480px]:mt-1 max-[480px]:justify-self-start"
           :class="branch.status === 'active' ? 'client-pill-ready' : 'client-pill-info'"
         >
           {{ branch.status === 'active' ? 'Faol' : 'Vaqtincha yopiq' }}

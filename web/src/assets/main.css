@@ -122,8 +122,12 @@
     white-space: nowrap;
   }
 
-  .mp-button:hover {
-    transform: translateY(-1px);
+  /* Hover lift only on real-hover (mouse) devices — on touch it stuck after a
+     tap, making the button look floating/selected (CB-67). */
+  @media (hover: hover) {
+    .mp-button:hover {
+      transform: translateY(-1px);
+    }
   }
 
   .mp-button:active {
@@ -830,9 +834,11 @@
       box-shadow 140ms ease;
   }
 
-  .client-edges-btn:hover {
-    border-color: var(--color-accent);
-    background: var(--color-accent-soft);
+  @media (hover: hover) {
+    .client-edges-btn:hover {
+      border-color: var(--color-accent);
+      background: var(--color-accent-soft);
+    }
   }
 
   .client-edge-svg {
@@ -1006,10 +1012,12 @@
       background 120ms ease;
   }
 
-  .ep-pattern:hover:not(:disabled),
-  .ep-source button:hover {
-    border-color: var(--color-ink-soft);
-    background: var(--color-sunk);
+  @media (hover: hover) {
+    .ep-pattern:hover:not(:disabled),
+    .ep-source button:hover {
+      border-color: var(--color-ink-soft);
+      background: var(--color-sunk);
+    }
   }
 
   .ep-pattern:disabled {
@@ -1105,9 +1113,11 @@
       color 120ms ease;
   }
 
-  .edge-btn:hover {
-    border-color: var(--color-ink);
-    color: var(--color-ink);
+  @media (hover: hover) {
+    .edge-btn:hover {
+      border-color: var(--color-ink);
+      color: var(--color-ink);
+    }
   }
 
   .edge-btn.set {
@@ -1178,9 +1188,11 @@
     text-align: left;
   }
 
-  .ep-edge-opt:hover {
-    border-color: var(--color-ink-soft);
-    background: var(--color-sunk);
+  @media (hover: hover) {
+    .ep-edge-opt:hover {
+      border-color: var(--color-ink-soft);
+      background: var(--color-sunk);
+    }
   }
 
   .ep-edge-opt.on {
@@ -1332,16 +1344,6 @@
     }
 
     .client-nav::-webkit-scrollbar {
-      display: none;
-    }
-  }
-
-  @media (max-width: 680px) {
-    .client-nav a:last-child {
-      display: none;
-    }
-
-    .client-user-pill .client-user-name {
       display: none;
     }
   }

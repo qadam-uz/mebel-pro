@@ -6,6 +6,7 @@ import {
   clientErrorLabel,
   formatPercent,
   formatPhone,
+  formatTodayHours,
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
@@ -394,6 +395,9 @@ onMounted(async () => {
                         `${branch.workshop_name} · ${branch.branch_name}`
                       }}
                     </p>
+                    <p class="mt-1 text-xs text-ink-soft">
+                      Bugun: {{ formatTodayHours(branch.today_hours) }}
+                    </p>
                   </div>
                   <div class="font-mono text-2xl font-extrabold text-accent">
                     {{
@@ -407,7 +411,12 @@ onMounted(async () => {
                 <div class="mx-5 mb-5 rounded-md bg-sunk p-3 font-mono text-xs text-ink-soft">
                   <template v-if="quoteBranch(branch.branch_id)">
                     <div class="flex justify-between gap-4 py-1">
-                      <span>Kesish xizmati</span>
+                      <span
+                        >Kesish xizmati ({{
+                          quoteBranch(branch.branch_id)?.panels_used ?? 0
+                        }}
+                        panel)</span
+                      >
                       <span class="text-ink">{{
                         formatTiyin(quoteBranch(branch.branch_id)?.subtotal_cutting_tiyin ?? 0)
                       }}</span>
@@ -472,6 +481,9 @@ onMounted(async () => {
                 </div>
                 <div class="mt-1 font-mono text-xs text-ink-muted">
                   {{ selectedQuote?.branch_address }}
+                </div>
+                <div class="mt-1 text-xs text-ink-soft">
+                  Bugun: {{ formatTodayHours(selectedQuote?.today_hours) }}
                 </div>
                 <div class="mt-2 font-mono text-xs text-ink-muted">
                   Tel: {{ formatPhone(selectedQuote?.branch_phone) }}
@@ -560,22 +572,56 @@ onMounted(async () => {
 
               <div class="mt-4 rounded-md bg-sunk p-4 font-mono text-xs">
                 <div class="flex justify-between gap-4 py-1">
-                  <span class="text-ink-soft">Kesish xizmati</span>
+                  <span class="text-ink-soft">
+                    Kesish xizmati
+                    <template v-if="selectedQuote">
+                      ({{ selectedQuote.panels_used }} panel ×
+                      {{ formatTiyin(selectedQuote.cutting_rate_tiyin) }})
+                    </template>
+                  </span>
                   <span class="text-ink">{{
                     formatTiyin(selectedQuote?.subtotal_cutting_tiyin ?? 0)
                   }}</span>
                 </div>
-                <div class="flex justify-between gap-4 py-1">
-                  <span class="text-ink-soft">Panel materiallar</span>
-                  <span class="text-ink">{{
-                    formatTiyin(selectedQuote?.subtotal_materials_tiyin ?? 0)
-                  }}</span>
+                <div class="py-1">
+                  <div class="flex justify-between gap-4">
+                    <span class="text-ink-soft">Panel materiallar</span>
+                    <span class="text-ink">{{
+                      formatTiyin(selectedQuote?.subtotal_materials_tiyin ?? 0)
+                    }}</span>
+                  </div>
+                  <div
+                    v-for="line in selectedQuote?.material_lines ?? []"
+                    :key="line.material_id"
+                    class="flex justify-between gap-4 pl-3 text-ink-muted"
+                  >
+                    <span class="min-w-0 truncate"
+                      >· {{ line.material_name }} ({{ line.panels_used }} ×
+                      {{ formatTiyin(line.unit_price_tiyin) }})</span
+                    >
+                    <span>{{ formatTiyin(line.line_total_tiyin) }}</span>
+                  </div>
                 </div>
-                <div class="flex justify-between gap-4 py-1">
-                  <span class="text-ink-soft">Krom yopishtirish</span>
-                  <span class="text-ink">{{
-                    formatTiyin(selectedQuote?.subtotal_edge_banding_tiyin ?? 0)
-                  }}</span>
+                <div v-if="(selectedQuote?.subtotal_edge_banding_tiyin ?? 0) > 0" class="py-1">
+                  <div class="flex justify-between gap-4">
+                    <span class="text-ink-soft">Krom yopishtirish</span>
+                    <span class="text-ink">{{
+                      formatTiyin(selectedQuote?.subtotal_edge_banding_tiyin ?? 0)
+                    }}</span>
+                  </div>
+                  <div
+                    v-for="line in selectedQuote?.edge_lines ?? []"
+                    :key="line.material_id"
+                    class="flex justify-between gap-4 pl-3 text-ink-muted"
+                  >
+                    <span class="min-w-0 truncate"
+                      >· {{ line.material_name }} ({{
+                        (line.consumed_mm / 1000).toFixed(2)
+                      }}
+                      m)</span
+                    >
+                    <span>{{ formatTiyin(line.line_total_tiyin) }}</span>
+                  </div>
                 </div>
                 <div
                   class="mt-2 flex justify-between gap-4 border-t border-hairline pt-3 text-sm font-extrabold text-accent"
