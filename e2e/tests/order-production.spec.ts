@@ -356,11 +356,13 @@ test("client places an order and workshop completes it through production queues
   await branchesLoaded;
 
   await page.getByRole("button", { name: "Ustaxona tanlash" }).click();
-  await chooseOption(
-    page,
-    /Afzal filial/,
-    new RegExp(`Order Workshop ${id}`),
-  );
+  // CB-51: two-pane picker — pick the workshop (left), then its branch (right).
+  await page
+    .getByRole("button", { name: new RegExp(`Order Workshop ${id}`) })
+    .click();
+  await page
+    .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
+    .click();
   await page.getByRole("button", { name: "Qo'llash" }).click();
   await expect(
     page.getByText(`Order Branch ${id} · Order Workshop ${id}`),

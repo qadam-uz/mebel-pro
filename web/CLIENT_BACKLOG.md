@@ -42,9 +42,23 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 0 | 2 | 3 | **5** |
-| Done | 32 | 66 | 29 | **127** |
+| Open (incl. partial) | 0 | 2 | 2 | **4** |
+| Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
+
+> Progress (2026-06-19, client-finish B17): **CB-51** — two-pane branch pre-filter.
+> The editor's flat "workshop · branch" SearchCombobox is replaced by a new
+> `components/CuttingBranchPicker.vue` (workshops left, the chosen workshop's branches
+> right, per cutting.md §"Branch pre-filter") with status chips + today-hours;
+> `temporarily_closed` branches stay selectable (CB-77). Editor wiring: removed the
+> dead `branchOptions` ChoiceOption computed, added a "Bekor qilish" that resets the
+> pending pick to the saved preference (`closeBranchPicker`), Qo'llash still calls
+> `setPreferredBranch` (→ loadMaterials + recovery re-eval). Updated the editor-picker
+> step in `order-production.spec` + `cutting-drafts.spec`, and fixed a **pre-existing
+> stale e2e assertion** in cutting-drafts (the algorithm-comparison table is collapsed
+> behind "Algoritmlarni solishtirish" now — the test never expanded it; classic e2e
+> drift). **Full e2e suite green (17/17)** + web gate (lint/format/typecheck/test 104/
+> build).
 
 > Progress (2026-06-19, client-finish B16): **E2E batch — CB-122 + CB-123** (run
 > locally against the dev stack; both green). New `e2e/tests/helpers.ts` (shared
@@ -466,7 +480,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-48 | P3 | responsive | low | S | Done | Stack branches/notifications rows on small phones |
 | CB-49 | P3 | responsive | low | S | **Won't** ✗refuted | ~~Fix two-column grid overflow in ~1024px band~~ |
 | CB-50 | P3 | ux-flow | low | S | Done | Disable Optimise after a run until a part changes |
-| CB-51 | P3 | ux-flow | low | M | Open | Two-pane workshop+branch picker in editor pre-filter |
+| CB-51 | P3 | ux-flow | low | M | Done | Two-pane workshop+branch picker in editor pre-filter |
 | CB-52 | P3 | performance | low | S | Done | Cache/staleness reuse for home/notifications/branch-options |
 | CB-53 | P3 | a11y | low | S | Done | Self-describing autosave live region (role=status) |
 | CB-54 | P3 | a11y | low | S | Done | AuthFileImage: required alt + localized failure label |
@@ -972,10 +986,10 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** Optimise is disabled only while `cutting.optimizing || parts.length===0` (`:1064`), so after a successful run it's immediately re-clickable on identical input — encouraging redundant slow re-runs. `cutting.md` §"result panel" wants it disabled until a row changes.
 **Fix:** Track a "dirty since last optimise" flag (true on any change, false after success) and add to `:disabled`.
 
-### CB-51 · Two-pane workshop+branch picker in editor pre-filter — `ux-flow` · low · M
-**Files:** `views/ClientCuttingEditorView.vue`
-**Why:** The branch pre-filter is a flat `FormSelect` of every branch as "workshop · branch" (`:773-785`, `branchOptions` `:57-66`) with no grouping; `temporarily_closed` distinguished only by a meta string. `cutting.md` §"Branch pre-filter" specifies a two-pane workshop-left/branches-right picker.
-**Fix:** Replace the flat select with a two-pane picker grouping branches under their workshop, marking `temporarily_closed`, keeping `setPreferredBranch` wiring.
+### CB-51 · Two-pane workshop+branch picker in editor pre-filter — `ux-flow` · low · M — **Done (B17)**
+**Files:** `components/CuttingBranchPicker.vue` (new), `views/ClientCuttingEditorView.vue`
+**Why:** The branch pre-filter was a flat `SearchCombobox` of every branch as "workshop · branch" with no grouping; `temporarily_closed` distinguished only by a meta string. `cutting.md` §"Branch pre-filter" specifies a two-pane workshop-left/branches-right picker.
+**Fix (shipped):** New `CuttingBranchPicker.vue` — workshops on the left (grouped by `workshop_id` with a branch count), the chosen workshop's branches on the right with a faol/vaqtincha-yopiq status chip + today-hours; selecting a branch v-models `selectedBranchId`, `Qo'llash` applies via the unchanged `setPreferredBranch` wiring (→ loadMaterials + not-carried recovery re-eval), `temporarily_closed` stays selectable (CB-77). Removed the dead flat-list `branchOptions` computed. Verified by the full e2e suite (order-production + cutting-drafts picker steps rewritten for the two panes).
 
 ### CB-52 · Cache/staleness reuse for home/notifications/branch-options — `performance` · low · S
 **Files:** `views/ClientHomeView.vue`, `components/NotificationsMenu.vue`, `ClientOrderNewView.vue`, `stores/cutting.ts`

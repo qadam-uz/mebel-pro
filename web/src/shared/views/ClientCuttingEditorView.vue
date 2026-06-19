@@ -12,6 +12,7 @@ import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
@@ -84,16 +85,6 @@ const boundOrderId = computed(
 const isReadOnly = computed(() => boundOrderId.value !== null)
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === draft.value?.preferred_branch_id),
-)
-const branchOptions = computed<ChoiceOption[]>(() =>
-  cutting.branchOptions.map((branch) => ({
-    value: branch.branch_id,
-    label: `${branch.workshop_name} · ${branch.branch_name}`,
-    meta:
-      branch.status === 'temporarily_closed'
-        ? (branch.closed_reason ?? 'vaqtincha yopiq')
-        : 'faol filial',
-  })),
 )
 // Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
 // a sort — applied to the shared option list every row's panel picker draws from.
@@ -855,6 +846,13 @@ async function setPreferredBranch(branchId: string | null) {
   await loadMaterials()
 }
 
+// Close the picker without applying — drop the pending pick back to the saved
+// preference so a re-open highlights what's actually active, not an abandoned choice.
+function closeBranchPicker() {
+  branchPickerOpen.value = false
+  selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+}
+
 async function optimize() {
   if (cutting.optimizing || !canOptimize.value) return
   optimizeError.value = null
@@ -981,7 +979,9 @@ watch(
       value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
       value.results[0]?.panels[0]?.id ??
       null
-    selectedBranchId.value = value.preferred_branch_id
+    // Don't clobber a pending pick while the picker is open (e.g. a debounced
+    // autosave round-trips mid-selection); mirror the saved preference otherwise.
+    if (!branchPickerOpen.value) selectedBranchId.value = value.preferred_branch_id
   },
   { immediate: true },
 )
@@ -1139,23 +1139,21 @@ const edgePatterns: Array<{
           </button>
         </section>
 
-        <section
-          v-if="branchPickerOpen"
-          class="client-card mb-4 grid gap-3 p-4 md:grid-cols-[1fr_auto]"
-        >
-          <SearchCombobox
-            v-model="selectedBranchId"
-            label="Afzal filial"
-            :options="branchOptions"
-            placeholder="Filialni qidiring"
-          />
-          <button
-            type="button"
-            class="mp-button mp-button-primary self-end"
-            @click="setPreferredBranch(selectedBranchId)"
-          >
-            Qo'llash
-          </button>
+        <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
+          <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
+          <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
+              Bekor qilish
+            </button>
+            <button
+              type="button"
+              class="mp-button mp-button-primary"
+              :disabled="!selectedBranchId"
+              @click="setPreferredBranch(selectedBranchId)"
+            >
+              Qo'llash
+            </button>
+          </div>
         </section>
 
         <section v-if="showRecovery" class="client-banner warn">
