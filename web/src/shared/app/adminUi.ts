@@ -1,13 +1,31 @@
 import type { DropdownOption, NavItem } from '@/shared/app/roleConfig'
 import type {
+  ActionLog,
   ErrorRecordStatus,
   JobRunStatus,
   MaterialKind,
   MaterialStatus,
   PlatformUserStatus,
+  StatusChangeLog,
   WorkshopSummary,
 } from '@/shared/stores/admin'
 import type { NotificationItem } from '@/shared/stores/notifications'
+
+// AB-51: pure audit-filter helpers, extracted so the substring-match predicate
+// is unit-testable without mounting the view.
+export function auditActionFields(row: ActionLog): string[] {
+  return [row.action, row.entity_type ?? '', row.entity_id ?? '', row.summary ?? '', row.trace_id]
+}
+
+export function auditStatusFields(row: StatusChangeLog): string[] {
+  return [row.entity_type, row.entity_id, row.from_status ?? '', row.to_status, row.reason ?? '']
+}
+
+export function matchesNeedle(fields: string[], needle: string): boolean {
+  const trimmed = needle.trim().toLowerCase()
+  if (!trimmed) return true
+  return fields.join(' ').toLowerCase().includes(trimmed)
+}
 
 export type AdminNavMetricKey =
   | 'workshops'

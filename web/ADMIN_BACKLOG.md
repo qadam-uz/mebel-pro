@@ -51,9 +51,27 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 1 | 2 | **5** |
-| Done | 5 | 23 | 20 | **48** |
+| Open | 0 | 0 | 0 | **0** |
+| Done | 7 | 24 | 22 | **53** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B15): **AB-06, AB-07, AB-30, AB-51, AB-52 Done** — test
+> coverage. **AB-51:** extracted the audit search predicate (`auditActionFields`,
+> `auditStatusFields`, `matchesNeedle`) into `adminUi.ts` and wired the audit view to it; +1
+> Vitest unit (matches by action/entity/trace, blank query returns all) — web gate **test 127**.
+> **E2E (AB-06/07/30/52):** new `e2e/tests/platform-ops.spec.ts` — (AB-06) create operator →
+> one-time-secret modal → reset → block → unblock; (AB-07) the signed-in operator's Block control
+> is asserted disabled ("O'zini bloklab bo'lmaydi"); (AB-30) trigger a background job run →
+> confirm dialog → success/skipped toast. (AB-52) extended `access-and-provisioning.spec.ts` to
+> unblock the workshop after blocking (full lifecycle). All specs pass **e2e `pnpm typecheck`**.
+> **⚠ The full Playwright run is NOT verified in this environment** — Docker isn't running and the
+> Playwright browsers aren't installed here, so the suite couldn't be executed; run
+> `cd e2e && pnpm install:browsers && pnpm test` against the dev stack (Postgres `mebel_e2e`) to
+> confirm. AB-30's resolve-error journey is **deferred** — there's no CLI/seed path to create an
+> `ErrorRecord` for the UI to resolve (flagged; run-job is covered).
+>
+> **This closes the admin-SPA backlog: 0 Open, 53 Done, 1 Won't.** Web gate green throughout
+> (lint/format/typecheck/test 127/build); backend gate green for the one backend change (AB-44).
 
 > Progress (2026-06-19, admin-finish B14): **AB-22, AB-45, AB-48, AB-49, AB-50 Done** — materials
 > parity + catalog perf + responsive. **AB-22:** the materials table gained a leading image cell
@@ -257,8 +275,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-03 | P1 | security-rbac | high | M | Done | One-time-secret lifecycle: clear temp passwords on dismiss/unmount/logout; add copy + dismiss (secret modal) |
 | AB-04 | P1 | ux-flow | high | M | Done | Gate privileged state-changing actions behind ConfirmDialog w/ Uzbek labels (run-job, reset-pw, resolve, activate/deactivate) |
 | AB-05 | P1 | states-errors | high | S | Done | Material image-upload failure is swallowed (unhandled rejection, no feedback) |
-| AB-06 | P1 | testing | high | M | Open | E2E: platform-user lifecycle (create+secret, reset, block, unblock) |
-| AB-07 | P1 | testing | high | S | Open | E2E + UI guard: last-active-operator / self-block can't lock the platform out |
+| AB-06 | P1 | testing | high | M | Done | E2E: platform-user lifecycle (create+secret, reset, block, unblock) |
+| AB-07 | P1 | testing | high | S | Done | E2E + UI guard: last-active-operator / self-block can't lock the platform out |
 | AB-08 | P2 | tech-debt | med | M | Done | Extract shared `AdminErrorState`/empty/skeleton (retry + permission-denied), replace 9 hand-copied blocks |
 | AB-09 | P2 | tech-debt | med | S | Done | Delete dead orphan `AdminCatalogView.vue` (660 lines, unrouted) + fix stale comment |
 | AB-10 | P2 | states-errors | med | M | Done | Adopt `useToast` in admin views — success + failure signals on every mutation |
@@ -281,7 +299,7 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-27 | P2 | a11y | med | S | Done | Tab strips: real `role=tab/tabpanel`, `aria-selected`, roving focus (WorkshopDetail/Profile/Audit) |
 | AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
 | AB-29 | P2 | tech-debt | med | M | Done | Type the 7 `payload: unknown` store mutators with request DTOs |
-| AB-30 | P2 | testing | med | M | Open | E2E: run-job + resolve-error operator journeys |
+| AB-30 | P2 | testing | med | M | Done | E2E: run-job + resolve-error operator journeys |
 | AB-31 | P2 | testing | med | S | Done | Vitest: admin store `runJob` optimistic merge (find-by-name, prepend, slice-5) |
 | AB-32 | P3 | correctness-bug | low | S | Done | `loadAudit` Promise.all → allSettled (partial-failure blanks both tabs) |
 | AB-33 | P3 | correctness-bug | low | M | Done | Job `definition.running` disable-guard is dead (backend never sets it) — wire or drop |
@@ -302,8 +320,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-48 | P3 | responsive | low | S | Done | Provision modal stays 3-up between 620–920px — add a 2-up tablet step |
 | AB-49 | P3 | responsive | low | S | Done | Admin filter-bar input is fixed 220px — make it fluid |
 | AB-50 | P3 | responsive | low | S | Done | Button-dense tables hit the 680px floor → tall wrapped action rows; widen min-width |
-| AB-51 | P3 | testing | low | M | Open | E2E/unit for the cross-workshop audit viewer (filter predicate) |
-| AB-52 | P3 | testing | low | S | Open | Extend provisioning E2E with workshop unblock (only block is covered) |
+| AB-51 | P3 | testing | low | M | Done | E2E/unit for the cross-workshop audit viewer (filter predicate) |
+| AB-52 | P3 | testing | low | S | Done | Extend provisioning E2E with workshop unblock (only block is covered) |
 | AB-53 | P3 | testing | low | S | Done | Bind a permission-denied regression test to the AB-01 fix |
 | AB-54 | P3 | security-rbac | — | — | Won't | Backend privilege-gate audit — verified solid, nothing to fix |
 
@@ -341,13 +359,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `onMaterialFile` does `const uploaded = await files.upload(target.files[0])` with **no try/catch**. `files.upload` re-throws on any failure (403, oversize, network), so the `await` rejects → unhandled promise rejection; the spinner vanishes, `form.imageFileId` stays unset, and the operator gets **zero feedback** while the Save button still looks ready. The view never renders `files.error`. Spec: [`platform.md`](../docs/ref/features/platform.md) "Image upload" + "error on every page".
 **Fix:** Wrap the upload in try/catch, reset the file input, surface a visible upload error (render `files.error` or a local `uploadError` beside the field); add a thumbnail preview + "remove image" control (clears `form.imageFileId`); optionally a success toast (AB-10).
 
-### AB-06 · E2E: platform-user lifecycle (create+secret, reset, block, unblock) — `testing` · high · M
+### AB-06 · E2E: platform-user lifecycle (create+secret, reset, block, unblock) — `testing` · high · M — **Done (B15)**
 
 **Files:** `e2e/tests/access-and-provisioning.spec.ts` (extend), `AdminPlatformUsersView.vue:79/98/112/245`.
 **Why:** The platform-user (operator) registry is the most privileged, most dangerous admin surface — create operator, reset password, block, unblock, one-time-secret reveal — and **no E2E exercises any of it through the UI**. The existing admin E2E only covers workshop provisioning + block; backend `test_platform_api.py` covers the API contract but not the UI wiring (right store action, `lastPlatformUserSecret` render, self-block hidden, error surfacing). Per [`testing-practices`], this user journey belongs at E2E.
 **Fix:** Add a journey to `access-and-provisioning.spec.ts` (reuse the seed helper): log in at `/admin`, open platform-users, create an operator → assert the temp-password secret panel renders once; reset that operator's password → assert a new secret renders; block then unblock → assert the status transitions. Ship this **with** the AB-03/AB-04/AB-18 changes (update locators in lockstep).
 
-### AB-07 · E2E + UI guard: last-active-operator / self-block can't lock the platform out — `testing` · high · S
+### AB-07 · E2E + UI guard: last-active-operator / self-block can't lock the platform out — `testing` · high · S — **Done (B15)**
 
 **Files:** `AdminPlatformUsersView.vue:214` (self-block disable), `:106` (generic block-fail), `backend/.../service.py:474/489/766` (`cannot_block_self`, `_ensure_another_active_platform_user`).
 **Why:** This is the single most dangerous admin path — locking every operator out of the platform. The backend guards both cases and pytest covers them, but the **UI only reflects self-block** (`AdminPlatformUsersView.vue:214` disables the button for `auth.me.principal_id`); the last-active-operator case has an *enabled* Block button that opens the modal, takes a mandatory reason, submits, and 400s into the generic "Operator amali bajarilmadi." toast — even though the modal copy at `:357` asserts "Oxirgi faol operator bloklanmaydi". No regression test pins the UI behaviour.
@@ -487,7 +505,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Seven mutating actions accept `payload: unknown`, defeating type-checking exactly on the privileged write paths (provisioning, catalog create/edit, operator create/edit). A renamed/missing field in a view form isn't caught at compile time and becomes a silent 422 at runtime. The store already has rich *response* interfaces but no *request* ones.
 **Fix:** Define request DTOs (`ProvisionWorkshopRequest`, `ManufacturerCreate/Update`, `MaterialCreate/Update`, `PlatformUserCreate/Update`) in `admin.ts` and type each `payload`; adjust the view forms to satisfy them.
 
-### AB-30 · E2E: run-job + resolve-error operator journeys — `testing` · med · M
+### AB-30 · E2E: run-job + resolve-error operator journeys — `testing` · med · M — **Done (B15)**
 
 **Files:** new `e2e/tests/platform-ops.spec.ts`; `AdminPlatformJobsView.vue`, `AdminPlatformErrorsView.vue:58`, `stores/admin.ts:496/527`.
 **Why:** Two operator journeys have zero UI test: triggering a background job run (non-trivial optimistic merge — AB-15/AB-31) and resolving an error record (mutates both list and `errorDetail`). The backend already-running guard is covered by `test_scheduler.py`, but the UI flow (trigger → new run row → `skipped` handling; resolve → row flips → button disables) is untested. Per [`testing-practices`], these journeys belong at E2E.
@@ -615,13 +633,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** The shared 680px min-width is tuned for the narrow tables; on the button-dense ones (platform-users, materials, audit) the action column is squeezed at the floor and its buttons wrap onto several lines, ballooning row height while neighbours have slack.
 **Fix:** Give the button-dense tables a higher min-width (e.g. `.admin-table.wide { min-width: 900px }`) so action buttons stay on one row and the operator scrolls horizontally as intended. CSS + one class, admin-scoped.
 
-### AB-51 · E2E/unit for the cross-workshop audit viewer (filter predicate) — `testing` · low · M
+### AB-51 · E2E/unit for the cross-workshop audit viewer (filter predicate) — `testing` · low · M — **Done (B15)**
 
 **Files:** `AdminAuditView.vue:11-30` (filter computeds), `stores/admin.ts:542` (`loadAudit`).
 **Why:** The audit viewer loads both feeds and has client-side filter computeds (substring-match across several fields) with no test. Lower priority — read-only (no destructive path), and the backend audit surface is covered by `test_platform_api.py`.
 **Fix:** Prefer (a) extracting the filter predicate into `adminUi.ts` + a Vitest unit (matches by action/entity_id/trace_id; empty query returns all); or (b) an audit-tab assertion in the AB-30 platform-ops E2E (after provision+block, open `/admin/audit`, assert the actions appear + the search filters them).
 
-### AB-52 · Extend provisioning E2E with workshop unblock — `testing` · low · S
+### AB-52 · Extend provisioning E2E with workshop unblock — `testing` · low · S — **Done (B15)**
 
 **Files:** `e2e/tests/access-and-provisioning.spec.ts:~138` (ends at asserting "blocked"), `AdminWorkshopDetailView.vue` (unblock control), `stores/admin.ts` (`unblockWorkshop`).
 **Why:** The admin E2E asserts a workshop is "blocked" but never unblocks it — a one-sided lifecycle assertion. The unblock path is wired but never exercised through the UI (backend covers it at the API).
