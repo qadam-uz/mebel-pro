@@ -2,16 +2,27 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { adminDate, workshopStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  branchStatusLabel,
+  workshopStatusLabel,
+  workshopStatusTone,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const route = useRoute()
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const workshopId = String(route.params.workshop_id)
 const tab = ref<'profile' | 'branches' | 'users'>('profile')
 const blockModalOpen = ref(false)
+const blockPanel = ref<HTMLElement | null>(null)
+const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen.value = false))
 const reason = ref('')
 const acting = ref(false)
 const actionError = ref<string | null>(null)
@@ -29,8 +40,10 @@ async function block() {
     await admin.blockWorkshop(admin.detail.workshop.id, reason.value)
     blockModalOpen.value = false
     reason.value = ''
+    toast.success('Ustaxona bloklandi')
   } catch {
     actionError.value = 'workshop_block_failed'
+    toast.danger("Ustaxonani bloklab bo'lmadi")
   } finally {
     acting.value = false
   }
@@ -42,8 +55,10 @@ async function unblock() {
   actionError.value = null
   try {
     await admin.unblockWorkshop(admin.detail.workshop.id)
+    toast.success('Ustaxona blokdan chiqarildi')
   } catch {
     actionError.value = 'workshop_unblock_failed'
+    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
   } finally {
     acting.value = false
   }
@@ -59,13 +74,15 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <div class="admin-skeleton-line w-2/5"></div>
   </section>
 
-  <section v-else-if="admin.error" class="admin-error">
-    <h3>Ustaxona yuklanmadi</h3>
-    <p>
-      Detail endpoint javob bermadi.
-      <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-    </p>
-  </section>
+  <div v-else-if="admin.error">
+    <RouterLink :to="rolePath('/admin/workshops')" class="admin-back">← Ustaxonalar</RouterLink>
+    <AdminErrorState
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Ustaxona yuklanmadi"
+      @retry="admin.loadWorkshop(workshopId)"
+    />
+  </div>
 
   <section v-else-if="admin.detail">
     <RouterLink :to="rolePath('/admin/workshops')" class="admin-back">← Ustaxonalar</RouterLink>
@@ -80,7 +97,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
       <div class="admin-page-tools">
         <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
-          {{ admin.detail.workshop.status }}
+          {{ workshopStatusLabel(admin.detail.workshop.status) }}
         </span>
         <button
           v-if="admin.detail.workshop.status === 'active'"
@@ -103,15 +120,29 @@ onMounted(() => admin.loadWorkshop(workshopId))
     </div>
 
     <p
+      v-if="admin.detail.workshop.status === 'blocked'"
+      class="mb-4 rounded-md bg-danger-soft px-4 py-3 text-sm font-bold text-danger"
+      role="alert"
+    >
+      Bu ustaxona bloklangan — ochiq buyurtmalar muzlatilgan, xodimlar kira olmaydi. Blokdan
+      chiqarilganda sessiyalar avtomatik tiklanmaydi.
+    </p>
+
+    <p
       v-if="actionError"
       class="mb-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Amal bajarilmadi.
     </p>
 
     <div class="admin-tabs" role="tablist" aria-label="Ustaxona tafsilotlari">
       <button
+        id="ws-tab-profile"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'profile'"
+        aria-controls="ws-panel-profile"
         class="admin-tab"
         :class="{ on: tab === 'profile' }"
         @click="tab = 'profile'"
@@ -119,7 +150,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
         Profil
       </button>
       <button
+        id="ws-tab-branches"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'branches'"
+        aria-controls="ws-panel-branches"
         class="admin-tab"
         :class="{ on: tab === 'branches' }"
         @click="tab = 'branches'"
@@ -127,7 +162,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
         Filiallar
       </button>
       <button
+        id="ws-tab-users"
         type="button"
+        role="tab"
+        :aria-selected="tab === 'users'"
+        aria-controls="ws-panel-users"
         class="admin-tab"
         :class="{ on: tab === 'users' }"
         @click="tab = 'users'"
@@ -136,12 +175,22 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </button>
     </div>
 
-    <section v-if="tab === 'profile'" class="admin-card max-w-[720px]">
+    <section
+      v-if="tab === 'profile'"
+      id="ws-panel-profile"
+      role="tabpanel"
+      aria-labelledby="ws-tab-profile"
+      class="admin-card max-w-[720px]"
+    >
       <div class="admin-card-h">
         <h2>Ustaxona profili</h2>
         <span class="sub">faqat ko'rish . operator tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
+        <p class="mb-4 rounded-md border border-hairline bg-sunk px-3 py-2 text-xs text-ink-soft">
+          Operator faqat provisioning, bloklash va blokdan chiqarish amallarini bajaradi — ustaxona
+          profili va egasi ma'lumotlari ustaxona egasining mas'uliyatida.
+        </p>
         <dl class="grid gap-4 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Nomi</dt>
@@ -174,7 +223,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Holat</dt>
             <dd class="mt-1">
               <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
-                {{ admin.detail.workshop.status }}
+                {{ workshopStatusLabel(admin.detail.workshop.status) }}
               </span>
             </dd>
           </div>
@@ -182,7 +231,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
     </section>
 
-    <section v-else-if="tab === 'branches'" class="admin-card">
+    <section
+      v-else-if="tab === 'branches'"
+      id="ws-panel-branches"
+      role="tabpanel"
+      aria-labelledby="ws-tab-branches"
+      class="admin-card"
+    >
       <div class="admin-card-h">
         <h2>Filiallar (read-only)</h2>
       </div>
@@ -212,7 +267,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
                       branch.status === 'active' ? 'admin-pill-success' : 'admin-pill-warning'
                     "
                   >
-                    {{ branch.status }}
+                    {{ branchStatusLabel(branch.status) }}
                   </span>
                 </td>
               </tr>
@@ -222,7 +277,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
     </section>
 
-    <section v-else class="admin-card">
+    <section
+      v-else
+      id="ws-panel-users"
+      role="tabpanel"
+      aria-labelledby="ws-tab-users"
+      class="admin-card"
+    >
       <div class="admin-card-h">
         <h2>Xodimlar (read-only)</h2>
         <span class="sub">rol yo'q - is_owner + berilgan ruxsatlar</span>
@@ -248,8 +309,16 @@ onMounted(() => admin.loadWorkshop(workshopId))
     </section>
 
     <template v-if="blockModalOpen">
-      <div class="admin-modal-scrim" @click="blockModalOpen = false"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="block-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="blockModalOpen = false"></div>
+      <section
+        ref="blockPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="block-title"
+        tabindex="-1"
+        @keydown="blockTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="block-title">Ustaxonani bloklash</h3>
           <button
@@ -264,8 +333,8 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <form @submit.prevent="block">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
-              Staff sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Clients
-              bloklanmaydi.
+              Xodimlar sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Mijozlarga
+              ta'sir qilmaydi. Blokdan chiqarilganda sessiyalar avtomatik tiklanmaydi.
             </p>
             <label class="admin-field" for="block-reason">
               <span>Majburiy sabab</span>
@@ -282,7 +351,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </button>
             <button
               type="submit"
-              class="mp-button mp-button-primary"
+              class="mp-button bg-danger text-white"
               :disabled="!canBlock || acting"
             >
               {{ acting ? 'Bloklanmoqda' : 'Bloklash' }}

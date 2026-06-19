@@ -1,13 +1,31 @@
 import type { DropdownOption, NavItem } from '@/shared/app/roleConfig'
 import type {
+  ActionLog,
   ErrorRecordStatus,
   JobRunStatus,
   MaterialKind,
   MaterialStatus,
   PlatformUserStatus,
+  StatusChangeLog,
   WorkshopSummary,
 } from '@/shared/stores/admin'
 import type { NotificationItem } from '@/shared/stores/notifications'
+
+// AB-51: pure audit-filter helpers, extracted so the substring-match predicate
+// is unit-testable without mounting the view.
+export function auditActionFields(row: ActionLog): string[] {
+  return [row.action, row.entity_type ?? '', row.entity_id ?? '', row.summary ?? '', row.trace_id]
+}
+
+export function auditStatusFields(row: StatusChangeLog): string[] {
+  return [row.entity_type, row.entity_id, row.from_status ?? '', row.to_status, row.reason ?? '']
+}
+
+export function matchesNeedle(fields: string[], needle: string): boolean {
+  const trimmed = needle.trim().toLowerCase()
+  if (!trimmed) return true
+  return fields.join(' ').toLowerCase().includes(trimmed)
+}
 
 export type AdminNavMetricKey =
   | 'workshops'
@@ -76,11 +94,6 @@ export function groupedNav(items: NavItem[]) {
   return groups
 }
 
-export function statusLabel(value: string | null | undefined) {
-  if (!value) return 'no run'
-  return value.replace(/_/g, ' ')
-}
-
 export function workshopStatusTone(status: WorkshopSummary['status']) {
   return status === 'active' ? 'admin-pill-success' : 'admin-pill-danger'
 }
@@ -103,6 +116,39 @@ export function jobStatusTone(status: JobRunStatus | null | undefined) {
 
 export function errorStatusTone(status: ErrorRecordStatus) {
   return status === 'open' ? 'admin-pill-danger' : 'admin-pill-success'
+}
+
+// AB-12: localized status labels so pills render Uzbek text (paired with the
+// colour tone above), instead of the raw English enum value.
+export function workshopStatusLabel(status: WorkshopSummary['status']) {
+  return status === 'active' ? 'Faol' : 'Bloklangan'
+}
+
+export function platformUserStatusLabel(status: PlatformUserStatus) {
+  return status === 'active' ? 'Faol' : 'Bloklangan'
+}
+
+export function materialStatusLabel(status: MaterialStatus) {
+  return status === 'active' ? 'Faol' : 'Faol emas'
+}
+
+export function branchStatusLabel(status: string) {
+  if (status === 'active') return 'Faol'
+  if (status === 'temporarily_closed') return 'Vaqtincha yopiq'
+  if (status === 'inactive') return 'Faol emas'
+  return status
+}
+
+export function jobStatusLabel(status: JobRunStatus | null | undefined) {
+  if (status === 'ok') return 'OK'
+  if (status === 'failed') return 'Muvaffaqiyatsiz'
+  if (status === 'running') return 'Ishlamoqda'
+  if (status === 'skipped') return "O'tkazib yuborildi"
+  return 'Ishga tushmagan'
+}
+
+export function errorStatusLabel(status: ErrorRecordStatus) {
+  return status === 'open' ? 'Ochiq' : 'Hal qilingan'
 }
 
 export function materialKindLabel(kind: MaterialKind | null | undefined) {

@@ -1,8 +1,9 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { useAuthStore } from '@/shared/stores/auth'
 
 export type MaterialStatus = 'active' | 'inactive'
 export type MaterialKind = 'panel' | 'edge'
@@ -197,11 +198,51 @@ export interface StatusChangeLog {
   changed_at: string
 }
 
-export interface CatalogFilters {
-  search?: string
-  status?: MaterialStatus | null
-  kind?: MaterialKind | null
-  manufacturer_id?: string | null
+// AB-29: typed request payloads for the privileged write paths (was `unknown`).
+export interface ProvisionWorkshopRequest {
+  workshop: { name: string; code: string | null; phone: string; address: string | null }
+  branch: {
+    name: string
+    address: string
+    phone: string
+    latitude: string
+    longitude: string
+    working_hours: Record<string, { open: string | null; close: string | null }>
+  }
+  owner: { full_name: string; login: string; phone: string }
+  temp_password?: string
+}
+
+export interface ManufacturerWriteRequest {
+  name: string
+  country: string | null
+  note: string | null
+}
+
+export interface MaterialWriteRequest {
+  kind: MaterialKind
+  manufacturer_id: string
+  type: PanelMaterialType | null
+  name: string
+  thickness_mm: string
+  color: string
+  decor_code: string | null
+  panel_length_mm: number | null
+  panel_width_mm: number | null
+  grain_direction: boolean | null
+  image_file_id: string | null
+}
+
+export interface PlatformUserCreateRequest {
+  full_name: string
+  login: string
+  phone: string
+  temp_password: string | null
+}
+
+export interface PlatformUserUpdateRequest {
+  full_name?: string
+  phone?: string
 }
 
 export const useAdminStore = defineStore('admin', () => {
@@ -228,6 +269,24 @@ export const useAdminStore = defineStore('admin', () => {
   const catalogTraceId = ref<string | null>(null)
   const opsTraceId = ref<string | null>(null)
 
+  // AB-03: the one-time provision / temp-password secrets must not outlive the
+  // session. They linger on `lastProvision` / `lastPlatformUserSecret` so a view
+  // can render them once; clear them explicitly (modal close / unmount) and,
+  // defensively, the moment auth is dropped (logout / "log out everywhere" /
+  // session-expiry all null the access token).
+  function clearSecrets() {
+    lastProvision.value = null
+    lastPlatformUserSecret.value = null
+  }
+
+  const auth = useAuthStore()
+  watch(
+    () => auth.accessToken,
+    (token) => {
+      if (!token) clearSecrets()
+    },
+  )
+
   async function loadWorkshops() {
     loading.value = true
     error.value = null
@@ -235,8 +294,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       workshops.value = await api.get<WorkshopSummary[]>('/platform/workshops', authInit())
     } catch (errorValue) {
-      error.value = 'workshops_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'workshops_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -249,8 +309,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       overview.value = await api.get<PlatformOverview>('/platform/overview', authInit())
     } catch (errorValue) {
-      error.value = 'overview_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'overview_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
@@ -263,14 +324,15 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       detail.value = await api.get<PlatformWorkshopDetail>(`/platform/workshops/${id}`, authInit())
     } catch (errorValue) {
-      error.value = 'workshop_load_failed'
-      traceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'workshop_load_failed')
+      error.value = captured.code
+      traceId.value = captured.traceId
     } finally {
       loading.value = false
     }
   }
 
-  async function provision(payload: unknown) {
+  async function provision(payload: ProvisionWorkshopRequest) {
     lastProvision.value = await api.post<ProvisionWorkshopResponse>(
       '/platform/workshops',
       payload,
@@ -305,21 +367,24 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadManufacturers(filters: CatalogFilters = {}) {
+  // AB-45: the platform catalog is operator-curated and bounded for this
+  // envelope, so the views filter the full list client-side (instant, no
+  // per-keystroke round-trips). The previously-plumbed-but-never-passed
+  // server-side filter params were dead/misleading and have been removed; if the
+  // catalog ever grows to thousands, reintroduce server-side paging.
+  async function loadManufacturers() {
     catalogLoading.value = true
     catalogError.value = null
     catalogTraceId.value = null
     try {
       manufacturers.value = await api.get<Manufacturer[]>(
-        withQuery('/platform/catalog/manufacturers', {
-          search: filters.search,
-          status: filters.status,
-        }),
+        '/platform/catalog/manufacturers',
         authInit(),
       )
     } catch (errorValue) {
-      // Preserve a 403 as permission_denied so AdminCatalogView's no-access state
-      // can trigger, instead of masking it as a generic load failure (CB-100).
+      // Preserve a 403 as permission_denied so AdminManufacturersView /
+      // AdminMaterialsView render the no-access AdminErrorState (AB-01/AB-08),
+      // instead of masking it as a generic load failure (CB-100).
       const captured = captureApiError(errorValue, 'manufacturers_load_failed')
       catalogError.value = captured.code
       catalogTraceId.value = captured.traceId
@@ -328,20 +393,12 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadMaterials(filters: CatalogFilters = {}) {
+  async function loadMaterials() {
     catalogLoading.value = true
     catalogError.value = null
     catalogTraceId.value = null
     try {
-      materials.value = await api.get<Material[]>(
-        withQuery('/platform/catalog/materials', {
-          search: filters.search,
-          status: filters.status,
-          kind: filters.kind,
-          manufacturer_id: filters.manufacturer_id,
-        }),
-        authInit(),
-      )
+      materials.value = await api.get<Material[]>('/platform/catalog/materials', authInit())
     } catch (errorValue) {
       const captured = captureApiError(errorValue, 'materials_load_failed')
       catalogError.value = captured.code
@@ -351,7 +408,7 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function createManufacturer(payload: unknown) {
+  async function createManufacturer(payload: ManufacturerWriteRequest) {
     const created = await api.post<Manufacturer>(
       '/platform/catalog/manufacturers',
       payload,
@@ -361,7 +418,7 @@ export const useAdminStore = defineStore('admin', () => {
     return created
   }
 
-  async function updateManufacturer(id: string, payload: unknown) {
+  async function updateManufacturer(id: string, payload: ManufacturerWriteRequest) {
     const updated = await api.patch<Manufacturer>(
       `/platform/catalog/manufacturers/${id}`,
       payload,
@@ -381,13 +438,13 @@ export const useAdminStore = defineStore('admin', () => {
     return updated
   }
 
-  async function createMaterial(payload: unknown) {
+  async function createMaterial(payload: MaterialWriteRequest) {
     const created = await api.post<Material>('/platform/catalog/materials', payload, authInit())
     materials.value = [created, ...materials.value]
     return created
   }
 
-  async function updateMaterial(id: string, payload: unknown) {
+  async function updateMaterial(id: string, payload: MaterialWriteRequest) {
     const updated = await api.patch<Material>(
       `/platform/catalog/materials/${id}`,
       payload,
@@ -409,6 +466,11 @@ export const useAdminStore = defineStore('admin', () => {
 
   function patchManufacturer(updated: Manufacturer) {
     manufacturers.value = manufacturers.value.map((row) => (row.id === updated.id ? updated : row))
+    // AB-16: materials carry a denormalized manufacturer_name; refresh it so a
+    // rename doesn't leave stale labels on the cached materials list/filter.
+    materials.value = materials.value.map((row) =>
+      row.manufacturer_id === updated.id ? { ...row, manufacturer_name: updated.name } : row,
+    )
   }
 
   function patchMaterial(updated: Material) {
@@ -422,24 +484,30 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       platformUsers.value = await api.get<PlatformUser[]>('/platform/users', authInit())
     } catch (errorValue) {
-      opsError.value = 'platform_users_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'platform_users_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
   }
 
-  async function createPlatformUser(payload: unknown) {
+  async function createPlatformUser(payload: PlatformUserCreateRequest) {
     lastPlatformUserSecret.value = await api.post<PlatformUserTempPasswordResponse>(
       '/platform/users',
       payload,
       authInit(),
     )
-    platformUsers.value = [lastPlatformUserSecret.value.user, ...platformUsers.value]
+    // AB-34: the list is server-sorted by (status, full_name); insert the new
+    // user in that order rather than unshifting, so it doesn't jump to the top
+    // and then visibly relocate after the next reload.
+    platformUsers.value = [...platformUsers.value, lastPlatformUserSecret.value.user].sort(
+      (a, b) => a.status.localeCompare(b.status) || a.full_name.localeCompare(b.full_name),
+    )
     return lastPlatformUserSecret.value
   }
 
-  async function updatePlatformUser(id: string, payload: unknown) {
+  async function updatePlatformUser(id: string, payload: PlatformUserUpdateRequest) {
     const updated = await api.patch<PlatformUser>(`/platform/users/${id}`, payload, authInit())
     patchPlatformUser(updated)
     return updated
@@ -486,8 +554,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       jobs.value = await api.get<PlatformJobSummary[]>('/platform/jobs', authInit())
     } catch (errorValue) {
-      opsError.value = 'jobs_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'jobs_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
@@ -497,8 +566,14 @@ export const useAdminStore = defineStore('admin', () => {
     const run = await api.post<JobRun>(`/platform/jobs/${name}/run`, undefined, authInit())
     const row = jobs.value.find((job) => job.definition.name === name)
     if (row) {
-      row.definition.last_run_at = run.started_at
-      row.definition.last_result = run.status
+      // AB-15: a `skipped` run (job already running) does NOT update the
+      // definition's last_run_at/last_result server-side, so only mirror a
+      // terminal result optimistically — otherwise we'd overwrite a real
+      // `failed` with `skipped` and silently drop it from the dashboard KPI.
+      if (run.status === 'ok' || run.status === 'failed') {
+        row.definition.last_run_at = run.started_at
+        row.definition.last_result = run.status
+      }
       row.recent_runs = [run, ...row.recent_runs].slice(0, 5)
     }
     return run
@@ -511,8 +586,9 @@ export const useAdminStore = defineStore('admin', () => {
     try {
       errors.value = await api.get<ErrorRecord[]>('/platform/errors', authInit())
     } catch (errorValue) {
-      opsError.value = 'errors_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
+      const captured = captureApiError(errorValue, 'errors_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     } finally {
       opsLoading.value = false
     }
@@ -539,23 +615,29 @@ export const useAdminStore = defineStore('admin', () => {
     errors.value = errors.value.map((row) => (row.id === updated.id ? updated : row))
   }
 
-  async function loadAudit() {
+  async function loadAudit(limit = 50) {
     opsLoading.value = true
     opsError.value = null
     opsTraceId.value = null
-    try {
-      const [actions, statusChanges] = await Promise.all([
-        api.get<ActionLog[]>('/platform/audit/actions', authInit()),
-        api.get<StatusChangeLog[]>('/platform/audit/status-changes', authInit()),
-      ])
-      auditActions.value = actions
-      auditStatusChanges.value = statusChanges
-    } catch (errorValue) {
-      opsError.value = 'audit_load_failed'
-      opsTraceId.value = apiTraceId(errorValue)
-    } finally {
-      opsLoading.value = false
+    // AB-32: settle each feed independently so a transient failure on ONE feed
+    // doesn't blank both tabs; only show the full-screen error when both fail.
+    // AB-17: an explicit limit (capped at the backend's 200) so the silent 50-row
+    // default can be extended via "load more".
+    const [actionsResult, statusResult] = await Promise.allSettled([
+      api.get<ActionLog[]>(withQuery('/platform/audit/actions', { limit }), authInit()),
+      api.get<StatusChangeLog[]>(
+        withQuery('/platform/audit/status-changes', { limit }),
+        authInit(),
+      ),
+    ])
+    if (actionsResult.status === 'fulfilled') auditActions.value = actionsResult.value
+    if (statusResult.status === 'fulfilled') auditStatusChanges.value = statusResult.value
+    if (actionsResult.status === 'rejected' && statusResult.status === 'rejected') {
+      const captured = captureApiError(actionsResult.reason, 'audit_load_failed')
+      opsError.value = captured.code
+      opsTraceId.value = captured.traceId
     }
+    opsLoading.value = false
   }
 
   function reset() {
@@ -587,6 +669,7 @@ export const useAdminStore = defineStore('admin', () => {
     workshops,
     detail,
     overview,
+    clearSecrets,
     lastProvision,
     manufacturers,
     materials,

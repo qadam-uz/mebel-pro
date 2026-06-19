@@ -1,19 +1,94 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { adminDate, dropdownOption, workshopStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  dropdownOption,
+  workshopStatusLabel,
+  workshopStatusTone,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
-import { useAdminStore } from '@/shared/stores/admin'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
+import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const creating = ref(false)
 const modalOpen = ref(false)
+const secretOpen = ref(false)
+const provisionPanel = ref<HTMLElement | null>(null)
+const provisionTrap = useFocusTrap(provisionPanel, modalOpen, () => (modalOpen.value = false))
+
+// AB-19: block / unblock from the list row, not only the detail view.
+const blockTarget = ref<WorkshopSummary | null>(null)
+const unblockTarget = ref<WorkshopSummary | null>(null)
+const acting = ref(false)
+const blockReason = ref('')
+
+function askBlock(workshop: WorkshopSummary) {
+  blockTarget.value = workshop
+  blockReason.value = ''
+}
+
+async function confirmBlock() {
+  if (!blockTarget.value || !blockReason.value.trim()) return
+  acting.value = true
+  try {
+    await admin.blockWorkshop(blockTarget.value.id, blockReason.value)
+    toast.success('Ustaxona bloklandi')
+    blockTarget.value = null
+  } catch {
+    toast.danger("Ustaxonani bloklab bo'lmadi")
+  } finally {
+    acting.value = false
+  }
+}
+
+async function confirmUnblock() {
+  if (!unblockTarget.value) return
+  acting.value = true
+  try {
+    await admin.unblockWorkshop(unblockTarget.value.id)
+    toast.success('Ustaxona blokdan chiqarildi')
+    unblockTarget.value = null
+  } catch {
+    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+  } finally {
+    acting.value = false
+  }
+}
+
+const secretRows = computed(() => {
+  const provision = admin.lastProvision
+  if (!provision) return []
+  return [
+    { label: 'Workshop code', value: provision.workshop.code },
+    { label: 'Owner login', value: provision.owner.login },
+    { label: 'Temp password', value: provision.temp_password },
+  ]
+})
+
+function closeSecret() {
+  secretOpen.value = false
+  admin.clearSecrets()
+}
+
+onBeforeUnmount(() => admin.clearSecrets())
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
+// AB-35: placeholder default coordinates (Tashkent centre) in one place, not a
+// magic literal duplicated across the initial form and resetForm.
+const DEFAULT_WORKSHOP_GEO = { latitude: '41.2995', longitude: '69.2401' }
+// AB-36: once the operator edits the code, stop re-deriving it from the name.
+const codeTouched = ref(false)
 const form = reactive({
   name: '',
   code: '',
@@ -22,8 +97,8 @@ const form = reactive({
   branchName: '',
   branchAddress: '',
   branchPhone: '+998',
-  latitude: '41.2995',
-  longitude: '69.2401',
+  latitude: DEFAULT_WORKSHOP_GEO.latitude,
+  longitude: DEFAULT_WORKSHOP_GEO.longitude,
   ownerName: '',
   ownerLogin: '',
   ownerPhone: '+998',
@@ -76,12 +151,13 @@ function resetForm() {
   form.branchName = ''
   form.branchAddress = ''
   form.branchPhone = '+998'
-  form.latitude = '41.2995'
-  form.longitude = '69.2401'
+  form.latitude = DEFAULT_WORKSHOP_GEO.latitude
+  form.longitude = DEFAULT_WORKSHOP_GEO.longitude
   form.ownerName = ''
   form.ownerLogin = ''
   form.ownerPhone = '+998'
   form.tempPassword = ''
+  codeTouched.value = false
 }
 
 async function createWorkshop() {
@@ -112,9 +188,12 @@ async function createWorkshop() {
     })
     resetForm()
     modalOpen.value = false
+    secretOpen.value = true
+    toast.success('Ustaxona yaratildi')
     await admin.loadOverview()
   } catch {
     createError.value = 'workshop_create_failed'
+    toast.danger('Ustaxona yaratilmadi')
   } finally {
     creating.value = false
   }
@@ -123,7 +202,7 @@ async function createWorkshop() {
 watch(
   () => form.name,
   (name) => {
-    if (!form.code) form.code = codeFromName(name)
+    if (!codeTouched.value) form.code = codeFromName(name)
     if (!form.branchName) form.branchName = name ? 'Asosiy filial' : ''
   },
 )
@@ -162,13 +241,13 @@ onMounted(async () => {
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.error" class="admin-error">
-      <h3>Ustaxonalar yuklanmadi</h3>
-      <p>
-        Registry endpoint javob bermadi.
-        <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.error"
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Ustaxonalar yuklanmadi"
+      @retry="admin.loadWorkshops"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Ustaxona topilmadi</h3>
@@ -185,30 +264,48 @@ onMounted(async () => {
               <th>Telefon</th>
               <th>Yaratildi</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="workshop in filtered" :key="workshop.id">
               <td class="nm">
                 {{ workshop.name }}
-                <small>{{ workshop.code }} . {{ workshop.address ?? 'address unset' }}</small>
+                <small>{{ workshop.code }} . {{ workshop.address ?? 'manzil kiritilmagan' }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ workshop.owner_user_id.slice(0, 8) }}</td>
               <td class="admin-mono text-ink-muted">{{ workshop.phone }}</td>
               <td class="admin-mono text-ink-muted">{{ adminDate(workshop.created_at) }}</td>
               <td>
                 <span class="admin-pill" :class="workshopStatusTone(workshop.status)">
-                  {{ workshop.status }}
+                  {{ workshopStatusLabel(workshop.status) }}
                 </span>
               </td>
               <td class="admin-right">
-                <RouterLink
-                  :to="rolePath(`/admin/workshops/${workshop.id}`)"
-                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                >
-                  Tafsilotlar
-                </RouterLink>
+                <div class="flex flex-wrap justify-end gap-2">
+                  <RouterLink
+                    :to="rolePath(`/admin/workshops/${workshop.id}`)"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                  >
+                    Tafsilotlar
+                  </RouterLink>
+                  <button
+                    v-if="workshop.status === 'active'"
+                    type="button"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
+                    @click="askBlock(workshop)"
+                  >
+                    Bloklash
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+                    @click="unblockTarget = workshop"
+                  >
+                    Blokdan chiqarish
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -217,12 +314,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="provisionPanel"
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-workshop-title"
+        tabindex="-1"
+        @keydown="provisionTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="new-workshop-title">Yangi ustaxona + egasi . atomik yaratish</h3>
@@ -244,7 +344,13 @@ onMounted(async () => {
               </label>
               <label class="admin-field" for="w-code">
                 <span>Workshop code</span>
-                <input id="w-code" v-model="form.code" autocomplete="off" required />
+                <input
+                  id="w-code"
+                  v-model="form.code"
+                  autocomplete="off"
+                  required
+                  @input="codeTouched = true"
+                />
               </label>
               <label class="admin-field" for="w-phone">
                 <span>Telefon</span>
@@ -333,33 +439,43 @@ onMounted(async () => {
       </section>
     </template>
 
-    <section v-if="admin.lastProvision" class="admin-card mt-5 max-w-[720px]">
-      <div class="admin-card-h">
-        <h2>Share once</h2>
-        <span class="sub">temp password shu oynada bir marta ko'rsatiladi</span>
-      </div>
-      <div class="admin-card-b">
-        <div class="admin-secret-box">
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Workshop code</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.workshop.code }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Owner login</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.owner.login }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Temp password</span>
-              <span class="admin-secret-value">{{ admin.lastProvision.temp_password }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <ConfirmDialog
+      :open="blockTarget !== null"
+      title="Ustaxonani bloklash"
+      :message="`${blockTarget?.name ?? ''} xodimlarining sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Blokdan chiqarilganda sessiyalar tiklanmaydi.`"
+      confirm-label="Bloklash"
+      busy-label="Bloklanmoqda"
+      cancel-label="Bekor qilish"
+      danger
+      :busy="acting"
+      :confirm-disabled="!blockReason.trim()"
+      @confirm="confirmBlock"
+      @cancel="blockTarget = null"
+    >
+      <label class="admin-field">
+        <span>Majburiy sabab</span>
+        <textarea v-model="blockReason" required></textarea>
+      </label>
+    </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="unblockTarget !== null"
+      title="Blokdan chiqarish"
+      :message="`${unblockTarget?.name ?? ''} blokdan chiqariladi. Foydalanuvchilar qaytadan kirishi kerak (sessiyalar avtomatik tiklanmaydi).`"
+      confirm-label="Blokdan chiqarish"
+      busy-label="Bajarilmoqda"
+      cancel-label="Bekor qilish"
+      :busy="acting"
+      @confirm="confirmUnblock"
+      @cancel="unblockTarget = null"
+    />
+
+    <AdminSecretModal
+      :open="secretOpen && !!admin.lastProvision"
+      title="Ustaxona yaratildi — bir martalik maxfiy ma'lumot"
+      intro="Workshop code va owner login bilan birga vaqtinchalik parolni egasiga yetkazing."
+      :rows="secretRows"
+      @close="closeSecret"
+    />
   </section>
 </template>

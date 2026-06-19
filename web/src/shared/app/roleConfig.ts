@@ -135,21 +135,21 @@ export const adminConfig: RoleConfig = {
   dropdownLabel: 'Monitor',
   dropdownOptions: [
     { value: 'platform', label: "Platforma sog'ligi", meta: 'ready', status: 'active' },
-    { value: 'jobs', label: 'Background ish', meta: 'failed kuzatuv', status: 'pending' },
+    { value: 'jobs', label: 'Fon vazifalar', meta: 'muvaffaqiyatsiz kuzatuvi', status: 'pending' },
     { value: 'errors', label: 'Xatolik monitor', meta: 'ochiq kodlar', status: 'pending' },
   ],
   nav: [
     { label: 'Asosiy', to: '/admin', group: 'Platforma', icon: 'dashboard' },
     { label: 'Ustaxonalar', to: '/admin/workshops', group: 'Platforma', icon: 'factory' },
     {
-      label: 'Manufacturerlar',
+      label: 'Ishlab chiqaruvchilar',
       to: '/admin/catalog/manufacturers',
       group: 'Katalog',
       icon: 'factory',
     },
     { label: 'Materiallar', to: '/admin/catalog/materials', group: 'Katalog', icon: 'package' },
     {
-      label: 'Background ish',
+      label: 'Fon vazifalar',
       to: '/admin/platform/jobs',
       group: 'Operatorlik',
       icon: 'activity',

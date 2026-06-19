@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { adminDate, adminDateTime, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import {
+  adminDate,
+  adminDateTime,
+  errorStatusLabel,
+  errorStatusTone,
+  workshopStatusLabel,
+} from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 
 const today = adminDate(new Date().toISOString())
 const failedJobs = computed(() =>
@@ -21,18 +30,40 @@ const isLoading = computed(
   () => admin.loading && !overview.value && admin.workshops.length === 0 && admin.jobs.length === 0,
 )
 const hasError = computed(() => admin.error && !overview.value)
+const partialFailure = ref(false)
+const running = ref(false)
 
-onMounted(async () => {
-  await Promise.all([
-    admin.loadOverview(),
-    admin.loadWorkshops(),
-    admin.loadJobs(),
-    admin.loadErrors(),
-    admin.loadPlatformUsers(),
-    admin.loadManufacturers(),
-    admin.loadMaterials(),
-  ])
-})
+// AB-14 / AB-46: the dashboard only needs overview + workshops + jobs + errors
+// (the operator count comes from `overview`, so the full catalog/operator lists
+// are no longer pre-pulled here). Run the loads sequentially and snapshot each
+// result so a single failed sub-load surfaces a non-fatal banner instead of
+// being lost to the shared loading/error refs (no concurrent clobber).
+async function loadAll() {
+  partialFailure.value = false
+  await admin.loadOverview()
+  if (admin.error) partialFailure.value = true
+  await admin.loadWorkshops()
+  if (admin.error) partialFailure.value = true
+  await admin.loadJobs()
+  if (admin.opsError) partialFailure.value = true
+  await admin.loadErrors()
+  if (admin.opsError) partialFailure.value = true
+}
+
+async function rerun(name: string) {
+  running.value = true
+  try {
+    const run = await admin.runJob(name)
+    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    else toast.success('Ish qayta ishga tushirildi')
+  } catch {
+    toast.danger('Ish ishga tushmadi')
+  } finally {
+    running.value = false
+  }
+}
+
+onMounted(loadAll)
 </script>
 
 <template>
@@ -57,15 +88,24 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-else-if="hasError" class="admin-error">
-      <h3>Platforma ma'lumotlari yuklanmadi</h3>
-      <p>
-        API javob bermadi.
-        <span v-if="admin.traceId" class="admin-mono">trace {{ admin.traceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="hasError"
+      :code="admin.error"
+      :trace-id="admin.traceId"
+      title="Platforma ma'lumotlari yuklanmadi"
+      @retry="loadAll"
+    />
 
     <template v-else>
+      <p
+        v-if="partialFailure"
+        class="mb-4 rounded-md bg-warning-soft px-4 py-3 text-sm font-bold text-warning"
+        role="alert"
+      >
+        Ba'zi bo'limlarni yangilab bo'lmadi — ko'rsatilgan ma'lumotlar to'liq bo'lmasligi mumkin.
+        <button type="button" class="ml-2 underline" @click="loadAll">Qayta urinish</button>
+      </p>
+
       <div class="admin-kpis">
         <RouterLink :to="rolePath('/admin/workshops')" class="admin-kpi">
           <div class="admin-kpi-label">Faol ustaxonalar</div>
@@ -110,10 +150,10 @@ onMounted(async () => {
           class="admin-kpi"
           :class="{ danger: failedJobs.length > 0 }"
         >
-          <div class="admin-kpi-label">Background ish</div>
+          <div class="admin-kpi-label">Fon vazifalar</div>
           <div class="admin-kpi-value">
             {{ failedJobs.length }}
-            <small>failed</small>
+            <small>muvaffaqiyatsiz</small>
           </div>
           <div class="admin-kpi-detail">
             <span>{{ failedJobs[0]?.definition.name ?? 'hammasi ok' }}</span>
@@ -160,7 +200,7 @@ onMounted(async () => {
                           workshop.status === 'active' ? 'admin-pill-success' : 'admin-pill-danger'
                         "
                       >
-                        {{ workshop.status }}
+                        {{ workshopStatusLabel(workshop.status) }}
                       </span>
                     </td>
                   </tr>
@@ -173,14 +213,14 @@ onMounted(async () => {
         <div class="grid gap-5">
           <section class="admin-card">
             <div class="admin-card-h">
-              <h2>Failed ish</h2>
+              <h2>Muvaffaqiyatsiz vazifalar</h2>
               <RouterLink :to="rolePath('/admin/platform/jobs')" class="admin-more">
                 hammasi →
               </RouterLink>
             </div>
             <div class="admin-card-b">
               <div v-if="failedJobs.length === 0" class="admin-empty">
-                <h3>Failed ish yo'q</h3>
+                <h3>Muvaffaqiyatsiz vazifa yo'q</h3>
                 <p>Scheduler oxirgi natijalari normal.</p>
               </div>
               <article
@@ -189,16 +229,21 @@ onMounted(async () => {
                 :key="job.definition.id"
                 class="admin-row-item"
               >
-                <span class="admin-pill admin-pill-danger">failed</span>
+                <span class="admin-pill admin-pill-danger">Muvaffaqiyatsiz</span>
                 <span>
                   <b>{{ job.definition.name }}</b>
                   <small class="block text-ink-muted">
                     {{ adminDateTime(job.definition.last_run_at) }}
                   </small>
                 </span>
-                <RouterLink :to="rolePath('/admin/platform/jobs')" class="admin-more">
-                  ko'rish →
-                </RouterLink>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                  :disabled="running"
+                  @click="rerun(job.definition.name)"
+                >
+                  Qayta
+                </button>
               </article>
             </div>
           </section>
@@ -222,7 +267,7 @@ onMounted(async () => {
                 class="admin-row-item"
               >
                 <span class="admin-pill" :class="errorStatusTone(record.status)">
-                  {{ statusLabel(record.status) }}
+                  {{ errorStatusLabel(record.status) }}
                 </span>
                 <span class="min-w-0">
                   <b class="block truncate font-mono text-xs">{{ record.code }}</b>
@@ -245,13 +290,13 @@ onMounted(async () => {
             :to="rolePath('/admin/catalog/manufacturers')"
             class="mp-button mp-button-outline"
           >
-            Manufacturerlar . {{ admin.manufacturers.length }}
+            Ishlab chiqaruvchilar
           </RouterLink>
           <RouterLink
             :to="rolePath('/admin/catalog/materials')"
             class="mp-button mp-button-outline"
           >
-            Materiallar . {{ admin.materials.length }}
+            Materiallar
           </RouterLink>
           <RouterLink :to="rolePath('/admin/platform/users')" class="mp-button mp-button-outline">
             Operatorlar . {{ overview?.platform_users_active ?? 0 }}

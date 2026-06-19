@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { dropdownOption, materialStatusTone } from '@/shared/app/adminUi'
+import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type Manufacturer, type MaterialStatus } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const toast = useToast()
 const modalOpen = ref(false)
+const statusTarget = ref<{ row: Manufacturer; status: MaterialStatus } | null>(null)
+const formPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
@@ -24,10 +32,18 @@ const statusOptions = [
   dropdownOption('active', 'Faol', "yangi material uchun ko'rinadi"),
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
+const countryFilter = ref('all')
+const countryOptions = computed(() => [
+  dropdownOption('all', 'Davlat', 'barcha davlatlar'),
+  ...Array.from(
+    new Set(admin.manufacturers.map((row) => row.country).filter((c): c is string => !!c)),
+  ).map((country) => dropdownOption(country, country, '')),
+])
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase()
   return admin.manufacturers.filter((manufacturer) => {
     if (statusFilter.value !== 'all' && manufacturer.status !== statusFilter.value) return false
+    if (countryFilter.value !== 'all' && manufacturer.country !== countryFilter.value) return false
     if (!needle) return true
     return [manufacturer.name, manufacturer.country ?? '', manufacturer.note ?? '']
       .join(' ')
@@ -70,17 +86,29 @@ async function save() {
     if (editingId.value) await admin.updateManufacturer(editingId.value, payload)
     else await admin.createManufacturer(payload)
     modalOpen.value = false
+    toast.success(editingId.value ? 'Manufacturer yangilandi' : "Manufacturer qo'shildi")
   } catch {
     saveError.value = 'manufacturer_save_failed'
+    toast.danger('Manufacturer saqlanmadi')
   } finally {
     saving.value = false
   }
 }
 
-async function setStatus(row: Manufacturer, status: MaterialStatus) {
-  actionId.value = row.id
+function askStatus(row: Manufacturer, status: MaterialStatus) {
+  statusTarget.value = { row, status }
+}
+
+async function confirmStatus() {
+  const target = statusTarget.value
+  if (!target) return
+  statusTarget.value = null
+  actionId.value = target.row.id
   try {
-    await admin.setManufacturerStatus(row.id, status)
+    await admin.setManufacturerStatus(target.row.id, target.status)
+    toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
+  } catch {
+    toast.danger('Amal bajarilmadi')
   } finally {
     actionId.value = null
   }
@@ -95,10 +123,12 @@ onMounted(async () => {
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Manufacturerlar</h1>
+        <h1>Ishlab chiqaruvchilar</h1>
         <p class="sub">Platforma material katalogidagi brand va ishlab chiqaruvchilar.</p>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">Manufacturer</button>
+      <button type="button" class="admin-primary-action" @click="openCreate">
+        Ishlab chiqaruvchi
+      </button>
     </div>
 
     <div class="admin-filters">
@@ -107,6 +137,7 @@ onMounted(async () => {
         <input v-model="search" placeholder="Manufacturer nomi" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      <ProjectDropdown v-model="countryFilter" label="Davlat" :options="countryOptions" />
       <button
         type="button"
         class="mp-button mp-button-outline"
@@ -116,25 +147,23 @@ onMounted(async () => {
       </button>
     </div>
 
-    <section v-if="admin.catalogLoading" class="admin-card p-5">
+    <section v-if="admin.catalogLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.catalogError" class="admin-error">
-      <h3>Manufacturerlar yuklanmadi</h3>
-      <p>
-        Catalog endpoint javob bermadi.
-        <span v-if="admin.catalogTraceId" class="admin-mono">
-          trace {{ admin.catalogTraceId }}
-        </span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.catalogError"
+      :code="admin.catalogError"
+      :trace-id="admin.catalogTraceId"
+      title="Ishlab chiqaruvchilar yuklanmadi"
+      @retry="admin.loadManufacturers()"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
-      <h3>Manufacturer yo'q</h3>
-      <p>Material yaratishdan oldin manufacturer qo'shing.</p>
+      <h3>Ishlab chiqaruvchi yo'q</h3>
+      <p>Material yaratishdan oldin ishlab chiqaruvchi qo'shing.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -142,12 +171,12 @@ onMounted(async () => {
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Manufacturer</th>
-              <th>Country</th>
+              <th>Ishlab chiqaruvchi</th>
+              <th>Davlat</th>
               <th class="admin-right">Materiallar</th>
               <th>Holat</th>
               <th>Izoh</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
@@ -160,7 +189,7 @@ onMounted(async () => {
               <td class="admin-right admin-mono">{{ materialCount(manufacturer.id) }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(manufacturer.status)">
-                  {{ manufacturer.status }}
+                  {{ materialStatusLabel(manufacturer.status) }}
                 </span>
               </td>
               <td class="max-w-[280px] truncate text-ink-muted">{{ manufacturer.note ?? '-' }}</td>
@@ -178,7 +207,7 @@ onMounted(async () => {
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === manufacturer.id"
                     @click="
-                      setStatus(
+                      askStatus(
                         manufacturer,
                         manufacturer.status === 'active' ? 'inactive' : 'active',
                       )
@@ -195,12 +224,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="formPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="manufacturer-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="manufacturer-title">
@@ -253,5 +285,21 @@ onMounted(async () => {
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="statusTarget !== null"
+      :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
+      :message="
+        statusTarget?.status === 'inactive'
+          ? `${statusTarget?.row.name} faol emas qilinadi — uning materiallari yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va yangi material tanlovida ko'rinadi.`
+      "
+      confirm-label="Tasdiqlash"
+      cancel-label="Bekor qilish"
+      :danger="statusTarget?.status === 'inactive'"
+      :busy="actionId === statusTarget?.row.id"
+      @confirm="confirmStatus"
+      @cancel="statusTarget = null"
+    />
   </section>
 </template>

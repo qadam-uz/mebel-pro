@@ -6,9 +6,13 @@ import {
   adminInitials,
   adminNavMetrics,
   adminNotificationDestination,
+  auditActionFields,
+  auditStatusFields,
   groupedNav,
+  matchesNeedle,
 } from '@/shared/app/adminUi'
 import type { NavItem } from '@/shared/app/roleConfig'
+import type { ActionLog, StatusChangeLog } from '@/shared/stores/admin'
 import type { NotificationItem } from '@/shared/stores/notifications'
 
 function notification(
@@ -80,6 +84,32 @@ describe('admin UI helpers', () => {
       { label: 'Katalog', items: [items[2]] },
       { label: 'Operatorlik', items: [items[3]] },
     ])
+  })
+
+  it('matches the audit search predicate by action / entity / trace, blank returns all (AB-51)', () => {
+    const action = {
+      action: 'platform.workshop.block',
+      entity_type: 'workshop',
+      entity_id: 'ws-42',
+      summary: 'Blocked Acme',
+      trace_id: 'trace-abc',
+    } as ActionLog
+    expect(matchesNeedle(auditActionFields(action), '')).toBe(true)
+    expect(matchesNeedle(auditActionFields(action), 'BLOCK')).toBe(true)
+    expect(matchesNeedle(auditActionFields(action), 'ws-42')).toBe(true)
+    expect(matchesNeedle(auditActionFields(action), 'trace-abc')).toBe(true)
+    expect(matchesNeedle(auditActionFields(action), 'nope')).toBe(false)
+
+    const status = {
+      entity_type: 'order',
+      entity_id: 'ord-7',
+      from_status: 'new',
+      to_status: 'confirmed',
+      reason: null,
+    } as StatusChangeLog
+    expect(matchesNeedle(auditStatusFields(status), 'confirmed')).toBe(true)
+    expect(matchesNeedle(auditStatusFields(status), '  ')).toBe(true)
+    expect(matchesNeedle(auditStatusFields(status), 'cancelled')).toBe(false)
   })
 
   it('routes admin notifications to the matching operating surface', () => {

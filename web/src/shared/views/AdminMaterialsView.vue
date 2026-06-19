@@ -1,10 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
-import { dropdownOption, materialKindLabel, materialStatusTone } from '@/shared/app/adminUi'
+import {
+  dropdownOption,
+  materialKindLabel,
+  materialStatusLabel,
+  materialStatusTone,
+} from '@/shared/app/adminUi'
+import { useRolePath } from '@/shared/app/paths'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import {
   useAdminStore,
   type Material,
@@ -16,8 +28,20 @@ import { useFilesStore } from '@/shared/stores/files'
 
 const admin = useAdminStore()
 const files = useFilesStore()
+const toast = useToast()
+const rolePath = useRolePath()
 const modalOpen = ref(false)
 const manufacturerModalOpen = ref(false)
+const uploadError = ref<string | null>(null)
+const statusTarget = ref<{ row: Material; status: MaterialStatus } | null>(null)
+const formPanel = ref<HTMLElement | null>(null)
+const inlineMfrPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
+const inlineMfrTrap = useFocusTrap(
+  inlineMfrPanel,
+  manufacturerModalOpen,
+  () => (manufacturerModalOpen.value = false),
+)
 const saving = ref(false)
 const manufacturerSaving = ref(false)
 const actionId = ref<string | null>(null)
@@ -107,6 +131,22 @@ const filtered = computed(() => {
   })
 })
 
+// AB-22: panels must have length >= width (the cut grain/orientation assumption).
+const dimensionError = computed(
+  () =>
+    form.kind === 'panel' &&
+    Number(form.panelLengthMm) > 0 &&
+    Number(form.panelWidthMm) > 0 &&
+    Number(form.panelLengthMm) < Number(form.panelWidthMm),
+)
+
+function clearFilters() {
+  search.value = ''
+  statusFilter.value = 'all'
+  kindFilter.value = 'all'
+  manufacturerFilter.value = 'all'
+}
+
 function openCreate() {
   editingId.value = null
   form.kind = 'panel'
@@ -145,14 +185,27 @@ function materialSpec(material: Material) {
   if (material.kind === 'panel') {
     return `${material.type ?? 'panel'} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
   }
-  return 'edge banding . metres'
+  return 'krom · metr'
 }
 
 async function onMaterialFile(event: Event) {
   const target = event.target
   if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
-  const uploaded = await files.upload(target.files[0])
-  form.imageFileId = uploaded.id
+  uploadError.value = null
+  try {
+    const uploaded = await files.upload(target.files[0])
+    form.imageFileId = uploaded.id
+    toast.success('Rasm yuklandi')
+  } catch {
+    uploadError.value = 'image_upload_failed'
+    toast.danger("Rasmni yuklab bo'lmadi")
+    target.value = ''
+  }
+}
+
+function removeImage() {
+  form.imageFileId = null
+  uploadError.value = null
 }
 
 async function save() {
@@ -176,8 +229,10 @@ async function save() {
     if (editingId.value) await admin.updateMaterial(editingId.value, payload)
     else await admin.createMaterial(payload)
     modalOpen.value = false
+    toast.success(editingId.value ? 'Material yangilandi' : "Material qo'shildi")
   } catch {
     saveError.value = 'material_save_failed'
+    toast.danger('Material saqlanmadi')
   } finally {
     saving.value = false
   }
@@ -204,10 +259,20 @@ async function saveInlineManufacturer() {
   }
 }
 
-async function setStatus(row: Material, status: MaterialStatus) {
-  actionId.value = row.id
+function askStatus(row: Material, status: MaterialStatus) {
+  statusTarget.value = { row, status }
+}
+
+async function confirmStatus() {
+  const target = statusTarget.value
+  if (!target) return
+  statusTarget.value = null
+  actionId.value = target.row.id
   try {
-    await admin.setMaterialStatus(row.id, status)
+    await admin.setMaterialStatus(target.row.id, target.status)
+    toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
+  } catch {
+    toast.danger('Amal bajarilmadi')
   } finally {
     actionId.value = null
   }
@@ -242,51 +307,84 @@ onMounted(async () => {
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
     </div>
 
-    <section v-if="admin.catalogLoading" class="admin-card p-5">
+    <section v-if="admin.catalogLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.catalogError" class="admin-error">
-      <h3>Materiallar yuklanmadi</h3>
-      <p>
-        Catalog endpoint javob bermadi.
-        <span v-if="admin.catalogTraceId" class="admin-mono">
-          trace {{ admin.catalogTraceId }}
-        </span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.catalogError"
+      :code="admin.catalogError"
+      :trace-id="admin.catalogTraceId"
+      title="Materiallar yuklanmadi"
+      @retry="admin.loadMaterials()"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
-      <h3>Material yo'q</h3>
-      <p>Manufacturer qo'shing, keyin panel yoki krom material yarating.</p>
+      <template v-if="admin.materials.length === 0">
+        <h3>Material yo'q</h3>
+        <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki krom material yarating.</p>
+        <div class="mt-3 flex flex-wrap justify-center gap-2">
+          <button type="button" class="admin-primary-action" @click="openCreate">
+            Yangi material
+          </button>
+          <RouterLink
+            :to="rolePath('/admin/catalog/manufacturers')"
+            class="mp-button mp-button-outline"
+          >
+            Ishlab chiqaruvchilar
+          </RouterLink>
+        </div>
+      </template>
+      <template v-else>
+        <h3>Filtrlarga mos material yo'q</h3>
+        <p>Filtrlarni o'zgartiring yoki tozalang.</p>
+        <button type="button" class="mp-button mp-button-outline mt-3" @click="clearFilters">
+          Filtrlarni tozalash
+        </button>
+      </template>
     </section>
 
     <section v-else class="admin-card">
       <div class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
+              <th><span class="sr-only">Rasm</span></th>
               <th>Material</th>
-              <th>Manufacturer</th>
+              <th>Ishlab chiqaruvchi</th>
               <th>Tur</th>
               <th>Turi / o'lcham</th>
               <th>Qalinligi</th>
               <th>Panel o'lchami</th>
               <th>Tola</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="material in filtered" :key="material.id">
+              <td>
+                <AuthFileImage
+                  :file-id="material.image_file_id"
+                  :alt="material.name"
+                  class="size-9 rounded-md object-cover"
+                />
+              </td>
               <td class="nm">
                 {{ material.name }}
-                <small>{{ material.color }} . {{ material.decor_code ?? 'decor yoq' }}</small>
+                <small>{{ material.color }} . {{ material.decor_code ?? "dekor yo'q" }}</small>
               </td>
               <td>{{ material.manufacturer_name }}</td>
-              <td>{{ materialKindLabel(material.kind) }}</td>
+              <td>
+                <span
+                  class="admin-pill"
+                  :class="material.kind === 'panel' ? 'admin-pill-success' : 'admin-pill-info'"
+                >
+                  {{ materialKindLabel(material.kind) }}
+                </span>
+              </td>
               <td>{{ materialSpec(material) }}</td>
               <td class="admin-mono">{{ material.thickness_mm }} mm</td>
               <td class="admin-mono">
@@ -298,7 +396,7 @@ onMounted(async () => {
               <td>{{ material.grain_direction ? 'bor' : '-' }}</td>
               <td>
                 <span class="admin-pill" :class="materialStatusTone(material.status)">
-                  {{ material.status }}
+                  {{ materialStatusLabel(material.status) }}
                 </span>
               </td>
               <td class="admin-right">
@@ -315,7 +413,7 @@ onMounted(async () => {
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === material.id"
                     @click="
-                      setStatus(material, material.status === 'active' ? 'inactive' : 'active')
+                      askStatus(material, material.status === 'active' ? 'inactive' : 'active')
                     "
                   >
                     {{ material.status === 'active' ? 'Faol emas qilish' : 'Faollashtirish' }}
@@ -329,12 +427,15 @@ onMounted(async () => {
     </section>
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
       <section
+        ref="formPanel"
         class="admin-modal wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="material-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="material-title">{{ editingId ? 'Material tahrirlash' : 'Yangi material' }}</h3>
@@ -352,16 +453,27 @@ onMounted(async () => {
             <div class="admin-form-grid three">
               <FormSelect
                 v-model="form.kind"
-                label="Kind"
+                label="Tur"
                 :options="materialKindOptions"
                 class="admin-full"
+                :disabled="!!editingId"
               />
+              <p v-if="editingId" class="admin-full text-xs text-ink-muted">
+                Tahrirlashda material turini o'zgartirib bo'lmaydi.
+              </p>
+              <p
+                v-if="form.kind === 'edge'"
+                class="admin-full rounded-md bg-sunk px-3 py-2 text-xs text-ink-soft"
+              >
+                Krom material metr hisobida o'lchanadi — panel o'lchami va tola yo'nalishi
+                qo'llanmaydi.
+              </p>
               <div class="admin-full grid gap-2 md:grid-cols-[1fr_auto]">
                 <FormSelect
                   v-model="form.manufacturerId"
-                  label="Manufacturer"
+                  label="Ishlab chiqaruvchi"
                   :options="manufacturerChoiceOptions"
-                  placeholder="Manufacturer tanlang"
+                  placeholder="Ishlab chiqaruvchini tanlang"
                 />
                 <button
                   type="button"
@@ -407,6 +519,13 @@ onMounted(async () => {
                   <span>Eni, mm</span>
                   <input id="mat-wid" v-model="form.panelWidthMm" inputmode="numeric" required />
                 </label>
+                <p
+                  v-if="dimensionError"
+                  class="admin-full text-xs font-bold text-danger"
+                  role="alert"
+                >
+                  Uzunlik enidan kichik bo'lmasligi kerak.
+                </p>
                 <label
                   class="flex min-h-11 items-center gap-3 self-end rounded-md border border-hairline-strong px-3 text-sm font-bold"
                 >
@@ -419,15 +538,29 @@ onMounted(async () => {
                 </label>
               </template>
               <label class="admin-field admin-full" for="mat-image">
-                <span>Image</span>
+                <span>Rasm</span>
                 <input id="mat-image" type="file" accept="image/*" @change="onMaterialFile" />
-                <span v-if="form.imageFileId" class="admin-mono text-ink-muted">
-                  file {{ form.imageFileId.slice(0, 8) }}
+                <span v-if="form.imageFileId" class="flex items-center gap-2 text-ink-muted">
+                  <span class="admin-mono">file {{ form.imageFileId.slice(0, 8) }}</span>
+                  <button
+                    type="button"
+                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                    @click="removeImage"
+                  >
+                    Olib tashlash
+                  </button>
                 </span>
               </label>
             </div>
-            <p v-if="files.uploading" class="mt-3 text-sm font-bold text-info">
-              Image yuklanmoqda...
+            <p v-if="files.uploading" class="mt-3 text-sm font-bold text-info" aria-live="polite">
+              Rasm yuklanmoqda...
+            </p>
+            <p
+              v-if="uploadError"
+              class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring.
             </p>
             <p
               v-if="saveError"
@@ -440,7 +573,11 @@ onMounted(async () => {
             <button type="button" class="mp-button mp-button-outline" @click="modalOpen = false">
               Bekor
             </button>
-            <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
+            <button
+              type="submit"
+              class="mp-button mp-button-primary"
+              :disabled="saving || dimensionError"
+            >
               {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
             </button>
           </div>
@@ -449,12 +586,19 @@ onMounted(async () => {
     </template>
 
     <template v-if="manufacturerModalOpen">
-      <div class="admin-modal-scrim" @click="manufacturerModalOpen = false"></div>
+      <div
+        class="admin-modal-scrim"
+        aria-hidden="true"
+        @click="manufacturerModalOpen = false"
+      ></div>
       <section
+        ref="inlineMfrPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="inline-mfr-title"
+        tabindex="-1"
+        @keydown="inlineMfrTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="inline-mfr-title">Yangi manufacturer</h3>
@@ -509,5 +653,21 @@ onMounted(async () => {
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="statusTarget !== null"
+      :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
+      :message="
+        statusTarget?.status === 'inactive'
+          ? `${statusTarget?.row.name} faol emas qilinadi — uni filiallarning yangi tanlovlaridan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va filial tanlovida ko'rinadi.`
+      "
+      confirm-label="Tasdiqlash"
+      cancel-label="Bekor qilish"
+      :danger="statusTarget?.status === 'inactive'"
+      :busy="actionId === statusTarget?.row.id"
+      @confirm="confirmStatus"
+      @cancel="statusTarget = null"
+    />
   </section>
 </template>

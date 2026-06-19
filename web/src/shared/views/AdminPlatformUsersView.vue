@@ -1,14 +1,31 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
-import { adminDateTime, platformUserStatusTone } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
+import {
+  adminDateTime,
+  platformUserStatusLabel,
+  platformUserStatusTone,
+} from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformUser } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 
 const admin = useAdminStore()
 const auth = useAuthStore()
+const toast = useToast()
 const modalOpen = ref(false)
 const blockModalOpen = ref(false)
+const secretOpen = ref(false)
+const resetTarget = ref<PlatformUser | null>(null)
+const formPanel = ref<HTMLElement | null>(null)
+const blockPanel = ref<HTMLElement | null>(null)
+const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
+const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen.value = false))
 const saving = ref(false)
 const actionId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
@@ -16,6 +33,40 @@ const editingId = ref<string | null>(null)
 const blockTarget = ref<PlatformUser | null>(null)
 const blockReason = ref('')
 const query = ref('')
+
+const activeOperatorCount = computed(
+  () => admin.platformUsers.filter((user) => user.status === 'active').length,
+)
+
+// AB-18: the server refuses to block the operator themselves or the last active
+// operator; reflect both in the UI (disabled with a reason) instead of letting
+// the click 400 into a generic failure.
+function blockDisabledReason(user: PlatformUser): string | null {
+  if (user.id === auth.me?.principal_id) return "O'zini bloklab bo'lmaydi"
+  if (user.status === 'active' && activeOperatorCount.value <= 1)
+    return "Oxirgi faol operatorni bloklab bo'lmaydi"
+  return null
+}
+
+function isCurrentOperator(user: PlatformUser): boolean {
+  return user.id === auth.me?.principal_id
+}
+
+const secretRows = computed(() => {
+  const secret = admin.lastPlatformUserSecret
+  if (!secret) return []
+  return [
+    { label: 'Operator', value: secret.user.login },
+    { label: 'Temp password', value: secret.temp_password },
+  ]
+})
+
+function closeSecret() {
+  secretOpen.value = false
+  admin.clearSecrets()
+}
+
+onBeforeUnmount(() => admin.clearSecrets())
 const form = reactive({
   fullName: '',
   login: '',
@@ -60,6 +111,8 @@ async function saveUser() {
         full_name: form.fullName,
         phone: form.phone,
       })
+      modalOpen.value = false
+      toast.success('Operator yangilandi')
     } else {
       await admin.createPlatformUser({
         full_name: form.fullName,
@@ -67,22 +120,35 @@ async function saveUser() {
         phone: form.phone,
         temp_password: form.tempPassword || null,
       })
+      modalOpen.value = false
+      secretOpen.value = true
+      toast.success('Operator yaratildi')
     }
-    modalOpen.value = false
   } catch {
     actionError.value = 'platform_user_save_failed'
+    toast.danger('Operator amali bajarilmadi')
   } finally {
     saving.value = false
   }
 }
 
-async function resetPassword(id: string) {
-  actionId.value = id
+function askReset(user: PlatformUser) {
+  resetTarget.value = user
+}
+
+async function confirmReset() {
+  const target = resetTarget.value
+  if (!target) return
+  actionId.value = target.id
   actionError.value = null
   try {
-    await admin.resetPlatformUserPassword(id)
+    await admin.resetPlatformUserPassword(target.id)
+    resetTarget.value = null
+    secretOpen.value = true
+    toast.success('Yangi vaqtinchalik parol yaratildi')
   } catch {
     actionError.value = 'platform_user_reset_failed'
+    toast.danger("Parolni qaytarib bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -102,8 +168,14 @@ async function confirmBlock() {
     await admin.blockPlatformUser(blockTarget.value.id, blockReason.value)
     blockModalOpen.value = false
     blockTarget.value = null
-  } catch {
+    toast.success('Operator bloklandi')
+  } catch (blockErr) {
     actionError.value = 'platform_user_block_failed'
+    toast.danger(
+      apiErrorCode(blockErr) === 'last_platform_operator'
+        ? "Oxirgi faol operatorni bloklab bo'lmaydi"
+        : "Operatorni bloklab bo'lmadi",
+    )
   } finally {
     actionId.value = null
   }
@@ -114,8 +186,10 @@ async function unblock(id: string) {
   actionError.value = null
   try {
     await admin.unblockPlatformUser(id)
+    toast.success('Operator blokdan chiqarildi')
   } catch {
     actionError.value = 'platform_user_unblock_failed'
+    toast.danger("Operatorni blokdan chiqarib bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -134,6 +208,11 @@ onMounted(admin.loadPlatformUsers)
       <button type="button" class="admin-primary-action" @click="openCreate">Yangi operator</button>
     </div>
 
+    <p class="mb-4 rounded-md border border-hairline bg-sunk px-4 py-3 text-sm text-ink-soft">
+      Platforma operatorlari bir xil scope-ga ega — alohida ruxsat modeli yo'q. O'zingizni yoki
+      oxirgi faol operatorni bloklab bo'lmaysiz.
+    </p>
+
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span class="sr-only">Operator qidiruv</span>
@@ -144,19 +223,19 @@ onMounted(admin.loadPlatformUsers)
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Operatorlar yuklanmadi</h3>
-      <p>
-        Platform users endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Operatorlar yuklanmadi"
+      @retry="admin.loadPlatformUsers"
+    />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Operator topilmadi</h3>
@@ -165,7 +244,7 @@ onMounted(admin.loadPlatformUsers)
 
     <section v-else class="admin-card">
       <div class="admin-table-wrap">
-        <table class="admin-table">
+        <table class="admin-table wide">
           <thead>
             <tr>
               <th>Operator</th>
@@ -173,13 +252,16 @@ onMounted(admin.loadPlatformUsers)
               <th>Telefon</th>
               <th>Oxirgi kirish</th>
               <th>Holat</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in filtered" :key="user.id">
               <td class="nm">
                 {{ user.full_name }}
+                <span v-if="isCurrentOperator(user)" class="admin-pill admin-pill-info ml-2">
+                  Joriy
+                </span>
                 <small>{{ user.id.slice(0, 8) }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ user.login }}</td>
@@ -187,7 +269,7 @@ onMounted(admin.loadPlatformUsers)
               <td class="admin-mono text-ink-muted">{{ adminDateTime(user.last_login_at) }}</td>
               <td>
                 <span class="admin-pill" :class="platformUserStatusTone(user.status)">
-                  {{ user.status }}
+                  {{ platformUserStatusLabel(user.status) }}
                 </span>
               </td>
               <td class="admin-right">
@@ -203,7 +285,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
-                    @click="resetPassword(user.id)"
+                    @click="askReset(user)"
                   >
                     Parol qaytarish
                   </button>
@@ -211,12 +293,11 @@ onMounted(admin.loadPlatformUsers)
                     v-if="user.status === 'active'"
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
-                    :disabled="user.id === auth.me?.principal_id"
+                    :disabled="blockDisabledReason(user) !== null || actionId === user.id"
+                    :title="blockDisabledReason(user) ?? undefined"
                     @click="askBlock(user)"
                   >
-                    {{
-                      user.id === auth.me?.principal_id ? "O'zini bloklab bo'lmaydi" : 'Bloklash'
-                    }}
+                    {{ blockDisabledReason(user) ?? 'Bloklash' }}
                   </button>
                   <button
                     v-else
@@ -238,38 +319,43 @@ onMounted(admin.loadPlatformUsers)
     <p
       v-if="actionError"
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Operator amali bajarilmadi.
     </p>
 
-    <section v-if="admin.lastPlatformUserSecret" class="admin-card mt-5 max-w-[620px]">
-      <div class="admin-card-h">
-        <h2>One-time secret</h2>
-        <span class="sub">temp password faqat shu yerda ko'rsatiladi</span>
-      </div>
-      <div class="admin-card-b">
-        <div class="admin-secret-box">
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Operator</span>
-              <span class="admin-secret-value">{{ admin.lastPlatformUserSecret.user.login }}</span>
-            </span>
-          </div>
-          <div class="admin-secret-row">
-            <span>
-              <span class="admin-secret-key">Temp password</span>
-              <span class="admin-secret-value">{{
-                admin.lastPlatformUserSecret.temp_password
-              }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
+    <AdminSecretModal
+      :open="secretOpen && !!admin.lastPlatformUserSecret"
+      title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
+      intro="Login va vaqtinchalik parolni operatorga yetkazing. Operator birinchi kirishda uni almashtiradi."
+      :rows="secretRows"
+      @close="closeSecret"
+    />
+
+    <ConfirmDialog
+      :open="resetTarget !== null"
+      title="Parolni qaytarish"
+      :message="`${resetTarget?.full_name ?? ''} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
+      confirm-label="Parolni qaytarish"
+      busy-label="Qaytarilmoqda"
+      cancel-label="Bekor qilish"
+      :busy="actionId === resetTarget?.id"
+      danger
+      @confirm="confirmReset"
+      @cancel="resetTarget = null"
+    />
 
     <template v-if="modalOpen">
-      <div class="admin-modal-scrim" @click="modalOpen = false"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="operator-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
+      <section
+        ref="formPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="operator-title"
+        tabindex="-1"
+        @keydown="formTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="operator-title">{{ editingId ? 'Operator tahrirlash' : 'Yangi operator' }}</h3>
           <button
@@ -332,12 +418,15 @@ onMounted(admin.loadPlatformUsers)
     </template>
 
     <template v-if="blockModalOpen && blockTarget">
-      <div class="admin-modal-scrim" @click="blockModalOpen = false"></div>
+      <div class="admin-modal-scrim" aria-hidden="true" @click="blockModalOpen = false"></div>
       <section
+        ref="blockPanel"
         class="admin-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="block-user-title"
+        tabindex="-1"
+        @keydown="blockTrap.onKeydown"
       >
         <div class="admin-modal-h">
           <h3 id="block-user-title">Operatorni bloklash</h3>
@@ -353,8 +442,8 @@ onMounted(admin.loadPlatformUsers)
         <form @submit.prevent="confirmBlock">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
-              {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Oxirgi faol operator
-              bloklanmaydi.
+              {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Blokdan chiqarilganda
+              sessiyalar avtomatik tiklanmaydi — operator qaytadan kiradi.
             </p>
             <label class="admin-field" for="op-block-reason">
               <span>Majburiy sabab</span>
@@ -371,7 +460,7 @@ onMounted(admin.loadPlatformUsers)
             </button>
             <button
               type="submit"
-              class="mp-button mp-button-primary"
+              class="mp-button bg-danger text-white"
               :disabled="!blockReason.trim() || actionId === blockTarget.id"
             >
               Bloklash

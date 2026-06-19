@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import { adminDateTime, jobStatusLabel, jobStatusTone } from '@/shared/app/adminUi'
+import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformJobSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const toast = useToast()
 const runningJob = ref<string | null>(null)
 const runError = ref<string | null>(null)
 const selectedJobName = ref<string | null>(null)
+const confirmJob = ref<{ name: string; retry: boolean } | null>(null)
 
 const selectedJob = computed(() =>
   selectedJobName.value
@@ -15,13 +21,31 @@ const selectedJob = computed(() =>
     : null,
 )
 
-async function runJob(name: string) {
-  runningJob.value = name
+const logPanel = ref<HTMLElement | null>(null)
+const logOpen = computed(() => selectedJobName.value !== null)
+const logTrap = useFocusTrap(logPanel, logOpen, () => (selectedJobName.value = null))
+
+function askRun(job: PlatformJobSummary) {
+  confirmJob.value = {
+    name: job.definition.name,
+    retry: job.definition.last_result === 'failed',
+  }
+}
+
+async function confirmRun() {
+  const target = confirmJob.value
+  if (!target) return
+  confirmJob.value = null
+  runningJob.value = target.name
   runError.value = null
   try {
-    await admin.runJob(name)
+    const run = await admin.runJob(target.name)
+    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    else if (run.status === 'failed') toast.danger('Ish muvaffaqiyatsiz tugadi')
+    else toast.success('Ish ishga tushirildi')
   } catch {
     runError.value = 'job_run_failed'
+    toast.danger('Ish ishga tushmadi')
   } finally {
     runningJob.value = null
   }
@@ -38,7 +62,7 @@ onMounted(admin.loadJobs)
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Background ish . scheduler</h1>
+        <h1>Fon vazifalar</h1>
         <p class="sub">In-process scheduler holati, oxirgi natija va manual trigger.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
@@ -46,22 +70,22 @@ onMounted(admin.loadJobs)
       </button>
     </div>
 
-    <section v-if="admin.opsLoading" class="admin-card p-5">
+    <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
-    <section v-else-if="admin.opsError" class="admin-error">
-      <h3>Background ish yuklanmadi</h3>
-      <p>
-        Scheduler endpoint javob bermadi.
-        <span v-if="admin.opsTraceId" class="admin-mono">trace {{ admin.opsTraceId }}</span>
-      </p>
-    </section>
+    <AdminErrorState
+      v-else-if="admin.opsError"
+      :code="admin.opsError"
+      :trace-id="admin.opsTraceId"
+      title="Fon vazifalar yuklanmadi"
+      @retry="admin.loadJobs"
+    />
 
     <section v-else-if="admin.jobs.length === 0" class="admin-empty">
-      <h3>Registered job yo'q</h3>
+      <h3>Ro'yxatdan o'tgan vazifa yo'q</h3>
       <p>Default scheduler jobs bootstrap qilingandan keyin ko'rinadi.</p>
     </section>
 
@@ -75,7 +99,7 @@ onMounted(admin.loadJobs)
               <th>Oxirgi ishlashi</th>
               <th>Natija</th>
               <th>Xulosa</th>
-              <th></th>
+              <th><span class="sr-only">Amallar</span></th>
             </tr>
           </thead>
           <tbody>
@@ -94,14 +118,14 @@ onMounted(admin.loadJobs)
               </td>
               <td>
                 <span class="admin-pill" :class="jobStatusTone(job.definition.last_result)">
-                  {{ statusLabel(job.definition.last_result) }}
+                  {{ jobStatusLabel(job.definition.last_result) }}
                 </span>
               </td>
               <td class="max-w-[360px] truncate">
                 {{
                   job.recent_runs[0]?.brief_log ??
                   job.recent_runs[0]?.error_message ??
-                  'Jurnal hali yoq'
+                  "Jurnal hali yo'q"
                 }}
               </td>
               <td class="admin-right">
@@ -116,8 +140,8 @@ onMounted(admin.loadJobs)
                   <button
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-                    :disabled="runningJob === job.definition.name || job.definition.running"
-                    @click="runJob(job.definition.name)"
+                    :disabled="runningJob === job.definition.name"
+                    @click="askRun(job)"
                   >
                     {{
                       runningJob === job.definition.name
@@ -138,13 +162,22 @@ onMounted(admin.loadJobs)
     <p
       v-if="runError"
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+      role="alert"
     >
       Job ishga tushmadi.
     </p>
 
     <template v-if="selectedJob">
-      <div class="admin-modal-scrim" @click="selectedJobName = null"></div>
-      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="job-log-title">
+      <div class="admin-modal-scrim" aria-hidden="true" @click="selectedJobName = null"></div>
+      <section
+        ref="logPanel"
+        class="admin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="job-log-title"
+        tabindex="-1"
+        @keydown="logTrap.onKeydown"
+      >
         <div class="admin-modal-h">
           <h3 id="job-log-title">Ish jurnali</h3>
           <button
@@ -170,12 +203,12 @@ onMounted(admin.loadJobs)
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <span class="admin-pill" :class="jobStatusTone(run.status)">
-                {{ statusLabel(run.status) }}
+                {{ jobStatusLabel(run.status) }}
               </span>
               <span class="admin-mono text-ink-muted">{{ adminDateTime(run.started_at) }}</span>
             </div>
             <p class="mt-3 text-sm text-ink">
-              {{ run.brief_log ?? run.error_message ?? 'No log' }}
+              {{ run.brief_log ?? run.error_message ?? "Jurnal yo'q" }}
             </p>
             <p v-if="run.trace_id" class="mt-2 admin-mono text-ink-muted">
               trace {{ run.trace_id }}
@@ -189,5 +222,20 @@ onMounted(admin.loadJobs)
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="confirmJob !== null"
+      :title="confirmJob?.retry ? 'Ishni qayta urinish' : 'Ishni hozir ishga tushirish'"
+      :message="
+        confirmJob?.retry
+          ? `${confirmJob?.name} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`
+          : `${confirmJob?.name} rejadan tashqari hozir ishga tushiriladi.`
+      "
+      confirm-label="Ishga tushirish"
+      busy-label="Ishlamoqda"
+      cancel-label="Bekor qilish"
+      @confirm="confirmRun"
+      @cancel="confirmJob = null"
+    />
   </section>
 </template>

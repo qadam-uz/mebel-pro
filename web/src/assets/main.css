@@ -3720,6 +3720,13 @@
     text-align: left;
   }
 
+  /* AB-50: button-dense tables (platform-users / materials / audit) need more
+     room so their action buttons stay on one row and the user scrolls
+     horizontally instead of the row ballooning vertically. */
+  .admin-table.wide {
+    min-width: 900px;
+  }
+
   .admin-table th {
     border-bottom: 1px solid var(--color-hairline-strong);
     background: var(--color-sunk);
@@ -3796,7 +3803,8 @@
   }
 
   .admin-filter-input input {
-    width: 220px;
+    width: 100%;
+    max-width: 220px;
     min-width: 0;
     border: 0;
     background: transparent;
@@ -4168,6 +4176,12 @@
   }
 
   @media (max-width: 920px) {
+    /* AB-48: drop the 3-up provision/material form to a comfortable 2-up before
+       the ≤620px single-column rule, so the ~640px modal isn't cramped. */
+    .admin-form-grid.three {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .workshop-app {
       grid-template-columns: 1fr;
     }
