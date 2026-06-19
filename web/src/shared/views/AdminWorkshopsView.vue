@@ -11,10 +11,11 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
-import { useAdminStore } from '@/shared/stores/admin'
+import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
@@ -24,6 +25,45 @@ const modalOpen = ref(false)
 const secretOpen = ref(false)
 const provisionPanel = ref<HTMLElement | null>(null)
 const provisionTrap = useFocusTrap(provisionPanel, modalOpen, () => (modalOpen.value = false))
+
+// AB-19: block / unblock from the list row, not only the detail view.
+const blockTarget = ref<WorkshopSummary | null>(null)
+const unblockTarget = ref<WorkshopSummary | null>(null)
+const acting = ref(false)
+const blockReason = ref('')
+
+function askBlock(workshop: WorkshopSummary) {
+  blockTarget.value = workshop
+  blockReason.value = ''
+}
+
+async function confirmBlock() {
+  if (!blockTarget.value || !blockReason.value.trim()) return
+  acting.value = true
+  try {
+    await admin.blockWorkshop(blockTarget.value.id, blockReason.value)
+    toast.success('Ustaxona bloklandi')
+    blockTarget.value = null
+  } catch {
+    toast.danger("Ustaxonani bloklab bo'lmadi")
+  } finally {
+    acting.value = false
+  }
+}
+
+async function confirmUnblock() {
+  if (!unblockTarget.value) return
+  acting.value = true
+  try {
+    await admin.unblockWorkshop(unblockTarget.value.id)
+    toast.success('Ustaxona blokdan chiqarildi')
+    unblockTarget.value = null
+  } catch {
+    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+  } finally {
+    acting.value = false
+  }
+}
 
 const secretRows = computed(() => {
   const provision = admin.lastProvision
@@ -236,12 +276,30 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="admin-right">
-                <RouterLink
-                  :to="rolePath(`/admin/workshops/${workshop.id}`)"
-                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                >
-                  Tafsilotlar
-                </RouterLink>
+                <div class="flex flex-wrap justify-end gap-2">
+                  <RouterLink
+                    :to="rolePath(`/admin/workshops/${workshop.id}`)"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                  >
+                    Tafsilotlar
+                  </RouterLink>
+                  <button
+                    v-if="workshop.status === 'active'"
+                    type="button"
+                    class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
+                    @click="askBlock(workshop)"
+                  >
+                    Bloklash
+                  </button>
+                  <button
+                    v-else
+                    type="button"
+                    class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+                    @click="unblockTarget = workshop"
+                  >
+                    Blokdan chiqarish
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -368,6 +426,37 @@ onMounted(async () => {
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="blockTarget !== null"
+      title="Ustaxonani bloklash"
+      :message="`${blockTarget?.name ?? ''} xodimlarining sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Blokdan chiqarilganda sessiyalar tiklanmaydi.`"
+      confirm-label="Bloklash"
+      busy-label="Bloklanmoqda"
+      cancel-label="Bekor qilish"
+      danger
+      :busy="acting"
+      :confirm-disabled="!blockReason.trim()"
+      @confirm="confirmBlock"
+      @cancel="blockTarget = null"
+    >
+      <label class="admin-field">
+        <span>Majburiy sabab</span>
+        <textarea v-model="blockReason" required></textarea>
+      </label>
+    </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="unblockTarget !== null"
+      title="Blokdan chiqarish"
+      :message="`${unblockTarget?.name ?? ''} blokdan chiqariladi. Foydalanuvchilar qaytadan kirishi kerak (sessiyalar avtomatik tiklanmaydi).`"
+      confirm-label="Blokdan chiqarish"
+      busy-label="Bajarilmoqda"
+      cancel-label="Bekor qilish"
+      :busy="acting"
+      @confirm="confirmUnblock"
+      @cancel="unblockTarget = null"
+    />
 
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
