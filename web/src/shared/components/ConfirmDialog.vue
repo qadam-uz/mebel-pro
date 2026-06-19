@@ -11,6 +11,7 @@ const props = withDefaults(
     message: string
     confirmLabel?: string
     cancelLabel?: string
+    busyLabel?: string
     danger?: boolean
     busy?: boolean
     confirmDisabled?: boolean
@@ -18,6 +19,7 @@ const props = withDefaults(
   {
     confirmLabel: 'Confirm',
     cancelLabel: 'Cancel',
+    busyLabel: 'Working',
     danger: false,
     busy: false,
     confirmDisabled: false,
@@ -140,7 +142,7 @@ onBeforeUnmount(() => {
             :disabled="busy || confirmDisabled"
             @click="emit('confirm')"
           >
-            {{ busy ? 'Working' : confirmLabel }}
+            {{ busy ? busyLabel : confirmLabel }}
           </button>
         </div>
       </section>
