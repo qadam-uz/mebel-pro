@@ -51,9 +51,25 @@ against the current Vue implementation. It mirrors the discipline of
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open | 2 | 20 | 21 | **43** |
-| Done | 5 | 4 | 1 | **10** |
+| Open | 2 | 17 | 18 | **37** |
+| Done | 5 | 7 | 4 | **16** |
 | Won't | — | — | 1 (AB-54) | **1** |
+
+> Progress (2026-06-19, admin-finish B4): **AB-15, AB-16, AB-31, AB-32, AB-33, AB-34 Done** —
+> correctness. **AB-15:** `runJob` only mirrors a **terminal** (`ok`/`failed`) result onto the
+> definition, never a `skipped` (already-running) one — so a real `failed` is no longer
+> silently overwritten and dropped from the dashboard KPI; the jobs view now branches on
+> `run.status` (warn toast "Job allaqachon ishlamoqda — o'tkazib yuborildi" on skip).
+> **AB-33:** dropped the dead `|| job.definition.running` half of the Run-button disable (the
+> scheduler never sets that flag, so it implied a cross-session guard that doesn't exist).
+> **AB-16:** `patchManufacturer` now also refreshes the denormalized `manufacturer_name` on
+> cached materials, so a rename no longer leaves stale labels. **AB-32:** `loadAudit` uses
+> `Promise.allSettled` and assigns each feed independently — a transient failure on one feed no
+> longer blanks both tabs; the full-screen error shows only when both fail. **AB-34:**
+> `createPlatformUser` inserts the new operator in the server's `(status, full_name)` order
+> instead of unshifting, killing the post-reload reorder jump. **AB-31:** +3 `runJob` unit
+> tests (prepend + cap-5, skip-doesn't-overwrite-failed, terminal-mirrors, unknown-name no-op).
+> Web gate green: lint:check · format:check · typecheck · test **126** · build.
 
 > Progress (2026-06-19, admin-finish B3): **AB-01, AB-08, AB-28, AB-53 Done** — error/states
 > foundation. New `components/AdminErrorState.vue` (title + trace + **Qayta urinish** retry +
@@ -121,8 +137,8 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-12 | P2 | i18n-copy | med | S | Open | Localize status pills (Faol/Bloklangan/Faol emas) + dot + `statusLabel` enum maps |
 | AB-13 | P2 | i18n-copy | med | S | Open | Translate `useStaffLogin` English error map (decision: shared w/ workshop) |
 | AB-14 | P2 | correctness-bug | med | M | Open | Dashboard concurrent loaders share one error/loading ref → race → false-"healthy" |
-| AB-15 | P2 | correctness-bug | med | S | Open | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
-| AB-16 | P2 | correctness-bug | med | S | Open | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
+| AB-15 | P2 | correctness-bug | med | S | Done | Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` |
+| AB-16 | P2 | correctness-bug | med | S | Done | Renaming a manufacturer leaves stale `manufacturer_name` on cached materials |
 | AB-17 | P2 | spec-conformance | med | M | Open | Audit viewer: add spec'd filters (workshop/module/date/action) + pagination (silent 50-row cap) + wire/remove CSV |
 | AB-18 | P2 | design-parity | med | M | Open | Platform-users: disable Block on last active operator + map error + 'Joriy' marker + operator-model banner |
 | AB-19 | P2 | design-parity | med | M | Open | Workshops list: inline Block/Unblock row actions (with confirm) |
@@ -137,10 +153,10 @@ against the current Vue implementation. It mirrors the discipline of
 | AB-28 | P2 | a11y | med | S | Done | Live regions on load-error + action-failure surfaces; standardize skeleton `aria-live` |
 | AB-29 | P2 | tech-debt | med | M | Open | Type the 7 `payload: unknown` store mutators with request DTOs |
 | AB-30 | P2 | testing | med | M | Open | E2E: run-job + resolve-error operator journeys |
-| AB-31 | P2 | testing | med | S | Open | Vitest: admin store `runJob` optimistic merge (find-by-name, prepend, slice-5) |
-| AB-32 | P3 | correctness-bug | low | S | Open | `loadAudit` Promise.all → allSettled (partial-failure blanks both tabs) |
-| AB-33 | P3 | correctness-bug | low | M | Open | Job `definition.running` disable-guard is dead (backend never sets it) — wire or drop |
-| AB-34 | P3 | correctness-bug | low | S | Open | `createPlatformUser` unshift breaks server `(status, name)` sort until reload |
+| AB-31 | P2 | testing | med | S | Done | Vitest: admin store `runJob` optimistic merge (find-by-name, prepend, slice-5) |
+| AB-32 | P3 | correctness-bug | low | S | Done | `loadAudit` Promise.all → allSettled (partial-failure blanks both tabs) |
+| AB-33 | P3 | correctness-bug | low | M | Done | Job `definition.running` disable-guard is dead (backend never sets it) — wire or drop |
+| AB-34 | P3 | correctness-bug | low | S | Done | `createPlatformUser` unshift breaks server `(status, name)` sort until reload |
 | AB-35 | P3 | completeness-stub | low | S | Open | Provision form hardcodes Tashkent lat/lon (dup literal) + no working-hours UI |
 | AB-36 | P3 | spec-conformance | low | S | Open | Provision code field stops re-deriving from name after first auto-fill |
 | AB-37 | P3 | design-parity | low | S | Open | Dashboard recent-workshops: owner login (not UUID) + Filial col + localized pill + re-run on failed-job card |
@@ -252,13 +268,13 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** `onMounted` fires a 7-way `Promise.all`. `loadOverview`/`loadWorkshops`/`loadWorkshop` all mutate the **same** `error`/`loading`/`traceId`; `loadJobs`/`loadErrors`/`loadPlatformUsers` all mutate the **same** `opsError`/`opsLoading`/`opsTraceId`. Running concurrently makes the flags last-writer-wins: each one's `error=null`/`loading=false` clobbers its siblings'. The view gates `isLoading`/`hasError` on `!overview.value`, so a *successful overview hides any other loader's failure* — if jobs or errors 403/fail, the dashboard renders normally and those sections show their empty states ("Failed ish yo'q", "Xatolik yozilmagan") as if all-clear. That's a **false "healthy" signal on a health dashboard**, and a surfaced `traceId` may belong to a different request than the failure.
 **Fix:** Give the concurrently-fetched endpoints independent loading/error slots (per-area triples, or have each loader return a result object aggregated in the view via `Promise.allSettled`); at minimum a non-fatal banner when any tile's loader failed so empty ≠ healthy. (Tech-debt framing of the shared-triple is the same root; fix once.)
 
-### AB-15 · Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` — `correctness-bug` · med · S
+### AB-15 · Job run never surfaces `skipped`/"already running"; optimistic patch overwrites `failed`→`skipped` — `correctness-bug` · med · S — **Done (B4)**
 
 **Files:** `AdminPlatformJobsView.vue:18-28`, `stores/admin.ts:496-505`, `backend/.../scheduler.py:42-49`.
 **Why:** The backend skip guard is an in-process `asyncio.Lock`: when a job is already running, `run_platform_job` returns a `JobRun` with `status='skipped'` / `brief_log='already running'` **without raising** and **without updating** `JobDefinition.last_run_at/last_result`. The view's `runJob` awaits and never inspects `run.status`, so on a skip the button flashes "Ishlamoqda" then returns to normal with **zero feedback** — the operator believes it ran. Worse, the store unconditionally writes `row.definition.last_result = run.status` (`admin.ts:500-501`): on a skip it writes a `skipped` + a `last_run_at` the server never persisted, and if the job was previously `failed`, this **silently drops it from the Dashboard failed-jobs KPI** (`AdminDashboardView.vue:13` filters `last_result==='failed'`) until the next `loadJobs` reverts it.
 **Fix:** Branch on `run.status`: on `skipped` show a distinct "Job allaqachon ishlamoqda — o'tkazib yuborildi" notice and **don't** patch the definition; only patch on terminal `ok`/`failed`. Simplest robust option: stop optimistically mutating the definition and re-`loadJobs()` after `runJob` resolves so list and server stay consistent. (Dead `definition.running` flag is AB-33.)
 
-### AB-16 · Renaming a manufacturer leaves stale `manufacturer_name` on cached materials — `correctness-bug` · med · S
+### AB-16 · Renaming a manufacturer leaves stale `manufacturer_name` on cached materials — `correctness-bug` · med · S — **Done (B4)**
 
 **Files:** `stores/admin.ts:364-372` (`updateManufacturer`→`patchManufacturer`), `:410-412` (`patchManufacturer` only touches the manufacturers array), `AdminMaterialsView.vue:288` (renders denormalized `manufacturer_name`).
 **Why:** `Material` carries a denormalized `manufacturer_name` (`admin.ts:69`). `patchManufacturer` only updates the `manufacturers` array — it never refreshes `materials[].manufacturer_name`. After an operator renames a manufacturer, the Materials table and the Materials manufacturer filter keep showing the **old** name (the store is a session-long singleton, so it persists across navigation) until a full materials reload.
@@ -348,7 +364,7 @@ against the current Vue implementation. It mirrors the discipline of
 **Why:** Two operator journeys have zero UI test: triggering a background job run (non-trivial optimistic merge — AB-15/AB-31) and resolving an error record (mutates both list and `errorDetail`). The backend already-running guard is covered by `test_scheduler.py`, but the UI flow (trigger → new run row → `skipped` handling; resolve → row flips → button disables) is untested. Per [`testing-practices`], these journeys belong at E2E.
 **Fix:** Add `platform-ops.spec.ts`: admin opens jobs, triggers a seeded job, asserts the run appears; opens errors (seed an `ErrorRecord`), resolves it, asserts the row flips to resolved and the button disables. Ship with the AB-15 fix so the `skipped` assertion is meaningful.
 
-### AB-31 · Vitest: admin store `runJob` optimistic merge — `testing` · med · S
+### AB-31 · Vitest: admin store `runJob` optimistic merge — `testing` · med · S — **Done (B4)**
 
 **Files:** `stores/admin.ts:496-505`; pattern: `stores/__tests__/notifications.spec.ts`.
 **Why:** `runJob` is the one store action with genuine pure-transform logic worth a unit (find row by `definition.name`, write `last_result`, prepend to `recent_runs` capped at `slice(0,5)`). Real bug modes exist: a name mismatch silently drops the update (the `if (row)` early-out), and the slice boundary is off-by-one-prone. There's no admin store unit test yet (the `patch*` helpers are trivial map-replace and don't warrant units). Per [`testing-practices`], pure store logic with branches is the right place for a unit.
@@ -356,19 +372,19 @@ against the current Vue implementation. It mirrors the discipline of
 
 ## P3 — nice-to-have / polish
 
-### AB-32 · `loadAudit` Promise.all → allSettled (partial failure blanks both tabs) — `correctness-bug` · low · S
+### AB-32 · `loadAudit` Promise.all → allSettled (partial failure blanks both tabs) — `correctness-bug` · low · S — **Done (B4)**
 
 **Files:** `stores/admin.ts:547-552`, `AdminAuditView.vue:85-91`.
 **Why:** `loadAudit` does `Promise.all` of `/audit/actions` + `/audit/status-changes`. If only one feed fails, the whole view drops to the error state (the good feed is discarded), and on success both lists are replaced — so a later partial failure on "Yangilash" blanks both tabs. No indication which feed failed.
 **Fix:** `Promise.allSettled`, assign each list independently, surface an error only for the feed(s) that actually failed (or keep the previously loaded data on partial failure).
 
-### AB-33 · Job `definition.running` disable-guard is dead — wire or drop — `correctness-bug` · low · M
+### AB-33 · Job `definition.running` disable-guard is dead — wire or drop — `correctness-bug` · low · M — **Done (B4)**
 
 **Files:** `AdminPlatformJobsView.vue:119` (`runningJob === name || job.definition.running`), `backend/.../models.py:23` (`running` exists, default False), `scheduler.py:39-75` (the lock never writes `running`).
 **Why:** The Run button's `job.definition.running` half is always false — the scheduler uses an `asyncio.Lock` and never sets `definition.running = True/False`. So the cross-operator/cross-tab guard is dead; only the local `runningJob` ref disables the current operator's own button. A second operator can still fire a run the server records as `skipped` (AB-15).
 **Fix:** Either (a) make the backend set `definition.running` around the lock (clear in `finally`) so the existing UI guard becomes meaningful cross-session, or (b) drop the dead `job.definition.running` reference (and the type field) so the UI stops implying a guarantee that doesn't exist. (Backend change = decision.)
 
-### AB-34 · `createPlatformUser` unshift breaks server `(status, name)` sort until reload — `correctness-bug` · low · S
+### AB-34 · `createPlatformUser` unshift breaks server `(status, name)` sort until reload — `correctness-bug` · low · S — **Done (B4)**
 
 **Files:** `stores/admin.ts:438-440`, `backend/.../service.py:362-368` (server sorts by `(status, full_name)`).
 **Why:** `createPlatformUser` prepends the new user, but the list is server-sorted by `(status, full_name)`. The new active user jumps to the top out of alphabetical order and, after a "Yangilash" reload, silently relocates — a visible reorder jump. (`provision`/`createManufacturer`/`createMaterial` prepend to created_at-desc lists and stay consistent; only platform users are mis-ordered.)

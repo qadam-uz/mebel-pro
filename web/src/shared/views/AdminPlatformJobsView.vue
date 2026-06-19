@@ -39,8 +39,10 @@ async function confirmRun() {
   runningJob.value = target.name
   runError.value = null
   try {
-    await admin.runJob(target.name)
-    toast.success('Ish ishga tushirildi')
+    const run = await admin.runJob(target.name)
+    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    else if (run.status === 'failed') toast.danger('Ish muvaffaqiyatsiz tugadi')
+    else toast.success('Ish ishga tushirildi')
   } catch {
     runError.value = 'job_run_failed'
     toast.danger('Ish ishga tushmadi')
@@ -138,7 +140,7 @@ onMounted(admin.loadJobs)
                   <button
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-                    :disabled="runningJob === job.definition.name || job.definition.running"
+                    :disabled="runningJob === job.definition.name"
                     @click="askRun(job)"
                   >
                     {{
