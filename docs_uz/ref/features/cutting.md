@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-07
+updated: 2026-06-19
 order: 80
 ---
 
@@ -34,7 +34,9 @@ bilan toʻqnashtiradi.
 
 **Cutting draft** — client tahrirlaydigan va order joylashtirgunicha qayta optimise
 qiladigan ish yuzasi. Client'ga private va cheksiz saqlanadi (expiry yoʻq; 50 ochiq
-draft'gacha cap).
+draft'gacha cap). Draft **birinchi optimise**'da server entity boʻladi — editor local va
+unsaved holda ochiladi, shuning uchun tashlab ketilgan/boʻsh editor hech qachon draft
+yaratmaydi (*Lifecycle*'ga qarang).
 
 Draft ushlab turadi:
 
@@ -67,12 +69,18 @@ sifatida ko'rsatadi; faqat `shop`-source length order'ning billed va consumed to
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft : client opens "New cutting"
-    draft --> draft : edit parts · run optimiser · pick algorithm
+    [*] --> editing : client opens "New cutting" (local, unsaved)
+    editing --> editing : edit parts · pick branch
+    editing --> draft : client runs the optimiser → draft created & persisted
+    draft --> draft : edit parts · re-optimise · pick algorithm
     draft --> confirmed : client places an order with the chosen result
     confirmed --> [*]
 ```
 
+- `editing` — **local va unsaved**, birinchi optimise'gacha boʻlgan editor. Hali server draft
+  yoʻq, shuning uchun chiqib ketish kiritilgan ma'lumotni tashlab yuboradi (editor avval
+  ogohlantiradi). Draft **birinchi optimise**'da yaratiladi va saqlanadi — autosave ham aynan
+  shunda boshlanadi.
 - `draft` mutable. `confirmed` immutable va cheksiz saqlanadi — u order ishora qilayotgan
   tarixiy yozuv.
 - `draft`'da optimiser'ni qayta ishga tushirish barcha algorithm result'larini joyida
@@ -80,6 +88,13 @@ stateDiagram-v2
 - Order placement'da **chosen** algorithm result draft'ning frozen snapshot'i boʻladi va
   draft `confirmed`'ga oʻtadi. Oʻsha run'dan boshqa algorithm result'lar bu nuqtada
   oʻchiriladi.
+
+**Nega lazily yaratiladi.** Draft'ni faqat birinchi optimise'da yaratish tashlab ketilgan va
+boʻsh editor'larni draft list'idan hamda 50-draft cap'idan tashqarida tutadi; qabul qilingan
+narx — birinchi optimise'gacha kiritilgan ma'lumot autosave qilinmaydi (editor uni tashlashdan
+oldin ogohlantiradi). Agar client'lar pre-optimise ma'lumotni yoʻqotishdan shikoyat qilsa qayta
+koʻrib chiqing — unda unsaved editor'ni local storage bilan qoʻllab-quvvatlang yoki eager
+yaratishni qaytaring.
 
 ### Parts and materials
 
@@ -188,9 +203,10 @@ download ham xuddi shu tarzda gate qilinadi. Har bir optimisation run audit qili
 
 ## UX — the cutting wizard (client app)
 
-`/c/cutting/:id`'da bitta workspace (stepper yoʻq — tepada bitta tahrirlash yuzasi, pastda
-bitta result panel). Entry — client app'ning home'idagi **New cutting** tugmasi, bu
-boʻsh draft yaratadi va shu yerga route qiladi. Ikkinchi darajali **My drafts** entry
+`/c/cutting/:id`'da bitta workspace (birinchi optimise'gacha `/c/cutting/new`; stepper yoʻq —
+tepada bitta tahrirlash yuzasi, pastda bitta result panel). Entry — client app'ning home'idagi
+**New cutting** tugmasi, bu boʻsh, unsaved editor'ni ochadi; draft birinchi **Optimise**'da
+yaratiladi va saqlanadi (*Lifecycle*'ga qarang). Ikkinchi darajali **My drafts** entry
 unbound draft'larni list qiladi.
 
 ### Branch pre-filter (top of the editor)
@@ -291,7 +307,9 @@ parts wipe'ning yagona usuli; branch pre-filter hech qachon uni chaqirmaydi.
 ### Run and the result panel
 
 Editor ostida primary **Optimise** tugma. Run paytida disabled (5 s cap), keyin biror row
-oʻzgargunicha disabled (shunda qayta tap stale layout'ni qayta ishga tushirmaydi).
+oʻzgargunicha disabled (shunda qayta tap stale layout'ni qayta ishga tushirmaydi). Yangi
+(unsaved) editor'da birinchi **Optimise** run'dan oldin draft'ni ham yaratadi va saqlaydi,
+shundan soʻng URL `/c/cutting/:id`'ga oʻtadi va autosave ishni oladi.
 
 Success'da, panel uchta region bilan view'ga scroll qiladi:
 

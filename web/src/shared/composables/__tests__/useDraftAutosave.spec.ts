@@ -74,6 +74,27 @@ describe('useDraftAutosave (CB-93)', () => {
     expect(autosave.saveState.value).toBe('saved')
   })
 
+  it('suspends scheduling entirely while enabled() is false', async () => {
+    const parts = ref<Part[]>([{ id: 1 }])
+    const persist = vi.fn().mockResolvedValue(undefined)
+    const onSchedule = vi.fn()
+    const autosave = useDraftAutosave({
+      parts,
+      persist,
+      canPersist: () => true,
+      isReadOnly: () => false,
+      enabled: () => false,
+      onSchedule,
+    })
+
+    parts.value.push({ id: 2 })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(700)
+    expect(onSchedule).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalled()
+    expect(autosave.saveState.value).toBe('saved')
+  })
+
   it('runs onSchedule when an edit schedules a save', async () => {
     const parts = ref<Part[]>([{ id: 1 }])
     const onSchedule = vi.fn()

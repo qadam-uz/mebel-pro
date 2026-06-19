@@ -398,8 +398,11 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
       response.ok(),
   )
   await page.getByRole('button', { name: 'Yangi kesim chizmasi' }).click()
-  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
+  // The editor opens unsaved — no draft is created until the first optimise
+  // (docs/ref/features/cutting.md), so the URL is /new with no draft id yet.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
+  await expect(page.getByText(/Hali saqlanmagan/)).toBeVisible()
   await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
@@ -419,6 +422,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await chooseEdgeBanding(page, edge.name)
   await page.getByRole('button', { name: 'Optimallashtirish' }).click()
 
+  // The first optimise creates + persists + optimises the draft, then routes to
+  // the real draft id (no longer /new).
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
   await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
   // The algorithm comparison is collapsed behind a link by default — expand it.
   await page.getByRole('button', { name: 'Algoritmlarni solishtirish' }).click()
