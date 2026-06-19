@@ -8,7 +8,7 @@ export const adminRoutes: RouteRecordRaw[] = [
   {
     path: '/auth/login',
     name: 'admin-login',
-    component: () => import('@/shared/views/LoginView.vue'),
+    component: () => import('@/shared/views/AdminLoginView.vue'),
     meta: { layout: 'auth', title: 'Kirish' },
   },
   {

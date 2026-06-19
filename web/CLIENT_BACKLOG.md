@@ -42,8 +42,8 @@ file tracks *fixes/polish* against the current Vue implementation.
 
 | | P1 | P2 | P3 | Total |
 |---|---|---|---|---|
-| Open (incl. partial) | 1 | 7 | 3 | **11** |
-| Done | 31 | 61 | 29 | **121** |
+| Open (incl. partial) | 1 | 6 | 3 | **10** |
+| Done | 31 | 62 | 29 | **122** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
 > Progress (2026-06-19, client-finish B13): perf — drafts-summary + staleness
@@ -462,7 +462,7 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 | CB-91 | P3 | spec-conformance | low | S | Done | Name the tape in the Edges cell summary |
 | CB-92 | P3 | tech-debt | low | S | Done | Delete unreachable "Fayldan" upload empty-state branch |
 | CB-93 | P2 | tech-debt | high | L | Open | Decompose ClientCuttingEditorView along five seams |
-| CB-94 | P2 | tech-debt | med | M | Open | Split LoginView into per-role views |
+| CB-94 | P2 | tech-debt | med | M | Done | Split LoginView into per-role views |
 | CB-95 | P2 | tech-debt | med | M | Open | Split ProfileView; dedupe ClientBranchOption type |
 | CB-96 | P2 | tech-debt | med | M | Open | useListboxControl/useStableId composables for dropdowns |
 | CB-97 | P2 | tech-debt | med | S | Done | Single authInit()/token injection (8 copies) |
