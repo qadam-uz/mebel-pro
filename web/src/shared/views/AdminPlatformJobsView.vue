@@ -2,13 +2,17 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, jobStatusTone, statusLabel } from '@/shared/app/adminUi'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformJobSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const toast = useToast()
 const runningJob = ref<string | null>(null)
 const runError = ref<string | null>(null)
 const selectedJobName = ref<string | null>(null)
+const confirmJob = ref<{ name: string; retry: boolean } | null>(null)
 
 const selectedJob = computed(() =>
   selectedJobName.value
@@ -20,13 +24,25 @@ const logPanel = ref<HTMLElement | null>(null)
 const logOpen = computed(() => selectedJobName.value !== null)
 const logTrap = useFocusTrap(logPanel, logOpen, () => (selectedJobName.value = null))
 
-async function runJob(name: string) {
-  runningJob.value = name
+function askRun(job: PlatformJobSummary) {
+  confirmJob.value = {
+    name: job.definition.name,
+    retry: job.definition.last_result === 'failed',
+  }
+}
+
+async function confirmRun() {
+  const target = confirmJob.value
+  if (!target) return
+  confirmJob.value = null
+  runningJob.value = target.name
   runError.value = null
   try {
-    await admin.runJob(name)
+    await admin.runJob(target.name)
+    toast.success('Ish ishga tushirildi')
   } catch {
     runError.value = 'job_run_failed'
+    toast.danger('Ish ishga tushmadi')
   } finally {
     runningJob.value = null
   }
@@ -122,7 +138,7 @@ onMounted(admin.loadJobs)
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                     :disabled="runningJob === job.definition.name || job.definition.running"
-                    @click="runJob(job.definition.name)"
+                    @click="askRun(job)"
                   >
                     {{
                       runningJob === job.definition.name
@@ -202,5 +218,20 @@ onMounted(admin.loadJobs)
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="confirmJob !== null"
+      :title="confirmJob?.retry ? 'Ishni qayta urinish' : 'Ishni hozir ishga tushirish'"
+      :message="
+        confirmJob?.retry
+          ? `${confirmJob?.name} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`
+          : `${confirmJob?.name} rejadan tashqari hozir ishga tushiriladi.`
+      "
+      confirm-label="Ishga tushirish"
+      busy-label="Ishlamoqda"
+      cancel-label="Bekor qilish"
+      @confirm="confirmRun"
+      @cancel="confirmJob = null"
+    />
   </section>
 </template>

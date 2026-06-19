@@ -2,12 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { adminDateTime, dropdownOption, errorStatusTone, statusLabel } from '@/shared/app/adminUi'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type ErrorRecord } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const toast = useToast()
 const selectedId = ref<string | null>(null)
+const confirmResolveOpen = ref(false)
 const detailPanel = ref<HTMLElement | null>(null)
 const detailOpen = computed(() => selectedId.value !== null)
 const detailTrap = useFocusTrap(detailPanel, detailOpen, () => (selectedId.value = null))
@@ -61,12 +65,15 @@ async function openDetail(record: ErrorRecord) {
 
 async function resolveSelected() {
   if (!selectedId.value) return
+  confirmResolveOpen.value = false
   resolvingId.value = selectedId.value
   actionError.value = null
   try {
     await admin.resolveError(selectedId.value)
+    toast.success('Xatolik tasdiqlandi')
   } catch {
     actionError.value = 'error_resolve_failed'
+    toast.danger('Amal bajarilmadi')
   } finally {
     resolvingId.value = null
   }
@@ -212,7 +219,7 @@ onMounted(admin.loadErrors)
                 :disabled="
                   selectedDetail.record.status === 'resolved' || resolvingId === selectedId
                 "
-                @click="resolveSelected"
+                @click="confirmResolveOpen = true"
               >
                 {{
                   selectedDetail.record.status === 'resolved'
@@ -254,5 +261,17 @@ onMounted(admin.loadErrors)
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="confirmResolveOpen"
+      title="Xatolikni tasdiqlash"
+      message="Bu xatolik kodi hal qilingan deb belgilanadi va monitor ro'yxatida resolved ko'rinadi."
+      confirm-label="Tasdiqlash"
+      busy-label="Tasdiqlanmoqda"
+      cancel-label="Bekor qilish"
+      :busy="resolvingId !== null"
+      @confirm="resolveSelected"
+      @cancel="confirmResolveOpen = false"
+    />
   </section>
 </template>

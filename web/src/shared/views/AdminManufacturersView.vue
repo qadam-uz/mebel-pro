@@ -2,12 +2,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { dropdownOption, materialStatusTone } from '@/shared/app/adminUi'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type Manufacturer, type MaterialStatus } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const toast = useToast()
 const modalOpen = ref(false)
+const statusTarget = ref<{ row: Manufacturer; status: MaterialStatus } | null>(null)
 const formPanel = ref<HTMLElement | null>(null)
 const formTrap = useFocusTrap(formPanel, modalOpen, () => (modalOpen.value = false))
 const saving = ref(false)
@@ -73,17 +77,29 @@ async function save() {
     if (editingId.value) await admin.updateManufacturer(editingId.value, payload)
     else await admin.createManufacturer(payload)
     modalOpen.value = false
+    toast.success(editingId.value ? 'Manufacturer yangilandi' : "Manufacturer qo'shildi")
   } catch {
     saveError.value = 'manufacturer_save_failed'
+    toast.danger('Manufacturer saqlanmadi')
   } finally {
     saving.value = false
   }
 }
 
-async function setStatus(row: Manufacturer, status: MaterialStatus) {
-  actionId.value = row.id
+function askStatus(row: Manufacturer, status: MaterialStatus) {
+  statusTarget.value = { row, status }
+}
+
+async function confirmStatus() {
+  const target = statusTarget.value
+  if (!target) return
+  statusTarget.value = null
+  actionId.value = target.row.id
   try {
-    await admin.setManufacturerStatus(row.id, status)
+    await admin.setManufacturerStatus(target.row.id, target.status)
+    toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
+  } catch {
+    toast.danger('Amal bajarilmadi')
   } finally {
     actionId.value = null
   }
@@ -181,7 +197,7 @@ onMounted(async () => {
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === manufacturer.id"
                     @click="
-                      setStatus(
+                      askStatus(
                         manufacturer,
                         manufacturer.status === 'active' ? 'inactive' : 'active',
                       )
@@ -259,5 +275,21 @@ onMounted(async () => {
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="statusTarget !== null"
+      :title="statusTarget?.status === 'inactive' ? 'Faol emas qilish' : 'Faollashtirish'"
+      :message="
+        statusTarget?.status === 'inactive'
+          ? `${statusTarget?.row.name} faol emas qilinadi — uning materiallari yangi tanlovlardan yashiriladi; mavjud buyurtmalarga ta'sir qilmaydi.`
+          : `${statusTarget?.row.name} faollashtiriladi va yangi material tanlovida ko'rinadi.`
+      "
+      confirm-label="Tasdiqlash"
+      cancel-label="Bekor qilish"
+      :danger="statusTarget?.status === 'inactive'"
+      :busy="actionId === statusTarget?.row.id"
+      @confirm="confirmStatus"
+      @cancel="statusTarget = null"
+    />
   </section>
 </template>

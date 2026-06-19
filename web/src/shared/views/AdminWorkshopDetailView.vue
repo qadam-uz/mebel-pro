@@ -5,11 +5,13 @@ import { RouterLink, useRoute } from 'vue-router'
 import { adminDate, workshopStatusTone } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
 const route = useRoute()
 const admin = useAdminStore()
 const rolePath = useRolePath()
+const toast = useToast()
 const workshopId = String(route.params.workshop_id)
 const tab = ref<'profile' | 'branches' | 'users'>('profile')
 const blockModalOpen = ref(false)
@@ -32,8 +34,10 @@ async function block() {
     await admin.blockWorkshop(admin.detail.workshop.id, reason.value)
     blockModalOpen.value = false
     reason.value = ''
+    toast.success('Ustaxona bloklandi')
   } catch {
     actionError.value = 'workshop_block_failed'
+    toast.danger("Ustaxonani bloklab bo'lmadi")
   } finally {
     acting.value = false
   }
@@ -45,8 +49,10 @@ async function unblock() {
   actionError.value = null
   try {
     await admin.unblockWorkshop(admin.detail.workshop.id)
+    toast.success('Ustaxona blokdan chiqarildi')
   } catch {
     actionError.value = 'workshop_unblock_failed'
+    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
   } finally {
     acting.value = false
   }
