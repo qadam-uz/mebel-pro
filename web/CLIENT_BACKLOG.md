@@ -46,6 +46,27 @@ file tracks *fixes/polish* against the current Vue implementation.
 | Done | 32 | 66 | 30 | **128** |
 | Won't | — | — | 2 (CB-49, CB-80) | **2** |
 
+> Progress (2026-06-19, client-finish-2 B21): **CB-93 — component extraction 2 of 3**
+> (still in progress). Extracted one parts-table row into a new presentational
+> `components/CuttingPartRow.vue` and the pure display helpers it (and the edge modal)
+> share into a new tested module `app/cuttingDisplay.ts` (`edgeFields`, `sideLabels`,
+> `colorForMaterial`, `edgeShortLabel`, `edgeTinyLabel`, `edgeSearchText`; +7 unit
+> tests). The editor stays the single owner of `parts`, validation, and every mutation —
+> the row receives `part`/`index`/validation props and **emits** granular edits
+> (`update:length|width|quantity|material|source`, `duplicate`/`delete`/`open-edge-picker`/
+> `bring-own`), so it never mutates the `part` prop (`vue/no-mutating-props`); the three
+> dimension inputs use writable computeds with `v-model.number` to preserve the original
+> loose-number semantics exactly. Byte-faithful: `id="part-row-${ref}"` (optimize()'s
+> per-row scroll target), the edge SVG, all aria-labels (Panel materiali / Uzunlik
+> millimetr / Eni millimetr / Soni / "Qism #N kromini tahrirlash"), and the four
+> validation/recovery blocks are preserved. **Editor: 1604 → 1296 lines.** Web gate green
+> (format/lint/typecheck/test 118/build). A 4-lens adversarial review came back clean
+> (helper-equivalence / template-parity / reactivity-deadcode = 0 findings); its lone
+> "writable-setter typed `number` but `v-model.number` can pass a string" note was
+> **refuted** — that is the pre-existing looseness of the `number`-typed `part` fields,
+> typecheck is green, and typing it "honestly" as `string` would instead break the
+> parent's assignment to `part.length_mm`.
+
 > Progress (2026-06-19, client-finish-2 B20): **CB-93 — component extraction 1 of 3**
 > (still in progress). Extracted the optimizer-RESULTS surface into a new
 > `components/CuttingResultsSection.vue` (KPI tiles, algorithm-comparison table, the
@@ -950,15 +971,13 @@ performance ~7 · completeness-stub ~7 · i18n-copy ~6 · responsive ~4 · secur
 **Why:** A ~1900-line view holding five separable concerns. Every cutting-flow change lands in one giant file.
 **Done:** the two pure modules — `cuttingEdgeDisplay.ts` (edge ranking/label/colour, unit-tested) and `autosaveController.ts` (debounce/flush core, CB-108) — plus **B18: `composables/useDraftAutosave.ts`** (the autosave wiring: status mirror, don't-persist gate, deep `parts` watch, CB-15 hydrate guard; +5 unit tests). That's the clean logic seam.
 **Remaining (deliberately not rushed):** of the three TEMPLATE-component extractions,
-**`CuttingResultsSection.vue` is now done** (client-finish-2 B20 — `chosenResult` + its ~12
-derived computeds moved wholesale; `activeResultId`/`activePanelId` v-models, `optimizeError`
-prop). The two left are **`CuttingPartRow.vue`** and **`CuttingEdgePickerModal.vue`**. These are
-tightly coupled to parent state woven through the view (the parts row mutates `part` directly via
-`v-model` — must become granular emits to satisfy `vue/no-mutating-props`; `edgePickerState` = 39
-refs across the modal's ~450 lines of computeds/mutators/template, and edge-banding drives pricing).
-The e2e suite covers only the happy path, so a blind big-bang risks the core cut→order flow for zero
-user-facing change. Per this item's own "incremental, one seam per PR" guidance, each remaining
-component is its own carefully-reviewed commit.
+**`CuttingResultsSection.vue` (B20) and `CuttingPartRow.vue` (B21) are now done** — the latter
+also pulled the shared pure display helpers into a tested `app/cuttingDisplay.ts`. The one left is
+**`CuttingEdgePickerModal.vue`** — the most coupled (`edgePickerState` = 39 refs across the modal's
+~450 lines of computeds/mutators/template, and edge-banding drives pricing). The e2e suite covers
+only the happy path, so a blind big-bang risks the core cut→order flow for zero user-facing change.
+Per this item's own "incremental, one seam per PR" guidance, the last component is its own
+carefully-reviewed commit, after which CB-93 is Done.
 
 ### CB-94 · Split LoginView into per-role views — `tech-debt` · med · M
 **Files:** `views/LoginView.vue`, `apps/*/routes.ts`

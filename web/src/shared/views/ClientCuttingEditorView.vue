@@ -6,6 +6,14 @@ import { ApiError } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
+import {
+  colorForMaterial,
+  edgeFields,
+  edgeSearchText,
+  edgeShortLabel,
+  edgeTinyLabel,
+  type EdgeField,
+} from '@/shared/app/cuttingDisplay'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
@@ -13,10 +21,10 @@ import Icon from '@/shared/components/AppIcon.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
+import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import type { PanelMaterialType } from '@/shared/stores/admin'
 import {
@@ -25,7 +33,6 @@ import {
   partFitError,
   partNotCarried,
   useCuttingStore,
-  type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
   type CuttingPart,
   type MaterialSource,
@@ -395,42 +402,6 @@ function rowHasError(part: CuttingPart, index: number): boolean {
   return partIsInvalid(part) || rowOptimizeError(part, index) !== null
 }
 
-function edgeCount(part: CuttingPart) {
-  return edgeFields.filter((side) => part[side]).length
-}
-
-function edgeSummary(part: CuttingPart) {
-  const count = edgeCount(part)
-  if (count === 0) return "Krom yo'q"
-  const sides = count === 4 ? '4 tomon' : `${count} tomon`
-  // Name the tape in the visible cell, not just the hover title / 6.5px SVG text
-  // (CB-91/CB-69): one label when every banded side shares a material, else
-  // "Aralash" so a mixed row is obvious without opening the picker.
-  const materialIds = [
-    ...new Set(edgeFields.filter((side) => part[side]).map((side) => part[side]?.material_id)),
-  ]
-  if (materialIds.length === 1) {
-    const material = edgeById(materialIds[0])
-    if (material) return `${edgeShortLabel(material, true)} · ${sides}`
-  } else if (materialIds.length > 1) {
-    return `Aralash · ${sides}`
-  }
-  return sides
-}
-
-function edgeSourceSummary(part: CuttingPart) {
-  const active = edgeFields.filter((side) => part[side])
-  if (active.length === 0) return 'tomonlar tanlanmagan'
-  const own = active.filter((side) => part[side]?.source === 'own').length
-  if (own === active.length) return "o'zim olib kelaman"
-  if (own > 0) return 'aralash manba'
-  return 'ustaxonadan'
-}
-
-function edgeSearchText(material: ClientCatalogMaterialOption) {
-  return `${material.manufacturer_name} ${material.name} ${material.color} ${material.decor_code ?? ''} ${material.thickness_mm}`.toLowerCase()
-}
-
 function rankedEdgesForPart(part: CuttingPart) {
   return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
 }
@@ -444,61 +415,8 @@ function recommendedEdgeForPart(part: CuttingPart) {
   )
 }
 
-function edgeShortLabel(
-  material: ClientCatalogMaterialOption | null | undefined,
-  withThickness = false,
-) {
-  if (!material) return '-'
-  const decor = material.decor_code ? `${material.decor_code} ` : ''
-  const thickness = withThickness ? ` · ${material.thickness_mm} mm` : ''
-  return `${material.manufacturer_name} · ${decor}${material.color}${thickness}`
-}
-
-function edgeTinyLabel(material: ClientCatalogMaterialOption | null | undefined) {
-  if (!material) return '-'
-  return `${material.manufacturer_name.split(' ')[0] ?? material.manufacturer_name} ${material.thickness_mm}`
-}
-
-function edgeCellTitle(part: CuttingPart) {
-  const lines = edgeFields.map((side) => {
-    const edge = part[side]
-    const material = edgeById(edge?.material_id)
-    const source = edge?.source === 'own' ? " (o'zim)" : ''
-    return `${sideLabels[side]}: ${edge ? `${edgeShortLabel(material, true)}${source}` : '-'}`
-  })
-  return `Krom yopishtirish - tahrirlash uchun bosing\n${lines.join(' · ')}`
-}
-
-function edgeStrokeWidth(edge: CuttingEdgeBand | null) {
-  const material = edgeById(edge?.material_id)
-  const thickness = Number(material?.thickness_mm ?? 0.4)
-  return thickness >= 2 ? 3 : 1.3
-}
-
-function edgeCellLabel(part: CuttingPart, side: EdgeField) {
-  const material = edgeById(part[side]?.material_id)
-  return material?.thickness_mm ?? ''
-}
-
 function pickerSideLabel(side: EdgeField) {
   return edgeTinyLabel(edgeById(edgePickerState.value[side]?.material_id))
-}
-
-function swatchStyle(part: CuttingPart) {
-  const material = materialById(part.material_id)
-  return { background: colorForMaterial(material?.color ?? material?.name ?? part.material_id) }
-}
-
-function colorForMaterial(value: string | null | undefined) {
-  const text = (value ?? '').toLowerCase()
-  if (text.includes('white') || text.includes('oq')) return '#f7f4ec'
-  if (text.includes('black') || text.includes('qora')) return '#2a2d33'
-  if (text.includes('gray') || text.includes('grey') || text.includes('kul')) return '#a7adb5'
-  if (text.includes('walnut') || text.includes('yong')) return '#805434'
-  if (text.includes('oak') || text.includes('dub')) return '#c9aa73'
-  let hash = 0
-  for (const char of text || 'material') hash = (hash * 31 + char.charCodeAt(0)) % 360
-  return `hsl(${hash} 34% 72%)`
 }
 
 function saveLabel() {
@@ -884,14 +802,6 @@ watch(edgePickerOpen, (open) => {
   else unlockBodyScroll()
 })
 
-const edgeFields = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right'] as const
-type EdgeField = (typeof edgeFields)[number]
-const sideLabels: Record<EdgeField, string> = {
-  edge_top: 'Yuqori',
-  edge_bottom: 'Pastki',
-  edge_left: 'Chap',
-  edge_right: "O'ng",
-}
 const edgePatterns: Array<{
   key: string
   label: string
@@ -1129,246 +1039,28 @@ const edgePatterns: Array<{
           </div>
 
           <div v-else class="grid gap-3 p-4">
-            <article
+            <CuttingPartRow
               v-for="(part, index) in parts"
-              :id="`part-row-${part.part_ref}`"
               :key="part.part_ref"
-              class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
-              :class="rowHasError(part, index) ? 'border-danger-soft' : 'border-hairline'"
-            >
-              <div
-                class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
-              >
-                <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
-
-                <div class="min-w-0">
-                  <SearchCombobox
-                    label="Panel materiali"
-                    :model-value="part.material_id"
-                    :options="panelChoices"
-                    placeholder="Panel tanlang"
-                    :error="!part.material_id ? 'Material tanlang' : null"
-                    @update:model-value="setPanel(part, $event)"
-                  />
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <span
-                      class="size-5 rounded border border-hairline"
-                      :style="swatchStyle(part)"
-                    ></span>
-                    <span
-                      v-if="materialById(part.material_id)?.grain_direction"
-                      class="mp-chip bg-info-soft text-info"
-                      title="Tola yo'nalishi bor — bu qism burilmaydi"
-                      aria-label="Tola yo'nalishi bor — bu qism burilmaydi"
-                    >
-                      <span aria-hidden="true">↕</span> Tola
-                    </span>
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setPanelSource(part, 'shop')"
-                    >
-                      Ustaxona
-                    </button>
-                    <button
-                      type="button"
-                      class="mp-chip"
-                      :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-                      @click="setPanelSource(part, 'own')"
-                    >
-                      O'zim olib kelaman
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Sub-lg: the three dimensions share one row; lg:contents
-                     dissolves this wrapper so each input is a column of the
-                     parent grid again (desktop layout unchanged) — CB-60. -->
-                <div class="grid grid-cols-3 gap-2 lg:contents">
-                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                    Uzunlik
-                    <input
-                      v-model.number="part.length_mm"
-                      type="number"
-                      :min="MIN_PART_MM"
-                      inputmode="numeric"
-                      enterkeyhint="next"
-                      class="mp-input font-mono"
-                      :class="
-                        part.length_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
-                      "
-                      aria-label="Uzunlik millimetr"
-                    />
-                  </label>
-
-                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                    Eni
-                    <input
-                      v-model.number="part.width_mm"
-                      type="number"
-                      :min="MIN_PART_MM"
-                      inputmode="numeric"
-                      enterkeyhint="next"
-                      class="mp-input font-mono"
-                      :class="
-                        part.width_mm < MIN_PART_MM || partSizeError(part) ? 'border-danger' : ''
-                      "
-                      aria-label="Eni millimetr"
-                    />
-                  </label>
-
-                  <label class="grid gap-1 text-xs font-bold text-ink-muted">
-                    Soni
-                    <input
-                      v-model.number="part.quantity"
-                      type="number"
-                      min="1"
-                      inputmode="numeric"
-                      enterkeyhint="done"
-                      class="mp-input font-mono"
-                      :class="part.quantity < 1 ? 'border-danger' : ''"
-                      aria-label="Soni"
-                    />
-                  </label>
-                </div>
-
-                <div class="min-w-0">
-                  <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
-                  <button
-                    type="button"
-                    class="client-edges-btn"
-                    :title="edgeCellTitle(part)"
-                    :aria-label="`Qism #${index + 1} kromini tahrirlash`"
-                    @click="openEdgePicker(part, $event)"
-                  >
-                    <svg viewBox="0 0 76 48" class="client-edge-svg" aria-hidden="true">
-                      <rect class="frame" x="14" y="13" width="48" height="22" />
-                      <line
-                        v-if="part.edge_top"
-                        class="side"
-                        x1="14"
-                        y1="13"
-                        x2="62"
-                        y2="13"
-                        :stroke-width="edgeStrokeWidth(part.edge_top)"
-                        :class="{ own: part.edge_top.source === 'own' }"
-                      />
-                      <line
-                        v-if="part.edge_bottom"
-                        class="side"
-                        x1="14"
-                        y1="35"
-                        x2="62"
-                        y2="35"
-                        :stroke-width="edgeStrokeWidth(part.edge_bottom)"
-                        :class="{ own: part.edge_bottom.source === 'own' }"
-                      />
-                      <line
-                        v-if="part.edge_left"
-                        class="side"
-                        x1="14"
-                        y1="13"
-                        x2="14"
-                        y2="35"
-                        :stroke-width="edgeStrokeWidth(part.edge_left)"
-                        :class="{ own: part.edge_left.source === 'own' }"
-                      />
-                      <line
-                        v-if="part.edge_right"
-                        class="side"
-                        x1="62"
-                        y1="13"
-                        x2="62"
-                        y2="35"
-                        :stroke-width="edgeStrokeWidth(part.edge_right)"
-                        :class="{ own: part.edge_right.source === 'own' }"
-                      />
-                      <text v-if="part.edge_top" class="lbl" x="38" y="7" text-anchor="middle">
-                        {{ edgeCellLabel(part, 'edge_top') }}
-                      </text>
-                      <text v-if="part.edge_bottom" class="lbl" x="38" y="45" text-anchor="middle">
-                        {{ edgeCellLabel(part, 'edge_bottom') }}
-                      </text>
-                      <text v-if="part.edge_left" class="lbl" x="6" y="24" text-anchor="middle">
-                        {{ edgeCellLabel(part, 'edge_left') }}
-                      </text>
-                      <text v-if="part.edge_right" class="lbl" x="70" y="24" text-anchor="middle">
-                        {{ edgeCellLabel(part, 'edge_right') }}
-                      </text>
-                    </svg>
-                    <span class="client-edge-summary">
-                      <b>{{ edgeSummary(part) }}</b>
-                      <small>{{ edgeSourceSummary(part) }}</small>
-                    </span>
-                  </button>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline"
-                    @click="duplicateRow(part)"
-                  >
-                    Nusxa
-                  </button>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline text-danger"
-                    @click="deleteRow(index)"
-                  >
-                    O'chirish
-                  </button>
-                </div>
-              </div>
-
-              <p
-                v-if="partSizeError(part)"
-                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
-              >
-                <span aria-hidden="true">!</span>
-                <span>{{ partSizeError(part) }}</span>
-              </p>
-
-              <p
-                v-if="rowMaterialMissing(part)"
-                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
-              >
-                <span aria-hidden="true">!</span>
-                <span>Bu qatordagi panel materiali endi katalogda yo'q — boshqasini tanlang.</span>
-              </p>
-
-              <p
-                v-if="rowOptimizeError(part, index)"
-                class="mt-3 flex items-center gap-2 rounded-md border border-danger-soft bg-danger-soft p-3 text-sm font-bold text-danger"
-              >
-                <span aria-hidden="true">!</span>
-                <span>{{ rowOptimizeError(part, index) }}</span>
-              </p>
-
-              <div
-                v-if="rowNotCarried(part).length"
-                class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-warning-soft bg-warning-soft p-3 text-sm text-warning"
-              >
-                <span class="font-black">!</span>
-                <span class="min-w-0 flex-1">
-                  Bu qator
-                  <b>{{ preferredBranch?.branch_name ?? 'tanlangan filial' }}</b>
-                  filialida mavjud bo'lmagan materialdan foydalanadi.
-                </span>
-                <button type="button" class="mp-button mp-button-outline" @click="bringOwn(part)">
-                  O'zim olib kelaman
-                </button>
-                <button
-                  v-if="rowNotCarried(part).some((issue) => issue !== 'panel')"
-                  type="button"
-                  class="mp-button mp-button-outline"
-                  @click="openEdgePicker(part)"
-                >
-                  Boshqa krom tanlash
-                </button>
-              </div>
-            </article>
+              :part="part"
+              :index="index"
+              :panel-choices="panelChoices"
+              :has-error="rowHasError(part, index)"
+              :size-error="partSizeError(part)"
+              :material-missing="rowMaterialMissing(part)"
+              :optimize-error="rowOptimizeError(part, index)"
+              :not-carried="rowNotCarried(part)"
+              :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+              @update:length="part.length_mm = $event"
+              @update:width="part.width_mm = $event"
+              @update:quantity="part.quantity = $event"
+              @update:material="setPanel(part, $event)"
+              @update:source="setPanelSource(part, $event)"
+              @duplicate="duplicateRow(part)"
+              @delete="deleteRow(index)"
+              @open-edge-picker="openEdgePicker(part, $event)"
+              @bring-own="bringOwn(part)"
+            />
           </div>
 
           <div v-if="optimizeBlockers.length" class="client-banner danger mx-5 mt-4" role="alert">
