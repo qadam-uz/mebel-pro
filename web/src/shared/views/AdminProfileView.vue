@@ -10,7 +10,11 @@ import { useAuthStore } from '@/shared/stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 const toast = useToast()
-const tab = ref<'profile' | 'password' | 'sessions'>('profile')
+// A reset-required operator is pinned here by the router guard; open the password
+// tab straight away so the one thing they can do is in front of them.
+const tab = ref<'profile' | 'password' | 'sessions'>(
+  auth.me?.password_reset_required ? 'password' : 'profile',
+)
 const sessions = ref<SessionResponse[]>([])
 const sessionsError = ref(false)
 const revokingId = ref<string | null>(null)
@@ -134,16 +138,6 @@ onMounted(loadSessions)
       >
         Chiqib ketish
       </button>
-    </div>
-
-    <div
-      v-if="auth.me?.password_reset_required"
-      class="mb-5 rounded-md bg-warning-soft px-4 py-3 text-warning"
-    >
-      <div class="font-extrabold">Parolni o'zgartirish kerak</div>
-      <p class="mt-1 text-sm">
-        Workspace yuzalariga to'liq kirishdan oldin vaqtinchalik parolni almashtiring.
-      </p>
     </div>
 
     <div class="admin-tabs" role="tablist" aria-label="Profil bo'limlari">
