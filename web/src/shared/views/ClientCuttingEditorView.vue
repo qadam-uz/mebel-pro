@@ -1017,7 +1017,7 @@ onBeforeRouteLeave(() => {
                  real select-all checkbox; the rest are decorative labels. -->
             <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
               <div
-                class="grid grid-cols-[30px_34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] items-center gap-3 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
                 <input
                   type="checkbox"

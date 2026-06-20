@@ -17,6 +17,11 @@ const props = withDefaults(
     // Extra classes on the visible <label> — e.g. `lg:sr-only` to keep the label
     // for a11y while a column header carries it on wide layouts. Default: visible.
     labelClass?: string
+    // Dense single-line trigger for grid/table cells (shorter, tighter padding).
+    compact?: boolean
+    // A colour swatch rendered inside the input's left edge (e.g. the picked
+    // material colour) so the cell reads visually, not just by name.
+    swatchColor?: string | null
   }>(),
   {
     placeholder: 'Qidiring',
@@ -24,6 +29,8 @@ const props = withDefaults(
     disabled: false,
     noResultsText: "Mos variant yo'q",
     labelClass: '',
+    compact: false,
+    swatchColor: null,
   },
 )
 
@@ -189,11 +196,22 @@ onBeforeUnmount(() => {
       {{ label }}
     </label>
     <div class="relative">
+      <span
+        v-if="swatchColor"
+        class="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 rounded border border-hairline"
+        :class="compact ? 'left-2' : 'left-2.5'"
+        :style="{ background: swatchColor }"
+        aria-hidden="true"
+      ></span>
       <input
         :id="id"
         ref="inputRef"
-        class="min-h-11 w-full rounded-md border bg-elevated px-3 text-sm text-ink"
-        :class="error ? 'border-danger' : 'border-hairline-strong'"
+        class="w-full rounded-md border bg-elevated text-sm text-ink"
+        :class="[
+          error ? 'border-danger' : 'border-hairline-strong',
+          compact ? 'min-h-9' : 'min-h-11',
+          swatchColor ? (compact ? 'pl-8 pr-2.5' : 'pl-9 pr-3') : compact ? 'px-2.5' : 'px-3',
+        ]"
         :value="query"
         :placeholder="placeholder"
         :disabled="disabled"
