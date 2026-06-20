@@ -784,9 +784,9 @@ onBeforeRouteLeave(() => {
           {{ saveLabel() }}
         </span>
         <button
+          v-if="parts.length > 0"
           type="button"
           class="mp-button mp-button-outline px-3 text-danger"
-          :disabled="parts.length === 0"
           aria-label="Ro'yxatni tozalash"
           title="Ro'yxatni tozalash"
           @click="requestClearParts"
