@@ -2,7 +2,16 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/shared/api/client'
-import { useAdminStore, type JobRun, type JobRunStatus } from '@/shared/stores/admin'
+import {
+  useAdminStore,
+  type ErrorRecord,
+  type ErrorRecordStatus,
+  type JobRun,
+  type JobRunStatus,
+  type Material,
+  type MaterialWriteRequest,
+  type WorkshopListItem,
+} from '@/shared/stores/admin'
 
 function makeRun(id: string, status: JobRunStatus): JobRun {
   return {
@@ -16,6 +25,60 @@ function makeRun(id: string, status: JobRunStatus): JobRun {
     error_code: null,
     error_message: null,
     trace_id: null,
+  }
+}
+
+function makeListWorkshop(): WorkshopListItem {
+  return {
+    id: 'w1',
+    code: 'c1',
+    name: 'WS',
+    phone: '+998900000000',
+    address: null,
+    status: 'active',
+    owner_user_id: 'u1',
+    created_at: '2026-06-19T10:00:00Z',
+    owner_login: 'owner-1',
+    branch_count: 3,
+  }
+}
+
+function makeMaterial(id: string, branchUsageCount: number, name = 'Panel'): Material {
+  return {
+    id,
+    kind: 'panel',
+    manufacturer_id: 'mf1',
+    manufacturer_name: 'Maker',
+    type: 'dsp',
+    name,
+    thickness_mm: '18',
+    color: 'White',
+    decor_code: null,
+    panel_length_mm: 2800,
+    panel_width_mm: 2070,
+    grain_direction: true,
+    image_file_id: null,
+    status: 'active',
+    branch_usage_count: branchUsageCount,
+    created_at: '2026-06-19T10:00:00Z',
+    updated_at: '2026-06-19T10:00:00Z',
+  }
+}
+
+function makeError(id: string, status: ErrorRecordStatus): ErrorRecord {
+  return {
+    id,
+    code: 'x.error',
+    module: 'tests',
+    status,
+    count_24h: 1,
+    count_7d: 1,
+    last_occurred_at: '2026-06-19T10:00:00Z',
+    preview_message: 'boom',
+    resolved_by_user_id: status === 'resolved' ? 'u1' : null,
+    resolved_at: status === 'resolved' ? '2026-06-19T10:00:00Z' : null,
+    created_at: '2026-06-19T10:00:00Z',
+    updated_at: '2026-06-19T10:00:00Z',
   }
 }
 
@@ -110,5 +173,64 @@ describe('admin store runJob optimistic merge', () => {
     const run = await store.runJob('does-not-exist')
     expect(run.status).toBe('ok')
     expect(store.jobs).toHaveLength(0)
+  })
+})
+
+// AB-37 / AB-22: block/unblock and material edits return the lean single-object
+// shape (no owner_login/branch_count/branch_usage_count); the patch helpers must
+// merge so those list-only fields survive a status/profile change.
+describe('admin store list-only fields survive single-object patches', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
+
+  it('blockWorkshop keeps owner_login + branch_count (AB-37)', async () => {
+    const store = useAdminStore()
+    store.workshops = [makeListWorkshop()]
+    // the block response is the lean WorkshopSummary — owner_login/branch_count
+    // keys are absent, not undefined, so the merge preserves the list row's.
+    vi.spyOn(api, 'post').mockResolvedValueOnce({
+      id: 'w1',
+      code: 'c1',
+      name: 'WS',
+      phone: '+998900000000',
+      address: null,
+      status: 'blocked',
+      owner_user_id: 'u1',
+      created_at: '2026-06-19T10:00:00Z',
+    })
+    await store.blockWorkshop('w1', 'Unpaid invoice')
+    const row = store.workshops[0]!
+    expect(row.status).toBe('blocked')
+    expect(row.owner_login).toBe('owner-1')
+    expect(row.branch_count).toBe(3)
+  })
+
+  it('updateMaterial keeps branch_usage_count (AB-22)', async () => {
+    const store = useAdminStore()
+    store.materials = [makeMaterial('m1', 4)]
+    // single-material response returns 0 for the uncomputed count
+    vi.spyOn(api, 'patch').mockResolvedValueOnce(makeMaterial('m1', 0, 'Renamed'))
+    await store.updateMaterial('m1', {} as MaterialWriteRequest)
+    const row = store.materials[0]!
+    expect(row.name).toBe('Renamed')
+    expect(row.branch_usage_count).toBe(4)
+  })
+})
+
+// AB-25: reopenError flips a resolved record back to open in both the list and
+// the open detail.
+describe('admin store reopenError', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
+
+  it('flips the record to open in the list and detail', async () => {
+    const store = useAdminStore()
+    store.errors = [makeError('e1', 'resolved')]
+    store.errorDetail = { record: makeError('e1', 'resolved'), occurrences: [] }
+    vi.spyOn(api, 'post').mockResolvedValueOnce(makeError('e1', 'open'))
+    await store.reopenError('e1')
+    expect(store.errors[0]!.status).toBe('open')
+    expect(store.errorDetail!.record.status).toBe('open')
+    expect(store.errorDetail!.record.resolved_at).toBeNull()
   })
 })

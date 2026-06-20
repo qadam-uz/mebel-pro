@@ -80,6 +80,21 @@ class PlatformOverview:
     platform_users_active: int
 
 
+@dataclass(frozen=True)
+class WorkshopListRow:
+    workshop: Workshop
+    owner_login: str
+    branch_count: int
+
+
+@dataclass(frozen=True)
+class WorkshopDetailRow:
+    workshop: Workshop
+    branches: list[Branch]
+    owner: WorkshopUser
+    block_reason: str | None
+
+
 async def _cleanup_expired_sessions_job(db: AsyncSession) -> str:
     count = await prune_expired_sessions(db)
     return f"Pruned {count} expired sessions"
@@ -111,11 +126,23 @@ def ensure_default_jobs_registered() -> None:
         registry.register(job)
 
 
-async def list_workshops(db: AsyncSession) -> list[Workshop]:
-    rows = (
-        await db.scalars(select(Workshop).order_by(Workshop.created_at.desc(), Workshop.name))
-    ).all()
-    return list(rows)
+async def list_workshops(db: AsyncSession) -> list[WorkshopListRow]:
+    # AB-37: surface the owner login (join WorkshopUser) and a branch count
+    # (aggregate over Branch) on each list row — both derived from existing data,
+    # no denormalized columns. Owner is a guaranteed 1:1 (inner join); branches
+    # are counted in full (an at-a-glance "Filiallar" total, active or not).
+    query = (
+        select(Workshop, WorkshopUser.login, func.count(Branch.id))
+        .join(WorkshopUser, WorkshopUser.id == Workshop.owner_user_id)
+        .outerjoin(Branch, Branch.workshop_id == Workshop.id)
+        .group_by(Workshop.id, WorkshopUser.login)
+        .order_by(Workshop.created_at.desc(), Workshop.name)
+    )
+    rows = (await db.execute(query)).all()
+    return [
+        WorkshopListRow(workshop=workshop, owner_login=login, branch_count=int(count or 0))
+        for workshop, login, count in rows
+    ]
 
 
 async def get_platform_overview(
@@ -152,7 +179,7 @@ async def get_workshop_detail(
     db: AsyncSession,
     *,
     workshop_id: uuid.UUID,
-) -> tuple[Workshop, list[Branch], WorkshopUser]:
+) -> WorkshopDetailRow:
     workshop = await db.get(Workshop, workshop_id)
     if workshop is None:
         raise APIError(
@@ -168,7 +195,34 @@ async def get_workshop_detail(
     owner = await db.get(WorkshopUser, workshop.owner_user_id)
     if owner is None:
         raise RuntimeError("workshop owner_user_id points to a missing owner")
-    return workshop, list(branches), owner
+    block_reason = (
+        await _latest_block_reason(db, workshop_id=workshop.id)
+        if workshop.status is WorkshopStatus.BLOCKED
+        else None
+    )
+    return WorkshopDetailRow(
+        workshop=workshop,
+        branches=list(branches),
+        owner=owner,
+        block_reason=block_reason,
+    )
+
+
+async def _latest_block_reason(db: AsyncSession, *, workshop_id: uuid.UUID) -> str | None:
+    # AB-20: the block reason lives on the status-change log written at block time
+    # (service.block_workshop). A currently-blocked workshop's most recent
+    # workshop-entity transition is that block, so take the latest row whose
+    # to_status is `blocked` and return its reason (None if never recorded).
+    logs = await list_status_change_logs(
+        db,
+        workshop_id=workshop_id,
+        entity_type="workshop",
+        limit=10,
+    )
+    for log in logs:
+        if log.to_status == WorkshopStatus.BLOCKED.value:
+            return log.reason
+    return None
 
 
 async def provision_workshop(
@@ -675,6 +729,34 @@ async def resolve_error_record(
         entity_type="error_record",
         entity_id=record.id,
         summary=f"Resolved error code {record.code}",
+        details={"code": record.code},
+    )
+    await db.flush()
+    await db.refresh(record)
+    return record
+
+
+async def reopen_error_record(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    record_id: uuid.UUID,
+) -> ErrorRecord:
+    # AB-25: the inverse of resolve — flip a resolved record back to open and clear
+    # the resolution metadata, so a code that recurs after being marked resolved
+    # can be re-triaged. The status enum already carries OPEN, so no migration.
+    require_platform_operator(principal)
+    record, _ = await get_error_record_detail(db, principal=principal, record_id=record_id)
+    record.status = ErrorRecordStatus.OPEN
+    record.resolved_by_user_id = None
+    record.resolved_at = None
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="platform.error.reopen",
+        entity_type="error_record",
+        entity_id=record.id,
+        summary=f"Reopened error code {record.code}",
         details={"code": record.code},
     )
     await db.flush()

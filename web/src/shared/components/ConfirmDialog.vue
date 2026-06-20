@@ -105,7 +105,10 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="fixed inset-0 z-50 grid place-items-center p-4" @keydown="onKeydown">
+    <!-- z-[85]: above the modal layer (admin modal panel z-80, scrim z-70) so a
+         confirm raised from inside another modal is clickable, yet below toasts
+         (z-90) so the success/failure toast still shows on top. -->
+    <div v-if="open" class="fixed inset-0 z-[85] grid place-items-center p-4" @keydown="onKeydown">
       <div class="absolute inset-0 bg-ink/35" aria-hidden="true"></div>
       <section
         :id="id"

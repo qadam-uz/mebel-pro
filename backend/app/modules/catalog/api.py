@@ -27,6 +27,7 @@ from app.modules.catalog.service import (
 def material_response_from_models(
     material: Material,
     manufacturer: Manufacturer,
+    branch_usage_count: int = 0,
 ) -> MaterialResponse:
     """Build the public material response shape from catalog-owned records."""
 
@@ -45,6 +46,7 @@ def material_response_from_models(
         grain_direction=material.grain_direction,
         image_file_id=material.image_file_id,
         status=material.status,
+        branch_usage_count=branch_usage_count,
         created_at=material.created_at,
         updated_at=material.updated_at,
     )

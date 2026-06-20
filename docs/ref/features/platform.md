@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-20
 order: 70
 ---
 
@@ -37,9 +37,12 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
   status dropdown, country dropdown. Empty: "No manufacturers yet — add one before
   adding materials."
 - **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
-  type/thickness, colour/decor, panel size (for panels), status, action menu. Filters:
+  type/thickness, colour/decor, panel size (for panels), status, **branch-usage count**
+  (how many distinct branches carry the material), action menu. Filters:
   kind dropdown (`panel` / `edge`), manufacturer dropdown (multi-select), type dropdown,
-  thickness dropdown, status dropdown.
+  thickness dropdown, status dropdown. A per-material "which branches carry this?"
+  drill-down is a planned follow-up — it needs a cross-module branch lookup, so v1 ships
+  only the count.
   **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
   Manufacturers dialog without leaving this page; spec fields per the kind). Row
   actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
@@ -75,7 +78,8 @@ The backend records application errors. The monitor **groups them by code**, wit
 (24 h / 7 d), the last occurrence, and a preview message. Operators can drill into a single
 code to see the full message, stack trace, the request / context details (sensitive fields
 masked at write time), trace ids, and affected workshops / users where known — and mark a
-code resolved.
+code resolved. A resolved code can be **reopened** if it recurs, flipping it back to open
+for re-triage.
 
 An error spike (a code's 24 h count crossing a threshold) notifies platform operators.
 
@@ -100,7 +104,8 @@ in-app creation is the path.
 ## UX (superadmin app)
 
 - **Dashboard** (`/admin`) — platform health at a glance: workshop / branch / client
-  counts, recent provisioning, and job + error status. It carries **no workshop
+  counts, a recent-workshops list (name, **owner login**, **branch count**, status), and
+  job + error status. It carries **no workshop
   financials** — operators monitor health and incidents, not workshop money
   ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollups are out of operator scope, so no
   per-workshop or platform revenue figure appears here.
@@ -118,8 +123,9 @@ Under a **Platform** section:
   rows highlighted.
 - **Errors** (`/admin/platform/errors`) — table: code, module, count (24 h / 7 d), last
   occurrence, preview message, action menu. Detail modal: full message, stack, masked context,
-  affected workshops / users, trace ids; "Resolve" → confirm. Filters: module, code, time
-  range, count threshold. Empty: "No errors recorded — nice."
+  affected workshops / users, trace ids; "Resolve" → confirm, and "Reopen" for an
+  already-resolved code. Filters: module, code, time range, count threshold. Empty: "No errors
+  recorded — nice."
 - **Platform users** (`/admin/platform/users`) — table: name, login, phone, status, last login,
   action menu (Edit · Reset password → one-time-secret confirmation · Block / Unblock).
   "+ Platform user" → dialog (fields + auto / manual temp password).

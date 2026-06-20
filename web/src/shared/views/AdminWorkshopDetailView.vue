@@ -119,14 +119,19 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
     </div>
 
-    <p
+    <div
       v-if="admin.detail.workshop.status === 'blocked'"
-      class="mb-4 rounded-md bg-danger-soft px-4 py-3 text-sm font-bold text-danger"
+      class="mb-4 rounded-md bg-danger-soft px-4 py-3 text-sm text-danger"
       role="alert"
     >
-      Bu ustaxona bloklangan — ochiq buyurtmalar muzlatilgan, xodimlar kira olmaydi. Blokdan
-      chiqarilganda sessiyalar avtomatik tiklanmaydi.
-    </p>
+      <p class="font-bold">
+        Bu ustaxona bloklangan — ochiq buyurtmalar muzlatilgan, xodimlar kira olmaydi. Blokdan
+        chiqarilganda sessiyalar avtomatik tiklanmaydi.
+      </p>
+      <p v-if="admin.detail.block_reason" class="mt-1">
+        <span class="font-bold">Sabab:</span> {{ admin.detail.block_reason }}
+      </p>
+    </div>
 
     <p
       v-if="actionError"

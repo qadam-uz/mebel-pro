@@ -20,6 +20,13 @@ export interface WorkshopSummary {
   created_at: string
 }
 
+// AB-37: the workshops list adds the owner login and a branch count on top of the
+// lean summary the single-object responses (provision/block/unblock) return.
+export interface WorkshopListItem extends WorkshopSummary {
+  owner_login: string
+  branch_count: number
+}
+
 export interface ProvisionWorkshopResponse {
   workshop: WorkshopSummary
   branch: {
@@ -42,6 +49,8 @@ export interface PlatformWorkshopDetail {
   workshop: WorkshopSummary
   branches: Array<{ id: string; name: string; status: string; address: string; phone: string }>
   owner: { id: string; login: string; full_name: string; phone: string }
+  // AB-20: the reason captured when the workshop was blocked (null when active).
+  block_reason: string | null
 }
 
 export interface PlatformOverview {
@@ -78,6 +87,8 @@ export interface Material {
   grain_direction: boolean | null
   image_file_id: string | null
   status: MaterialStatus
+  // AB-22: how many distinct branches carry this material (list responses only).
+  branch_usage_count: number
   created_at: string
   updated_at: string
 }
@@ -246,7 +257,7 @@ export interface PlatformUserUpdateRequest {
 }
 
 export const useAdminStore = defineStore('admin', () => {
-  const workshops = ref<WorkshopSummary[]>([])
+  const workshops = ref<WorkshopListItem[]>([])
   const detail = ref<PlatformWorkshopDetail | null>(null)
   const overview = ref<PlatformOverview | null>(null)
   const lastProvision = ref<ProvisionWorkshopResponse | null>(null)
@@ -292,7 +303,7 @@ export const useAdminStore = defineStore('admin', () => {
     error.value = null
     traceId.value = null
     try {
-      workshops.value = await api.get<WorkshopSummary[]>('/platform/workshops', authInit())
+      workshops.value = await api.get<WorkshopListItem[]>('/platform/workshops', authInit())
     } catch (errorValue) {
       const captured = captureApiError(errorValue, 'workshops_load_failed')
       error.value = captured.code
@@ -338,7 +349,15 @@ export const useAdminStore = defineStore('admin', () => {
       payload,
       authInit(),
     )
-    workshops.value = [lastProvision.value.workshop, ...workshops.value]
+    // The provision response carries the lean WorkshopSummary; lift it to a list
+    // item with the known owner login and the one branch just created, so the
+    // dashboard/list show the AB-37 columns without waiting for a reload.
+    const listed: WorkshopListItem = {
+      ...lastProvision.value.workshop,
+      owner_login: lastProvision.value.owner.login,
+      branch_count: 1,
+    }
+    workshops.value = [listed, ...workshops.value]
     return lastProvision.value
   }
 
@@ -349,6 +368,9 @@ export const useAdminStore = defineStore('admin', () => {
       authInit(),
     )
     patchWorkshop(updated)
+    // AB-20: surface the just-entered reason on the open detail immediately; a
+    // reload re-reads the canonical (whitespace-normalized) value from the log.
+    if (detail.value?.workshop.id === id) detail.value.block_reason = reason
   }
 
   async function unblockWorkshop(id: string) {
@@ -358,10 +380,15 @@ export const useAdminStore = defineStore('admin', () => {
       authInit(),
     )
     patchWorkshop(updated)
+    if (detail.value?.workshop.id === id) detail.value.block_reason = null
   }
 
   function patchWorkshop(updated: WorkshopSummary) {
-    workshops.value = workshops.value.map((row) => (row.id === updated.id ? updated : row))
+    // block/unblock return the lean WorkshopSummary; merge so the AB-37 list-only
+    // fields (owner_login, branch_count) survive the status change.
+    workshops.value = workshops.value.map((row) =>
+      row.id === updated.id ? { ...row, ...updated } : row,
+    )
     if (detail.value?.workshop.id === updated.id) {
       detail.value = { ...detail.value, workshop: updated }
     }
@@ -474,7 +501,11 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   function patchMaterial(updated: Material) {
-    materials.value = materials.value.map((row) => (row.id === updated.id ? updated : row))
+    // AB-22: single-material responses (edit / activate) don't compute the usage
+    // count and return 0 — preserve the existing list row's count on patch.
+    materials.value = materials.value.map((row) =>
+      row.id === updated.id ? { ...updated, branch_usage_count: row.branch_usage_count } : row,
+    )
   }
 
   async function loadPlatformUsers() {
@@ -611,6 +642,19 @@ export const useAdminStore = defineStore('admin', () => {
     return updated
   }
 
+  // AB-25: the inverse of resolveError — flip a resolved record back to open so a
+  // code that recurs after being marked resolved can be re-triaged.
+  async function reopenError(id: string) {
+    const updated = await api.post<ErrorRecord>(
+      `/platform/errors/${id}/reopen`,
+      undefined,
+      authInit(),
+    )
+    patchError(updated)
+    if (errorDetail.value?.record.id === id) errorDetail.value.record = updated
+    return updated
+  }
+
   function patchError(updated: ErrorRecord) {
     errors.value = errors.value.map((row) => (row.id === updated.id ? updated : row))
   }
@@ -714,6 +758,7 @@ export const useAdminStore = defineStore('admin', () => {
     loadErrors,
     loadErrorDetail,
     resolveError,
+    reopenError,
     loadAudit,
     reset,
   }

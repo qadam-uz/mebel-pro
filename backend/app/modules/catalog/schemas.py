@@ -74,6 +74,10 @@ class MaterialResponse(APIModel):
     grain_direction: bool | None
     image_file_id: uuid.UUID | None
     status: MaterialStatus
+    # AB-22: how many distinct branches carry this platform material. Populated on
+    # the platform materials list; 0 on single-material / branch responses that
+    # don't compute it.
+    branch_usage_count: int = 0
     created_at: datetime
     updated_at: datetime
 

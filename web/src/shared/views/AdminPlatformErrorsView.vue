@@ -121,6 +121,23 @@ async function resolveSelected() {
   }
 }
 
+// AB-25: re-open a resolved record so a recurring code can be re-triaged. Lower
+// stakes than resolve (and trivially reversible), so no confirm step.
+async function reopenSelected() {
+  if (!selectedId.value) return
+  resolvingId.value = selectedId.value
+  actionError.value = null
+  try {
+    await admin.reopenError(selectedId.value)
+    toast.success('Xatolik qayta ochildi')
+  } catch {
+    actionError.value = 'error_reopen_failed'
+    toast.danger('Amal bajarilmadi')
+  } finally {
+    resolvingId.value = null
+  }
+}
+
 onMounted(admin.loadErrors)
 </script>
 
@@ -274,20 +291,22 @@ onMounted(admin.loadErrors)
                 </p>
               </div>
               <button
+                v-if="selectedDetail.record.status !== 'resolved'"
                 type="button"
                 class="mp-button mp-button-primary"
-                :disabled="
-                  selectedDetail.record.status === 'resolved' || resolvingId === selectedId
-                "
+                :disabled="resolvingId === selectedId"
                 @click="confirmResolveOpen = true"
               >
-                {{
-                  selectedDetail.record.status === 'resolved'
-                    ? 'Tasdiqlandi'
-                    : resolvingId === selectedId
-                      ? 'Tasdiqlanmoqda'
-                      : 'Tasdiqlash (resolve)'
-                }}
+                {{ resolvingId === selectedId ? 'Tasdiqlanmoqda' : 'Tasdiqlash (resolve)' }}
+              </button>
+              <button
+                v-else
+                type="button"
+                class="mp-button mp-button-outline"
+                :disabled="resolvingId === selectedId"
+                @click="reopenSelected"
+              >
+                {{ resolvingId === selectedId ? 'Ochilmoqda' : 'Qayta ochish' }}
               </button>
             </div>
             <article

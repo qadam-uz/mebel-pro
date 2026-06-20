@@ -67,6 +67,15 @@ class WorkshopSummary(APIModel):
     created_at: datetime
 
 
+class WorkshopListItem(WorkshopSummary):
+    # AB-37: the workshops list (dashboard + full list) shows the owner by login
+    # rather than an opaque UUID slice, and a Filial (branch) count — both derived
+    # from existing data via a join/aggregate, so they live on the list item only,
+    # not on the lean WorkshopSummary reused by provision/block/unblock/detail.
+    owner_login: str
+    branch_count: int
+
+
 class BranchSummary(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
@@ -105,6 +114,10 @@ class PlatformWorkshopDetail(APIModel):
     workshop: WorkshopSummary
     branches: list[BranchSummary]
     owner: WorkshopUserSummary
+    # AB-20: the reason captured when the workshop was blocked, surfaced next to
+    # the status pill / danger banner. None for an active workshop (or a legacy
+    # block recorded without a reason).
+    block_reason: str | None = None
 
 
 class PlatformOverviewResponse(APIModel):

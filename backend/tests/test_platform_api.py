@@ -462,3 +462,98 @@ async def test_platform_jobs_errors_and_audit_surfaces(
     assert "platform.error.resolve" in {row["action"] for row in actions.json()}
     assert statuses.status_code == 200
     assert statuses.json() == []
+
+
+async def test_workshop_detail_surfaces_block_reason(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # AB-20: a blocked workshop's detail carries the reason captured at block time;
+    # an active workshop (and one later unblocked) reports None.
+    access = await _platform_access_token(client, db_session)
+    provisioned = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access),
+        json=_provision_payload(code="reasoned"),
+    )
+    assert provisioned.status_code == 201
+    workshop_id = provisioned.json()["workshop"]["id"]
+
+    active = await client.get(f"/api/v1/platform/workshops/{workshop_id}", headers=_auth(access))
+    assert active.status_code == 200
+    assert active.json()["block_reason"] is None
+
+    await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/block",
+        headers=_auth(access),
+        json={"reason": "Unpaid invoice"},
+    )
+    blocked = await client.get(f"/api/v1/platform/workshops/{workshop_id}", headers=_auth(access))
+    assert blocked.json()["block_reason"] == "Unpaid invoice"
+
+    await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/unblock",
+        headers=_auth(access),
+    )
+    unblocked = await client.get(f"/api/v1/platform/workshops/{workshop_id}", headers=_auth(access))
+    assert unblocked.json()["block_reason"] is None
+
+
+async def test_workshops_list_reports_owner_login_and_branch_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # AB-37: the list row carries the owner login (not just the UUID) and a count
+    # of the workshop's branches, both derived via join/aggregate.
+    access = await _platform_access_token(client, db_session)
+    provisioned = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access),
+        json=_provision_payload(code="counted"),
+    )
+    assert provisioned.status_code == 201
+    workshop_id = provisioned.json()["workshop"]["id"]
+    owner_login = provisioned.json()["owner"]["login"]
+
+    listing = await client.get("/api/v1/platform/workshops", headers=_auth(access))
+    assert listing.status_code == 200
+    row = next(w for w in listing.json() if w["id"] == workshop_id)
+    assert row["owner_login"] == owner_login
+    assert row["branch_count"] == 1
+
+
+async def test_error_record_manual_reopen_clears_resolution(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # AB-25: the operator reopen endpoint flips a resolved record back to open and
+    # clears the resolution metadata, writing a platform.error.reopen action.
+    access = await _platform_access_token(client, db_session)
+    record = await record_application_error(
+        db_session,
+        code="platform.reopen_me",
+        module="tests",
+        message="boom",
+        trace_id="trace-reopen",
+    )
+
+    resolved = await client.post(
+        f"/api/v1/platform/errors/{record.id}/resolve",
+        headers=_auth(access),
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["status"] == "resolved"
+    assert resolved.json()["resolved_at"] is not None
+    assert resolved.json()["resolved_by_user_id"] is not None
+
+    reopened = await client.post(
+        f"/api/v1/platform/errors/{record.id}/reopen",
+        headers=_auth(access),
+    )
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "open"
+    assert reopened.json()["resolved_at"] is None
+    assert reopened.json()["resolved_by_user_id"] is None
+
+    actions = await client.get("/api/v1/platform/audit/actions", headers=_auth(access))
+    assert "platform.error.reopen" in {row["action"] for row in actions.json()}
