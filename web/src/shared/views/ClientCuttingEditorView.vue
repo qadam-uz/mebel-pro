@@ -765,10 +765,10 @@ onBeforeRouteLeave(() => {
 
       <fieldset :disabled="isReadOnly" class="contents">
         <section
-          class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-hairline border-l-4 border-l-accent bg-sunk px-4 py-3 text-sm text-ink-soft"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
-            class="grid size-6 place-items-center rounded bg-elevated font-mono font-black text-accent"
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
             aria-hidden="true"
           >
             i
@@ -782,6 +782,7 @@ onBeforeRouteLeave(() => {
                   : 'barcha ustaxonalar'
               }}
             </b>
+            <span class="text-ink-muted"> — materiallarni cheklamaydi (ixtiyoriy)</span>
           </div>
           <button
             type="button"

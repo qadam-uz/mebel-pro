@@ -9,6 +9,7 @@ import {
   sideLabels,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
+import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
@@ -48,6 +49,15 @@ const emit = defineEmits<{
 }>()
 
 const cutting = useCuttingStore()
+
+const rowActions = computed<ActionMenuItem[]>(() => [
+  { label: 'Nusxa' },
+  { label: "O'chirish", danger: true },
+])
+function onRowAction(index: number) {
+  if (index === 0) emit('duplicate')
+  else emit('delete')
+}
 
 function materialById(id: string | null | undefined) {
   return cutting.panelOptions.find((material) => material.id === id) ?? null
@@ -173,18 +183,16 @@ function edgeCellLabel(side: EdgeField) {
           <button
             type="button"
             class="mp-chip"
-            :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
-            @click="emit('update:source', 'shop')"
-          >
-            Ustaxona
-          </button>
-          <button
-            type="button"
-            class="mp-chip"
             :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-            @click="emit('update:source', 'own')"
+            :aria-label="
+              part.material_source === 'shop'
+                ? 'Manba: ustaxonadan — almashtirish'
+                : 'Manba: o\'zim olib kelaman — almashtirish'
+            "
+            @click="emit('update:source', part.material_source === 'shop' ? 'own' : 'shop')"
           >
-            O'zim olib kelaman
+            <span aria-hidden="true">⇄</span>
+            {{ part.material_source === 'shop' ? 'Ustaxonadan' : "O'zim olib kelaman" }}
           </button>
         </div>
       </div>
@@ -307,17 +315,12 @@ function edgeCellLabel(side: EdgeField) {
         </button>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
-        <button type="button" class="mp-button mp-button-outline" @click="emit('duplicate')">
-          Nusxa
-        </button>
-        <button
-          type="button"
-          class="mp-button mp-button-outline text-danger"
-          @click="emit('delete')"
-        >
-          O'chirish
-        </button>
+      <div class="flex items-start justify-end lg:justify-center">
+        <ActionMenu
+          :label="`Qism #${index + 1} amallari`"
+          :items="rowActions"
+          @select="onRowAction"
+        />
       </div>
     </div>
 
