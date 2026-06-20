@@ -14,12 +14,16 @@ const props = withDefaults(
     error?: string | null
     disabled?: boolean
     noResultsText?: string
+    // Extra classes on the visible <label> — e.g. `lg:sr-only` to keep the label
+    // for a11y while a column header carries it on wide layouts. Default: visible.
+    labelClass?: string
   }>(),
   {
     placeholder: 'Qidiring',
     error: null,
     disabled: false,
     noResultsText: "Mos variant yo'q",
+    labelClass: '',
   },
 )
 
@@ -176,7 +180,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <label :id="`${id}-label`" class="mb-1 block text-sm font-bold text-ink" :for="id">
+    <label
+      :id="`${id}-label`"
+      class="mb-1 block text-sm font-bold text-ink"
+      :class="labelClass"
+      :for="id"
+    >
       {{ label }}
     </label>
     <div class="relative">

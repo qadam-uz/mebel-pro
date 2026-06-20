@@ -920,6 +920,25 @@ onBeforeRouteLeave(() => {
           </div>
 
           <div v-else class="grid gap-3 p-4">
+            <!-- Desktop column header: same border + p-3 + grid template as a
+                 CuttingPartRow card, so the columns line up; hidden on mobile,
+                 where each row keeps its own field labels. -->
+            <div
+              class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block"
+              aria-hidden="true"
+            >
+              <div
+                class="grid grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] gap-3 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+              >
+                <span>#</span>
+                <span>Panel materiali</span>
+                <span>Uzunlik</span>
+                <span>Eni</span>
+                <span>Soni</span>
+                <span>Krom</span>
+                <span>Amallar</span>
+              </div>
+            </div>
             <CuttingPartRow
               v-for="(part, index) in parts"
               :key="part.part_ref"
