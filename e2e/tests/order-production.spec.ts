@@ -349,7 +349,9 @@ test("client places an order and workshop completes it through production queues
       response.ok(),
   );
   await page.getByRole("button", { name: "Yangi kesim chizmasi" }).click();
-  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
+  // CB-defer-draft: the editor opens unsaved at `/cutting/new`; the persisted
+  // draft (with an id in the URL) is created only on the first optimise below.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/);
   await expect(
     page.getByRole("heading", { name: "Chizma", exact: true }),
   ).toBeVisible();
@@ -378,6 +380,8 @@ test("client places an order and workshop completes it through production queues
   await chooseEdgeBanding(page, edge.name);
   await page.getByRole("button", { name: "Optimallashtirish" }).click();
 
+  // First optimise persists the draft and hands off from `/new` to the real id.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { name: "Natija", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
   await page.getByRole("link", { name: "Buyurtma berish" }).click();
