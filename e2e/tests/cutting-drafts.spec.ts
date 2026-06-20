@@ -402,7 +402,6 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // (docs/ref/features/cutting.md), so the URL is /new with no draft id yet.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
-  await expect(page.getByText(/Hali saqlanmagan/)).toBeVisible()
   await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()

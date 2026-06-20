@@ -774,12 +774,8 @@ onBeforeRouteLeave(() => {
         </p>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
-        <span v-if="isNewDraft" class="mp-chip bg-info-soft text-info" role="status">
-          <span class="mp-dot" aria-hidden="true"></span>
-          Hali saqlanmagan — optimallashtirilganda saqlanadi
-        </span>
         <span
-          v-else
+          v-if="!isNewDraft"
           class="mp-chip"
           :class="{
             'bg-success-soft text-success': saveState === 'saved',
