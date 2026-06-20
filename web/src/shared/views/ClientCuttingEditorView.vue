@@ -100,8 +100,10 @@ const preferredBranch = computed(() =>
 // Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
 // a sort — applied to the shared option list every row's panel picker draws from.
 const panelManufacturerFilter = ref<string[]>([])
-const panelTypeFilter = ref<string | null>(null)
-const panelThicknessFilter = ref<string | null>(null)
+// '' = the "Barcha turlar / qalinliklar" option (no filter) — keeps the select
+// showing that label instead of a bare placeholder when nothing is narrowed.
+const panelTypeFilter = ref<string | null>('')
+const panelThicknessFilter = ref<string | null>('')
 const panelSort = ref<string | null>('relevance')
 
 const PANEL_TYPE_LABELS: Record<string, string> = {
@@ -154,8 +156,8 @@ const panelFiltersActive = computed(
 )
 function clearPanelFilters() {
   panelManufacturerFilter.value = []
-  panelTypeFilter.value = null
-  panelThicknessFilter.value = null
+  panelTypeFilter.value = ''
+  panelThicknessFilter.value = ''
 }
 
 const panelOptions = computed(() => {
