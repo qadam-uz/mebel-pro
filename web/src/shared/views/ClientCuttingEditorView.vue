@@ -761,11 +761,6 @@ onBeforeRouteLeave(() => {
 
 <template>
   <section>
-    <RouterLink :to="rolePath('/c/cutting/drafts')" class="client-back">
-      <span aria-hidden="true">←</span>
-      Saqlangan chizmalar
-    </RouterLink>
-
     <div class="client-page-head">
       <div>
         <h1>Chizma</h1>
@@ -790,11 +785,13 @@ onBeforeRouteLeave(() => {
         </span>
         <button
           type="button"
-          class="mp-button mp-button-outline text-danger"
+          class="mp-button mp-button-outline px-3 text-danger"
           :disabled="parts.length === 0"
+          aria-label="Ro'yxatni tozalash"
+          title="Ro'yxatni tozalash"
           @click="requestClearParts"
         >
-          Ro'yxatni tozalash
+          <Icon name="trash" class="size-[18px]" />
         </button>
       </div>
     </div>
