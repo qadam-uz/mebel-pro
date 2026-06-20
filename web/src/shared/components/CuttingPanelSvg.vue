@@ -4,9 +4,9 @@ import { computed } from 'vue'
 import type { CuttingPanel, CuttingPlacement, CuttingResult } from '@/shared/stores/cutting'
 
 // The viewBox stays in raw panel mm, but a label only renders when its placement
-// is large enough at a normalized 800-unit width (mirrors the prototype): the
-// font size and the visibility threshold are expressed against that scale so a
-// 2800mm panel and a 900mm panel read the same on screen.
+// is large enough at a normalized 800-unit width: the font size and the
+// visibility threshold are expressed against that scale so a 2800mm panel and a
+// 900mm panel read the same on screen.
 const NORM_WIDTH = 800
 const LABEL_FONT = 11
 const LABEL_MIN_W = 80

@@ -1,17 +1,10 @@
 """Live-rendered documentation site.
 
-Serves the repository's Markdown trees as HTML, rendered on every request — no
-build step, no static-site generator. Two trees, two mounts (both outside the
-``/api`` prefix, both behind the same HTTP Basic guard):
-
-* ``/docs`` — the **English** docs at :data:`Settings.DOCS_DIR` (default
-  ``<repo>/docs``). The single source of truth.
-* ``/docs-uz`` — the **Uzbek** mirror at :data:`Settings.DOCS_UZ_DIR` (default
-  ``<repo>/docs_uz``). A derived, read-only translation of ``/docs``; never a
-  source. Generated one-way from ``docs/`` and kept structurally 1:1 with it.
-
-Every rendered page carries a language switcher linking to its counterpart in
-the other tree (same relative path). Edit a file under either tree and refresh.
+Serves the repository's ``docs/`` Markdown tree as HTML, rendered on every
+request — no build step, no static-site generator. Mounted at ``/docs``
+(outside the ``/api`` prefix, behind the HTTP Basic guard) from
+:data:`Settings.DOCS_DIR` (default ``<repo>/docs``), the single source of
+truth. Edit a file under ``docs/`` and refresh.
 """
 
 from __future__ import annotations
@@ -41,21 +34,17 @@ from app.core.config import settings
 _STATIC_DIR = Path(__file__).parent / "docs_assets"
 _DEFAULT_ORDER = 1000
 
-# --- the two documentation sites --------------------------------------------
+# --- the documentation site -------------------------------------------------
 
 
 @dataclass(frozen=True)
 class _Site:
-    """One documentation tree: where it lives, where it mounts, and the link
-    to its counterpart in the other language."""
+    """The documentation tree: where it lives and where it mounts."""
 
-    lang: str  # "en" | "uz"
-    prefix: str  # URL mount, no trailing slash — "/docs" | "/docs-uz"
+    lang: str  # "en"
+    prefix: str  # URL mount, no trailing slash — "/docs"
     settings_attr: str  # Settings field naming the root dir
-    dir_label: str  # how the tree is named in chrome/errors ("docs", "docs_uz")
-    this_label: str  # switcher label for *this* site ("EN", "UZ")
-    alt_prefix: str  # counterpart site's mount
-    alt_label: str  # switcher label for the counterpart site
+    dir_label: str  # how the tree is named in chrome/errors ("docs")
 
     def root(self) -> Path:
         root: Path = getattr(settings, self.settings_attr)
@@ -67,20 +56,7 @@ EN_SITE = _Site(
     prefix="/docs",
     settings_attr="DOCS_DIR",
     dir_label="docs",
-    this_label="EN",
-    alt_prefix="/docs-uz",
-    alt_label="Oʻzbekcha",  # noqa: RUF001 — Uzbek-latin tutuq belgisi (U+02BB), intentional
 )
-UZ_SITE = _Site(
-    lang="uz",
-    prefix="/docs-uz",
-    settings_attr="DOCS_UZ_DIR",
-    dir_label="docs_uz",
-    this_label="UZ",
-    alt_prefix="/docs",
-    alt_label="English",
-)
-SITES: tuple[_Site, ...] = (EN_SITE, UZ_SITE)
 
 # --- HTTP Basic auth (shared with the OpenAPI UIs — see app/main.py) ---------
 
@@ -331,10 +307,10 @@ def _render_nav(items: list[NavItem], cur_rel: str) -> str:
 class _RelLinkTreeprocessor(Treeprocessor):
     """Rewrite in-repo Markdown links/images so they resolve under the site mount.
 
-    ``[x](scope.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope``
-    (``/docs-uz/...`` on the Uzbek site); image ``src``\\ s point at their byte
-    route. Absolute URLs, anchors, ``mailto:``/``tel:``, and links that climb
-    out of the tree are left untouched.
+    ``[x](scope.md)`` on ``/docs/spec/vision`` becomes ``/docs/spec/scope``;
+    image ``src``\\ s point at their byte route. Absolute URLs, anchors,
+    ``mailto:``/``tel:``, and links that climb out of the tree are left
+    untouched.
     """
 
     def __init__(self, md: markdown.Markdown, cur_rel: str, prefix: str) -> None:
@@ -530,25 +506,6 @@ def _footer_html(site: _Site) -> str:
     )
 
 
-def _counterpart_url(site: _Site, cur_rel: str) -> str:
-    """The same page in the other language — same relative path, other mount."""
-    rel_noext = cur_rel[: -len(".md")] if cur_rel.endswith(".md") else cur_rel
-    if not rel_noext or rel_noext == "index":
-        return site.alt_prefix
-    return f"{site.alt_prefix}/{rel_noext}"
-
-
-def _lang_switch_html(site: _Site, cur_rel: str) -> str:
-    return (
-        f'<a class="lang-switch" href="{escape(_counterpart_url(site, cur_rel))}" '
-        f'title="{escape(site.alt_label)}" rel="alternate" '
-        f'hreflang="{escape(UZ_SITE.lang if site is EN_SITE else EN_SITE.lang)}">'
-        f'<span class="cur">{escape(site.this_label)}</span>'
-        f'<span class="sep">/</span>'
-        f'<span class="alt">{escape(site.alt_label)}</span></a>'
-    )
-
-
 def _page(
     site: _Site,
     *,
@@ -606,7 +563,6 @@ def _page(
       <kbd class="search-kbd" id="docs-search-kbd">&#8984;K</kbd>
     </button>
   </div>
-  {_lang_switch_html(site, cur_rel)}
   <a class="api-link" href="/api-docs">API&nbsp;reference&nbsp;&#8599;</a>
 </header>
 <div class="{shell_cls}">
@@ -766,5 +722,5 @@ def _make_router(site: _Site) -> APIRouter:
     return r
 
 
-# Two mounts: English at /docs (source of truth) and Uzbek at /docs-uz (mirror).
-routers: list[APIRouter] = [_make_router(s) for s in SITES]
+# One mount: the English docs at /docs (the single source of truth).
+routers: list[APIRouter] = [_make_router(EN_SITE)]

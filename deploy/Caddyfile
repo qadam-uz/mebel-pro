@@ -8,9 +8,8 @@
 #   • app.{$BASE_DOMAIN}       → client SPA       (+ /api/* → backend)
 #   • workshop.{$BASE_DOMAIN}  → workshop SPA     (+ /api/* → backend)
 #   • admin.{$BASE_DOMAIN}     → superadmin SPA   (+ /api/* → backend,
-#                                                  + /docs, /docs-uz,
-#                                                    /api-docs, /api-redoc
-#                                                    → backend,
+#                                                  + /docs, /api-docs,
+#                                                    /api-redoc → backend,
 #                                                    HTTP Basic-gated server-side)
 #
 # Auto-HTTPS: the box must be reachable from the internet on 80 and 443 and DNS
@@ -33,7 +32,7 @@
 }
 
 # Apex: the static SEO landing only. Role apps are served only on their
-# documented subdomains; apex app/prototype paths intentionally 404.
+# documented subdomains; apex app paths intentionally 404.
 {$BASE_DOMAIN} {
 	import common
 
@@ -94,14 +93,12 @@ workshop.{$BASE_DOMAIN} {
 admin.{$BASE_DOMAIN} {
 	import common
 
-	@backend path /api/* /docs /docs/* /docs-uz /docs-uz/* /api-docs /api-docs/* /api-redoc /api-redoc/*
+	@backend path /api/* /docs /docs/* /api-docs /api-docs/* /api-redoc /api-redoc/*
 	handle @backend {
 		reverse_proxy backend:8000
 	}
 
-	# TEMPORARY: /prototypes serves the prototype-full reference from baked-in
-	# static files (see web/Dockerfile + web/nginx.conf).
-	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-* /prototypes /prototypes/*
+	@admin_public path /assets/* /favicon.svg /favicon.ico /apple-touch-icon-180.png /site.webmanifest /icon-* /maskable-*
 	handle @admin_public {
 		reverse_proxy web:80
 	}

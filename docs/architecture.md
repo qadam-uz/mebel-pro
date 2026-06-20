@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-08
+updated: 2026-06-20
 order: 70
 ---
 
@@ -31,9 +31,9 @@ analytics / BI (dashboards are operational-DB aggregates).
 
 ## Current stage
 
-**Pre-production prototyping** — shaping business logic and UX against the prototype in
-`web/prototypes/`. Nothing is deployed for real users: no production data, no external API
-consumer, no installed client to keep working. So changing today's shape is cheap, and we spend
+**Pre-production** — shaping business logic and UX directly in the Vue SPAs. Nothing is
+deployed for real users: no production data, no external API consumer, no installed client to
+keep working. So changing today's shape is cheap, and we spend
 that freedom: edit existing migrations in place to keep the history clean rather than stacking
 corrective ones, change schemas and contracts without backward-compat shims, and
 delete-and-replace instead of running deprecation cycles. The guardrails still hold — docs stay
