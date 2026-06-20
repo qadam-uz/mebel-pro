@@ -72,7 +72,7 @@ const totalEdge = computed(() => {
   )
 })
 const edgeCostSplit = computed(() => {
-  // No backend material/service split yet — mirror the prototype's 45/55 fallback.
+  // No backend material/service split yet — use a 45/55 materials/service fallback.
   const total = order.value?.subtotal_edge_banding_tiyin ?? 0
   const materials = Math.round(total * 0.45)
   return { total, materials, service: total - materials }

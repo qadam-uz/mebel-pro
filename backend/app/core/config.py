@@ -34,11 +34,6 @@ class Settings(BaseSettings):
     # override in containers via `DOCS_DIR`.
     DOCS_DIR: Path = _BACKEND_ROOT.parent / "docs"
 
-    # Uzbek mirror of `docs/` — a derived, read-only translation rendered live
-    # at `/docs-uz`. Defaults to the repo's `docs_uz/`; override via
-    # `DOCS_UZ_DIR`. Never a source: generated one-way from `DOCS_DIR`.
-    DOCS_UZ_DIR: Path = _BACKEND_ROOT.parent / "docs_uz"
-
     # HTTP Basic credentials guarding `/docs` *and* the OpenAPI UIs
     # (`/api-docs`, `/api-redoc`, the schema). Change these in any real deploy.
     DOCS_AUTH_USERNAME: str = "docs"

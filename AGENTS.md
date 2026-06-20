@@ -4,37 +4,15 @@ Documentation is the source of truth. Always keep it up to date as you work, fol
 **docs-management** skill. If what the user asks and what the docs say disagree, tell the user
 the conflict points and consolidate them together.
 
-## Documentation language — English canon, Uzbek mirror
-
-- **`docs/`** is the single source of truth, in English. Agents and humans work
-  **only** from it; all reasoning, planning, editing, and the docs-management
-  skill operate here.
-- **`docs_uz/`** is the Uzbek mirror — a derived artifact, never a source.
-  Translation flows one way: `docs/` → `docs_uz/`, never the reverse. Agents
-  may read and edit `docs_uz/` only to keep the mirror synchronized with
-  already-decided English canon; never use it to infer requirements, resolve
-  conflicts, or make product/technical decisions.
-- The mirror is **1:1** with `docs/` — identical paths, structure, code blocks,
-  link targets, mermaid node IDs, and **frontmatter (incl. `title:`) byte for
-  byte**. Only connective prose is rendered into Uzbek; **every technical/
-  domain/feature/role term, status value, and identifier stays English** (when
-  in doubt, keep it English). It reads as Uzbek grammar carrying English terms.
-- **When you change a `docs/` page, update its `docs_uz/` counterpart in the
-  same change** — manually if there is no generator. They must never drift; if
-  they do, `docs/` wins and the mirror is repaired from it.
-- Both are served live: `docs/` at `/docs`, `docs_uz/` at `/docs-uz`, each page
-  linking to its counterpart.
+`docs/` is the single source of truth, in English. Agents and humans work only
+from it; all reasoning, planning, editing, and the docs-management skill operate
+there. It is served live at `/docs`.
 
 Furniture-panel cutting platform — see [`docs/index.md`](docs/index.md) (what
 it is) and [`docs/architecture.md`](docs/architecture.md) (the technical shape:
 modular-monolith backend, three SPAs + static landing, topology, invariants).
 Make sure to ALWAYS read all canon specs at docs/ and read other specs (features, entities) on-demand.
 The repo map below is the working layout.
-
-## Prototypes
-
-- `web/prototypes/prototype-full` is the full, polished prototype and the executable design
-  reference for all three SPAs. Style-exploration prototype directories have been removed.
 
 ## Repo map
 
@@ -45,7 +23,6 @@ The repo map below is the working layout.
 | `e2e/`     | End-to-end browser tests                                                      | Playwright · TypeScript · **pnpm**                                                    | [`e2e/AGENTS.md`](e2e/AGENTS.md)                                            |
 | `deploy/`  | Container orchestration                                                       | Docker Compose · Caddy (edge, auto-HTTPS) · nginx · Postgres · MinIO                  | [`deploy/AGENTS.md`](deploy/AGENTS.md)                                      |
 | `docs/`    | Project documentation — **English, source of truth** (served live at `/docs`) | Markdown                                                                              | managed via the **docs-management** skill                                   |
-| `docs_uz/` | Uzbek **mirror** of `docs/` — derived (served live at `/docs-uz`)             | Markdown                                                                              | kept in sync from `docs/`; never a source — see _Documentation language_ above |
 
 Each subproject is self-contained with its own toolchain and `AGENTS.md` —
 **read the relevant one before working in that directory.** There is no

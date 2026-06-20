@@ -1,13 +1,13 @@
 # DESIGN SYSTEM
 
-The selected visual direction is still represented by `web/prototypes/prototype-full/`.
-Until the Vue design system is extracted, that prototype is the executable reference for
-tokens, primitives, density, and interaction behavior.
+This file is the deterministic design system contract — tokens, primitives, density, and
+interaction behavior — for the three Vue SPAs. Realize it in shared code: `@theme` tokens in
+`src/assets/main.css`, primitives and composed components under `src/shared/`.
 
 ## Primitives
 
-- **Dropdowns** use the project dropdown primitive (`mp-select` in the HTML prototype,
-  later a shared Vue component). Do not use browser-native `<select>` as visible UI in
+- **Dropdowns** use the project dropdown primitive (a shared Vue component). Do not use
+  browser-native `<select>` as visible UI in
   filters, forms, modals, tables, or settings. The primitive must match the app surface:
   crisp radius, elevated popover, visible focus ring, selected check mark, hover/active
   states, and keyboard operation (`Enter` / `Space`, arrows, `Esc`, `Tab` close).

@@ -64,8 +64,7 @@ stage; advance only when its gate's exit criteria are met.
    moment.
 4. **Write the polished docs.** Encode the target state into `docs/` via the
    project docs standarts — fully guideline-compliant, not a draft (writing
-   them is itself a design check). Defer the `docs_uz/` mirror to Land; docs may
-   still shift in review.
+   them is itself a design check).
 5. **Write `plan.md`** (see schema). It carries the _consequential_ how:
    contracts, seams, decisions + rationale, ordered steps, test plan — **not**
    line-level code. Test for any item: _"if I get this wrong, does Plan-review
@@ -143,8 +142,7 @@ met; no unresolved blocking finding; no known visual or functional defect.
    a clean rebase can still break semantically. Never `rebase → push`.
 3. **Push**, open a **PR** whose body summarizes the problem + acceptance
    criteria (link, don't restate the plan).
-4. **Regenerate the `docs_uz/` mirror** now that docs are final.
-5. **Merge gate.** If a `merge` gate is set → stop for human. If not → merge
+4. **Merge gate.** If a `merge` gate is set → stop for human. If not → merge
    automatically **only on CI green**. Per the _fail-safe_ convention,
    outward / irreversible steps lean closed: auto-merge is the explicit no-gate
    behavior, never a fallback when something is uncertain.

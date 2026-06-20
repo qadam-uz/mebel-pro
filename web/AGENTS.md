@@ -17,11 +17,6 @@ covers only the **current build state**:
   `web/workshop/index.html`, and `web/admin/index.html`, each mounting its own
   entry under `src/apps/<role>/main.ts` with role routes in
   `src/apps/<role>/routes.ts`. Shared code lives under `src/shared/`.
-- **HTML prototype** lives in `web/prototypes/prototype-full/` — the full,
-  polished design reference. It is not a Vite entry; the production web image
-  still serves it under the temporary `/prototypes` route for review while the
-  Vue SPAs are being hardened. Port screens from it into the Vue SPAs rather
-  than creating new style-prototype directories.
 
 ## Toolchain
 

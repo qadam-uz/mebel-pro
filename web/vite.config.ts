@@ -60,10 +60,6 @@ export default defineConfig({
         target: apiTarget,
         changeOrigin: true,
       },
-      '/docs-uz': {
-        target: apiTarget,
-        changeOrigin: true,
-      },
       '/api-docs': {
         target: apiTarget,
         changeOrigin: true,

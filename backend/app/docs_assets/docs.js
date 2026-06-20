@@ -1,12 +1,12 @@
 /* Progressive enhancement for the docs site (app/docs_site.py):
    (1) ⌘K / Ctrl+K opens a search modal that ranks pages from the JSON index
-       served at <prefix>/_search.json (/docs or /docs-uz), and
+       served at /docs/_search.json, and
    (2) highlights the section you're reading in the "on this page" rail. */
 (function () {
   "use strict";
 
-  // Mount prefix for the active tree ("/docs" for English, "/docs-uz" for the
-  // Uzbek mirror), injected by the page shell so search + crumbs work on both.
+  // Mount prefix ("/docs"), injected by the page shell so search + crumbs
+  // resolve against it.
   var PREFIX = String(window.__DOCS_PREFIX__ || "/docs").replace(/\/+$/, "");
   var PREFIX_RE = new RegExp(
     "^" + PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\/?"

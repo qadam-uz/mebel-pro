@@ -24,10 +24,4 @@ FROM nginx:1.27-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# --- TEMPORARY: static prototype-full reference ------------------------------
-# Bake web/prototypes/ into the image so prototype-full remains reviewable at
-# admin.<domain>/prototypes while the Vue SPAs are hardened against it.
-COPY prototypes /usr/share/nginx/html/prototypes
-# --- end TEMPORARY -----------------------------------------------------------
-
 EXPOSE 80
