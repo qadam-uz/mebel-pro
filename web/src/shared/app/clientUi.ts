@@ -46,6 +46,50 @@ export function clientStatusPillClass(status: OrderStatus): string {
   return 'client-pill client-pill-new'
 }
 
+/** Filled fraction (0..100) of the five-phase order track, for the dashboard progress bar.
+ *  Terminal/off-track statuses (`cancelled`) read as 0. */
+export function clientPhaseProgress(status: OrderStatus): number {
+  const index = clientPhaseIndex(status)
+  if (index < 0) return 0
+  return [14, 30, 55, 85, 100][index] ?? 0
+}
+
+/** The next phase label after `status`, or null when already at the final phase / off-track. */
+export function clientNextPhaseLabel(status: OrderStatus): string | null {
+  const index = clientPhaseIndex(status)
+  if (index < 0 || index >= clientPhaseLabels.length - 1) return null
+  return clientPhaseLabels[index + 1]
+}
+
+/** First given name for the dashboard greeting, or null when no real name is set
+ *  (so the caller falls back to a generic heading rather than greeting a phone number). */
+export function clientGreetingName(
+  me: { full_name?: string | null; name?: string | null } | null | undefined,
+): string | null {
+  // `||` (not `??`) so an empty-string full_name falls through to `name`.
+  const raw = me?.full_name?.trim() || me?.name?.trim()
+  const first = raw?.split(/\s+/)[0]
+  return first ? first : null
+}
+
+/** One-line dashboard subtitle keyed off what most needs the client's attention:
+ *  ready-for-pickup first, then in-flight orders, then saved drafts, then first-run. */
+export function clientHomeSubtitle(counts: {
+  ready: number
+  active: number
+  drafts: number
+}): string {
+  const { ready, active, drafts } = counts
+  if (ready > 0) {
+    return active > ready
+      ? `${ready} buyurtmangiz olishga tayyor — qolgani yo'lda.`
+      : `${ready} buyurtmangiz olishga tayyor.`
+  }
+  if (active > 0) return `${active} ta faol buyurtmangiz bor.`
+  if (drafts > 0) return 'Saqlangan chizmalaringizdan davom eting.'
+  return 'Birinchi kesim chizmangizdan boshlang.'
+}
+
 export function normalizeUzPhone(value: string): string {
   let digits = value.replace(/\D/g, '')
   // drop a trunk-prefix 8 typed before the 998 country code ("8 998 …")
