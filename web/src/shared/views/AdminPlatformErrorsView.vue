@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import {
   adminDateTime,
@@ -15,6 +16,7 @@ import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type ErrorRecord } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const route = useRoute()
 const toast = useToast()
 const selectedId = ref<string | null>(null)
 const confirmResolveOpen = ref(false)
@@ -45,7 +47,7 @@ const moduleOptions = computed(() => [
 const thresholdOptions = [
   dropdownOption('all', 'Chastota', 'barcha kodlar'),
   dropdownOption('3', '24s ≥ 3', "ko'tarilayotgan"),
-  dropdownOption('10', '24s ≥ 10', 'spike'),
+  dropdownOption('10', '24s ≥ 10', 'spayk'),
 ]
 const timeOptions = [
   dropdownOption('all', 'Vaqt', 'barcha vaqt'),
@@ -95,6 +97,38 @@ async function openDetail(record: ErrorRecord) {
   }
 }
 
+async function openDetailById(id: string) {
+  if (selectedId.value === id && selectedDetail.value) return
+  const listed = admin.errors.find((record) => record.id === id)
+  if (listed) {
+    await openDetail(listed)
+    return
+  }
+  selectedId.value = id
+  actionError.value = null
+  detailError.value = false
+  showRaw.value = false
+  try {
+    await admin.loadErrorDetail(id)
+  } catch {
+    actionError.value = 'error_detail_failed'
+    detailError.value = true
+  }
+}
+
+async function openErrorFromRoute() {
+  const recordId = typeof route.query.record === 'string' ? route.query.record : null
+  if (recordId) {
+    await openDetailById(recordId)
+    return
+  }
+  const code = typeof route.query.code === 'string' ? route.query.code : null
+  if (!code) return
+  query.value = code
+  const listed = admin.errors.find((record) => record.code === code)
+  if (listed) await openDetail(listed)
+}
+
 async function retryDetail() {
   if (!selectedId.value) return
   detailError.value = false
@@ -138,7 +172,16 @@ async function reopenSelected() {
   }
 }
 
-onMounted(admin.loadErrors)
+onMounted(async () => {
+  await admin.loadErrors()
+  await openErrorFromRoute()
+})
+watch(
+  () => [route.query.record, route.query.code],
+  () => {
+    void openErrorFromRoute()
+  },
+)
 </script>
 
 <template>
@@ -146,7 +189,7 @@ onMounted(admin.loadErrors)
     <div class="admin-page-head">
       <div>
         <h1>Xatolik monitor</h1>
-        <p class="sub">Grouped application errors, spike counts, trace IDs va context.</p>
+        <p class="sub">Guruhlangan application errorlar, spayk sonlari, trace ID va kontekst.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadErrors">
         Yangilash
@@ -155,7 +198,7 @@ onMounted(admin.loadErrors)
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Kod yoki tavsif</span>
+        <span>Qidiruv</span>
         <input v-model="query" placeholder="Kod yoki tavsif" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
@@ -218,6 +261,7 @@ onMounted(admin.loadErrors)
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${record.code} xatoligi tafsilotlarini ochish`"
                     @click="openDetail(record)"
                   >
                     Tafsilotlar
@@ -235,7 +279,7 @@ onMounted(admin.loadErrors)
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
       role="alert"
     >
-      Error action bajarilmadi.
+      Xatolik amali bajarilmadi.
     </p>
 
     <template v-if="selectedId">
@@ -297,7 +341,7 @@ onMounted(admin.loadErrors)
                 :disabled="resolvingId === selectedId"
                 @click="confirmResolveOpen = true"
               >
-                {{ resolvingId === selectedId ? 'Tasdiqlanmoqda' : 'Tasdiqlash (resolve)' }}
+                {{ resolvingId === selectedId ? 'Tasdiqlanmoqda' : 'Hal qilingan deb belgilash' }}
               </button>
               <button
                 v-else
@@ -360,7 +404,7 @@ onMounted(admin.loadErrors)
     <ConfirmDialog
       :open="confirmResolveOpen"
       title="Xatolikni tasdiqlash"
-      message="Bu xatolik kodi hal qilingan deb belgilanadi va monitor ro'yxatida resolved ko'rinadi."
+      message="Bu xatolik kodi hal qilingan deb belgilanadi va monitor ro'yxatida shu holatda ko'rinadi."
       confirm-label="Tasdiqlash"
       busy-label="Tasdiqlanmoqda"
       cancel-label="Bekor qilish"

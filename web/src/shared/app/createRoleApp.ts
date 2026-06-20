@@ -99,6 +99,13 @@ export function roleRoutePermissionAllowed(
   )
 }
 
+function focusAdminContent(toMeta: Record<string, unknown>) {
+  if (toMeta.layout === 'auth') return
+  requestAnimationFrame(() => {
+    document.getElementById('admin-content')?.focus({ preventScroll: true })
+  })
+}
+
 export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], localBase: string) {
   const historyBase = resolveHistoryBase(localBase)
   const roleConfig = normalizeRoleConfig(config, localBase, historyBase)
@@ -146,6 +153,7 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
 
   router.afterEach((to) => {
     document.title = roleDocumentTitle(to.meta.title, roleConfig)
+    if (roleConfig.role === 'admin') focusAdminContent(to.meta)
   })
 
   const app = createApp(RoleApp)

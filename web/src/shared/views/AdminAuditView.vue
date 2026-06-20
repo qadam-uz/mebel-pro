@@ -143,14 +143,14 @@ onMounted(() => {
     <div class="admin-page-head">
       <div>
         <h1>Audit log . platforma</h1>
-        <p class="sub">Mutating use case va status transition append-only loglari.</p>
+        <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining append-only loglari.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="refresh">Yangilash</button>
     </div>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Obyekt ID yoki amal</span>
+        <span>Qidiruv</span>
         <input v-model="query" placeholder="Obyekt ID yoki amal" />
       </label>
       <ProjectDropdown v-model="workshopFilter" label="Ustaxona" :options="workshopOptions" />
@@ -208,8 +208,8 @@ onMounted(() => {
       class="admin-card"
     >
       <div v-if="filteredActions.length === 0" class="admin-empty m-5">
-        <h3>Action log bo'sh</h3>
-        <p>Mutating platform amallari shu yerda ko'rinadi.</p>
+        <h3>Amallar logi bo'sh</h3>
+        <p>O'zgartiruvchi platforma amallari shu yerda ko'rinadi.</p>
       </div>
       <div v-else class="admin-table-wrap">
         <table class="admin-table wide">

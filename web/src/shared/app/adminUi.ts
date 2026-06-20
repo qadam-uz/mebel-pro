@@ -175,19 +175,44 @@ function padDatePart(value: number) {
   return String(value).padStart(2, '0')
 }
 
+function notificationPayloadText(item: NotificationItem, key: string) {
+  const value = item.payload[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
 export function adminNotificationTitle(item: NotificationItem) {
   const summary = item.payload.summary
   if (typeof summary === 'string' && summary.trim()) return summary
-  if (item.event_code.includes('job')) return `Failed ish . ${item.event_code}`
-  if (item.event_code.includes('error')) return `Error spike . ${item.event_code}`
+  const jobName = notificationPayloadText(item, 'job_name')
+  const errorCode =
+    notificationPayloadText(item, 'error_code') ?? notificationPayloadText(item, 'code')
+  if (item.event_code.includes('job')) {
+    return jobName ? `Job muvaffaqiyatsiz: ${jobName}` : `Job muvaffaqiyatsiz: ${item.event_code}`
+  }
+  if (item.event_code.includes('error')) {
+    return errorCode ? `Xato spayki: ${errorCode}` : `Xato spayki: ${item.event_code}`
+  }
   return item.event_code
 }
 
 export function adminNotificationDestination(item: NotificationItem) {
   if (item.entity_type === 'workshop' && item.entity_id) return `/admin/workshops/${item.entity_id}`
-  if (item.entity_type === 'error_record' && item.entity_id) return '/admin/platform/errors'
-  if (item.event_code.includes('job')) return '/admin/platform/jobs'
-  if (item.event_code.includes('error')) return '/admin/platform/errors'
+  if (item.entity_type === 'error_record' && item.entity_id) {
+    return `/admin/platform/errors?record=${encodeURIComponent(item.entity_id)}`
+  }
+  const jobName = notificationPayloadText(item, 'job_name')
+  if (item.event_code.includes('job')) {
+    return jobName
+      ? `/admin/platform/jobs?job=${encodeURIComponent(jobName)}`
+      : '/admin/platform/jobs'
+  }
+  const errorCode =
+    notificationPayloadText(item, 'error_code') ?? notificationPayloadText(item, 'code')
+  if (item.event_code.includes('error')) {
+    return errorCode
+      ? `/admin/platform/errors?code=${encodeURIComponent(errorCode)}`
+      : '/admin/platform/errors'
+  }
   return '/admin/notifications'
 }
 

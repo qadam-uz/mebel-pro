@@ -53,6 +53,8 @@ const search = ref('')
 const statusFilter = ref('all')
 const kindFilter = ref('all')
 const manufacturerFilter = ref('all')
+const typeFilter = ref('all')
+const thicknessFilter = ref('all')
 
 const form = reactive({
   kind: 'panel' as MaterialKind,
@@ -75,8 +77,8 @@ const manufacturerForm = reactive({
 
 const kindOptions = [
   dropdownOption('all', 'Hammasi', 'panel va krom'),
-  dropdownOption('panel', 'Panel', 'DSP/MDF/Plywood'),
-  dropdownOption('edge', 'Krom', 'edge banding'),
+  dropdownOption('panel', 'Panel', 'plita materiallari'),
+  dropdownOption('edge', 'Krom', 'krom lenta'),
 ]
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
@@ -84,7 +86,7 @@ const statusOptions = [
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
 const manufacturerFilterOptions = computed(() => [
-  dropdownOption('all', 'Hammasi', 'barcha manufacturerlar'),
+  dropdownOption('all', 'Hammasi', 'barcha ishlab chiqaruvchilar'),
   ...admin.manufacturers.map((manufacturer) =>
     dropdownOption(manufacturer.id, manufacturer.name, manufacturer.country ?? ''),
   ),
@@ -102,12 +104,22 @@ const materialTypeOptions: ChoiceOption[] = [
   { value: 'dsp', label: 'DSP' },
   { value: 'mdf', label: 'MDF' },
   { value: 'plywood', label: 'Plywood' },
-  { value: 'natural_wood', label: 'Natural wood' },
-  { value: 'other', label: 'Other' },
+  { value: 'natural_wood', label: "Tabiiy yog'och" },
+  { value: 'other', label: 'Boshqa' },
 ]
+const materialTypeFilterOptions = computed(() => [
+  dropdownOption('all', 'Hammasi', 'barcha panel turlari'),
+  ...materialTypeOptions.map((option) => dropdownOption(option.value, option.label, '')),
+])
+const thicknessFilterOptions = computed(() => [
+  dropdownOption('all', 'Hammasi', 'barcha qalinliklar'),
+  ...Array.from(new Set(admin.materials.map((material) => material.thickness_mm)))
+    .sort((left, right) => Number(left) - Number(right))
+    .map((thickness) => dropdownOption(thickness, `${thickness} mm`, '')),
+])
 const materialKindOptions: ChoiceOption[] = [
-  { value: 'panel', label: 'Panel', meta: 'list material' },
-  { value: 'edge', label: 'Krom', meta: 'edge banding' },
+  { value: 'panel', label: 'Panel', meta: 'plita materiali' },
+  { value: 'edge', label: 'Krom', meta: 'krom lenta' },
 ]
 
 const filtered = computed(() => {
@@ -116,6 +128,9 @@ const filtered = computed(() => {
     if (statusFilter.value !== 'all' && material.status !== statusFilter.value) return false
     if (kindFilter.value !== 'all' && material.kind !== kindFilter.value) return false
     if (manufacturerFilter.value !== 'all' && material.manufacturer_id !== manufacturerFilter.value)
+      return false
+    if (typeFilter.value !== 'all' && material.type !== typeFilter.value) return false
+    if (thicknessFilter.value !== 'all' && material.thickness_mm !== thicknessFilter.value)
       return false
     if (!needle) return true
     return [
@@ -146,6 +161,8 @@ function clearFilters() {
   statusFilter.value = 'all'
   kindFilter.value = 'all'
   manufacturerFilter.value = 'all'
+  typeFilter.value = 'all'
+  thicknessFilter.value = 'all'
 }
 
 function openCreate() {
@@ -184,9 +201,13 @@ function openEdit(material: Material) {
 
 function materialSpec(material: Material) {
   if (material.kind === 'panel') {
-    return `${material.type ?? 'panel'} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
+    return `${materialTypeLabel(material.type)} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
   }
   return 'krom · metr'
+}
+
+function materialTypeLabel(type: PanelMaterialType | null | undefined) {
+  return materialTypeOptions.find((option) => option.value === type)?.label ?? 'Panel'
 }
 
 async function onMaterialFile(event: Event) {
@@ -276,21 +297,31 @@ onMounted(async () => {
     <div class="admin-page-head">
       <div>
         <h1>Platforma material katalogi</h1>
-        <p class="sub">Platforma master materiallari: panel va krom records.</p>
+        <p class="sub">Platforma master materiallari: panel va krom yozuvlari.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">Yangi material</button>
     </div>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Material nomi</span>
+        <span>Qidiruv</span>
         <input v-model="search" placeholder="Material nomi" />
       </label>
       <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" />
       <ProjectDropdown
         v-model="manufacturerFilter"
-        label="Manufacturer"
+        label="Ishlab chiqaruvchi"
         :options="manufacturerFilterOptions"
+      />
+      <ProjectDropdown
+        v-model="typeFilter"
+        label="Panel turi"
+        :options="materialTypeFilterOptions"
+      />
+      <ProjectDropdown
+        v-model="thicknessFilter"
+        label="Qalinlik"
+        :options="thicknessFilterOptions"
       />
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
     </div>
@@ -394,6 +425,7 @@ onMounted(async () => {
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${material.name} materialini tahrirlash`"
                     @click="openEdit(material)"
                   >
                     Tahrirlash
@@ -402,6 +434,11 @@ onMounted(async () => {
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === material.id"
+                    :aria-label="
+                      material.status === 'active'
+                        ? `${material.name} materialini faol emas qilish`
+                        : `${material.name} materialini faollashtirish`
+                    "
                     @click="
                       askStatus(material, material.status === 'active' ? 'inactive' : 'active')
                     "
@@ -438,7 +475,7 @@ onMounted(async () => {
             x
           </button>
         </div>
-        <form @submit.prevent="save">
+        <form novalidate @submit.prevent="save">
           <div class="admin-modal-b">
             <div class="admin-form-grid three">
               <FormSelect
@@ -470,7 +507,7 @@ onMounted(async () => {
                   class="mp-button mp-button-outline self-end"
                   @click="manufacturerModalOpen = true"
                 >
-                  Inline manufacturer
+                  Yangi ishlab chiqaruvchi
                 </button>
               </div>
               <label class="admin-field admin-full" for="mat-name">
@@ -497,7 +534,7 @@ onMounted(async () => {
                 <input id="mat-color" v-model="form.color" required />
               </label>
               <label class="admin-field" for="mat-decor">
-                <span>Decor code</span>
+                <span>Decor kodi</span>
                 <input id="mat-decor" v-model="form.decorCode" />
               </label>
               <template v-if="form.kind === 'panel'">
@@ -591,7 +628,7 @@ onMounted(async () => {
         @keydown="inlineMfrTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="inline-mfr-title">Yangi manufacturer</h3>
+          <h3 id="inline-mfr-title">Yangi ishlab chiqaruvchi</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -601,7 +638,7 @@ onMounted(async () => {
             x
           </button>
         </div>
-        <form @submit.prevent="saveInlineManufacturer">
+        <form novalidate @submit.prevent="saveInlineManufacturer">
           <div class="admin-modal-b">
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="inline-mfr-name">
@@ -609,7 +646,7 @@ onMounted(async () => {
                 <input id="inline-mfr-name" v-model="manufacturerForm.name" required />
               </label>
               <label class="admin-field" for="inline-mfr-country">
-                <span>Country</span>
+                <span>Davlat</span>
                 <input id="inline-mfr-country" v-model="manufacturerForm.country" />
               </label>
               <label class="admin-field admin-full" for="inline-mfr-note">
@@ -621,7 +658,7 @@ onMounted(async () => {
               v-if="manufacturerError"
               class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Manufacturer yaratilmadi.
+              Ishlab chiqaruvchi yaratilmadi.
             </p>
           </div>
           <div class="admin-modal-f">

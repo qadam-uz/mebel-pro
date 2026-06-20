@@ -17,6 +17,10 @@ import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
+type WorkingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+
+type WorkingHoursForm = Record<WorkingDay, { open: string; close: string }>
+
 const admin = useAdminStore()
 const rolePath = useRolePath()
 const toast = useToast()
@@ -69,9 +73,9 @@ const secretRows = computed(() => {
   const provision = admin.lastProvision
   if (!provision) return []
   return [
-    { label: 'Workshop code', value: provision.workshop.code },
-    { label: 'Owner login', value: provision.owner.login },
-    { label: 'Temp password', value: provision.temp_password },
+    { label: 'Ustaxona kodi', value: provision.workshop.code },
+    { label: 'Ega login', value: provision.owner.login },
+    { label: 'Vaqtinchalik parol', value: provision.temp_password },
   ]
 })
 
@@ -101,6 +105,24 @@ const form = reactive({
   ownerPhone: '+998',
   tempPassword: '',
 })
+const workingHours = reactive<WorkingHoursForm>({
+  monday: { open: '09:00', close: '18:00' },
+  tuesday: { open: '09:00', close: '18:00' },
+  wednesday: { open: '09:00', close: '18:00' },
+  thursday: { open: '09:00', close: '18:00' },
+  friday: { open: '09:00', close: '18:00' },
+  saturday: { open: '10:00', close: '16:00' },
+  sunday: { open: '', close: '' },
+})
+const workingDayOptions: Array<{ key: WorkingDay; label: string }> = [
+  { key: 'monday', label: 'Dushanba' },
+  { key: 'tuesday', label: 'Seshanba' },
+  { key: 'wednesday', label: 'Chorshanba' },
+  { key: 'thursday', label: 'Payshanba' },
+  { key: 'friday', label: 'Juma' },
+  { key: 'saturday', label: 'Shanba' },
+  { key: 'sunday', label: 'Yakshanba' },
+]
 
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
@@ -119,16 +141,33 @@ const filtered = computed(() => {
   })
 })
 
-function defaultWorkingHours() {
-  return {
-    monday: { open: '09:00', close: '18:00' },
-    tuesday: { open: '09:00', close: '18:00' },
-    wednesday: { open: '09:00', close: '18:00' },
-    thursday: { open: '09:00', close: '18:00' },
-    friday: { open: '09:00', close: '18:00' },
-    saturday: { open: '10:00', close: '16:00' },
-    sunday: { open: null, close: null },
-  }
+function resetWorkingHours() {
+  workingHours.monday.open = '09:00'
+  workingHours.monday.close = '18:00'
+  workingHours.tuesday.open = '09:00'
+  workingHours.tuesday.close = '18:00'
+  workingHours.wednesday.open = '09:00'
+  workingHours.wednesday.close = '18:00'
+  workingHours.thursday.open = '09:00'
+  workingHours.thursday.close = '18:00'
+  workingHours.friday.open = '09:00'
+  workingHours.friday.close = '18:00'
+  workingHours.saturday.open = '10:00'
+  workingHours.saturday.close = '16:00'
+  workingHours.sunday.open = ''
+  workingHours.sunday.close = ''
+}
+
+function workingHoursPayload() {
+  return Object.fromEntries(
+    workingDayOptions.map(({ key }) => [
+      key,
+      {
+        open: workingHours[key].open || null,
+        close: workingHours[key].close || null,
+      },
+    ]),
+  )
 }
 
 function codeFromName(value: string) {
@@ -154,6 +193,7 @@ function resetForm() {
   form.ownerLogin = ''
   form.ownerPhone = '+998'
   form.tempPassword = ''
+  resetWorkingHours()
   codeTouched.value = false
 }
 
@@ -174,7 +214,7 @@ async function createWorkshop() {
         phone: form.branchPhone,
         latitude: form.latitude,
         longitude: form.longitude,
-        working_hours: defaultWorkingHours(),
+        working_hours: workingHoursPayload(),
       },
       owner: {
         full_name: form.ownerName,
@@ -223,7 +263,7 @@ onMounted(async () => {
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Ustaxona nomi yoki kod</span>
+        <span>Qidiruv</span>
         <input v-model="search" placeholder="Ustaxona nomi yoki kod" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
@@ -285,6 +325,7 @@ onMounted(async () => {
                   <RouterLink
                     :to="rolePath(`/admin/workshops/${workshop.id}`)"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${workshop.name} tafsilotlarini ochish`"
                   >
                     Tafsilotlar
                   </RouterLink>
@@ -292,6 +333,7 @@ onMounted(async () => {
                     v-if="workshop.status === 'active'"
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
+                    :aria-label="`${workshop.name} ustaxonasini bloklash`"
                     @click="askBlock(workshop)"
                   >
                     Bloklash
@@ -300,6 +342,7 @@ onMounted(async () => {
                     v-else
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
+                    :aria-label="`${workshop.name} ustaxonasini blokdan chiqarish`"
                     @click="unblockTarget = workshop"
                   >
                     Blokdan chiqarish
@@ -334,7 +377,7 @@ onMounted(async () => {
             x
           </button>
         </div>
-        <form @submit.prevent="createWorkshop">
+        <form novalidate @submit.prevent="createWorkshop">
           <div class="admin-modal-b">
             <div class="admin-form-grid three">
               <label class="admin-field admin-full" for="w-name">
@@ -342,7 +385,7 @@ onMounted(async () => {
                 <input id="w-name" v-model="form.name" autocomplete="organization" required />
               </label>
               <label class="admin-field" for="w-code">
-                <span>Workshop code</span>
+                <span>Ustaxona kodi</span>
                 <input
                   id="w-code"
                   v-model="form.code"
@@ -384,19 +427,19 @@ onMounted(async () => {
                 <input id="b-address" v-model="form.branchAddress" required />
               </label>
               <label class="admin-field" for="b-lat">
-                <span>Latitude</span>
+                <span>Kenglik</span>
                 <input id="b-lat" v-model="form.latitude" inputmode="decimal" required />
               </label>
               <label class="admin-field" for="b-lon">
-                <span>Longitude</span>
+                <span>Uzunlik</span>
                 <input id="b-lon" v-model="form.longitude" inputmode="decimal" required />
               </label>
               <label class="admin-field" for="o-name">
-                <span>Owner ism</span>
+                <span>Ega ismi</span>
                 <input id="o-name" v-model="form.ownerName" autocomplete="name" required />
               </label>
               <label class="admin-field" for="o-phone">
-                <span>Owner telefon</span>
+                <span>Ega telefoni</span>
                 <input
                   id="o-phone"
                   v-model="form.ownerPhone"
@@ -406,11 +449,11 @@ onMounted(async () => {
                 />
               </label>
               <label class="admin-field" for="o-login">
-                <span>Owner login</span>
+                <span>Ega login</span>
                 <input id="o-login" v-model="form.ownerLogin" autocomplete="username" required />
               </label>
               <label class="admin-field admin-full" for="o-pass">
-                <span>Temp password</span>
+                <span>Vaqtinchalik parol</span>
                 <input
                   id="o-pass"
                   v-model="form.tempPassword"
@@ -418,6 +461,34 @@ onMounted(async () => {
                   placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
                 />
               </label>
+              <fieldset class="admin-full admin-working-hours">
+                <legend>Birinchi filial ish vaqti</legend>
+                <div class="admin-working-hours-grid">
+                  <div
+                    v-for="day in workingDayOptions"
+                    :key="day.key"
+                    class="admin-working-hours-row"
+                  >
+                    <span>{{ day.label }}</span>
+                    <label :for="`hours-${day.key}-open`">
+                      <span class="sr-only">{{ day.label }} ochilish vaqti</span>
+                      <input
+                        :id="`hours-${day.key}-open`"
+                        v-model="workingHours[day.key].open"
+                        type="time"
+                      />
+                    </label>
+                    <label :for="`hours-${day.key}-close`">
+                      <span class="sr-only">{{ day.label }} yopilish vaqti</span>
+                      <input
+                        :id="`hours-${day.key}-close`"
+                        v-model="workingHours[day.key].close"
+                        type="time"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </fieldset>
             </div>
             <p
               v-if="createError"
@@ -453,7 +524,7 @@ onMounted(async () => {
     >
       <label class="admin-field">
         <span>Majburiy sabab</span>
-        <textarea v-model="blockReason" required></textarea>
+        <textarea v-model="blockReason"></textarea>
       </label>
     </ConfirmDialog>
 
@@ -472,7 +543,7 @@ onMounted(async () => {
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
       title="Ustaxona yaratildi — bir martalik maxfiy ma'lumot"
-      intro="Workshop code va owner login bilan birga vaqtinchalik parolni egasiga yetkazing."
+      intro="Ustaxona kodi, ega login va vaqtinchalik parolni egasiga yetkazing."
       :rows="secretRows"
       @close="closeSecret"
     />

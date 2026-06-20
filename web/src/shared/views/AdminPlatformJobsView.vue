@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { adminDateTime, jobStatusLabel, jobStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
@@ -9,6 +10,7 @@ import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformJobSummary } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
+const route = useRoute()
 const toast = useToast()
 const runningJob = ref<string | null>(null)
 const runError = ref<string | null>(null)
@@ -55,7 +57,20 @@ function openLog(job: PlatformJobSummary) {
   selectedJobName.value = job.definition.name
 }
 
-onMounted(admin.loadJobs)
+function openJobFromRoute() {
+  const jobName = typeof route.query.job === 'string' ? route.query.job : null
+  if (!jobName) return
+  if (admin.jobs.some((job) => job.definition.name === jobName)) selectedJobName.value = jobName
+}
+
+onMounted(async () => {
+  await admin.loadJobs()
+  openJobFromRoute()
+})
+watch(
+  () => route.query.job,
+  () => openJobFromRoute(),
+)
 </script>
 
 <template>
@@ -63,7 +78,7 @@ onMounted(admin.loadJobs)
     <div class="admin-page-head">
       <div>
         <h1>Fon vazifalar</h1>
-        <p class="sub">In-process scheduler holati, oxirgi natija va manual trigger.</p>
+        <p class="sub">In-process scheduler holati, oxirgi natija va qo'lda ishga tushirish.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
         Yangilash
@@ -86,7 +101,7 @@ onMounted(admin.loadJobs)
 
     <section v-else-if="admin.jobs.length === 0" class="admin-empty">
       <h3>Ro'yxatdan o'tgan vazifa yo'q</h3>
-      <p>Default scheduler jobs bootstrap qilingandan keyin ko'rinadi.</p>
+      <p>Ro'yxatdan o'tgan joblar bootstrap qilingandan keyin ko'rinadi.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -110,7 +125,7 @@ onMounted(admin.loadJobs)
             >
               <td class="nm">
                 {{ job.definition.name }}
-                <small>{{ job.definition.enabled ? 'enabled' : 'disabled' }}</small>
+                <small>{{ job.definition.enabled ? 'yoqilgan' : "o'chirilgan" }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ job.definition.schedule }}</td>
               <td class="admin-mono text-ink-muted">
@@ -133,6 +148,7 @@ onMounted(admin.loadJobs)
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${job.definition.name} jurnalini ko'rish`"
                     @click="openLog(job)"
                   >
                     Jurnalni ko'rish
@@ -141,13 +157,14 @@ onMounted(admin.loadJobs)
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                     :disabled="runningJob === job.definition.name"
+                    :aria-label="`${job.definition.name} jobini hozir ishga tushirish`"
                     @click="askRun(job)"
                   >
                     {{
                       runningJob === job.definition.name
                         ? 'Ishlamoqda'
                         : job.definition.last_result === 'failed'
-                          ? 'Qayta urinish (failed)'
+                          ? 'Qayta urinish'
                           : 'Hozir ishga tushirish'
                     }}
                   </button>
@@ -192,7 +209,7 @@ onMounted(admin.loadJobs)
         <div class="admin-modal-b">
           <p class="mb-4 font-mono text-sm font-bold text-ink">{{ selectedJob.definition.name }}</p>
           <div v-if="selectedJob.recent_runs.length === 0" class="admin-empty">
-            <h3>Run yo'q</h3>
+            <h3>Ishga tushirish yozuvi yo'q</h3>
             <p>Job hali ishga tushmagan.</p>
           </div>
           <article

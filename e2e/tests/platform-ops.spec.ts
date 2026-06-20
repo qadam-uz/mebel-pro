@@ -118,7 +118,7 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await createDialog.getByLabel('Ism').fill('E2E Operator')
   await createDialog.getByLabel('Telefon').fill(phoneFor(id, 5))
   await createDialog.getByLabel('Login').fill(opLogin)
-  await createDialog.getByLabel('Temp password').fill('OpTemp123')
+  await createDialog.getByLabel('Vaqtinchalik parol').fill('OpTemp123')
   await createDialog.getByRole('button', { name: 'Saqlash' }).click()
 
   const secret = page.getByRole('dialog', { name: /maxfiy ma'lumot/ })
@@ -130,7 +130,7 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await expect(opRow).toBeVisible()
 
   // Reset password → a fresh one-time secret.
-  await opRow.getByRole('button', { name: 'Parol qaytarish' }).click()
+  await opRow.getByRole('button', { name: /operatori parolini qaytarish/ }).click()
   await page.getByRole('dialog', { name: 'Parolni qaytarish' }).getByRole('button', {
     name: 'Parolni qaytarish',
   }).click()
@@ -138,7 +138,7 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await page.getByRole('button', { name: /Yopdim/ }).click()
 
   // Block → row becomes Bloklangan.
-  await opRow.getByRole('button', { name: 'Bloklash' }).click()
+  await opRow.getByRole('button', { name: /operatorini bloklash/ }).click()
   await page.getByLabel(/sabab/i).fill('E2E operator block')
   await page
     .getByRole('dialog', { name: 'Operatorni bloklash' })
@@ -147,7 +147,7 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await expect(opRow.getByText('Bloklangan')).toBeVisible()
 
   // Unblock → back to Faol.
-  await opRow.getByRole('button', { name: 'Blokdan chiqarish' }).click()
+  await opRow.getByRole('button', { name: /operatorini blokdan chiqarish/ }).click()
   await expect(opRow.getByText('Faol')).toBeVisible()
 })
 
@@ -179,10 +179,10 @@ test('admin resolves then reopens an error record', async ({ page }, testInfo) =
   await page.getByRole('link', { name: 'Xatolik monitor' }).first().click()
   const row = page.getByRole('row').filter({ hasText: code })
   await expect(row).toBeVisible()
-  await row.getByRole('button', { name: 'Tafsilotlar' }).click()
+  await row.getByRole('button', { name: /xatoligi tafsilotlarini ochish/ }).click()
 
   // Resolve via the confirm dialog → the reopen affordance replaces it.
-  await page.getByRole('button', { name: 'Tasdiqlash (resolve)' }).click()
+  await page.getByRole('button', { name: 'Hal qilingan deb belgilash' }).click()
   await page
     .getByRole('dialog', { name: 'Xatolikni tasdiqlash' })
     .getByRole('button', { name: 'Tasdiqlash' })
@@ -192,5 +192,5 @@ test('admin resolves then reopens an error record', async ({ page }, testInfo) =
 
   // Reopen → the record flips back to open and the resolve affordance returns.
   await reopen.click()
-  await expect(page.getByRole('button', { name: 'Tasdiqlash (resolve)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Hal qilingan deb belgilash' })).toBeVisible()
 })

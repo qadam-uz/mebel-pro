@@ -240,6 +240,7 @@ onMounted(loadAll)
                   type="button"
                   class="mp-button mp-button-outline min-h-8 px-2 text-xs"
                   :disabled="running"
+                  :aria-label="`${job.definition.name} jobini qayta ishga tushirish`"
                   @click="rerun(job.definition.name)"
                 >
                   Qayta

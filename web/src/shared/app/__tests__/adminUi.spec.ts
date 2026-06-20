@@ -130,7 +130,7 @@ describe('admin UI helpers', () => {
           event_code: 'error.spike',
         }),
       ),
-    ).toBe('/admin/platform/errors')
+    ).toBe('/admin/platform/errors?record=err-1')
     expect(
       adminNotificationDestination(
         notification({ entity_type: null, entity_id: null, event_code: 'job.failed' }),

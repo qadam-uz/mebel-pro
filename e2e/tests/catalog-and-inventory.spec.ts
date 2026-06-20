@@ -210,20 +210,22 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   // this deterministic whether or not the catalog already has rows.
   await page.getByRole('button', { name: 'Yangi material' }).first().click()
   const materialDialog = page.getByRole('dialog', { name: 'Yangi material' })
-  await materialDialog.getByRole('button', { name: 'Inline manufacturer' }).click()
-  const manufacturerDialog = page.getByRole('dialog', { name: 'Yangi manufacturer' })
+  await materialDialog.getByRole('button', { name: 'Yangi ishlab chiqaruvchi' }).click()
+  const manufacturerDialog = page.getByRole('dialog', { name: 'Yangi ishlab chiqaruvchi' })
   await manufacturerDialog.getByLabel('Nomi').fill(makerName)
-  await manufacturerDialog.getByLabel('Country').fill('UZ')
+  await manufacturerDialog.getByLabel('Davlat').fill('UZ')
   await manufacturerDialog.getByRole('button', { name: 'Saqlash' }).click()
   await expect(manufacturerDialog).toBeHidden()
   await expect(materialDialog.getByRole('button', { name: new RegExp(makerName) })).toBeVisible()
 
   await materialDialog.getByLabel('Material nomi').fill(materialName)
   await materialDialog.getByLabel('Rang / decor').fill('White')
-  await materialDialog.getByLabel('Decor code').fill(`UI-${id}`)
+  await materialDialog.getByLabel('Decor kodi').fill(`UI-${id}`)
   await materialDialog.getByRole('button', { name: 'Saqlash' }).click()
 
-  await expect(page.getByRole('cell', { name: materialName })).toBeVisible()
+  await expect(
+    page.getByRole('row', { name: new RegExp(escapeRegExp(materialName)) }),
+  ).toBeVisible()
 })
 
 test('owner adds a branch material and records stock movement with a receipt', async ({

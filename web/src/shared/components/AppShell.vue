@@ -749,6 +749,7 @@ onBeforeUnmount(() => {
   </div>
 
   <div v-else class="admin-app">
+    <a class="admin-skip-link" href="#admin-content">Kontentga o'tish</a>
     <aside class="admin-sidebar" aria-label="Superadmin navigation">
       <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="admin-brand-mark" />
@@ -916,7 +917,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <main class="admin-main">
+    <main id="admin-content" class="admin-main" tabindex="-1">
       <div v-if="passwordResetRequired" class="admin-reset-gate" role="alert">
         <svg
           class="admin-reset-gate-ic"
@@ -945,13 +946,6 @@ onBeforeUnmount(() => {
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
           Menu
         </button>
-
-        <label class="admin-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('search')"></svg>
-          <span class="sr-only">Global qidiruv</span>
-          <input placeholder="Ustaxona, mijoz, buyurtma yoki xatolik kodi..." />
-          <span class="admin-kbd">⌘ K</span>
-        </label>
 
         <div class="admin-top-actions">
           <NotificationsMenu />

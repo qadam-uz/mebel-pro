@@ -28,7 +28,7 @@ const errorText = computed(() =>
         <span class="client-brand-name">Mebel Pro</span>
       </RouterLink>
 
-      <form class="space-y-4" @submit.prevent="submit">
+      <form class="space-y-4" novalidate @submit.prevent="submit">
         <div>
           <h1 id="admin-login-title" class="font-serif text-3xl font-semibold leading-tight">
             Operator paneliga kirish

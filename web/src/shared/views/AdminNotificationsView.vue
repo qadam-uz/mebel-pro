@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
@@ -19,6 +19,7 @@ const rolePath = useRolePath()
 const toast = useToast()
 const filter = ref('all')
 const markingId = ref<string | null>(null)
+const PAGE_SIZE = 50
 const filterOptions = [
   dropdownOption('all', 'Hammasi', 'barcha yozuvlar'),
   dropdownOption('unread', "O'qilmagan", 'faqat yangi'),
@@ -49,18 +50,33 @@ async function markRead(id: string) {
   }
 }
 
+function markOpened(item: NotificationItem) {
+  if (item.read_at === null) void markRead(item.id)
+}
+
 async function markAll() {
   await notifications.markAllRead()
   if (notifications.actionError) toast.danger("Belgilab bo'lmadi")
   else toast.success("Hammasi o'qilgan deb belgilandi")
 }
 
+function loadFirstPage() {
+  return notifications.loadList(PAGE_SIZE, 0, filter.value === 'unread')
+}
+
+function loadMore() {
+  return notifications.loadList(PAGE_SIZE, notifications.items.length, filter.value === 'unread')
+}
+
 let pollTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
-  void notifications.loadList(100)
+  void loadFirstPage()
   pollTimer = setInterval(() => {
     if (document.visibilityState === 'visible') void notifications.loadUnreadCount()
   }, 45000)
+})
+watch(filter, () => {
+  void loadFirstPage()
 })
 onBeforeUnmount(() => clearInterval(pollTimer))
 </script>
@@ -70,7 +86,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
     <div class="admin-page-head">
       <div>
         <h1>Bildirishnomalar</h1>
-        <p class="sub">Operator uchun failed job va error spike xabarlari.</p>
+        <p class="sub">Operator uchun job xatosi va xato spayki xabarlari.</p>
       </div>
       <button
         type="button"
@@ -86,7 +102,11 @@ onBeforeUnmount(() => clearInterval(pollTimer))
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
     </div>
 
-    <section v-if="notifications.loading" class="admin-card p-5" aria-live="polite">
+    <section
+      v-if="notifications.loading && notifications.items.length === 0"
+      class="admin-card p-5"
+      aria-live="polite"
+    >
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
@@ -95,8 +115,9 @@ onBeforeUnmount(() => clearInterval(pollTimer))
     <AdminErrorState
       v-else-if="notifications.error"
       :code="notifications.error"
+      :trace-id="notifications.traceId"
       title="Bildirishnomalar yuklanmadi"
-      @retry="notifications.loadList(100)"
+      @retry="loadFirstPage"
     />
 
     <section v-else-if="rows.length === 0" class="admin-empty">
@@ -123,6 +144,8 @@ onBeforeUnmount(() => clearInterval(pollTimer))
             <RouterLink
               :to="rolePath(adminNotificationDestination(item))"
               class="block truncate font-bold text-ink no-underline"
+              :aria-label="`${adminNotificationTitle(item)} bildirishnomasini ochish`"
+              @click="markOpened(item)"
             >
               {{ adminNotificationTitle(item) }}
             </RouterLink>
@@ -141,6 +164,16 @@ onBeforeUnmount(() => clearInterval(pollTimer))
           </button>
           <span v-else class="admin-mono text-ink-muted">{{ adminDateTime(item.read_at) }}</span>
         </article>
+        <div v-if="notifications.hasMore" class="mt-3 flex justify-center">
+          <button
+            type="button"
+            class="mp-button mp-button-outline"
+            :disabled="notifications.loading"
+            @click="loadMore"
+          >
+            {{ notifications.loading ? 'Yuklanmoqda' : 'Yana yuklash' }}
+          </button>
+        </div>
       </div>
     </section>
   </section>

@@ -103,6 +103,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
           v-if="admin.detail.workshop.status === 'active'"
           type="button"
           class="mp-button mp-button-outline text-danger"
+          :aria-label="`${admin.detail.workshop.name} ustaxonasini bloklash`"
           @click="blockModalOpen = true"
         >
           Ustaxonani bloklash
@@ -112,6 +113,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
           type="button"
           class="mp-button mp-button-primary"
           :disabled="acting"
+          :aria-label="`${admin.detail.workshop.name} ustaxonasini blokdan chiqarish`"
           @click="unblock"
         >
           Blokdan chiqarish
@@ -216,7 +218,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Owner</dt>
+            <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
             <dd class="mt-1 text-base font-bold text-ink">
               {{ admin.detail.owner.full_name }}
               <span class="block font-mono text-xs text-ink-muted">
@@ -244,7 +246,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       class="admin-card"
     >
       <div class="admin-card-h">
-        <h2>Filiallar (read-only)</h2>
+        <h2>Filiallar (faqat o'qish)</h2>
       </div>
       <div class="admin-card-b flush">
         <div class="admin-table-wrap">
@@ -290,7 +292,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       class="admin-card"
     >
       <div class="admin-card-h">
-        <h2>Xodimlar (read-only)</h2>
+        <h2>Xodimlar (faqat o'qish)</h2>
         <span class="sub">rol yo'q - is_owner + berilgan ruxsatlar</span>
       </div>
       <div class="admin-card-b">
@@ -307,7 +309,8 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <div class="admin-empty mt-4">
           <h3>Staff ro'yxati alohida ko'rsatilmaydi</h3>
           <p>
-            v1 operator scope owner va filiallarni incident response uchun read-only ko'rsatadi.
+            v1 operator doirasi ega va filiallarni incident response uchun faqat o'qish rejimida
+            ko'rsatadi.
           </p>
         </div>
       </div>
@@ -335,7 +338,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             x
           </button>
         </div>
-        <form @submit.prevent="block">
+        <form novalidate @submit.prevent="block">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
               Xodimlar sessiyalari darhol bekor qilinadi, ochiq buyurtmalar muzlaydi. Mijozlarga
@@ -343,7 +346,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </p>
             <label class="admin-field" for="block-reason">
               <span>Majburiy sabab</span>
-              <textarea id="block-reason" v-model="reason" required></textarea>
+              <textarea id="block-reason" v-model="reason"></textarea>
             </label>
           </div>
           <div class="admin-modal-f">

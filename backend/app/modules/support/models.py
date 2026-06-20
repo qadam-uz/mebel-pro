@@ -67,6 +67,7 @@ class ActionLog(UUIDPrimaryKey, Base):
     __table_args__ = (
         Index("ix_action_logs_workshop_branch", "workshop_id", "branch_id"),
         Index("ix_action_logs_entity", "entity_type", "entity_id"),
+        Index("ix_action_logs_created_at", "created_at"),
     )
 
     actor_type: Mapped[ActorType] = mapped_column(
@@ -90,6 +91,7 @@ class StatusChangeLog(UUIDPrimaryKey, Base):
     __table_args__ = (
         Index("ix_status_change_logs_entity", "entity_type", "entity_id"),
         Index("ix_status_change_logs_workshop_branch", "workshop_id", "branch_id"),
+        Index("ix_status_change_logs_changed_at", "changed_at"),
     )
 
     entity_type: Mapped[str] = mapped_column(nullable=False)

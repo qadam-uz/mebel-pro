@@ -86,10 +86,12 @@ async function save() {
     if (editingId.value) await admin.updateManufacturer(editingId.value, payload)
     else await admin.createManufacturer(payload)
     modalOpen.value = false
-    toast.success(editingId.value ? 'Manufacturer yangilandi' : "Manufacturer qo'shildi")
+    toast.success(
+      editingId.value ? 'Ishlab chiqaruvchi yangilandi' : "Ishlab chiqaruvchi qo'shildi",
+    )
   } catch {
     saveError.value = 'manufacturer_save_failed'
-    toast.danger('Manufacturer saqlanmadi')
+    toast.danger('Ishlab chiqaruvchi saqlanmadi')
   } finally {
     saving.value = false
   }
@@ -124,7 +126,7 @@ onMounted(async () => {
     <div class="admin-page-head">
       <div>
         <h1>Ishlab chiqaruvchilar</h1>
-        <p class="sub">Platforma material katalogidagi brand va ishlab chiqaruvchilar.</p>
+        <p class="sub">Platforma material katalogidagi brend va ishlab chiqaruvchilar.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">
         Ishlab chiqaruvchi
@@ -133,8 +135,8 @@ onMounted(async () => {
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Manufacturer nomi</span>
-        <input v-model="search" placeholder="Manufacturer nomi" />
+        <span>Qidiruv</span>
+        <input v-model="search" placeholder="Ishlab chiqaruvchi nomi" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
       <ProjectDropdown v-model="countryFilter" label="Davlat" :options="countryOptions" />
@@ -198,6 +200,7 @@ onMounted(async () => {
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${manufacturer.name} ishlab chiqaruvchisini tahrirlash`"
                     @click="openEdit(manufacturer)"
                   >
                     Tahrirlash
@@ -206,6 +209,11 @@ onMounted(async () => {
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === manufacturer.id"
+                    :aria-label="
+                      manufacturer.status === 'active'
+                        ? `${manufacturer.name} ishlab chiqaruvchisini faol emas qilish`
+                        : `${manufacturer.name} ishlab chiqaruvchisini faollashtirish`
+                    "
                     @click="
                       askStatus(
                         manufacturer,
@@ -236,7 +244,7 @@ onMounted(async () => {
       >
         <div class="admin-modal-h">
           <h3 id="manufacturer-title">
-            {{ editingId ? 'Manufacturer tahrirlash' : 'Yangi manufacturer' }}
+            {{ editingId ? 'Ishlab chiqaruvchini tahrirlash' : 'Yangi ishlab chiqaruvchi' }}
           </h3>
           <button
             type="button"
@@ -247,7 +255,7 @@ onMounted(async () => {
             x
           </button>
         </div>
-        <form @submit.prevent="save">
+        <form novalidate @submit.prevent="save">
           <div class="admin-modal-b">
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="mfr-name">
@@ -255,8 +263,8 @@ onMounted(async () => {
                 <input id="mfr-name" v-model="form.name" placeholder="Egger" required />
               </label>
               <label class="admin-field" for="mfr-country">
-                <span>Country</span>
-                <input id="mfr-country" v-model="form.country" placeholder="Austria" />
+                <span>Davlat</span>
+                <input id="mfr-country" v-model="form.country" placeholder="Avstriya" />
               </label>
               <label class="admin-field admin-full" for="mfr-note">
                 <span>Izoh</span>
@@ -271,7 +279,7 @@ onMounted(async () => {
               v-if="saveError"
               class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Manufacturer saqlanmadi.
+              Ishlab chiqaruvchi saqlanmadi.
             </p>
           </div>
           <div class="admin-modal-f">

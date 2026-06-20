@@ -188,7 +188,7 @@ onMounted(loadSessions)
     >
       <div class="admin-card-h">
         <h2>Profil</h2>
-        <span class="sub">read-only . operator o'z profilini tahrirlamaydi</span>
+        <span class="sub">faqat o'qish . operator o'z profilini tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
         <dl class="grid gap-4 sm:grid-cols-2">
@@ -210,7 +210,7 @@ onMounted(loadSessions)
       <div class="admin-card-h">
         <h2>Parolni o'zgartirish</h2>
       </div>
-      <form class="admin-card-b grid gap-4" @submit.prevent="changePassword">
+      <form class="admin-card-b grid gap-4" novalidate @submit.prevent="changePassword">
         <label class="admin-field" for="admin-current-password">
           <span class="admin-field-label">Joriy parol</span>
           <input

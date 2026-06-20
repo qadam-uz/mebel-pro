@@ -57,7 +57,7 @@ const secretRows = computed(() => {
   if (!secret) return []
   return [
     { label: 'Operator', value: secret.user.login },
-    { label: 'Temp password', value: secret.temp_password },
+    { label: 'Vaqtinchalik parol', value: secret.temp_password },
   ]
 })
 
@@ -203,19 +203,19 @@ onMounted(admin.loadPlatformUsers)
     <div class="admin-page-head">
       <div>
         <h1>Platforma operatorlari</h1>
-        <p class="sub">Platforma scope bir xil; permission modeli yo'q.</p>
+        <p class="sub">Platforma doirasi bir xil; alohida ruxsat modeli yo'q.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">Yangi operator</button>
     </div>
 
     <p class="mb-4 rounded-md border border-hairline bg-sunk px-4 py-3 text-sm text-ink-soft">
-      Platforma operatorlari bir xil scope-ga ega — alohida ruxsat modeli yo'q. O'zingizni yoki
+      Platforma operatorlari bir xil doiraga ega — alohida ruxsat modeli yo'q. O'zingizni yoki
       oxirgi faol operatorni bloklab bo'lmaysiz.
     </p>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span class="sr-only">Operator qidiruv</span>
+        <span>Qidiruv</span>
         <input v-model="query" placeholder="Ism, login yoki telefon" />
       </label>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadPlatformUsers">
@@ -277,6 +277,7 @@ onMounted(admin.loadPlatformUsers)
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                    :aria-label="`${user.full_name} operatorini tahrirlash`"
                     @click="openEdit(user)"
                   >
                     Tahrirlash
@@ -285,6 +286,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
+                    :aria-label="`${user.full_name} operatori parolini qaytarish`"
                     @click="askReset(user)"
                   >
                     Parol qaytarish
@@ -295,6 +297,9 @@ onMounted(admin.loadPlatformUsers)
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
                     :disabled="blockDisabledReason(user) !== null || actionId === user.id"
                     :title="blockDisabledReason(user) ?? undefined"
+                    :aria-label="
+                      blockDisabledReason(user) ?? `${user.full_name} operatorini bloklash`
+                    "
                     @click="askBlock(user)"
                   >
                     {{ blockDisabledReason(user) ?? 'Bloklash' }}
@@ -304,6 +309,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
+                    :aria-label="`${user.full_name} operatorini blokdan chiqarish`"
                     @click="unblock(user.id)"
                   >
                     Blokdan chiqarish
@@ -367,7 +373,7 @@ onMounted(admin.loadPlatformUsers)
             x
           </button>
         </div>
-        <form @submit.prevent="saveUser">
+        <form novalidate @submit.prevent="saveUser">
           <div class="admin-modal-b">
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="op-name">
@@ -395,7 +401,7 @@ onMounted(admin.loadPlatformUsers)
                 />
               </label>
               <label v-if="!editingId" class="admin-field admin-full" for="op-pass">
-                <span>Temp password</span>
+                <span>Vaqtinchalik parol</span>
                 <input
                   id="op-pass"
                   v-model="form.tempPassword"
@@ -439,7 +445,7 @@ onMounted(admin.loadPlatformUsers)
             x
           </button>
         </div>
-        <form @submit.prevent="confirmBlock">
+        <form novalidate @submit.prevent="confirmBlock">
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
               {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Blokdan chiqarilganda
