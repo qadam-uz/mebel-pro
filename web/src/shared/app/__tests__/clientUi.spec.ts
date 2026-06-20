@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import {
   clientErrorLabel,
+  clientGreetingName,
+  clientHomeSubtitle,
+  clientNextPhaseLabel,
   clientNotificationBody,
   clientNotificationIconName,
   clientNotificationTitle,
   clientPhaseIndex,
+  clientPhaseProgress,
   clientStatusPillClass,
   formatPercent,
   formatRelativeDate,
@@ -48,6 +52,55 @@ describe('client UI helpers', () => {
     expect(clientPhaseIndex('cancelled')).toBe(-1)
     expect(clientStatusPillClass('ready')).toContain('client-pill-ready')
     expect(clientStatusPillClass('cancelled')).toContain('client-pill-danger')
+  })
+
+  it('drives the dashboard progress bar and next-phase hint from the order phase', () => {
+    // monotonic fill across the five phases; ready is near-complete, completed is full
+    expect(clientPhaseProgress('new')).toBe(14)
+    expect(clientPhaseProgress('cutting')).toBe(55)
+    expect(clientPhaseProgress('ready')).toBe(85)
+    expect(clientPhaseProgress('completed')).toBe(100)
+    // off-track statuses read as empty rather than NaN
+    expect(clientPhaseProgress('cancelled')).toBe(0)
+    // next-phase label points one step ahead; the final phase has none
+    expect(clientNextPhaseLabel('new')).toBe('Tasdiqlandi')
+    expect(clientNextPhaseLabel('cutting')).toBe('Tayyor')
+    expect(clientNextPhaseLabel('ready')).toBe('Topshirildi')
+    expect(clientNextPhaseLabel('completed')).toBeNull()
+    expect(clientNextPhaseLabel('cancelled')).toBeNull()
+  })
+
+  it('greets with the first given name, falling back when no real name is set', () => {
+    expect(clientGreetingName({ full_name: 'Dilshod Karimov', name: null })).toBe('Dilshod')
+    expect(clientGreetingName({ full_name: null, name: 'Aziza' })).toBe('Aziza')
+    expect(clientGreetingName({ full_name: '  Bobur  Mirzo ', name: null })).toBe('Bobur')
+    // full_name wins over name; never greets a blank/absent name (caller uses a generic heading)
+    expect(clientGreetingName({ full_name: 'Sardor', name: 'ignored' })).toBe('Sardor')
+    // an empty-string full_name falls through to a populated name (|| not ??)
+    expect(clientGreetingName({ full_name: '', name: 'Aziza' })).toBe('Aziza')
+    expect(clientGreetingName({ full_name: '   ', name: 'Jasur' })).toBe('Jasur')
+    expect(clientGreetingName({ full_name: '', name: '' })).toBeNull()
+    expect(clientGreetingName(null)).toBeNull()
+  })
+
+  it('keys the dashboard subtitle off what most needs attention', () => {
+    // ready-for-pickup wins; "qolgani yo'lda" only when other orders are still in flight
+    expect(clientHomeSubtitle({ ready: 1, active: 3, drafts: 2 })).toBe(
+      "1 buyurtmangiz olishga tayyor — qolgani yo'lda.",
+    )
+    expect(clientHomeSubtitle({ ready: 2, active: 2, drafts: 0 })).toBe(
+      '2 buyurtmangiz olishga tayyor.',
+    )
+    // no ready order → in-flight orders, then drafts, then first-run
+    expect(clientHomeSubtitle({ ready: 0, active: 2, drafts: 1 })).toBe(
+      '2 ta faol buyurtmangiz bor.',
+    )
+    expect(clientHomeSubtitle({ ready: 0, active: 0, drafts: 3 })).toBe(
+      'Saqlangan chizmalaringizdan davom eting.',
+    )
+    expect(clientHomeSubtitle({ ready: 0, active: 0, drafts: 0 })).toBe(
+      'Birinchi kesim chizmangizdan boshlang.',
+    )
   })
 
   it('formats optimizer waste ratios as percentages (0..1 fraction × 100)', () => {

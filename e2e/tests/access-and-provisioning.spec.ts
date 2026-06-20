@@ -303,5 +303,6 @@ test('client signs in with dev OTP and registers a name', async ({ page }, testI
   await page.getByRole('button', { name: 'Davom etish' }).click()
 
   await expect(page).toHaveURL(/\/client\/c$/)
-  await expect(page.getByRole('heading', { name: 'Bosh sahifa', exact: true })).toBeVisible()
+  // The home greets the client by the name they just registered (first given name).
+  await expect(page.getByRole('heading', { name: 'Salom, E2E', exact: true })).toBeVisible()
 })

@@ -221,10 +221,21 @@ fix the branch's pricing or selection
 
 ## UX — client app
 
-The client app's home is the cutting wizard entry (**New cutting** + **My drafts** + **My
-orders**). Branch is chosen at placement, against a specific cutting — defaulted from the
-draft's `preferred_branch_id` if set.
+The client app's home (`/c`) is an **order-status-first dashboard**, with the cutting wizard
+one tap away (**New cutting** + **My drafts** + **My orders** all reachable from it). Branch is
+chosen at placement, against a specific cutting — defaulted from the draft's
+`preferred_branch_id` if set.
 
+- **Home dashboard** (`/c`) — greets the client by first name and leads with whatever most
+  needs attention. When an order is `ready`, a **ready-for-pickup** banner surfaces the first
+  such order (number, branch, total, a pickup action into its detail, and a *N more ready* hint
+  when several are waiting); the subtitle and a three-up count strip summarise **active
+  orders**, **in production** (`cutting` + `edge_banding`), and **saved drafts**. Below, the
+  **active orders** list shows each order as a row — number, branch, placed-at, a phase-progress
+  bar with the current and next phase, the status pill, total, and a track/detail action — and a
+  **continue** list links the most recent drafts back into the editor. A client with nothing
+  active and no saved drafts sees a single first-run start prompt instead of empty sections;
+  New cutting is always one action away in the header.
 - **Cutting wizard** — see [`cutting.md`](cutting.md). Entry point and where the client
   spends most of their time.
 - **Order create wizard** (`/c/orders/new/:draftId`) — opens from the cutting result's
