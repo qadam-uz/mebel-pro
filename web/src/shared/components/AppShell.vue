@@ -843,6 +843,7 @@ onBeforeUnmount(() => {
       class="admin-drawer"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="admin-mobile-drawer-title"
       @keydown="onDrawerKeydown"
     >
       <button
@@ -853,7 +854,9 @@ onBeforeUnmount(() => {
       ></button>
       <div ref="drawerPanelRef" class="admin-drawer-panel" tabindex="-1">
         <div class="admin-drawer-head">
-          <span class="font-serif text-lg font-semibold">Mebel Pro</span>
+          <span id="admin-mobile-drawer-title" class="font-serif text-lg font-semibold">
+            Mebel Pro
+          </span>
           <button
             class="admin-icon-button"
             type="button"
@@ -882,12 +885,32 @@ onBeforeUnmount(() => {
               active-class="on"
               :tabindex="passwordResetRequired ? -1 : undefined"
               :aria-disabled="passwordResetRequired ? 'true' : undefined"
+              @click="closeMobileNav"
             >
               <span class="admin-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
               </span>
               <span>{{ item.label }}</span>
             </RouterLink>
+          </section>
+          <section class="admin-nav-group">
+            <div class="admin-nav-label">Ma'lumotnoma</div>
+            <a
+              v-for="link in adminDocsLinks"
+              :key="`m-doc-${link.href}`"
+              class="admin-nav-item"
+              :href="link.href"
+              target="_blank"
+              rel="noopener"
+              :tabindex="passwordResetRequired ? -1 : undefined"
+              :aria-disabled="passwordResetRequired ? 'true' : undefined"
+              @click="closeMobileNav"
+            >
+              <span class="admin-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" v-html="adminIconPath('book')"></svg>
+              </span>
+              <span>{{ link.label }}</span>
+            </a>
           </section>
         </nav>
       </div>

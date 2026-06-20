@@ -19,6 +19,11 @@ from app.models.enums import (
 from app.modules.workshop.schemas import WorkingHours, validate_working_hours
 from app.schemas.common import APIModel
 
+LATITUDE_MIN = Decimal("-90")
+LATITUDE_MAX = Decimal("90")
+LONGITUDE_MIN = Decimal("-180")
+LONGITUDE_MAX = Decimal("180")
+
 
 class WorkshopInput(BaseModel):
     name: str
@@ -40,6 +45,20 @@ class FirstBranchInput(BaseModel):
     @classmethod
     def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
         return validate_working_hours(value)
+
+    @field_validator("latitude")
+    @classmethod
+    def _validate_latitude(cls, value: Decimal) -> Decimal:
+        if value < LATITUDE_MIN or value > LATITUDE_MAX:
+            raise ValueError("latitude must be between -90 and 90")
+        return value
+
+    @field_validator("longitude")
+    @classmethod
+    def _validate_longitude(cls, value: Decimal) -> Decimal:
+        if value < LONGITUDE_MIN or value > LONGITUDE_MAX:
+            raise ValueError("longitude must be between -180 and 180")
+        return value
 
 
 class OwnerInput(BaseModel):

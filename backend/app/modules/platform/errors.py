@@ -1,15 +1,19 @@
 """Application error-monitor recording."""
 
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import ErrorRecordStatus
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord
 from app.modules.support.api import scrub_sensitive, scrub_text
+
+ROLLING_24H = timedelta(hours=24)
+ROLLING_7D = timedelta(days=7)
 
 
 async def record_application_error(
@@ -45,8 +49,6 @@ async def record_application_error(
             if record is None:
                 raise
     record.status = ErrorRecordStatus.OPEN
-    record.count_24h += 1
-    record.count_7d += 1
     record.last_occurred_at = now
     record.preview_message = safe_message[:240]
     db.add(
@@ -60,4 +62,38 @@ async def record_application_error(
         )
     )
     await db.flush()
+    await refresh_error_record_counts(db, [record], now=now)
     return record
+
+
+async def refresh_error_record_counts(
+    db: AsyncSession,
+    records: list[ErrorRecord],
+    *,
+    now: datetime | None = None,
+) -> list[ErrorRecord]:
+    """Refresh persisted rolling error counters from occurrence timestamps."""
+    if not records:
+        return records
+    current = now or datetime.now(UTC)
+    for record in records:
+        record.count_24h = await _count_occurrences_since(db, record.id, current - ROLLING_24H)
+        record.count_7d = await _count_occurrences_since(db, record.id, current - ROLLING_7D)
+    await db.flush()
+    return records
+
+
+async def _count_occurrences_since(
+    db: AsyncSession,
+    record_id: uuid.UUID,
+    since: datetime,
+) -> int:
+    count = await db.scalar(
+        select(func.count())
+        .select_from(ErrorOccurrence)
+        .where(
+            ErrorOccurrence.error_record_id == record_id,
+            ErrorOccurrence.occurred_at >= since,
+        )
+    )
+    return int(count or 0)

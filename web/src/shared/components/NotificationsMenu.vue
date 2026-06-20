@@ -36,6 +36,11 @@ const isAdmin = computed(() => roleConfig.role === 'admin')
 const menuLabel = computed(() =>
   isClient.value || isWorkshop.value || isAdmin.value ? 'Bildirishnomalar' : 'Notifications',
 )
+const menuPositionClass = computed(() =>
+  isAdmin.value
+    ? 'fixed inset-x-4 top-16 mt-0 w-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(360px,calc(100vw-2rem))]'
+    : 'absolute right-0 mt-2 w-[min(360px,calc(100vw-2rem))]',
+)
 
 function title(item: NotificationItem) {
   return notificationTitle(item, roleConfig.role)
@@ -239,7 +244,8 @@ onBeforeUnmount(() => {
     <div
       v-if="open"
       ref="menuRef"
-      class="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      class="z-50 overflow-hidden rounded-[10px] border border-hairline-strong bg-elevated shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
+      :class="menuPositionClass"
       role="menu"
       :aria-label="menuLabel"
       @keydown="onMenuKeydown"
@@ -253,7 +259,9 @@ onBeforeUnmount(() => {
           :disabled="notifications.unread === 0"
           @click="markAllRead"
         >
-          {{ isClient || isWorkshop ? "Hammasini o'qilgan deb belgilash" : 'Mark all read' }}
+          {{
+            isClient || isWorkshop || isAdmin ? "Hammasini o'qilgan deb belgilash" : 'Mark all read'
+          }}
         </button>
       </div>
       <div v-if="notifications.loading" class="px-4 py-5 text-sm font-bold text-ink-soft">

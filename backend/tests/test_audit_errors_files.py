@@ -1,6 +1,9 @@
+from datetime import UTC, datetime, timedelta
+
 from app.core.principal import system_actor
 from app.modules.platform.api import record_application_error
 from app.modules.platform.contracts import ErrorOccurrence
+from app.modules.platform.errors import refresh_error_record_counts
 from app.modules.support.api import (
     InMemoryFileStorage,
     record_action,
@@ -91,6 +94,37 @@ async def test_error_monitor_records_masked_occurrences(db_session: AsyncSession
     assert occurrence.message == "A password=*** error"
     assert occurrence.stack == "RuntimeError: token=***"
     assert occurrence.context == {"access_token": "***", "safe": "value"}
+
+
+async def test_error_monitor_counts_are_rolling_windows(db_session: AsyncSession) -> None:
+    record = await record_application_error(
+        db_session,
+        code="test.rolling",
+        module="tests",
+        message="old occurrence",
+        trace_id="trace-old",
+    )
+    old_occurrence = await db_session.scalar(
+        select(ErrorOccurrence).where(ErrorOccurrence.trace_id == "trace-old")
+    )
+    assert old_occurrence is not None
+    old_occurrence.occurred_at = datetime.now(UTC) - timedelta(days=8)
+    await db_session.flush()
+
+    refreshed = await refresh_error_record_counts(db_session, [record])
+    assert refreshed[0].count_24h == 0
+    assert refreshed[0].count_7d == 0
+
+    record = await record_application_error(
+        db_session,
+        code="test.rolling",
+        module="tests",
+        message="new occurrence",
+        trace_id="trace-new",
+    )
+
+    assert record.count_24h == 1
+    assert record.count_7d == 1
 
 
 def test_in_memory_file_storage_round_trips_and_deletes_content() -> None:

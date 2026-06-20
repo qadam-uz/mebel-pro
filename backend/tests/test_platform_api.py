@@ -212,6 +212,39 @@ async def test_platform_provision_rejects_non_canonical_working_hours(
     assert bad_range.status_code == 422
 
 
+async def test_platform_provision_rejects_out_of_range_coordinates(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_token = await _platform_access_token(client, db_session)
+
+    bad_latitude = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="bad-latitude"),
+            "branch": {
+                **_provision_payload()["branch"],
+                "latitude": "91",
+            },
+        },
+    )
+    bad_longitude = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(code="bad-longitude"),
+            "branch": {
+                **_provision_payload()["branch"],
+                "longitude": "181",
+            },
+        },
+    )
+
+    assert bad_latitude.status_code == 422
+    assert bad_longitude.status_code == 422
+
+
 async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_sessions(
     client: AsyncClient,
     db_session: AsyncSession,

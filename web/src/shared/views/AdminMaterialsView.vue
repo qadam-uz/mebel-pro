@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { buildAdminMaterialWriteRequest } from '@/shared/app/adminMaterials'
 import {
   dropdownOption,
   materialKindLabel,
@@ -212,20 +213,7 @@ async function save() {
   saving.value = true
   saveError.value = null
   try {
-    const isPanel = form.kind === 'panel'
-    const payload = {
-      kind: form.kind,
-      manufacturer_id: form.manufacturerId,
-      type: isPanel ? form.type : null,
-      name: form.name,
-      thickness_mm: form.thicknessMm,
-      color: form.color,
-      decor_code: form.decorCode || null,
-      panel_length_mm: isPanel ? Number(form.panelLengthMm) : null,
-      panel_width_mm: isPanel ? Number(form.panelWidthMm) : null,
-      grain_direction: isPanel ? form.grainDirection : null,
-      image_file_id: form.imageFileId,
-    }
+    const payload = buildAdminMaterialWriteRequest(form)
     if (editingId.value) await admin.updateMaterial(editingId.value, payload)
     else await admin.createMaterial(payload)
     modalOpen.value = false
@@ -578,9 +566,9 @@ onMounted(async () => {
             <button
               type="submit"
               class="mp-button mp-button-primary"
-              :disabled="saving || dimensionError"
+              :disabled="saving || files.uploading || dimensionError"
             >
-              {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+              {{ files.uploading ? 'Rasm yuklanmoqda' : saving ? 'Saqlanmoqda' : 'Saqlash' }}
             </button>
           </div>
         </form>

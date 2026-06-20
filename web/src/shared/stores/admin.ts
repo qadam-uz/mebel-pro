@@ -230,19 +230,26 @@ export interface ManufacturerWriteRequest {
   note: string | null
 }
 
-export interface MaterialWriteRequest {
-  kind: MaterialKind
+interface MaterialWriteBase {
   manufacturer_id: string
-  type: PanelMaterialType | null
   name: string
   thickness_mm: string
   color: string
   decor_code: string | null
-  panel_length_mm: number | null
-  panel_width_mm: number | null
-  grain_direction: boolean | null
   image_file_id: string | null
 }
+
+export type MaterialWriteRequest =
+  | (MaterialWriteBase & {
+      kind: 'panel'
+      type: PanelMaterialType
+      panel_length_mm: number
+      panel_width_mm: number
+      grain_direction: boolean
+    })
+  | (MaterialWriteBase & {
+      kind: 'edge'
+    })
 
 export interface PlatformUserCreateRequest {
   full_name: string

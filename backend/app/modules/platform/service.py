@@ -32,6 +32,7 @@ from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.inventory.contracts import StockItem
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord, JobDefinition, JobRun
+from app.modules.platform.errors import refresh_error_record_counts
 from app.modules.platform.scheduler import RegisteredJob, registry
 from app.modules.platform.schemas import (
     PlatformUserCreateRequest,
@@ -685,7 +686,8 @@ async def list_error_records(
     # in practice, but cap the result defensively so a pathological spread of
     # distinct codes can't return an unbounded list to the monitor.
     query = query.limit(200)
-    return list((await db.scalars(query)).all())
+    records = list((await db.scalars(query)).all())
+    return await refresh_error_record_counts(db, records)
 
 
 async def get_error_record_detail(
@@ -698,6 +700,7 @@ async def get_error_record_detail(
     record = await db.get(ErrorRecord, record_id)
     if record is None:
         raise APIError("error_not_found", "Error record not found", status_code=404)
+    await refresh_error_record_counts(db, [record])
     occurrences = list(
         (
             await db.scalars(
@@ -854,15 +857,17 @@ async def _ensure_another_active_platform_user(
     *,
     blocked_user_id: uuid.UUID,
 ) -> None:
-    count = await db.scalar(
-        select(func.count())
-        .select_from(PlatformUser)
-        .where(
-            PlatformUser.status == UserStatus.ACTIVE,
-            PlatformUser.id != blocked_user_id,
-        )
+    active_ids = list(
+        (
+            await db.scalars(
+                select(PlatformUser.id)
+                .where(PlatformUser.status == UserStatus.ACTIVE)
+                .order_by(PlatformUser.id)
+                .with_for_update()
+            )
+        ).all()
     )
-    if (count or 0) < 1:
+    if not any(active_id != blocked_user_id for active_id in active_ids):
         raise APIError(
             "last_platform_operator",
             "At least one active platform operator is required",

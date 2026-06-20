@@ -84,9 +84,6 @@ onBeforeUnmount(() => admin.clearSecrets())
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
-// AB-35: placeholder default coordinates (Tashkent centre) in one place, not a
-// magic literal duplicated across the initial form and resetForm.
-const DEFAULT_WORKSHOP_GEO = { latitude: '41.2995', longitude: '69.2401' }
 // AB-36: once the operator edits the code, stop re-deriving it from the name.
 const codeTouched = ref(false)
 const form = reactive({
@@ -97,8 +94,8 @@ const form = reactive({
   branchName: '',
   branchAddress: '',
   branchPhone: '+998',
-  latitude: DEFAULT_WORKSHOP_GEO.latitude,
-  longitude: DEFAULT_WORKSHOP_GEO.longitude,
+  latitude: '',
+  longitude: '',
   ownerName: '',
   ownerLogin: '',
   ownerPhone: '+998',
@@ -151,8 +148,8 @@ function resetForm() {
   form.branchName = ''
   form.branchAddress = ''
   form.branchPhone = '+998'
-  form.latitude = DEFAULT_WORKSHOP_GEO.latitude
-  form.longitude = DEFAULT_WORKSHOP_GEO.longitude
+  form.latitude = ''
+  form.longitude = ''
   form.ownerName = ''
   form.ownerLogin = ''
   form.ownerPhone = '+998'
