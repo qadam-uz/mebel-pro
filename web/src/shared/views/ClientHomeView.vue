@@ -138,12 +138,11 @@ onMounted(() => {
       <div class="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <RouterLink
           :to="rolePath('/c/orders')"
-          class="client-card flex items-center gap-3 p-4 no-underline transition hover:border-ink"
+          class="client-card flex items-center gap-3 p-4 no-underline client-card-link"
         >
-          <span
-            class="grid size-9 place-items-center rounded-lg bg-sunk font-mono font-bold text-ink-soft"
-            >B</span
-          >
+          <span class="grid size-9 place-items-center rounded-lg bg-sunk text-ink-soft">
+            <Icon name="box" />
+          </span>
           <span>
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               activeOrders.length
@@ -153,12 +152,11 @@ onMounted(() => {
         </RouterLink>
         <RouterLink
           :to="rolePath('/c/orders')"
-          class="client-card flex items-center gap-3 p-4 no-underline transition hover:border-ink"
+          class="client-card flex items-center gap-3 p-4 no-underline client-card-link"
         >
-          <span
-            class="grid size-9 place-items-center rounded-lg bg-sunk font-mono font-bold text-ink-soft"
-            >I</span
-          >
+          <span class="grid size-9 place-items-center rounded-lg bg-sunk text-ink-soft">
+            <Icon name="layers" />
+          </span>
           <span>
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               productionCount
@@ -168,13 +166,12 @@ onMounted(() => {
         </RouterLink>
         <RouterLink
           :to="rolePath('/c/orders')"
-          class="client-card flex items-center gap-3 p-4 no-underline transition hover:border-ink"
+          class="client-card flex items-center gap-3 p-4 no-underline client-card-link"
           :class="readyCount > 0 ? 'border-accent-tint bg-accent-soft' : ''"
         >
-          <span
-            class="grid size-9 place-items-center rounded-lg bg-accent-soft font-mono font-bold text-accent"
-            >T</span
-          >
+          <span class="grid size-9 place-items-center rounded-lg bg-accent-soft text-accent">
+            <Icon name="check" />
+          </span>
           <span>
             <span
               class="block font-mono text-[22px] font-bold leading-none"
@@ -186,12 +183,11 @@ onMounted(() => {
         </RouterLink>
         <RouterLink
           :to="rolePath('/c/cutting/drafts')"
-          class="client-card flex items-center gap-3 p-4 no-underline transition hover:border-ink"
+          class="client-card flex items-center gap-3 p-4 no-underline client-card-link"
         >
-          <span
-            class="grid size-9 place-items-center rounded-lg bg-sunk font-mono font-bold text-ink-soft"
-            >C</span
-          >
+          <span class="grid size-9 place-items-center rounded-lg bg-sunk text-ink-soft">
+            <Icon name="scissors" />
+          </span>
           <span>
             <span class="block font-mono text-[22px] font-bold leading-none text-ink">{{
               cutting.drafts.length
@@ -245,7 +241,8 @@ onMounted(() => {
             <article
               v-for="order in activeOrders"
               :key="order.id"
-              class="client-card cursor-pointer p-4 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+              class="client-card cursor-pointer p-4 client-card-link focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+              :class="order.status === 'ready' ? 'border-accent-tint bg-accent-soft/40' : ''"
               role="link"
               tabindex="0"
               :aria-label="`${order.order_number} — ${order.branch_name}`"
@@ -337,7 +334,7 @@ onMounted(() => {
             <article
               v-for="draft in recentDrafts"
               :key="draft.id"
-              class="client-card grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+              class="client-card grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 client-card-link focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
               role="link"
               tabindex="0"
               :aria-label="draftTitle(draft)"

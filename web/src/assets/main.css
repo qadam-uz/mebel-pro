@@ -440,6 +440,25 @@
     box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
   }
 
+  /* Clickable card: a tactile lift on hover-capable pointers only, so a tap on
+     touch never leaves it stuck-raised. Pair with .client-card on any card that
+     navigates on click. */
+  .client-card-link {
+    cursor: pointer;
+    transition:
+      border-color 0.14s ease,
+      transform 0.14s ease,
+      box-shadow 0.14s ease;
+  }
+
+  @media (hover: hover) {
+    .client-card-link:hover {
+      transform: translateY(-2px);
+      border-color: var(--color-hairline-strong);
+      box-shadow: 0 12px 26px -14px rgb(15 27 45 / 24%);
+    }
+  }
+
   .client-card-h {
     display: flex;
     flex-wrap: wrap;

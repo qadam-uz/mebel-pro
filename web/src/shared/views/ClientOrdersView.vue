@@ -138,7 +138,7 @@ onMounted(() => {
       <article
         v-for="order in visibleOrders"
         :key="order.id"
-        class="client-card cursor-pointer p-5 transition hover:border-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
+        class="client-card client-card-link p-5 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint"
         role="link"
         tabindex="0"
         :aria-label="`${order.order_number} — ${order.branch_name}`"
@@ -146,16 +146,18 @@ onMounted(() => {
         @keydown.enter="openOrder(order)"
       >
         <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <div class="font-mono text-xs uppercase tracking-wide text-ink-muted">
+          <div class="min-w-0">
+            <span
+              class="inline-block rounded-md bg-sunk px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-ink-soft"
+            >
               {{ order.order_number }}
-            </div>
-            <h2 class="my-1 font-serif text-xl font-semibold text-ink">
+            </span>
+            <h2 class="mb-1 mt-2 font-serif text-xl font-semibold text-ink">
               {{ order.branch_name }}
             </h2>
             <p class="text-sm text-ink-soft">
               {{ order.workshop_name }} · {{ formatRelativeDate(order.created_at) }} ·
-              {{ order.item_count }} qism
+              <b class="font-semibold text-ink">{{ order.item_count }} qism</b>
             </p>
           </div>
           <span :class="clientStatusPillClass(order.status)">

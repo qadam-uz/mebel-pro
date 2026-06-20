@@ -63,13 +63,21 @@ onMounted(refreshBranches)
     </div>
 
     <label class="mb-2 block text-sm font-bold text-ink" for="branch-search">Qidirish</label>
-    <input
-      id="branch-search"
-      v-model="search"
-      class="mp-input mb-5 max-w-[380px]"
-      aria-label="Ustaxona yoki shahar nomi"
-      placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..."
-    />
+    <div class="relative mb-5 max-w-[380px]">
+      <span
+        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
+        aria-hidden="true"
+      >
+        <Icon name="search" />
+      </span>
+      <input
+        id="branch-search"
+        v-model="search"
+        class="mp-input pl-10"
+        aria-label="Ustaxona yoki shahar nomi"
+        placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..."
+      />
+    </div>
 
     <div v-if="catalog.loading" class="grid gap-3" aria-live="polite">
       <div
@@ -105,7 +113,7 @@ onMounted(refreshBranches)
         v-for="branch in visibleBranches"
         :key="branch.branch_id"
         class="client-card grid grid-cols-[50px_minmax(0,1fr)_auto] items-center gap-4 p-5 max-[480px]:grid-cols-[50px_minmax(0,1fr)]"
-        :class="branch.status !== 'active' ? 'opacity-70' : ''"
+        :class="branch.status !== 'active' ? 'bg-sunk' : ''"
       >
         <div
           class="grid size-[50px] place-items-center rounded-lg font-serif text-lg font-bold"
