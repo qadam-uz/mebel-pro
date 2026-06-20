@@ -358,10 +358,7 @@ test("client places an order and workshop completes it through production queues
   await branchesLoaded;
 
   await page.getByRole("button", { name: "Ustaxona tanlash" }).click();
-  // CB-51: two-pane picker — pick the workshop (left), then its branch (right).
-  await page
-    .getByRole("button", { name: new RegExp(`Order Workshop ${id}`) })
-    .click();
+  // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
   await page
     .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
     .click();

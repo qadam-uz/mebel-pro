@@ -200,11 +200,12 @@ A small affordance under the page header naming the active pre-filter:
 - **Pre-filter set** → "Catalog: Yunusobod · Furniture House" + a **Clear** button and a
   **Change** button.
 
-Picking or changing the branch opens a workshop-and-branch picker (workshops on the left,
-the workshop's active and `temporarily_closed` branches on the right). Confirming sets the
-draft's `preferred_branch_id`. Clearing removes it. **Neither edits the parts list.** Rows
-that reference materials the new branch doesn't carry get a per-row warning + recovery
-affordances (below).
+Picking or changing the branch opens a single flat branch list — one row per branch, naming
+the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
+branches stay selectable, the row just flags why); a search field appears once the list is
+long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`. Clearing
+removes it. **Neither edits the parts list.** Rows that reference materials the new branch
+doesn't carry get a per-row warning + recovery affordances (below).
 
 ### Parts editor (top)
 
