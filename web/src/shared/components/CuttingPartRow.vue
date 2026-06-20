@@ -35,6 +35,7 @@ const props = defineProps<{
   optimizeError: string | null
   notCarried: string[]
   preferredBranchName: string
+  selected?: boolean
 }>()
 const emit = defineEmits<{
   'update:length': [number]
@@ -46,6 +47,7 @@ const emit = defineEmits<{
   delete: []
   'open-edge-picker': [Event | undefined]
   'bring-own': []
+  'toggle-select': []
 }>()
 
 const cutting = useCuttingStore()
@@ -153,11 +155,26 @@ function edgeCellLabel(side: EdgeField) {
   <article
     :id="`part-row-${part.part_ref}`"
     class="rounded-lg border p-3 transition hover:border-ink-soft"
-    :class="hasError ? 'border-danger-soft bg-danger-soft/30' : 'border-hairline bg-elevated'"
+    :class="
+      hasError
+        ? 'border-danger-soft bg-danger-soft/30'
+        : selected
+          ? 'border-accent-tint bg-accent-soft/40'
+          : 'border-hairline bg-elevated'
+    "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
+      class="grid gap-3 lg:grid-cols-[30px_34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
     >
+      <div class="hidden lg:flex lg:justify-center">
+        <input
+          type="checkbox"
+          class="size-4"
+          :checked="selected"
+          :aria-label="`Qism #${index + 1} ni tanlash`"
+          @change="emit('toggle-select')"
+        />
+      </div>
       <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
 
       <div class="min-w-0">

@@ -246,13 +246,20 @@ panel has grain — a passive cue, not a control.
   (`Workshop supplies` / `I'll bring it`) applies to the currently banded sides; mixed
   per-side source remains possible through the diagram but is not presented as a separate
   step.
-- **Apply writes only this row in v1.** The footer has only **Cancel** and **Apply**.
-  **Apply** saves the selected side pattern, tape, and source to the row whose **Edges**
-  cell opened the picker; it never edits sibling rows. Bulk helpers such as **Same panel
-  material** or **All rows** are out of scope for v1 because they add propagation and
-  overwrite decisions to a small mobile form. If bulk edge editing returns later, it should
-  be an explicit list-level action or a follow-up confirmation after row apply, not a
-  default control in the picker.
+- **The edge picker applies to the row it was opened from.** The footer has only **Cancel**
+  and **Apply**; **Apply** saves the selected side pattern, tape, and source to the row whose
+  **Edges** cell opened the picker, and never edits sibling rows from inside the picker.
+  **Bulk edge apply** is instead an explicit **list-level** action (see _Bulk row actions_
+  below) — the picker stays single-purpose, exactly as foreseen here.
+
+**Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
+column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
+**Apply edges** (opens the edge picker seeded from the first selected row and writes the
+applied side pattern / tape / source to every selected row), **Change material** (a small
+picker that sets one panel material on every selected row), and **Delete**. This is the
+list-level path for re-banding or re-materialing many identical parts without N picker
+round-trips — a desktop power feature; on mobile each row is edited individually via its ⋯
+overflow menu.
 
 Per-row inline validation; a single roll-up message below the table when something blocks
 the optimiser.

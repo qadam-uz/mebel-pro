@@ -34,6 +34,8 @@ const props = defineProps<{
   preferredEdgeId: string | null
   preferredBranchId: string | null
   preferredBranchName: string
+  // Overrides the "qism #N" part of the title — used for bulk apply ("N qismga").
+  titleSuffix?: string
 }>()
 const emit = defineEmits<{
   apply: [{ edges: Record<EdgeField, CuttingEdgeBand | null>; rememberedMaterialId: string | null }]
@@ -322,7 +324,9 @@ onBeforeUnmount(() => {
       tabindex="-1"
     >
       <div class="client-edge-modal-h">
-        <h3 id="edge-picker-title">Krom yopishtirish — qism #{{ partNumber }}</h3>
+        <h3 id="edge-picker-title">
+          Krom yopishtirish — {{ titleSuffix ?? `qism #${partNumber}` }}
+        </h3>
         <button
           type="button"
           class="client-edge-close"
