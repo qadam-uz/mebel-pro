@@ -22,32 +22,31 @@ function phoneFor(id: string, offset: number) {
   return `+99890${String(hash).padStart(7, '0')}`
 }
 
-async function seedPlatform(login: string) {
-  await execFileAsync(
-    'uv',
-    [
-      '--directory',
-      '../backend',
-      'run',
-      'python',
-      '-m',
-      'app.cli',
-      'seed-platform-user',
-      '--login',
-      login,
-      '--password',
-      adminPassword,
-      '--full-name',
-      'E2E Admin',
-      '--phone',
-      phoneFor(login, 1),
-      '--no-password-reset-required',
-    ],
-    {
-      cwd: process.cwd(),
-      env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl, OTP_DEV_CODES: '["000000"]' },
-    },
-  )
+async function seedPlatform(login: string, { resetRequired = false } = {}) {
+  const args = [
+    '--directory',
+    '../backend',
+    'run',
+    'python',
+    '-m',
+    'app.cli',
+    'seed-platform-user',
+    '--login',
+    login,
+    '--password',
+    adminPassword,
+    '--full-name',
+    'E2E Admin',
+    '--phone',
+    phoneFor(login, 1),
+  ]
+  // A reset-required operator is what triggers the password-reset gate; the rest
+  // of the suite wants ready-to-use accounts.
+  if (!resetRequired) args.push('--no-password-reset-required')
+  await execFileAsync('uv', args, {
+    cwd: process.cwd(),
+    env: { ...process.env, ENV: 'test', DATABASE_URL: databaseUrl, OTP_DEV_CODES: '["000000"]' },
+  })
 }
 
 async function seedErrorRecord(code: string) {
@@ -81,6 +80,26 @@ async function loginAsAdmin(page: Page, login: string) {
   await page.getByLabel(/^(Password|Parol)$/).fill(adminPassword)
   await page.getByRole('button', { name: /^(Continue|Kirish)$/ }).click()
 }
+
+test('reset-required operator sees the gate and a locked nav', async ({ page }, testInfo) => {
+  const login = `reset-${runId(testInfo)}`
+  await seedPlatform(login, { resetRequired: true })
+  await loginAsAdmin(page, login)
+
+  // The router guard pins them to the profile; the shell gate explains why
+  // instead of the sidebar silently bouncing.
+  await expect(page).toHaveURL(/\/admin\/profile/)
+  await expect(page.getByRole('alert').getByText("Parolni o'zgartiring")).toBeVisible()
+
+  // The password tab is already open — the one action they can take.
+  await expect(page.getByRole('tab', { name: 'Parol' })).toHaveAttribute('aria-selected', 'true')
+
+  // The sidebar nav is locked, not silently navigable.
+  await expect(page.getByRole('link', { name: 'Materiallar' }).first()).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+})
 
 test('admin creates, resets, blocks and unblocks a platform operator', async ({ page }, testInfo) => {
   const id = runId(testInfo)

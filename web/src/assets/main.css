@@ -3325,6 +3325,69 @@
     color: currentColor;
   }
 
+  /* Password-reset gate: dim + disable the nav so clicks don't silently bounce
+     back to the profile. The router guard still blocks non-account routes. */
+  .admin-nav.is-locked .admin-nav-item {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .admin-reset-gate {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    border-bottom: 1px solid #f6e3c2;
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+    padding: 12px 28px;
+  }
+
+  .admin-reset-gate-ic {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .admin-reset-gate-body {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 260px;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 13px;
+  }
+
+  .admin-reset-gate-body strong {
+    font-weight: 800;
+  }
+
+  .admin-reset-gate-cta {
+    flex: none;
+    border: 1px solid currentColor;
+    border-radius: 7px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: inherit;
+    white-space: nowrap;
+  }
+
+  .admin-reset-gate-cta:hover {
+    background: var(--color-warning);
+    color: var(--color-elevated);
+  }
+
+  .admin-reset-gate-cta:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
   .admin-nav-count {
     display: inline-flex;
     min-width: 22px;

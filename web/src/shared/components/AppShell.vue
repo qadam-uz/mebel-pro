@@ -172,6 +172,10 @@ const adminDocsLinks = [
   { label: 'API docs', href: '/api-docs' },
   { label: 'ReDoc', href: '/api-redoc' },
 ]
+// Password-reset gate (access-management.md): a fresh operator is pinned to the
+// profile until they change their temp password. Surface it loudly and lock the
+// nav so clicks don't silently bounce.
+const passwordResetRequired = computed(() => auth.me?.password_reset_required === true)
 
 function iconPath(name: string | undefined) {
   const paths: Record<string, string> = {
@@ -762,7 +766,11 @@ onBeforeUnmount(() => {
         </span>
       </div>
 
-      <nav class="admin-nav" aria-label="Asosiy navigatsiya">
+      <nav
+        class="admin-nav"
+        :class="{ 'is-locked': passwordResetRequired }"
+        aria-label="Asosiy navigatsiya"
+      >
         <section v-for="group in groupedAdminNav" :key="group.label" class="admin-nav-group">
           <div class="admin-nav-label">{{ group.label }}</div>
           <RouterLink
@@ -771,6 +779,8 @@ onBeforeUnmount(() => {
             :to="item.to"
             class="admin-nav-item"
             active-class="on"
+            :tabindex="passwordResetRequired ? -1 : undefined"
+            :aria-disabled="passwordResetRequired ? 'true' : undefined"
             @click="closeMobileNav"
           >
             <span class="admin-nav-icon" aria-hidden="true">
@@ -792,6 +802,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="admin-nav-item"
+            :disabled="passwordResetRequired"
             :aria-expanded="docsMenuOpen"
             @click="docsMenuOpen = !docsMenuOpen"
           >
@@ -852,7 +863,11 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('close')"></svg>
           </button>
         </div>
-        <nav class="admin-nav" aria-label="Mobil navigatsiya">
+        <nav
+          class="admin-nav"
+          :class="{ 'is-locked': passwordResetRequired }"
+          aria-label="Mobil navigatsiya"
+        >
           <section
             v-for="group in groupedAdminNav"
             :key="`m-${group.label}`"
@@ -865,6 +880,8 @@ onBeforeUnmount(() => {
               :to="item.to"
               class="admin-nav-item"
               active-class="on"
+              :tabindex="passwordResetRequired ? -1 : undefined"
+              :aria-disabled="passwordResetRequired ? 'true' : undefined"
             >
               <span class="admin-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
@@ -877,6 +894,24 @@ onBeforeUnmount(() => {
     </div>
 
     <main class="admin-main">
+      <div v-if="passwordResetRequired" class="admin-reset-gate" role="alert">
+        <svg
+          class="admin-reset-gate-ic"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          v-html="adminIconPath('lock')"
+        ></svg>
+        <div class="admin-reset-gate-body">
+          <strong>Parolni o'zgartiring</strong>
+          <span>
+            Platformaning boshqa bo'limlari vaqtinchalik parol almashtirilmaguncha bloklangan.
+          </span>
+        </div>
+        <RouterLink :to="config.profilePath" class="admin-reset-gate-cta">
+          Parolni almashtirish
+        </RouterLink>
+      </div>
+
       <header class="admin-topbar">
         <button
           ref="mobileTriggerRef"
