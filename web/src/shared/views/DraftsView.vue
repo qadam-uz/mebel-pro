@@ -172,7 +172,7 @@ onMounted(() => {
       <article
         v-for="draft in sortedDrafts"
         :key="draft.id"
-        class="client-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4 transition hover:border-ink"
+        class="client-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4 client-card-link"
       >
         <button type="button" class="min-w-0 text-left" @click="openDraft(draft)">
           <span class="block truncate text-sm font-bold text-ink">{{ draftTitle(draft) }}</span>
@@ -196,12 +196,16 @@ onMounted(() => {
           </span>
         </button>
         <div class="flex items-center gap-2">
-          <button type="button" class="font-bold text-accent" @click="openDraft(draft)">
+          <button
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            @click="openDraft(draft)"
+          >
             Ochish →
           </button>
           <button
             type="button"
-            class="grid size-8 place-items-center rounded-md border border-hairline text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
+            class="grid size-9 place-items-center rounded-md border border-hairline text-lg text-ink-muted transition hover:border-danger hover:bg-danger-soft hover:text-danger"
             :disabled="deletingId === draft.id"
             aria-label="Chizmani o'chirish"
             @click="requestDeleteDraft(draft)"

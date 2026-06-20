@@ -381,6 +381,12 @@ onMounted(async () => {
                       {{ branchTitle(quoteBranch(branch.branch_id), branch) }}
                     </h2>
                     <span
+                      v-if="selectedBranchId === branch.branch_id"
+                      class="mt-1 mr-1 inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-white"
+                    >
+                      ✓ Tanlandi
+                    </span>
+                    <span
                       v-if="
                         branch.branch_id === preferredBranch?.branch_id &&
                         quoteBranch(branch.branch_id)

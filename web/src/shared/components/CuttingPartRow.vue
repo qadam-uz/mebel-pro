@@ -142,8 +142,8 @@ function edgeCellLabel(side: EdgeField) {
 <template>
   <article
     :id="`part-row-${part.part_ref}`"
-    class="rounded-lg border bg-elevated p-3 transition hover:border-ink-soft"
-    :class="hasError ? 'border-danger-soft' : 'border-hairline'"
+    class="rounded-lg border p-3 transition hover:border-ink-soft"
+    :class="hasError ? 'border-danger-soft bg-danger-soft/30' : 'border-hairline bg-elevated'"
   >
     <div
       class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"

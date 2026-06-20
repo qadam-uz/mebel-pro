@@ -182,7 +182,7 @@ onMounted(reloadProfile)
                 />
                 <button
                   type="submit"
-                  class="mp-button mp-button-primary min-h-8 px-3 text-xs"
+                  class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                   :disabled="isSaving"
                 >
                   Saqlash
@@ -192,7 +192,7 @@ onMounted(reloadProfile)
                 <span class="font-bold text-ink">{{ auth.displayName }}</span>
                 <button
                   type="button"
-                  class="mp-button mp-button-outline min-h-8 px-3 text-xs"
+                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                   @click="editingClientName = true"
                 >
                   O'zgartirish
@@ -232,14 +232,14 @@ onMounted(reloadProfile)
               <div class="flex flex-wrap justify-end gap-2">
                 <button
                   type="button"
-                  class="mp-button mp-button-outline min-h-8 px-3 text-xs"
+                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                   @click="preferredBranchId = null"
                 >
                   Tozalash
                 </button>
                 <button
                   type="button"
-                  class="mp-button mp-button-primary min-h-8 px-3 text-xs"
+                  class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                   :disabled="isSaving"
                   @click="savePreferredBranch"
                 >
@@ -268,7 +268,7 @@ onMounted(reloadProfile)
           <h2>Faol sessiyalar</h2>
           <button
             type="button"
-            class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
             @click="logoutEverywhereOpen = true"
           >
             Hammasini chiqarish
@@ -280,21 +280,30 @@ onMounted(reloadProfile)
           </div>
           <template v-else>
             <div v-for="session in sessions" :key="session.id" class="client-row-item">
-              <div>
-                <div class="client-row-name">
-                  {{ deviceLabel(session) }}
-                  <span v-if="session.is_current" class="client-pill client-pill-ready ml-2"
-                    >Joriy</span
-                  >
-                </div>
-                <div class="text-sm text-ink-muted">
-                  {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
+              <div class="flex min-w-0 items-center gap-3">
+                <span
+                  class="grid size-9 shrink-0 place-items-center rounded-lg bg-sunk text-ink-soft"
+                  :class="session.is_current ? 'bg-accent-soft text-accent' : ''"
+                  aria-hidden="true"
+                >
+                  <Icon name="monitor" />
+                </span>
+                <div class="min-w-0">
+                  <div class="client-row-name">
+                    {{ deviceLabel(session) }}
+                    <span v-if="session.is_current" class="client-pill client-pill-ready ml-2"
+                      >Joriy</span
+                    >
+                  </div>
+                  <div class="text-sm text-ink-muted">
+                    {{ formatDate(session.last_used_at) }} · {{ session.id.slice(0, 8) }}
+                  </div>
                 </div>
               </div>
               <button
                 v-if="!session.is_current"
                 type="button"
-                class="mp-button mp-button-outline min-h-8 px-3 text-xs text-danger"
+                class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
                 @click="revokeRow(session.id)"
               >
                 Yopish

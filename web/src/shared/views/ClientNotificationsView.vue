@@ -168,12 +168,12 @@ onMounted(() => {
           v-for="item in visibleItems"
           :key="item.id"
           type="button"
-          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left transition hover:border-ink max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
+          class="client-card grid w-full grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-4 p-4 text-left client-card-link max-[480px]:grid-cols-[38px_minmax(0,1fr)]"
           :class="item.read_at === null ? 'bg-accent-soft border-accent-tint' : ''"
           @click="openItem(item)"
         >
           <span
-            class="client-notif-icon grid size-[38px] place-items-center rounded-lg text-white"
+            class="client-notif-icon grid size-[38px] place-items-center rounded-lg text-white shadow-[0_2px_6px_-2px_rgb(15_27_45_/_22%)]"
             :class="iconClass(item)"
             aria-hidden="true"
           >
