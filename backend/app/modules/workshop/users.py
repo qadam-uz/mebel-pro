@@ -217,6 +217,12 @@ async def update_user(
             )
         user.login = login
     if "home_branch_id" in payload.model_fields_set:
+        if payload.home_branch_id is None:
+            raise APIError(
+                "home_branch_required",
+                "Home branch is required",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         user.home_branch_id = await _validate_home_branch(
             db,
             user.workshop_id,
@@ -492,10 +498,8 @@ async def _replace_grants(
 async def _validate_home_branch(
     db: AsyncSession,
     workshop_id: uuid.UUID,
-    branch_id: uuid.UUID | None,
-) -> uuid.UUID | None:
-    if branch_id is None:
-        return None
+    branch_id: uuid.UUID,
+) -> uuid.UUID:
     branch = await db.get(Branch, branch_id)
     if (
         branch is None

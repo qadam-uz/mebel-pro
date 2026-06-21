@@ -8,6 +8,8 @@ const props = defineProps<{
   label: string
   modelValue: string[]
   options: ChoiceOption[]
+  emptyLabel?: string
+  selectedLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -24,9 +26,9 @@ const selectedOptions = computed(() =>
   props.options.filter((option) => props.modelValue.includes(option.value)),
 )
 const summary = computed(() => {
-  if (selectedOptions.value.length === 0) return 'Any'
+  if (selectedOptions.value.length === 0) return props.emptyLabel ?? 'Any'
   if (selectedOptions.value.length === 1) return selectedOptions.value[0]?.label ?? '1 selected'
-  return `${selectedOptions.value.length} selected`
+  return `${selectedOptions.value.length} ${props.selectedLabel ?? 'selected'}`
 })
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]

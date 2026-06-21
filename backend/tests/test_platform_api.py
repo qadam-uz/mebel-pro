@@ -1,12 +1,16 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from app.models.enums import AuthenticatedPrincipalType, WorkshopStatus
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PlatformUser, Session, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
+from app.modules.platform import service as platform_service
 from app.modules.platform.api import record_application_error
-from app.modules.platform.contracts import JobDefinition
-from app.modules.support.contracts import ActionLog, StatusChangeLog
+from app.modules.platform.contracts import ErrorRecord, JobDefinition
+from app.modules.platform.scheduler import RegisteredJob, registry
+from app.modules.platform.service import ensure_default_jobs_registered, run_due_platform_jobs
+from app.modules.support.contracts import ActionLog, Notification, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -472,12 +476,9 @@ async def test_platform_jobs_errors_and_audit_surfaces(
     )
 
     assert jobs.status_code == 200
-    assert {row["definition"]["name"] for row in jobs.json()} == {
-        "cleanup-expired-sessions",
-        "daily-low-stock-summary",
-    }
+    assert {row["definition"]["name"] for row in jobs.json()} == {"cleanup-expired-sessions"}
     assert repeated_jobs.status_code == 200
-    assert await db_session.scalar(select(func.count()).select_from(JobDefinition)) == 2
+    assert await db_session.scalar(select(func.count()).select_from(JobDefinition)) == 1
     assert run.status_code == 200
     assert run.json()["status"] == "ok"
     assert run.json()["brief_log"] == "Pruned 0 expired sessions"
@@ -495,6 +496,218 @@ async def test_platform_jobs_errors_and_audit_surfaces(
     assert "platform.error.resolve" in {row["action"] for row in actions.json()}
     assert statuses.status_code == 200
     assert statuses.json() == []
+
+
+async def test_platform_scheduler_runs_due_jobs_and_reports_failures(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_token = await _platform_access_token(client, db_session)
+
+    listed = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
+    assert listed.status_code == 200
+
+    definition = await db_session.scalar(
+        select(JobDefinition).where(JobDefinition.name == "cleanup-expired-sessions")
+    )
+    assert definition is not None
+    definition.last_run_at = datetime.now(UTC) - timedelta(hours=2)
+
+    runs = await run_due_platform_jobs(
+        db_session,
+        now=datetime.now(UTC),
+        trace_id="test-scheduler",
+    )
+    scheduler_actions = (
+        await db_session.scalars(
+            select(ActionLog).where(
+                ActionLog.action == "platform.job.run",
+                ActionLog.trace_id == "test-scheduler",
+            )
+        )
+    ).all()
+
+    assert len(runs) == 1
+    assert runs[0].job_name == "cleanup-expired-sessions"
+    assert runs[0].status.value == "ok"
+    assert len(scheduler_actions) == 1
+
+    async def failing_handler(_: AsyncSession) -> str | None:
+        raise RuntimeError("planned failure")
+
+    failing_job = RegisteredJob(
+        name="cleanup-expired-sessions",
+        schedule="hourly",
+        handler=failing_handler,
+    )
+    original_defaults = platform_service.DEFAULT_JOBS
+    platform_service.DEFAULT_JOBS = (failing_job,)
+    registry.register(failing_job)
+    try:
+        failed = await client.post(
+            "/api/v1/platform/jobs/cleanup-expired-sessions/run",
+            headers=_auth(access_token),
+        )
+    finally:
+        platform_service.DEFAULT_JOBS = original_defaults
+        ensure_default_jobs_registered()
+
+    failure_notice = await db_session.scalar(
+        select(Notification).where(Notification.event_code == "job.failed")
+    )
+
+    assert failed.status_code == 200
+    assert failed.json()["status"] == "failed"
+    assert failure_notice is not None
+    assert failure_notice.payload["job_name"] == "cleanup-expired-sessions"
+    assert failure_notice.payload["error_message"] == "planned failure"
+
+
+async def test_platform_audit_filters_and_offsets_are_server_side(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access = await _platform_access_token(client, db_session)
+    provisioned = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access),
+        json=_provision_payload(code="audited"),
+    )
+    assert provisioned.status_code == 201
+    workshop_id = provisioned.json()["workshop"]["id"]
+    today = datetime.now(UTC).date().isoformat()
+
+    block = await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/block",
+        headers=_auth(access),
+        json={"reason": "Audit filter check"},
+    )
+    assert block.status_code == 200
+
+    actions = await client.get(
+        "/api/v1/platform/audit/actions",
+        headers=_auth(access),
+        params={
+            "module": "platform",
+            "action_prefix": "platform.workshop",
+            "actor": "platform_user",
+            "entity_type": "workshop",
+            "entity_id": workshop_id,
+            "date_from": today,
+            "date_to": today,
+            "limit": 1,
+            "offset": 0,
+        },
+    )
+    next_actions = await client.get(
+        "/api/v1/platform/audit/actions",
+        headers=_auth(access),
+        params={
+            "entity_id": workshop_id,
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+    statuses = await client.get(
+        "/api/v1/platform/audit/status-changes",
+        headers=_auth(access),
+        params={
+            "entity_type": "workshop",
+            "entity_id": workshop_id,
+            "to_status": "blocked",
+            "actor": "platform_user",
+            "date_from": today,
+            "date_to": today,
+            "limit": 10,
+            "offset": 0,
+        },
+    )
+    invalid_range = await client.get(
+        "/api/v1/platform/audit/actions",
+        headers=_auth(access),
+        params={"date_from": "2026-06-21", "date_to": "2026-06-20"},
+    )
+
+    assert actions.status_code == 200
+    assert len(actions.json()) == 1
+    assert actions.json()[0]["action"].startswith("platform.workshop")
+    assert next_actions.status_code == 200
+    assert len(next_actions.json()) == 1
+    assert statuses.status_code == 200
+    assert [row["to_status"] for row in statuses.json()] == ["blocked"]
+    assert invalid_range.status_code == 400
+    assert invalid_range.json()["code"] == "invalid_date_range"
+
+
+async def test_error_records_group_by_code_and_module_and_emit_spike_notice(
+    db_session: AsyncSession,
+) -> None:
+    platform_user = await seed_platform_user(
+        db_session,
+        login="spike-admin",
+        password="Admin123",
+        password_reset_required=False,
+    )
+    sales_record = None
+    for index in range(9):
+        sales_record = await record_application_error(
+            db_session,
+            code="shared.code",
+            module="sales",
+            message=f"sales boom {index}",
+            trace_id=f"trace-sales-{index}",
+            workshop_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+        )
+    assert sales_record is not None
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 0
+
+    tenth = await record_application_error(
+        db_session,
+        code="shared.code",
+        module="sales",
+        message="sales boom threshold",
+        trace_id="trace-sales-threshold",
+    )
+    workshop_record = await record_application_error(
+        db_session,
+        code="shared.code",
+        module="workshop",
+        message="workshop boom",
+        trace_id="trace-workshop",
+    )
+    await record_application_error(
+        db_session,
+        code="shared.code",
+        module="sales",
+        message="sales boom after threshold",
+        trace_id="trace-sales-after",
+    )
+
+    notices = (
+        await db_session.scalars(
+            select(Notification).where(Notification.event_code == "error.spike")
+        )
+    ).all()
+    records = (
+        await db_session.scalars(
+            select(ErrorRecord)
+            .where(ErrorRecord.code == "shared.code")
+            .order_by(ErrorRecord.module)
+        )
+    ).all()
+
+    assert tenth.id == sales_record.id
+    assert workshop_record.id != sales_record.id
+    assert [record.module for record in records] == ["sales", "workshop"]
+    assert len(notices) == 1
+    assert notices[0].recipient_id == platform_user.id
+    assert notices[0].payload == {
+        "code": "shared.code",
+        "module": "sales",
+        "count_24h": 10,
+        "threshold": 10,
+    }
 
 
 async def test_workshop_detail_surfaces_block_reason(

@@ -1,24 +1,27 @@
 """Platform operator use cases."""
 
+import asyncio
 import re
 import secrets
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from structlog import get_logger
 
 from app.core.errors import APIError
-from app.core.principal import AuthenticatedPrincipal, actor_from_principal
+from app.core.principal import AuthenticatedPrincipal, actor_from_principal, system_actor
 from app.core.security import PasswordPolicyError, hash_password, validate_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
     BranchStatus,
     ErrorRecordStatus,
+    JobRunStatus,
     UserStatus,
     WorkshopStatus,
 )
@@ -30,9 +33,9 @@ from app.modules.access.api import (
 )
 from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
-from app.modules.inventory.contracts import StockItem
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord, JobDefinition, JobRun
 from app.modules.platform.errors import refresh_error_record_counts
+from app.modules.platform.notifications import notify_platform_users
 from app.modules.platform.scheduler import RegisteredJob, registry
 from app.modules.platform.schemas import (
     PlatformUserCreateRequest,
@@ -49,6 +52,9 @@ from app.modules.workshop.contracts import Branch, Workshop
 from app.modules.workshop.schemas import dump_working_hours
 
 CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$")
+JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
+PLATFORM_SCHEDULER_POLL_SECONDS = 60.0
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -101,23 +107,11 @@ async def _cleanup_expired_sessions_job(db: AsyncSession) -> str:
     return f"Pruned {count} expired sessions"
 
 
-async def _daily_low_stock_summary_job(db: AsyncSession) -> str:
-    count = await db.scalar(
-        select(func.count()).select_from(StockItem).where(StockItem.on_hand <= StockItem.min_stock)
-    )
-    return f"{count or 0} low-stock stock items found"
-
-
 DEFAULT_JOBS = (
     RegisteredJob(
         name="cleanup-expired-sessions",
         schedule="hourly",
         handler=_cleanup_expired_sessions_job,
-    ),
-    RegisteredJob(
-        name="daily-low-stock-summary",
-        schedule="daily",
-        handler=_daily_low_stock_summary_job,
     ),
 )
 
@@ -652,16 +646,96 @@ async def run_platform_job(
     job = registry.get(name)
     if job is None:
         raise APIError("job_not_found", "Job not found", status_code=status.HTTP_404_NOT_FOUND)
-    run = await registry.run(db, name, trace_id=principal.trace_id)
     await record_action(
         db,
         actor=actor_from_principal(principal),
         action="platform.job.run",
         entity_type="job",
-        entity_id=run.id,
         summary=f"Triggered job {name}",
-        details={"status": run.status.value, "job_name": name},
+        details={"job_name": name, "trigger": "manual"},
     )
+    run = await _run_registered_platform_job(db, name=name, trace_id=principal.trace_id)
+    return run
+
+
+async def run_due_platform_jobs(
+    db: AsyncSession,
+    *,
+    now: datetime | None = None,
+    trace_id: str = "platform-scheduler",
+) -> list[JobRun]:
+    """Run enabled scheduled jobs that are due, without sleeping."""
+    await _ensure_platform_job_definitions(db)
+    current = now or datetime.now(UTC)
+    runs: list[JobRun] = []
+    for job in registry.registered():
+        definition = await db.scalar(select(JobDefinition).where(JobDefinition.name == job.name))
+        if definition is None or not _job_due(definition, current):
+            continue
+        await record_action(
+            db,
+            actor=system_actor(trace_id),
+            action="platform.job.run",
+            entity_type="job",
+            summary=f"Scheduled job {job.name}",
+            details={"job_name": job.name, "trigger": "schedule"},
+        )
+        runs.append(await _run_registered_platform_job(db, name=job.name, trace_id=trace_id))
+    return runs
+
+
+async def run_platform_scheduler(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    poll_interval_seconds: float = PLATFORM_SCHEDULER_POLL_SECONDS,
+) -> None:
+    """Poll for due in-process platform jobs until cancelled."""
+    ensure_default_jobs_registered()
+    while True:
+        try:
+            async with session_factory() as db:
+                await run_due_platform_jobs(db)
+                await db.commit()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # pragma: no cover - defensive background loop guard
+            logger.warning("platform_scheduler_tick_failed", exc_info=exc)
+        await asyncio.sleep(poll_interval_seconds)
+
+
+def _job_due(definition: JobDefinition, now: datetime) -> bool:
+    if not definition.enabled or definition.running:
+        return False
+    interval = JOB_SCHEDULE_INTERVALS.get(definition.schedule)
+    if interval is None:
+        return False
+    last_run_at = definition.last_run_at
+    if last_run_at is None:
+        return True
+    if last_run_at.tzinfo is None:
+        last_run_at = last_run_at.replace(tzinfo=UTC)
+    return now - last_run_at >= interval
+
+
+async def _run_registered_platform_job(
+    db: AsyncSession,
+    *,
+    name: str,
+    trace_id: str | None,
+) -> JobRun:
+    run = await registry.run(db, name, trace_id=trace_id)
+    if run.status is JobRunStatus.FAILED:
+        await notify_platform_users(
+            db,
+            event_code="job.failed",
+            entity_type="job_run",
+            entity_id=run.id,
+            payload={
+                "job_name": name,
+                "error_code": run.error_code,
+                "error_message": run.error_message,
+            },
+        )
     return run
 
 
@@ -774,7 +848,15 @@ async def list_platform_action_logs(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     action: str | None = None,
+    action_prefix: str | None = None,
+    module: str | None = None,
+    actor_search: str | None = None,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> Sequence[object]:
     require_platform_operator(principal)
     return await list_action_logs(
@@ -782,7 +864,15 @@ async def list_platform_action_logs(
         workshop_id=workshop_id,
         branch_id=branch_id,
         action=action,
+        action_prefix=action_prefix,
+        module=module,
+        actor_search=actor_search,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        created_from=created_from,
+        created_to=created_to,
         limit=limit,
+        offset=offset,
     )
 
 
@@ -793,7 +883,14 @@ async def list_platform_status_change_logs(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    actor_search: str | None = None,
+    changed_from: datetime | None = None,
+    changed_to: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> Sequence[object]:
     require_platform_operator(principal)
     return await list_status_change_logs(
@@ -801,7 +898,14 @@ async def list_platform_status_change_logs(
         workshop_id=workshop_id,
         branch_id=branch_id,
         entity_type=entity_type,
+        entity_id=entity_id,
+        from_status=from_status,
+        to_status=to_status,
+        actor_search=actor_search,
+        changed_from=changed_from,
+        changed_to=changed_to,
         limit=limit,
+        offset=offset,
     )
 
 

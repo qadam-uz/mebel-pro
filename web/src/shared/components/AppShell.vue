@@ -177,6 +177,15 @@ const adminDocsLinks = [
 // nav so clicks don't silently bounce.
 const passwordResetRequired = computed(() => auth.me?.password_reset_required === true)
 
+function onAdminNavClick(event: MouseEvent) {
+  if (passwordResetRequired.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+  closeMobileNav()
+}
+
 function iconPath(name: string | undefined) {
   const paths: Record<string, string> = {
     dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-5H4v5Z"/>',
@@ -206,7 +215,7 @@ function drawerFocusable() {
     drawerPanelRef.value?.querySelectorAll<HTMLElement>(
       'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     ) ?? [],
-  ).filter((element) => !element.hasAttribute('disabled'))
+  ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex >= 0)
 }
 
 function openMobileNav() {
@@ -782,7 +791,7 @@ onBeforeUnmount(() => {
             active-class="on"
             :tabindex="passwordResetRequired ? -1 : undefined"
             :aria-disabled="passwordResetRequired ? 'true' : undefined"
-            @click="closeMobileNav"
+            @click="onAdminNavClick"
           >
             <span class="admin-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
@@ -886,7 +895,7 @@ onBeforeUnmount(() => {
               active-class="on"
               :tabindex="passwordResetRequired ? -1 : undefined"
               :aria-disabled="passwordResetRequired ? 'true' : undefined"
-              @click="closeMobileNav"
+              @click="onAdminNavClick"
             >
               <span class="admin-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="adminIconPath(item.icon)"></svg>
@@ -905,7 +914,7 @@ onBeforeUnmount(() => {
               rel="noopener"
               :tabindex="passwordResetRequired ? -1 : undefined"
               :aria-disabled="passwordResetRequired ? 'true' : undefined"
-              @click="closeMobileNav"
+              @click="onAdminNavClick"
             >
               <span class="admin-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="adminIconPath('book')"></svg>
@@ -941,6 +950,7 @@ onBeforeUnmount(() => {
           ref="mobileTriggerRef"
           class="admin-mobile-button"
           type="button"
+          :disabled="passwordResetRequired"
           @click="openMobileNav"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
@@ -948,8 +958,14 @@ onBeforeUnmount(() => {
         </button>
 
         <div class="admin-top-actions">
-          <NotificationsMenu />
-          <RouterLink :to="config.primaryActionTo" class="admin-primary-action">
+          <NotificationsMenu v-if="!passwordResetRequired" />
+          <RouterLink
+            :to="config.primaryActionTo"
+            class="admin-primary-action"
+            :tabindex="passwordResetRequired ? -1 : undefined"
+            :aria-disabled="passwordResetRequired ? 'true' : undefined"
+            @click="onAdminNavClick"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('plus')"></svg>
             {{ config.primaryActionLabel }}
           </RouterLink>

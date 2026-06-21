@@ -179,7 +179,7 @@ class WorkshopUserCreateRequest(BaseModel):
     full_name: str
     phone: str
     login: str
-    home_branch_id: uuid.UUID | None = None
+    home_branch_id: uuid.UUID
     grants: list[GrantInput] = Field(default_factory=list)
     temp_password: str | None = None
 
@@ -206,7 +206,7 @@ class WorkshopUserResponse(APIModel):
     full_name: str
     phone: str
     is_owner: bool
-    home_branch_id: uuid.UUID | None
+    home_branch_id: uuid.UUID
     status: UserStatus
     password_reset_required: bool
     created_at: datetime

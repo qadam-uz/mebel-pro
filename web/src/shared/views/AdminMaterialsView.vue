@@ -14,6 +14,7 @@ import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -52,9 +53,9 @@ const manufacturerError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
 const kindFilter = ref('all')
-const manufacturerFilter = ref('all')
-const typeFilter = ref('all')
-const thicknessFilter = ref('all')
+const manufacturerFilter = ref<string[]>([])
+const typeFilter = ref<string[]>([])
+const thicknessFilter = ref<string[]>([])
 
 const form = reactive({
   kind: 'panel' as MaterialKind,
@@ -85,12 +86,13 @@ const statusOptions = [
   dropdownOption('active', 'Faol', "branch tanlovida ko'rinadi"),
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
-const manufacturerFilterOptions = computed(() => [
-  dropdownOption('all', 'Hammasi', 'barcha ishlab chiqaruvchilar'),
-  ...admin.manufacturers.map((manufacturer) =>
-    dropdownOption(manufacturer.id, manufacturer.name, manufacturer.country ?? ''),
-  ),
-])
+const manufacturerFilterOptions = computed<ChoiceOption[]>(() =>
+  admin.manufacturers.map((manufacturer) => ({
+    value: manufacturer.id,
+    label: manufacturer.name,
+    meta: manufacturer.country ?? '',
+  })),
+)
 const manufacturerChoiceOptions = computed<ChoiceOption[]>(() =>
   admin.manufacturers
     .filter((manufacturer) => manufacturer.status === 'active')
@@ -107,16 +109,12 @@ const materialTypeOptions: ChoiceOption[] = [
   { value: 'natural_wood', label: "Tabiiy yog'och" },
   { value: 'other', label: 'Boshqa' },
 ]
-const materialTypeFilterOptions = computed(() => [
-  dropdownOption('all', 'Hammasi', 'barcha panel turlari'),
-  ...materialTypeOptions.map((option) => dropdownOption(option.value, option.label, '')),
-])
-const thicknessFilterOptions = computed(() => [
-  dropdownOption('all', 'Hammasi', 'barcha qalinliklar'),
-  ...Array.from(new Set(admin.materials.map((material) => material.thickness_mm)))
+const materialTypeFilterOptions = computed<ChoiceOption[]>(() => materialTypeOptions)
+const thicknessFilterOptions = computed<ChoiceOption[]>(() =>
+  Array.from(new Set(admin.materials.map((material) => material.thickness_mm)))
     .sort((left, right) => Number(left) - Number(right))
-    .map((thickness) => dropdownOption(thickness, `${thickness} mm`, '')),
-])
+    .map((thickness) => ({ value: thickness, label: `${thickness} mm` })),
+)
 const materialKindOptions: ChoiceOption[] = [
   { value: 'panel', label: 'Panel', meta: 'plita materiali' },
   { value: 'edge', label: 'Krom', meta: 'krom lenta' },
@@ -127,11 +125,24 @@ const filtered = computed(() => {
   return admin.materials.filter((material) => {
     if (statusFilter.value !== 'all' && material.status !== statusFilter.value) return false
     if (kindFilter.value !== 'all' && material.kind !== kindFilter.value) return false
-    if (manufacturerFilter.value !== 'all' && material.manufacturer_id !== manufacturerFilter.value)
+    if (
+      manufacturerFilter.value.length > 0 &&
+      !manufacturerFilter.value.includes(material.manufacturer_id)
+    ) {
       return false
-    if (typeFilter.value !== 'all' && material.type !== typeFilter.value) return false
-    if (thicknessFilter.value !== 'all' && material.thickness_mm !== thicknessFilter.value)
+    }
+    if (
+      typeFilter.value.length > 0 &&
+      (!material.type || !typeFilter.value.includes(material.type))
+    ) {
       return false
+    }
+    if (
+      thicknessFilter.value.length > 0 &&
+      !thicknessFilter.value.includes(material.thickness_mm)
+    ) {
+      return false
+    }
     if (!needle) return true
     return [
       material.name,
@@ -160,9 +171,9 @@ function clearFilters() {
   search.value = ''
   statusFilter.value = 'all'
   kindFilter.value = 'all'
-  manufacturerFilter.value = 'all'
-  typeFilter.value = 'all'
-  thicknessFilter.value = 'all'
+  manufacturerFilter.value = []
+  typeFilter.value = []
+  thicknessFilter.value = []
 }
 
 function openCreate() {
@@ -308,34 +319,40 @@ onMounted(async () => {
         <input v-model="search" placeholder="Material nomi" />
       </label>
       <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" />
-      <ProjectDropdown
+      <MultiSelectFilter
         v-model="manufacturerFilter"
-        label="Ishlab chiqaruvchi"
+        label="Ishlab chiqaruvchilar"
         :options="manufacturerFilterOptions"
+        empty-label="Hammasi"
+        selected-label="tanlangan"
       />
-      <ProjectDropdown
+      <MultiSelectFilter
         v-model="typeFilter"
-        label="Panel turi"
+        label="Panel turlari"
         :options="materialTypeFilterOptions"
+        empty-label="Hammasi"
+        selected-label="tanlangan"
       />
-      <ProjectDropdown
+      <MultiSelectFilter
         v-model="thicknessFilter"
-        label="Qalinlik"
+        label="Qalinliklar"
         :options="thicknessFilterOptions"
+        empty-label="Hammasi"
+        selected-label="tanlangan"
       />
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
     </div>
 
-    <section v-if="admin.catalogLoading" class="admin-card p-5" aria-live="polite">
+    <section v-if="admin.materialsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
     <AdminErrorState
-      v-else-if="admin.catalogError"
-      :code="admin.catalogError"
-      :trace-id="admin.catalogTraceId"
+      v-else-if="admin.materialsError"
+      :code="admin.materialsError"
+      :trace-id="admin.materialsTraceId"
       title="Materiallar yuklanmadi"
       @retry="admin.loadMaterials()"
     />

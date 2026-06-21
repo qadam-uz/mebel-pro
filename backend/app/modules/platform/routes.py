@@ -1,11 +1,13 @@
 """Platform-operator routes."""
 
 import uuid
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import AccountReadyPrincipal, Session
+from app.core.errors import APIError
 from app.models.enums import ErrorRecordStatus
 from app.modules.platform.api import (
     block_platform_user,
@@ -308,15 +310,32 @@ async def audit_actions_index(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     action: str | None = None,
+    action_prefix: str | None = None,
+    module: str | None = None,
+    actor: str | None = None,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     limit: LimitQuery = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ActionLogResponse]:
+    created_from, created_to = _date_range(date_from, date_to)
     rows = await list_platform_action_logs(
         db,
         principal=principal,
         workshop_id=workshop_id,
         branch_id=branch_id,
         action=action,
+        action_prefix=action_prefix,
+        module=module,
+        actor_search=actor,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        created_from=created_from,
+        created_to=created_to,
         limit=limit,
+        offset=offset,
     )
     return [ActionLogResponse.model_validate(row) for row in rows]
 
@@ -328,14 +347,44 @@ async def audit_status_index(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    actor: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     limit: LimitQuery = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[StatusChangeLogResponse]:
+    changed_from, changed_to = _date_range(date_from, date_to)
     rows = await list_platform_status_change_logs(
         db,
         principal=principal,
         workshop_id=workshop_id,
         branch_id=branch_id,
         entity_type=entity_type,
+        entity_id=entity_id,
+        from_status=from_status,
+        to_status=to_status,
+        actor_search=actor,
+        changed_from=changed_from,
+        changed_to=changed_to,
         limit=limit,
+        offset=offset,
     )
     return [StatusChangeLogResponse.model_validate(row) for row in rows]
+
+
+def _date_range(
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[datetime | None, datetime | None]:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise APIError("invalid_date_range", "date_from must be before date_to")
+    start = datetime.combine(date_from, time.min, tzinfo=UTC) if date_from is not None else None
+    end = (
+        datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+        if date_to is not None
+        else None
+    )
+    return start, end

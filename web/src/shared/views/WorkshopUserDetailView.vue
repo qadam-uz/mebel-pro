@@ -38,10 +38,9 @@ const profileForm = reactive({
   fullName: '',
   phone: '',
   login: '',
-  homeBranchId: 'none',
+  homeBranchId: '',
 })
 const profileBranchOptions = computed<ChoiceOption[]>(() => [
-  { value: 'none', label: 'Biriktirilmagan' },
   ...workshop.branches.map((branch) => ({
     value: branch.id,
     label: branch.name,
@@ -82,7 +81,7 @@ function syncProfileForm() {
   profileForm.fullName = user.value.full_name
   profileForm.phone = user.value.phone
   profileForm.login = user.value.login
-  profileForm.homeBranchId = user.value.home_branch_id ?? 'none'
+  profileForm.homeBranchId = user.value.home_branch_id
 }
 
 async function load() {
@@ -108,7 +107,7 @@ async function saveProfile() {
       full_name: profileForm.fullName,
       phone: profileForm.phone,
       login: profileForm.login,
-      home_branch_id: profileForm.homeBranchId === 'none' ? null : profileForm.homeBranchId,
+      home_branch_id: profileForm.homeBranchId,
     })
     syncProfileForm()
     profileSaved.value = 'Profil saqlandi.'

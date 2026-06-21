@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { adminDateTime } from '@/shared/app/adminUi'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import { useToast } from '@/shared/composables/useToast'
 import type { SessionResponse } from '@/shared/stores/auth'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -25,6 +26,11 @@ const message = ref<string | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const loggingOut = ref(false)
+const tabOptions = [
+  { value: 'profile', label: 'Profil' },
+  { value: 'password', label: 'Parol' },
+  { value: 'sessions', label: 'Sessiyalar' },
+]
 
 const profileRows = computed(() => [
   ['Ism', auth.displayName],
@@ -140,50 +146,19 @@ onMounted(loadSessions)
       </button>
     </div>
 
-    <div class="admin-tabs" role="tablist" aria-label="Profil bo'limlari">
-      <button
-        id="pf-tab-profile"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'profile'"
-        aria-controls="pf-panel-profile"
-        class="admin-tab"
-        :class="{ on: tab === 'profile' }"
-        @click="tab = 'profile'"
-      >
-        Profil
-      </button>
-      <button
-        id="pf-tab-password"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'password'"
-        aria-controls="pf-panel-password"
-        class="admin-tab"
-        :class="{ on: tab === 'password' }"
-        @click="tab = 'password'"
-      >
-        Parol
-      </button>
-      <button
-        id="pf-tab-sessions"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'sessions'"
-        aria-controls="pf-panel-sessions"
-        class="admin-tab"
-        :class="{ on: tab === 'sessions' }"
-        @click="tab = 'sessions'"
-      >
-        Sessiyalar
-      </button>
-    </div>
+    <AppTabs
+      v-model="tab"
+      :tabs="tabOptions"
+      id-prefix="pf"
+      label="Profil bo'limlari"
+      variant="admin"
+    />
 
     <section
       v-if="tab === 'profile'"
-      id="pf-panel-profile"
+      id="pf-profile-panel"
       role="tabpanel"
-      aria-labelledby="pf-tab-profile"
+      aria-labelledby="pf-profile-tab"
       class="admin-card max-w-[640px]"
     >
       <div class="admin-card-h">
@@ -202,9 +177,9 @@ onMounted(loadSessions)
 
     <section
       v-else-if="tab === 'password'"
-      id="pf-panel-password"
+      id="pf-password-panel"
       role="tabpanel"
-      aria-labelledby="pf-tab-password"
+      aria-labelledby="pf-password-tab"
       class="admin-card max-w-[520px]"
     >
       <div class="admin-card-h">
@@ -266,9 +241,9 @@ onMounted(loadSessions)
 
     <section
       v-else
-      id="pf-panel-sessions"
+      id="pf-sessions-panel"
       role="tabpanel"
-      aria-labelledby="pf-tab-sessions"
+      aria-labelledby="pf-sessions-tab"
       class="admin-card max-w-[720px]"
     >
       <div class="admin-card-h">

@@ -139,6 +139,7 @@ async def test_staff_branch_context_includes_multiple_active_grant_branches(
             "full_name": "Multi Grant",
             "phone": "+998905151515",
             "login": "multigrant",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
             "grants": [
                 {"permission": "manage_orders", "branch_id": branch_id},
@@ -176,6 +177,7 @@ async def test_staff_branch_context_excludes_inactive_grant_branch(
             "full_name": "Inactive Grant",
             "phone": "+998905252525",
             "login": "inactivegrant",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
             "grants": [{"permission": "manage_inventory", "branch_id": branch_id}],
         },
@@ -214,6 +216,7 @@ async def test_grant_replacement_takes_effect_on_staff_next_request(
             "full_name": "Zero Grant",
             "phone": "+998906060606",
             "login": "zerogrant",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
             "grants": [],
         },
@@ -256,6 +259,20 @@ async def test_owner_filters_users_and_sees_last_login(
     db_session: AsyncSession,
 ) -> None:
     owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    second_branch = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Sergeli",
+            "address": "Tashkent, Sergeli",
+            "phone": "+998906262600",
+            "latitude": "41.22",
+            "longitude": "69.22",
+            "working_hours": default_working_hours(),
+        },
+    )
+    assert second_branch.status_code == 201
+    second_branch_id = second_branch.json()["id"]
     cutter = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -263,6 +280,7 @@ async def test_owner_filters_users_and_sees_last_login(
             "full_name": "Cutter Filter",
             "phone": "+998906161616",
             "login": "cutterfilter",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
             "grants": [{"permission": "process_production", "branch_id": branch_id}],
         },
@@ -274,6 +292,7 @@ async def test_owner_filters_users_and_sees_last_login(
             "full_name": "Office Filter",
             "phone": "+998906262626",
             "login": "officefilter",
+            "home_branch_id": second_branch_id,
             "temp_password": "StaffTemp123",
             "grants": [],
         },
@@ -389,8 +408,12 @@ async def test_owner_updates_staff_profile_fields(
             "full_name": "Edited Staff",
             "phone": "+998906565656",
             "login": "edited",
-            "home_branch_id": None,
         },
+    )
+    null_home_branch = await client.patch(
+        f"/api/v1/workshop/users/{user_id}",
+        headers=_auth(owner_access),
+        json={"home_branch_id": None},
     )
     duplicate = await client.patch(
         f"/api/v1/workshop/users/{user_id}",
@@ -403,7 +426,9 @@ async def test_owner_updates_staff_profile_fields(
     assert updated.json()["full_name"] == "Edited Staff"
     assert updated.json()["phone"] == "+998906565656"
     assert updated.json()["login"] == "edited"
-    assert updated.json()["home_branch_id"] is None
+    assert updated.json()["home_branch_id"] == branch_id
+    assert null_home_branch.status_code == 422
+    assert null_home_branch.json()["code"] == "home_branch_required"
     assert duplicate.status_code == 409
     assert duplicate.json()["code"] == "login_exists"
 
@@ -412,7 +437,7 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, _, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -420,6 +445,7 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
             "full_name": "Office Staff",
             "phone": "+998907070707",
             "login": "office",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
         },
     )
@@ -506,7 +532,7 @@ async def test_non_owner_staff_cannot_manage_users(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, _, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -514,6 +540,7 @@ async def test_non_owner_staff_cannot_manage_users(
             "full_name": "Staff",
             "phone": "+998908080808",
             "login": "staff",
+            "home_branch_id": branch_id,
             "temp_password": "StaffTemp123",
         },
     )

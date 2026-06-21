@@ -39,8 +39,8 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
 - **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
   type/thickness, colour/decor, panel size (for panels), status, **branch-usage count**
   (how many distinct branches carry the material), action menu. Filters:
-  kind dropdown (`panel` / `edge`), manufacturer dropdown (multi-select), type dropdown,
-  thickness dropdown, status dropdown. A per-material "which branches carry this?"
+  kind dropdown (`panel` / `edge`), manufacturer multi-select, panel-type multi-select,
+  thickness multi-select, status dropdown. A per-material "which branches carry this?"
   drill-down is a planned follow-up — it needs a cross-module branch lookup, so v1 ships
   only the count.
   **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
@@ -61,10 +61,11 @@ jobs:
 | Job | When | What |
 |---|---|---|
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
-| `daily-low-stock-summary` | daily | per branch, one notification rolling up the day's low-stock conditions |
 
 Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
 the 50-draft cap ([`cutting.md`](cutting.md)). There is no auto-cleanup of drafts anywhere.
+Low-stock is surfaced by the inventory module when stock changes; v1 has **no scheduled
+daily low-stock digest job**.
 
 A job doesn't run twice concurrently (a guard). A failed job records its result and notifies
 platform operators; the operator can re-trigger it manually.
@@ -74,12 +75,12 @@ demand.
 
 ## Error monitor
 
-The backend records application errors. The monitor **groups them by code**, with counts
-(24 h / 7 d), the last occurrence, and a preview message. Operators can drill into a single
-code to see the full message, stack trace, the request / context details (sensitive fields
-masked at write time), trace ids, and affected workshops / users where known — and mark a
-code resolved. A resolved code can be **reopened** if it recurs, flipping it back to open
-for re-triage.
+The backend records application errors. The monitor **groups them by code + module**, with
+counts (24 h / 7 d), the last occurrence, and a preview message. Operators can drill into a
+single grouped record to see the full message, stack trace, the request / context details
+(sensitive fields masked at write time), trace ids, and affected workshops / users where known
+— and mark a code resolved. A resolved code can be **reopened** if it recurs, flipping it back
+to open for re-triage.
 
 An error spike (a code's 24 h count crossing a threshold) notifies platform operators.
 

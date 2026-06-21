@@ -58,6 +58,8 @@ const errorText = computed(() =>
         <p
           v-if="errorText"
           class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          role="alert"
+          aria-live="assertive"
         >
           {{ errorText }}
         </p>

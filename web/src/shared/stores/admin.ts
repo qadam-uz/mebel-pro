@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 import { api, captureApiError, withQuery } from '@/shared/api/client'
@@ -263,6 +263,44 @@ export interface PlatformUserUpdateRequest {
   phone?: string
 }
 
+type QueryValue = string | number | boolean | null | undefined
+
+export interface AuditActionQuery extends Record<string, QueryValue> {
+  workshop_id?: string
+  branch_id?: string
+  action?: string
+  action_prefix?: string
+  module?: string
+  actor?: string
+  entity_type?: string
+  entity_id?: string
+  date_from?: string
+  date_to?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AuditStatusQuery extends Record<string, QueryValue> {
+  workshop_id?: string
+  branch_id?: string
+  entity_type?: string
+  entity_id?: string
+  from_status?: string
+  to_status?: string
+  actor?: string
+  date_from?: string
+  date_to?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AuditLoadOptions {
+  actions?: AuditActionQuery
+  status?: AuditStatusQuery
+  appendActions?: boolean
+  appendStatus?: boolean
+}
+
 export const useAdminStore = defineStore('admin', () => {
   const workshops = ref<WorkshopListItem[]>([])
   const detail = ref<PlatformWorkshopDetail | null>(null)
@@ -278,13 +316,19 @@ export const useAdminStore = defineStore('admin', () => {
   const auditActions = ref<ActionLog[]>([])
   const auditStatusChanges = ref<StatusChangeLog[]>([])
   const loading = ref(false)
-  const catalogLoading = ref(false)
+  const manufacturersLoading = ref(false)
+  const materialsLoading = ref(false)
+  const catalogLoading = computed(() => manufacturersLoading.value || materialsLoading.value)
   const opsLoading = ref(false)
   const error = ref<string | null>(null)
-  const catalogError = ref<string | null>(null)
+  const manufacturersError = ref<string | null>(null)
+  const materialsError = ref<string | null>(null)
+  const catalogError = computed(() => manufacturersError.value ?? materialsError.value)
   const opsError = ref<string | null>(null)
   const traceId = ref<string | null>(null)
-  const catalogTraceId = ref<string | null>(null)
+  const manufacturersTraceId = ref<string | null>(null)
+  const materialsTraceId = ref<string | null>(null)
+  const catalogTraceId = computed(() => manufacturersTraceId.value ?? materialsTraceId.value)
   const opsTraceId = ref<string | null>(null)
 
   // AB-03: the one-time provision / temp-password secrets must not outlive the
@@ -407,9 +451,9 @@ export const useAdminStore = defineStore('admin', () => {
   // server-side filter params were dead/misleading and have been removed; if the
   // catalog ever grows to thousands, reintroduce server-side paging.
   async function loadManufacturers() {
-    catalogLoading.value = true
-    catalogError.value = null
-    catalogTraceId.value = null
+    manufacturersLoading.value = true
+    manufacturersError.value = null
+    manufacturersTraceId.value = null
     try {
       manufacturers.value = await api.get<Manufacturer[]>(
         '/platform/catalog/manufacturers',
@@ -420,25 +464,25 @@ export const useAdminStore = defineStore('admin', () => {
       // AdminMaterialsView render the no-access AdminErrorState (AB-01/AB-08),
       // instead of masking it as a generic load failure (CB-100).
       const captured = captureApiError(errorValue, 'manufacturers_load_failed')
-      catalogError.value = captured.code
-      catalogTraceId.value = captured.traceId
+      manufacturersError.value = captured.code
+      manufacturersTraceId.value = captured.traceId
     } finally {
-      catalogLoading.value = false
+      manufacturersLoading.value = false
     }
   }
 
   async function loadMaterials() {
-    catalogLoading.value = true
-    catalogError.value = null
-    catalogTraceId.value = null
+    materialsLoading.value = true
+    materialsError.value = null
+    materialsTraceId.value = null
     try {
       materials.value = await api.get<Material[]>('/platform/catalog/materials', authInit())
     } catch (errorValue) {
       const captured = captureApiError(errorValue, 'materials_load_failed')
-      catalogError.value = captured.code
-      catalogTraceId.value = captured.traceId
+      materialsError.value = captured.code
+      materialsTraceId.value = captured.traceId
     } finally {
-      catalogLoading.value = false
+      materialsLoading.value = false
     }
   }
 
@@ -666,29 +710,39 @@ export const useAdminStore = defineStore('admin', () => {
     errors.value = errors.value.map((row) => (row.id === updated.id ? updated : row))
   }
 
-  async function loadAudit(limit = 50) {
+  async function loadAudit(options: AuditLoadOptions = {}) {
+    const actionQuery = options.actions ?? { limit: 50 }
+    const statusQuery = options.status ?? { limit: 50 }
     opsLoading.value = true
     opsError.value = null
     opsTraceId.value = null
-    // AB-32: settle each feed independently so a transient failure on ONE feed
-    // doesn't blank both tabs; only show the full-screen error when both fail.
-    // AB-17: an explicit limit (capped at the backend's 200) so the silent 50-row
-    // default can be extended via "load more".
     const [actionsResult, statusResult] = await Promise.allSettled([
-      api.get<ActionLog[]>(withQuery('/platform/audit/actions', { limit }), authInit()),
+      api.get<ActionLog[]>(withQuery('/platform/audit/actions', actionQuery), authInit()),
       api.get<StatusChangeLog[]>(
-        withQuery('/platform/audit/status-changes', { limit }),
+        withQuery('/platform/audit/status-changes', statusQuery),
         authInit(),
       ),
     ])
-    if (actionsResult.status === 'fulfilled') auditActions.value = actionsResult.value
-    if (statusResult.status === 'fulfilled') auditStatusChanges.value = statusResult.value
+    if (actionsResult.status === 'fulfilled') {
+      auditActions.value = options.appendActions
+        ? [...auditActions.value, ...actionsResult.value]
+        : actionsResult.value
+    }
+    if (statusResult.status === 'fulfilled') {
+      auditStatusChanges.value = options.appendStatus
+        ? [...auditStatusChanges.value, ...statusResult.value]
+        : statusResult.value
+    }
     if (actionsResult.status === 'rejected' && statusResult.status === 'rejected') {
       const captured = captureApiError(actionsResult.reason, 'audit_load_failed')
       opsError.value = captured.code
       opsTraceId.value = captured.traceId
     }
     opsLoading.value = false
+    return {
+      actionsCount: actionsResult.status === 'fulfilled' ? actionsResult.value.length : 0,
+      statusCount: statusResult.status === 'fulfilled' ? statusResult.value.length : 0,
+    }
   }
 
   function reset() {
@@ -706,13 +760,16 @@ export const useAdminStore = defineStore('admin', () => {
     auditActions.value = []
     auditStatusChanges.value = []
     loading.value = false
-    catalogLoading.value = false
+    manufacturersLoading.value = false
+    materialsLoading.value = false
     opsLoading.value = false
     error.value = null
-    catalogError.value = null
+    manufacturersError.value = null
+    materialsError.value = null
     opsError.value = null
     traceId.value = null
-    catalogTraceId.value = null
+    manufacturersTraceId.value = null
+    materialsTraceId.value = null
     opsTraceId.value = null
   }
 
@@ -732,12 +789,18 @@ export const useAdminStore = defineStore('admin', () => {
     auditActions,
     auditStatusChanges,
     loading,
+    manufacturersLoading,
+    materialsLoading,
     catalogLoading,
     opsLoading,
     error,
+    manufacturersError,
+    materialsError,
     catalogError,
     opsError,
     traceId,
+    manufacturersTraceId,
+    materialsTraceId,
     catalogTraceId,
     opsTraceId,
     loadWorkshops,

@@ -99,6 +99,12 @@ test('reset-required operator sees the gate and a locked nav', async ({ page }, 
     'aria-disabled',
     'true',
   )
+  await expect(page.getByRole('link', { name: 'Yangi ustaxona' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await page.goto('/admin/catalog/materials')
+  await expect(page).toHaveURL(/\/admin\/profile/)
 })
 
 test('admin creates, resets, blocks and unblocks a platform operator', async ({ page }, testInfo) => {

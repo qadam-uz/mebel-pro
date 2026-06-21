@@ -1,7 +1,8 @@
 """FastAPI application factory and entrypoint."""
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import cast
 
 from fastapi import Depends, FastAPI, Request
@@ -13,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.db import SessionLocal
 from app.core.errors import (
     APIError,
     api_error_handler,
@@ -24,6 +26,7 @@ from app.core.logging import configure_logging
 from app.core.trace import trace_middleware
 from app.docs_site import require_docs_auth
 from app.docs_site import routers as docs_routers
+from app.modules.platform.api import run_platform_scheduler
 
 # The OpenAPI schema stays under the API prefix; the interactive UIs sit beside
 # the docs site at /api-docs and /api-redoc (`/docs` is the docs site). All
@@ -34,8 +37,13 @@ ExceptionHandler = Callable[[Request, Exception], Response | Awaitable[Response]
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    # Startup hooks (warm caches, etc.) go here. Shutdown after `yield`.
-    yield
+    scheduler_task = asyncio.create_task(run_platform_scheduler(SessionLocal))
+    try:
+        yield
+    finally:
+        scheduler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler_task
 
 
 def create_app() -> FastAPI:

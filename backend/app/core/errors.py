@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from structlog import get_logger
 
 from app.core.db import SessionLocal
+from app.core.principal import AuthenticatedPrincipal
 from app.core.trace import TRACE_HEADER, get_trace_id
 from app.modules.platform.api import record_application_error
 
@@ -66,6 +67,11 @@ def _json_error(
 def _request_trace_id(request: Request) -> str:
     trace_id = getattr(request.state, "trace_id", None)
     return trace_id if isinstance(trace_id, str) else get_trace_id()
+
+
+def _request_principal(request: Request) -> AuthenticatedPrincipal | None:
+    principal = getattr(request.state, "principal", None)
+    return principal if isinstance(principal, AuthenticatedPrincipal) else None
 
 
 def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
@@ -130,6 +136,7 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
 
 
 async def _record_unexpected_error(request: Request, exc: Exception, *, trace_id: str) -> None:
+    principal = _request_principal(request)
     context = {
         "method": request.method,
         "path": request.url.path,
@@ -151,6 +158,8 @@ async def _record_unexpected_error(request: Request, exc: Exception, *, trace_id
                 trace_id=trace_id,
                 stack=stack,
                 context=context,
+                workshop_id=principal.workshop_id if principal is not None else None,
+                user_id=principal.principal_id if principal is not None else None,
             )
             await db.commit()
     except Exception as monitor_exc:

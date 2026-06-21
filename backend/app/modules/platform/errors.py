@@ -10,10 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import ErrorRecordStatus
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord
+from app.modules.platform.notifications import notify_platform_users
 from app.modules.support.api import scrub_sensitive, scrub_text
 
 ROLLING_24H = timedelta(hours=24)
 ROLLING_7D = timedelta(days=7)
+ERROR_SPIKE_THRESHOLD_24H = 10
 
 
 async def record_application_error(
@@ -25,11 +27,17 @@ async def record_application_error(
     trace_id: str,
     stack: str | None = None,
     context: dict[str, Any] | None = None,
+    workshop_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
 ) -> ErrorRecord:
     now = datetime.now(UTC)
     safe_message = scrub_text(message)
     safe_stack = scrub_text(stack) if stack is not None else None
-    record = await db.scalar(select(ErrorRecord).where(ErrorRecord.code == code).with_for_update())
+    record = await db.scalar(
+        select(ErrorRecord)
+        .where(ErrorRecord.code == code, ErrorRecord.module == module)
+        .with_for_update()
+    )
     if record is None:
         try:
             async with db.begin_nested():
@@ -44,10 +52,13 @@ async def record_application_error(
                 await db.flush()
         except IntegrityError:
             record = await db.scalar(
-                select(ErrorRecord).where(ErrorRecord.code == code).with_for_update()
+                select(ErrorRecord)
+                .where(ErrorRecord.code == code, ErrorRecord.module == module)
+                .with_for_update()
             )
             if record is None:
                 raise
+    previous_24h_count = await _count_occurrences_since(db, record.id, now - ROLLING_24H)
     record.status = ErrorRecordStatus.OPEN
     record.last_occurred_at = now
     record.preview_message = safe_message[:240]
@@ -58,11 +69,26 @@ async def record_application_error(
             message=safe_message,
             stack=safe_stack,
             context=scrub_sensitive(context) if context is not None else None,
+            workshop_id=workshop_id,
+            user_id=user_id,
             occurred_at=now,
         )
     )
     await db.flush()
     await refresh_error_record_counts(db, [record], now=now)
+    if previous_24h_count < ERROR_SPIKE_THRESHOLD_24H <= record.count_24h:
+        await notify_platform_users(
+            db,
+            event_code="error.spike",
+            entity_type="error_record",
+            entity_id=record.id,
+            payload={
+                "code": record.code,
+                "module": record.module,
+                "count_24h": record.count_24h,
+                "threshold": ERROR_SPIKE_THRESHOLD_24H,
+            },
+        )
     return record
 
 

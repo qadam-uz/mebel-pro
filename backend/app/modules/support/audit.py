@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.principal import ActorContext
@@ -148,7 +148,15 @@ async def list_action_logs(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     action: str | None = None,
+    action_prefix: str | None = None,
+    module: str | None = None,
+    actor_search: str | None = None,
+    entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[ActionLog]:
     query = select(ActionLog).order_by(ActionLog.created_at.desc())
     if workshop_id is not None:
@@ -157,7 +165,30 @@ async def list_action_logs(
         query = query.where(ActionLog.branch_id == branch_id)
     if action is not None:
         query = query.where(ActionLog.action == action)
-    return list((await db.scalars(query.limit(_bounded_limit(limit)))).all())
+    if action_prefix is not None:
+        query = query.where(ActionLog.action.like(f"{_normalized_filter(action_prefix)}%"))
+    if module is not None:
+        query = query.where(ActionLog.action.like(f"{_normalized_filter(module)}.%"))
+    normalized_actor = _normalized_filter(actor_search)
+    if normalized_actor:
+        actor_pattern = f"%{normalized_actor}%"
+        query = query.where(
+            or_(
+                cast(ActionLog.actor_type, String).ilike(actor_pattern),
+                cast(ActionLog.actor_user_id, String).ilike(actor_pattern),
+                cast(ActionLog.actor_client_id, String).ilike(actor_pattern),
+            )
+        )
+    if entity_type is not None:
+        query = query.where(ActionLog.entity_type == _normalized_filter(entity_type))
+    if entity_id is not None:
+        query = query.where(ActionLog.entity_id == entity_id)
+    if created_from is not None:
+        query = query.where(ActionLog.created_at >= created_from)
+    if created_to is not None:
+        query = query.where(ActionLog.created_at < created_to)
+    rows = await db.scalars(query.offset(_bounded_offset(offset)).limit(_bounded_limit(limit)))
+    return list(rows.all())
 
 
 async def list_status_change_logs(
@@ -166,7 +197,14 @@ async def list_status_change_logs(
     workshop_id: uuid.UUID | None = None,
     branch_id: uuid.UUID | None = None,
     entity_type: str | None = None,
+    entity_id: uuid.UUID | None = None,
+    from_status: str | None = None,
+    to_status: str | None = None,
+    actor_search: str | None = None,
+    changed_from: datetime | None = None,
+    changed_to: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[StatusChangeLog]:
     query = select(StatusChangeLog).order_by(StatusChangeLog.changed_at.desc())
     if workshop_id is not None:
@@ -175,8 +213,37 @@ async def list_status_change_logs(
         query = query.where(StatusChangeLog.branch_id == branch_id)
     if entity_type is not None:
         query = query.where(StatusChangeLog.entity_type == entity_type)
-    return list((await db.scalars(query.limit(_bounded_limit(limit)))).all())
+    if entity_id is not None:
+        query = query.where(StatusChangeLog.entity_id == entity_id)
+    if from_status is not None:
+        query = query.where(StatusChangeLog.from_status == _normalized_filter(from_status))
+    if to_status is not None:
+        query = query.where(StatusChangeLog.to_status == _normalized_filter(to_status))
+    normalized_actor = _normalized_filter(actor_search)
+    if normalized_actor:
+        actor_pattern = f"%{normalized_actor}%"
+        query = query.where(
+            or_(
+                cast(StatusChangeLog.actor_type, String).ilike(actor_pattern),
+                cast(StatusChangeLog.actor_user_id, String).ilike(actor_pattern),
+                cast(StatusChangeLog.actor_client_id, String).ilike(actor_pattern),
+            )
+        )
+    if changed_from is not None:
+        query = query.where(StatusChangeLog.changed_at >= changed_from)
+    if changed_to is not None:
+        query = query.where(StatusChangeLog.changed_at < changed_to)
+    rows = await db.scalars(query.offset(_bounded_offset(offset)).limit(_bounded_limit(limit)))
+    return list(rows.all())
 
 
 def _bounded_limit(limit: int) -> int:
     return max(1, min(limit, 200))
+
+
+def _bounded_offset(offset: int) -> int:
+    return max(0, offset)
+
+
+def _normalized_filter(value: str | None) -> str:
+    return " ".join(value.strip().split()) if value else ""

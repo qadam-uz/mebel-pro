@@ -47,7 +47,7 @@ class JobRun(UUIDPrimaryKey, Base):
 class ErrorRecord(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "error_records"
     __table_args__ = (
-        UniqueConstraint("code", name="uq_error_records_code"),
+        UniqueConstraint("code", "module", name="uq_error_records_code_module"),
         CheckConstraint("count_24h >= 0 AND count_7d >= 0", name="ck_error_records_counts"),
     )
 

@@ -115,7 +115,7 @@ export interface WorkshopWorkerOption {
   id: string
   full_name: string
   is_owner: boolean
-  home_branch_id: string | null
+  home_branch_id: string
 }
 
 export interface WorkshopOrderFilters {

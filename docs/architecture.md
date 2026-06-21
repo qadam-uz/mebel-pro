@@ -76,7 +76,8 @@ Each SPA stays same-origin with its API (no CORS).
 - **One MinIO / S3** — material images, logos, and receipt attachments. The `files` module owns
   stored files; others attach/detach by id. Cutting PDFs are generated on demand from immutable
   cutting-result rows, not stored as file records in v1.
-- **In-process scheduler** — prune expired sessions, daily low-stock summary.
+- **In-process scheduler** — platform maintenance jobs that stay inside the app process; in v1,
+  this prunes expired sessions.
 - **Three SPAs + a static landing.** API same-origin under `/api`.
 - **One external integration** — Telegram Gateway, used only to deliver client sign-in OTP codes.
 - **Deployment** — Docker Compose: Postgres + MinIO + FastAPI + nginx-served web + Caddy edge

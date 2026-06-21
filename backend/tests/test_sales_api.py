@@ -409,6 +409,93 @@ async def test_client_order_detail_gates_settlement_until_ready(
     }
 
 
+async def test_production_staff_sees_and_updates_only_assigned_orders(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    other_worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    worker_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=worker.id,
+    )
+    other_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=other_worker.id,
+    )
+    worker_access = worker_tokens.access_token
+    other_access = other_tokens.access_token
+    order_id = order["id"]
+
+    before_assignment = await client.get(
+        "/api/v1/workshop/orders?status=active",
+        headers=_auth(worker_access),
+    )
+    invisible_detail = await client.get(
+        f"/api/v1/workshop/orders/{order_id}",
+        headers=_auth(worker_access),
+    )
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+
+    worker_list = await client.get(
+        "/api/v1/workshop/orders?status=active",
+        headers=_auth(worker_access),
+    )
+    worker_detail = await client.get(
+        f"/api/v1/workshop/orders/{order_id}",
+        headers=_auth(worker_access),
+    )
+    other_list = await client.get(
+        "/api/v1/workshop/orders?status=active",
+        headers=_auth(other_access),
+    )
+    other_detail = await client.get(
+        f"/api/v1/workshop/orders/{order_id}",
+        headers=_auth(other_access),
+    )
+    other_cut = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(other_access),
+        json={"version": assigned.json()["version"]},
+    )
+    worker_cut = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(worker_access),
+        json={"version": assigned.json()["version"]},
+    )
+
+    assert before_assignment.status_code == 200
+    assert before_assignment.json() == []
+    assert invisible_detail.status_code == 404
+    assert worker_list.status_code == 200
+    assert [row["id"] for row in worker_list.json()] == [order_id]
+    assert worker_detail.status_code == 200
+    assert worker_detail.json()["id"] == order_id
+    assert other_list.status_code == 200
+    assert other_list.json() == []
+    assert other_detail.status_code == 404
+    assert other_cut.status_code == 404
+    assert worker_cut.status_code == 200
+    assert worker_cut.json()["status"] == "edge_banding"
+
+
 async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     client: AsyncClient,
     db_session: AsyncSession,

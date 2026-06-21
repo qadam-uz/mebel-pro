@@ -10,6 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -26,6 +27,11 @@ const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen
 const reason = ref('')
 const acting = ref(false)
 const actionError = ref<string | null>(null)
+const tabOptions = [
+  { value: 'profile', label: 'Profil' },
+  { value: 'branches', label: 'Filiallar' },
+  { value: 'users', label: 'Xodimlar' },
+]
 
 const canBlock = computed(
   () => admin.detail?.workshop.status === 'active' && reason.value.trim().length > 0,
@@ -143,50 +149,19 @@ onMounted(() => admin.loadWorkshop(workshopId))
       Amal bajarilmadi.
     </p>
 
-    <div class="admin-tabs" role="tablist" aria-label="Ustaxona tafsilotlari">
-      <button
-        id="ws-tab-profile"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'profile'"
-        aria-controls="ws-panel-profile"
-        class="admin-tab"
-        :class="{ on: tab === 'profile' }"
-        @click="tab = 'profile'"
-      >
-        Profil
-      </button>
-      <button
-        id="ws-tab-branches"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'branches'"
-        aria-controls="ws-panel-branches"
-        class="admin-tab"
-        :class="{ on: tab === 'branches' }"
-        @click="tab = 'branches'"
-      >
-        Filiallar
-      </button>
-      <button
-        id="ws-tab-users"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'users'"
-        aria-controls="ws-panel-users"
-        class="admin-tab"
-        :class="{ on: tab === 'users' }"
-        @click="tab = 'users'"
-      >
-        Xodimlar
-      </button>
-    </div>
+    <AppTabs
+      v-model="tab"
+      :tabs="tabOptions"
+      id-prefix="ws"
+      label="Ustaxona tafsilotlari"
+      variant="admin"
+    />
 
     <section
       v-if="tab === 'profile'"
-      id="ws-panel-profile"
+      id="ws-profile-panel"
       role="tabpanel"
-      aria-labelledby="ws-tab-profile"
+      aria-labelledby="ws-profile-tab"
       class="admin-card max-w-[720px]"
     >
       <div class="admin-card-h">
@@ -240,9 +215,9 @@ onMounted(() => admin.loadWorkshop(workshopId))
 
     <section
       v-else-if="tab === 'branches'"
-      id="ws-panel-branches"
+      id="ws-branches-panel"
       role="tabpanel"
-      aria-labelledby="ws-tab-branches"
+      aria-labelledby="ws-branches-tab"
       class="admin-card"
     >
       <div class="admin-card-h">
@@ -286,9 +261,9 @@ onMounted(() => admin.loadWorkshop(workshopId))
 
     <section
       v-else
-      id="ws-panel-users"
+      id="ws-users-panel"
       role="tabpanel"
-      aria-labelledby="ws-tab-users"
+      aria-labelledby="ws-users-tab"
       class="admin-card"
     >
       <div class="admin-card-h">

@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import status
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
@@ -54,7 +55,6 @@ WORKSHOP_CUTTING_PERMISSIONS = frozenset(
     {
         Permission.VIEW_DASHBOARD,
         Permission.MANAGE_ORDERS,
-        Permission.PROCESS_PRODUCTION,
     }
 )
 
@@ -822,15 +822,34 @@ def _workshop_branch_ids(principal: AuthenticatedPrincipal) -> set[uuid.UUID]:
     }
 
 
+def _production_branch_ids(principal: AuthenticatedPrincipal) -> set[uuid.UUID]:
+    return {
+        grant.branch_id
+        for grant in principal.grants
+        if grant.permission is Permission.PROCESS_PRODUCTION
+    }
+
+
 def _apply_workshop_scope(query: Any, principal: AuthenticatedPrincipal) -> Any:
     if principal.is_owner:
         return query.where(Order.workshop_id == principal.workshop_id)
     branch_ids = _workshop_branch_ids(principal)
-    if not branch_ids:
+    production_branch_ids = _production_branch_ids(principal)
+    conditions: list[ColumnElement[bool]] = []
+    if branch_ids:
+        conditions.append(Order.branch_id.in_(branch_ids))
+    if production_branch_ids:
+        conditions.append(
+            and_(
+                Order.branch_id.in_(production_branch_ids),
+                Order.assigned_cutter_user_id == principal.principal_id,
+            )
+        )
+    if not conditions:
         return query.where(Order.branch_id.in_([]))
     return query.where(
         Order.workshop_id == principal.workshop_id,
-        Order.branch_id.in_(branch_ids),
+        or_(*conditions),
     )
 
 

@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-09
+updated: 2026-06-20
 order: 20
 ---
 
@@ -157,8 +157,8 @@ A platform operator provisions a workshop atomically with its first user and fir
   `home_branch_id = first_branch.id`, and `password_reset_required = true`. Returns the summary
   and the temp password **once**. Workshop fields include a generated `code` with manual override;
   the returned summary includes the workshop code and owner login. Only the temp password is
-  secret and shown once. The owner cannot be created, demoted, or deleted by anyone except a
-  platform operator; exactly one owner per workshop.
+  secret and shown once. Provisioning creates exactly one owner; after that, v1 has no owner
+  create / demote / delete / transfer path.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**

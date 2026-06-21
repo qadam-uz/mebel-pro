@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-20
 order: 10
 ---
 
@@ -61,8 +61,8 @@ reports, booked as a `salary` expense ([`finance.md`](../features/finance.md)).
 Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop; sign-in
 resolves the workshop by `workshop.code` before checking the login; `home_branch_id` belongs to
 the same workshop; blocking the user, or blocking its workshop, deletes its sessions; staff with
-zero grants can log in but has no actionable screens; only a platform operator may move ownership
-to another user.
+zero grants can log in but has no actionable screens; v1 has no owner transfer path after
+provisioning.
 
 ## Permission grant
 

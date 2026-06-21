@@ -149,16 +149,16 @@ onMounted(async () => {
       </button>
     </div>
 
-    <section v-if="admin.catalogLoading" class="admin-card p-5" aria-live="polite">
+    <section v-if="admin.manufacturersLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
     </section>
 
     <AdminErrorState
-      v-else-if="admin.catalogError"
-      :code="admin.catalogError"
-      :trace-id="admin.catalogTraceId"
+      v-else-if="admin.manufacturersError"
+      :code="admin.manufacturersError"
+      :trace-id="admin.manufacturersTraceId"
       title="Ishlab chiqaruvchilar yuklanmadi"
       @retry="admin.loadManufacturers()"
     />

@@ -328,6 +328,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
       full_name: 'Inventory Staff',
       phone: phoneFor(id, 50),
       login: staffLogin,
+      home_branch_id: branchId,
       temp_password: 'StaffTemp123',
       grants: [{ permission: 'manage_inventory', branch_id: branchId }],
     },

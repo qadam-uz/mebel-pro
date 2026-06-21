@@ -102,13 +102,14 @@ async def test_session_cap_keeps_latest_five_sessions(db_session: AsyncSession) 
 async def test_workshop_session_revocation_deletes_all_workshop_user_sessions(
     db_session: AsyncSession,
 ) -> None:
-    workshop, _, owner = await seed_workshop_with_owner(db_session)
+    workshop, branch, owner = await seed_workshop_with_owner(db_session)
     staff = WorkshopUser(
         workshop_id=workshop.id,
         login="staff",
         password_hash=owner.password_hash,
         full_name="Staff",
         phone="+998904444444",
+        home_branch_id=branch.id,
     )
     db_session.add(staff)
     await db_session.flush()

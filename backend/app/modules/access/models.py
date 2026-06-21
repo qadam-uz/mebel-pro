@@ -62,7 +62,10 @@ class WorkshopUser(UUIDPrimaryKey, Timestamped, Base):
     full_name: Mapped[str] = mapped_column(nullable=False)
     phone: Mapped[str] = mapped_column(nullable=False)
     is_owner: Mapped[bool] = mapped_column(default=False, nullable=False)
-    home_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
+    home_branch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("branches.id"),
+        nullable=False,
+    )
     status: Mapped[UserStatus] = mapped_column(
         enum_type(UserStatus, "user_status"),
         default=UserStatus.ACTIVE,

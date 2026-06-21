@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick } from 'vue'
+import { computed, nextTick } from 'vue'
 
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 
@@ -8,6 +8,7 @@ const props = defineProps<{
   tabs: ChoiceOption[]
   idPrefix: string
   label: string
+  variant?: 'default' | 'admin'
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +22,9 @@ function tabId(value: string) {
 function panelId(value: string) {
   return `${props.idPrefix}-${value}-panel`
 }
+
+const rootClass = computed(() => (props.variant === 'admin' ? 'admin-tabs' : 'tabs'))
+const tabClass = computed(() => (props.variant === 'admin' ? 'admin-tab' : 'tab'))
 
 async function select(value: string, focus = false) {
   emit('update:modelValue', value)
@@ -55,14 +59,13 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="tabs" role="tablist" :aria-label="label" @keydown="onKeydown">
+  <div :class="rootClass" role="tablist" :aria-label="label" @keydown="onKeydown">
     <button
       v-for="tab in tabs"
       :id="tabId(tab.value)"
       :key="tab.value"
       type="button"
-      class="tab"
-      :class="{ on: modelValue === tab.value }"
+      :class="[tabClass, { on: modelValue === tab.value }]"
       role="tab"
       :aria-selected="modelValue === tab.value"
       :aria-controls="panelId(tab.value)"

@@ -76,6 +76,7 @@ async def test_staff_needs_branch_permission_grant(db_session: AsyncSession) -> 
         password_hash=owner.password_hash,
         full_name="Staff Authz",
         phone="+998905555555",
+        home_branch_id=branch.id,
     )
     db_session.add(staff)
     await db_session.flush()

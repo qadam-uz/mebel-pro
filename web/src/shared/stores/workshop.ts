@@ -33,7 +33,7 @@ export interface WorkshopUser {
   full_name: string
   phone: string
   is_owner: boolean
-  home_branch_id: string | null
+  home_branch_id: string
   status: 'active' | 'blocked'
   password_reset_required: boolean
   last_login_at: string | null
@@ -638,7 +638,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
       full_name?: string
       phone?: string
       login?: string
-      home_branch_id?: string | null
+      home_branch_id?: string
     },
   ) {
     error.value = null

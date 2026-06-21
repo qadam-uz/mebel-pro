@@ -395,7 +395,7 @@ def upgrade() -> None:
             ["platform_users.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("code", name="uq_error_records_code"),
+        sa.UniqueConstraint("code", "module", name="uq_error_records_code_module"),
     )
     op.create_table(
         "job_runs",
@@ -702,7 +702,7 @@ def upgrade() -> None:
         sa.Column("full_name", sa.String(), nullable=False),
         sa.Column("phone", sa.String(), nullable=False),
         sa.Column("is_owner", sa.Boolean(), nullable=False),
-        sa.Column("home_branch_id", sa.Uuid(), nullable=True),
+        sa.Column("home_branch_id", sa.Uuid(), nullable=False),
         sa.Column(
             "status",
             sa.Enum("active", "blocked", name="user_status", create_constraint=True),

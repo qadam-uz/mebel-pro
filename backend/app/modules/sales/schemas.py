@@ -153,7 +153,7 @@ class WorkshopWorkerOption(APIModel):
     id: uuid.UUID
     full_name: str
     is_owner: bool
-    home_branch_id: uuid.UUID | None
+    home_branch_id: uuid.UUID
 
 
 class OrderSummaryResponse(APIModel):

@@ -86,6 +86,22 @@ async def _staff_access(
     branch_id: uuid.UUID,
     permission: Permission,
 ) -> str:
+    access, _ = await _staff_user_access(
+        db,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=permission,
+    )
+    return access
+
+
+async def _staff_user_access(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    permission: Permission,
+) -> tuple[str, WorkshopUser]:
     staff = WorkshopUser(
         workshop_id=workshop_id,
         login=f"staff-{uuid.uuid4().hex[:8]}",
@@ -113,7 +129,7 @@ async def _staff_access(
         principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
         principal_id=staff.id,
     )
-    return tokens.access_token
+    return tokens.access_token, staff
 
 
 async def _materials(
@@ -413,6 +429,67 @@ async def test_workshop_cutting_plans_are_order_bound_and_branch_scoped(
     assert denied_staff.status_code == 404
     assert denied_client.status_code == 403
     assert denied_platform.status_code == 403
+
+
+async def test_production_staff_sees_only_assigned_cutting_plans(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    _, first_client = await _client_access(db_session, phone="+998901111031")
+    _, second_client = await _client_access(db_session, phone="+998901111032")
+    assigned_result = await _confirmed_result(
+        db_session,
+        first_client.id,
+        workshop_id,
+        branch_id,
+        panel,
+        edge,
+    )
+    unassigned_result = await _confirmed_result(
+        db_session,
+        second_client.id,
+        workshop_id,
+        branch_id,
+        panel,
+        edge,
+    )
+    production_access, worker = await _staff_user_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.PROCESS_PRODUCTION,
+    )
+    assert assigned_result.order_id is not None
+    assigned_order = await db_session.get(Order, assigned_result.order_id)
+    assert assigned_order is not None
+    assigned_order.assigned_cutter_user_id = worker.id
+    await db_session.flush()
+
+    owner_list = await client.get("/api/v1/workshop/cutting-plans", headers=_auth(owner_access))
+    production_list = await client.get(
+        "/api/v1/workshop/cutting-plans",
+        headers=_auth(production_access),
+    )
+    assigned_detail = await client.get(
+        f"/api/v1/workshop/cutting-plans/{assigned_result.id}",
+        headers=_auth(production_access),
+    )
+    unassigned_detail = await client.get(
+        f"/api/v1/workshop/cutting-plans/{unassigned_result.id}",
+        headers=_auth(production_access),
+    )
+
+    assert owner_list.status_code == 200
+    assert {row["id"] for row in owner_list.json()} == {
+        str(assigned_result.id),
+        str(unassigned_result.id),
+    }
+    assert production_list.status_code == 200
+    assert [row["id"] for row in production_list.json()] == [str(assigned_result.id)]
+    assert assigned_detail.status_code == 200
+    assert unassigned_detail.status_code == 404
 
 
 async def _confirmed_result(

@@ -11,6 +11,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 
@@ -32,6 +33,7 @@ const isLoading = computed(
 const hasError = computed(() => admin.error && !overview.value)
 const partialFailure = ref(false)
 const running = ref(false)
+const confirmJob = ref<string | null>(null)
 
 // AB-14 / AB-46: the dashboard only needs overview + workshops + jobs + errors
 // (the operator count comes from `overview`, so the full catalog/operator lists
@@ -52,6 +54,7 @@ async function loadAll() {
 
 async function rerun(name: string) {
   running.value = true
+  confirmJob.value = null
   try {
     const run = await admin.runJob(name)
     if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
@@ -61,6 +64,10 @@ async function rerun(name: string) {
   } finally {
     running.value = false
   }
+}
+
+function requestRerun(name: string) {
+  confirmJob.value = name
 }
 
 onMounted(loadAll)
@@ -75,8 +82,13 @@ onMounted(loadAll)
           Loyiha kuni . <b>{{ today }}</b> . platforma sog'ligi va insidentlar
         </p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="admin.loadOverview">
-        Yangilash
+      <button
+        type="button"
+        class="mp-button mp-button-outline"
+        :disabled="admin.loading || admin.opsLoading"
+        @click="loadAll"
+      >
+        {{ admin.loading || admin.opsLoading ? 'Yuklanmoqda' : 'Yangilash' }}
       </button>
     </div>
 
@@ -241,7 +253,7 @@ onMounted(loadAll)
                   class="mp-button mp-button-outline min-h-8 px-2 text-xs"
                   :disabled="running"
                   :aria-label="`${job.definition.name} jobini qayta ishga tushirish`"
-                  @click="rerun(job.definition.name)"
+                  @click="requestRerun(job.definition.name)"
                 >
                   Qayta
                 </button>
@@ -305,5 +317,17 @@ onMounted(loadAll)
         </div>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="confirmJob !== null"
+      title="Ishni qayta urinish"
+      :message="`${confirmJob} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`"
+      confirm-label="Ishga tushirish"
+      busy-label="Ishlamoqda"
+      cancel-label="Bekor qilish"
+      :busy="running"
+      @confirm="confirmJob && rerun(confirmJob)"
+      @cancel="confirmJob = null"
+    />
   </section>
 </template>

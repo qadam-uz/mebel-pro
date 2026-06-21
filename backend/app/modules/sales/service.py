@@ -14,8 +14,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from fastapi import status
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
@@ -77,7 +78,6 @@ WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
     {
         Permission.VIEW_DASHBOARD,
         Permission.MANAGE_ORDERS,
-        Permission.PROCESS_PRODUCTION,
     }
 )
 
@@ -2002,14 +2002,31 @@ def _apply_workshop_order_scope(
     query = query.where(Order.workshop_id == principal.workshop_id)
     if principal.is_owner:
         return query.where(Order.branch_id == branch_id) if branch_id is not None else query
-    branch_ids = {
+    view_branch_ids = {
         grant.branch_id
         for grant in principal.grants
         if grant.permission in WORKSHOP_ORDER_VIEW_PERMISSIONS
     }
+    production_branch_ids = _production_branch_ids(principal)
     if branch_id is not None:
-        branch_ids = {branch_id} if branch_id in branch_ids else set()
-    return query.where(Order.branch_id.in_(branch_ids))
+        view_branch_ids = {branch_id} if branch_id in view_branch_ids else set()
+        production_branch_ids = {branch_id} if branch_id in production_branch_ids else set()
+    conditions: list[ColumnElement[bool]] = []
+    if view_branch_ids:
+        conditions.append(Order.branch_id.in_(view_branch_ids))
+    if production_branch_ids:
+        conditions.append(
+            and_(
+                Order.branch_id.in_(production_branch_ids),
+                or_(
+                    Order.assigned_cutter_user_id == principal.principal_id,
+                    Order.assigned_edger_user_id == principal.principal_id,
+                ),
+            )
+        )
+    if not conditions:
+        return query.where(Order.branch_id.in_([]))
+    return query.where(or_(*conditions))
 
 
 def _apply_order_filters(
@@ -2056,10 +2073,12 @@ def _apply_order_filters(
 
 
 def _can_view_workshop_order(principal: AuthenticatedPrincipal, order: Order) -> bool:
-    return any(
+    if any(
         _has_order_permission(principal, order, permission)
         for permission in WORKSHOP_ORDER_VIEW_PERMISSIONS
-    )
+    ):
+        return True
+    return _can_view_assigned_production_order(principal, order)
 
 
 def _has_order_permission(
@@ -2073,6 +2092,26 @@ def _has_order_permission(
         branch_id=order.branch_id,
         permission=permission,
     )
+
+
+def _production_branch_ids(principal: AuthenticatedPrincipal) -> set[uuid.UUID]:
+    return {
+        grant.branch_id
+        for grant in principal.grants
+        if grant.permission is Permission.PROCESS_PRODUCTION
+    }
+
+
+def _can_view_assigned_production_order(
+    principal: AuthenticatedPrincipal,
+    order: Order,
+) -> bool:
+    if principal.principal_id not in {
+        order.assigned_cutter_user_id,
+        order.assigned_edger_user_id,
+    }:
+        return False
+    return _has_order_permission(principal, order, Permission.PROCESS_PRODUCTION)
 
 
 async def _credited_worker(

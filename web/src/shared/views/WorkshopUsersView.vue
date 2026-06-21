@@ -38,7 +38,6 @@ const form = reactive({
 })
 
 const branchOptions = computed(() => [
-  { value: '', label: 'Asosiy filial yo`q', meta: 'ixtiyoriy', status: 'pending' as const },
   ...workshop.branches.map((branch) => ({
     value: branch.id,
     label: branch.name,
@@ -119,6 +118,28 @@ function toggleGrant(permission: string, branchId: string) {
   selected.value = next
 }
 
+function defaultHomeBranchId() {
+  const selectedBranch = workshop.branches.find(
+    (branch) => branch.id === workshop.selectedBranchContext,
+  )
+  return (
+    selectedBranch?.id ??
+    workshop.branches.find((branch) => branch.status === 'active')?.id ??
+    workshop.branches[0]?.id ??
+    ''
+  )
+}
+
+function ensureCreateHomeBranch() {
+  if (workshop.branches.some((branch) => branch.id === form.homeBranchId)) return
+  form.homeBranchId = defaultHomeBranchId()
+}
+
+function openCreateForm() {
+  showCreate.value = !showCreate.value
+  if (showCreate.value) ensureCreateHomeBranch()
+}
+
 watch(
   () => route.query.search,
   () => {
@@ -133,6 +154,12 @@ watch([branchFilter, statusFilter], () => {
 })
 
 async function createStaff() {
+  ensureCreateHomeBranch()
+  if (!form.homeBranchId) {
+    createError.value = 'Avval filial yarating.'
+    createTraceId.value = null
+    return
+  }
   creating.value = true
   createError.value = null
   createTraceId.value = null
@@ -141,7 +168,7 @@ async function createStaff() {
       full_name: form.fullName,
       phone: form.phone,
       login: form.login,
-      home_branch_id: form.homeBranchId || null,
+      home_branch_id: form.homeBranchId,
       temp_password: form.tempPassword || undefined,
       grants: [...selected.value].map((value) => {
         const [permission, branch_id] = value.split('|')
@@ -151,7 +178,7 @@ async function createStaff() {
     form.fullName = ''
     form.phone = '+998'
     form.login = ''
-    form.homeBranchId = ''
+    form.homeBranchId = defaultHomeBranchId()
     form.tempPassword = ''
     selected.value = new Set()
     showCreate.value = false
@@ -167,6 +194,7 @@ async function createStaff() {
 onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
+  ensureCreateHomeBranch()
   if (auth.me?.is_owner) void refreshUsers()
 })
 
@@ -187,7 +215,7 @@ onBeforeUnmount(() => {
           v-if="auth.me?.is_owner"
           type="button"
           class="mp-button mp-button-primary"
-          @click="showCreate = !showCreate"
+          @click="openCreateForm"
         >
           Yangi xodim
         </button>

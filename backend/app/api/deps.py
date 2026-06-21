@@ -9,7 +9,7 @@ Use the ``Session`` annotated alias in route signatures::
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, status
+from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,7 @@ BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(_bear
 
 
 async def get_current_principal(
+    request: Request,
     db: Session,
     credentials: BearerCredentials,
 ) -> AuthenticatedPrincipal:
@@ -57,6 +58,7 @@ async def get_current_principal(
             "Authentication required",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
+    request.state.principal = principal
     return principal
 
 

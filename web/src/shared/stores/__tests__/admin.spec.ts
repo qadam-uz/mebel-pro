@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api } from '@/shared/api/client'
 import {
   useAdminStore,
+  type ActionLog,
   type ErrorRecord,
   type ErrorRecordStatus,
   type JobRun,
   type JobRunStatus,
   type Material,
   type MaterialWriteRequest,
+  type StatusChangeLog,
   type WorkshopListItem,
 } from '@/shared/stores/admin'
 
@@ -82,6 +84,42 @@ function makeError(id: string, status: ErrorRecordStatus): ErrorRecord {
   }
 }
 
+function makeAction(id: string): ActionLog {
+  return {
+    id,
+    actor_type: 'platform_user',
+    actor_user_id: 'u1',
+    actor_client_id: null,
+    workshop_id: 'w1',
+    branch_id: null,
+    action: 'platform.workshop.block',
+    entity_type: 'workshop',
+    entity_id: 'entity-1',
+    summary: 'Blocked',
+    details: null,
+    trace_id: 'trace-1',
+    created_at: '2026-06-19T10:00:00Z',
+  }
+}
+
+function makeStatus(id: string): StatusChangeLog {
+  return {
+    id,
+    entity_type: 'workshop',
+    entity_id: 'entity-1',
+    workshop_id: 'w1',
+    branch_id: null,
+    from_status: 'active',
+    to_status: 'blocked',
+    actor_type: 'platform_user',
+    actor_user_id: 'u1',
+    actor_client_id: null,
+    reason: 'reason',
+    action_log_id: null,
+    changed_at: '2026-06-19T10:00:00Z',
+  }
+}
+
 // AB-01 / AB-53 regression: every admin loader must run its error through
 // captureApiError so a 403 surfaces as `permission_denied` (rendered as the
 // dedicated access-revoked state) rather than being masked as a generic outage.
@@ -108,6 +146,65 @@ describe('admin store loaders surface permission_denied on 403', () => {
     const store = useAdminStore()
     await store.loadJobs()
     expect(store.opsError).toBe('jobs_load_failed')
+  })
+})
+
+describe('admin store catalog loader state', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
+
+  it('keeps manufacturer and material errors independent', async () => {
+    const store = useAdminStore()
+    vi.spyOn(api, 'get').mockRejectedValueOnce(new ApiError(403, { code: 'forbidden' }))
+    await store.loadManufacturers()
+    expect(store.manufacturersError).toBe('permission_denied')
+    expect(store.materialsError).toBeNull()
+
+    vi.spyOn(api, 'get').mockResolvedValueOnce([])
+    await store.loadMaterials()
+    expect(store.manufacturersError).toBe('permission_denied')
+    expect(store.materialsError).toBeNull()
+  })
+})
+
+describe('admin store audit loading', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.restoreAllMocks())
+
+  it('passes server filters and appends offset pages', async () => {
+    const get = vi
+      .spyOn(api, 'get')
+      .mockResolvedValueOnce([makeAction('a1')])
+      .mockResolvedValueOnce([makeStatus('s1')])
+      .mockResolvedValueOnce([makeAction('a2')])
+      .mockResolvedValueOnce([makeStatus('s2')])
+    const store = useAdminStore()
+
+    const first = await store.loadAudit({
+      actions: { workshop_id: 'w1', action_prefix: 'platform', limit: 50, offset: 0 },
+      status: { workshop_id: 'w1', to_status: 'blocked', limit: 50, offset: 0 },
+    })
+    const next = await store.loadAudit({
+      actions: { workshop_id: 'w1', action_prefix: 'platform', limit: 50, offset: 1 },
+      status: { workshop_id: 'w1', to_status: 'blocked', limit: 50, offset: 1 },
+      appendActions: true,
+      appendStatus: true,
+    })
+
+    expect(first).toEqual({ actionsCount: 1, statusCount: 1 })
+    expect(next).toEqual({ actionsCount: 1, statusCount: 1 })
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      '/platform/audit/actions?workshop_id=w1&action_prefix=platform&limit=50&offset=0',
+      { accessToken: null },
+    )
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      '/platform/audit/status-changes?workshop_id=w1&to_status=blocked&limit=50&offset=0',
+      { accessToken: null },
+    )
+    expect(store.auditActions.map((row) => row.id)).toEqual(['a1', 'a2'])
+    expect(store.auditStatusChanges.map((row) => row.id)).toEqual(['s1', 's2'])
   })
 })
 

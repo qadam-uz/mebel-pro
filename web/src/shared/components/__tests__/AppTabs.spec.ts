@@ -59,4 +59,20 @@ describe('AppTabs', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['three'])
   })
+
+  it('can render with admin classes while keeping tab semantics', () => {
+    const wrapper = mount(AppTabs, {
+      props: {
+        modelValue: 'one',
+        tabs,
+        idPrefix: 'admin-tabs',
+        label: 'Admin tabs',
+        variant: 'admin',
+      },
+    })
+
+    expect(wrapper.get('[role="tablist"]').classes()).toContain('admin-tabs')
+    expect(wrapper.get('[role="tab"]').classes()).toContain('admin-tab')
+    expect(wrapper.get('[role="tab"]').attributes('aria-controls')).toBe('admin-tabs-one-panel')
+  })
 })

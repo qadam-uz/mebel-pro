@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
-import {
-  adminDateTime,
-  auditActionFields,
-  auditStatusFields,
-  dropdownOption,
-  matchesNeedle,
-} from '@/shared/app/adminUi'
+import { adminDateTime, dropdownOption } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AppTabs from '@/shared/components/AppTabs.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
-import { useAdminStore } from '@/shared/stores/admin'
+import { useAdminStore, type AuditActionQuery, type AuditStatusQuery } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const tab = ref<'actions' | 'status'>('actions')
@@ -18,8 +13,16 @@ const query = ref('')
 const workshopFilter = ref('all')
 const entityFilter = ref('all')
 const timeFilter = ref('all')
-const limit = ref(50)
-const MAX_LIMIT = 200
+const PAGE_SIZE = 50
+const MAX_RESULTS = 200
+const actionsHasMore = ref(false)
+const statusHasMore = ref(false)
+const loadingMore = ref(false)
+
+const tabOptions = [
+  { value: 'actions', label: 'Amallar' },
+  { value: 'status', label: "Holat o'zgarishlari" },
+]
 
 const workshopName = computed(() => {
   const map = new Map<string, string>()
@@ -46,35 +49,63 @@ const timeOptions = [
   dropdownOption('7d', 'Oxirgi 7 kun', ''),
 ]
 
-function withinWindow(timestamp: string): boolean {
-  if (timeFilter.value === 'all') return true
-  const windowMs = timeFilter.value === '24h' ? 86_400_000 : 604_800_000
-  return Date.now() - new Date(timestamp).getTime() <= windowMs
+function isoDate(value: Date): string {
+  return value.toISOString().slice(0, 10)
 }
 
-const filteredActions = computed(() =>
-  admin.auditActions.filter((row) => {
-    if (workshopFilter.value !== 'all' && row.workshop_id !== workshopFilter.value) return false
-    if (entityFilter.value !== 'all' && row.entity_type !== entityFilter.value) return false
-    if (!withinWindow(row.created_at)) return false
-    return matchesNeedle(auditActionFields(row), query.value)
-  }),
-)
-const filteredStatus = computed(() =>
-  admin.auditStatusChanges.filter((row) => {
-    if (workshopFilter.value !== 'all' && row.workshop_id !== workshopFilter.value) return false
-    if (entityFilter.value !== 'all' && row.entity_type !== entityFilter.value) return false
-    if (!withinWindow(row.changed_at)) return false
-    return matchesNeedle(auditStatusFields(row), query.value)
-  }),
-)
+function selectedDateRange(): Pick<AuditActionQuery, 'date_from' | 'date_to'> {
+  if (timeFilter.value === 'all') return {}
+  const end = new Date()
+  const start = new Date(end)
+  if (timeFilter.value === '7d') start.setDate(start.getDate() - 6)
+  return { date_from: isoDate(start), date_to: isoDate(end) }
+}
 
-// A full page back means there may be more rows server-side (the 50-row default
-// is the silent cap AB-17 makes visible/extendable).
-const hasMore = computed(
-  () =>
-    limit.value < MAX_LIMIT &&
-    (admin.auditActions.length >= limit.value || admin.auditStatusChanges.length >= limit.value),
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function actorQuery(value: string): string | undefined {
+  return ['platform_user', 'workshop_user', 'client', 'system'].some((actor) =>
+    actor.startsWith(value),
+  )
+    ? value
+    : undefined
+}
+
+function actionQuery(offset: number): AuditActionQuery {
+  const needle = query.value.trim()
+  const params: AuditActionQuery = { limit: PAGE_SIZE, offset, ...selectedDateRange() }
+  if (workshopFilter.value !== 'all') params.workshop_id = workshopFilter.value
+  if (entityFilter.value !== 'all') params.entity_type = entityFilter.value
+  if (needle) {
+    if (isUuid(needle)) params.entity_id = needle
+    else {
+      const actor = actorQuery(needle)
+      if (actor) params.actor = actor
+      else params.action_prefix = needle
+    }
+  }
+  return params
+}
+
+function statusQuery(offset: number): AuditStatusQuery {
+  const needle = query.value.trim()
+  const params: AuditStatusQuery = { limit: PAGE_SIZE, offset, ...selectedDateRange() }
+  if (workshopFilter.value !== 'all') params.workshop_id = workshopFilter.value
+  if (entityFilter.value !== 'all') params.entity_type = entityFilter.value
+  if (needle) {
+    if (isUuid(needle)) params.entity_id = needle
+    else params.actor = needle
+  }
+  return params
+}
+
+const hasMore = computed(() =>
+  tab.value === 'actions' ? actionsHasMore.value : statusHasMore.value,
+)
+const visibleCount = computed(() =>
+  tab.value === 'actions' ? admin.auditActions.length : admin.auditStatusChanges.length,
 )
 
 function detailsText(value: Record<string, unknown> | null) {
@@ -82,13 +113,33 @@ function detailsText(value: Record<string, unknown> | null) {
   return JSON.stringify(value)
 }
 
-function refresh() {
-  void admin.loadAudit(limit.value)
+async function refresh() {
+  const result = await admin.loadAudit({
+    actions: actionQuery(0),
+    status: statusQuery(0),
+  })
+  actionsHasMore.value =
+    result.actionsCount === PAGE_SIZE && admin.auditActions.length < MAX_RESULTS
+  statusHasMore.value =
+    result.statusCount === PAGE_SIZE && admin.auditStatusChanges.length < MAX_RESULTS
 }
 
-function loadMore() {
-  limit.value = Math.min(MAX_LIMIT, limit.value + 50)
-  refresh()
+async function loadMore() {
+  loadingMore.value = true
+  try {
+    const result = await admin.loadAudit({
+      actions: actionQuery(admin.auditActions.length),
+      status: statusQuery(admin.auditStatusChanges.length),
+      appendActions: true,
+      appendStatus: true,
+    })
+    actionsHasMore.value =
+      result.actionsCount === PAGE_SIZE && admin.auditActions.length < MAX_RESULTS
+    statusHasMore.value =
+      result.statusCount === PAGE_SIZE && admin.auditStatusChanges.length < MAX_RESULTS
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 function csvCell(value: string): string {
@@ -100,7 +151,7 @@ function exportCsv() {
     tab.value === 'actions'
       ? [
           ['Vaqt', 'Ustaxona', 'Obyekt turi', 'Amal', 'Aktor', 'Tafsilot'],
-          ...filteredActions.value.map((row) => [
+          ...admin.auditActions.map((row) => [
             adminDateTime(row.created_at),
             row.workshop_id ? (workshopName.value.get(row.workshop_id) ?? row.workshop_id) : '-',
             row.entity_type ?? '-',
@@ -111,7 +162,7 @@ function exportCsv() {
         ]
       : [
           ['Vaqt', 'Obyekt', 'Obyekt ID', "O'tish", 'Aktor', 'Sabab'],
-          ...filteredStatus.value.map((row) => [
+          ...admin.auditStatusChanges.map((row) => [
             adminDateTime(row.changed_at),
             row.entity_type,
             row.entity_id,
@@ -136,6 +187,10 @@ onMounted(() => {
   refresh()
   if (admin.workshops.length === 0) void admin.loadWorkshops()
 })
+
+watch([workshopFilter, entityFilter, timeFilter], () => {
+  void refresh()
+})
 </script>
 
 <template>
@@ -151,40 +206,22 @@ onMounted(() => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidiruv</span>
-        <input v-model="query" placeholder="Obyekt ID yoki amal" />
+        <input v-model="query" placeholder="Obyekt ID, amal yoki aktor" @keyup.enter="refresh" />
       </label>
       <ProjectDropdown v-model="workshopFilter" label="Ustaxona" :options="workshopOptions" />
       <ProjectDropdown v-model="entityFilter" label="Obyekt turi" :options="entityOptions" />
       <ProjectDropdown v-model="timeFilter" label="Vaqt" :options="timeOptions" />
+      <button type="button" class="mp-button mp-button-outline" @click="refresh">Filtrlash</button>
       <button type="button" class="mp-button mp-button-outline" @click="exportCsv">CSV</button>
     </div>
 
-    <div class="admin-tabs" role="tablist" aria-label="Audit turi">
-      <button
-        id="audit-tab-actions"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'actions'"
-        aria-controls="audit-panel-actions"
-        class="admin-tab"
-        :class="{ on: tab === 'actions' }"
-        @click="tab = 'actions'"
-      >
-        Amallar
-      </button>
-      <button
-        id="audit-tab-status"
-        type="button"
-        role="tab"
-        :aria-selected="tab === 'status'"
-        aria-controls="audit-panel-status"
-        class="admin-tab"
-        :class="{ on: tab === 'status' }"
-        @click="tab = 'status'"
-      >
-        Holat o'zgarishlari
-      </button>
-    </div>
+    <AppTabs
+      v-model="tab"
+      :tabs="tabOptions"
+      id-prefix="audit"
+      label="Audit turi"
+      variant="admin"
+    />
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
       <div class="admin-skeleton-line w-3/5"></div>
@@ -202,12 +239,12 @@ onMounted(() => {
 
     <section
       v-else-if="tab === 'actions'"
-      id="audit-panel-actions"
+      id="audit-actions-panel"
       role="tabpanel"
-      aria-labelledby="audit-tab-actions"
+      aria-labelledby="audit-actions-tab"
       class="admin-card"
     >
-      <div v-if="filteredActions.length === 0" class="admin-empty m-5">
+      <div v-if="admin.auditActions.length === 0" class="admin-empty m-5">
         <h3>Amallar logi bo'sh</h3>
         <p>O'zgartiruvchi platforma amallari shu yerda ko'rinadi.</p>
       </div>
@@ -224,7 +261,7 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in filteredActions" :key="row.id">
+            <tr v-for="row in admin.auditActions" :key="row.id">
               <td class="admin-mono text-ink-muted">{{ adminDateTime(row.created_at) }}</td>
               <td class="text-ink-muted">
                 {{
@@ -252,12 +289,12 @@ onMounted(() => {
 
     <section
       v-else
-      id="audit-panel-status"
+      id="audit-status-panel"
       role="tabpanel"
-      aria-labelledby="audit-tab-status"
+      aria-labelledby="audit-status-tab"
       class="admin-card"
     >
-      <div v-if="filteredStatus.length === 0" class="admin-empty m-5">
+      <div v-if="admin.auditStatusChanges.length === 0" class="admin-empty m-5">
         <h3>Status log bo'sh</h3>
         <p>Status transition shu yerda ko'rinadi.</p>
       </div>
@@ -273,7 +310,7 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in filteredStatus" :key="row.id">
+            <tr v-for="row in admin.auditStatusChanges" :key="row.id">
               <td class="admin-mono text-ink-muted">{{ adminDateTime(row.changed_at) }}</td>
               <td class="nm">
                 {{ row.entity_type }}
@@ -291,12 +328,17 @@ onMounted(() => {
     </section>
 
     <div v-if="!admin.opsLoading && !admin.opsError" class="mt-4 flex items-center gap-3">
-      <button v-if="hasMore" type="button" class="mp-button mp-button-outline" @click="loadMore">
-        Ko'proq yuklash
+      <button
+        v-if="hasMore"
+        type="button"
+        class="mp-button mp-button-outline"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
+        {{ loadingMore ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
       </button>
       <span class="text-xs text-ink-muted">
-        {{ tab === 'actions' ? filteredActions.length : filteredStatus.length }} ta yozuv · eng
-        so'nggi {{ limit }} tagacha
+        {{ visibleCount }} ta yozuv · server filtrlari bilan
       </span>
     </div>
   </section>
