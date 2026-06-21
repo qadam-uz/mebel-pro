@@ -920,6 +920,25 @@ onBeforeRouteLeave(() => {
           </div>
 
           <div v-else class="grid gap-3 p-4">
+            <!-- Desktop column header: same border + p-3 + grid template as a
+                 CuttingPartRow card, so the columns line up; hidden on mobile,
+                 where each row keeps its own field labels. -->
+            <div
+              class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block"
+              aria-hidden="true"
+            >
+              <div
+                class="grid grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] gap-3 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+              >
+                <span>#</span>
+                <span>Panel materiali</span>
+                <span>Uzunlik</span>
+                <span>Eni</span>
+                <span>Soni</span>
+                <span>Krom</span>
+                <span>Amallar</span>
+              </div>
+            </div>
             <CuttingPartRow
               v-for="(part, index) in parts"
               :key="part.part_ref"
@@ -966,17 +985,35 @@ onBeforeRouteLeave(() => {
           <div
             class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5"
           >
-            <div>
-              <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
-              <p v-else class="text-sm text-ink-soft">
-                {{ parts.length }} qator · {{ totalQuantity }} dona · pre-filter
-                {{ preferredBranch ? preferredBranch.branch_name : 'yoqilmagan' }}
-              </p>
-              <label class="mt-2 inline-flex min-h-9 items-center gap-2 text-sm font-bold text-ink">
-                <input v-model="showAllCatalog" type="checkbox" class="size-4" />
-                Barcha katalogni ko'rsatish
-              </label>
-            </div>
+            <label class="inline-flex min-h-9 items-center gap-2 text-sm font-bold text-ink">
+              <input v-model="showAllCatalog" type="checkbox" class="size-4" />
+              Barcha katalogni ko'rsatish
+            </label>
+            <p v-if="saveError" class="text-sm font-bold text-danger">{{ saveError }}</p>
+          </div>
+        </section>
+
+        <!-- Sticky action bar: the primary Optimise CTA stays reachable without
+             scrolling to the bottom of a long parts list, and the disabled reason
+             is shown inline (visible on touch) instead of only in a title tooltip. -->
+        <div
+          v-if="parts.length > 0"
+          class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_rgb(15_27_45_/_30%)] backdrop-blur"
+        >
+          <div class="text-sm">
+            <span class="font-mono font-bold text-ink"
+              >{{ parts.length }} qator · {{ totalQuantity }} dona</span
+            >
+            <span class="text-ink-muted"> / {{ MAX_PARTS }}</span>
+          </div>
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <span
+              v-if="!cutting.optimizing && !creatingDraft && optimizeDisabledHint"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted"
+            >
+              <span class="font-black text-warning" aria-hidden="true">!</span>
+              {{ optimizeDisabledHint }}
+            </span>
             <button
               type="button"
               class="mp-button mp-button-primary"
@@ -987,7 +1024,7 @@ onBeforeRouteLeave(() => {
               {{ cutting.optimizing || creatingDraft ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
             </button>
           </div>
-        </section>
+        </div>
       </fieldset>
 
       <CuttingResultsSection

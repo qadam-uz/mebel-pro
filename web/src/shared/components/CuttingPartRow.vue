@@ -153,6 +153,7 @@ function edgeCellLabel(side: EdgeField) {
       <div class="min-w-0">
         <SearchCombobox
           label="Panel materiali"
+          label-class="lg:sr-only"
           :model-value="part.material_id"
           :options="panelChoices"
           placeholder="Panel tanlang"
@@ -193,7 +194,7 @@ function edgeCellLabel(side: EdgeField) {
            parent grid again (desktop layout unchanged) — CB-60. -->
       <div class="grid grid-cols-3 gap-2 lg:contents">
         <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          Uzunlik
+          <span class="lg:hidden">Uzunlik</span>
           <input
             v-model.number="lengthModel"
             type="number"
@@ -207,7 +208,7 @@ function edgeCellLabel(side: EdgeField) {
         </label>
 
         <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          Eni
+          <span class="lg:hidden">Eni</span>
           <input
             v-model.number="widthModel"
             type="number"
@@ -221,7 +222,7 @@ function edgeCellLabel(side: EdgeField) {
         </label>
 
         <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          Soni
+          <span class="lg:hidden">Soni</span>
           <input
             v-model.number="quantityModel"
             type="number"
@@ -236,7 +237,7 @@ function edgeCellLabel(side: EdgeField) {
       </div>
 
       <div class="min-w-0">
-        <span class="mb-1 block text-sm font-bold text-ink">Krom</span>
+        <span class="mb-1 block text-sm font-bold text-ink lg:hidden">Krom</span>
         <button
           type="button"
           class="client-edges-btn"
