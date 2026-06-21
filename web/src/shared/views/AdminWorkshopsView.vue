@@ -11,6 +11,7 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -258,7 +259,7 @@ onMounted(async () => {
         <p class="sub">Ustaxonalarni yaratish, bloklash va holatini kuzatish.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="modalOpen = true">
-        Yangi ustaxona
+        + Yangi ustaxona
       </button>
     </div>
 
@@ -268,9 +269,7 @@ onMounted(async () => {
         <input v-model="search" placeholder="Ustaxona nomi yoki kod" />
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-      <button type="button" class="mp-button mp-button-outline" @click="admin.loadWorkshops">
-        Yangilash
-      </button>
+      <AdminRefreshButton :loading="admin.loading" @click="admin.loadWorkshops" />
     </div>
 
     <section v-if="admin.loading" class="admin-card p-5" aria-live="polite">

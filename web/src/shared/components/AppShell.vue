@@ -835,9 +835,6 @@ onBeforeUnmount(() => {
               {{ link.label }}
             </a>
           </div>
-          <p class="admin-doc-note">
-            Alohida kirish: HTTP Basic bilan himoyalangan; yangi oynada ochiladi.
-          </p>
         </section>
       </nav>
 
@@ -968,7 +965,6 @@ onBeforeUnmount(() => {
             :aria-disabled="passwordResetRequired ? 'true' : undefined"
             @click="onAdminNavClick"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('plus')"></svg>
             {{ config.primaryActionLabel }}
           </RouterLink>
         </div>

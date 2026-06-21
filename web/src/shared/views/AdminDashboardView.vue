@@ -12,6 +12,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -20,7 +21,6 @@ const admin = useAdminStore()
 const rolePath = useRolePath()
 const toast = useToast()
 
-const today = adminDate(new Date().toISOString())
 const failedJobs = computed(() =>
   admin.jobs.filter((job) => job.definition.last_result === 'failed').slice(0, 2),
 )
@@ -80,18 +80,8 @@ onMounted(loadAll)
     <div class="admin-page-head">
       <div>
         <h1>Platforma asosiy</h1>
-        <p class="date">
-          Loyiha kuni . <b>{{ today }}</b> . platforma sog'ligi va insidentlar
-        </p>
       </div>
-      <button
-        type="button"
-        class="mp-button mp-button-outline"
-        :disabled="admin.loading || admin.opsLoading"
-        @click="loadAll"
-      >
-        {{ admin.loading || admin.opsLoading ? 'Yuklanmoqda' : 'Yangilash' }}
-      </button>
+      <AdminRefreshButton :loading="admin.loading || admin.opsLoading" @click="loadAll" />
     </div>
 
     <section v-if="isLoading" class="admin-kpis" aria-live="polite">

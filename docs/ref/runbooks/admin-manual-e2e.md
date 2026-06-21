@@ -55,7 +55,7 @@ Before screenshots:
 
 1. Open `http://localhost:5173/admin`.
 2. Sign in as `admin.ready`.
-3. Confirm the shell shows admin navigation, notification bell, and the **Yangi ustaxona**
+3. Confirm the shell shows admin navigation, notification bell, and the **+ Yangi ustaxona**
    primary action.
 4. Run the scenario set below in this order unless a specific defect requires isolation.
 
@@ -149,8 +149,8 @@ Use this for every screenshot and action result:
 |---|---|---|---|---|
 | `ADM-SHELL-01` | `admin.ready` | Sign in and land on `/admin`. | Sidebar groups are **Platforma**, **Katalog**, **Operatorlik**, **Tizim**, **Ma'lumotnoma**. Active route is visually current. Counts show without layout jump. | desktop/tablet |
 | `ADM-SHELL-02` | `admin.ready` | Tab from the browser chrome into the page. Activate **Kontentga o'tish**. | Skip link is visible on focus and moves focus to `#admin-content`. | desktop |
-| `ADM-SHELL-03` | `admin.ready` | Click **Yangi ustaxona** in the top bar. | Navigates to `/admin/workshops`; primary action remains one clear action. | desktop/mobile |
-| `ADM-SHELL-04` | `admin.ready` | Open **Hujjatlar & API**. | Menu opens below the nav item with Docs and API docs links; outside click closes it; Tab order is logical. | desktop |
+| `ADM-SHELL-03` | `admin.ready` | Click **+ Yangi ustaxona** in the top bar. | Navigates to `/admin/workshops`; primary action remains one clear action. | desktop/mobile |
+| `ADM-SHELL-04` | `admin.ready` | Open **Hujjatlar & API**. | Menu opens below the nav item with Docs and API docs links; no inline HTTP Basic explanation appears; outside click closes it; Tab order is logical. | desktop |
 | `ADM-SHELL-05` | `admin.ready`, mobile viewport | Tap **Menu**, navigate to **Materiallar**, then close with Escape and close button. | Drawer traps focus, closes on Escape/button/scrim, returns focus to Menu. No background scroll. | mobile |
 | `ADM-SHELL-06` | `admin.reset` | Sign in. Try sidebar link, top primary action, notification bell, and direct `/admin/catalog/materials`. | User is pinned to `/admin/profile`; gate alert explains password change. Locked nav has `aria-disabled`; top action and mobile menu are disabled. | desktop/mobile |
 | `ADM-SHELL-07` | `admin.ready` | Use browser back/forward between admin pages. | Document title changes, focus moves to main content, and shell state remains consistent. | desktop |
@@ -160,7 +160,7 @@ Use this for every screenshot and action result:
 
 | ID | Setup | Steps | Expected | Screenshots |
 |---|---|---|---|---|
-| `ADM-AUTH-01` | none | Open `/admin/auth/login`. | Login card is centered, branded, and explains docs/API are separately protected. Inputs have visible labels. | desktop/mobile |
+| `ADM-AUTH-01` | none | Open `/admin/auth/login`. | Login card is centered and branded; it does not explain docs/API protection. Inputs have visible labels. | desktop/mobile |
 | `ADM-AUTH-02` | `admin.ready` | Sign in with valid credentials. | Button shows `Tekshirilmoqda`, then user lands on `/admin`. | desktop |
 | `ADM-AUTH-03` | `admin.ready` | Submit bad password. | Generic error: `Login yoki parol noto'g'ri.` Form values are preserved. | desktop |
 | `ADM-AUTH-04` | locked operator | Submit valid locked credentials. | Lockout message is concise and does not reveal account existence for wrong credentials. | desktop |
@@ -203,7 +203,7 @@ Use this for every screenshot and action result:
 | `ADM-WORKSHOPS-03` | fail list request | Open page. | Error state has specific title, retry, trace id if present. | desktop |
 | `ADM-WORKSHOPS-04` | full data | Search by name/code; filter **Faol**, **Bloklangan**, reset filter. | Dropdown labels are clear; filtered results match; no-results differs from first-run empty. | desktop |
 | `ADM-WORKSHOPS-05` | full data | Search impossible value. | Empty state says no workshop matched and gives a way forward. | desktop |
-| `ADM-WORKSHOPS-06` | `admin.ready` | Open **Yangi ustaxona**. | Wide modal opens, focus enters, labels persist, working-hours grid fits all viewports. | desktop/mobile |
+| `ADM-WORKSHOPS-06` | `admin.ready` | Open **+ Yangi ustaxona**. | Wide modal opens, focus enters, labels persist, working-hours grid fits all viewports. | desktop/mobile |
 | `ADM-WORKSHOPS-07` | create modal | Type workshop name, then edit code manually, clear branch name. | Code auto-generates until manually edited; branch name defaults to `Asosiy filial` only when empty. | desktop |
 | `ADM-WORKSHOPS-08` | create modal | Fill valid data, submit. | Busy label `Yaratilmoqda`, success toast, one-time secret modal with code/login/password and copy buttons. | desktop/mobile |
 | `ADM-WORKSHOPS-09` | create modal | Submit missing/invalid fields and duplicate code. | Form remains open, values preserved, error copy is concise and field problems are findable. | desktop |
@@ -249,9 +249,9 @@ Use this for every screenshot and action result:
 | `ADM-MATERIAL-04` | full data | Use kind dropdown and manufacturer/type/thickness multi-select filters. | Multi-select selected count is readable; keyboard toggles choices; clear path exists. | desktop/mobile |
 | `ADM-MATERIAL-05` | full data | Search impossible value. | No-results empty offers **Filtrlarni tozalash**. | desktop |
 | `ADM-MATERIAL-06` | material with image | Inspect table image and image fallback. | Images reserve space, have meaningful alt, and fallback does not shift the row. | desktop |
-| `ADM-MATERIAL-07` | active manufacturer | Open **Yangi material** for panel. | FormSelect controls render instead of native selects; all labels visible; panel-only fields visible. | desktop/mobile |
+| `ADM-MATERIAL-07` | active manufacturer | Open **+ Yangi material** for panel. | FormSelect controls render instead of native selects; all labels visible; panel-only fields visible. | desktop/mobile |
 | `ADM-MATERIAL-08` | create modal | Switch kind to **Krom**. | Edge explanation appears; panel dimensions/grain hide; save payload remains clear. | desktop |
-| `ADM-MATERIAL-09` | material modal | Open inline **Yangi ishlab chiqaruvchi** modal. | Nested modal appears above parent, traps focus, saves, selects new manufacturer, and returns to material form. | desktop |
+| `ADM-MATERIAL-09` | material modal | Open inline **+ Yangi ishlab chiqaruvchi** modal. | Nested modal appears above parent, traps focus, saves, selects new manufacturer, and returns to material form. | desktop |
 | `ADM-MATERIAL-10` | panel form | Enter length smaller than width. | Inline error appears; submit disabled; fields preserved. | desktop |
 | `ADM-MATERIAL-11` | form with image | Upload image, remove image, upload invalid/failed image. | Upload state and failure copy are visible; image removal is obvious. | desktop |
 | `ADM-MATERIAL-12` | existing material | Edit material. | Kind selector is disabled with explanation; save updates row. | desktop |
@@ -339,7 +339,7 @@ Use this for every screenshot and action result:
 
 | ID | Setup | Steps | Expected | Screenshots |
 |---|---|---|---|---|
-| `ADM-DOCS-01` | `admin.ready` | Open docs menu and each Docs/API link. | Links open new tab; labels make separate HTTP-Basic prompt unsurprising; `/docs`, `/api-docs`, `/api-redoc` load behind docs auth. | desktop |
+| `ADM-DOCS-01` | `admin.ready` | Open docs menu and each Docs/API link. | Links open new tab; no extra explanatory note appears in the admin shell; `/docs`, `/api-docs`, `/api-redoc` load behind docs auth. | desktop |
 | `ADM-404-01` | `admin.ready` | Open `/admin/unknown-route`. | Not-found page is inside admin shell, offers **Asosiyga qaytish**, and copy is localized or intentionally accepted. | desktop/mobile |
 
 ## Visual audit checklist
@@ -353,6 +353,8 @@ For each screenshot, record pass/fail in `audit.md`:
 - Hierarchy: one clear primary action per page; secondary actions do not compete.
 - Consistency: admin buttons, pills, tabs, dropdowns, empty/error states, and modal headers use
   the same visual language across pages.
+- Admin actions: page refresh controls are icon-only with accessible names, and object-creation
+  buttons use a visible `+` prefix.
 - Accessibility: visible focus, reachable controls, labels, role/name/state, modal focus trap,
   Escape behavior, reduced-motion sanity.
 - Feedback: busy state on async actions, disabled state explains why, toast/status appears after

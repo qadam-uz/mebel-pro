@@ -10,6 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -192,9 +193,7 @@ watch(
         <h1>Xatolik monitor</h1>
         <p class="sub">Guruhlangan ilova xatoliklari, ko'payish sonlari, trace ID va kontekst.</p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="admin.loadErrors">
-        Yangilash
-      </button>
+      <AdminRefreshButton :loading="admin.opsLoading" @click="admin.loadErrors" />
     </div>
 
     <div class="admin-filters">

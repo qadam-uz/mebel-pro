@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-21
 order: 70
 ---
 
@@ -32,7 +32,7 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
 ### UX (under a **Catalog** section in the superadmin app)
 
 - **Manufacturers** (`/admin/catalog/manufacturers`) — table: name, country, materials
-  count, status, action menu. **+ Manufacturer** → dialog (name, optional country,
+  count, status, action menu. **+ Yangi ishlab chiqaruvchi** -> dialog (name, optional country,
   optional note). Row actions: Edit · Activate / Deactivate. No Delete. Filters:
   status dropdown, country dropdown. Empty: "No manufacturers yet — add one before
   adding materials."
@@ -43,7 +43,7 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
   thickness multi-select, status dropdown. A per-material "which branches carry this?"
   drill-down is a planned follow-up — it needs a cross-module branch lookup, so v1 ships
   only the count.
-  **+ Material** → kind-specific form (manufacturer picker with inline-add → opens the
+  **+ Yangi material** -> kind-specific form (manufacturer picker with inline-add -> opens the
   Manufacturers dialog without leaving this page; spec fields per the kind). Row
   actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
   yet — add manufacturers, then materials."
@@ -111,9 +111,13 @@ in-app creation is the path.
   ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollups are out of operator scope, so no
   per-workshop or platform revenue figure appears here.
 - **Docs & API reference** — a nav link out to `/docs`, `/api-docs`, `/api-redoc` (the
-  live docs site and the OpenAPI references). These are HTTP-Basic-gated at the edge, a
-  **sign-in separate from the app session** — the link opens in a new tab and is labelled
-  so the second prompt isn't a surprise.
+  live docs site and the OpenAPI references). These remain HTTP-Basic-gated at the edge,
+  but the superadmin UI keeps the navigation terse and does not explain that separate
+  prompt inline.
+
+Admin page refresh controls are icon-only buttons with an accessible name. Object-creation
+buttons use a visible `+` prefix in the Uzbek label, while non-action headings keep natural
+Uzbek copy.
 
 Under a **Catalog** section, the Manufacturers and Materials surfaces above.
 
@@ -129,7 +133,7 @@ Under a **Platform** section:
   recorded — nice."
 - **Platform users** (`/admin/platform/users`) — table: name, login, phone, status, last login,
   action menu (Edit · Reset password → one-time-secret confirmation · Block / Unblock).
-  "+ Platform user" → dialog (fields + auto / manual temp password).
+  **+ Yangi operator** -> dialog (fields + auto / manual temp password).
 
 The **Audit** viewer lives in [`workshop.md`](workshop.md) — in v1 it is a **superadmin-only**
 surface, rendered cross-workshop in this app. There is **no cross-workshop orders view** in

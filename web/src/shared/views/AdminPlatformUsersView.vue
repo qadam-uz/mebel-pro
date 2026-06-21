@@ -9,6 +9,7 @@ import {
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -206,7 +207,9 @@ onMounted(admin.loadPlatformUsers)
         <h1>Platforma operatorlari</h1>
         <p class="sub">Platforma doirasi bir xil; alohida ruxsat modeli yo'q.</p>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">Yangi operator</button>
+      <button type="button" class="admin-primary-action" @click="openCreate">
+        + Yangi operator
+      </button>
     </div>
 
     <p class="mb-4 rounded-md border border-hairline bg-sunk px-4 py-3 text-sm text-ink-soft">
@@ -219,9 +222,7 @@ onMounted(admin.loadPlatformUsers)
         <span>Qidiruv</span>
         <input v-model="query" placeholder="Ism, login yoki telefon" />
       </label>
-      <button type="button" class="mp-button mp-button-outline" @click="admin.loadPlatformUsers">
-        Yangilash
-      </button>
+      <AdminRefreshButton :loading="admin.opsLoading" @click="admin.loadPlatformUsers" />
     </div>
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">

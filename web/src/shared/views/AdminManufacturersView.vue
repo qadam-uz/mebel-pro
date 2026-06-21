@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -130,7 +131,7 @@ onMounted(async () => {
         <p class="sub">Platforma material katalogidagi brend va ishlab chiqaruvchilar.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">
-        Yangi ishlab chiqaruvchi
+        + Yangi ishlab chiqaruvchi
       </button>
     </div>
 
@@ -141,13 +142,7 @@ onMounted(async () => {
       </label>
       <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
       <ProjectDropdown v-model="countryFilter" label="Davlat" :options="countryOptions" />
-      <button
-        type="button"
-        class="mp-button mp-button-outline"
-        @click="() => admin.loadManufacturers()"
-      >
-        Yangilash
-      </button>
+      <AdminRefreshButton :loading="admin.manufacturersLoading" @click="admin.loadManufacturers" />
     </div>
 
     <section v-if="admin.manufacturersLoading" class="admin-card p-5" aria-live="polite">

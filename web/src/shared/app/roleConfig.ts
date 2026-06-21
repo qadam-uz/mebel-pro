@@ -130,7 +130,7 @@ export const adminConfig: RoleConfig = {
   notFoundHomeLabel: 'Asosiyga qaytish',
   dashboardTitle: 'Platforma asosiy',
   dashboardSubtitle: "Platforma sog'ligi, insidentlar va ustaxona yaratish holati.",
-  primaryActionLabel: 'Yangi ustaxona',
+  primaryActionLabel: '+ Yangi ustaxona',
   primaryActionTo: '/admin/workshops',
   dropdownLabel: 'Monitor',
   dropdownOptions: [

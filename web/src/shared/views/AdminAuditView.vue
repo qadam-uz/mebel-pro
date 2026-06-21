@@ -9,6 +9,7 @@ import {
   dropdownOption,
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useAdminStore, type AuditActionQuery, type AuditStatusQuery } from '@/shared/stores/admin'
@@ -211,7 +212,7 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
         <h1>Platforma audit logi</h1>
         <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining o'zgarmas loglari.</p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="refresh">Yangilash</button>
+      <AdminRefreshButton :loading="admin.opsLoading" @click="refresh" />
     </div>
 
     <div class="admin-filters">

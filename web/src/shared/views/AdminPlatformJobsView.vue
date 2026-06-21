@@ -12,6 +12,7 @@ import {
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
@@ -89,9 +90,7 @@ watch(
         <h1>Fon vazifalar</h1>
         <p class="sub">Fon vazifalar holati, oxirgi natija va qo'lda ishga tushirish.</p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
-        Yangilash
-      </button>
+      <AdminRefreshButton :loading="admin.opsLoading" @click="admin.loadJobs" />
     </div>
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">

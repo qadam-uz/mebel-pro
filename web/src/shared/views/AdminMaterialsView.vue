@@ -311,7 +311,9 @@ onMounted(async () => {
         <h1>Platforma material katalogi</h1>
         <p class="sub">Platforma master materiallari: panel va krom yozuvlari.</p>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">Yangi material</button>
+      <button type="button" class="admin-primary-action" @click="openCreate">
+        + Yangi material
+      </button>
     </div>
 
     <div class="admin-filters">
@@ -364,7 +366,7 @@ onMounted(async () => {
         <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki krom material yarating.</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2">
           <button type="button" class="admin-primary-action" @click="openCreate">
-            Yangi material
+            + Yangi material
           </button>
           <RouterLink
             :to="rolePath('/admin/catalog/manufacturers')"
@@ -525,7 +527,7 @@ onMounted(async () => {
                   class="mp-button mp-button-outline self-end"
                   @click="manufacturerModalOpen = true"
                 >
-                  Yangi ishlab chiqaruvchi
+                  + Yangi ishlab chiqaruvchi
                 </button>
               </div>
               <label class="admin-field admin-full" for="mat-name">

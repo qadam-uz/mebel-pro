@@ -33,10 +33,7 @@ const errorText = computed(() =>
           <h1 id="admin-login-title" class="font-serif text-3xl font-semibold leading-tight">
             Operator paneliga kirish
           </h1>
-          <p class="mt-2 text-sm text-ink-soft">
-            Platforma operatori login va parol bilan kiradi. Hujjatlar va API havolalari alohida
-            HTTP-Basic himoyasida ochiladi.
-          </p>
+          <p class="mt-2 text-sm text-ink-soft">Platforma operatori login va parol bilan kiradi.</p>
         </div>
 
         <label class="admin-field" for="admin-login">
