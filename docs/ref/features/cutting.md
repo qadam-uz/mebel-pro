@@ -210,7 +210,15 @@ doesn't carry get a per-row warning + recovery affordances (below).
 ### Parts editor (top)
 
 A mode switch at the top: **Manual entry** (default) · **Upload file** (`.bas` / `.xlsx`;
-disabled in v1 with a "Coming soon" pill).
+disabled in v1 with a "Coming soon" pill). The page header carries a **Clear parts list**
+trash icon, shown only once there are rows. The primary **Optimise** button lives in a
+**sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
+reason shown inline) — so it stays reachable above a long list.
+
+On wide layouts the parts table renders as a dense, scannable grid: a shared column header
+and one compact single-line row per part (the panel cell carries a colour swatch, an inline
+source toggle, a grain badge, and a leading row checkbox for bulk actions; row actions live
+behind a `⋯` menu). On narrow screens each row stacks into a labelled card.
 
 The parts table:
 
@@ -233,16 +241,20 @@ panel has grain — a passive cue, not a control.
   banding, and which tape should be used. There is no separate "match panel" section,
   "browse other materials" section, "customise per side" button, or standalone "apply to
   all" button.
-- **Side choice sits at the top.** Quick patterns cover the common shapes: **None**, **All
-  sides**, **Top + bottom**, **Left + right**. An interactive panel diagram below the
-  patterns lets the client toggle individual sides without leaving the picker. Choosing a
-  tape with no side selected applies it to all four sides; choosing a tape after sides are
-  selected applies it only to those sides.
-- **Material choice is one ranked list.** Edges with the same `decor_code` as the panel
-  are pinned first with a **Recommended** marker; same-`color` matches follow; all other
-  active edge materials continue in the same list. Search and a thickness dropdown filter
-  this one list. If no panel is selected, the picker says that matching will appear after
-  the panel is picked but still allows catalog search.
+- **The panel diagram is the centerpiece.** Compact quick-pattern chips sit above it
+  (**None**, **All sides**, **Top + bottom**, **Left + right**), and the diagram below shows
+  the part with all four sides **labelled** (top / bottom / left / right) — tap a side to
+  toggle its banding; banded sides fill (shop vs. "I'll bring it" read as distinct fills).
+  Choosing a tape applies it only to the **currently banded** sides; with **no** side
+  selected the tape is just remembered (highlighted in the list) and used by the next side
+  toggled on — picking a tape never auto-bands all four sides.
+- **The ranked tape list is revealed on demand.** Once a tape is chosen the list collapses
+  to a one-line summary (swatch + tape + thickness + how many sides) with a **Change**
+  toggle; opening it — or arriving at a part with no banding yet — shows the full list.
+  Edges with the same `decor_code` as the panel are pinned first with a **Recommended**
+  marker; same-`color` matches follow; all other active edge materials continue in the same
+  list, filtered by search + a thickness dropdown. If no panel is selected, matching appears
+  once the panel is picked but catalog search still works.
 - **Source is quiet by default.** `shop` is the default. A segmented source control
   (`Workshop supplies` / `I'll bring it`) applies to the currently banded sides; mixed
   per-side source remains possible through the diagram but is not presented as a separate
@@ -295,8 +307,9 @@ parts wholesale; the branch pre-filter never invokes it.
 
 ### Run and the result panel
 
-A primary **Optimise** button below the editor. Disabled while running (5 s cap), then
-disabled until any row changes (so re-tapping doesn't re-run a stale layout). On a brand-new
+A primary **Optimise** button in the sticky bottom action bar. Disabled while running (5 s
+cap), then disabled until any row changes (so re-tapping doesn't re-run a stale layout); the
+disable reason is shown inline next to it. On a brand-new
 (unsaved) editor the first **Optimise** also creates and saves the draft before running, after
 which the URL becomes `/c/cutting/:id` and autosave takes over.
 
