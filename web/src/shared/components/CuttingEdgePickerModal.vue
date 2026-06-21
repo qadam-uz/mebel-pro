@@ -52,6 +52,10 @@ const edgeDialogRef = ref<HTMLElement | null>(null)
 // part has no banding yet (the first-time pick); when editing a part that already
 // has a tape, collapse to the compact summary + an "O'zgartirish" toggle.
 const showTapeList = ref(false)
+// The last tape the user picked from the list. Applied to the currently banded
+// sides; when none are banded it's only remembered, so the next side toggled on
+// (or a pattern) uses it — picking a tape must not auto-band every side.
+const lastPickedEdgeId = ref<string | null>(null)
 
 const sideNames: Record<EdgeField, string> = {
   edge_top: 'Yuqori',
@@ -123,7 +127,7 @@ function recommendedEdgeForPart() {
   return recommendedEdge(
     materialById(part.material_id),
     cutting.edgeOptions,
-    edgePickerSelectedMaterialId.value,
+    lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
   )
 }
@@ -189,6 +193,10 @@ const edgePickerSelectedMaterialId = computed(() => {
   return first ?? null
 })
 const selectedEdgeMaterial = computed(() => edgeById(edgePickerSelectedMaterialId.value))
+// The tape highlighted in the list: what's banded, or the user's pending pick.
+const highlightedEdgeId = computed(
+  () => edgePickerSelectedMaterialId.value ?? lastPickedEdgeId.value,
+)
 const edgePickerBranchNote = computed(() => {
   if (!props.preferredBranchId) return null
   const missing = new Map<string, string>()
@@ -244,10 +252,13 @@ function setPickerSource(source: MaterialSource) {
 }
 
 function selectPickerMaterial(materialId: string) {
+  // Remember the pick either way; with banded sides, re-tape them. With NO sides
+  // banded (e.g. after "Hech qaysi") only remember it — never auto-band all four.
+  lastPickedEdgeId.value = materialId
   const active = edgePickerActiveSides.value
-  const targetSides = active.length ? active : edgeFields
+  if (active.length === 0) return
   const next = { ...edgePickerState.value }
-  for (const side of targetSides) {
+  for (const side of active) {
     next[side] = { material_id: materialId, source: edgePickerSource.value }
   }
   edgePickerState.value = next
@@ -320,6 +331,7 @@ watch(
       // First-time pick (no banding yet) opens the tape list; editing an existing
       // banded part starts collapsed to the compact summary.
       showTapeList.value = active.length === 0
+      lastPickedEdgeId.value = firstEdgeId(edgePickerState.value)
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
       lockBodyScroll()
@@ -331,6 +343,7 @@ watch(
       edgePickerState.value = blankEdgeState()
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
+      lastPickedEdgeId.value = null
     }
   },
 )
@@ -543,7 +556,7 @@ onBeforeUnmount(() => {
               :key="material.id"
               type="button"
               class="ep-edge-opt"
-              :class="{ on: edgePickerSelectedMaterialId === material.id }"
+              :class="{ on: highlightedEdgeId === material.id }"
               @click="selectPickerMaterial(material.id)"
             >
               <span class="rad" aria-hidden="true"></span>
