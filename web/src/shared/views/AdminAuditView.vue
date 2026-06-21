@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { adminDateTime, dropdownOption } from '@/shared/app/adminUi'
+import {
+  adminActorLabel,
+  adminDateTime,
+  adminEntityLabel,
+  adminStatusTransitionLabel,
+  dropdownOption,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -41,7 +47,7 @@ const entityOptions = computed(() => [
         .map((row) => row.entity_type)
         .filter((value): value is string => !!value),
     ),
-  ).map((entity) => dropdownOption(entity, entity, '')),
+  ).map((entity) => dropdownOption(entity, adminEntityLabel(entity), entity)),
 ])
 const timeOptions = [
   dropdownOption('all', 'Vaqt', 'barcha vaqt'),
@@ -113,6 +119,11 @@ function detailsText(value: Record<string, unknown> | null) {
   return JSON.stringify(value)
 }
 
+function actorText(actorType: string, actorId: string | null | undefined) {
+  const label = adminActorLabel(actorType)
+  return actorId ? `${label} ${actorId.slice(0, 8)}` : label
+}
+
 async function refresh() {
   const result = await admin.loadAudit({
     actions: actionQuery(0),
@@ -154,9 +165,9 @@ function exportCsv() {
           ...admin.auditActions.map((row) => [
             adminDateTime(row.created_at),
             row.workshop_id ? (workshopName.value.get(row.workshop_id) ?? row.workshop_id) : '-',
-            row.entity_type ?? '-',
+            adminEntityLabel(row.entity_type),
             row.action,
-            `${row.actor_type} ${row.actor_user_id ?? ''}`.trim(),
+            actorText(row.actor_type, row.actor_user_id),
             detailsText(row.details),
           ]),
         ]
@@ -164,10 +175,10 @@ function exportCsv() {
           ['Vaqt', 'Obyekt', 'Obyekt ID', "O'tish", 'Aktor', 'Sabab'],
           ...admin.auditStatusChanges.map((row) => [
             adminDateTime(row.changed_at),
-            row.entity_type,
+            adminEntityLabel(row.entity_type),
             row.entity_id,
-            `${row.from_status ?? '-'} -> ${row.to_status}`,
-            `${row.actor_type} ${row.actor_user_id ?? ''}`.trim(),
+            adminStatusTransitionLabel(row.from_status, row.to_status),
+            actorText(row.actor_type, row.actor_user_id),
             row.reason ?? '-',
           ]),
         ]
@@ -197,8 +208,8 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Audit log . platforma</h1>
-        <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining append-only loglari.</p>
+        <h1>Platforma audit logi</h1>
+        <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining o'zgarmas loglari.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="refresh">Yangilash</button>
     </div>
@@ -270,13 +281,13 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
                     : '-'
                 }}
               </td>
-              <td>{{ row.entity_type ?? '-' }}</td>
+              <td>{{ adminEntityLabel(row.entity_type) }}</td>
               <td class="nm">
                 {{ row.action }}
                 <small>{{ row.summary ?? "Izoh yo'q" }}</small>
               </td>
               <td class="admin-mono text-ink-muted">
-                {{ row.actor_type }} {{ row.actor_user_id?.slice(0, 8) ?? '' }}
+                {{ actorText(row.actor_type, row.actor_user_id) }}
               </td>
               <td class="max-w-[320px] truncate admin-mono text-ink-muted">
                 {{ detailsText(row.details) }}
@@ -295,8 +306,8 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
       class="admin-card"
     >
       <div v-if="admin.auditStatusChanges.length === 0" class="admin-empty m-5">
-        <h3>Status log bo'sh</h3>
-        <p>Status transition shu yerda ko'rinadi.</p>
+        <h3>Holat logi bo'sh</h3>
+        <p>Holat o'zgarishlari shu yerda ko'rinadi.</p>
       </div>
       <div v-else class="admin-table-wrap">
         <table class="admin-table wide">
@@ -313,12 +324,14 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
             <tr v-for="row in admin.auditStatusChanges" :key="row.id">
               <td class="admin-mono text-ink-muted">{{ adminDateTime(row.changed_at) }}</td>
               <td class="nm">
-                {{ row.entity_type }}
+                {{ adminEntityLabel(row.entity_type) }}
                 <small>{{ row.entity_id }}</small>
               </td>
-              <td class="admin-mono">{{ row.from_status ?? '-' }} -> {{ row.to_status }}</td>
+              <td class="admin-mono">
+                {{ adminStatusTransitionLabel(row.from_status, row.to_status) }}
+              </td>
               <td class="admin-mono text-ink-muted">
-                {{ row.actor_type }} {{ row.actor_user_id?.slice(0, 8) ?? '' }}
+                {{ actorText(row.actor_type, row.actor_user_id) }}
               </td>
               <td>{{ row.reason ?? '-' }}</td>
             </tr>
@@ -338,7 +351,7 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
         {{ loadingMore ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
       </button>
       <span class="text-xs text-ink-muted">
-        {{ visibleCount }} ta yozuv · server filtrlari bilan
+        {{ visibleCount }} ta yozuv · serverda filtrlangan
       </span>
     </div>
   </section>

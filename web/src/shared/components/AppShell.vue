@@ -835,7 +835,9 @@ onBeforeUnmount(() => {
               {{ link.label }}
             </a>
           </div>
-          <p class="admin-doc-note">Alohida kirish: chetda HTTP-Basic, yangi oynada.</p>
+          <p class="admin-doc-note">
+            Alohida kirish: HTTP Basic bilan himoyalangan; yangi oynada ochiladi.
+          </p>
         </section>
       </nav>
 

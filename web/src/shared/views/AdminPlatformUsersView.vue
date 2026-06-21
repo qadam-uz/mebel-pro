@@ -8,6 +8,7 @@ import {
   platformUserStatusTone,
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -370,7 +371,7 @@ onMounted(admin.loadPlatformUsers)
             aria-label="Yopish"
             @click="modalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="saveUser">
@@ -442,7 +443,7 @@ onMounted(admin.loadPlatformUsers)
             aria-label="Yopish"
             @click="blockModalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="confirmBlock">

@@ -3129,8 +3129,11 @@
 
   .admin-app {
     display: grid;
+    width: 100%;
+    max-width: 100vw;
     min-height: 100vh;
     grid-template-columns: 248px minmax(0, 1fr);
+    overflow-x: clip;
     background: var(--color-bg);
     color: var(--color-ink);
   }
@@ -3504,7 +3507,10 @@
 
   .admin-main {
     display: flex;
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
+    overflow-x: clip;
     flex-direction: column;
   }
 
@@ -3617,8 +3623,11 @@
   }
 
   .admin-page {
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
     flex: 1;
+    overflow-x: clip;
     padding: 28px;
   }
 
@@ -3758,6 +3767,8 @@
   }
 
   .admin-card {
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
     overflow: hidden;
     border: 1px solid var(--color-hairline);
@@ -3816,15 +3827,19 @@
   }
 
   .admin-table-wrap {
+    display: block;
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    contain: inline-size paint;
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .admin-table {
-    width: 100%;
-    min-width: 680px;
+    width: max(100%, 680px);
+    min-width: 0;
     border-collapse: collapse;
     font-size: 13px;
     text-align: left;
@@ -3834,7 +3849,7 @@
      room so their action buttons stay on one row and the user scrolls
      horizontally instead of the row ballooning vertically. */
   .admin-table.wide {
-    min-width: 900px;
+    width: max(100%, 900px);
   }
 
   .admin-table th {
@@ -3895,21 +3910,31 @@
   .admin-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: end;
+    align-items: stretch;
     gap: 12px;
     margin-bottom: 18px;
   }
 
+  .admin-filters > * {
+    max-width: 100%;
+  }
+
   .admin-filter-input {
     display: flex;
-    min-height: 40px;
-    align-items: center;
-    gap: 6px;
+    min-height: 70px;
+    min-width: 220px;
+    flex: 0 1 240px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
     border: 1px solid var(--color-hairline-strong);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--color-elevated);
-    padding: 8px 12px;
-    box-shadow: 0 1px 2px rgb(15 27 45 / 5%);
+    padding: 10px 12px;
+    box-shadow:
+      0 1px 2px rgb(15 27 45 / 4%),
+      0 4px 10px -3px rgb(15 27 45 / 9%);
   }
 
   .admin-filter-input > span:not(.sr-only) {
@@ -3923,14 +3948,38 @@
 
   .admin-filter-input input {
     width: 100%;
-    max-width: 220px;
     min-width: 0;
     border: 0;
     background: transparent;
     color: var(--color-ink);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
     outline: 0;
+  }
+
+  .admin-filters > .relative {
+    min-height: 70px;
+    min-width: 208px;
+    flex: 0 1 220px;
+    align-self: stretch;
+  }
+
+  .admin-filters > .relative > .mp-surface {
+    width: 100%;
+    min-width: 0 !important;
+    min-height: 70px;
+  }
+
+  .admin-filters > .relative > button:not(.mp-surface) {
+    min-height: 44px;
+  }
+
+  .admin-filters > .mp-button {
+    min-height: 70px;
+    align-self: stretch;
+    border-radius: 8px;
+    padding-block: 10px;
   }
 
   .admin-field {
@@ -4163,8 +4212,9 @@
     left: 50%;
     z-index: 80;
     display: flex;
-    width: min(calc(100% - 32px), 640px);
-    max-height: 90vh;
+    width: min(calc(100vw - 32px), 640px);
+    max-width: calc(100vw - 32px);
+    max-height: min(90vh, calc(100dvh - 32px));
     flex-direction: column;
     overflow: hidden;
     transform: translate(-50%, -50%);
@@ -4177,7 +4227,14 @@
   }
 
   .admin-modal.wide {
-    width: min(calc(100% - 32px), 900px);
+    width: min(calc(100vw - 32px), 900px);
+  }
+
+  .admin-modal > form {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 
   .admin-modal-h {
@@ -4215,6 +4272,7 @@
   }
 
   .admin-modal-b {
+    min-height: 0;
     flex: 1;
     overflow-y: auto;
     padding: 18px 24px;
@@ -4222,6 +4280,7 @@
 
   .admin-modal-f {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 8px;
@@ -4456,6 +4515,38 @@
   }
 
   @media (max-width: 620px) {
+    .admin-filters {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-filter-input,
+    .admin-filters > .relative,
+    .admin-filters > .mp-button {
+      width: 100%;
+      min-width: 0;
+      flex: none;
+    }
+
+    .admin-modal {
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      max-height: min(92vh, calc(100dvh - 24px));
+      border-radius: 12px;
+    }
+
+    .admin-modal-h {
+      padding: 14px 16px 12px;
+    }
+
+    .admin-modal-b {
+      padding: 16px;
+    }
+
+    .admin-modal-f {
+      padding: 12px 16px;
+    }
+
     .page-head,
     .admin-page-head {
       align-items: stretch;

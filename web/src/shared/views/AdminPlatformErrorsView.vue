@@ -9,6 +9,7 @@ import {
   errorStatusTone,
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -41,13 +42,13 @@ const statusOptions = [
 const moduleOptions = computed(() => [
   dropdownOption('all', 'Modul', 'barcha modullar'),
   ...Array.from(new Set(admin.errors.map((error) => error.module))).map((module) =>
-    dropdownOption(module, module, 'module'),
+    dropdownOption(module, module, 'modul'),
   ),
 ])
 const thresholdOptions = [
   dropdownOption('all', 'Chastota', 'barcha kodlar'),
   dropdownOption('3', '24s ≥ 3', "ko'tarilayotgan"),
-  dropdownOption('10', '24s ≥ 10', 'spayk'),
+  dropdownOption('10', '24s ≥ 10', "ko'payish"),
 ]
 const timeOptions = [
   dropdownOption('all', 'Vaqt', 'barcha vaqt'),
@@ -189,7 +190,7 @@ watch(
     <div class="admin-page-head">
       <div>
         <h1>Xatolik monitor</h1>
-        <p class="sub">Guruhlangan application errorlar, spayk sonlari, trace ID va kontekst.</p>
+        <p class="sub">Guruhlangan ilova xatoliklari, ko'payish sonlari, trace ID va kontekst.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadErrors">
         Yangilash
@@ -223,7 +224,7 @@ watch(
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Xatolik yozilmagan</h3>
-      <p>Xatolik yo'q — zo'r.</p>
+      <p>Xatolik yo'q.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -301,7 +302,7 @@ watch(
             aria-label="Yopish"
             @click="selectedId = null"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <div class="admin-modal-b">

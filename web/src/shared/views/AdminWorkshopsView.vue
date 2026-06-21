@@ -10,6 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -254,7 +255,7 @@ onMounted(async () => {
     <div class="admin-page-head">
       <div>
         <h1>Ustaxonalar</h1>
-        <p class="sub">Tenantlarni provisioning qilish, bloklash va holatini kuzatish.</p>
+        <p class="sub">Ustaxonalarni yaratish, bloklash va holatini kuzatish.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="modalOpen = true">
         Yangi ustaxona
@@ -288,7 +289,7 @@ onMounted(async () => {
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Ustaxona topilmadi</h3>
-      <p>Filtrni o'zgartiring yoki yangi ustaxona provisioning qiling.</p>
+      <p>Filtrni o'zgartiring yoki yangi ustaxona yarating.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -367,18 +368,21 @@ onMounted(async () => {
         @keydown="provisionTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="new-workshop-title">Yangi ustaxona + egasi . atomik yaratish</h3>
+          <h3 id="new-workshop-title">Yangi ustaxona va egasi</h3>
           <button
             type="button"
             class="admin-icon-button"
             aria-label="Yopish"
             @click="modalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="createWorkshop">
           <div class="admin-modal-b">
+            <p class="mb-4 rounded-md bg-sunk px-3 py-2 text-sm text-ink-soft">
+              Ustaxona, birinchi filial va egasi bir amal bilan yaratiladi.
+            </p>
             <div class="admin-form-grid three">
               <label class="admin-field admin-full" for="w-name">
                 <span>Ustaxona nomi</span>

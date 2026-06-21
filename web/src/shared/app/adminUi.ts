@@ -151,6 +151,98 @@ export function errorStatusLabel(status: ErrorRecordStatus) {
   return status === 'open' ? 'Ochiq' : 'Hal qilingan'
 }
 
+const ADMIN_ENTITY_LABELS: Record<string, string> = {
+  platform_user: 'Platforma operatori',
+  workshop_user: 'Ustaxona xodimi',
+  client: 'Mijoz',
+  workshop: 'Ustaxona',
+  branch: 'Filial',
+  manufacturer: 'Ishlab chiqaruvchi',
+  material: 'Material',
+  order: 'Buyurtma',
+  error_record: 'Xatolik yozuvi',
+  job_run: 'Fon vazifa yozuvi',
+  session: 'Sessiya',
+}
+
+const ADMIN_ACTOR_LABELS: Record<string, string> = {
+  platform_user: 'Platforma operatori',
+  workshop_user: 'Ustaxona xodimi',
+  client: 'Mijoz',
+  system: 'Tizim',
+}
+
+const ADMIN_STATUS_LABELS: Record<string, string> = {
+  active: 'Faol',
+  blocked: 'Bloklangan',
+  inactive: 'Faol emas',
+  temporarily_closed: 'Vaqtincha yopiq',
+  open: 'Ochiq',
+  resolved: 'Hal qilingan',
+  pending: 'Kutilmoqda',
+  new: 'Yangi',
+  verified: 'Tekshirilgan',
+  cutting: 'Kesilmoqda',
+  banding: 'Kromlanmoqda',
+  ready: 'Tayyor',
+  collected: 'Topshirilgan',
+  cancelled: 'Bekor qilingan',
+}
+
+const ADMIN_JOB_LABELS: Record<string, string> = {
+  'cleanup-expired-sessions': "Muddati o'tgan sessiyalarni tozalash",
+}
+
+const ADMIN_JOB_SCHEDULE_LABELS: Record<string, string> = {
+  hourly: 'Har soatda',
+  daily: 'Har kuni',
+  weekly: 'Har hafta',
+  manual: "Qo'lda",
+}
+
+function fallbackDisplayLabel(value: string) {
+  return value.replace(/_/g, ' ').replace(/-/g, ' ')
+}
+
+export function adminEntityLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  return ADMIN_ENTITY_LABELS[value] ?? fallbackDisplayLabel(value)
+}
+
+export function adminActorLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  return ADMIN_ACTOR_LABELS[value] ?? adminEntityLabel(value)
+}
+
+export function adminStatusValueLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  return ADMIN_STATUS_LABELS[value] ?? fallbackDisplayLabel(value)
+}
+
+export function adminStatusTransitionLabel(
+  fromStatus: string | null | undefined,
+  toStatus: string | null | undefined,
+) {
+  return `${adminStatusValueLabel(fromStatus)} -> ${adminStatusValueLabel(toStatus)}`
+}
+
+export function adminJobNameLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  return ADMIN_JOB_LABELS[value] ?? fallbackDisplayLabel(value)
+}
+
+export function adminJobScheduleLabel(value: string | null | undefined) {
+  if (!value) return '-'
+  return ADMIN_JOB_SCHEDULE_LABELS[value] ?? fallbackDisplayLabel(value)
+}
+
+export function adminJobLogText(value: string | null | undefined) {
+  if (!value) return "Jurnal hali yo'q"
+  const pruned = value.match(/^Pruned (\d+) expired sessions$/)
+  if (pruned) return `Muddati o'tgan ${pruned[1]} ta sessiya tozalandi`
+  return value
+}
+
 export function materialKindLabel(kind: MaterialKind | null | undefined) {
   if (kind === 'panel') return 'Panel'
   if (kind === 'edge') return 'Krom'
@@ -187,10 +279,12 @@ export function adminNotificationTitle(item: NotificationItem) {
   const errorCode =
     notificationPayloadText(item, 'error_code') ?? notificationPayloadText(item, 'code')
   if (item.event_code.includes('job')) {
-    return jobName ? `Job muvaffaqiyatsiz: ${jobName}` : `Job muvaffaqiyatsiz: ${item.event_code}`
+    return jobName
+      ? `Fon vazifa muvaffaqiyatsiz: ${adminJobNameLabel(jobName)}`
+      : `Fon vazifa muvaffaqiyatsiz: ${item.event_code}`
   }
   if (item.event_code.includes('error')) {
-    return errorCode ? `Xato spayki: ${errorCode}` : `Xato spayki: ${item.event_code}`
+    return errorCode ? `Xato ko'payishi: ${errorCode}` : `Xato ko'payishi: ${item.event_code}`
   }
   return item.event_code
 }

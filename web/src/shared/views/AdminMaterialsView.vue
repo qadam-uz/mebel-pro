@@ -11,6 +11,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -83,7 +84,7 @@ const kindOptions = [
 ]
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
-  dropdownOption('active', 'Faol', "branch tanlovida ko'rinadi"),
+  dropdownOption('active', 'Faol', "filial tanlovida ko'rinadi"),
   dropdownOption('inactive', 'Faol emas', 'yangi tanlovdan yashirilgan'),
 ]
 const manufacturerFilterOptions = computed<ChoiceOption[]>(() =>
@@ -489,7 +490,7 @@ onMounted(async () => {
             aria-label="Yopish"
             @click="modalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="save">
@@ -652,7 +653,7 @@ onMounted(async () => {
             aria-label="Yopish"
             @click="manufacturerModalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="saveInlineManufacturer">

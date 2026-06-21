@@ -32,7 +32,7 @@ const rows = computed(() => {
   return notifications.items
 })
 
-// AB-24: a colored kind tile so a failed-job vs error-spike alert is
+// AB-24: a colored kind tile so a failed-task vs error-growth alert is
 // distinguishable at a glance (the inbox's whole purpose).
 function kindMeta(item: NotificationItem) {
   if (item.event_code.includes('job')) return { letter: 'J', cls: 'bg-warning-soft text-warning' }
@@ -86,7 +86,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
     <div class="admin-page-head">
       <div>
         <h1>Bildirishnomalar</h1>
-        <p class="sub">Operator uchun job xatosi va xato spayki xabarlari.</p>
+        <p class="sub">Operator uchun fon vazifa xatosi va xato ko'payishi xabarlari.</p>
       </div>
       <button
         type="button"
@@ -94,7 +94,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
         :disabled="notifications.unread === 0"
         @click="markAll"
       >
-        Hammasini o'qilgan
+        Hammasini o'qilgan deb belgilash
       </button>
     </div>
 
@@ -160,7 +160,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
             :disabled="markingId === item.id"
             @click="markRead(item.id)"
           >
-            O'qilgan
+            O'qilgan deb belgilash
           </button>
           <span v-else class="admin-mono text-ink-muted">{{ adminDateTime(item.read_at) }}</span>
         </article>

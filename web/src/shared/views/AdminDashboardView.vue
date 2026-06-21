@@ -5,6 +5,7 @@ import { RouterLink } from 'vue-router'
 import {
   adminDate,
   adminDateTime,
+  adminJobNameLabel,
   errorStatusLabel,
   errorStatusTone,
   workshopStatusLabel,
@@ -57,7 +58,8 @@ async function rerun(name: string) {
   confirmJob.value = null
   try {
     const run = await admin.runJob(name)
-    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    if (run.status === 'skipped')
+      toast.warn("Fon vazifa allaqachon ishlamoqda — o'tkazib yuborildi")
     else toast.success('Ish qayta ishga tushirildi')
   } catch {
     toast.danger('Ish ishga tushmadi')
@@ -168,7 +170,9 @@ onMounted(loadAll)
             <small>muvaffaqiyatsiz</small>
           </div>
           <div class="admin-kpi-detail">
-            <span>{{ failedJobs[0]?.definition.name ?? 'hammasi ok' }}</span>
+            <span>
+              {{ failedJobs[0] ? adminJobNameLabel(failedJobs[0].definition.name) : 'hammasi ok' }}
+            </span>
             <span>ko'rish →</span>
           </div>
         </RouterLink>
@@ -183,7 +187,7 @@ onMounted(loadAll)
           <div class="admin-card-b flush">
             <div v-if="recentWorkshops.length === 0" class="admin-empty m-5">
               <h3>Ustaxona yo'q</h3>
-              <p>Yangi ustaxona provisioning qilingandan keyin shu yerda ko'rinadi.</p>
+              <p>Yangi ustaxona yaratilgandan keyin shu yerda ko'rinadi.</p>
             </div>
             <div v-else class="admin-table-wrap">
               <table class="admin-table">
@@ -243,7 +247,7 @@ onMounted(loadAll)
               >
                 <span class="admin-pill admin-pill-danger">Muvaffaqiyatsiz</span>
                 <span>
-                  <b>{{ job.definition.name }}</b>
+                  <b>{{ adminJobNameLabel(job.definition.name) }}</b>
                   <small class="block text-ink-muted">
                     {{ adminDateTime(job.definition.last_run_at) }}
                   </small>
@@ -252,7 +256,7 @@ onMounted(loadAll)
                   type="button"
                   class="mp-button mp-button-outline min-h-8 px-2 text-xs"
                   :disabled="running"
-                  :aria-label="`${job.definition.name} jobini qayta ishga tushirish`"
+                  :aria-label="`${adminJobNameLabel(job.definition.name)} vazifasini qayta ishga tushirish`"
                   @click="requestRerun(job.definition.name)"
                 >
                   Qayta
@@ -321,7 +325,7 @@ onMounted(loadAll)
     <ConfirmDialog
       :open="confirmJob !== null"
       title="Ishni qayta urinish"
-      :message="`${confirmJob} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`"
+      :message="`${adminJobNameLabel(confirmJob)} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`"
       confirm-label="Ishga tushirish"
       busy-label="Ishlamoqda"
       cancel-label="Bekor qilish"

@@ -2,8 +2,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
-import { adminDateTime, jobStatusLabel, jobStatusTone } from '@/shared/app/adminUi'
+import {
+  adminDateTime,
+  adminJobLogText,
+  adminJobNameLabel,
+  adminJobScheduleLabel,
+  jobStatusLabel,
+  jobStatusTone,
+} from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
@@ -42,7 +50,8 @@ async function confirmRun() {
   runError.value = null
   try {
     const run = await admin.runJob(target.name)
-    if (run.status === 'skipped') toast.warn("Job allaqachon ishlamoqda — o'tkazib yuborildi")
+    if (run.status === 'skipped')
+      toast.warn("Fon vazifa allaqachon ishlamoqda — o'tkazib yuborildi")
     else if (run.status === 'failed') toast.danger('Ish muvaffaqiyatsiz tugadi')
     else toast.success('Ish ishga tushirildi')
   } catch {
@@ -78,7 +87,7 @@ watch(
     <div class="admin-page-head">
       <div>
         <h1>Fon vazifalar</h1>
-        <p class="sub">In-process scheduler holati, oxirgi natija va qo'lda ishga tushirish.</p>
+        <p class="sub">Fon vazifalar holati, oxirgi natija va qo'lda ishga tushirish.</p>
       </div>
       <button type="button" class="mp-button mp-button-outline" @click="admin.loadJobs">
         Yangilash
@@ -101,7 +110,7 @@ watch(
 
     <section v-else-if="admin.jobs.length === 0" class="admin-empty">
       <h3>Ro'yxatdan o'tgan vazifa yo'q</h3>
-      <p>Ro'yxatdan o'tgan joblar bootstrap qilingandan keyin ko'rinadi.</p>
+      <p>Ro'yxatdan o'tgan vazifalar ishga tushgandan keyin ko'rinadi.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -124,10 +133,10 @@ watch(
               :class="{ 'bg-danger-soft': job.definition.last_result === 'failed' }"
             >
               <td class="nm">
-                {{ job.definition.name }}
+                {{ adminJobNameLabel(job.definition.name) }}
                 <small>{{ job.definition.enabled ? 'yoqilgan' : "o'chirilgan" }}</small>
               </td>
-              <td class="admin-mono text-ink-muted">{{ job.definition.schedule }}</td>
+              <td class="text-ink-muted">{{ adminJobScheduleLabel(job.definition.schedule) }}</td>
               <td class="admin-mono text-ink-muted">
                 {{ adminDateTime(job.definition.last_run_at) }}
               </td>
@@ -138,9 +147,9 @@ watch(
               </td>
               <td class="max-w-[360px] truncate">
                 {{
-                  job.recent_runs[0]?.brief_log ??
-                  job.recent_runs[0]?.error_message ??
-                  "Jurnal hali yo'q"
+                  adminJobLogText(
+                    job.recent_runs[0]?.brief_log ?? job.recent_runs[0]?.error_message,
+                  )
                 }}
               </td>
               <td class="admin-right">
@@ -148,7 +157,7 @@ watch(
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                    :aria-label="`${job.definition.name} jurnalini ko'rish`"
+                    :aria-label="`${adminJobNameLabel(job.definition.name)} jurnalini ko'rish`"
                     @click="openLog(job)"
                   >
                     Jurnalni ko'rish
@@ -157,7 +166,7 @@ watch(
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                     :disabled="runningJob === job.definition.name"
-                    :aria-label="`${job.definition.name} jobini hozir ishga tushirish`"
+                    :aria-label="`${adminJobNameLabel(job.definition.name)} vazifasini hozir ishga tushirish`"
                     @click="askRun(job)"
                   >
                     {{
@@ -181,7 +190,7 @@ watch(
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
       role="alert"
     >
-      Job ishga tushmadi.
+      Fon vazifa ishga tushmadi.
     </p>
 
     <template v-if="selectedJob">
@@ -203,14 +212,16 @@ watch(
             aria-label="Yopish"
             @click="selectedJobName = null"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <div class="admin-modal-b">
-          <p class="mb-4 font-mono text-sm font-bold text-ink">{{ selectedJob.definition.name }}</p>
+          <p class="mb-4 text-sm font-bold text-ink">
+            {{ adminJobNameLabel(selectedJob.definition.name) }}
+          </p>
           <div v-if="selectedJob.recent_runs.length === 0" class="admin-empty">
             <h3>Ishga tushirish yozuvi yo'q</h3>
-            <p>Job hali ishga tushmagan.</p>
+            <p>Vazifa hali ishga tushmagan.</p>
           </div>
           <article
             v-for="run in selectedJob.recent_runs"
@@ -225,7 +236,7 @@ watch(
               <span class="admin-mono text-ink-muted">{{ adminDateTime(run.started_at) }}</span>
             </div>
             <p class="mt-3 text-sm text-ink">
-              {{ run.brief_log ?? run.error_message ?? "Jurnal yo'q" }}
+              {{ adminJobLogText(run.brief_log ?? run.error_message) }}
             </p>
             <p v-if="run.trace_id" class="mt-2 admin-mono text-ink-muted">
               trace {{ run.trace_id }}
@@ -245,8 +256,8 @@ watch(
       :title="confirmJob?.retry ? 'Ishni qayta urinish' : 'Ishni hozir ishga tushirish'"
       :message="
         confirmJob?.retry
-          ? `${confirmJob?.name} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`
-          : `${confirmJob?.name} rejadan tashqari hozir ishga tushiriladi.`
+          ? `${adminJobNameLabel(confirmJob?.name)} muvaffaqiyatsiz tugagan edi — uni qo'lda qayta ishga tushirasizmi?`
+          : `${adminJobNameLabel(confirmJob?.name)} rejadan tashqari hozir ishga tushiriladi.`
       "
       confirm-label="Ishga tushirish"
       busy-label="Ishlamoqda"

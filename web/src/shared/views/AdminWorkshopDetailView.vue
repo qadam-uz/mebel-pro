@@ -10,6 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
@@ -166,11 +167,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
     >
       <div class="admin-card-h">
         <h2>Ustaxona profili</h2>
-        <span class="sub">faqat ko'rish . operator tahrirlamaydi</span>
+        <span class="sub">faqat ko'rish; operator tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
         <p class="mb-4 rounded-md border border-hairline bg-sunk px-3 py-2 text-xs text-ink-soft">
-          Operator faqat provisioning, bloklash va blokdan chiqarish amallarini bajaradi — ustaxona
+          Operator faqat yaratish, bloklash va blokdan chiqarish amallarini bajaradi — ustaxona
           profili va egasi ma'lumotlari ustaxona egasining mas'uliyatida.
         </p>
         <dl class="grid gap-4 sm:grid-cols-2">
@@ -268,11 +269,11 @@ onMounted(() => admin.loadWorkshop(workshopId))
     >
       <div class="admin-card-h">
         <h2>Xodimlar (faqat o'qish)</h2>
-        <span class="sub">rol yo'q - is_owner + berilgan ruxsatlar</span>
+        <span class="sub">egasi va berilgan ruxsatlar ko'rsatiladi</span>
       </div>
       <div class="admin-card-b">
         <article class="admin-row-item">
-          <span class="admin-pill admin-pill-success">owner</span>
+          <span class="admin-pill admin-pill-success">Egasi</span>
           <span>
             <b>{{ admin.detail.owner.full_name }}</b>
             <small class="block text-ink-muted">
@@ -282,11 +283,8 @@ onMounted(() => admin.loadWorkshop(workshopId))
           <span class="admin-mono text-ink-muted">{{ admin.detail.owner.id.slice(0, 8) }}</span>
         </article>
         <div class="admin-empty mt-4">
-          <h3>Staff ro'yxati alohida ko'rsatilmaydi</h3>
-          <p>
-            v1 operator doirasi ega va filiallarni incident response uchun faqat o'qish rejimida
-            ko'rsatadi.
-          </p>
+          <h3>Xodimlar ro'yxati faqat o'qish rejimida</h3>
+          <p>v1 da operator egasi, filiallar va ruxsatlarni faqat ko'rish rejimida kuzatadi.</p>
         </div>
       </div>
     </section>
@@ -310,7 +308,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             aria-label="Yopish"
             @click="blockModalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="block">

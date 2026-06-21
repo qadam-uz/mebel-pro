@@ -2,6 +2,7 @@
 import { ref, toRef } from 'vue'
 
 import { copyText } from '@/shared/app/clipboard'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 
@@ -51,7 +52,7 @@ async function copyAll() {
       <div class="admin-modal-h">
         <h3 id="admin-secret-title">{{ title }}</h3>
         <button type="button" class="admin-icon-button" aria-label="Yopish" @click="emit('close')">
-          x
+          <AdminModalCloseIcon />
         </button>
       </div>
       <div class="admin-modal-b">

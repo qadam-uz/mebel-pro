@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   adminDate,
   adminDateTime,
+  adminEntityLabel,
   adminInitials,
+  adminJobLogText,
+  adminJobNameLabel,
+  adminJobScheduleLabel,
   adminNavMetrics,
   adminNotificationDestination,
+  adminNotificationTitle,
+  adminStatusTransitionLabel,
   auditActionFields,
   auditStatusFields,
   groupedNav,
@@ -42,6 +48,19 @@ describe('admin UI helpers', () => {
     expect(adminDate('2026-06-08T00:00:00')).toBe('08.06.2026')
     expect(adminDateTime('2026-06-08T14:05:00')).toBe('08.06.2026 14:05')
     expect(adminDate('not-a-date')).toBe('-')
+  })
+
+  it('maps admin internals to operator-facing labels', () => {
+    expect(adminEntityLabel('platform_user')).toBe('Platforma operatori')
+    expect(adminEntityLabel('manufacturer')).toBe('Ishlab chiqaruvchi')
+    expect(adminStatusTransitionLabel('active', 'blocked')).toBe('Faol -> Bloklangan')
+    expect(adminJobNameLabel('cleanup-expired-sessions')).toBe(
+      "Muddati o'tgan sessiyalarni tozalash",
+    )
+    expect(adminJobScheduleLabel('hourly')).toBe('Har soatda')
+    expect(adminJobLogText('Pruned 0 expired sessions')).toBe(
+      "Muddati o'tgan 0 ta sessiya tozalandi",
+    )
   })
 
   it('maps live admin metrics to route-level sidebar badges', () => {
@@ -136,5 +155,20 @@ describe('admin UI helpers', () => {
         notification({ entity_type: null, entity_id: null, event_code: 'job.failed' }),
       ),
     ).toBe('/admin/platform/jobs')
+  })
+
+  it('presents admin notifications without mixed-language spike/job labels', () => {
+    expect(
+      adminNotificationTitle({
+        ...notification({ entity_type: null, entity_id: null, event_code: 'error.spike' }),
+        payload: { error_code: 'platform.error' },
+      }),
+    ).toBe("Xato ko'payishi: platform.error")
+    expect(
+      adminNotificationTitle({
+        ...notification({ entity_type: null, entity_id: null, event_code: 'job.failed' }),
+        payload: { job_name: 'cleanup-expired-sessions' },
+      }),
+    ).toBe("Fon vazifa muvaffaqiyatsiz: Muddati o'tgan sessiyalarni tozalash")
   })
 })

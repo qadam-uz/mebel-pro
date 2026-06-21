@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
+import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -129,7 +130,7 @@ onMounted(async () => {
         <p class="sub">Platforma material katalogidagi brend va ishlab chiqaruvchilar.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">
-        Ishlab chiqaruvchi
+        Yangi ishlab chiqaruvchi
       </button>
     </div>
 
@@ -252,7 +253,7 @@ onMounted(async () => {
             aria-label="Yopish"
             @click="modalOpen = false"
           >
-            x
+            <AdminModalCloseIcon />
           </button>
         </div>
         <form novalidate @submit.prevent="save">
