@@ -64,7 +64,6 @@ const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
-const recoveryDismissed = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
@@ -101,15 +100,29 @@ const panelOptions = computed(() =>
     activeBranchId.value && !showAllCatalog.value ? material.branch_carried : true,
   ),
 )
-const panelChoices = computed<ChoiceOption[]>(() =>
-  panelOptions.value.map((material) => ({
+const panelChoices = computed<ChoiceOption[]>(() => {
+  // Always keep a material a row already references in the options, even if the
+  // branch filter (or "Show all catalog" being off) would drop it — otherwise the
+  // picker shows an empty "Panel tanlang" for a row that does have a (not-carried)
+  // panel, which reads as "nothing selected" while the not-carried warning fires.
+  const list = [...panelOptions.value]
+  const present = new Set(list.map((material) => material.id))
+  for (const part of parts.value) {
+    if (!part.material_id || present.has(part.material_id)) continue
+    const material = cutting.panelOptions.find((option) => option.id === part.material_id)
+    if (material) {
+      list.push(material)
+      present.add(material.id)
+    }
+  }
+  return list.map((material) => ({
     value: material.id,
     label: materialLabel(material),
     meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
       material.branch_carried ? '' : " · filialda yo'q"
     }`,
-  })),
-)
+  }))
+})
 const hasPersistableParts = computed(() => parts.value.every((part) => !partIsInvalid(part)))
 const lastOptimizedSignature = ref<string | null>(null)
 function partsSignature(list: CuttingPart[] = parts.value) {
@@ -146,26 +159,16 @@ const optimizeDisabledHint = computed(() => {
   if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
   return ''
 })
-// A single roll-up of everything blocking the optimiser, shown under the table.
-const optimizeBlockers = computed(() => {
-  if (parts.value.length === 0) return []
-  const blockers: string[] = []
-  if (!hasPersistableParts.value) blockers.push("Qatorlardagi xatolarni to'g'rilang")
-  if (totalQuantity.value > MAX_PARTS)
-    blockers.push(`Jami ${totalQuantity.value} dona — bir martada ${MAX_PARTS} donadan oshmasin`)
-  return blockers
-})
-const notCarriedRows = computed(() => parts.value.filter((part) => rowNotCarried(part).length > 0))
 const totalQuantity = computed(() =>
   parts.value.reduce((sum, part) => sum + Math.max(0, Number(part.quantity) || 0), 0),
-)
-const showRecovery = computed(
-  () => !isReadOnly.value && !recoveryDismissed.value && notCarriedRows.value.length > 0,
 )
 function blankPart(): CuttingPart {
   return {
     part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}`,
-    material_id: panelOptions.value[0]?.id ?? '',
+    // Start with no material: the panel is a deliberate catalog choice, so the
+    // row shows "Panel tanlang" / "Material tanlang" until the user picks one —
+    // auto-selecting the first catalog panel silently risked the wrong material.
+    material_id: '',
     material_source: 'shop',
     length_mm: 100,
     width_mm: 100,
@@ -451,7 +454,6 @@ async function setPreferredBranch(branchId: string | null) {
     branchTouched.value = true
     branchPickerOpen.value = false
     selectedBranchId.value = branchId
-    recoveryDismissed.value = false
     await loadMaterials()
     return
   }
@@ -465,7 +467,6 @@ async function setPreferredBranch(branchId: string | null) {
   }
   branchPickerOpen.value = false
   selectedBranchId.value = branchId
-  recoveryDismissed.value = false
   await loadMaterials()
 }
 
@@ -739,7 +740,6 @@ onBeforeRouteLeave(() => {
             i
           </span>
           <div class="min-w-0 flex-1">
-            <span>Katalog filtri: </span>
             <b class="text-ink">
               {{
                 preferredBranch
@@ -747,7 +747,6 @@ onBeforeRouteLeave(() => {
                   : 'barcha ustaxonalar'
               }}
             </b>
-            <span class="text-ink-muted"> — materiallarni cheklamaydi (ixtiyoriy)</span>
           </div>
           <button
             type="button"
@@ -795,30 +794,6 @@ onBeforeRouteLeave(() => {
               Qo'llash
             </button>
           </div>
-        </section>
-
-        <section v-if="showRecovery" class="client-banner warn">
-          <span class="grid size-6 place-items-center rounded bg-warning text-white">!</span>
-          <span class="min-w-0 flex-1">
-            {{ notCarriedRows.length }} qator tanlangan ustaxonada mavjud bo'lmagan materialdan
-            foydalanadi. Shu qatorlarni o'zim olib kelaman deb belgilang yoki pre-filterni tozalang.
-            <span class="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="mp-button mp-button-outline"
-                @click="setPreferredBranch(null)"
-              >
-                Pre-filterni tozalash
-              </button>
-              <button
-                type="button"
-                class="mp-button mp-button-outline"
-                @click="recoveryDismissed = true"
-              >
-                Yopish
-              </button>
-            </span>
-          </span>
         </section>
 
         <section class="client-card">
@@ -945,11 +920,6 @@ onBeforeRouteLeave(() => {
               <Icon name="plus" class="size-4" />
               Qism qo'shish
             </button>
-          </div>
-
-          <div v-if="optimizeBlockers.length" class="client-banner danger mx-5 mt-4" role="alert">
-            <span class="font-mono font-black">!</span>
-            <span>Optimallashtirib bo'lmaydi: {{ optimizeBlockers.join(' · ') }}</span>
           </div>
 
           <div

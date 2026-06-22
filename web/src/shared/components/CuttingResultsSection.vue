@@ -370,11 +370,9 @@ async function choose(result: CuttingResult) {
               :class="placement.id === activePlacementId ? 'border-accent text-accent' : 'text-ink'"
               @click="selectPlacement(placement)"
             >
-              {{ placement.part_ref }} #{{ placement.part_quantity_index }}
-              <span v-if="placement.rotated" class="font-bold">R</span>
-              <span class="text-ink-muted"
-                >· {{ placement.length_mm }}×{{ placement.width_mm }} mm</span
-              >
+              <b class="font-semibold">{{ placement.length_mm }}×{{ placement.width_mm }} mm</b>
+              <span class="text-ink-muted">#{{ placement.part_quantity_index }}</span>
+              <span v-if="placement.rotated" class="font-bold text-accent">R</span>
             </button>
           </div>
         </div>

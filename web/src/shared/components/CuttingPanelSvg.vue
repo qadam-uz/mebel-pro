@@ -39,8 +39,14 @@ function svgY(placement: CuttingPlacement) {
   return panelWidth.value - placement.y_mm - placement.width_mm
 }
 
-function label(placement: CuttingPlacement) {
-  return `${placement.part_ref} #${placement.part_quantity_index}${placement.rotated ? ' R' : ''}`
+// Dimension labels instead of the opaque part_ref: length runs along the top edge
+// (horizontal), width along the left edge (vertical, rotated -90°) — a dimensioned
+// drawing the cutter can read at a glance.
+function widthLabelX(placement: CuttingPlacement) {
+  return placement.x_mm + labelFontSize.value * 1.25
+}
+function widthLabelY(placement: CuttingPlacement) {
+  return svgY(placement) + placement.width_mm / 2
 }
 
 function labelFits(placement: CuttingPlacement) {
@@ -88,17 +94,31 @@ function labelFits(placement: CuttingPlacement) {
         stroke="var(--color-accent)"
         stroke-width="1.5"
       />
-      <text
-        v-if="labelFits(placement)"
-        :x="placement.x_mm + labelFontSize * 0.5"
-        :y="svgY(placement) + labelFontSize * 1.15"
-        fill="var(--color-ink)"
-        :font-size="labelFontSize"
-        font-family="sans-serif"
-        aria-hidden="true"
-      >
-        {{ label(placement) }}
-      </text>
+      <template v-if="labelFits(placement)">
+        <text
+          :x="placement.x_mm + placement.length_mm / 2"
+          :y="svgY(placement) + labelFontSize * 1.25"
+          fill="var(--color-ink-soft)"
+          :font-size="labelFontSize"
+          font-family="sans-serif"
+          text-anchor="middle"
+          aria-hidden="true"
+        >
+          {{ placement.length_mm }}
+        </text>
+        <text
+          :x="widthLabelX(placement)"
+          :y="widthLabelY(placement)"
+          :transform="`rotate(-90 ${widthLabelX(placement)} ${widthLabelY(placement)})`"
+          fill="var(--color-ink-soft)"
+          :font-size="labelFontSize"
+          font-family="sans-serif"
+          text-anchor="middle"
+          aria-hidden="true"
+        >
+          {{ placement.width_mm }}
+        </text>
+      </template>
     </g>
   </svg>
 </template>

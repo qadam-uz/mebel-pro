@@ -196,9 +196,9 @@ the first **Optimise** (see *Lifecycle*). A secondary **My drafts** entry lists 
 
 A small affordance under the page header naming the active pre-filter:
 
-- **No pre-filter** → "Catalog: all branches" + a **Pick a branch** link.
-- **Pre-filter set** → "Catalog: Yunusobod · Furniture House" + a **Clear** button and a
-  **Change** button.
+- **No pre-filter** → "all branches" + a **Pick a branch** link.
+- **Pre-filter set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Clear**
+  button and a **Change** button.
 
 Picking or changing the branch opens a single flat branch list — one row per branch, naming
 the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
@@ -251,7 +251,9 @@ panel has grain — a passive cue, not a control.
   "browse other materials" section, "customise per side" button, or standalone "apply to
   all" button.
 - **The panel diagram is the centerpiece.** Compact quick-pattern chips sit above it
-  (**None**, **All sides**, **Top + bottom**, **Left + right**), and the diagram below shows
+  (**None**, **All sides**, **Top + bottom**, **Left + right**) — each chip carries a mini
+  rectangle that draws its banded sides thick so it reads spatially, not just by text — and
+  the diagram below shows
   the part with all four sides **labelled** (top / bottom / left / right) — tap a side to
   toggle its banding; banded sides fill (shop vs. "I'll bring it" read as distinct fills).
   Choosing a tape applies it only to the **currently banded** sides; with **no** side
@@ -283,19 +285,18 @@ list-level path for re-banding or re-materialing many identical parts without N 
 round-trips — a desktop power feature; on mobile each row is edited individually (its own
 fields plus the per-row delete button).
 
-Per-row inline validation; a single roll-up message below the table when something blocks
-the optimiser.
+Per-row inline validation; when something blocks the optimiser the reason is shown inline
+next to the (disabled) **Optimise** button in the sticky bar — there is no separate roll-up
+banner under the table.
 
 ### Recovery affordances — when materials aren't carried at the preferred branch
 
 When `preferred_branch_id` is set and a row references materials the branch doesn't carry,
 the row is **not** disabled, **not** dropped, **not** moved. It stays in place, editable,
-with:
+with a **per-row warning** on each affected row (there is no separate top-level roll-up
+banner — the warning lives on the row that has the issue):
 
-- A **dismissible summary banner** above the parts table: *"N parts use materials not
-  carried at <branch>. Bring your own, swap them, or place this order at a different
-  branch."* + a **Clear preferred branch** action.
-- A **per-row warning** on each affected row: *"Not at <branch>."* with two inline buttons:
+- The warning reads *"Not at <branch>."* with two inline buttons:
   - **I'll bring my own** — flips the row's panel source (or for an affected edge side,
     that side's source) to `own`. The branch no longer needs to carry it.
   - **Pick a different material** — opens the picker pre-filtered to the new branch (panel
@@ -348,9 +349,10 @@ On success, the panel scrolls into view with three regions:
    - A material tab strip (`DSP H1334 18mm · 2750×1830 · 3 panels` ·
      `MDF Qum 16mm · 2800×2070 · 1 panel`). Within a material, panel tabs
      (`Panel 1 / 2 / 3`).
-   - The active panel renders as an interactive SVG (pan / zoom on mobile). Hovering a
-     placement highlights it in the side legend (part #, dimensions, quantity index,
-     rotation indicator).
+   - The active panel renders as an interactive SVG (pan / zoom on mobile); each placed
+     part is labelled with its **dimensions** — length along the top edge, width down the
+     left edge — rather than an opaque part id. Selecting a placement highlights it in the
+     side legend, which leads with the dimensions (+ quantity index, rotation indicator).
 
 3. **Actions.**
    - **Place order with this cutting** → routes into the order wizard
