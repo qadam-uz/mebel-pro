@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from app.api.deps import AccountReadyPrincipal, Principal, get_session
 from app.main import create_app
@@ -147,6 +149,7 @@ async def test_account_ready_dependency_blocks_password_reset_required(
 
 async def test_unexpected_errors_return_generic_public_body(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setattr("app.main.settings.DEBUG", False)
     app = create_app()
@@ -167,3 +170,15 @@ async def test_unexpected_errors_return_generic_public_body(
         "trace_id": "trace-boom",
     }
     assert "secret" not in resp.text
+    logs = [
+        json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")
+    ]
+    unexpected = [row for row in logs if row.get("event") == "unexpected_api_error"]
+    assert unexpected
+    log = unexpected[-1]
+    assert log["trace_id"] == "trace-boom"
+    assert log["method"] == "GET"
+    assert log["path"] == "/api/v1/test/boom"
+    assert log["exc_type"] == "builtins.RuntimeError"
+    assert "RuntimeError" in log["stack"]
+    assert "password=secret" not in json.dumps(log)
