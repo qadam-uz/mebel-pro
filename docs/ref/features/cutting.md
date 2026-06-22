@@ -207,6 +207,10 @@ long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`
 removes it. **Neither edits the parts list.** Rows that reference materials the new branch
 doesn't carry get a per-row warning + recovery affordances (below).
 
+The **Show all catalog** toggle lives inside this same pre-filter affordance and appears
+**only once a branch is selected** — without one the catalog isn't branch-narrowed, so the
+toggle has nothing to widen and stays hidden.
+
 ### Parts editor (top)
 
 A mode switch at the top: **Manual entry** (default) · **Upload file** (`.bas` / `.xlsx`;
@@ -215,22 +219,27 @@ trash icon, shown only once there are rows. The primary **Optimise** button live
 **sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
 reason shown inline) — so it stays reachable above a long list.
 
+Adding a row follows the content rather than a fixed header control: an empty editor shows a
+centred **Add part** call-to-action, and once there are rows a dashed **Add part** tile sits
+beneath the last row (there is no separate header add button).
+
 On wide layouts the parts table renders as a dense, scannable grid: a shared column header
 and one compact single-line row per part (the panel cell carries a colour swatch, an inline
-source toggle, a grain badge, and a leading row checkbox for bulk actions; row actions live
-behind a `⋯` menu). On narrow screens each row stacks into a labelled card.
+source toggle, a grain badge, and a leading row checkbox for bulk actions; a trailing
+**Delete** trash button removes the row). On narrow screens each row stacks into a labelled
+card.
 
 The parts table:
 
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size; sortable by relevance / decor / manufacturer. Dropdown filters above: `Manufacturer` (multi-select), `Type` (`dsp` / `mdf` / `plywood` / …), `Thickness`. When `preferred_branch_id` is set, the picker is pre-filtered to that branch's selection by default; a toggle "Show all catalog" widens it. Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it` |
+| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). When `preferred_branch_id` is set, the picker is pre-filtered to that branch's selection by default; a toggle "Show all catalog" widens it. Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it`. A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
 | **Edges** | per-side summary — a small panel diagram (line weight signals thickness) + a one-line label (e.g. `H1334 · 0.4 mm` · `T·B · H1334 2.0` · `Mixed · 2 edges` · `None`). Tap → edge picker |
-| **⋯** | duplicate row · delete row |
+| **Delete** | a trash icon button removes the row |
 
 The grain indicator (a small arrow) appears **on the panel chip itself** when the chosen
 panel has grain — a passive cue, not a control.
@@ -271,8 +280,8 @@ column (and a select-all in the header). Selecting one or more rows reveals a bu
 applied side pattern / tape / source to every selected row), **Change material** (a small
 picker that sets one panel material on every selected row), and **Delete**. This is the
 list-level path for re-banding or re-materialing many identical parts without N picker
-round-trips — a desktop power feature; on mobile each row is edited individually via its ⋯
-overflow menu.
+round-trips — a desktop power feature; on mobile each row is edited individually (its own
+fields plus the per-row delete button).
 
 Per-row inline validation; a single roll-up message below the table when something blocks
 the optimiser.
@@ -292,8 +301,7 @@ with:
   - **Pick a different material** — opens the picker pre-filtered to the new branch (panel
     swap on the panel cell; edge swap inside the edge picker with the affected side
     already active and the same inline note visible).
-- The row's existing **⋯ → Delete row** menu still works; removal is opt-in and never
-  automatic.
+- The row's **Delete** (trash) button still works; removal is opt-in and never automatic.
 
 For a row whose **own**-source panel is referenced (i.e. the client already brings the
 panel), there's no warning — `own` doesn't care which branch carries it. Same for `own`
@@ -301,8 +309,8 @@ edge sides.
 
 ### Clearing the parts list (deliberate)
 
-A **"⋯" menu next to the page header** carries a **Clear parts list** action (danger-styled,
-confirmation: *"Remove all N parts? This can't be undone."*). This is the only way to wipe
+A **Clear parts list** trash icon next to the page header runs a danger-styled action
+(confirmation: *"Remove all N parts? This can't be undone."*). This is the only way to wipe
 parts wholesale; the branch pre-filter never invokes it.
 
 ### Run and the result panel
@@ -312,6 +320,10 @@ cap), then disabled until any row changes (so re-tapping doesn't re-run a stale 
 disable reason is shown inline next to it. On a brand-new
 (unsaved) editor the first **Optimise** also creates and saves the draft before running, after
 which the URL becomes `/c/cutting/:id` and autosave takes over.
+
+The result panel only renders once an optimise has produced a result (or an error to surface);
+before the first run there is **no empty placeholder** — the parts editor and the sticky
+Optimise button are all there is to see.
 
 On success, the panel scrolls into view with three regions:
 

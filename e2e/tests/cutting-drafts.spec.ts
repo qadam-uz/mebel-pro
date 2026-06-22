@@ -397,7 +397,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
       response.url().includes('/api/v1/client/branch-options') &&
       response.ok(),
   )
-  await page.getByRole('button', { name: 'Yangi kesim chizmasi' }).click()
+  // Fresh DB → empty home (first-run), so the create CTA is the centred
+  // "Yangi chizma" in the empty state; the header button only shows with content.
+  await page.getByRole('button', { name: 'Yangi chizma' }).click()
   // The editor opens unsaved — no draft is created until the first optimise
   // (docs/ref/features/cutting.md), so the URL is /new with no draft id yet.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)

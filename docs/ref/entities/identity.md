@@ -95,7 +95,7 @@ branch per order. Uses the client app.
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; **unique, required** — the verified identity and natural key |
 | `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
-| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The client sets and clears it from their profile. |
+| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced** (removed pending a rethink — to be re-added). |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 

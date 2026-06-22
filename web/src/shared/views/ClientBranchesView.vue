@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { formatTiyin } from '@/shared/formatters'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
-import {
-  useClientCatalogStore,
-  type ClientBranch,
-  type ClientBranchMaterialPreview,
-} from '@/shared/stores/clientCatalog'
+import { useClientCatalogStore, type ClientBranch } from '@/shared/stores/clientCatalog'
 
 const catalog = useClientCatalogStore()
 const search = ref('')
@@ -21,16 +16,6 @@ async function refreshBranches() {
   // One request now — the branch payload carries an inline material preview
   // (CB-13), so the old per-branch materials N+1 is gone.
   await catalog.loadBranches(search.value)
-}
-
-function materialLabels(branch: ClientBranch) {
-  return branch.materials_preview.map(materialTitle)
-}
-
-function materialTitle(material: ClientBranchMaterialPreview) {
-  const name = material.name.split('·')[0].trim()
-  const price = formatTiyin(material.price_tiyin)
-  return `${material.manufacturer_name} ${name} · ${price}/${material.display_unit}`
 }
 
 function hours(branch: ClientBranch) {
@@ -53,7 +38,7 @@ onMounted(refreshBranches)
     <div class="client-page-head mb-2">
       <div>
         <h1>Ustaxonalar</h1>
-        <p class="sub">Faol ustaxonalar va ularda mavjud materiallar.</p>
+        <p class="sub">Faol ustaxonalar — manzil va aloqa ma'lumotlari.</p>
       </div>
     </div>
 
@@ -134,14 +119,6 @@ onMounted(refreshBranches)
           <p class="mt-1 font-mono text-xs text-ink-muted">
             {{ branch.address }} · {{ hours(branch) }} · {{ branch.phone }}
           </p>
-          <p v-if="branch.materials_total > 0" class="mt-2 text-sm text-ink-soft">
-            Materiallar:
-            <b class="font-semibold text-ink">
-              {{ materialLabels(branch).slice(0, 4).join(' · ') }}
-            </b>
-            <span v-if="branch.materials_total > 4"> +{{ branch.materials_total - 4 }} </span>
-          </p>
-          <p v-else class="mt-2 text-sm text-ink-soft">Ochiq materiallar ko'rsatilmagan.</p>
           <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
             {{ branch.closed_reason ?? 'Vaqtincha yopiq' }}
           </p>

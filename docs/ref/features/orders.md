@@ -283,8 +283,9 @@ chosen at placement, against a specific cutting — defaulted from the draft's
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
   while `new`.
-- **Branches page** (`/c/branches`) — a passive directory (name, address, hours,
-  materials carried); not the start of the flow; no per-branch CTAs.
+- **Branches page** (`/c/branches`) — a passive directory (name, address, hours, contact);
+  materials are **not** listed here (browsed in the cutting editor's per-branch catalog
+  instead); not the start of the flow; no per-branch CTAs.
 
 ## UX — workshop app
 

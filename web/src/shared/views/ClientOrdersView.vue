@@ -35,6 +35,19 @@ const statusOptions = [
 
 const visibleOrders = computed(() => orders.clientOrders)
 
+// "True empty" = no orders at all, not merely filtered away. Drives the header
+// CTA: hide it in the onboarding empty state (the centred CTA covers it), but
+// keep it when the user has orders or just filtered them out.
+const noFilter = computed(() => status.value === 'all' && !search.value)
+const isTrueEmpty = computed(
+  () => !orders.loading && !orders.error && visibleOrders.value.length === 0 && noFilter.value,
+)
+
+function clearFilters() {
+  status.value = 'all'
+  search.value = ''
+}
+
 function reloadOrders() {
   void orders.loadClientOrders({ status: status.value, search: search.value })
 }
@@ -96,7 +109,14 @@ onMounted(() => {
         <h1>Mening buyurtmalarim</h1>
         <p class="sub">Faol va tugatilgan buyurtmalaringiz.</p>
       </div>
-      <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary">
+      <!-- The onboarding empty state carries a centred CTA, so this would be
+           redundant there; it shows once the user has orders (or has merely
+           filtered them away). -->
+      <RouterLink
+        v-if="!isTrueEmpty"
+        :to="rolePath('/c/cutting/drafts')"
+        class="mp-button mp-button-primary"
+      >
         Yangi buyurtma
       </RouterLink>
     </div>
@@ -127,11 +147,18 @@ onMounted(() => {
     <div v-else-if="visibleOrders.length === 0" class="client-empty">
       <div class="client-empty-icon"><Icon name="box" /></div>
       <h3>Buyurtma yo'q</h3>
-      <p v-if="status === 'all' && !search">Hali buyurtma bermagansiz — chizmadan boshlang.</p>
-      <p v-else>Bu so'rovga mos buyurtma topilmadi.</p>
-      <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
-        Yangi buyurtma
-      </RouterLink>
+      <template v-if="noFilter">
+        <p>Hali buyurtma bermagansiz — chizmadan boshlang.</p>
+        <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
+          Yangi buyurtma
+        </RouterLink>
+      </template>
+      <template v-else>
+        <p>Bu so'rovga mos buyurtma topilmadi.</p>
+        <button type="button" class="mp-button mp-button-outline mt-4" @click="clearFilters">
+          Filtrlarni tozalash
+        </button>
+      </template>
     </div>
 
     <div v-else class="grid gap-3">
