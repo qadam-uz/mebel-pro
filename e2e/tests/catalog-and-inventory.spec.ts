@@ -241,12 +241,11 @@ test('owner adds a branch material and records stock movement with a receipt', a
   const material = await createCatalogMaterial(request, adminAccess, id)
 
   await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
-  await page.goto('/workshop/branches')
-  await page.getByRole('link', { name: new RegExp(`Catalog Branch ${id}`) }).click()
-  await page.getByRole('tab', { name: /Materiallar/ }).click()
+  await page.goto('/workshop/catalog')
+  await expect(page.getByRole('heading', { name: 'Filial material katalogi' })).toBeVisible()
 
   const addMaterial = page
-    .getByRole('heading', { name: "Filial materiali qo'shish" })
+    .getByRole('heading', { name: "Filialga material qo'shish" })
     .locator('xpath=ancestor::section[1]')
   await addMaterial.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
@@ -256,8 +255,11 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await addMaterial.getByRole('button', { name: "Material qo'shish" }).click()
   await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Ombor' }).click()
-  const stockIn = page.getByRole('heading', { name: 'Kirim' }).locator('xpath=ancestor::section[1]')
+  await page.goto('/workshop/inventory')
+  await expect(page.getByRole('heading', { name: 'Ombor' })).toBeVisible()
+  const stockIn = page
+    .getByRole('heading', { name: 'Kirim yozish' })
+    .locator('xpath=ancestor::section[1]')
   await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await stockIn.getByRole('combobox', { name: 'Material' }).press('Escape')
@@ -278,7 +280,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   ).toBeVisible()
 
   const adjustment = page
-    .getByRole('heading', { name: 'Tuzatish' })
+    .getByRole('heading', { name: 'Tuzatish yozish' })
     .locator('xpath=ancestor::section[1]')
   await adjustment.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
@@ -287,6 +289,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await adjustment.getByLabel('Izoh').fill('E2E stock take')
   await adjustment.getByRole('button', { name: 'Tuzatish yozish' }).click()
   await expect(page.getByText('past zaxira')).toBeVisible()
+  await page.getByRole('tab', { name: 'Tranzaksiyalar' }).click()
   await expect(page.getByRole('cell', { name: `Supplier ${id}` })).toBeVisible()
 })
 
@@ -343,7 +346,8 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await expect(page.getByRole('link', { name: 'Xodimlar' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Materiallar' })).toHaveCount(0)
   await page.getByRole('tab', { name: 'Ombor' }).click()
-  await expect(page.getByRole('heading', { name: 'Kirim' })).toBeVisible()
+  await page.getByRole('link', { name: 'Omborni ochish' }).click()
+  await expect(page.getByRole('heading', { name: 'Kirim yozish' })).toBeVisible()
 })
 
 test('client browses public branch catalog without stock details', async ({ page, request }, testInfo) => {
