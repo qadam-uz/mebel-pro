@@ -1,6 +1,10 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
-from app.core.principal import system_actor
+import pytest
+from app.core.errors import APIError
+from app.core.principal import AuthenticatedPrincipal, system_actor
+from app.models.enums import AuthenticatedPrincipalType
 from app.modules.platform.api import record_application_error
 from app.modules.platform.contracts import ErrorOccurrence
 from app.modules.platform.errors import refresh_error_record_counts
@@ -10,6 +14,7 @@ from app.modules.support.api import (
     record_status_change,
     scrub_sensitive,
 )
+from app.modules.support.files import FileStorageUnavailable, S3FileStorage, create_uploaded_file
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -136,3 +141,36 @@ def test_in_memory_file_storage_round_trips_and_deletes_content() -> None:
     assert storage.open("files/demo.txt") == b"demo"
     storage.delete("files/demo.txt")
     assert "files/demo.txt" not in storage.objects
+
+
+def test_s3_file_storage_uses_minio_compatible_config() -> None:
+    storage = S3FileStorage()
+    config = storage._client.meta.config
+
+    assert config.s3["addressing_style"] == "path"
+    assert config.request_checksum_calculation == "when_required"
+    assert config.response_checksum_validation == "when_required"
+
+
+async def test_upload_reports_storage_unavailable(db_session: AsyncSession) -> None:
+    class FailingStorage(InMemoryFileStorage):
+        def put(self, key: str, content: bytes, content_type: str):
+            raise FileStorageUnavailable("SignatureDoesNotMatch")
+
+    with pytest.raises(APIError) as raised:
+        await create_uploaded_file(
+            db_session,
+            principal=AuthenticatedPrincipal(
+                principal_type=AuthenticatedPrincipalType.PLATFORM_USER,
+                principal_id=uuid.uuid4(),
+                session_id=uuid.uuid4(),
+                trace_id="trace-upload",
+            ),
+            storage=FailingStorage(),
+            original_name="receipt.pdf",
+            content_type="application/pdf",
+            content=b"pdf",
+        )
+
+    assert raised.value.code == "file_storage_unavailable"
+    assert raised.value.status_code == 503
