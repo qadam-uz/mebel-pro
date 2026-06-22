@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
 import {
   adminDate,
   branchStatusLabel,
@@ -28,19 +34,24 @@ const blockTrap = useFocusTrap(blockPanel, blockModalOpen, () => (blockModalOpen
 const reason = ref('')
 const acting = ref(false)
 const actionError = ref<string | null>(null)
+const blockFieldErrors = reactive<FieldErrors<'reason'>>({})
 const tabOptions = [
   { value: 'profile', label: 'Profil' },
   { value: 'branches', label: 'Filiallar' },
   { value: 'users', label: 'Xodimlar' },
 ]
 
-const canBlock = computed(
-  () => admin.detail?.workshop.status === 'active' && reason.value.trim().length > 0,
-)
+const canBlock = computed(() => admin.detail?.workshop.status === 'active')
 const canUnblock = computed(() => admin.detail?.workshop.status === 'blocked')
 
 async function block() {
+  clearFieldErrors(blockFieldErrors)
   if (!canBlock.value || !admin.detail) return
+  if (!reason.value.trim()) {
+    blockFieldErrors.reason = 'Majburiy maydon.'
+    focusFirstFieldError(blockFieldErrors, ['reason'], { reason: 'block-reason' })
+    return
+  }
   acting.value = true
   actionError.value = null
   try {
@@ -48,9 +59,17 @@ async function block() {
     blockModalOpen.value = false
     reason.value = ''
     toast.success('Ustaxona bloklandi')
-  } catch {
-    actionError.value = 'workshop_block_failed'
-    toast.danger("Ustaxonani bloklab bo'lmadi")
+  } catch (error) {
+    Object.assign(
+      blockFieldErrors,
+      fieldErrorsFromApi<'reason'>(error, { reason_required: 'reason' }),
+    )
+    if (blockFieldErrors.reason) {
+      focusFirstFieldError(blockFieldErrors, ['reason'], { reason: 'block-reason' })
+    } else {
+      actionError.value = 'workshop_block_failed'
+      toast.danger("Ustaxonani bloklab bo'lmadi")
+    }
   } finally {
     acting.value = false
   }
@@ -69,6 +88,11 @@ async function unblock() {
   } finally {
     acting.value = false
   }
+}
+
+function openBlockModal() {
+  clearFieldErrors(blockFieldErrors)
+  blockModalOpen.value = true
 }
 
 onMounted(() => admin.loadWorkshop(workshopId))
@@ -111,7 +135,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
           type="button"
           class="mp-button mp-button-outline text-danger"
           :aria-label="`${admin.detail.workshop.name} ustaxonasini bloklash`"
-          @click="blockModalOpen = true"
+          @click="openBlockModal"
         >
           Ustaxonani bloklash
         </button>
@@ -170,10 +194,6 @@ onMounted(() => admin.loadWorkshop(workshopId))
         <span class="sub">faqat ko'rish; operator tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
-        <p class="mb-4 rounded-md border border-hairline bg-sunk px-3 py-2 text-xs text-ink-soft">
-          Operator faqat yaratish, bloklash va blokdan chiqarish amallarini bajaradi — ustaxona
-          profili va egasi ma'lumotlari ustaxona egasining mas'uliyatida.
-        </p>
         <dl class="grid gap-4 sm:grid-cols-2">
           <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Nomi</dt>
@@ -196,10 +216,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
           <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
             <dd class="mt-1 text-base font-bold text-ink">
-              {{ admin.detail.owner.full_name }}
-              <span class="block font-mono text-xs text-ink-muted">
-                {{ admin.detail.owner.login }} . {{ admin.detail.owner.phone }}
-              </span>
+              <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
             </dd>
           </div>
           <div>
@@ -269,23 +286,15 @@ onMounted(() => admin.loadWorkshop(workshopId))
     >
       <div class="admin-card-h">
         <h2>Xodimlar (faqat o'qish)</h2>
-        <span class="sub">egasi va berilgan ruxsatlar ko'rsatiladi</span>
       </div>
       <div class="admin-card-b">
         <article class="admin-row-item">
           <span class="admin-pill admin-pill-success">Egasi</span>
           <span>
-            <b>{{ admin.detail.owner.full_name }}</b>
-            <small class="block text-ink-muted">
-              {{ admin.detail.owner.login }} . {{ admin.detail.owner.phone }}
-            </small>
+            <b class="font-mono">{{ admin.detail.owner.login }}</b>
           </span>
           <span class="admin-mono text-ink-muted">{{ admin.detail.owner.id.slice(0, 8) }}</span>
         </article>
-        <div class="admin-empty mt-4">
-          <h3>Xodimlar ro'yxati faqat o'qish rejimida</h3>
-          <p>v1 da operator egasi, filiallar va ruxsatlarni faqat ko'rish rejimida kuzatadi.</p>
-        </div>
       </div>
     </section>
 
@@ -319,7 +328,20 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </p>
             <label class="admin-field" for="block-reason">
               <span>Majburiy sabab</span>
-              <textarea id="block-reason" v-model="reason"></textarea>
+              <textarea
+                id="block-reason"
+                v-model="reason"
+                :aria-invalid="!!blockFieldErrors.reason"
+                aria-describedby="block-reason-error"
+              ></textarea>
+              <span
+                v-if="blockFieldErrors.reason"
+                id="block-reason-error"
+                class="admin-field-error"
+                role="alert"
+              >
+                {{ blockFieldErrors.reason }}
+              </span>
             </label>
           </div>
           <div class="admin-modal-f">

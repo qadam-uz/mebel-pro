@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-23
 order: 20
 ---
 
@@ -150,15 +150,17 @@ the phone the client already typed when stepping forward or back:
 A platform operator provisions a workshop atomically with its first user and first branch:
 
 - **Create a workshop, first branch, and owner — atomically.** Input: workshop fields + first
-  branch fields (`name`, `address`, `phone`, `latitude`, `longitude`, `working_hours`) + the
-  owner's `full_name`, `login`, `phone`, plus an auto-generated temp password (manual override).
+  branch fields (`name`, `address`, `phone`, `working_hours`) + the owner's `login`, plus an
+  auto-generated temp password (manual override).
   The same transaction creates the `workshop` row, an `active` first `branch` row with empty
   `branch_pricing`, and a `workshop_user` row with `is_owner = true`,
   `home_branch_id = first_branch.id`, and `password_reset_required = true`. Returns the summary
   and the temp password **once**. Workshop fields include a generated `code` with manual override;
   the returned summary includes the workshop code and owner login. Only the temp password is
   secret and shown once. Provisioning creates exactly one owner; after that, v1 has no owner
-  create / demote / delete / transfer path.
+  create / demote / delete / transfer path. Platform provisioning does not collect branch
+  coordinates or owner name/phone; precise branch location and owner profile/contact data are
+  owner-managed after first sign-in.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
@@ -166,7 +168,7 @@ A platform operator provisions a workshop atomically with its first user and fir
 
 The operator's **only** workshop write actions are: provision (workshop + first branch + first
 owner, atomic), block, and unblock. The operator does **not** edit the workshop profile or the
-owner's identity fields (name / phone / login) — that is owner territory and there is no
+owner's profile/contact fields (name / phone) — that is owner territory and there is no
 operator path to it. Workshop *editing* (profile, settings) lives in
 [`workshop.md`](workshop.md); owner-identity edits are owner self-service / owner-managed,
 not operator-managed. If correcting an owner's phone via the operator ever becomes a real
@@ -174,8 +176,9 @@ need, it must be specified here first — it is deliberately absent in v1.
 
 ### UX
 
-- **Create-workshop dialog** — workshop fields + first branch fields + owner fields, temp
-  password (auto-generated, copy button, manual toggle). On success: read-only confirmation
+- **Create-workshop dialog** — workshop fields + first branch name/address/phone/working-hours,
+  owner login, temp password (auto-generated, copy button, manual toggle). On success:
+  read-only confirmation
   showing the workshop code + owner login + temp password with "share this with the owner —
   temp password shown once" + copy button; the owner sees the password-reset gate after sign-in
   and lands with the first branch available in branch context. The code field

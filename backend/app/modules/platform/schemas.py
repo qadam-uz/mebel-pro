@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.models.enums import (
     ActorType,
@@ -19,11 +19,6 @@ from app.models.enums import (
 from app.modules.workshop.schemas import WorkingHours, validate_working_hours
 from app.schemas.common import APIModel
 
-LATITUDE_MIN = Decimal("-90")
-LATITUDE_MAX = Decimal("90")
-LONGITUDE_MIN = Decimal("-180")
-LONGITUDE_MAX = Decimal("180")
-
 
 class WorkshopInput(BaseModel):
     name: str
@@ -34,11 +29,11 @@ class WorkshopInput(BaseModel):
 
 
 class FirstBranchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     address: str
     phone: str
-    latitude: Decimal
-    longitude: Decimal
     working_hours: WorkingHours
 
     @field_validator("working_hours")
@@ -46,25 +41,11 @@ class FirstBranchInput(BaseModel):
     def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
         return validate_working_hours(value)
 
-    @field_validator("latitude")
-    @classmethod
-    def _validate_latitude(cls, value: Decimal) -> Decimal:
-        if value < LATITUDE_MIN or value > LATITUDE_MAX:
-            raise ValueError("latitude must be between -90 and 90")
-        return value
-
-    @field_validator("longitude")
-    @classmethod
-    def _validate_longitude(cls, value: Decimal) -> Decimal:
-        if value < LONGITUDE_MIN or value > LONGITUDE_MAX:
-            raise ValueError("longitude must be between -180 and 180")
-        return value
-
 
 class OwnerInput(BaseModel):
-    full_name: str
+    model_config = ConfigDict(extra="forbid")
+
     login: str
-    phone: str
 
 
 class ProvisionWorkshopRequest(BaseModel):
@@ -113,8 +94,6 @@ class WorkshopUserSummary(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
     login: str
-    full_name: str
-    phone: str
     is_owner: bool
     home_branch_id: uuid.UUID
     status: UserStatus

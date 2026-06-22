@@ -3,6 +3,16 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  tempPassword,
+  uzPhone,
+  workshopCode,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
+import {
   adminDate,
   dropdownOption,
   workshopStatusLabel,
@@ -20,6 +30,15 @@ import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
 type WorkingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+type ProvisionField =
+  | 'name'
+  | 'code'
+  | 'phone'
+  | 'branchName'
+  | 'branchAddress'
+  | 'branchPhone'
+  | 'ownerLogin'
+  | 'tempPassword'
 
 type WorkingHoursForm = Record<WorkingDay, { open: string; close: string }>
 
@@ -37,20 +56,31 @@ const blockTarget = ref<WorkshopSummary | null>(null)
 const unblockTarget = ref<WorkshopSummary | null>(null)
 const acting = ref(false)
 const blockReason = ref('')
+const blockFieldErrors = reactive<FieldErrors<'blockReason'>>({})
 
 function askBlock(workshop: WorkshopSummary) {
   blockTarget.value = workshop
   blockReason.value = ''
+  clearFieldErrors(blockFieldErrors)
 }
 
 async function confirmBlock() {
-  if (!blockTarget.value || !blockReason.value.trim()) return
+  clearFieldErrors(blockFieldErrors)
+  if (!blockTarget.value) return
+  if (!blockReason.value.trim()) {
+    blockFieldErrors.blockReason = 'Majburiy maydon.'
+    return
+  }
   acting.value = true
   try {
     await admin.blockWorkshop(blockTarget.value.id, blockReason.value)
     toast.success('Ustaxona bloklandi')
     blockTarget.value = null
-  } catch {
+  } catch (error) {
+    Object.assign(
+      blockFieldErrors,
+      fieldErrorsFromApi<'blockReason'>(error, { reason_required: 'blockReason' }),
+    )
     toast.danger("Ustaxonani bloklab bo'lmadi")
   } finally {
     acting.value = false
@@ -100,13 +130,50 @@ const form = reactive({
   branchName: '',
   branchAddress: '',
   branchPhone: '+998',
-  latitude: '',
-  longitude: '',
-  ownerName: '',
   ownerLogin: '',
-  ownerPhone: '+998',
   tempPassword: '',
 })
+const provisionFieldErrors = reactive<FieldErrors<ProvisionField>>({})
+const provisionFieldIds: Record<ProvisionField, string> = {
+  name: 'w-name',
+  code: 'w-code',
+  phone: 'w-phone',
+  branchName: 'b-name',
+  branchAddress: 'b-address',
+  branchPhone: 'b-phone',
+  ownerLogin: 'o-login',
+  tempPassword: 'o-pass',
+}
+const provisionFieldOrder: ProvisionField[] = [
+  'name',
+  'code',
+  'phone',
+  'branchName',
+  'branchAddress',
+  'branchPhone',
+  'ownerLogin',
+  'tempPassword',
+]
+const provisionApiFieldMap: Partial<Record<string, ProvisionField>> = {
+  workshop_name_required: 'name',
+  invalid_workshop_code: 'code',
+  workshop_code_exists: 'code',
+  invalid_phone: 'phone',
+  branch_name_required: 'branchName',
+  branch_address_required: 'branchAddress',
+  owner_login_required: 'ownerLogin',
+  weak_password: 'tempPassword',
+}
+const provisionApiLocMap: Partial<Record<string, ProvisionField>> = {
+  'body.workshop.name': 'name',
+  'body.workshop.code': 'code',
+  'body.workshop.phone': 'phone',
+  'body.branch.name': 'branchName',
+  'body.branch.address': 'branchAddress',
+  'body.branch.phone': 'branchPhone',
+  'body.owner.login': 'ownerLogin',
+  'body.temp_password': 'tempPassword',
+}
 const workingHours = reactive<WorkingHoursForm>({
   monday: { open: '09:00', close: '18:00' },
   tuesday: { open: '09:00', close: '18:00' },
@@ -189,19 +256,38 @@ function resetForm() {
   form.branchName = ''
   form.branchAddress = ''
   form.branchPhone = '+998'
-  form.latitude = ''
-  form.longitude = ''
-  form.ownerName = ''
   form.ownerLogin = ''
-  form.ownerPhone = '+998'
   form.tempPassword = ''
   resetWorkingHours()
   codeTouched.value = false
+  clearFieldErrors(provisionFieldErrors)
+  createError.value = null
+}
+
+function validateProvisionForm() {
+  clearFieldErrors(provisionFieldErrors)
+  const set = (field: ProvisionField, error: string | null) => {
+    if (error) provisionFieldErrors[field] = error
+  }
+  set('name', requiredText(form.name))
+  set('code', requiredText(form.code) ?? workshopCode(form.code))
+  set('phone', requiredText(form.phone) ?? uzPhone(form.phone))
+  set('branchName', requiredText(form.branchName))
+  set('branchAddress', requiredText(form.branchAddress))
+  set('branchPhone', requiredText(form.branchPhone) ?? uzPhone(form.branchPhone))
+  set('ownerLogin', requiredText(form.ownerLogin))
+  set('tempPassword', tempPassword(form.tempPassword))
+  const hasErrors = provisionFieldOrder.some((field) => Boolean(provisionFieldErrors[field]))
+  if (hasErrors) {
+    focusFirstFieldError(provisionFieldErrors, provisionFieldOrder, provisionFieldIds)
+  }
+  return !hasErrors
 }
 
 async function createWorkshop() {
-  creating.value = true
   createError.value = null
+  if (!validateProvisionForm()) return
+  creating.value = true
   try {
     await admin.provision({
       workshop: {
@@ -214,14 +300,10 @@ async function createWorkshop() {
         name: form.branchName,
         address: form.branchAddress,
         phone: form.branchPhone,
-        latitude: form.latitude,
-        longitude: form.longitude,
         working_hours: workingHoursPayload(),
       },
       owner: {
-        full_name: form.ownerName,
         login: form.ownerLogin,
-        phone: form.ownerPhone,
       },
       temp_password: form.tempPassword || undefined,
     })
@@ -230,9 +312,19 @@ async function createWorkshop() {
     secretOpen.value = true
     toast.success('Ustaxona yaratildi')
     await admin.loadOverview()
-  } catch {
-    createError.value = 'workshop_create_failed'
-    toast.danger('Ustaxona yaratilmadi')
+  } catch (error) {
+    const fields = fieldErrorsFromApi<ProvisionField>(
+      error,
+      provisionApiFieldMap,
+      provisionApiLocMap,
+    )
+    if (Object.keys(fields).length > 0) {
+      Object.assign(provisionFieldErrors, fields)
+      focusFirstFieldError(provisionFieldErrors, provisionFieldOrder, provisionFieldIds)
+    } else {
+      createError.value = 'workshop_create_failed'
+      toast.danger('Ustaxona yaratilmadi')
+    }
   } finally {
     creating.value = false
   }
@@ -379,13 +471,25 @@ onMounted(async () => {
         </div>
         <form novalidate @submit.prevent="createWorkshop">
           <div class="admin-modal-b">
-            <p class="mb-4 rounded-md bg-sunk px-3 py-2 text-sm text-ink-soft">
-              Ustaxona, birinchi filial va egasi bir amal bilan yaratiladi.
-            </p>
             <div class="admin-form-grid three">
               <label class="admin-field admin-full" for="w-name">
                 <span>Ustaxona nomi</span>
-                <input id="w-name" v-model="form.name" autocomplete="organization" required />
+                <input
+                  id="w-name"
+                  v-model="form.name"
+                  autocomplete="organization"
+                  required
+                  :aria-invalid="!!provisionFieldErrors.name"
+                  aria-describedby="w-name-error"
+                />
+                <span
+                  v-if="provisionFieldErrors.name"
+                  id="w-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.name }}
+                </span>
               </label>
               <label class="admin-field" for="w-code">
                 <span>Ustaxona kodi</span>
@@ -394,8 +498,18 @@ onMounted(async () => {
                   v-model="form.code"
                   autocomplete="off"
                   required
+                  :aria-invalid="!!provisionFieldErrors.code"
+                  aria-describedby="w-code-error"
                   @input="codeTouched = true"
                 />
+                <span
+                  v-if="provisionFieldErrors.code"
+                  id="w-code-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.code }}
+                </span>
               </label>
               <label class="admin-field" for="w-phone">
                 <span>Telefon</span>
@@ -405,7 +519,17 @@ onMounted(async () => {
                   autocomplete="tel"
                   inputmode="tel"
                   required
+                  :aria-invalid="!!provisionFieldErrors.phone"
+                  aria-describedby="w-phone-error"
                 />
+                <span
+                  v-if="provisionFieldErrors.phone"
+                  id="w-phone-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.phone }}
+                </span>
               </label>
               <label class="admin-field" for="w-address">
                 <span>Manzil</span>
@@ -413,7 +537,21 @@ onMounted(async () => {
               </label>
               <label class="admin-field" for="b-name">
                 <span>Birinchi filial</span>
-                <input id="b-name" v-model="form.branchName" required />
+                <input
+                  id="b-name"
+                  v-model="form.branchName"
+                  required
+                  :aria-invalid="!!provisionFieldErrors.branchName"
+                  aria-describedby="b-name-error"
+                />
+                <span
+                  v-if="provisionFieldErrors.branchName"
+                  id="b-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.branchName }}
+                </span>
               </label>
               <label class="admin-field" for="b-phone">
                 <span>Filial telefoni</span>
@@ -423,37 +561,54 @@ onMounted(async () => {
                   autocomplete="tel"
                   inputmode="tel"
                   required
+                  :aria-invalid="!!provisionFieldErrors.branchPhone"
+                  aria-describedby="b-phone-error"
                 />
+                <span
+                  v-if="provisionFieldErrors.branchPhone"
+                  id="b-phone-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.branchPhone }}
+                </span>
               </label>
               <label class="admin-field" for="b-address">
                 <span>Filial manzili</span>
-                <input id="b-address" v-model="form.branchAddress" required />
-              </label>
-              <label class="admin-field" for="b-lat">
-                <span>Kenglik</span>
-                <input id="b-lat" v-model="form.latitude" inputmode="decimal" required />
-              </label>
-              <label class="admin-field" for="b-lon">
-                <span>Uzunlik</span>
-                <input id="b-lon" v-model="form.longitude" inputmode="decimal" required />
-              </label>
-              <label class="admin-field" for="o-name">
-                <span>Ega ismi</span>
-                <input id="o-name" v-model="form.ownerName" autocomplete="name" required />
-              </label>
-              <label class="admin-field" for="o-phone">
-                <span>Ega telefoni</span>
                 <input
-                  id="o-phone"
-                  v-model="form.ownerPhone"
-                  autocomplete="tel"
-                  inputmode="tel"
+                  id="b-address"
+                  v-model="form.branchAddress"
                   required
+                  :aria-invalid="!!provisionFieldErrors.branchAddress"
+                  aria-describedby="b-address-error"
                 />
+                <span
+                  v-if="provisionFieldErrors.branchAddress"
+                  id="b-address-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.branchAddress }}
+                </span>
               </label>
               <label class="admin-field" for="o-login">
                 <span>Ega login</span>
-                <input id="o-login" v-model="form.ownerLogin" autocomplete="username" required />
+                <input
+                  id="o-login"
+                  v-model="form.ownerLogin"
+                  autocomplete="username"
+                  required
+                  :aria-invalid="!!provisionFieldErrors.ownerLogin"
+                  aria-describedby="o-login-error"
+                />
+                <span
+                  v-if="provisionFieldErrors.ownerLogin"
+                  id="o-login-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.ownerLogin }}
+                </span>
               </label>
               <label class="admin-field admin-full" for="o-pass">
                 <span>Vaqtinchalik parol</span>
@@ -462,7 +617,17 @@ onMounted(async () => {
                   v-model="form.tempPassword"
                   autocomplete="new-password"
                   placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
+                  :aria-invalid="!!provisionFieldErrors.tempPassword"
+                  aria-describedby="o-pass-error"
                 />
+                <span
+                  v-if="provisionFieldErrors.tempPassword"
+                  id="o-pass-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ provisionFieldErrors.tempPassword }}
+                </span>
               </label>
               <fieldset class="admin-full admin-working-hours">
                 <legend>Birinchi filial ish vaqti</legend>
@@ -525,9 +690,22 @@ onMounted(async () => {
       @confirm="confirmBlock"
       @cancel="blockTarget = null"
     >
-      <label class="admin-field">
+      <label class="admin-field" for="workshop-block-reason">
         <span>Majburiy sabab</span>
-        <textarea v-model="blockReason"></textarea>
+        <textarea
+          id="workshop-block-reason"
+          v-model="blockReason"
+          :aria-invalid="!!blockFieldErrors.blockReason"
+          aria-describedby="workshop-block-reason-error"
+        ></textarea>
+        <span
+          v-if="blockFieldErrors.blockReason"
+          id="workshop-block-reason-error"
+          class="admin-field-error"
+          role="alert"
+        >
+          {{ blockFieldErrors.blockReason }}
+        </span>
       </label>
     </ConfirmDialog>
 

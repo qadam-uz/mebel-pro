@@ -39,8 +39,6 @@ export interface ProvisionWorkshopResponse {
   owner: {
     id: string
     login: string
-    full_name: string
-    phone: string
   }
   temp_password: string
 }
@@ -48,7 +46,7 @@ export interface ProvisionWorkshopResponse {
 export interface PlatformWorkshopDetail {
   workshop: WorkshopSummary
   branches: Array<{ id: string; name: string; status: string; address: string; phone: string }>
-  owner: { id: string; login: string; full_name: string; phone: string }
+  owner: { id: string; login: string }
   // AB-20: the reason captured when the workshop was blocked (null when active).
   block_reason: string | null
 }
@@ -216,11 +214,9 @@ export interface ProvisionWorkshopRequest {
     name: string
     address: string
     phone: string
-    latitude: string
-    longitude: string
     working_hours: Record<string, { open: string | null; close: string | null }>
   }
-  owner: { full_name: string; login: string; phone: string }
+  owner: { login: string }
   temp_password?: string
 }
 

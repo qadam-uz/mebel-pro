@@ -4,6 +4,15 @@ import { RouterLink } from 'vue-router'
 
 import { buildAdminMaterialWriteRequest } from '@/shared/app/adminMaterials'
 import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  positiveDecimal,
+  positiveInteger,
+  requiredText,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
+import {
   dropdownOption,
   materialKindLabel,
   materialStatusLabel,
@@ -76,6 +85,53 @@ const manufacturerForm = reactive({
   country: '',
   note: '',
 })
+type MaterialField =
+  | 'manufacturerId'
+  | 'name'
+  | 'thicknessMm'
+  | 'color'
+  | 'type'
+  | 'panelLengthMm'
+  | 'panelWidthMm'
+type InlineManufacturerField = 'name'
+const materialFieldErrors = reactive<FieldErrors<MaterialField>>({})
+const inlineManufacturerFieldErrors = reactive<FieldErrors<InlineManufacturerField>>({})
+const materialFieldIds: Record<MaterialField, string> = {
+  manufacturerId: 'mat-manufacturer',
+  name: 'mat-name',
+  thicknessMm: 'mat-thick',
+  color: 'mat-color',
+  type: 'mat-type',
+  panelLengthMm: 'mat-len',
+  panelWidthMm: 'mat-wid',
+}
+const materialFieldOrder: MaterialField[] = [
+  'manufacturerId',
+  'name',
+  'thicknessMm',
+  'color',
+  'type',
+  'panelLengthMm',
+  'panelWidthMm',
+]
+const materialApiFieldMap: Partial<Record<string, MaterialField>> = {
+  manufacturer_not_found: 'manufacturerId',
+  material_name_required: 'name',
+  material_color_required: 'color',
+  invalid_thickness: 'thicknessMm',
+  invalid_panel_material: 'type',
+  invalid_panel_size: 'panelLengthMm',
+  invalid_grain: 'type',
+}
+const materialApiLocMap: Partial<Record<string, MaterialField>> = {
+  'body.manufacturer_id': 'manufacturerId',
+  'body.name': 'name',
+  'body.thickness_mm': 'thicknessMm',
+  'body.color': 'color',
+  'body.type': 'type',
+  'body.panel_length_mm': 'panelLengthMm',
+  'body.panel_width_mm': 'panelWidthMm',
+}
 
 const kindOptions = [
   dropdownOption('all', 'Hammasi', 'panel va krom'),
@@ -191,6 +247,7 @@ function openCreate() {
   form.grainDirection = true
   form.imageFileId = null
   saveError.value = null
+  clearFieldErrors(materialFieldErrors)
   modalOpen.value = true
 }
 
@@ -208,7 +265,14 @@ function openEdit(material: Material) {
   form.grainDirection = material.grain_direction ?? false
   form.imageFileId = material.image_file_id
   saveError.value = null
+  clearFieldErrors(materialFieldErrors)
   modalOpen.value = true
+}
+
+function openInlineManufacturer() {
+  clearFieldErrors(inlineManufacturerFieldErrors)
+  manufacturerError.value = null
+  manufacturerModalOpen.value = true
 }
 
 function materialSpec(material: Material) {
@@ -242,7 +306,30 @@ function removeImage() {
   uploadError.value = null
 }
 
+function validateMaterialForm() {
+  clearFieldErrors(materialFieldErrors)
+  const set = (field: MaterialField, error: string | null) => {
+    if (error) materialFieldErrors[field] = error
+  }
+  set('manufacturerId', requiredText(form.manufacturerId, 'Ishlab chiqaruvchini tanlang.'))
+  set('name', requiredText(form.name))
+  set('thicknessMm', requiredText(form.thicknessMm) ?? positiveDecimal(form.thicknessMm))
+  set('color', requiredText(form.color))
+  if (form.kind === 'panel') {
+    set('type', requiredText(form.type))
+    set('panelLengthMm', requiredText(form.panelLengthMm) ?? positiveInteger(form.panelLengthMm))
+    set('panelWidthMm', requiredText(form.panelWidthMm) ?? positiveInteger(form.panelWidthMm))
+    if (!materialFieldErrors.panelLengthMm && dimensionError.value) {
+      materialFieldErrors.panelLengthMm = "Uzunlik enidan kichik bo'lmasligi kerak."
+    }
+  }
+  const hasErrors = materialFieldOrder.some((field) => Boolean(materialFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(materialFieldErrors, materialFieldOrder, materialFieldIds)
+  return !hasErrors
+}
+
 async function save() {
+  if (!validateMaterialForm()) return
   saving.value = true
   saveError.value = null
   try {
@@ -251,15 +338,28 @@ async function save() {
     else await admin.createMaterial(payload)
     modalOpen.value = false
     toast.success(editingId.value ? 'Material yangilandi' : "Material qo'shildi")
-  } catch {
-    saveError.value = 'material_save_failed'
-    toast.danger('Material saqlanmadi')
+  } catch (error) {
+    const fields = fieldErrorsFromApi<MaterialField>(error, materialApiFieldMap, materialApiLocMap)
+    if (Object.keys(fields).length > 0) {
+      Object.assign(materialFieldErrors, fields)
+      focusFirstFieldError(materialFieldErrors, materialFieldOrder, materialFieldIds)
+    } else {
+      saveError.value = 'material_save_failed'
+      toast.danger('Material saqlanmadi')
+    }
   } finally {
     saving.value = false
   }
 }
 
 async function saveInlineManufacturer() {
+  clearFieldErrors(inlineManufacturerFieldErrors)
+  const nameError = requiredText(manufacturerForm.name)
+  if (nameError) {
+    inlineManufacturerFieldErrors.name = nameError
+    focusFirstFieldError(inlineManufacturerFieldErrors, ['name'], { name: 'inline-mfr-name' })
+    return
+  }
   manufacturerSaving.value = true
   manufacturerError.value = null
   try {
@@ -273,8 +373,19 @@ async function saveInlineManufacturer() {
     manufacturerForm.country = ''
     manufacturerForm.note = ''
     manufacturerModalOpen.value = false
-  } catch {
-    manufacturerError.value = 'manufacturer_save_failed'
+  } catch (error) {
+    Object.assign(
+      inlineManufacturerFieldErrors,
+      fieldErrorsFromApi<InlineManufacturerField>(error, {
+        manufacturer_name_required: 'name',
+        manufacturer_name_exists: 'name',
+      }),
+    )
+    if (inlineManufacturerFieldErrors.name) {
+      focusFirstFieldError(inlineManufacturerFieldErrors, ['name'], { name: 'inline-mfr-name' })
+    } else {
+      manufacturerError.value = 'manufacturer_save_failed'
+    }
   } finally {
     manufacturerSaving.value = false
   }
@@ -499,33 +610,26 @@ onMounted(async () => {
           <div class="admin-modal-b">
             <div class="admin-form-grid three">
               <FormSelect
+                id="mat-kind"
                 v-model="form.kind"
                 label="Tur"
                 :options="materialKindOptions"
                 class="admin-full"
                 :disabled="!!editingId"
               />
-              <p v-if="editingId" class="admin-full text-xs text-ink-muted">
-                Tahrirlashda material turini o'zgartirib bo'lmaydi.
-              </p>
-              <p
-                v-if="form.kind === 'edge'"
-                class="admin-full rounded-md bg-sunk px-3 py-2 text-xs text-ink-soft"
-              >
-                Krom material metr hisobida o'lchanadi — panel o'lchami va tola yo'nalishi
-                qo'llanmaydi.
-              </p>
               <div class="admin-full grid gap-2 md:grid-cols-[1fr_auto]">
                 <FormSelect
+                  id="mat-manufacturer"
                   v-model="form.manufacturerId"
                   label="Ishlab chiqaruvchi"
                   :options="manufacturerChoiceOptions"
                   placeholder="Ishlab chiqaruvchini tanlang"
+                  :error="materialFieldErrors.manufacturerId"
                 />
                 <button
                   type="button"
                   class="mp-button mp-button-outline self-end"
-                  @click="manufacturerModalOpen = true"
+                  @click="openInlineManufacturer"
                 >
                   + Yangi ishlab chiqaruvchi
                 </button>
@@ -537,21 +641,62 @@ onMounted(async () => {
                   v-model="form.name"
                   placeholder="LDSP H1334 ST9 . Dub Sonoma"
                   required
+                  :aria-invalid="!!materialFieldErrors.name"
+                  aria-describedby="mat-name-error"
                 />
+                <span
+                  v-if="materialFieldErrors.name"
+                  id="mat-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ materialFieldErrors.name }}
+                </span>
               </label>
               <FormSelect
                 v-if="form.kind === 'panel'"
+                id="mat-type"
                 v-model="form.type"
                 label="Panel turi"
                 :options="materialTypeOptions"
+                :error="materialFieldErrors.type"
               />
               <label class="admin-field" for="mat-thick">
                 <span>Qalinligi, mm</span>
-                <input id="mat-thick" v-model="form.thicknessMm" inputmode="decimal" required />
+                <input
+                  id="mat-thick"
+                  v-model="form.thicknessMm"
+                  inputmode="decimal"
+                  required
+                  :aria-invalid="!!materialFieldErrors.thicknessMm"
+                  aria-describedby="mat-thick-error"
+                />
+                <span
+                  v-if="materialFieldErrors.thicknessMm"
+                  id="mat-thick-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ materialFieldErrors.thicknessMm }}
+                </span>
               </label>
               <label class="admin-field" for="mat-color">
                 <span>Rang / decor</span>
-                <input id="mat-color" v-model="form.color" required />
+                <input
+                  id="mat-color"
+                  v-model="form.color"
+                  required
+                  :aria-invalid="!!materialFieldErrors.color"
+                  aria-describedby="mat-color-error"
+                />
+                <span
+                  v-if="materialFieldErrors.color"
+                  id="mat-color-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ materialFieldErrors.color }}
+                </span>
               </label>
               <label class="admin-field" for="mat-decor">
                 <span>Decor kodi</span>
@@ -560,11 +705,41 @@ onMounted(async () => {
               <template v-if="form.kind === 'panel'">
                 <label class="admin-field" for="mat-len">
                   <span>Uzunlik, mm</span>
-                  <input id="mat-len" v-model="form.panelLengthMm" inputmode="numeric" required />
+                  <input
+                    id="mat-len"
+                    v-model="form.panelLengthMm"
+                    inputmode="numeric"
+                    required
+                    :aria-invalid="!!materialFieldErrors.panelLengthMm"
+                    aria-describedby="mat-len-error"
+                  />
+                  <span
+                    v-if="materialFieldErrors.panelLengthMm"
+                    id="mat-len-error"
+                    class="admin-field-error"
+                    role="alert"
+                  >
+                    {{ materialFieldErrors.panelLengthMm }}
+                  </span>
                 </label>
                 <label class="admin-field" for="mat-wid">
                   <span>Eni, mm</span>
-                  <input id="mat-wid" v-model="form.panelWidthMm" inputmode="numeric" required />
+                  <input
+                    id="mat-wid"
+                    v-model="form.panelWidthMm"
+                    inputmode="numeric"
+                    required
+                    :aria-invalid="!!materialFieldErrors.panelWidthMm"
+                    aria-describedby="mat-wid-error"
+                  />
+                  <span
+                    v-if="materialFieldErrors.panelWidthMm"
+                    id="mat-wid-error"
+                    class="admin-field-error"
+                    role="alert"
+                  >
+                    {{ materialFieldErrors.panelWidthMm }}
+                  </span>
                 </label>
                 <p
                   v-if="dimensionError"
@@ -663,7 +838,21 @@ onMounted(async () => {
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="inline-mfr-name">
                 <span>Nomi</span>
-                <input id="inline-mfr-name" v-model="manufacturerForm.name" required />
+                <input
+                  id="inline-mfr-name"
+                  v-model="manufacturerForm.name"
+                  required
+                  :aria-invalid="!!inlineManufacturerFieldErrors.name"
+                  aria-describedby="inline-mfr-name-error"
+                />
+                <span
+                  v-if="inlineManufacturerFieldErrors.name"
+                  id="inline-mfr-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ inlineManufacturerFieldErrors.name }}
+                </span>
               </label>
               <label class="admin-field" for="inline-mfr-country">
                 <span>Davlat</span>

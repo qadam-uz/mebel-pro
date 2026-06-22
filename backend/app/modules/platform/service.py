@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import status
 from sqlalchemy import func, select
@@ -52,6 +53,8 @@ from app.modules.workshop.contracts import Branch, Workshop
 from app.modules.workshop.schemas import dump_working_hours
 
 CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$")
+DEFAULT_BRANCH_LATITUDE = Decimal("41.2995")
+DEFAULT_BRANCH_LONGITUDE = Decimal("69.2401")
 JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
 PLATFORM_SCHEDULER_POLL_SECONDS = 60.0
 logger = get_logger(__name__)
@@ -240,11 +243,12 @@ async def provision_workshop(
     owner_login = _required_text(payload.owner.login, "owner_login_required")
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
+    workshop_phone = normalize_uz_phone(payload.workshop.phone)
     workshop = Workshop(
         id=workshop_id,
         code=code,
         name=_required_text(payload.workshop.name, "workshop_name_required"),
-        phone=normalize_uz_phone(payload.workshop.phone),
+        phone=workshop_phone,
         address=_optional_text(payload.workshop.address),
         owner_user_id=owner_id,
         status=WorkshopStatus.ACTIVE,
@@ -258,8 +262,8 @@ async def provision_workshop(
         name=_required_text(payload.branch.name, "branch_name_required"),
         address=_required_text(payload.branch.address, "branch_address_required"),
         phone=normalize_uz_phone(payload.branch.phone),
-        latitude=payload.branch.latitude,
-        longitude=payload.branch.longitude,
+        latitude=DEFAULT_BRANCH_LATITUDE,
+        longitude=DEFAULT_BRANCH_LONGITUDE,
         working_hours=dump_working_hours(payload.branch.working_hours),
         status=BranchStatus.ACTIVE,
     )
@@ -272,8 +276,8 @@ async def provision_workshop(
         workshop_id=workshop.id,
         login=owner_login,
         password_hash=hash_password(temp_password),
-        full_name=_required_text(payload.owner.full_name, "owner_name_required"),
-        phone=normalize_uz_phone(payload.owner.phone),
+        full_name=owner_login,
+        phone=workshop_phone,
         is_owner=True,
         home_branch_id=branch.id,
         status=UserStatus.ACTIVE,

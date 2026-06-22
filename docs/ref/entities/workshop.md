@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-06-23
 order: 20
 ---
 
@@ -60,7 +60,7 @@ whether clients see it and order from it.
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required |
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX` |
-| `latitude` / `longitude` | numeric | manual numeric (no geocoder in v1) |
+| `latitude` / `longitude` | numeric | owner-managed manual numeric (no geocoder in v1); platform provisioning does not collect it |
 | `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |

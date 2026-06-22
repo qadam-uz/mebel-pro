@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   adminActorLabel,
@@ -25,6 +25,7 @@ const MAX_RESULTS = 200
 const actionsHasMore = ref(false)
 const statusHasMore = ref(false)
 const loadingMore = ref(false)
+let refreshTimer: number | undefined
 
 const tabOptions = [
   { value: 'actions', label: 'Amallar' },
@@ -126,6 +127,10 @@ function actorText(actorType: string, actorId: string | null | undefined) {
 }
 
 async function refresh() {
+  if (refreshTimer !== undefined) {
+    window.clearTimeout(refreshTimer)
+    refreshTimer = undefined
+  }
   const result = await admin.loadAudit({
     actions: actionQuery(0),
     status: statusQuery(0),
@@ -134,6 +139,14 @@ async function refresh() {
     result.actionsCount === PAGE_SIZE && admin.auditActions.length < MAX_RESULTS
   statusHasMore.value =
     result.statusCount === PAGE_SIZE && admin.auditStatusChanges.length < MAX_RESULTS
+}
+
+function queueRefresh() {
+  if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+  refreshTimer = window.setTimeout(() => {
+    refreshTimer = undefined
+    void refresh()
+  }, 200)
 }
 
 async function loadMore() {
@@ -200,9 +213,11 @@ onMounted(() => {
   if (admin.workshops.length === 0) void admin.loadWorkshops()
 })
 
-watch([workshopFilter, entityFilter, timeFilter], () => {
-  void refresh()
+onBeforeUnmount(() => {
+  if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
 })
+
+watch([query, workshopFilter, entityFilter, timeFilter], queueRefresh)
 </script>
 
 <template>
@@ -218,12 +233,11 @@ watch([workshopFilter, entityFilter, timeFilter], () => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidiruv</span>
-        <input v-model="query" placeholder="Obyekt ID, amal yoki aktor" @keyup.enter="refresh" />
+        <input v-model="query" placeholder="Obyekt ID, amal yoki aktor" />
       </label>
       <ProjectDropdown v-model="workshopFilter" label="Ustaxona" :options="workshopOptions" />
       <ProjectDropdown v-model="entityFilter" label="Obyekt turi" :options="entityOptions" />
       <ProjectDropdown v-model="timeFilter" label="Vaqt" :options="timeOptions" />
-      <button type="button" class="mp-button mp-button-outline" @click="refresh">Filtrlash</button>
       <button type="button" class="mp-button mp-button-outline" @click="exportCsv">CSV</button>
     </div>
 
