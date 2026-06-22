@@ -15,7 +15,7 @@ const props = withDefaults(
     disabled?: boolean
   }>(),
   {
-    placeholder: 'Choose one',
+    placeholder: 'Tanlang',
     error: null,
     disabled: false,
   },

@@ -1,0 +1,85 @@
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+export interface ActionMenuItem {
+  label: string
+  danger?: boolean
+  disabled?: boolean
+}
+
+const props = withDefaults(
+  defineProps<{
+    items: ActionMenuItem[]
+    // Accessible name for the trigger (e.g. "Qism #2 amallari").
+    label?: string
+  }>(),
+  { label: 'Amallar' },
+)
+const emit = defineEmits<{ select: [index: number] }>()
+
+const open = ref(false)
+const wrapRef = ref<HTMLElement | null>(null)
+const menuRef = ref<HTMLElement | null>(null)
+const buttonRef = ref<HTMLButtonElement | null>(null)
+
+function toggle() {
+  open.value = !open.value
+}
+function close(returnFocus = false) {
+  open.value = false
+  if (returnFocus) buttonRef.value?.focus()
+}
+function onSelect(index: number) {
+  if (props.items[index]?.disabled) return
+  emit('select', index)
+  close()
+}
+function onDocumentPointerDown(event: PointerEvent) {
+  if (!(event.target instanceof Node)) return
+  if (wrapRef.value?.contains(event.target)) return
+  close()
+}
+
+// Open/close lifecycle: bind the click-outside listener only while open, and
+// move focus into the menu so keyboard users land on the first item.
+watch(open, async (isOpen) => {
+  if (isOpen) {
+    document.addEventListener('pointerdown', onDocumentPointerDown)
+    await nextTick()
+    menuRef.value?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus()
+  } else {
+    document.removeEventListener('pointerdown', onDocumentPointerDown)
+  }
+})
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointerDown))
+</script>
+
+<template>
+  <div ref="wrapRef" class="mp-action-menu-wrap" @keydown.esc.stop.prevent="close(true)">
+    <button
+      ref="buttonRef"
+      type="button"
+      class="mp-action-icon-button"
+      :aria-expanded="open"
+      aria-haspopup="menu"
+      :aria-label="label"
+      @click="toggle"
+    >
+      <span aria-hidden="true">⋯</span>
+    </button>
+    <div v-if="open" ref="menuRef" class="mp-action-menu" role="menu">
+      <button
+        v-for="(item, index) in items"
+        :key="index"
+        type="button"
+        class="mp-action-menu-item"
+        :class="{ danger: item.danger }"
+        role="menuitem"
+        :disabled="item.disabled"
+        @click="onSelect(index)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+  </div>
+</template>

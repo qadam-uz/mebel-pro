@@ -402,12 +402,10 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // (docs/ref/features/cutting.md), so the URL is /new with no draft id yet.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
-  await expect(page.getByText(/Hali saqlanmagan/)).toBeVisible()
   await branchesLoaded
 
   await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
-  // CB-51: the preferred-branch picker is a two-pane workshop→branch picker.
-  await page.getByRole('button', { name: new RegExp(`Cutting Workshop ${id}`) }).click()
+  // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
   await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
   await page.getByRole('button', { name: "Qo'llash" }).click()
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()

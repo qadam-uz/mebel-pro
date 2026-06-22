@@ -17,6 +17,7 @@ import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
+import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import type { PanelMaterialType } from '@/shared/stores/admin'
 import {
@@ -99,8 +100,10 @@ const preferredBranch = computed(() =>
 // Panel picker filters (CB-84): manufacturer (multi-select), type, thickness, and
 // a sort — applied to the shared option list every row's panel picker draws from.
 const panelManufacturerFilter = ref<string[]>([])
-const panelTypeFilter = ref<string | null>(null)
-const panelThicknessFilter = ref<string | null>(null)
+// '' = the "Barcha turlar / qalinliklar" option (no filter) — keeps the select
+// showing that label instead of a bare placeholder when nothing is narrowed.
+const panelTypeFilter = ref<string | null>('')
+const panelThicknessFilter = ref<string | null>('')
 const panelSort = ref<string | null>('relevance')
 
 const PANEL_TYPE_LABELS: Record<string, string> = {
@@ -153,8 +156,8 @@ const panelFiltersActive = computed(
 )
 function clearPanelFilters() {
   panelManufacturerFilter.value = []
-  panelTypeFilter.value = null
-  panelThicknessFilter.value = null
+  panelTypeFilter.value = ''
+  panelThicknessFilter.value = ''
 }
 
 const panelOptions = computed(() => {
@@ -379,6 +382,11 @@ function deleteRow(index: number) {
     const next = { ...preferredEdgeByPart.value }
     delete next[removed.part_ref]
     preferredEdgeByPart.value = next
+    if (selectedRefs.value.has(removed.part_ref)) {
+      const nextSel = new Set(selectedRefs.value)
+      nextSel.delete(removed.part_ref)
+      selectedRefs.value = nextSel
+    }
   }
 }
 
@@ -390,6 +398,63 @@ function clearParts() {
   parts.value = []
   preferredEdgeByPart.value = {}
   clearPartsConfirmOpen.value = false
+  clearSelection()
+}
+
+// --- Bulk selection (desktop power-feature) --------------------------------
+// Select rows, then apply edges / change material / delete in one action so
+// banding or re-materialing many identical parts isn't N modal round-trips.
+const selectedRefs = ref<Set<string>>(new Set())
+const selectedParts = computed(() =>
+  parts.value.filter((part) => selectedRefs.value.has(part.part_ref)),
+)
+const allSelected = computed(
+  () => parts.value.length > 0 && selectedParts.value.length === parts.value.length,
+)
+const bulkEdgeMode = ref(false)
+const bulkMaterialOpen = ref(false)
+const bulkMaterialId = ref<string | null>(null)
+
+function toggleSelect(partRef: string) {
+  const next = new Set(selectedRefs.value)
+  if (next.has(partRef)) next.delete(partRef)
+  else next.add(partRef)
+  selectedRefs.value = next
+}
+function toggleSelectAll() {
+  selectedRefs.value = allSelected.value
+    ? new Set()
+    : new Set(parts.value.map((part) => part.part_ref))
+}
+function clearSelection() {
+  selectedRefs.value = new Set()
+}
+function bulkDelete() {
+  const removed = selectedRefs.value
+  parts.value = parts.value.filter((part) => !removed.has(part.part_ref))
+  const nextEdges = { ...preferredEdgeByPart.value }
+  for (const ref of removed) delete nextEdges[ref]
+  preferredEdgeByPart.value = nextEdges
+  clearSelection()
+}
+function openBulkEdge() {
+  if (selectedParts.value.length === 0) return
+  // Reuse the single-part edge picker: seed it from the first selected part and
+  // write the applied result to every selected part on apply (bulkEdgeMode).
+  bulkEdgeMode.value = true
+  edgePickerPart.value = { ...selectedParts.value[0], part_ref: '__bulk__' }
+  edgeReturnFocus = null
+}
+function openBulkMaterial() {
+  if (selectedParts.value.length === 0) return
+  bulkMaterialId.value = selectedParts.value[0]?.material_id || null
+  bulkMaterialOpen.value = true
+}
+function applyBulkMaterial() {
+  if (bulkMaterialId.value) {
+    for (const part of selectedParts.value) part.material_id = bulkMaterialId.value
+  }
+  bulkMaterialOpen.value = false
 }
 
 function setPanelSource(part: CuttingPart, source: MaterialSource) {
@@ -420,6 +485,7 @@ function openEdgePicker(part: CuttingPart, event?: Event) {
 
 function closeEdgePicker() {
   edgePickerPart.value = null
+  bulkEdgeMode.value = false
   edgeReturnFocus?.focus()
   edgeReturnFocus = null
 }
@@ -428,8 +494,11 @@ function onEdgePickerApply(payload: {
   edges: Record<EdgeField, CuttingEdgeBand | null>
   rememberedMaterialId: string | null
 }) {
-  const part = edgePickerPart.value
-  if (part) {
+  // Bulk mode writes the same edge set to every selected part; single mode
+  // writes to the one open part.
+  const targets = bulkEdgeMode.value ? selectedParts.value : [edgePickerPart.value]
+  for (const part of targets) {
+    if (!part) continue
     part.edge_top = payload.edges.edge_top
     part.edge_bottom = payload.edges.edge_bottom
     part.edge_left = payload.edges.edge_left
@@ -694,11 +763,6 @@ onBeforeRouteLeave(() => {
 
 <template>
   <section>
-    <RouterLink :to="rolePath('/c/cutting/drafts')" class="client-back">
-      <span aria-hidden="true">←</span>
-      Saqlangan chizmalar
-    </RouterLink>
-
     <div class="client-page-head">
       <div>
         <h1>Chizma</h1>
@@ -707,12 +771,8 @@ onBeforeRouteLeave(() => {
         </p>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
-        <span v-if="isNewDraft" class="mp-chip bg-info-soft text-info" role="status">
-          <span class="mp-dot" aria-hidden="true"></span>
-          Hali saqlanmagan — optimallashtirilganda saqlanadi
-        </span>
         <span
-          v-else
+          v-if="!isNewDraft"
           class="mp-chip"
           :class="{
             'bg-success-soft text-success': saveState === 'saved',
@@ -726,12 +786,14 @@ onBeforeRouteLeave(() => {
           {{ saveLabel() }}
         </span>
         <button
+          v-if="parts.length > 0"
           type="button"
-          class="mp-button mp-button-outline text-danger"
-          :disabled="parts.length === 0"
+          class="mp-button mp-button-outline px-3 text-danger"
+          aria-label="Ro'yxatni tozalash"
+          title="Ro'yxatni tozalash"
           @click="requestClearParts"
         >
-          Ro'yxatni tozalash
+          <Icon name="trash" class="size-[18px]" />
         </button>
       </div>
     </div>
@@ -765,10 +827,10 @@ onBeforeRouteLeave(() => {
 
       <fieldset :disabled="isReadOnly" class="contents">
         <section
-          class="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-hairline border-l-4 border-l-accent bg-sunk px-4 py-3 text-sm text-ink-soft"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
-            class="grid size-6 place-items-center rounded bg-elevated font-mono font-black text-accent"
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
             aria-hidden="true"
           >
             i
@@ -782,6 +844,7 @@ onBeforeRouteLeave(() => {
                   : 'barcha ustaxonalar'
               }}
             </b>
+            <span class="text-ink-muted"> — materiallarni cheklamaydi (ixtiyoriy)</span>
           </div>
           <button
             type="button"
@@ -908,6 +971,29 @@ onBeforeRouteLeave(() => {
             </div>
           </div>
 
+          <div
+            v-if="selectedParts.length > 0"
+            class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
+          >
+            <span class="text-accent">{{ selectedParts.length }} qism tanlandi</span>
+            <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
+              Krom qo'llash
+            </button>
+            <button type="button" class="text-accent hover:underline" @click="openBulkMaterial">
+              Material almashtirish
+            </button>
+            <button type="button" class="text-danger hover:underline" @click="bulkDelete">
+              O'chirish
+            </button>
+            <button
+              type="button"
+              class="ml-auto text-ink-muted hover:text-ink"
+              @click="clearSelection"
+            >
+              Bekor qilish
+            </button>
+          </div>
+
           <div v-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="plus" /></div>
@@ -922,21 +1008,27 @@ onBeforeRouteLeave(() => {
           <div v-else class="grid gap-3 p-4">
             <!-- Desktop column header: same border + p-3 + grid template as a
                  CuttingPartRow card, so the columns line up; hidden on mobile,
-                 where each row keeps its own field labels. -->
-            <div
-              class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block"
-              aria-hidden="true"
-            >
+                 where each row keeps its own field labels. The leading cell is a
+                 real select-all checkbox; the rest are decorative labels. -->
+            <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
               <div
-                class="grid grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] gap-3 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
-                <span>#</span>
-                <span>Panel materiali</span>
-                <span>Uzunlik</span>
-                <span>Eni</span>
-                <span>Soni</span>
-                <span>Krom</span>
-                <span>Amallar</span>
+                <input
+                  type="checkbox"
+                  class="size-4 justify-self-center"
+                  :checked="allSelected"
+                  :indeterminate.prop="selectedParts.length > 0 && !allSelected"
+                  aria-label="Hamma qatorni tanlash"
+                  @change="toggleSelectAll"
+                />
+                <span aria-hidden="true">#</span>
+                <span aria-hidden="true">Panel materiali</span>
+                <span aria-hidden="true">Uzunlik</span>
+                <span aria-hidden="true">Eni</span>
+                <span aria-hidden="true">Soni</span>
+                <span aria-hidden="true">Krom</span>
+                <span aria-hidden="true">Amallar</span>
               </div>
             </div>
             <CuttingPartRow
@@ -951,6 +1043,8 @@ onBeforeRouteLeave(() => {
               :optimize-error="rowOptimizeError(part, index)"
               :not-carried="rowNotCarried(part)"
               :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+              :selected="selectedRefs.has(part.part_ref)"
+              @toggle-select="toggleSelect(part.part_ref)"
               @update:length="part.length_mm = $event"
               @update:width="part.width_mm = $event"
               @update:quantity="part.quantity = $event"
@@ -1061,11 +1155,72 @@ onBeforeRouteLeave(() => {
     <CuttingEdgePickerModal
       :part="edgePickerPart"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
+      :title-suffix="bulkEdgeMode ? `${selectedParts.length} qismga` : undefined"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
       :preferred-branch-id="activeBranchId"
       :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
       @apply="onEdgePickerApply"
       @close="closeEdgePicker"
     />
+
+    <!-- Bulk material picker. A custom card (NOT .client-edge-modal, which has
+         overflow:hidden) so the SearchCombobox dropdown isn't clipped. -->
+    <div
+      v-if="bulkMaterialOpen"
+      class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Material almashtirish"
+      @keydown.esc="bulkMaterialOpen = false"
+    >
+      <div
+        class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
+        @click="bulkMaterialOpen = false"
+      ></div>
+      <div
+        class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
+      >
+        <div class="mb-3 flex items-start justify-between gap-3">
+          <h3 class="font-serif text-lg font-semibold text-ink">
+            Material almashtirish — {{ selectedParts.length }} qismga
+          </h3>
+          <button
+            type="button"
+            class="client-edge-close"
+            aria-label="Yopish"
+            @click="bulkMaterialOpen = false"
+          >
+            ×
+          </button>
+        </div>
+        <SearchCombobox
+          :model-value="bulkMaterialId"
+          label="Panel materiali"
+          :options="panelChoices"
+          placeholder="Panel tanlang"
+          @update:model-value="bulkMaterialId = $event"
+        />
+        <p class="mt-2 text-sm text-ink-muted">
+          Tanlangan material {{ selectedParts.length }} ta qatorga qo'llanadi.
+        </p>
+        <div class="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            class="mp-button mp-button-outline"
+            @click="bulkMaterialOpen = false"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="button"
+            class="mp-button mp-button-primary"
+            :disabled="!bulkMaterialId"
+            @click="applyBulkMaterial"
+          >
+            Qo'llash
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>

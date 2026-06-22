@@ -26,9 +26,9 @@ const selectedOptions = computed(() =>
   props.options.filter((option) => props.modelValue.includes(option.value)),
 )
 const summary = computed(() => {
-  if (selectedOptions.value.length === 0) return props.emptyLabel ?? 'Any'
-  if (selectedOptions.value.length === 1) return selectedOptions.value[0]?.label ?? '1 selected'
-  return `${selectedOptions.value.length} ${props.selectedLabel ?? 'selected'}`
+  if (selectedOptions.value.length === 0) return props.emptyLabel ?? 'Barchasi'
+  if (selectedOptions.value.length === 1) return selectedOptions.value[0]?.label ?? '1 tanlandi'
+  return `${selectedOptions.value.length} ${props.selectedLabel ?? 'tanlandi'}`
 })
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]

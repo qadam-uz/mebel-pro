@@ -7,7 +7,6 @@ import {
   edgeFields,
   edgeSearchText,
   edgeShortLabel,
-  edgeTinyLabel,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
@@ -34,6 +33,8 @@ const props = defineProps<{
   preferredEdgeId: string | null
   preferredBranchId: string | null
   preferredBranchName: string
+  // Overrides the "qism #N" part of the title — used for bulk apply ("N qismga").
+  titleSuffix?: string
 }>()
 const emit = defineEmits<{
   apply: [{ edges: Record<EdgeField, CuttingEdgeBand | null>; rememberedMaterialId: string | null }]
@@ -47,6 +48,21 @@ const edgePickerSource = ref<MaterialSource>('shop')
 const edgePickerSearch = ref('')
 const edgePickerThickness = ref<string | null>('all')
 const edgeDialogRef = ref<HTMLElement | null>(null)
+// The searchable tape list is revealed on demand. Open it by default only when the
+// part has no banding yet (the first-time pick); when editing a part that already
+// has a tape, collapse to the compact summary + an "O'zgartirish" toggle.
+const showTapeList = ref(false)
+// The last tape the user picked from the list. Applied to the currently banded
+// sides; when none are banded it's only remembered, so the next side toggled on
+// (or a pattern) uses it — picking a tape must not auto-band every side.
+const lastPickedEdgeId = ref<string | null>(null)
+
+const sideNames: Record<EdgeField, string> = {
+  edge_top: 'Yuqori',
+  edge_bottom: 'Pastki',
+  edge_left: 'Chap',
+  edge_right: "O'ng",
+}
 
 const edgePatterns: Array<{ key: string; label: string; hint: string; sides: EdgeField[] }> = [
   { key: 'none', label: 'Hech qaysi', hint: 'Krom olib tashlanadi', sides: [] },
@@ -111,13 +127,28 @@ function recommendedEdgeForPart() {
   return recommendedEdge(
     materialById(part.material_id),
     cutting.edgeOptions,
-    edgePickerSelectedMaterialId.value,
+    lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
   )
 }
 
-function pickerSideLabel(side: EdgeField) {
-  return edgeTinyLabel(edgeById(edgePickerState.value[side]?.material_id))
+function pickerSideThickness(side: EdgeField) {
+  const material = edgeById(edgePickerState.value[side]?.material_id)
+  return material?.thickness_mm ? `${material.thickness_mm}mm` : ''
+}
+
+// Tailwind classes for a side strip in the diagram: filled (shop = accent, own =
+// dark teal) when banded, dashed/muted when empty.
+function sideClass(side: EdgeField) {
+  const edge = edgePickerState.value[side]
+  if (!edge) {
+    return 'border border-dashed border-hairline-strong bg-sunk text-ink-muted hover:border-ink-soft'
+  }
+  return edge.source === 'own' ? 'bg-[#0b5a54] text-white' : 'bg-accent text-white'
+}
+
+function sideAria(side: EdgeField) {
+  return `${sideNames[side]} tomon — ${edgePickerState.value[side] ? 'krom bor, bosib olib tashlang' : "krom qo'shing"}`
 }
 
 const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
@@ -161,6 +192,11 @@ const edgePickerSelectedMaterialId = computed(() => {
     .find(Boolean)
   return first ?? null
 })
+const selectedEdgeMaterial = computed(() => edgeById(edgePickerSelectedMaterialId.value))
+// The tape highlighted in the list: what's banded, or the user's pending pick.
+const highlightedEdgeId = computed(
+  () => edgePickerSelectedMaterialId.value ?? lastPickedEdgeId.value,
+)
 const edgePickerBranchNote = computed(() => {
   if (!props.preferredBranchId) return null
   const missing = new Map<string, string>()
@@ -216,10 +252,13 @@ function setPickerSource(source: MaterialSource) {
 }
 
 function selectPickerMaterial(materialId: string) {
+  // Remember the pick either way; with banded sides, re-tape them. With NO sides
+  // banded (e.g. after "Hech qaysi") only remember it — never auto-band all four.
+  lastPickedEdgeId.value = materialId
   const active = edgePickerActiveSides.value
-  const targetSides = active.length ? active : edgeFields
+  if (active.length === 0) return
   const next = { ...edgePickerState.value }
-  for (const side of targetSides) {
+  for (const side of active) {
     next[side] = { material_id: materialId, source: edgePickerSource.value }
   }
   edgePickerState.value = next
@@ -289,6 +328,10 @@ watch(
         active.length > 0 && active.every((side) => edgePickerState.value[side]?.source === 'own')
           ? 'own'
           : commonEdgeSource(part)
+      // First-time pick (no banding yet) opens the tape list; editing an existing
+      // banded part starts collapsed to the compact summary.
+      showTapeList.value = active.length === 0
+      lastPickedEdgeId.value = firstEdgeId(edgePickerState.value)
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
       lockBodyScroll()
@@ -300,6 +343,7 @@ watch(
       edgePickerState.value = blankEdgeState()
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
+      lastPickedEdgeId.value = null
     }
   },
 )
@@ -322,7 +366,9 @@ onBeforeUnmount(() => {
       tabindex="-1"
     >
       <div class="client-edge-modal-h">
-        <h3 id="edge-picker-title">Krom yopishtirish — qism #{{ partNumber }}</h3>
+        <h3 id="edge-picker-title">
+          Krom yopishtirish — {{ titleSuffix ?? `qism #${partNumber}` }}
+        </h3>
         <button
           type="button"
           class="client-edge-close"
@@ -334,107 +380,163 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="client-edge-modal-b">
-        <p class="ep-help">
-          {{
-            edgePickerMaterials.some((item) => item.rank < 2)
-              ? "Mos kromlar ro'yxatda yuqorida turadi; kerak bo'lsa rang yoki qalinlik bo'yicha tanlang."
-              : "Bu panel uchun mos krom topilmadi; katalogdan rang yoki qalinlik bo'yicha tanlang."
-          }}
-        </p>
-
-        <div class="ep-patterns" aria-label="Krom tomoni shablonlari">
+        <div class="flex flex-wrap gap-2" aria-label="Krom tomoni shablonlari">
           <button
             v-for="pattern in edgePatterns"
             :key="pattern.key"
             type="button"
-            class="ep-pattern"
-            :class="{ on: edgePickerPatternKey === pattern.key }"
+            class="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+            :class="
+              edgePickerPatternKey === pattern.key
+                ? 'border-accent bg-accent-soft text-accent'
+                : 'border-hairline-strong bg-elevated text-ink hover:border-ink-soft'
+            "
             :disabled="pattern.sides.length > 0 && !recommendedEdgeForPart()"
             @click="applyEdgePattern(pattern.key)"
           >
-            <span class="nm">{{ pattern.label }}</span>
-            <span class="meta">{{ pattern.hint }}</span>
+            {{ pattern.label }}
+            <span
+              v-if="pattern.key === 'all'"
+              class="rounded bg-accent px-1.5 py-0.5 text-[9px] font-extrabold text-white"
+              >tez</span
+            >
           </button>
         </div>
 
-        <div class="edge-diagram" aria-label="Krom tomonlari">
-          <span class="lbl">Yuqori</span>
+        <div
+          class="mx-auto grid w-full max-w-[340px] grid-cols-[62px_minmax(0,1fr)_62px] grid-rows-[34px_92px_34px] items-stretch gap-1.5"
+          aria-label="Krom tomonlari"
+        >
+          <span></span>
           <button
             type="button"
-            class="edge-btn h"
-            :class="{
-              set: Boolean(edgePickerState.edge_top),
-              own: edgePickerState.edge_top?.source === 'own',
-            }"
+            class="flex items-center justify-center gap-1.5 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            :class="sideClass('edge_top')"
             :aria-pressed="Boolean(edgePickerState.edge_top)"
+            :aria-label="sideAria('edge_top')"
             @click="togglePickerSide('edge_top')"
           >
-            {{ edgePickerState.edge_top ? pickerSideLabel('edge_top') : '-' }}
+            <span>{{ sideNames.edge_top }}</span>
+            <span v-if="edgePickerState.edge_top" class="font-mono text-[10px] opacity-90">{{
+              pickerSideThickness('edge_top')
+            }}</span>
+            <span v-else class="text-sm leading-none opacity-70">+</span>
           </button>
-          <div class="mid">
-            <button
-              type="button"
-              class="edge-btn v"
-              :class="{
-                set: Boolean(edgePickerState.edge_left),
-                own: edgePickerState.edge_left?.source === 'own',
-              }"
-              :aria-pressed="Boolean(edgePickerState.edge_left)"
-              @click="togglePickerSide('edge_left')"
+          <span></span>
+
+          <button
+            type="button"
+            class="flex items-center justify-center rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            :class="sideClass('edge_left')"
+            :aria-pressed="Boolean(edgePickerState.edge_left)"
+            :aria-label="sideAria('edge_left')"
+            @click="togglePickerSide('edge_left')"
+          >
+            {{ sideNames.edge_left }}
+          </button>
+          <div
+            class="flex flex-col items-center justify-center gap-1 rounded-md border border-hairline text-ink-muted"
+            style="
+              background: repeating-linear-gradient(
+                45deg,
+                var(--color-sunk),
+                var(--color-sunk) 7px,
+                var(--color-elevated) 7px,
+                var(--color-elevated) 14px
+              );
+            "
+          >
+            <span class="text-xs font-bold">Qism</span>
+            <span v-if="part" class="font-mono text-[11px] font-bold text-ink-soft"
+              >{{ part.length_mm }} × {{ part.width_mm }}</span
             >
-              {{ edgePickerState.edge_left ? pickerSideLabel('edge_left') : '-' }}
-            </button>
-            <div class="panel">Qism</div>
-            <button
-              type="button"
-              class="edge-btn v"
-              :class="{
-                set: Boolean(edgePickerState.edge_right),
-                own: edgePickerState.edge_right?.source === 'own',
-              }"
-              :aria-pressed="Boolean(edgePickerState.edge_right)"
-              @click="togglePickerSide('edge_right')"
-            >
-              {{ edgePickerState.edge_right ? pickerSideLabel('edge_right') : '-' }}
-            </button>
           </div>
           <button
             type="button"
-            class="edge-btn h"
-            :class="{
-              set: Boolean(edgePickerState.edge_bottom),
-              own: edgePickerState.edge_bottom?.source === 'own',
-            }"
+            class="flex items-center justify-center rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            :class="sideClass('edge_right')"
+            :aria-pressed="Boolean(edgePickerState.edge_right)"
+            :aria-label="sideAria('edge_right')"
+            @click="togglePickerSide('edge_right')"
+          >
+            {{ sideNames.edge_right }}
+          </button>
+
+          <span></span>
+          <button
+            type="button"
+            class="flex items-center justify-center gap-1.5 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            :class="sideClass('edge_bottom')"
             :aria-pressed="Boolean(edgePickerState.edge_bottom)"
+            :aria-label="sideAria('edge_bottom')"
             @click="togglePickerSide('edge_bottom')"
           >
-            {{ edgePickerState.edge_bottom ? pickerSideLabel('edge_bottom') : '-' }}
+            <span>{{ sideNames.edge_bottom }}</span>
+            <span v-if="edgePickerState.edge_bottom" class="font-mono text-[10px] opacity-90">{{
+              pickerSideThickness('edge_bottom')
+            }}</span>
+            <span v-else class="text-sm leading-none opacity-70">+</span>
           </button>
-          <span class="lbl">Pastki</span>
+          <span></span>
         </div>
 
-        <div class="ep-source">
+        <div
+          v-if="selectedEdgeMaterial && !showTapeList"
+          class="flex items-center gap-3 rounded-xl border border-hairline bg-elevated p-3"
+        >
+          <span
+            class="size-9 shrink-0 rounded-lg border border-hairline"
+            :style="{ background: colorForMaterial(selectedEdgeMaterial.color) }"
+          ></span>
+          <div class="min-w-0">
+            <div class="truncate text-sm font-bold text-ink">
+              {{ edgeShortLabel(selectedEdgeMaterial) }}
+            </div>
+            <div class="font-mono text-[11.5px] text-ink-muted">
+              {{ selectedEdgeMaterial.name }} · {{ edgePickerActiveSides.length }} tomonga
+            </div>
+          </div>
           <button
             type="button"
-            :class="{ on: edgePickerSource === 'shop' }"
-            :aria-pressed="edgePickerSource === 'shop'"
-            @click="setPickerSource('shop')"
+            class="ml-auto shrink-0 text-sm font-bold text-accent"
+            @click="showTapeList = true"
           >
-            <span class="nm">Ustaxonadan</span>
-            <span class="meta">Krom narxga qo'shiladi</span>
-          </button>
-          <button
-            type="button"
-            :class="{ on: edgePickerSource === 'own' }"
-            :aria-pressed="edgePickerSource === 'own'"
-            @click="setPickerSource('own')"
-          >
-            <span class="nm">O'zim olib kelaman</span>
-            <span class="meta">Faqat yopishtirish xizmati</span>
+            O'zgartirish →
           </button>
         </div>
 
-        <div class="ep-tools">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span class="text-xs font-bold text-ink-muted">Manba:</span>
+          <div class="inline-flex overflow-hidden rounded-lg border border-hairline-strong">
+            <button
+              type="button"
+              class="px-3.5 py-2 text-xs font-bold transition"
+              :class="
+                edgePickerSource === 'shop' ? 'bg-accent text-white' : 'bg-elevated text-ink-muted'
+              "
+              :aria-pressed="edgePickerSource === 'shop'"
+              @click="setPickerSource('shop')"
+            >
+              Ustaxonadan
+            </button>
+            <button
+              type="button"
+              class="border-l border-hairline-strong px-3.5 py-2 text-xs font-bold transition"
+              :class="
+                edgePickerSource === 'own' ? 'bg-accent text-white' : 'bg-elevated text-ink-muted'
+              "
+              :aria-pressed="edgePickerSource === 'own'"
+              @click="setPickerSource('own')"
+            >
+              O'zim olib kelaman
+            </button>
+          </div>
+          <span class="text-[11.5px] text-ink-muted">{{
+            edgePickerSource === 'shop' ? "narxga qo'shiladi" : 'faqat yopishtirish'
+          }}</span>
+        </div>
+
+        <div v-if="showTapeList" class="ep-tools">
           <input
             v-model="edgePickerSearch"
             class="ep-search"
@@ -454,7 +556,7 @@ onBeforeUnmount(() => {
               :key="material.id"
               type="button"
               class="ep-edge-opt"
-              :class="{ on: edgePickerSelectedMaterialId === material.id }"
+              :class="{ on: highlightedEdgeId === material.id }"
               @click="selectPickerMaterial(material.id)"
             >
               <span class="rad" aria-hidden="true"></span>
@@ -472,9 +574,10 @@ onBeforeUnmount(() => {
               Mos krom topilmadi. Qidiruv yoki qalinlikni o'zgartiring.
             </div>
           </div>
-          <div v-if="edgePickerBranchNote" class="ep-branch-note">
-            {{ edgePickerBranchNote }}
-          </div>
+        </div>
+
+        <div v-if="edgePickerBranchNote" class="ep-branch-note">
+          {{ edgePickerBranchNote }}
         </div>
       </div>
 

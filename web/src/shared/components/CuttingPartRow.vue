@@ -9,6 +9,7 @@ import {
   sideLabels,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
+import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
@@ -34,6 +35,7 @@ const props = defineProps<{
   optimizeError: string | null
   notCarried: string[]
   preferredBranchName: string
+  selected?: boolean
 }>()
 const emit = defineEmits<{
   'update:length': [number]
@@ -45,9 +47,19 @@ const emit = defineEmits<{
   delete: []
   'open-edge-picker': [Event | undefined]
   'bring-own': []
+  'toggle-select': []
 }>()
 
 const cutting = useCuttingStore()
+
+const rowActions = computed<ActionMenuItem[]>(() => [
+  { label: 'Nusxa' },
+  { label: "O'chirish", danger: true },
+])
+function onRowAction(index: number) {
+  if (index === 0) emit('duplicate')
+  else emit('delete')
+}
 
 function materialById(id: string | null | undefined) {
   return cutting.panelOptions.find((material) => material.id === id) ?? null
@@ -143,25 +155,75 @@ function edgeCellLabel(side: EdgeField) {
   <article
     :id="`part-row-${part.part_ref}`"
     class="rounded-lg border p-3 transition hover:border-ink-soft"
-    :class="hasError ? 'border-danger-soft bg-danger-soft/30' : 'border-hairline bg-elevated'"
+    :class="
+      hasError
+        ? 'border-danger-soft bg-danger-soft/30'
+        : selected
+          ? 'border-accent-tint bg-accent-soft/40'
+          : 'border-hairline bg-elevated'
+    "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[34px_minmax(240px,1.6fr)_90px_90px_76px_minmax(280px,1fr)_96px] lg:items-start"
+      class="grid gap-3 lg:grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] lg:items-center lg:gap-2"
     >
+      <div class="hidden lg:flex lg:justify-center">
+        <input
+          type="checkbox"
+          class="size-4"
+          :checked="selected"
+          :aria-label="`Qism #${index + 1} ni tanlash`"
+          @change="emit('toggle-select')"
+        />
+      </div>
       <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
 
       <div class="min-w-0">
-        <SearchCombobox
-          label="Panel materiali"
-          label-class="lg:sr-only"
-          :model-value="part.material_id"
-          :options="panelChoices"
-          placeholder="Panel tanlang"
-          :error="!part.material_id ? 'Material tanlang' : null"
-          @update:model-value="emit('update:material', $event)"
-        />
-        <div class="mt-2 flex flex-wrap items-center gap-2">
-          <span class="size-5 rounded border border-hairline" :style="swatchStyle"></span>
+        <div class="flex items-center gap-1.5">
+          <SearchCombobox
+            class="min-w-0 flex-1"
+            label="Panel materiali"
+            label-class="lg:sr-only"
+            compact
+            :swatch-color="part.material_id ? swatchStyle.background : null"
+            :model-value="part.material_id"
+            :options="panelChoices"
+            placeholder="Panel tanlang"
+            :error="!part.material_id ? 'Material tanlang' : null"
+            @update:model-value="emit('update:material', $event)"
+          />
+          <button
+            type="button"
+            class="hidden h-9 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-bold lg:inline-flex"
+            :class="
+              part.material_source === 'own'
+                ? 'border-accent-tint bg-accent-soft text-accent'
+                : 'border-hairline-strong bg-elevated text-ink-soft'
+            "
+            :title="
+              part.material_source === 'shop'
+                ? 'Ustaxonadan — bosib almashtiring'
+                : 'O\'zim — bosib almashtiring'
+            "
+            :aria-label="
+              part.material_source === 'shop'
+                ? 'Manba: ustaxonadan — almashtirish'
+                : 'Manba: o\'zim — almashtirish'
+            "
+            @click="emit('update:source', part.material_source === 'shop' ? 'own' : 'shop')"
+          >
+            <span aria-hidden="true">⇄</span>
+            {{ part.material_source === 'shop' ? 'Ustaxona' : "O'zim" }}
+          </button>
+          <span
+            v-if="grain"
+            class="hidden h-9 shrink-0 items-center gap-1 rounded-md bg-info-soft px-2 text-xs font-bold text-info lg:inline-flex"
+            title="Tola yo'nalishi bor — bu qism burilmaydi"
+            aria-label="Tola yo'nalishi bor"
+          >
+            <span aria-hidden="true">↕</span> Tola
+          </span>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
           <span
             v-if="grain"
             class="mp-chip bg-info-soft text-info"
@@ -173,18 +235,16 @@ function edgeCellLabel(side: EdgeField) {
           <button
             type="button"
             class="mp-chip"
-            :class="part.material_source === 'shop' ? 'bg-accent-soft text-accent' : ''"
-            @click="emit('update:source', 'shop')"
-          >
-            Ustaxona
-          </button>
-          <button
-            type="button"
-            class="mp-chip"
             :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-            @click="emit('update:source', 'own')"
+            :aria-label="
+              part.material_source === 'shop'
+                ? 'Manba: ustaxonadan — almashtirish'
+                : 'Manba: o\'zim olib kelaman — almashtirish'
+            "
+            @click="emit('update:source', part.material_source === 'shop' ? 'own' : 'shop')"
           >
-            O'zim olib kelaman
+            <span aria-hidden="true">⇄</span>
+            {{ part.material_source === 'shop' ? 'Ustaxonadan' : "O'zim olib kelaman" }}
           </button>
         </div>
       </div>
@@ -201,7 +261,7 @@ function edgeCellLabel(side: EdgeField) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono"
+            class="mp-input font-mono lg:min-h-9 lg:px-2"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Uzunlik millimetr"
           />
@@ -215,7 +275,7 @@ function edgeCellLabel(side: EdgeField) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono"
+            class="mp-input font-mono lg:min-h-9 lg:px-2"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Eni millimetr"
           />
@@ -229,7 +289,7 @@ function edgeCellLabel(side: EdgeField) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input font-mono"
+            class="mp-input font-mono lg:min-h-9 lg:px-2"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             aria-label="Soni"
           />
@@ -240,7 +300,75 @@ function edgeCellLabel(side: EdgeField) {
         <span class="mb-1 block text-sm font-bold text-ink lg:hidden">Krom</span>
         <button
           type="button"
-          class="client-edges-btn"
+          class="hidden h-9 w-full items-center gap-2 rounded-md border border-hairline-strong bg-elevated px-2 text-left hover:border-accent lg:flex"
+          :title="edgeCellTitle()"
+          :aria-label="`Qism #${index + 1} kromini tahrirlash`"
+          @click="emit('open-edge-picker', $event)"
+        >
+          <svg viewBox="0 0 76 48" class="h-5 w-8 shrink-0" fill="none" aria-hidden="true">
+            <rect
+              x="14"
+              y="13"
+              width="48"
+              height="22"
+              fill="none"
+              stroke="var(--color-ink-muted)"
+              stroke-dasharray="1 2"
+              stroke-width="0.6"
+              opacity="0.6"
+            />
+            <line
+              v-if="part.edge_top"
+              x1="14"
+              y1="13"
+              x2="62"
+              y2="13"
+              stroke="var(--color-accent)"
+              stroke-linecap="round"
+              :stroke-width="edgeStrokeWidth(part.edge_top)"
+              :stroke-dasharray="part.edge_top.source === 'own' ? '3 2' : undefined"
+            />
+            <line
+              v-if="part.edge_bottom"
+              x1="14"
+              y1="35"
+              x2="62"
+              y2="35"
+              stroke="var(--color-accent)"
+              stroke-linecap="round"
+              :stroke-width="edgeStrokeWidth(part.edge_bottom)"
+              :stroke-dasharray="part.edge_bottom.source === 'own' ? '3 2' : undefined"
+            />
+            <line
+              v-if="part.edge_left"
+              x1="14"
+              y1="13"
+              x2="14"
+              y2="35"
+              stroke="var(--color-accent)"
+              stroke-linecap="round"
+              :stroke-width="edgeStrokeWidth(part.edge_left)"
+              :stroke-dasharray="part.edge_left.source === 'own' ? '3 2' : undefined"
+            />
+            <line
+              v-if="part.edge_right"
+              x1="62"
+              y1="13"
+              x2="62"
+              y2="35"
+              stroke="var(--color-accent)"
+              stroke-linecap="round"
+              :stroke-width="edgeStrokeWidth(part.edge_right)"
+              :stroke-dasharray="part.edge_right.source === 'own' ? '3 2' : undefined"
+            />
+          </svg>
+          <span class="truncate text-xs font-bold text-ink">{{
+            edgeCount() ? edgeSummary() : "Krom yo'q"
+          }}</span>
+        </button>
+        <button
+          type="button"
+          class="client-edges-btn lg:hidden"
           :title="edgeCellTitle()"
           :aria-label="`Qism #${index + 1} kromini tahrirlash`"
           @click="emit('open-edge-picker', $event)"
@@ -307,17 +435,12 @@ function edgeCellLabel(side: EdgeField) {
         </button>
       </div>
 
-      <div class="grid grid-cols-2 gap-2 lg:grid-cols-1">
-        <button type="button" class="mp-button mp-button-outline" @click="emit('duplicate')">
-          Nusxa
-        </button>
-        <button
-          type="button"
-          class="mp-button mp-button-outline text-danger"
-          @click="emit('delete')"
-        >
-          O'chirish
-        </button>
+      <div class="flex items-start justify-end lg:justify-center">
+        <ActionMenu
+          :label="`Qism #${index + 1} amallari`"
+          :items="rowActions"
+          @select="onRowAction"
+        />
       </div>
     </div>
 
