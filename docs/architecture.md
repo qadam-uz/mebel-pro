@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-23
 order: 70
 ---
 
@@ -159,7 +159,9 @@ specifics, this section just states the requirement.
 
 - Every mutating use case writes an append-only `action_log` row; every order status transition
   writes an append-only `status_change_log` row.
-- Every API response carries `X-Trace-ID`; errors include `trace_id` in the body.
+- Every API response carries `X-Trace-ID`; errors include `trace_id` in the body. Unexpected
+  500s use a generic public message unless `DEBUG=true`, where the response message is the
+  scrubbed exception text.
 
 ### Performance budgets
 

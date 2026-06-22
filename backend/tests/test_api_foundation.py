@@ -182,3 +182,26 @@ async def test_unexpected_errors_return_generic_public_body(
     assert log["exc_type"] == "builtins.RuntimeError"
     assert "RuntimeError" in log["stack"]
     assert "password=secret" not in json.dumps(log)
+
+
+async def test_unexpected_errors_return_debug_message_when_debug_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.main.settings.DEBUG", True)
+    app = create_app()
+
+    @app.get("/api/v1/test/debug-boom")
+    async def debug_boom() -> None:
+        raise RuntimeError("debug detail")
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/test/debug-boom", headers={"X-Trace-ID": "trace-debug"})
+
+    assert resp.status_code == 500
+    assert resp.headers["X-Trace-ID"] == "trace-debug"
+    assert resp.json() == {
+        "code": "internal_error",
+        "message": "debug detail",
+        "trace_id": "trace-debug",
+    }

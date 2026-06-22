@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from structlog import get_logger
 
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.principal import AuthenticatedPrincipal
 from app.core.trace import TRACE_HEADER, get_trace_id
@@ -128,6 +129,11 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException) -> J
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     trace_id = _request_trace_id(request)
     stack = _exception_stack(exc)
+    response_message = (
+        scrub_text(str(exc) or exc.__class__.__name__)
+        if settings.DEBUG
+        else "Internal server error"
+    )
     logger.error(
         "unexpected_api_error",
         trace_id=trace_id,
@@ -142,7 +148,7 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
     return _json_error(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "internal_error",
-        "Internal server error",
+        response_message,
         trace_id=trace_id,
     )
 
