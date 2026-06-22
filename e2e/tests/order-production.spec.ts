@@ -435,11 +435,11 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
 
-  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(`Order Owner ${id}`));
+  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
   await chooseOption(
     workshopPage,
     /Krom yopishtiruvchi/,
-    new RegExp(`Order Owner ${id}`),
+    new RegExp(setup.ownerLogin),
   );
   await workshopPage.getByRole("button", { name: "Tayinlash va boshlash" }).click();
   await expect(
