@@ -134,7 +134,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <div class="client-section-title">
+    <div v-if="cutting.loading || sortedDrafts.length > 0" class="client-section-title">
       <h2>Hammasi</h2>
       <span v-if="cutting.loading" class="client-skeleton inline-block h-4 w-20"></span>
       <span v-else class="font-mono text-sm text-ink-muted">
