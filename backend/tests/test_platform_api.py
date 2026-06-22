@@ -436,6 +436,7 @@ async def test_platform_jobs_errors_and_audit_surfaces(
         trace_id="trace-platform-error",
         context={"token": "secret", "safe": "kept"},
     )
+    db_session.expire(record, ["updated_at"])
 
     jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
     repeated_jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
