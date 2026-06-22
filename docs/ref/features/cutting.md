@@ -353,6 +353,11 @@ On success, the panel scrolls into view with three regions:
      part is labelled with its **dimensions** — length along the top edge, width down the
      left edge — rather than an opaque part id. Selecting a placement highlights it in the
      side legend, which leads with the dimensions (+ quantity index, rotation indicator).
+   - **Banded sides** are flagged by a short, centred accent tick set just inside the
+     placed rectangle, on each banded side only (not a full-length frame) — so the cutter
+     sees which edges take tape at a glance. The side mapping follows the part's own edges;
+     a rotated placement maps them 90° clockwise. Tick inset, length and weight are
+     normalised, so banding reads the same on a large and a small panel.
 
 3. **Actions.**
    - **Place order with this cutting** → routes into the order wizard
