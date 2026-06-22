@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-23
 order: 40
 ---
 
@@ -33,10 +33,9 @@ editing settings.
 
 - **Workshops list** (`/admin/workshops`) — table: name, owner login, branch count, phone,
   created, status badge. Status filter; name search;
-  **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." (The
-  owner is identified by login here — the stable operational handle; the detail view carries
-  the full owner contact.)
-- **Workshop detail** — header (name, status, owner, created); tabs: **Profile** (read-only),
+  **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." The owner
+  is identified by login here — the stable operational handle.
+- **Workshop detail** — header (name, status, owner login, created); tabs: **Profile** (read-only),
   **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze). When the
   workshop is blocked, the detail shows the **reason captured at block time** in the danger

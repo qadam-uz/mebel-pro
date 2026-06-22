@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
 import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -28,6 +35,10 @@ const form = reactive({
   country: '',
   note: '',
 })
+type ManufacturerField = 'name'
+const fieldErrors = reactive<FieldErrors<ManufacturerField>>({})
+const fieldIds: Record<ManufacturerField, string> = { name: 'mfr-name' }
+const fieldOrder: ManufacturerField[] = ['name']
 
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
@@ -64,6 +75,7 @@ function openCreate() {
   form.country = ''
   form.note = ''
   saveError.value = null
+  clearFieldErrors(fieldErrors)
   modalOpen.value = true
 }
 
@@ -73,10 +85,17 @@ function openEdit(row: Manufacturer) {
   form.country = row.country ?? ''
   form.note = row.note ?? ''
   saveError.value = null
+  clearFieldErrors(fieldErrors)
   modalOpen.value = true
 }
 
 async function save() {
+  clearFieldErrors(fieldErrors)
+  fieldErrors.name = requiredText(form.name) ?? undefined
+  if (fieldErrors.name) {
+    focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+    return
+  }
   saving.value = true
   saveError.value = null
   try {
@@ -91,9 +110,20 @@ async function save() {
     toast.success(
       editingId.value ? 'Ishlab chiqaruvchi yangilandi' : "Ishlab chiqaruvchi qo'shildi",
     )
-  } catch {
-    saveError.value = 'manufacturer_save_failed'
-    toast.danger('Ishlab chiqaruvchi saqlanmadi')
+  } catch (error) {
+    Object.assign(
+      fieldErrors,
+      fieldErrorsFromApi<ManufacturerField>(error, {
+        manufacturer_name_required: 'name',
+        manufacturer_name_exists: 'name',
+      }),
+    )
+    if (fieldErrors.name) {
+      focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+    } else {
+      saveError.value = 'manufacturer_save_failed'
+      toast.danger('Ishlab chiqaruvchi saqlanmadi')
+    }
   } finally {
     saving.value = false
   }
@@ -256,7 +286,22 @@ onMounted(async () => {
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="mfr-name">
                 <span>Nomi</span>
-                <input id="mfr-name" v-model="form.name" placeholder="Egger" required />
+                <input
+                  id="mfr-name"
+                  v-model="form.name"
+                  placeholder="Egger"
+                  required
+                  :aria-invalid="!!fieldErrors.name"
+                  aria-describedby="mfr-name-error"
+                />
+                <span
+                  v-if="fieldErrors.name"
+                  id="mfr-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ fieldErrors.name }}
+                </span>
               </label>
               <label class="admin-field" for="mfr-country">
                 <span>Davlat</span>

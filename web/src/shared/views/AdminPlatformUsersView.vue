@@ -3,6 +3,15 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 import { apiErrorCode } from '@/shared/api/client'
 import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  tempPassword,
+  uzPhone,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
+import {
   adminDateTime,
   platformUserStatusLabel,
   platformUserStatusTone,
@@ -75,6 +84,16 @@ const form = reactive({
   phone: '+998',
   tempPassword: '',
 })
+type OperatorField = 'fullName' | 'phone' | 'login' | 'tempPassword'
+const fieldErrors = reactive<FieldErrors<OperatorField>>({})
+const fieldIds: Record<OperatorField, string> = {
+  fullName: 'op-name',
+  phone: 'op-phone',
+  login: 'op-login',
+  tempPassword: 'op-pass',
+}
+const fieldOrder: OperatorField[] = ['fullName', 'phone', 'login', 'tempPassword']
+const blockFieldErrors = reactive<FieldErrors<'blockReason'>>({})
 
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -91,6 +110,7 @@ function openCreate() {
   form.phone = '+998'
   form.tempPassword = ''
   actionError.value = null
+  clearFieldErrors(fieldErrors)
   modalOpen.value = true
 }
 
@@ -101,10 +121,28 @@ function openEdit(user: PlatformUser) {
   form.phone = user.phone
   form.tempPassword = ''
   actionError.value = null
+  clearFieldErrors(fieldErrors)
   modalOpen.value = true
 }
 
+function validateUserForm() {
+  clearFieldErrors(fieldErrors)
+  const set = (field: OperatorField, error: string | null) => {
+    if (error) fieldErrors[field] = error
+  }
+  set('fullName', requiredText(form.fullName))
+  set('phone', requiredText(form.phone) ?? uzPhone(form.phone))
+  if (!editingId.value) {
+    set('login', requiredText(form.login))
+    set('tempPassword', tempPassword(form.tempPassword))
+  }
+  const hasErrors = fieldOrder.some((field) => Boolean(fieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+  return !hasErrors
+}
+
 async function saveUser() {
+  if (!validateUserForm()) return
   saving.value = true
   actionError.value = null
   try {
@@ -126,9 +164,21 @@ async function saveUser() {
       secretOpen.value = true
       toast.success('Operator yaratildi')
     }
-  } catch {
-    actionError.value = 'platform_user_save_failed'
-    toast.danger('Operator amali bajarilmadi')
+  } catch (error) {
+    const fields = fieldErrorsFromApi<OperatorField>(error, {
+      full_name_required: 'fullName',
+      invalid_phone: 'phone',
+      login_required: 'login',
+      login_exists: 'login',
+      weak_password: 'tempPassword',
+    })
+    if (Object.keys(fields).length > 0) {
+      Object.assign(fieldErrors, fields)
+      focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+    } else {
+      actionError.value = 'platform_user_save_failed'
+      toast.danger('Operator amali bajarilmadi')
+    }
   } finally {
     saving.value = false
   }
@@ -159,11 +209,18 @@ async function confirmReset() {
 function askBlock(user: PlatformUser) {
   blockTarget.value = user
   blockReason.value = ''
+  clearFieldErrors(blockFieldErrors)
   blockModalOpen.value = true
 }
 
 async function confirmBlock() {
-  if (!blockTarget.value || !blockReason.value.trim()) return
+  clearFieldErrors(blockFieldErrors)
+  if (!blockTarget.value) return
+  if (!blockReason.value.trim()) {
+    blockFieldErrors.blockReason = 'Majburiy maydon.'
+    focusFirstFieldError(blockFieldErrors, ['blockReason'], { blockReason: 'op-block-reason' })
+    return
+  }
   actionId.value = blockTarget.value.id
   actionError.value = null
   try {
@@ -172,12 +229,20 @@ async function confirmBlock() {
     blockTarget.value = null
     toast.success('Operator bloklandi')
   } catch (blockErr) {
-    actionError.value = 'platform_user_block_failed'
-    toast.danger(
-      apiErrorCode(blockErr) === 'last_platform_operator'
-        ? "Oxirgi faol operatorni bloklab bo'lmaydi"
-        : "Operatorni bloklab bo'lmadi",
+    Object.assign(
+      blockFieldErrors,
+      fieldErrorsFromApi<'blockReason'>(blockErr, { reason_required: 'blockReason' }),
     )
+    if (blockFieldErrors.blockReason) {
+      focusFirstFieldError(blockFieldErrors, ['blockReason'], { blockReason: 'op-block-reason' })
+    } else {
+      actionError.value = 'platform_user_block_failed'
+      toast.danger(
+        apiErrorCode(blockErr) === 'last_platform_operator'
+          ? "Oxirgi faol operatorni bloklab bo'lmaydi"
+          : "Operatorni bloklab bo'lmadi",
+      )
+    }
   } finally {
     actionId.value = null
   }
@@ -211,11 +276,6 @@ onMounted(admin.loadPlatformUsers)
         + Yangi operator
       </button>
     </div>
-
-    <p class="mb-4 rounded-md border border-hairline bg-sunk px-4 py-3 text-sm text-ink-soft">
-      Platforma operatorlari bir xil doiraga ega — alohida ruxsat modeli yo'q. O'zingizni yoki
-      oxirgi faol operatorni bloklab bo'lmaysiz.
-    </p>
 
     <div class="admin-filters">
       <label class="admin-filter-input">
@@ -380,7 +440,22 @@ onMounted(admin.loadPlatformUsers)
             <div class="admin-form-grid">
               <label class="admin-field admin-full" for="op-name">
                 <span>Ism</span>
-                <input id="op-name" v-model="form.fullName" autocomplete="name" required />
+                <input
+                  id="op-name"
+                  v-model="form.fullName"
+                  autocomplete="name"
+                  required
+                  :aria-invalid="!!fieldErrors.fullName"
+                  aria-describedby="op-name-error"
+                />
+                <span
+                  v-if="fieldErrors.fullName"
+                  id="op-name-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ fieldErrors.fullName }}
+                </span>
               </label>
               <label class="admin-field" for="op-phone">
                 <span>Telefon</span>
@@ -390,7 +465,17 @@ onMounted(admin.loadPlatformUsers)
                   autocomplete="tel"
                   inputmode="tel"
                   required
+                  :aria-invalid="!!fieldErrors.phone"
+                  aria-describedby="op-phone-error"
                 />
+                <span
+                  v-if="fieldErrors.phone"
+                  id="op-phone-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ fieldErrors.phone }}
+                </span>
               </label>
               <label class="admin-field" for="op-login">
                 <span>Login</span>
@@ -400,7 +485,17 @@ onMounted(admin.loadPlatformUsers)
                   autocomplete="username"
                   :disabled="!!editingId"
                   required
+                  :aria-invalid="!!fieldErrors.login"
+                  aria-describedby="op-login-error"
                 />
+                <span
+                  v-if="fieldErrors.login"
+                  id="op-login-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ fieldErrors.login }}
+                </span>
               </label>
               <label v-if="!editingId" class="admin-field admin-full" for="op-pass">
                 <span>Vaqtinchalik parol</span>
@@ -409,7 +504,17 @@ onMounted(admin.loadPlatformUsers)
                   v-model="form.tempPassword"
                   autocomplete="new-password"
                   placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
+                  :aria-invalid="!!fieldErrors.tempPassword"
+                  aria-describedby="op-pass-error"
                 />
+                <span
+                  v-if="fieldErrors.tempPassword"
+                  id="op-pass-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ fieldErrors.tempPassword }}
+                </span>
               </label>
             </div>
           </div>
@@ -455,7 +560,21 @@ onMounted(admin.loadPlatformUsers)
             </p>
             <label class="admin-field" for="op-block-reason">
               <span>Majburiy sabab</span>
-              <textarea id="op-block-reason" v-model="blockReason" required></textarea>
+              <textarea
+                id="op-block-reason"
+                v-model="blockReason"
+                required
+                :aria-invalid="!!blockFieldErrors.blockReason"
+                aria-describedby="op-block-reason-error"
+              ></textarea>
+              <span
+                v-if="blockFieldErrors.blockReason"
+                id="op-block-reason-error"
+                class="admin-field-error"
+                role="alert"
+              >
+                {{ blockFieldErrors.blockReason }}
+              </span>
             </label>
           </div>
           <div class="admin-modal-f">
@@ -469,7 +588,7 @@ onMounted(admin.loadPlatformUsers)
             <button
               type="submit"
               class="mp-button bg-danger text-white"
-              :disabled="!blockReason.trim() || actionId === blockTarget.id"
+              :disabled="actionId === blockTarget.id"
             >
               Bloklash
             </button>
