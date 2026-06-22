@@ -22,6 +22,9 @@ const props = withDefaults(
     // A colour swatch rendered inside the input's left edge (e.g. the picked
     // material colour) so the cell reads visually, not just by name.
     swatchColor?: string | null
+    // Show a trailing ✕ that clears the current selection and reopens the list
+    // for a fresh search — opt-in, since most pickers expect a value to stay set.
+    clearable?: boolean
   }>(),
   {
     placeholder: 'Qidiring',
@@ -31,6 +34,7 @@ const props = withDefaults(
     labelClass: '',
     compact: false,
     swatchColor: null,
+    clearable: false,
   },
 )
 
@@ -52,6 +56,7 @@ const {
 } = useDropdownPlacement(inputRef, listRef)
 
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
+const showClear = computed(() => props.clearable && !!props.modelValue && !props.disabled)
 const filteredOptions = computed(() => {
   const value = query.value.trim().toLowerCase()
   if (!value) return props.options
@@ -90,14 +95,20 @@ function firstEnabledIndex(start = 0, direction = 1) {
   return findEnabledIndex(filteredOptions.value, start, direction)
 }
 
+// Set while choosing closes the list: clicking an option blurs the input, and
+// choose() refocuses it — without this guard the input's @focus would reopen the
+// list we just closed (the dropdown "lingered" after picking).
+let suppressFocusOpen = false
+
 async function openList() {
-  if (props.disabled) return
+  if (props.disabled || suppressFocusOpen) return
   open.value = true
   activeIndex.value = firstEnabledIndex(0)
   await nextTick()
+  // Placement flips the list up when there's no room below and the list scrolls
+  // internally, so it stays visible without scrolling the page (which jumped the
+  // content "up" when the dropdown opened low in the viewport).
   startPlacement()
-  await nextTick()
-  listRef.value?.scrollIntoView?.({ block: 'nearest' })
 }
 
 function closeList(returnFocus = false) {
@@ -111,7 +122,17 @@ function choose(option: ChoiceOption) {
   if (option.disabled) return
   emit('update:modelValue', option.value)
   query.value = option.label
+  suppressFocusOpen = true
   closeList(true)
+  suppressFocusOpen = false
+}
+
+async function clearSelection() {
+  emit('update:modelValue', null)
+  query.value = ''
+  emit('search', '')
+  await openList()
+  inputRef.value?.focus()
 }
 
 function onInput(event: Event) {
@@ -145,7 +166,8 @@ function onKeydown(event: KeyboardEvent) {
     const option = filteredOptions.value[activeIndex.value]
     if (option) choose(option)
   } else if (event.key === 'Escape') {
-    closeList(true)
+    // Only act when open; refocusing a closed list would retrigger @focus → reopen.
+    if (open.value) closeList(true)
   } else if (event.key === 'Tab') {
     closeList()
   }
@@ -210,7 +232,8 @@ onBeforeUnmount(() => {
         :class="[
           error ? 'border-danger' : 'border-hairline-strong',
           compact ? 'min-h-9' : 'min-h-11',
-          swatchColor ? (compact ? 'pl-8 pr-2.5' : 'pl-9 pr-3') : compact ? 'px-2.5' : 'px-3',
+          swatchColor ? (compact ? 'pl-8' : 'pl-9') : compact ? 'pl-2.5' : 'pl-3',
+          showClear ? (compact ? 'pr-8' : 'pr-9') : compact ? 'pr-2.5' : 'pr-3',
         ]"
         :value="query"
         :placeholder="placeholder"
@@ -226,6 +249,24 @@ onBeforeUnmount(() => {
         @input="onInput"
         @keydown="onKeydown"
       />
+      <button
+        v-if="showClear"
+        type="button"
+        class="absolute top-1/2 grid -translate-y-1/2 place-items-center rounded-full text-ink-muted transition hover:bg-sunk hover:text-ink"
+        :class="compact ? 'right-1.5 size-6' : 'right-2 size-7'"
+        :aria-label="`${label} tanlovini tozalash`"
+        @click="clearSelection"
+      >
+        <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
+          <path
+            d="M6 6l8 8M14 6l-8 8"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-width="1.8"
+          />
+        </svg>
+      </button>
       <ul
         v-if="open"
         :id="`${id}-listbox`"

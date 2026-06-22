@@ -348,7 +348,9 @@ test("client places an order and workshop completes it through production queues
       response.url().includes("/api/v1/client/branch-options") &&
       response.ok(),
   );
-  await page.getByRole("button", { name: "Yangi kesim chizmasi" }).click();
+  // Fresh DB → empty home (first-run), so the create CTA is the centred
+  // "Yangi chizma" in the empty state; the header button only shows with content.
+  await page.getByRole("button", { name: "Yangi chizma" }).click();
   // CB-defer-draft: the editor opens unsaved at `/cutting/new`; the persisted
   // draft (with an id in the URL) is created only on the first optimise below.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/);

@@ -1,25 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
 
 import { apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
-import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
 import Icon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useSessions } from '@/shared/composables/useSessions'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useClientProfileStore, type ClientProfile } from '@/shared/stores/clientProfile'
 import { useOrdersStore } from '@/shared/stores/orders'
 
-const config = useRoleConfig()
 const auth = useAuthStore()
 const orders = useOrdersStore()
 const profileStore = useClientProfileStore()
-const router = useRouter()
 const {
   sessions,
   logoutCurrentOpen,
@@ -32,7 +26,6 @@ const {
 } = useSessions()
 
 const clientName = ref('')
-const preferredBranchId = ref<string | null>(null)
 const message = ref<string | null>(null)
 const error = ref<string | null>(null)
 const profileLoading = ref(false)
@@ -41,32 +34,8 @@ const profileTraceId = ref<string | null>(null)
 const isSaving = ref(false)
 const editingClientName = ref(false)
 
-// temporarily_closed branches stay SELECTABLE (CB-77); the meta flags why it's closed.
-const branchChoiceOptions = computed<ChoiceOption[]>(() =>
-  profileStore.branchOptions.map((option) => ({
-    value: option.branch_id,
-    label: `${option.workshop_name} · ${option.branch_name}`,
-    meta:
-      option.status === 'temporarily_closed'
-        ? (option.closed_reason ?? 'vaqtincha yopiq')
-        : undefined,
-  })),
-)
-// The saved preferred branch no longer appears in branch-options → surface a
-// stale-preference state instead of a silent placeholder (CB-77).
-const preferredBranchMissing = computed(
-  () =>
-    !!preferredBranchId.value &&
-    !profileStore.branchOptions.some((option) => option.branch_id === preferredBranchId.value),
-)
-
-function goBack() {
-  if (window.history.state?.back) router.back()
-  else router.push(config.homePath)
-}
-
-// Send only the edited field (CB-78): name form PATCHes {name}, branch row PATCHes
-// {preferred_branch_id}; the backend treats an absent key as unchanged.
+// Send only the edited field (CB-78): the name form PATCHes {name}; the backend
+// treats an absent key as unchanged.
 async function patchProfile(payload: Partial<ClientProfile>, successMessage: string) {
   error.value = null
   message.value = null
@@ -95,10 +64,6 @@ async function saveClientName() {
   if (ok) editingClientName.value = false
 }
 
-async function savePreferredBranch() {
-  await patchProfile({ preferred_branch_id: preferredBranchId.value }, 'Afzal filial saqlandi.')
-}
-
 async function reloadProfile() {
   profileLoading.value = true
   profileError.value = null
@@ -110,7 +75,6 @@ async function reloadProfile() {
       orders.loadClientOrders(),
     ])
     clientName.value = profile.name
-    preferredBranchId.value = profile.preferred_branch_id
   } catch (errorValue) {
     profileError.value = 'profile_load_failed'
     profileTraceId.value = apiTraceId(errorValue)
@@ -124,18 +88,6 @@ onMounted(reloadProfile)
 
 <template>
   <section>
-    <button type="button" class="client-back" @click="goBack">← Orqaga</button>
-
-    <div class="client-page-head">
-      <div>
-        <h1>Profil</h1>
-        <p class="sub">Profilingiz va faol sessiyalar.</p>
-      </div>
-      <button type="button" class="mp-button mp-button-outline" @click="logoutCurrentOpen = true">
-        Chiqib ketish
-      </button>
-    </div>
-
     <div v-if="profileLoading" class="grid max-w-[760px] gap-5" aria-live="polite">
       <div class="client-card p-5">
         <div class="client-skeleton h-4 w-1/4"></div>
@@ -159,6 +111,13 @@ onMounted(reloadProfile)
       <section class="client-card">
         <div class="client-card-h">
           <h2>Profil</h2>
+          <button
+            type="button"
+            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+            @click="logoutCurrentOpen = true"
+          >
+            Chiqib ketish
+          </button>
         </div>
         <div class="client-card-b">
           <div class="client-row-item">
@@ -192,10 +151,12 @@ onMounted(reloadProfile)
                 <span class="font-bold text-ink">{{ auth.displayName }}</span>
                 <button
                   type="button"
-                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                  class="mp-action-icon-button"
+                  aria-label="Ismni o'zgartirish"
+                  title="Ismni o'zgartirish"
                   @click="editingClientName = true"
                 >
-                  O'zgartirish
+                  <Icon name="pencil" class="size-[18px]" />
                 </button>
               </template>
             </div>
@@ -209,44 +170,6 @@ onMounted(reloadProfile)
               </div>
             </div>
             <div class="font-mono text-sm text-ink">{{ formatPhone(auth.me?.phone) }}</div>
-          </div>
-
-          <div class="client-row-item">
-            <div>
-              <div class="client-row-name">Afzal filial</div>
-              <div class="text-sm text-ink-muted">
-                Yangi chizma shu filial konteksti bilan boshlanadi
-              </div>
-            </div>
-            <div class="grid w-full max-w-md gap-2 sm:justify-items-end">
-              <SearchCombobox
-                v-model="preferredBranchId"
-                class="w-full sm:max-w-md"
-                label="Tanlangan"
-                :options="branchChoiceOptions"
-                placeholder="Filialni qidiring"
-              />
-              <p v-if="preferredBranchMissing" class="text-sm font-bold text-warning sm:text-right">
-                Avvalgi filial endi mavjud emas — boshqasini tanlang yoki tozalang.
-              </p>
-              <div class="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                  @click="preferredBranchId = null"
-                >
-                  Tozalash
-                </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary min-h-9 px-3 text-xs"
-                  :disabled="isSaving"
-                  @click="savePreferredBranch"
-                >
-                  Saqlash
-                </button>
-              </div>
-            </div>
           </div>
 
           <div class="client-row-item">

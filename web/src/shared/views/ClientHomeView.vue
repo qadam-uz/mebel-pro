@@ -133,7 +133,15 @@ onMounted(() => {
           {{ subtitle }}
         </p>
       </div>
-      <button type="button" class="mp-button mp-button-primary" @click="newCutting">
+      <!-- First-run shows a centred CTA in the empty state, so the header button
+           would be redundant; it appears only once the dashboard has content and
+           there's no other persistent "new draft" affordance. -->
+      <button
+        v-if="!isFirstRun"
+        type="button"
+        class="mp-button mp-button-primary"
+        @click="newCutting"
+      >
         <Icon name="plus" class="size-[18px]" /> Yangi kesim chizmasi
       </button>
     </div>

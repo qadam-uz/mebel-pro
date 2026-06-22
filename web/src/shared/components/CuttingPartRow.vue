@@ -9,7 +9,7 @@ import {
   sideLabels,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
-import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
+import Icon from '@/shared/components/AppIcon.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
@@ -43,7 +43,6 @@ const emit = defineEmits<{
   'update:quantity': [number]
   'update:material': [string | null]
   'update:source': [MaterialSource]
-  duplicate: []
   delete: []
   'open-edge-picker': [Event | undefined]
   'bring-own': []
@@ -51,15 +50,6 @@ const emit = defineEmits<{
 }>()
 
 const cutting = useCuttingStore()
-
-const rowActions = computed<ActionMenuItem[]>(() => [
-  { label: 'Nusxa' },
-  { label: "O'chirish", danger: true },
-])
-function onRowAction(index: number) {
-  if (index === 0) emit('duplicate')
-  else emit('delete')
-}
 
 function materialById(id: string | null | undefined) {
   return cutting.panelOptions.find((material) => material.id === id) ?? null
@@ -184,6 +174,7 @@ function edgeCellLabel(side: EdgeField) {
             label="Panel materiali"
             label-class="lg:sr-only"
             compact
+            clearable
             :swatch-color="part.material_id ? swatchStyle.background : null"
             :model-value="part.material_id"
             :options="panelChoices"
@@ -436,11 +427,14 @@ function edgeCellLabel(side: EdgeField) {
       </div>
 
       <div class="flex items-start justify-end lg:justify-center">
-        <ActionMenu
-          :label="`Qism #${index + 1} amallari`"
-          :items="rowActions"
-          @select="onRowAction"
-        />
+        <button
+          type="button"
+          class="mp-action-icon-button hover:!text-danger"
+          :aria-label="`Qism #${index + 1} ni o'chirish`"
+          @click="emit('delete')"
+        >
+          <Icon name="trash" class="size-[18px]" />
+        </button>
       </div>
     </div>
 

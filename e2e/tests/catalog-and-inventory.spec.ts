@@ -350,7 +350,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await expect(page.getByRole('heading', { name: 'Kirim yozish' })).toBeVisible()
 })
 
-test('client browses public branch catalog without stock details', async ({ page, request }, testInfo) => {
+test('client browses the workshop directory without catalog or stock details', async ({ page, request }, testInfo) => {
   const id = runId(testInfo)
   const adminLogin = `p3-admin-${id}`
   await seedPlatform(adminLogin)
@@ -394,8 +394,11 @@ test('client browses public branch catalog without stock details', async ({ page
     has: page.getByRole('heading', { name: new RegExp(`Catalog Workshop ${id}`) }),
   })
   await expect(branchCard).toBeVisible()
-  await expect(branchCard.getByText(material.name)).toBeVisible()
-  await expect(branchCard.getByText(/UZS\s*2[, ]500/)).toBeVisible()
+  // The workshops page is a directory now (the CB-13 client material preview was
+  // removed): neither the catalog (material name / price) nor any internal
+  // stock/supplier detail surfaces — materials are browsed in the cutting editor.
+  await expect(branchCard.getByText(material.name)).toHaveCount(0)
+  await expect(branchCard.getByText(/UZS\s*2[, ]500/)).toHaveCount(0)
   await expect(page.getByText('low stock')).toHaveCount(0)
   await expect(page.getByText(/Supplier/)).toHaveCount(0)
 })
