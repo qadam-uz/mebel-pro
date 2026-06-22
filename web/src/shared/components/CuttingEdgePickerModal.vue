@@ -394,12 +394,29 @@ onBeforeUnmount(() => {
             :disabled="pattern.sides.length > 0 && !recommendedEdgeForPart()"
             @click="applyEdgePattern(pattern.key)"
           >
+            <!-- Panel diagram: the banded sides are drawn thick, the rest thin,
+                 so the chip reads spatially (which edges get tape) not just by
+                 text. Strokes use currentColor → follow the chip's selected tint. -->
+            <svg viewBox="0 0 24 18" class="size-[18px] shrink-0" fill="none" aria-hidden="true">
+              <line
+                v-for="side in [
+                  { k: 'edge_top', x1: 3, y1: 3, x2: 21, y2: 3 },
+                  { k: 'edge_bottom', x1: 3, y1: 15, x2: 21, y2: 15 },
+                  { k: 'edge_left', x1: 3, y1: 3, x2: 3, y2: 15 },
+                  { k: 'edge_right', x1: 21, y1: 3, x2: 21, y2: 15 },
+                ]"
+                :key="side.k"
+                :x1="side.x1"
+                :y1="side.y1"
+                :x2="side.x2"
+                :y2="side.y2"
+                stroke="currentColor"
+                stroke-linecap="round"
+                :stroke-width="pattern.sides.includes(side.k as EdgeField) ? 2.6 : 1"
+                :opacity="pattern.sides.includes(side.k as EdgeField) ? 1 : 0.3"
+              />
+            </svg>
             {{ pattern.label }}
-            <span
-              v-if="pattern.key === 'all'"
-              class="rounded bg-accent px-1.5 py-0.5 text-[9px] font-extrabold text-white"
-              >tez</span
-            >
           </button>
         </div>
 

@@ -154,7 +154,7 @@ function edgeCellLabel(side: EdgeField) {
     "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] lg:items-center lg:gap-2"
+      class="grid gap-3 lg:grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] lg:items-start lg:gap-2"
     >
       <div class="hidden lg:flex lg:justify-center">
         <input
@@ -168,7 +168,7 @@ function edgeCellLabel(side: EdgeField) {
       <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
 
       <div class="min-w-0">
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-start gap-1.5">
           <SearchCombobox
             class="min-w-0 flex-1"
             label="Panel materiali"
