@@ -23,7 +23,7 @@ covers only the **current build state**:
 | Concern      | Tool                                                                                                     |
 | ------------ | -------------------------------------------------------------------------------------------------------- |
 | Runtime / PM | Node **22+**, **pnpm** (`packageManager` pinned; `engine-strict`)                                        |
-| Build / dev  | **Vite 7** (`@vitejs/plugin-vue`, `vite-plugin-vue-devtools`)                                            |
+| Build / dev  | **Vite 7** (`@vitejs/plugin-vue`)                                                                        |
 | Framework    | Vue **3.5** (`<script setup lang="ts">`, Composition API)                                                |
 | Routing      | Vue Router 4 (`createWebHistory`)                                                                        |
 | State        | Pinia (setup-style stores)                                                                               |
@@ -70,11 +70,11 @@ web/
   vite.config.ts            # MPA inputs, role history fallback, `@` alias, /api proxy
   vitest.config.ts          # merges vite config; jsdom env; excludes e2e/**
   tsconfig*.json            # root references → app / node / vitest projects
-  env.d.ts                  # ImportMetaEnv augmentation (VITE_* vars)
+  env.d.ts                  # Vite client types
   eslint.config.ts          # flat config
   nginx.conf                # used by the Docker image to serve dist/ (SPA history fallback)
   Dockerfile                # node:22 build (corepack→pnpm) → nginx:alpine runtime
-  .env.dev.example          # build-time VITE_* vars (dev); .env.prod.example mirrors it
+  .env.dev.example          # build-time env shape (dev); .env.prod.example mirrors it
   src/
     apps/
       client/main.ts        # client app bootstrap
@@ -107,7 +107,7 @@ web/
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.
-- **Env vars**: only `VITE_`-prefixed vars reach client code; declare them in `env.d.ts` (`ImportMetaEnv`) and document in `.env.dev.example` + `.env.prod.example`. In dev leave `VITE_API_BASE_URL` empty (Vite proxies `/api`); same in prod (the Caddy edge serves the API same-origin under `/api`).
+- **Env vars**: only `VITE_`-prefixed vars reach client code. Add one only when the browser genuinely needs public build-time config; document it in `.env.dev.example` + `.env.prod.example`. API origin is not configurable — dev uses the Vite `/api` proxy and prod uses the Caddy same-origin `/api` edge.
 - **Tests**: colocate as `src/**/__tests__/*.spec.ts` (or `*.spec.ts` next to the unit). Use `@vue/test-utils` `mount`; mock `@/api/client` rather than hitting the network. Don't put browser/integration flows here — that's `e2e/`.
 - **Clean gate**: `eslint`, `prettier --check`, `vue-tsc`, and the test suite must all pass; `pnpm build` must succeed (it type-checks via `vue-tsc --build`). Fix issues rather than disabling rules; scope any `eslint-disable` to the line with a reason.
 

@@ -58,7 +58,7 @@ backend/
   app/
     main.py               # create_app() factory + module-level `app`; lifespan hook
     docs_site.py          # serves the repo's docs/ as HTML at /docs (Markdown rendered live); also exports `require_docs_auth`
-    docs_assets/          # docs-site assets: style.css (theme) + docs.js (nav filter, on-this-page scroll-spy)
+    docs_assets/          # docs-site assets: style.css (theme) + docs.js (on-this-page scroll-spy)
     core/
       config.py           # Settings (env / .env); `settings` singleton; sqlalchemy_database_uri; MINIO_*; DOCS_DIR; DOCS_AUTH_*
       db.py               # async engine, SessionLocal, get_session() dependency

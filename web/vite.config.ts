@@ -2,7 +2,6 @@ import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
-import vueDevTools from 'vite-plugin-vue-devtools'
 import { defineConfig } from 'vite'
 
 function roleHistoryFallback() {
@@ -31,7 +30,7 @@ const apiTarget = process.env.API_PROXY_TARGET ?? 'http://localhost:8000'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [roleHistoryFallback(), vue(), vueDevTools(), tailwindcss()],
+  plugins: [roleHistoryFallback(), vue(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -37,7 +37,6 @@ async def test_docs_and_openapi_require_basic_auth(client: AsyncClient, docs_dir
         "/docs",
         "/docs/spec/vision",
         "/docs/assets/diagram.txt",
-        "/docs/_search.json",
         "/api-docs",
         "/api-redoc",
     )
@@ -78,9 +77,9 @@ async def test_markdown_page_link_rewriting_and_toc(client: AsyncClient, docs_di
     assert 'href="/docs/index"' in body
     # External links untouched.
     assert 'href="https://example.com"' in body
-    # Active nav item marked; code highlighting present.
+    # Active nav item marked; fenced code still renders as a plain code block.
     assert 'class="active"' in body
-    assert ".highlight" in body
+    assert "<pre><code" in body
     # "On this page" rail built from the document's headings.
     assert 'class="toc"' in body and "On this page" in body
     assert 'href="#why"' in body and 'href="#how"' in body and 'href="#detail"' in body
@@ -109,26 +108,6 @@ async def test_non_markdown_files_served_raw(client: AsyncClient, docs_dir: Path
     resp = await client.get("/docs/assets/diagram.txt", auth=AUTH)
     assert resp.status_code == 200
     assert resp.text == "hello-asset"
-
-
-async def test_search_index_lists_pages(client: AsyncClient, docs_dir: Path) -> None:
-    # The /docs JSON index feeds the ⌘K search modal — one entry per renderable page.
-    resp = await client.get("/docs/_search.json", auth=AUTH)
-    assert resp.status_code == 200
-    data = resp.json()
-    by_title = {d["title"]: d for d in data}
-    # No frontmatter title on index.md → humanized stem ("Index"); the others
-    # use their explicit frontmatter title.
-    assert {"Index", "Product Vision", "Scope"} <= set(by_title)
-    vision = by_title["Product Vision"]
-    # URL is the extension-less docs path the modal navigates to.
-    assert vision["url"] == "/docs/spec/vision"
-    # Headings are pulled out for ranking; body text is markdown-stripped.
-    assert "Why" in vision["headings"] and "How" in vision["headings"]
-    assert "Reasons" in vision["text"]
-    assert "title:" not in vision["text"]  # frontmatter stripped
-    # The root index.md keeps its canonical /docs URL.
-    assert by_title["Index"]["url"] == "/docs"
 
 
 async def test_missing_doc_redirects_to_docs_home(client: AsyncClient, docs_dir: Path) -> None:

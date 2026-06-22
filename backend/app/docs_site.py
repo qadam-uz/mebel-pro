@@ -24,7 +24,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from markdown.extensions import Extension
-from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.toc import TocExtension
 from markdown.preprocessors import Preprocessor
 from markdown.treeprocessors import Treeprocessor
@@ -217,66 +216,6 @@ def build_nav(site: _Site) -> list[NavItem]:
     return walk(root)
 
 
-# --- search index (consumed by the ⌘K modal in docs.js) ----------------------
-
-_CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
-_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
-_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
-_LIST_MARK_RE = re.compile(r"^\s*[#>*\-+]+\s*", re.MULTILINE)
-_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
-_EMPHASIS_RE = re.compile(r"[*_~]+")
-_WS_RE = re.compile(r"\s+")
-
-
-def _strip_md_for_search(body: str) -> str:
-    """Crude Markdown → plain text so client-side search can scan & snippet."""
-    body = _CODE_FENCE_RE.sub(" ", body)
-    body = _INLINE_CODE_RE.sub(r"\1", body)
-    body = _LINK_RE.sub(r"\1", body)
-    body = _HTML_TAG_RE.sub(" ", body)
-    body = _LIST_MARK_RE.sub("", body)
-    body = _EMPHASIS_RE.sub("", body)
-    return _WS_RE.sub(" ", body).strip()
-
-
-def _extract_headings(body: str) -> list[str]:
-    return [m.group(1).strip() for m in _HEADING_RE.finditer(body)]
-
-
-def build_search_index(site: _Site) -> list[dict[str, object]]:
-    """Walk the site's tree and return a flat list of pages for client-side search."""
-    root = site.root()
-    if not root.is_dir():
-        return []
-    out: list[dict[str, object]] = []
-    for path in sorted(root.rglob("*.md")):
-        rel_parts = path.relative_to(root).parts
-        if any(part.startswith((".", "_")) for part in rel_parts):
-            continue
-        name = path.name.lower()
-        if name == "readme.md":
-            continue
-        is_root_index = name == "index.md" and path.parent == root
-        if name == "index.md" and not is_root_index:
-            continue
-        try:
-            raw = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        meta, body = _split_frontmatter(raw)
-        rel = path.relative_to(root).as_posix()
-        out.append(
-            {
-                "title": meta.title or _humanize(path.stem),
-                "url": site.prefix if is_root_index else f"{site.prefix}/" + rel[: -len(".md")],
-                "headings": _extract_headings(body),
-                "text": _strip_md_for_search(body),
-            }
-        )
-    return out
-
-
 def _nav_contains(item: NavItem, cur_rel: str) -> bool:
     return bool(item.rel) and (cur_rel == item.rel or cur_rel.startswith(item.rel + "/"))
 
@@ -364,9 +303,9 @@ class _RelLinkExtension(Extension):
 class _MermaidPreprocessor(Preprocessor):
     """Lift fenced ``mermaid`` blocks out of Markdown processing entirely.
 
-    A ```` ```mermaid ```` fence is replaced — *before* ``fenced_code`` and
-    ``codehilite`` see it — with a raw ``<pre class="mermaid">…</pre>`` HTML
-    block, which the Mermaid JS picks up on load and renders as inline SVG.
+    A ```` ```mermaid ```` fence is replaced before ``fenced_code`` sees it
+    with a raw ``<pre class="mermaid">…</pre>`` HTML block, which the Mermaid JS
+    picks up on load and renders as inline SVG.
     """
 
     _FENCE_RE = re.compile(
@@ -405,7 +344,6 @@ def render_markdown(text: str, cur_rel: str, prefix: str) -> tuple[str, _Meta, s
             "footnotes",
             "abbr",
             "md_in_html",
-            CodeHiliteExtension(css_class="highlight", guess_lang=False),
             TocExtension(permalink="#", toc_depth="2-4"),
             _RelLinkExtension(cur_rel, prefix),
             _MermaidExtension(),
@@ -447,11 +385,7 @@ def _toc_html(tokens: list[dict[str, object]]) -> str:
 
 @lru_cache(maxsize=1)
 def _styles() -> str:
-    from pygments.formatters import HtmlFormatter
-
-    css = (_STATIC_DIR / "style.css").read_text(encoding="utf-8")
-    pyg = str(HtmlFormatter(style="default").get_style_defs(".highlight"))
-    return css + "\n" + pyg
+    return (_STATIC_DIR / "style.css").read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -555,14 +489,6 @@ def _page(
 <header class="topbar">
   <label class="burger" for="nav-toggle" aria-label="Toggle navigation">&#9776;</label>
   {_brand_html(site)}
-  <div class="search">
-    <button type="button" class="search-trigger" id="docs-search-trigger"
-            aria-haspopup="dialog" aria-controls="docs-search-modal"
-            aria-label="Search documentation">
-      <span class="t">Search docs&#8230;</span>
-      <kbd class="search-kbd" id="docs-search-kbd">&#8984;K</kbd>
-    </button>
-  </div>
   <a class="api-link" href="/api-docs">API&nbsp;reference&nbsp;&#8599;</a>
 </header>
 <div class="{shell_cls}">
@@ -577,23 +503,6 @@ def _page(
   </main>
   {aside}
 </div>
-<div class="search-modal" id="docs-search-modal" hidden role="dialog"
-     aria-modal="true" aria-label="Search documentation">
-  <div class="search-modal-backdrop" data-dismiss="1"></div>
-  <div class="search-modal-panel">
-    <input type="search" class="search-modal-input" id="docs-search-input"
-           placeholder="Search the docs&#8230;" autocomplete="off" spellcheck="false"
-           aria-label="Search query">
-    <div class="search-modal-results" id="docs-search-results"
-         role="listbox" aria-label="Search results"></div>
-    <div class="search-modal-foot">
-      <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd>&nbsp;navigate</span>
-      <span><kbd>&crarr;</kbd>&nbsp;open</span>
-      <span><kbd>esc</kbd>&nbsp;close</span>
-    </div>
-  </div>
-</div>
-<script>window.__DOCS_PREFIX__="{site.prefix}";</script>
 <script>{_scripts()}</script>
 {mermaid_html}
 </body>
@@ -703,13 +612,8 @@ def _docs_page(site: _Site, doc_path: str) -> Response:
 
 
 def _make_router(site: _Site) -> APIRouter:
-    """Build the three routes (search index · home · catch-all) for one site."""
+    """Build the home and catch-all routes for one docs site."""
     r = APIRouter(tags=["docs"], dependencies=[Depends(require_docs_auth)])
-
-    @r.get(f"{site.prefix}/_search.json", include_in_schema=False)
-    async def docs_search_index() -> list[dict[str, object]]:
-        """Index consumed by the ⌘K search modal in ``docs_assets/docs.js``."""
-        return build_search_index(site)
 
     @r.get(site.prefix, response_class=HTMLResponse, include_in_schema=False)
     async def docs_home() -> HTMLResponse:

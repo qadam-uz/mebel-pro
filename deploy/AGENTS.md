@@ -87,7 +87,6 @@ chmod 600 /opt/mebel-pro/deploy/.env
 #                                      — an access key + bucket on the shared MinIO
 #                                        (create them once via the MinIO console
 #                                        or `mc`; the bucket isn't auto-created)
-#        BACKEND_CORS_ORIGINS=[]       — same-origin via the edge
 #        DOCS_AUTH_USERNAME / DOCS_AUTH_PASSWORD  — gates admin.<domain>/docs
 #        BASE_DOMAIN=mebel-pro.uz · ACME_EMAIL=ops@…
 

@@ -1,7 +1,5 @@
-// Thin fetch wrapper for the backend JSON API. Empty VITE_API_BASE_URL keeps
-// requests same-origin in dev and production.
+// Thin fetch wrapper for the same-origin backend JSON API.
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 const API_PREFIX = '/api/v1'
 
 export interface ApiRequestInit extends RequestInit {
@@ -112,7 +110,7 @@ async function request<T>(path: string, init: ApiRequestInit = {}, retrying = fa
   if (accessToken) {
     mergedHeaders.set('Authorization', `Bearer ${accessToken}`)
   }
-  const res = await fetch(`${BASE_URL}${API_PREFIX}${path}`, {
+  const res = await fetch(`${API_PREFIX}${path}`, {
     credentials: 'include',
     headers: mergedHeaders,
     ...requestInit,
@@ -146,7 +144,7 @@ async function requestBlob(path: string, init: ApiRequestInit = {}): Promise<Blo
   if (accessToken) {
     mergedHeaders.set('Authorization', `Bearer ${accessToken}`)
   }
-  const res = await fetch(`${BASE_URL}${API_PREFIX}${path}`, {
+  const res = await fetch(`${API_PREFIX}${path}`, {
     credentials: 'include',
     headers: mergedHeaders,
     ...requestInit,

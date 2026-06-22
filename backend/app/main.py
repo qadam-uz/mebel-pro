@@ -7,7 +7,6 @@ from typing import cast
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -58,15 +57,6 @@ def create_app() -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
-
-    if settings.BACKEND_CORS_ORIGINS:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.BACKEND_CORS_ORIGINS,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
 
     app.middleware("http")(trace_middleware)
     app.add_exception_handler(APIError, cast(ExceptionHandler, api_error_handler))

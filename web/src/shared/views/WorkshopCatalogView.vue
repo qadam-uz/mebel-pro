@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
@@ -8,11 +8,12 @@ import { useRolePath } from '@/shared/app/paths'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { branchOptions } from '@/shared/app/workshopUi'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatStockQuantity, formatTiyin } from '@/shared/formatters'
+import { formatStockQuantity, formatTiyin, parseDisplayQuantity } from '@/shared/formatters'
 import type { MaterialKind, MaterialStatus, PanelMaterialType } from '@/shared/stores/admin'
-import { useWorkshopStore } from '@/shared/stores/workshop'
+import { useWorkshopStore, type BranchMaterial } from '@/shared/stores/workshop'
 
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
@@ -28,7 +29,16 @@ const search = ref('')
 const rowActionId = ref<string | null>(null)
 const rowActionError = ref<string | null>(null)
 const rowActionTraceId = ref<string | null>(null)
+const materialSaving = ref(false)
+const materialError = ref<string | null>(null)
+const materialFieldError = ref<string | null>(null)
+const editingBranchMaterialId = ref<string | null>(null)
 let searchTimer: number | undefined
+const materialForm = reactive({
+  materialId: null as string | null,
+  priceTiyin: '0',
+  minStock: '0',
+})
 
 const canUseCatalog = computed(() => permissions.can(p.manageCatalog))
 const accessibleBranches = computed(() =>
@@ -88,6 +98,27 @@ const manufacturerOptions = computed(() => {
       .map(([value, label]) => ({ value, label, meta: 'manufacturer', status: 'active' as const })),
   ]
 })
+const availableCatalogOptions = computed(() =>
+  workshop.catalogOptions
+    .filter((option) => !option.already_selected)
+    .map((option) => ({
+      value: option.material.id,
+      label: option.material.name,
+      meta: `${option.material.manufacturer_name} · ${option.material.kind}`,
+    })),
+)
+const editingBranchMaterial = computed(
+  () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
+)
+const selectedCatalogMaterial = computed(
+  () =>
+    workshop.catalogOptions.find((option) => option.material.id === materialForm.materialId)
+      ?.material ?? null,
+)
+const materialMinStockUnit = computed(() => {
+  const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
+  return material?.kind === 'edge' ? 'm' : 'pcs'
+})
 function applyContextBranch() {
   const contextBranchId = workshop.selectedBranchContext
   if (!contextBranchId) return
@@ -119,15 +150,77 @@ async function refreshCatalog() {
   if (!selectedBranchId.value || selectedBranchId.value === 'all') return
   rowActionError.value = null
   rowActionTraceId.value = null
-  await workshop
-    .loadBranchMaterials(selectedBranchId.value, {
-      status: statusFilter.value === 'all' ? null : statusFilter.value,
-      kind: kindFilter.value === 'all' ? null : kindFilter.value,
-      manufacturer_id: manufacturerFilter.value === 'all' ? null : manufacturerFilter.value,
-      material_type: materialTypeFilter.value === 'all' ? null : materialTypeFilter.value,
-      search: search.value,
-    })
-    .catch(() => undefined)
+  const filters = {
+    status: statusFilter.value === 'all' ? null : statusFilter.value,
+    kind: kindFilter.value === 'all' ? null : kindFilter.value,
+    manufacturer_id: manufacturerFilter.value === 'all' ? null : manufacturerFilter.value,
+    material_type: materialTypeFilter.value === 'all' ? null : materialTypeFilter.value,
+    search: search.value,
+  }
+  await Promise.all([
+    workshop.loadBranchMaterials(selectedBranchId.value, filters).catch(() => undefined),
+    workshop.loadCatalogOptions(selectedBranchId.value, filters).catch(() => undefined),
+  ])
+}
+
+async function saveBranchMaterial() {
+  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  materialSaving.value = true
+  materialError.value = null
+  materialFieldError.value = null
+  try {
+    if (!editingBranchMaterialId.value && !materialForm.materialId) {
+      materialFieldError.value = 'Material tanlang'
+      return
+    }
+    const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
+    const minStock = parseDisplayQuantity(
+      materialForm.minStock,
+      material?.kind === 'edge' ? 'm' : 'pcs',
+    )
+    const price = Number(materialForm.priceTiyin)
+    if (!Number.isFinite(price) || price < 0 || !Number.isFinite(minStock) || minStock < 0) {
+      materialFieldError.value = "Narx va min zaxirani to'g'ri kiriting"
+      return
+    }
+    const payload = { price_tiyin: price, min_stock: minStock }
+    const wasEditing = Boolean(editingBranchMaterialId.value)
+    if (editingBranchMaterialId.value) {
+      await workshop.updateBranchMaterial(
+        selectedBranchId.value,
+        editingBranchMaterialId.value,
+        payload,
+      )
+    } else {
+      await workshop.addBranchMaterial(selectedBranchId.value, {
+        material_id: materialForm.materialId,
+        ...payload,
+      })
+    }
+    resetMaterialForm()
+    await refreshCatalog()
+    toast.success(wasEditing ? 'Material sozlamasi saqlandi.' : "Material filialga qo'shildi.")
+  } catch {
+    materialError.value = 'branch_material_save_failed'
+  } finally {
+    materialSaving.value = false
+  }
+}
+
+function editBranchMaterial(row: BranchMaterial) {
+  editingBranchMaterialId.value = row.id
+  materialForm.materialId = row.material_id
+  materialForm.priceTiyin = String(row.price_tiyin)
+  materialForm.minStock =
+    row.material.kind === 'edge' ? String(row.min_stock / 1000) : String(row.min_stock)
+}
+
+function resetMaterialForm() {
+  editingBranchMaterialId.value = null
+  materialForm.materialId = null
+  materialForm.priceTiyin = '0'
+  materialForm.minStock = '0'
+  materialFieldError.value = null
 }
 
 async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) {
@@ -161,6 +254,7 @@ watch(search, () => {
 
 watch(selectedBranchId, (value) => {
   if (value && value !== 'all') workshop.setSelectedBranchContext(value)
+  resetMaterialForm()
 })
 
 watch(
@@ -206,7 +300,7 @@ onBeforeUnmount(() => {
           :to="rolePath(`/workshop/branches/${selectedBranch.id}`)"
           class="mp-button mp-button-primary"
         >
-          Filial katalogini ochish
+          Filial tafsiloti
         </RouterLink>
       </div>
     </div>
@@ -247,6 +341,62 @@ onBeforeUnmount(() => {
           {{ rowActionError }} · trace_id: {{ rowActionTraceId ?? 'unavailable' }}
         </div>
       </div>
+
+      <section v-if="selectedBranch" class="card mb-4 p-4">
+        <h2 class="mb-3 text-base font-extrabold text-ink">
+          {{
+            editingBranchMaterialId ? 'Material narxi va min zaxira' : "Filialga material qo'shish"
+          }}
+        </h2>
+        <form class="grid gap-3 md:grid-cols-4" @submit.prevent="saveBranchMaterial">
+          <SearchCombobox
+            v-model="materialForm.materialId"
+            label="Material"
+            :options="availableCatalogOptions"
+            :disabled="editingBranchMaterialId !== null"
+            :error="materialFieldError"
+            class="md:col-span-2"
+          />
+          <label class="field">
+            <span>Narx (tiyin)</span>
+            <input
+              v-model="materialForm.priceTiyin"
+              class="mp-input"
+              inputmode="numeric"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Min zaxira {{ materialMinStockUnit }}</span>
+            <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
+          </label>
+          <div class="flex flex-wrap gap-2 md:col-span-4">
+            <button class="mp-button mp-button-primary" type="submit" :disabled="materialSaving">
+              {{
+                materialSaving
+                  ? 'Saqlanmoqda'
+                  : editingBranchMaterialId
+                    ? 'Saqlash'
+                    : "Material qo'shish"
+              }}
+            </button>
+            <button
+              v-if="editingBranchMaterialId"
+              type="button"
+              class="mp-button mp-button-outline"
+              @click="resetMaterialForm"
+            >
+              Bekor
+            </button>
+          </div>
+        </form>
+        <p
+          v-if="materialError"
+          class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+        >
+          Filial materiali saqlanmadi.
+        </p>
+      </section>
 
       <section v-if="workshop.catalogLoading" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
@@ -308,13 +458,13 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td class="right">
-                  <RouterLink
-                    v-if="selectedBranch"
-                    :to="rolePath(`/workshop/branches/${selectedBranch.id}`)"
+                  <button
+                    type="button"
                     class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                    @click="editBranchMaterial(row)"
                   >
                     Narx / min
-                  </RouterLink>
+                  </button>
                   <button
                     type="button"
                     class="mp-button mp-button-outline ml-2 min-h-8 px-2 text-xs"

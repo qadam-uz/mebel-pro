@@ -215,8 +215,6 @@ jobs:
           tags: mebel-pro-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
-          build-args: |
-            VITE_API_BASE_URL=
 
   # ---------------------------------------------------------------------------
   # 5. Deploy — SSH to the prod server and run deploy/scripts/deploy.sh.

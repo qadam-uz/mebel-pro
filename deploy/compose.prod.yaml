@@ -20,8 +20,7 @@
 #
 # Required env in deploy/.env (create it on the server, chmod 600):
 #   ENV, DEBUG, POSTGRES_* (creds on the SHARED postgres), MINIO_* (creds on
-#   the SHARED minio), BACKEND_CORS_ORIGINS, DOCS_AUTH_*, BASE_DOMAIN,
-#   ACME_EMAIL, VITE_API_BASE_URL.
+#   the SHARED minio), DOCS_AUTH_*, BASE_DOMAIN, ACME_EMAIL.
 
 name: mebel-pro
 
@@ -44,7 +43,6 @@ services:
       MINIO_SECRET_ACCESS_KEY: ${MINIO_SECRET_ACCESS_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-mebel}
       MINIO_USE_SSL: "false"
-      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-[]}
       DOCS_DIR: /docs
       DOCS_AUTH_USERNAME: ${DOCS_AUTH_USERNAME}
       DOCS_AUTH_PASSWORD: ${DOCS_AUTH_PASSWORD}
@@ -88,8 +86,6 @@ services:
   web:
     build:
       context: ../web
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     restart: unless-stopped
     depends_on:
       - backend

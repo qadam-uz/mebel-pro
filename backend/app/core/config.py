@@ -25,9 +25,6 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Mebel Pro"
     API_V1_PREFIX: str = "/api/v1"
 
-    # CORS: comma-separated list of allowed origins.
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:5173"]
-
     # --- Docs site ---------------------------------------------------------
     # English docs — the single source of truth — rendered live at `/docs`
     # (Markdown → HTML, no build step). Defaults to the repo's `docs/`;
