@@ -88,7 +88,6 @@ async def workshop_login(
 ) -> TokenResponse:
     result = await authenticate_workshop_user(
         db,
-        workshop_code=payload.workshop_code,
         login=payload.login,
         password=payload.password,
         trace_id=get_trace_id(),

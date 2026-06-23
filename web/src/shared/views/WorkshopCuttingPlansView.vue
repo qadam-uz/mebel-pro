@@ -3,10 +3,15 @@ import { onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
-import { metres, useCuttingStore } from '@/shared/stores/cutting'
+import { formatDate } from '@/shared/formatters'
+import { metres, useCuttingStore, type WorkshopCuttingPlanSummary } from '@/shared/stores/cutting'
 
 const cutting = useCuttingStore()
 const rolePath = useRolePath()
+
+function panelCount(plan: WorkshopCuttingPlanSummary) {
+  return Object.values(plan.panels_used_by_material).reduce((sum, count) => sum + count, 0)
+}
 
 onMounted(() => {
   void cutting.loadWorkshopPlans()
@@ -59,14 +64,17 @@ onMounted(() => {
         >
           <div>
             <h2 class="text-base font-extrabold text-ink">{{ plan.order_number }}</h2>
-            <p class="mt-1 font-mono text-xs text-ink-muted">natija {{ plan.id }}</p>
+            <p v-if="plan.confirmed_at" class="mt-1 text-xs text-ink-muted">
+              Tasdiqlangan: {{ formatDate(plan.confirmed_at) }}
+            </p>
             <div class="mt-3 flex flex-wrap gap-2">
               <span class="mp-chip bg-success-soft text-success">
                 <span class="mp-dot" aria-hidden="true"></span>
                 tasdiqlangan
               </span>
-              <span class="mp-chip">{{ plan.algorithm_name }}</span>
+              <span class="mp-chip">{{ panelCount(plan) }} panel</span>
               <span class="mp-chip">{{ metres(plan.total_edge_length_mm) }} krom</span>
+              <span class="mp-chip">{{ plan.algorithm_name }}</span>
             </div>
           </div>
           <RouterLink

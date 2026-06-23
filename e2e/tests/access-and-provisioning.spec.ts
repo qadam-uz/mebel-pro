@@ -195,7 +195,6 @@ test('owner changes temp password, creates staff, and saves a grant', async ({ p
   const setup = await provisionWorkshop(request, token, id)
 
   await page.goto('/workshop/')
-  await page.getByLabel('Workshop code').fill(setup.code)
   await page.getByLabel('Login').fill(setup.ownerLogin)
   await page.getByLabel(passwordLabel).fill(setup.ownerPassword)
   await page.getByRole('button', { name: continueButton }).click()
@@ -239,7 +238,6 @@ test('staff sees granted branch context after password change', async ({ page, r
   expect(created.ok()).toBe(true)
 
   await page.goto('/workshop/')
-  await page.getByLabel('Workshop code').fill(setup.code)
   await page.getByLabel('Login').fill(staffLogin)
   await page.getByLabel(passwordLabel).fill('StaffTemp123')
   await page.getByRole('button', { name: continueButton }).click()
@@ -273,7 +271,6 @@ test('workshop staff direct URLs respect branch-scoped grants', async ({
   expect(created.ok()).toBe(true)
 
   await page.goto('/workshop/')
-  await page.getByLabel('Workshop code').fill(setup.code)
   await page.getByLabel('Login').fill(staffLogin)
   await page.getByLabel(passwordLabel).fill('StaffTemp123')
   await page.getByRole('button', { name: continueButton }).click()

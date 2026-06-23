@@ -138,12 +138,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function workshopLogin(workshopCode: string, login: string, password: string) {
+  async function workshopLogin(login: string, password: string) {
     status.value = 'loading'
     try {
       applyToken(
         await api.post<TokenResponse>('/auth/workshop/login', {
-          workshop_code: workshopCode,
           login,
           password,
         }),

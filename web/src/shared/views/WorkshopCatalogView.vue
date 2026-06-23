@@ -117,7 +117,7 @@ const selectedCatalogMaterial = computed(
 )
 const materialMinStockUnit = computed(() => {
   const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
-  return material?.kind === 'edge' ? 'm' : 'pcs'
+  return material?.kind === 'edge' ? 'm' : 'panel'
 })
 function applyContextBranch() {
   const contextBranchId = workshop.selectedBranchContext
@@ -178,12 +178,18 @@ async function saveBranchMaterial() {
       materialForm.minStock,
       material?.kind === 'edge' ? 'm' : 'pcs',
     )
-    const price = Number(materialForm.priceTiyin)
-    if (!Number.isFinite(price) || price < 0 || !Number.isFinite(minStock) || minStock < 0) {
+    // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100 tiyin).
+    const priceTiyin = Math.round(Number(materialForm.priceTiyin) * 100)
+    if (
+      !Number.isFinite(priceTiyin) ||
+      priceTiyin < 0 ||
+      !Number.isFinite(minStock) ||
+      minStock < 0
+    ) {
       materialFieldError.value = "Narx va min zaxirani to'g'ri kiriting"
       return
     }
-    const payload = { price_tiyin: price, min_stock: minStock }
+    const payload = { price_tiyin: priceTiyin, min_stock: minStock }
     const wasEditing = Boolean(editingBranchMaterialId.value)
     if (editingBranchMaterialId.value) {
       await workshop.updateBranchMaterial(
@@ -210,7 +216,7 @@ async function saveBranchMaterial() {
 function editBranchMaterial(row: BranchMaterial) {
   editingBranchMaterialId.value = row.id
   materialForm.materialId = row.material_id
-  materialForm.priceTiyin = String(row.price_tiyin)
+  materialForm.priceTiyin = String(row.price_tiyin / 100)
   materialForm.minStock =
     row.material.kind === 'edge' ? String(row.min_stock / 1000) : String(row.min_stock)
 }
@@ -358,7 +364,7 @@ onBeforeUnmount(() => {
             class="md:col-span-2"
           />
           <label class="field">
-            <span>Narx (tiyin)</span>
+            <span>Narx (so'm)</span>
             <input
               v-model="materialForm.priceTiyin"
               class="mp-input"

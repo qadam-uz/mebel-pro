@@ -9,6 +9,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { branchOptions } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -541,9 +542,7 @@ onBeforeUnmount(() => {
             </label>
             <label class="field">
               <span>Chek</span>
-              <input
-                type="file"
-                class="mp-input"
+              <FilePicker
                 accept="image/png,image/jpeg,image/webp,application/pdf"
                 :disabled="files.uploading"
                 @change="onReceiptFile"
