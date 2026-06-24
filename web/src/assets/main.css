@@ -217,6 +217,12 @@
       min-height: 40px;
       padding-inline: 14px;
     }
+
+    /* Dashboard tool / period / retry buttons are dense (32-36px) — lift them
+       to the 44px touch target on coarse pointers without changing desktop. */
+    .workshop-dashboard .mp-button {
+      min-height: 44px;
+    }
   }
 
   .mp-dot {
@@ -2660,6 +2666,7 @@
   .p-dn {
     background: var(--color-sunk);
     color: var(--color-ink-muted);
+    border: 1px solid var(--color-hairline-strong);
   }
 
   .row-item {
@@ -4396,6 +4403,12 @@
   @media (min-width: 900px) {
     .kpis {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    /* Dashboard runs 5 KPIs — one balanced row instead of the default 4-col
+       grid (which would orphan the 5th card onto a second row). */
+    .kpis-dash {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 
     .admin-kpis {

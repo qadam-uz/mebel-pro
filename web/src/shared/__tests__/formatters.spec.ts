@@ -9,8 +9,10 @@ import {
 } from '@/shared/formatters'
 
 describe('shared formatters', () => {
-  it('formats tiyin as UZS without fractional digits', () => {
+  it("formats tiyin as so'm without fractional digits", () => {
+    expect(formatTiyin(0)).toBe("0 so'm")
     expect(formatTiyin(12_345_600)).toContain('123')
+    expect(formatTiyin(12_345_600)).toMatch(/so'm$/)
   })
 
   it('formats dates with the Uzbek locale seed', () => {

@@ -27,6 +27,9 @@ const workshop = useWorkshopStore()
 const orders = useOrdersStore()
 const finance = useFinanceStore()
 const dashboardLoading = ref(false)
+// First-load flag: drives skeletons on the very first paint only, so later
+// refreshes / period / branch-context reloads swap data in place without flicker.
+const dashboardReady = ref(false)
 const dashboardError = ref<string | null>(null)
 const dashboardTraceId = ref<string | null>(null)
 const chartDays = ref(14)
@@ -70,12 +73,16 @@ const lowStock = computed(() => workshop.lowStockItems.slice(0, 5))
 const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
+const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
 const chartBars = computed(() => {
   const rows = chartRows.value
   if (rows.length === 0) return []
   const width = Math.max(3, (CHART_WIDTH - CHART_GAP * (rows.length + 1)) / rows.length)
   return rows.map((row, index) => {
-    const height = Math.max(6, (row.income_tiyin / chartMax.value) * CHART_MAX_BAR_HEIGHT)
+    const height =
+      row.income_tiyin > 0
+        ? Math.max(6, (row.income_tiyin / chartMax.value) * CHART_MAX_BAR_HEIGHT)
+        : 0
     return {
       day: row.day,
       income_tiyin: row.income_tiyin,
@@ -95,11 +102,16 @@ const chartBars = computed(() => {
 const chartLabels = computed(() => {
   const bars = chartBars.value
   if (bars.length === 0) return []
-  const indexes = new Set([0, Math.floor(bars.length / 2), bars.length - 1])
-  return [...indexes].map((index) => ({
-    x: bars[index].x + bars[index].width / 2,
-    label: formatDate(bars[index].day),
-  }))
+  const last = bars.length - 1
+  const indexes = [...new Set([0, Math.floor(bars.length / 2), last])]
+  return indexes.map((index) => {
+    const bar = bars[index]
+    // Anchor the edge labels to the bar edges so the first/last date never
+    // overflows the viewBox and gets clipped (a centered last label did).
+    const anchor = index === 0 ? 'start' : index === last ? 'end' : 'middle'
+    const x = index === 0 ? bar.x : index === last ? bar.x + bar.width : bar.x + bar.width / 2
+    return { x, label: formatDate(bar.day), anchor }
+  })
 })
 const chartToday = computed(() =>
   chartRows.value.length > 0 ? chartRows.value[chartRows.value.length - 1] : null,
@@ -148,7 +160,20 @@ function contextBranchFor(branches: Array<{ id: string }>) {
 function setChartPeriod(days: number) {
   if (chartDays.value === days) return
   chartDays.value = days
-  void loadDashboard()
+  // Only the sales chart depends on the period — reload just the finance
+  // summary so the orders/branch/inventory cards don't flicker on a filter.
+  void loadFinanceSummary()
+}
+
+async function loadFinanceSummary() {
+  if (!canFinance.value) return
+  await finance.loadSummary({
+    ...chartRange(),
+    branch_id:
+      contextBranchFor(financeBranches.value) ??
+      (permissions.isOwner.value ? null : (financeBranches.value[0]?.id ?? null)),
+  })
+  if (finance.error) recordDashboardError(finance.error, finance.traceId)
 }
 
 async function loadDashboard() {
@@ -177,15 +202,7 @@ async function loadDashboard() {
       if (orders.error) recordDashboardError(orders.error, orders.traceId)
     }
   }
-  if (canFinance.value) {
-    await finance.loadSummary({
-      ...chartRange(),
-      branch_id:
-        contextBranchFor(financeBranches.value) ??
-        (permissions.isOwner.value ? null : (financeBranches.value[0]?.id ?? null)),
-    })
-    if (finance.error) recordDashboardError(finance.error, finance.traceId)
-  }
+  await loadFinanceSummary()
   const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
   const inventoryBranchIds =
     inventoryContextBranchId !== null
@@ -206,6 +223,7 @@ async function loadDashboard() {
     }
   }
   dashboardLoading.value = false
+  dashboardReady.value = true
 }
 
 onMounted(loadDashboard)
@@ -219,11 +237,11 @@ watch(
 </script>
 
 <template>
-  <section>
+  <section class="workshop-dashboard">
     <div class="page-head">
       <div>
         <h1>Asosiy</h1>
-        <div class="date">Bugun · <b>ustaxona boshqaruvi</b></div>
+        <div class="sub">Ustaxona ko'rsatkichlari · filiallar bo'yicha</div>
       </div>
       <div class="tools">
         <button
@@ -234,27 +252,6 @@ watch(
         >
           {{ dashboardLoading ? 'Yuklanmoqda' : 'Yangilash' }}
         </button>
-        <RouterLink
-          v-if="canOrders"
-          :to="rolePath('/workshop/orders')"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-        >
-          Buyurtmalar
-        </RouterLink>
-        <RouterLink
-          v-if="canProduction"
-          :to="rolePath('/workshop/cutting')"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-        >
-          Kesish navbati
-        </RouterLink>
-        <RouterLink
-          v-if="canProduction"
-          :to="rolePath('/workshop/banding')"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-        >
-          Krom navbati
-        </RouterLink>
       </div>
     </div>
 
@@ -278,27 +275,25 @@ watch(
     </div>
 
     <template v-else>
-      <div class="kpis">
+      <div class="kpis kpis-dash">
         <RouterLink v-if="canOrders" :to="rolePath('/workshop/orders')" class="kpi no-underline">
           <div class="lbl">Ishlab chiqarishda</div>
-          <div class="v num">{{ activeOrders.length }}</div>
-          <div class="d"><span>faol buyurtmalar</span><span class="more">taxta</span></div>
-        </RouterLink>
-
-        <RouterLink
-          v-if="canProduction"
-          :to="rolePath('/workshop/cutting')"
-          class="kpi no-underline"
-        >
-          <div class="lbl">Mening navbatim</div>
-          <div class="v num">{{ productionQueueCounts.total }}</div>
-          <div class="d"><span>tayinlangan ishlab chiqarish</span></div>
+          <div class="v num">
+            <span v-if="dashboardReady">{{ activeOrders.length }}</span>
+            <span v-else class="sk block h-7 w-12"></span>
+          </div>
+          <div class="d"><span>faol buyurtmalar</span></div>
         </RouterLink>
 
         <RouterLink v-if="canFinance" :to="rolePath('/workshop/finance')" class="kpi no-underline">
           <div class="lbl">Tushum</div>
-          <div class="v num">{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</div>
-          <div class="d"><span>yozilgan</span></div>
+          <div class="v num">
+            <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</span>
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d">
+            <span>so'nggi {{ chartDays }} kun</span>
+          </div>
         </RouterLink>
 
         <RouterLink
@@ -307,8 +302,15 @@ watch(
           class="kpi no-underline"
         >
           <div class="lbl">Xarajatlar</div>
-          <div class="v num">{{ formatTiyin(finance.summary?.expense_tiyin ?? 0) }}</div>
-          <div class="d"><span>yozilgan</span></div>
+          <div class="v num">
+            <span v-if="dashboardReady">{{
+              formatTiyin(finance.summary?.expense_tiyin ?? 0)
+            }}</span>
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d">
+            <span>so'nggi {{ chartDays }} kun</span>
+          </div>
         </RouterLink>
 
         <RouterLink
@@ -319,19 +321,24 @@ watch(
         >
           <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">Foyda</div>
           <div class="v num" :class="netPositive ? 'success-text' : 'danger-text'">
-            {{ formatTiyin(finance.summary?.net_tiyin ?? 0) }}
+            <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.net_tiyin ?? 0) }}</span>
+            <span v-else class="sk block h-7 w-28"></span>
           </div>
-          <div class="d"><span>tushum - xarajat</span></div>
+          <div class="d"><span>tushum − xarajat</span></div>
         </RouterLink>
 
         <RouterLink
           v-if="canInventory"
           :to="rolePath('/workshop/inventory')"
-          class="kpi warn no-underline"
+          class="kpi no-underline"
+          :class="lowStock.length > 0 ? 'warn' : ''"
         >
-          <div class="lbl">Pastdagi zaxiralar</div>
-          <div class="v num warn-text">{{ lowStock.length }}</div>
-          <div class="d"><span>ombor</span></div>
+          <div class="lbl">Past zaxiralar</div>
+          <div class="v num" :class="lowStock.length > 0 ? 'warn-text' : ''">
+            <span v-if="dashboardReady">{{ lowStock.length }}</span>
+            <span v-else class="sk block h-7 w-12"></span>
+          </div>
+          <div class="d"><span>me'yordan past</span></div>
         </RouterLink>
       </div>
 
@@ -357,7 +364,7 @@ watch(
                 {{ productionQueueCounts.cutting }}
                 <small class="font-sans text-sm text-ink-muted">ish</small>
               </div>
-              <p class="mt-2 font-mono text-[11px] text-ink-muted">
+              <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
                 Tasdiqlangan yoki kesilayotgan, sizga tayinlangan buyurtmalar.
               </p>
             </RouterLink>
@@ -372,7 +379,7 @@ watch(
                 {{ productionQueueCounts.banding }}
                 <small class="font-sans text-sm text-ink-muted">ish</small>
               </div>
-              <p class="mt-2 font-mono text-[11px] text-ink-muted">
+              <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
                 Krom bosqichida sizga biriktirilgan buyurtmalar.
               </p>
             </RouterLink>
@@ -394,25 +401,26 @@ watch(
                   Jami · <b>{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</b>
                 </div>
               </div>
-              <div class="flex gap-1">
+              <div class="flex gap-1" role="group" aria-label="Davr (kun)">
                 <button
                   v-for="days in chartPeriodOptions"
                   :key="days"
                   class="mp-button min-h-8 px-2 text-xs"
                   :class="days === chartDays ? 'mp-button-primary' : 'mp-button-outline'"
                   type="button"
-                  :disabled="dashboardLoading"
+                  :disabled="finance.loading"
                   :aria-pressed="days === chartDays"
                   @click="setChartPeriod(days)"
                 >
-                  {{ days }} K
+                  {{ days }} kun
                 </button>
               </div>
             </div>
             <div class="card-b">
-              <div v-if="chartRows.length === 0" class="st-empty !py-8">
+              <div v-if="!dashboardReady" class="sk block h-[150px] w-full"></div>
+              <div v-else-if="chartRows.length === 0 || !hasIncome" class="st-empty !py-8">
                 <h3>Savdo yozuvi yo'q</h3>
-                <p>Tanlangan davrda tushum yozilmagan.</p>
+                <p>Tanlangan davrda hali tushum yozilmagan.</p>
               </div>
               <div v-else>
                 <p class="sr-only">{{ chartSummary }}</p>
@@ -456,7 +464,7 @@ watch(
                       :key="label.label"
                       :x="label.x"
                       y="210"
-                      text-anchor="middle"
+                      :text-anchor="label.anchor"
                     >
                       {{ label.label }}
                     </text>
@@ -478,10 +486,18 @@ watch(
             </div>
             <div class="card-b">
               <div
-                class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline md:grid-cols-3"
+                class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline grid-cols-[repeat(auto-fit,minmax(220px,1fr))]"
               >
+                <template v-if="!dashboardReady">
+                  <div v-for="n in 2" :key="'skb' + n" class="bg-elevated p-4">
+                    <span class="sk block h-3 w-24"></span>
+                    <span class="sk mt-3 block h-8 w-16"></span>
+                    <span class="sk mt-3 block h-3 w-32"></span>
+                  </div>
+                </template>
                 <RouterLink
                   v-for="branch in workshop.branches"
+                  v-else
                   :key="branch.id"
                   :to="rolePath(`/workshop/branches/${branch.id}`)"
                   class="bg-elevated p-4 no-underline transition hover:bg-sunk"
@@ -528,32 +544,39 @@ watch(
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="order in recentOrders" :key="order.id" class="clickable">
-                      <td class="id">
-                        <RouterLink
-                          :to="rolePath(`/workshop/orders/${order.id}`)"
-                          class="no-underline"
-                        >
-                          {{ order.order_number }}
-                        </RouterLink>
-                      </td>
-                      <td class="nm">{{ order.contact_name }}</td>
-                      <td>{{ order.branch_name }}</td>
-                      <td>
-                        <span :class="orderPillClass(order.status)">
-                          <span class="pd"></span>{{ workshopStatusUz[order.status] }}
-                        </span>
-                      </td>
-                      <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
-                    </tr>
-                    <tr v-if="recentOrders.length === 0">
-                      <td colspan="5">
-                        <div class="st-empty !border-0 !py-8">
-                          <h3>Buyurtma yo'q</h3>
-                          <p>Mijozlar buyurtma bergach shu yerda chiqadi.</p>
-                        </div>
-                      </td>
-                    </tr>
+                    <template v-if="!dashboardReady">
+                      <tr v-for="n in 4" :key="'skr' + n">
+                        <td colspan="5"><span class="sk sk-line" style="width: 100%"></span></td>
+                      </tr>
+                    </template>
+                    <template v-else>
+                      <tr v-for="order in recentOrders" :key="order.id" class="clickable">
+                        <td class="id">
+                          <RouterLink
+                            :to="rolePath(`/workshop/orders/${order.id}`)"
+                            class="no-underline"
+                          >
+                            {{ order.order_number }}
+                          </RouterLink>
+                        </td>
+                        <td class="nm">{{ order.contact_name }}</td>
+                        <td>{{ order.branch_name }}</td>
+                        <td>
+                          <span :class="orderPillClass(order.status)">
+                            <span class="pd"></span>{{ workshopStatusUz[order.status] }}
+                          </span>
+                        </td>
+                        <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
+                      </tr>
+                      <tr v-if="recentOrders.length === 0">
+                        <td colspan="5">
+                          <div class="st-empty !border-0 !py-8">
+                            <h3>Buyurtma yo'q</h3>
+                            <p>Mijozlar buyurtma bergach shu yerda chiqadi.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    </template>
                   </tbody>
                 </table>
               </div>

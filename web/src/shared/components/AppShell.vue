@@ -588,6 +588,7 @@ onBeforeUnmount(() => {
           v-model="selectedContext"
           :label="config.dropdownLabel"
           :options="dropdownOptions"
+          hide-label
         />
 
         <div ref="workshopSearchRootRef" class="workshop-search-wrap">
