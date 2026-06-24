@@ -161,7 +161,7 @@ onMounted(refresh)
         </div>
       </div>
 
-      <div class="queue-grid">
+      <div class="max-w-2xl">
         <section class="queue-col">
           <h2>
             Krom kutmoqda

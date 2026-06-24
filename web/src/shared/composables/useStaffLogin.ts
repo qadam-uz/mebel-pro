@@ -25,7 +25,6 @@ export function useStaffLogin() {
 
   const login = ref('')
   const password = ref('')
-  const workshopCode = ref('')
   const isSubmitting = ref(false)
   const error = ref<string | null>(null)
 
@@ -41,7 +40,7 @@ export function useStaffLogin() {
       if (config.role === 'admin') {
         await auth.platformLogin(login.value, password.value)
       } else if (config.role === 'workshop') {
-        await auth.workshopLogin(workshopCode.value, login.value, password.value)
+        await auth.workshopLogin(login.value, password.value)
       }
       await router.replace(redirectTo.value)
     } catch {
@@ -51,5 +50,5 @@ export function useStaffLogin() {
     }
   }
 
-  return { config, login, password, workshopCode, isSubmitting, error, errorText, submit }
+  return { config, login, password, isSubmitting, error, errorText, submit }
 }

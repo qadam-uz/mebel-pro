@@ -134,9 +134,11 @@ const revertTargetLabel = computed(() => {
   if (current.status === 'ready') return current.has_banding ? 'kromga' : 'kesishga'
   return ''
 })
-const revertButtonLabel = computed(() =>
-  revertTargetLabel.value ? `${revertTargetLabel.value} qaytarish` : 'Bir qadam orqaga',
-)
+const revertButtonLabel = computed(() => {
+  if (!revertTargetLabel.value) return 'Bir qadam orqaga'
+  const label = `${revertTargetLabel.value} qaytarish`
+  return label.charAt(0).toUpperCase() + label.slice(1)
+})
 const canSubmitCuttingCompletion = computed(() => {
   const current = order.value
   if (!current || !canCompleteCutting.value) return false
@@ -514,9 +516,7 @@ onMounted(loadDetail)
     <template v-else>
       <div class="od-head">
         <h1>{{ order.order_number }}</h1>
-        <div class="id">
-          {{ order.branch_name }} · {{ formatDate(order.created_at) }} · v{{ order.version }}
-        </div>
+        <div class="id">{{ order.branch_name }} · {{ formatDate(order.created_at) }}</div>
         <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
           <span :class="orderPillClass(order.status)">
             <span class="pd"></span>{{ workshopStatusUz[order.status] }}

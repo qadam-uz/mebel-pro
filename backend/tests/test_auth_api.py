@@ -1,5 +1,6 @@
 from http.cookies import SimpleCookie
 
+from app.core.security import hash_password
 from app.models.enums import UserStatus
 from app.modules.access.routes import REFRESH_COOKIE_NAME
 from httpx import AsyncClient
@@ -60,27 +61,22 @@ async def test_platform_login_sets_refresh_cookie_and_returns_me(
     assert me_response.json()["principal_id"] == str(user.id)
 
 
-async def test_workshop_login_uses_workshop_code_namespace(
+async def test_workshop_login_resolves_by_login_and_password(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     workshop, branch, owner = await seed_workshop_with_owner(db_session)
 
-    wrong_code = await client.post(
-        "/api/v1/auth/workshop/login",
-        json={"workshop_code": "missing", "login": "owner", "password": "Owner123"},
-    )
+    # No workshop code needed; login is case-insensitive.
     response = await client.post(
         "/api/v1/auth/workshop/login",
-        json={
-            "workshop_code": workshop.code.upper(),
-            "login": "OWNER",
-            "password": "Owner123",
-        },
+        json={"login": "OWNER", "password": "Owner123"},
+    )
+    wrong = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "Nope123"},
     )
 
-    assert wrong_code.status_code == 401
-    assert wrong_code.json()["code"] == "invalid_credentials"
     assert response.status_code == 200
     me = response.json()["me"]
     assert me["principal_type"] == "workshop_user"
@@ -88,6 +84,47 @@ async def test_workshop_login_uses_workshop_code_namespace(
     assert me["workshop_id"] == str(workshop.id)
     assert me["is_owner"] is True
     assert {grant["branch_id"] for grant in me["grants"]} == {str(branch.id)}
+    assert wrong.status_code == 401
+    assert wrong.json()["code"] == "invalid_credentials"
+
+
+async def test_workshop_login_disambiguates_same_login_across_workshops(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Two workshops both have an owner whose login is "owner" (logins are unique
+    # only per workshop). The password resolves which account logs in.
+    ws_a, _, owner_a = await seed_workshop_with_owner(db_session)
+    ws_b, _, owner_b = await seed_workshop_with_owner(db_session)
+    owner_b.password_hash = hash_password("Different456")
+    await db_session.flush()
+
+    a = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "Owner123"},
+    )
+    b = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "Different456"},
+    )
+
+    assert a.status_code == 200
+    assert a.json()["me"]["principal_id"] == str(owner_a.id)
+    assert a.json()["me"]["workshop_id"] == str(ws_a.id)
+    assert b.status_code == 200
+    assert b.json()["me"]["principal_id"] == str(owner_b.id)
+    assert b.json()["me"]["workshop_id"] == str(ws_b.id)
+
+    # Same login AND same password in both workshops is ambiguous → generic 401,
+    # never an accidental login to the wrong workshop.
+    owner_b.password_hash = hash_password("Owner123")
+    await db_session.flush()
+    ambiguous = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "Owner123"},
+    )
+    assert ambiguous.status_code == 401
+    assert ambiguous.json()["code"] == "invalid_credentials"
 
 
 async def test_bad_credentials_lockout_discloses_status_only_after_valid_password(

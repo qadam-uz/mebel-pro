@@ -388,7 +388,7 @@ onMounted(load)
         </div>
 
         <div class="card">
-          <div class="card-h"><h2>Status</h2></div>
+          <div class="card-h"><h2>Holat</h2></div>
           <div class="card-b">
             <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
               <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}

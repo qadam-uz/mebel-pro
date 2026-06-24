@@ -175,7 +175,6 @@ async function loginAdmin(page: Page, login: string) {
 
 async function loginWorkshop(page: Page, code: string, login: string, password: string) {
   await page.goto('/workshop/')
-  await page.getByLabel('Workshop code').fill(code)
   await page.getByLabel('Login').fill(login)
   await page.getByLabel(passwordLabel).fill(password)
   await page.getByRole('button', { name: continueButton }).click()
@@ -246,7 +245,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await addMaterial.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await addMaterial.getByRole('combobox', { name: 'Material' }).press('Escape')
-  await addMaterial.getByLabel('Narx (tiyin)').fill('250000')
+  await addMaterial.getByLabel(/Narx/).fill('2500')
   await addMaterial.getByLabel(/Min zaxira/).fill('2')
   await addMaterial.getByRole('button', { name: "Material qo'shish" }).click()
   await expect(page.getByRole('cell', { name: material.name })).toBeVisible()

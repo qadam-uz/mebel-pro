@@ -281,7 +281,6 @@ async function loginWorkshop(
   baseUrl = "",
 ) {
   await page.goto(`${baseUrl}/workshop/`);
-  await page.getByLabel("Workshop code").fill(code);
   await page.getByLabel("Login").fill(login);
   await page.getByLabel(passwordLabel).fill(password);
   await page.getByRole("button", { name: continueButton }).click();

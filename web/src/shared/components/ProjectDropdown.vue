@@ -8,6 +8,9 @@ const props = defineProps<{
   label: string
   modelValue: string
   options: DropdownOption[]
+  // Visually hide the eyebrow label (still read by screen readers) to keep the
+  // trigger compact — used by the workshop topbar branch picker.
+  hideLabel?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -165,7 +168,13 @@ onBeforeUnmount(() => {
         <span class="mp-dot"></span>
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block text-[11px] font-bold uppercase tracking-[0.13em] text-ink-muted">
+        <span
+          :class="
+            hideLabel
+              ? 'sr-only'
+              : 'block text-[11px] font-bold uppercase tracking-[0.13em] text-ink-muted'
+          "
+        >
           {{ label }}
         </span>
         <span class="block truncate text-sm font-bold text-ink">{{ selected.label }}</span>

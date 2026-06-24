@@ -6,6 +6,7 @@ import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/a
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import FilePicker from '@/shared/components/FilePicker.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
@@ -667,9 +668,7 @@ onMounted(async () => {
           </label>
           <label class="field md:col-span-2">
             <span>Chek</span>
-            <input
-              type="file"
-              class="mp-input"
+            <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
               :disabled="files.uploading"
               @change="uploadExpenseReceipt"
@@ -766,9 +765,7 @@ onMounted(async () => {
           </label>
           <label class="field md:col-span-2">
             <span>Chek</span>
-            <input
-              type="file"
-              class="mp-input"
+            <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
               :disabled="files.uploading"
               @change="uploadIncomeReceipt"

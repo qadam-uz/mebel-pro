@@ -1,9 +1,12 @@
 export function formatTiyin(value: number): string {
-  return new Intl.NumberFormat('uz-UZ', {
-    style: 'currency',
-    currency: 'UZS',
-    maximumFractionDigits: 0,
-  }).format(Math.round(value / 100))
+  // Pin the suffix to "so'm" deterministically rather than using the currency
+  // formatter, whose ICU tables can render the English-looking code "UZS" on
+  // trimmed/older builds. This keeps currency identical on every runtime and
+  // matches the Uzbek SPA's own labels (Narx (so'm), Summa (so'm)).
+  const amount = new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(
+    Math.round(value / 100),
+  )
+  return `${amount} so'm`
 }
 
 export function formatDate(value: string | Date): string {

@@ -1,75 +1,128 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import Icon from '@/shared/components/AppIcon.vue'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 
-const { config, login, password, workshopCode, isSubmitting, errorText, submit } = useStaffLogin()
+const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
+
+const showPassword = ref(false)
+
+// useStaffLogin is shared with the admin login and keeps its error text in
+// English; map the error CODE to Uzbek locally (mirrors AdminLoginView) so the
+// workshop SPA stays fully Uzbek.
+const LOGIN_ERROR_UZ: Record<string, string> = {
+  invalid_credentials: "Login yoki parol noto'g'ri.",
+  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
+  account_blocked: 'Hisob bloklangan.',
+  network_error: "Server bilan bog'lanib bo'lmadi.",
+}
+const errorText = computed(() =>
+  error.value ? (LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
+)
+
+const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va moliya']
 </script>
 
 <template>
-  <main class="grid min-h-screen bg-bg px-4 py-8 text-ink md:grid-cols-[1fr_minmax(360px,460px)]">
-    <section class="flex min-h-[320px] flex-col justify-between py-6 md:px-8">
-      <RouterLink :to="config.homePath" class="flex items-center gap-3">
-        <img src="/favicon.svg" alt="" class="size-9" />
-        <span class="font-serif text-2xl font-semibold">{{ config.productLabel }}</span>
+  <main class="grid min-h-screen text-ink lg:grid-cols-[1.05fr_1fr]">
+    <!-- Brand panel — hidden below lg; the form carries the brand on mobile. -->
+    <section
+      class="relative hidden flex-col justify-center gap-10 bg-accent px-12 py-12 text-white lg:flex xl:px-16"
+    >
+      <RouterLink
+        :to="config.homePath"
+        class="absolute left-12 top-12 flex items-center gap-3 xl:left-16 xl:top-16"
+      >
+        <span class="inline-flex size-9 items-center justify-center rounded-lg bg-white">
+          <img src="/favicon.svg" alt="" class="size-6" />
+        </span>
+        <span class="font-serif text-xl font-semibold">{{ config.productLabel }}</span>
       </RouterLink>
 
-      <div class="max-w-xl">
-        <p class="mp-chip mb-5">
-          <span class="mp-dot" aria-hidden="true"></span>
-          {{ config.roleLabel }}
-        </p>
-        <h1 class="font-serif text-4xl font-semibold leading-tight tracking-normal md:text-5xl">
-          {{ config.roleLabel }} sign-in
+      <div class="max-w-md">
+        <h1 class="font-serif text-4xl font-semibold leading-tight">
+          Ustaxonangizni bir joydan boshqaring
         </h1>
-        <p class="mt-4 text-lg text-ink-soft">Enter account credentials to continue.</p>
+        <ul class="mt-7 space-y-3.5">
+          <li
+            v-for="point in valuePoints"
+            :key="point"
+            class="flex items-center gap-3 text-lg text-white/90"
+          >
+            <span
+              class="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15"
+            >
+              <Icon name="check" class="size-3.5" />
+            </span>
+            {{ point }}
+          </li>
+        </ul>
       </div>
     </section>
 
-    <section class="mp-surface self-center p-5 md:p-6" aria-labelledby="signin-title">
-      <h2 id="signin-title" class="font-serif text-2xl font-semibold">Sign in</h2>
+    <!-- Form panel -->
+    <section class="flex items-center justify-center bg-bg px-4 py-10">
+      <div class="w-full max-w-[400px]">
+        <RouterLink :to="config.homePath" class="mb-7 flex items-center gap-3 lg:hidden">
+          <img src="/favicon.svg" alt="" class="size-9" />
+          <span class="font-serif text-2xl font-semibold">{{ config.productLabel }}</span>
+        </RouterLink>
 
-      <form class="mt-5 space-y-4" @submit.prevent="submit">
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Workshop code</span>
-          <input
-            v-model="workshopCode"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
-            type="text"
-            autocomplete="organization"
-            required
-          />
-        </label>
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Login</span>
-          <input
-            v-model="login"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
-            type="text"
-            autocomplete="username"
-            required
-          />
-        </label>
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-ink">Password</span>
-          <input
-            v-model="password"
-            class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
-        </label>
-        <p
-          v-if="errorText"
-          class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-        >
-          {{ errorText }}
-        </p>
-        <button type="submit" class="mp-button mp-button-primary w-full" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Signing in' : 'Continue' }}
-        </button>
-      </form>
+        <div class="mp-surface p-6 md:p-7" aria-labelledby="signin-title">
+          <h2 id="signin-title" class="font-serif text-2xl font-semibold">Kirish</h2>
+          <p class="mt-1 text-sm text-ink-soft">Login va parol bilan kiring.</p>
+
+          <form class="mt-6 space-y-4" @submit.prevent="submit">
+            <label class="block">
+              <span class="mb-2 block text-sm font-bold text-ink">Login</span>
+              <input
+                v-model="login"
+                class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 text-base text-ink"
+                type="text"
+                autocomplete="username"
+                required
+              />
+            </label>
+            <label class="block">
+              <span class="mb-2 block text-sm font-bold text-ink">Parol</span>
+              <div class="relative">
+                <input
+                  v-model="password"
+                  class="min-h-11 w-full rounded-md border border-hairline-strong bg-elevated pl-3 pr-12 text-base text-ink"
+                  :type="showPassword ? 'text' : 'password'"
+                  autocomplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  class="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted transition hover:text-ink"
+                  :aria-label="showPassword ? 'Parolni yashirish' : 'Parolni ko\'rsatish'"
+                  :aria-pressed="showPassword"
+                  @click="showPassword = !showPassword"
+                >
+                  <Icon :name="showPassword ? 'eye-off' : 'eye'" class="size-5" />
+                </button>
+              </div>
+            </label>
+            <p
+              v-if="errorText"
+              class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              {{ errorText }}
+            </p>
+            <button
+              type="submit"
+              class="mp-button mp-button-primary w-full"
+              :disabled="isSubmitting"
+            >
+              {{ isSubmitting ? 'Tekshirilmoqda' : 'Kirish' }}
+            </button>
+          </form>
+        </div>
+      </div>
     </section>
   </main>
 </template>

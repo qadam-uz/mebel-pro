@@ -16,7 +16,6 @@ class PlatformLoginRequest(BaseModel):
 
 
 class WorkshopLoginRequest(BaseModel):
-    workshop_code: str
     login: str
     password: str
 

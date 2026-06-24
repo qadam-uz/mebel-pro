@@ -107,24 +107,34 @@ async def authenticate_platform_user(
 async def authenticate_workshop_user(
     db: AsyncSession,
     *,
-    workshop_code: str,
     login: str,
     password: str,
     trace_id: str,
     device_info: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> AuthSessionResult:
-    workshop = await db.scalar(
-        select(Workshop).where(func.lower(Workshop.code) == _normalized(workshop_code))
-    )
-    if workshop is None:
-        raise _invalid_credentials()
-    user = await db.scalar(
-        select(WorkshopUser).where(
-            WorkshopUser.workshop_id == workshop.id,
-            func.lower(WorkshopUser.login) == _normalized(login),
+    # Workshop logins are unique per workshop, not globally, so the login alone
+    # can't name the workshop. Resolve it with the password: among the accounts
+    # sharing this login, the one whose password matches is the user. Exactly one
+    # match authenticates; with none, a lone account still records the failed
+    # attempt (so lockout holds) while a shared login can't be locked by guesses;
+    # a duplicate match (same login AND password in two workshops) stays generic.
+    candidates = (
+        await db.scalars(
+            select(WorkshopUser).where(func.lower(WorkshopUser.login) == _normalized(login))
         )
-    )
+    ).all()
+    matched = [
+        candidate for candidate in candidates if verify_password(password, candidate.password_hash)
+    ]
+    user: WorkshopUser | None
+    if len(matched) == 1:
+        user = matched[0]
+    elif not matched and len(candidates) == 1:
+        user = candidates[0]
+    else:
+        user = None
+    workshop = await db.get(Workshop, user.workshop_id) if user is not None else None
     return await _authenticate_user(
         db,
         user=user,

@@ -3,6 +3,7 @@ import { onMounted, reactive, ref, watch } from 'vue'
 
 import { apiTraceId } from '@/shared/api/client'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import FilePicker from '@/shared/components/FilePicker.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useFilesStore } from '@/shared/stores/files'
@@ -147,10 +148,8 @@ onMounted(() => {
               </span>
             </div>
             <div class="min-w-0 flex-1">
-              <input
+              <FilePicker
                 id="workshop-logo-upload"
-                class="block min-h-11 w-full rounded-md border border-hairline-strong bg-elevated px-3 py-2 text-sm"
-                type="file"
                 accept="image/png,image/jpeg,image/webp"
                 :disabled="files.uploading"
                 @change="onLogoFile"
