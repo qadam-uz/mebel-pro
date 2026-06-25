@@ -2496,6 +2496,8 @@
     right: 0;
     z-index: 30;
     min-width: 210px;
+    max-height: 320px;
+    overflow-y: auto;
     border: 1px solid var(--color-hairline-strong);
     border-radius: 8px;
     background: var(--color-elevated);
@@ -2785,6 +2787,7 @@
 
   .board-col {
     min-width: 210px;
+    align-self: start;
     border: 1px solid var(--color-hairline);
     border-radius: 10px;
     background: var(--color-elevated);
@@ -2806,9 +2809,21 @@
   .board-col .ct {
     border-radius: 999px;
     background: var(--color-sunk);
-    color: var(--color-ink-muted);
+    color: var(--color-ink-strong);
     font-family: var(--font-mono);
+    font-weight: 700;
     padding: 1px 7px;
+  }
+
+  /* On the board card the order number is the production identity the cutter
+     keys off, so it leads; the amount is demoted below it. */
+  .board-card .id {
+    color: var(--color-ink);
+    font-size: 13px;
+  }
+
+  .board-card .amt {
+    color: var(--color-ink-soft);
   }
 
   .board-card {

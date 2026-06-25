@@ -16,6 +16,21 @@ export function formatDate(value: string | Date): string {
   return `${day}.${month}.${date.getFullYear()}`
 }
 
+// Calendar-relative age in Uzbek ("bugun", "kecha", "5 kun oldin", …) for
+// at-a-glance freshness; pair with the absolute date in a title attribute.
+export function formatRelativeUz(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const days = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000)
+  if (days <= 0) return 'bugun'
+  if (days === 1) return 'kecha'
+  if (days < 7) return `${days} kun oldin`
+  if (days < 30) return `${Math.floor(days / 7)} hafta oldin`
+  return `${Math.floor(days / 30)} oy oldin`
+}
+
 export function formatDateInputValue(value: Date): string {
   const year = value.getFullYear()
   const month = String(value.getMonth() + 1).padStart(2, '0')
