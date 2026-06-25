@@ -2781,13 +2781,13 @@
     display: grid;
     gap: 12px;
     grid-template-columns: repeat(5, minmax(210px, 1fr));
+    grid-auto-rows: minmax(min-content, 1fr);
     overflow-x: auto;
     padding-bottom: 4px;
   }
 
   .board-col {
     min-width: 210px;
-    align-self: start;
   }
 
   .board-col h4 {
@@ -2852,9 +2852,15 @@
     opacity: 0.45;
   }
 
-  /* Highlight a valid drop column's header band while dragging. */
-  .board-col.drop-target h4 {
+  /* Highlight the whole valid drop lane (and its header) while dragging so a
+     card can be dropped anywhere in the column, not just on the header. */
+  .board-col.drop-target {
     background: var(--color-accent-soft);
+    border-radius: 10px;
+  }
+
+  .board-col.drop-target h4 {
+    background: var(--color-accent-tint);
     color: var(--color-accent);
   }
 

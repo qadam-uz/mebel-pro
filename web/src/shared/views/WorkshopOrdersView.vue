@@ -632,7 +632,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section>
+  <section class="flex min-h-full flex-col">
     <div class="page-head">
       <div>
         <h1>Buyurtmalar</h1>
@@ -761,7 +761,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <section v-if="mode === 'board'" class="board">
+      <section v-if="mode === 'board'" class="board min-h-0 flex-1">
         <div
           v-for="column in boardColumns"
           :key="column.state"
@@ -783,10 +783,14 @@ onBeforeUnmount(() => {
             @dragstart="onCardDragStart(order, $event)"
             @dragend="onCardDragEnd"
           >
-            <RouterLink
-              :to="rolePath(`/workshop/orders/${order.id}`)"
+            <div
               class="block text-inherit no-underline"
-              draggable="false"
+              role="link"
+              tabindex="0"
+              :aria-label="`${order.order_number} — tafsilotlar`"
+              @click="openOrder(order.id)"
+              @keydown.enter="openOrder(order.id)"
+              @keydown.space.prevent="openOrder(order.id)"
             >
               <span class="top">
                 <span class="id">{{ order.order_number }}</span>
@@ -841,7 +845,7 @@ onBeforeUnmount(() => {
                   {{ chip.initials }}
                 </span>
               </span>
-            </RouterLink>
+            </div>
             <div
               class="mp-action-menu-wrap mt-3 ml-auto block w-fit"
               data-order-action-menu
