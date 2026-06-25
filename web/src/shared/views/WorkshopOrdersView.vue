@@ -12,12 +12,7 @@ import {
   type WorkshopOrderListAction,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import {
-  branchOptions,
-  orderPillClass,
-  workshopErrorMessage,
-  workshopStatusUz,
-} from '@/shared/app/workshopUi'
+import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -74,27 +69,16 @@ const workerOptionsByBranch = ref<Record<string, WorkshopWorkerOption[]>>({})
 const workerOptionLoadingBranches = new Set<string>()
 let timer: number | undefined
 
-const branchFilterOptions = computed(() => branchOptions(workshop.branches))
 const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha holatlar', status: 'active' as const },
-  { value: 'active', label: 'Faol', meta: 'tugatilmaganlar', status: 'active' as const },
-  { value: 'new', label: 'Yangi', meta: 'tasdiq kerak', status: 'pending' as const },
-  {
-    value: 'confirmed',
-    label: 'Tasdiqlangan',
-    meta: 'kesuvchi kutilmoqda',
-    status: 'pending' as const,
-  },
+  { value: 'all', label: 'Hammasi', meta: '', status: 'active' as const },
+  { value: 'active', label: 'Faol', meta: '', status: 'active' as const },
+  { value: 'new', label: 'Yangi', meta: '', status: 'pending' as const },
+  { value: 'confirmed', label: 'Tasdiqlangan', meta: '', status: 'pending' as const },
   { value: 'cutting', label: 'Kesilmoqda', meta: '', status: 'active' as const },
   { value: 'edge_banding', label: 'Kromda', meta: '', status: 'active' as const },
-  { value: 'ready', label: 'Tayyor', meta: 'olib ketishni kutmoqda', status: 'active' as const },
-  {
-    value: 'completed',
-    label: 'Tugatilgan',
-    meta: 'mijoz olib ketgan',
-    status: 'blocked' as const,
-  },
-  { value: 'cancelled', label: 'Bekor qilingan', meta: 'to‘xtatilgan', status: 'blocked' as const },
+  { value: 'ready', label: 'Tayyor', meta: '', status: 'active' as const },
+  { value: 'completed', label: 'Tugatilgan', meta: '', status: 'blocked' as const },
+  { value: 'cancelled', label: 'Bekor qilingan', meta: '', status: 'blocked' as const },
 ]
 const dateOptions = [
   { value: 'all', label: 'Barcha sanalar', meta: '', status: 'active' as const },
@@ -112,22 +96,13 @@ const terminalStatus = computed(() => ['completed', 'cancelled'].includes(status
 const visibleOrderBranchIds = computed(() => [
   ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
 ])
-const hasActiveFilters = computed(
-  () =>
-    status.value !== 'active' ||
-    dateFilter.value !== 'all' ||
-    search.value !== '' ||
-    branchId.value !== 'all',
-)
+// Branch and search are driven by the topbar (context + global search), so the
+// in-page reset only clears the status / date dropdowns.
+const hasActiveFilters = computed(() => status.value !== 'active' || dateFilter.value !== 'all')
 
 function resetFilters() {
   status.value = 'active'
   dateFilter.value = 'all'
-  search.value = ''
-  branchId.value = 'all'
-  // Setting branchId to 'all' alone does NOT clear the persisted branch
-  // context (it's re-applied on the next visit), so clear it explicitly.
-  workshop.setSelectedBranchContext(null)
 }
 
 function applyContextBranch() {
@@ -275,18 +250,132 @@ function boardMenuItems(order: OrderSummary) {
   }))
 }
 
-function toggleActionMenu(orderId: string) {
-  openActionMenuId.value = openActionMenuId.value === orderId ? null : orderId
+const actionMenuStyle = ref<Record<string, string>>({})
+
+function toggleActionMenu(orderId: string, event?: Event) {
+  if (openActionMenuId.value === orderId) {
+    closeActionMenu()
+    return
+  }
+  openActionMenuId.value = orderId
+  const trigger = event?.currentTarget
+  if (!(trigger instanceof HTMLElement)) return
+  // The menu is teleported to <body> with fixed positioning so it escapes the
+  // board/card/table overflow clipping; flip upward when there's no room below.
+  const rect = trigger.getBoundingClientRect()
+  const openUp = window.innerHeight - rect.bottom < 260
+  actionMenuStyle.value = {
+    position: 'fixed',
+    left: `${Math.round(rect.right)}px`,
+    right: 'auto',
+    transform: 'translateX(-100%)',
+    ...(openUp
+      ? { bottom: `${Math.round(window.innerHeight - rect.top + 6)}px`, top: 'auto' }
+      : { top: `${Math.round(rect.bottom + 6)}px`, bottom: 'auto' }),
+  }
 }
 
 function closeActionMenu() {
   openActionMenuId.value = null
 }
 
+function onMenuDismissScroll() {
+  if (openActionMenuId.value) closeActionMenu()
+}
+
+function onMenuDismissKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && openActionMenuId.value) closeActionMenu()
+}
+
 // Whole table row opens detail (the board card body is already a link); the
 // action cell stops propagation so the kebab menu still works.
 function openOrder(orderId: string) {
   void router.push(rolePath(`/workshop/orders/${orderId}`))
+}
+
+// --- Kanban drag-and-drop (desktop). Status transitions are guarded, so a drop
+// doesn't move the card directly — it triggers that order's forward action
+// (approve / assign / done) or revert, reusing the existing dialogs. The kebab
+// menu stays the accessible / touch fallback.
+const draggingOrderId = ref<string | null>(null)
+const dragOverState = ref<OrderStatus | null>(null)
+
+const FORWARD_ACTION_KIND: Record<string, WorkshopOrderListAction['kind']> = {
+  new: 'approve',
+  confirmed: 'assign',
+  cutting: 'complete_cutting',
+  edge_banding: 'complete_banding',
+}
+
+function isValidDropTarget(targetState: OrderStatus) {
+  const order = orders.workshopOrders.find((item) => item.id === draggingOrderId.value)
+  if (!order) return false
+  const from = activeWorkshopStatuses.indexOf(order.status)
+  const to = activeWorkshopStatuses.indexOf(targetState)
+  if (from === -1 || to === -1) return false
+  // Forward one stage, or back to any earlier stage (revert).
+  return to === from + 1 || to < from
+}
+
+function onCardDragStart(order: OrderSummary, event: DragEvent) {
+  draggingOrderId.value = order.id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', order.id)
+  }
+}
+
+function onCardDragEnd() {
+  draggingOrderId.value = null
+  dragOverState.value = null
+}
+
+function onColumnDragOver(state: OrderStatus, event: DragEvent) {
+  if (!draggingOrderId.value || !isValidDropTarget(state)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dragOverState.value = state
+}
+
+function onColumnDrop(state: OrderStatus) {
+  const order = orders.workshopOrders.find((item) => item.id === draggingOrderId.value)
+  draggingOrderId.value = null
+  dragOverState.value = null
+  if (order) moveOrderToColumn(order, state)
+}
+
+function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
+  const from = activeWorkshopStatuses.indexOf(order.status)
+  const to = activeWorkshopStatuses.indexOf(targetState)
+  if (from === -1 || to === -1 || from === to) return
+  const list = actionsFor(order)
+  if (to < from) {
+    const revert = list.find((action) => action.kind === 'revert')
+    if (!revert) {
+      toast.danger('Bu buyurtmani orqaga qaytarib bo‘lmaydi.')
+      return
+    }
+    startListAction(revert, order)
+    return
+  }
+  if (to > from + 1) {
+    toast.danger('Faqat keyingi bosqichga o‘tkazish mumkin.')
+    return
+  }
+  // Forward one stage: the order's primary forward action, falling back to
+  // "assign" (e.g. a cutting order with no cutter yet) which routes to detail.
+  const action =
+    list.find((item) => item.kind === FORWARD_ACTION_KIND[order.status]) ??
+    list.find((item) => item.kind === 'assign')
+  if (!action) {
+    toast.danger('Bu o‘tishni hozir bajarib bo‘lmaydi (ruxsat yoki tayinlash kerak).')
+    return
+  }
+  if (action.kind === 'assign') {
+    openOrder(order.id)
+    return
+  }
+  startListAction(action, order)
 }
 
 function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
@@ -523,6 +612,9 @@ watch([branchId, status, search, dateFilter], () => {
 
 onMounted(async () => {
   document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onMenuDismissKeydown)
+  window.addEventListener('scroll', onMenuDismissScroll, true)
+  window.addEventListener('resize', closeActionMenu)
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
   if (!applyRouteBranch()) applyContextBranch()
@@ -533,6 +625,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.clearTimeout(timer)
   document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('keydown', onMenuDismissKeydown)
+  window.removeEventListener('scroll', onMenuDismissScroll, true)
+  window.removeEventListener('resize', closeActionMenu)
 })
 </script>
 
@@ -541,7 +636,7 @@ onBeforeUnmount(() => {
     <div class="page-head">
       <div>
         <h1>Buyurtmalar</h1>
-        <p class="sub">Barcha filiallar bo'yicha buyurtmalar oqimi.</p>
+        <p class="sub">Buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
         <div class="flex gap-1" role="group" aria-label="Ko'rinish">
@@ -580,29 +675,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="filters">
-      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" />
-      <div
-        class="mp-surface flex min-h-11 min-w-64 items-center gap-2 px-3 focus-within:border-hairline-strong"
-      >
-        <AppIcon name="search" class="size-4 shrink-0 text-ink-muted" />
-        <input
-          v-model="search"
-          class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted"
-          placeholder="ID yoki mijoz nomi"
-          aria-label="Qidirish"
-        />
-        <button
-          v-if="search"
-          type="button"
-          class="shrink-0 text-lg leading-none text-ink-muted transition hover:text-ink"
-          aria-label="Qidiruvni tozalash"
-          @click="search = ''"
-        >
-          ×
-        </button>
-      </div>
-      <ProjectDropdown v-model="dateFilter" label="Sana" :options="dateOptions" />
-      <ProjectDropdown v-model="branchId" label="Filial" :options="branchFilterOptions" />
+      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" hide-label />
+      <ProjectDropdown v-model="dateFilter" label="Sana" :options="dateOptions" hide-label />
       <button
         v-if="hasActiveFilters"
         type="button"
@@ -688,15 +762,31 @@ onBeforeUnmount(() => {
       </div>
 
       <section v-if="mode === 'board'" class="board">
-        <div v-for="column in boardColumns" :key="column.state" class="board-col">
+        <div
+          v-for="column in boardColumns"
+          :key="column.state"
+          class="board-col"
+          :class="{ 'drop-target': dragOverState === column.state }"
+          @dragover="onColumnDragOver(column.state, $event)"
+          @drop.prevent="onColumnDrop(column.state)"
+        >
           <h4>
             {{ workshopStatusUz[column.state] }}
             <span class="ct">{{ column.orders.length }}</span>
           </h4>
-          <article v-for="order in column.orders" :key="order.id" class="board-card">
+          <article
+            v-for="order in column.orders"
+            :key="order.id"
+            class="board-card"
+            :class="{ 'is-dragging': draggingOrderId === order.id }"
+            draggable="true"
+            @dragstart="onCardDragStart(order, $event)"
+            @dragend="onCardDragEnd"
+          >
             <RouterLink
               :to="rolePath(`/workshop/orders/${order.id}`)"
               class="block text-inherit no-underline"
+              draggable="false"
             >
               <span class="top">
                 <span class="id">{{ order.order_number }}</span>
@@ -764,49 +854,47 @@ onBeforeUnmount(() => {
                 :aria-expanded="openActionMenuId === order.id"
                 :aria-controls="`order-actions-${order.id}`"
                 :aria-label="`${order.order_number} amallari`"
-                @click="toggleActionMenu(order.id)"
+                @click="toggleActionMenu(order.id, $event)"
               >
                 <span aria-hidden="true">...</span>
               </button>
-              <div
-                v-if="openActionMenuId === order.id"
-                :id="`order-actions-${order.id}`"
-                class="mp-action-menu"
-              >
-                <template
-                  v-for="{ action, showSep } in boardMenuItems(order)"
-                  :key="`${order.id}-${action.kind}`"
+              <Teleport to="body">
+                <div
+                  v-if="openActionMenuId === order.id"
+                  :id="`order-actions-${order.id}`"
+                  class="mp-action-menu"
+                  :style="actionMenuStyle"
+                  data-order-action-menu
                 >
-                  <div v-if="showSep" class="mp-action-menu-sep" aria-hidden="true"></div>
-                  <RouterLink
-                    v-if="action.kind === 'assign'"
-                    :to="rolePath(`/workshop/orders/${order.id}`)"
-                    class="mp-action-menu-item"
-                    :class="{ danger: action.danger }"
-                    @click="closeActionMenu"
+                  <template
+                    v-for="{ action, showSep } in boardMenuItems(order)"
+                    :key="`${order.id}-${action.kind}`"
                   >
-                    {{ action.label }}
-                  </RouterLink>
-                  <button
-                    v-else
-                    type="button"
-                    class="mp-action-menu-item"
-                    :class="{ danger: action.danger }"
-                    :disabled="orders.actionLoading"
-                    @click="startListAction(action, order)"
-                  >
-                    {{ action.label }}
-                  </button>
-                </template>
-              </div>
+                    <div v-if="showSep" class="mp-action-menu-sep" aria-hidden="true"></div>
+                    <RouterLink
+                      v-if="action.kind === 'assign'"
+                      :to="rolePath(`/workshop/orders/${order.id}`)"
+                      class="mp-action-menu-item"
+                      :class="{ danger: action.danger }"
+                      @click="closeActionMenu"
+                    >
+                      {{ action.label }}
+                    </RouterLink>
+                    <button
+                      v-else
+                      type="button"
+                      class="mp-action-menu-item"
+                      :class="{ danger: action.danger }"
+                      :disabled="orders.actionLoading"
+                      @click="startListAction(action, order)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  </template>
+                </div>
+              </Teleport>
             </div>
           </article>
-          <div
-            v-if="column.orders.length === 0"
-            class="flex min-h-20 items-center justify-center px-2 py-4 text-center text-xs text-ink-muted"
-          >
-            Hozircha bu bosqichda buyurtma yo'q
-          </div>
         </div>
       </section>
 
@@ -877,45 +965,49 @@ onBeforeUnmount(() => {
                       :aria-expanded="openActionMenuId === order.id"
                       :aria-controls="`order-actions-table-${order.id}`"
                       :aria-label="`${order.order_number} amallari`"
-                      @click="toggleActionMenu(order.id)"
+                      @click="toggleActionMenu(order.id, $event)"
                     >
                       <span aria-hidden="true">...</span>
                     </button>
-                    <div
-                      v-if="openActionMenuId === order.id"
-                      :id="`order-actions-table-${order.id}`"
-                      class="mp-action-menu"
-                    >
-                      <template
-                        v-for="(action, index) in actionsFor(order)"
-                        :key="`${order.id}-${action.kind}`"
+                    <Teleport to="body">
+                      <div
+                        v-if="openActionMenuId === order.id"
+                        :id="`order-actions-table-${order.id}`"
+                        class="mp-action-menu"
+                        :style="actionMenuStyle"
+                        data-order-action-menu
                       >
-                        <div
-                          v-if="action.kind === 'detail' && index > 0"
-                          class="mp-action-menu-sep"
-                          aria-hidden="true"
-                        ></div>
-                        <RouterLink
-                          v-if="action.kind === 'detail' || action.kind === 'assign'"
-                          :to="rolePath(`/workshop/orders/${order.id}`)"
-                          class="mp-action-menu-item"
-                          :class="{ danger: action.danger }"
-                          @click="closeActionMenu"
+                        <template
+                          v-for="(action, index) in actionsFor(order)"
+                          :key="`${order.id}-${action.kind}`"
                         >
-                          {{ action.label }}
-                        </RouterLink>
-                        <button
-                          v-else
-                          type="button"
-                          class="mp-action-menu-item"
-                          :class="{ danger: action.danger }"
-                          :disabled="orders.actionLoading"
-                          @click="startListAction(action, order)"
-                        >
-                          {{ action.label }}
-                        </button>
-                      </template>
-                    </div>
+                          <div
+                            v-if="action.kind === 'detail' && index > 0"
+                            class="mp-action-menu-sep"
+                            aria-hidden="true"
+                          ></div>
+                          <RouterLink
+                            v-if="action.kind === 'detail' || action.kind === 'assign'"
+                            :to="rolePath(`/workshop/orders/${order.id}`)"
+                            class="mp-action-menu-item"
+                            :class="{ danger: action.danger }"
+                            @click="closeActionMenu"
+                          >
+                            {{ action.label }}
+                          </RouterLink>
+                          <button
+                            v-else
+                            type="button"
+                            class="mp-action-menu-item"
+                            :class="{ danger: action.danger }"
+                            :disabled="orders.actionLoading"
+                            @click="startListAction(action, order)"
+                          >
+                            {{ action.label }}
+                          </button>
+                        </template>
+                      </div>
+                    </Teleport>
                   </div>
                 </td>
               </tr>
@@ -941,6 +1033,7 @@ onBeforeUnmount(() => {
       :title="pendingConfirmAction?.title ?? ''"
       :message="pendingConfirmAction?.message ?? ''"
       :confirm-label="pendingConfirmAction?.confirmLabel ?? 'Tasdiqlash'"
+      cancel-label="Orqaga"
       :danger="pendingConfirmAction?.danger ?? false"
       :busy="orders.actionLoading"
       @cancel="pendingConfirmAction = null"
@@ -952,6 +1045,7 @@ onBeforeUnmount(() => {
       :title="pendingReasonAction?.title ?? ''"
       :message="pendingReasonAction?.message ?? ''"
       :confirm-label="pendingReasonAction?.confirmLabel ?? 'Tasdiqlash'"
+      cancel-label="Orqaga"
       :danger="pendingReasonAction?.danger ?? false"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"

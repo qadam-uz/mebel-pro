@@ -2788,27 +2788,26 @@
   .board-col {
     min-width: 210px;
     align-self: start;
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
-    background: var(--color-elevated);
-    padding: 10px;
   }
 
   .board-col h4 {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-radius: 8px;
+    background: var(--color-sunk);
     color: var(--color-ink-soft);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.08em;
     margin: 0 0 10px;
+    padding: 7px 10px;
     text-transform: uppercase;
   }
 
   .board-col .ct {
     border-radius: 999px;
-    background: var(--color-sunk);
+    background: var(--color-elevated);
     color: var(--color-ink-strong);
     font-family: var(--font-mono);
     font-weight: 700;
@@ -2834,10 +2833,29 @@
     background: var(--color-elevated);
     box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
     color: inherit;
+    cursor: grab;
     display: block;
     margin-bottom: 8px;
     padding: 12px;
     text-decoration: none;
+  }
+
+  .board-card a {
+    cursor: inherit;
+  }
+
+  .board-card:active {
+    cursor: grabbing;
+  }
+
+  .board-card.is-dragging {
+    opacity: 0.45;
+  }
+
+  /* Highlight a valid drop column's header band while dragging. */
+  .board-col.drop-target h4 {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
   }
 
   .board-card:hover {
