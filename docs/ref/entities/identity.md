@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-26
 order: 10
 ---
 
@@ -35,7 +35,7 @@ by the platform-user registry.
 ## Workshop user
 
 A workshop's person — **including its owner**, plus office staff, cutters, edge banders,
-accountants. Logs in with workshop code + login + password. Belongs to exactly one workshop.
+accountants. Logs in with login + password. Belongs to exactly one workshop.
 **There is no separate "worker" entity and no fixed role** — capability is the owner flag
 (everything) or a set of branch-scoped [permission grants](#permission-grant), and one person may
 hold every grant. Uses the workshop app.
@@ -59,10 +59,10 @@ salary. A worker's pay is the accountant's manual calculation from the worker-pr
 reports, booked as a `salary` expense ([`finance.md`](../features/finance.md)).
 
 Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop; sign-in
-resolves the workshop by `workshop.code` before checking the login; `home_branch_id` belongs to
-the same workshop; blocking the user, or blocking its workshop, deletes its sessions; staff with
-zero grants can log in but has no actionable screens; v1 has no owner transfer path after
-provisioning.
+resolves exactly one same-login account by password and rejects same-login / same-password
+cross-workshop ambiguity; `home_branch_id` belongs to the same workshop; blocking the user, or
+blocking its workshop, deletes its sessions; staff with zero grants can log in but has no
+actionable screens; v1 has no owner transfer path after provisioning.
 
 ## Permission grant
 
@@ -95,7 +95,7 @@ branch per order. Uses the client app.
 | `id` | UUID | PK |
 | `phone` | text | `+998XXXXXXXXX`; **unique, required** — the verified identity and natural key |
 | `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
-| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced** (removed pending a rethink — to be re-added). |
+| `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced**. |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 

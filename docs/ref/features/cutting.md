@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-19
+updated: 2026-06-26
 order: 80
 ---
 
@@ -37,9 +37,10 @@ and unsaved, so abandoned/empty editors never mint a draft (see *Lifecycle*).
 
 A draft owns:
 
-- **An optional `preferred_branch_id`.** Seeded from the client's
-  [profile default](../entities/identity.md#client); the client can change or clear it on
-  the draft without touching the profile. When set, the material picker is **pre-filtered**
+- **An optional `preferred_branch_id`.** Seeded from the client's stored
+  [profile default](../entities/identity.md#client) when one exists; the current profile UI does
+  not expose setting that default. The client can still change or clear it on the draft without
+  touching the profile. When set, the material picker is **pre-filtered**
   to materials this branch carries and the order step defaults to this branch — but the
   filter is a help, never a data operation: parts already in the list stay editable even
   when their materials aren't carried at the new branch (see *Recovery affordances*).

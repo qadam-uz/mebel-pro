@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-23
+updated: 2026-06-26
 order: 20
 ---
 
@@ -14,17 +14,19 @@ and how the surfaces look in the three apps.
 
 ## Workshop & platform user sign-in
 
-Platform users sign in with login + password. Workshop users sign in with workshop `code` +
-login + password; the code selects the tenant namespace, because workshop-user login is
-case-insensitive and unique only inside that workshop. The error on a bad pair is a **generic**
-"login or password is incorrect" — no account-existence oracle. **Five consecutive bad attempts
-→ a 15-minute lockout** (`locked_until`); a correct password resets the counter. Passwords are
-argon2 / bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one
-digit.
+Platform users sign in with login + password. Workshop users also sign in with login +
+password — **no workshop code field**. Workshop-user login is case-insensitive and unique only
+inside one workshop, so the backend resolves the submitted login by checking the password across
+same-login accounts: exactly one password match authenticates, no match fails, and more than one
+match fails as ambiguous. The error on a bad pair is a **generic** "login or password is
+incorrect" — no account-existence oracle. **Five consecutive bad attempts → a 15-minute
+lockout** (`locked_until`); a correct password resets the counter. Passwords are argon2 /
+bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one digit.
 
 `account_locked` and `account_blocked` are returned only after the submitted credential pair is
-otherwise valid. Unknown workshop code, unknown login, wrong password, wrong password for a locked
-account, and wrong password for a blocked account all return the same generic credential error.
+otherwise valid. Unknown login, wrong password, wrong password for a locked account, wrong
+password for a blocked account, and ambiguous same-login / same-password matches all return the
+same generic credential error.
 
 `password_reset_required` (set on creation, on a higher-principal password reset, and after
 a security rotation) is an account gate. It is returned from `get-me` and the workshop /
@@ -67,10 +69,10 @@ revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant 
 
 ### UX
 
-- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — workshop
-  users see workshop code + login + password fields; platform users see login + password
-  fields. Failure uses the same generic error; a lockout banner ("try again at HH:MM") appears
-  only after credentials are otherwise valid and the account is locked.
+- **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — both
+  password-auth surfaces show login + password only. Failure uses the same generic error; a
+  lockout banner ("try again at HH:MM") appears only after credentials are otherwise valid and
+  the account is locked.
 - **Password-reset gate** — shown in the workshop / superadmin app shell when
   `password_reset_required = true`; it is persistent, blocking for non-account routes, and links
   to the profile password tab. The gate disappears only after a successful password change.
@@ -140,10 +142,9 @@ the phone the client already typed when stepping forward or back:
 - **Name step** — shown **only** when verification returned `is_new = true`: one `name` field,
   primary **Continue**; returning clients skip straight into the app.
 - **Client profile** (`/c/profile`) — `name` editable (it's client-entered, not synced); `phone`
-  read-only (changing it would mean re-verification — out of scope in v1); preferred branch
-  selector with searchable workshop + branch options limited to branches the client may see
-  (`active` and `temporarily_closed`), plus a clear action; sessions list with a current marker;
-  "log out" / "log out everywhere".
+  read-only (changing it would mean re-verification — out of scope in v1); order count; sessions
+  list with a current marker; "log out" / "log out everywhere". The model still has
+  `preferred_branch_id`, but the profile UI to set it is not currently surfaced.
 
 ## Workshop provisioning (superadmin app)
 
@@ -308,8 +309,9 @@ grants at least one active branch permission.
 
 - **Create-workshop fails after the workshop row but before the owner row** — the whole
   operation rolls back (atomic).
-- **Owner login collides** with an existing owner login in another workshop — fine (logins
-  are unique per workshop, not globally).
+- **Owner login collides** with an existing owner login in another workshop — allowed because
+  logins are unique per workshop, not globally. If the same login also has the same password in
+  more than one workshop, sign-in rejects it as ambiguous until one password differs.
 - **Login collision within the same workshop** — rejected.
 - **Block a workshop while staff are mid-action** — their next request 401s; the platform
   operator can still read the workshop's data for incident response.
