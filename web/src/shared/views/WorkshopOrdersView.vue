@@ -922,7 +922,6 @@ onBeforeUnmount(() => {
                 v-for="order in orders.workshopOrders"
                 :key="order.id"
                 class="clickable"
-                role="link"
                 tabindex="0"
                 :aria-label="`${order.order_number} — ${order.contact_name}`"
                 @click="openOrder(order.id)"
