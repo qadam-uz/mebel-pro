@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-19
+updated: 2026-06-26
 order: 80
 ---
 
@@ -37,9 +37,10 @@ and unsaved, so abandoned/empty editors never mint a draft (see *Lifecycle*).
 
 A draft owns:
 
-- **An optional `preferred_branch_id`.** Seeded from the client's
-  [profile default](../entities/identity.md#client); the client can change or clear it on
-  the draft without touching the profile. When set, the material picker is **pre-filtered**
+- **An optional `preferred_branch_id`.** Seeded from the client's stored
+  [profile default](../entities/identity.md#client) when one exists; the current profile UI does
+  not expose setting that default. The client can still change or clear it on the draft without
+  touching the profile. When set, the material picker is **pre-filtered**
   to materials this branch carries and the order step defaults to this branch — but the
   filter is a help, never a data operation: parts already in the list stay editable even
   when their materials aren't carried at the new branch (see *Recovery affordances*).
@@ -353,6 +354,11 @@ On success, the panel scrolls into view with three regions:
      part is labelled with its **dimensions** — length along the top edge, width down the
      left edge — rather than an opaque part id. Selecting a placement highlights it in the
      side legend, which leads with the dimensions (+ quantity index, rotation indicator).
+   - **Banded sides** are flagged by a short, centred accent tick set just inside the
+     placed rectangle, on each banded side only (not a full-length frame) — so the cutter
+     sees which edges take tape at a glance. The side mapping follows the part's own edges;
+     a rotated placement maps them 90° clockwise. Tick inset, length and weight are
+     normalised, so banding reads the same on a large and a small panel.
 
 3. **Actions.**
    - **Place order with this cutting** → routes into the order wizard

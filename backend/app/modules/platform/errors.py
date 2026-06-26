@@ -106,6 +106,8 @@ async def refresh_error_record_counts(
         record.count_24h = await _count_occurrences_since(db, record.id, current - ROLLING_24H)
         record.count_7d = await _count_occurrences_since(db, record.id, current - ROLLING_7D)
     await db.flush()
+    for record in records:
+        await db.refresh(record)
     return records
 
 

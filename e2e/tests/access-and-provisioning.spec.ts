@@ -96,14 +96,10 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
         name: `Branch ${id}`,
         address: 'Tashkent, Test',
         phone: phoneFor(id, 3),
-        latitude: '41.2995',
-        longitude: '69.2401',
         working_hours: defaultWorkingHours(),
       },
       owner: {
-        full_name: 'E2E Owner',
         login: ownerLogin,
-        phone: phoneFor(id, 4),
       },
       temp_password: ownerPassword,
     },
@@ -158,11 +154,7 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   await provisionForm.getByLabel('Birinchi filial').fill(`Branch ${id}`)
   await provisionForm.getByLabel('Filial manzili').fill('Tashkent, Test')
   await provisionForm.getByLabel('Filial telefoni').fill(phoneFor(id, 11))
-  await provisionForm.getByLabel('Kenglik').fill('41.2995')
-  await provisionForm.getByLabel('Uzunlik').fill('69.2401')
-  await provisionForm.getByLabel('Ega ismi').fill('UI Owner')
   await provisionForm.getByLabel('Ega login').fill(`ui-owner-${id}`)
-  await provisionForm.getByLabel('Ega telefoni').fill(phoneFor(id, 12))
   await provisionForm.getByLabel('Vaqtinchalik parol').fill('OwnerTemp123')
   await provisionForm.getByRole('button', { name: 'Yaratish' }).click()
 

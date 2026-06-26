@@ -9,9 +9,12 @@ from pathlib import Path
 from typing import Protocol
 
 import boto3
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog import get_logger
 
 from app.core.config import settings
 from app.core.errors import APIError
@@ -42,6 +45,12 @@ ALLOWED_UPLOAD_CONTENT_TYPES = frozenset(
 IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 RECEIPT_CONTENT_TYPES = ALLOWED_UPLOAD_CONTENT_TYPES
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+logger = get_logger(__name__)
+S3_CLIENT_CONFIG = Config(
+    request_checksum_calculation="when_required",
+    response_checksum_validation="when_required",
+    s3={"addressing_style": "path"},
+)
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,10 @@ class StoredObject:
     key: str
     size_bytes: int
     content_type: str
+
+
+class FileStorageUnavailable(Exception):
+    """Object storage rejected an operation."""
 
 
 class FileStorage(Protocol):
@@ -69,15 +82,19 @@ class S3FileStorage:
             aws_access_key_id=settings.MINIO_ACCESS_KEY_ID,
             aws_secret_access_key=settings.MINIO_SECRET_ACCESS_KEY,
             use_ssl=settings.MINIO_USE_SSL,
+            config=S3_CLIENT_CONFIG,
         )
 
     def put(self, key: str, content: bytes, content_type: str) -> StoredObject:
-        self._client.put_object(
-            Bucket=self._bucket,
-            Key=key,
-            Body=content,
-            ContentType=content_type,
-        )
+        try:
+            self._client.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise FileStorageUnavailable(_storage_error_code(exc)) from exc
         return StoredObject(key=key, size_bytes=len(content), content_type=content_type)
 
     def open(self, key: str) -> bytes:
@@ -136,7 +153,19 @@ async def create_uploaded_file(
         )
     safe_name = _safe_filename(original_name)
     storage_key = f"uploads/{uuid.uuid4().hex}/{safe_name}"
-    stored = storage.put(storage_key, content, content_type)
+    try:
+        stored = storage.put(storage_key, content, content_type)
+    except FileStorageUnavailable as exc:
+        logger.warning(
+            "file_storage_write_failed",
+            storage_key=storage_key,
+            storage_error=str(exc),
+        )
+        raise APIError(
+            "file_storage_unavailable",
+            "File storage is unavailable",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        ) from exc
     row = StoredFile(
         storage_key=stored.key,
         original_name=safe_name,
@@ -150,6 +179,14 @@ async def create_uploaded_file(
     await db.flush()
     await db.refresh(row)
     return row
+
+
+def _storage_error_code(exc: Exception) -> str:
+    if isinstance(exc, ClientError):
+        code = exc.response.get("Error", {}).get("Code")
+        if isinstance(code, str) and code:
+            return code
+    return exc.__class__.__name__
 
 
 async def attach_file(

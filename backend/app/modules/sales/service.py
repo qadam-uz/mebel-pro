@@ -184,6 +184,15 @@ async def place_client_order(
     await db.flush()
 
     for priced in pricing.priced_parts:
+        quantity = int(priced.part["quantity"])
+        # The per-part panel cost is divided into an integer per-unit price; the line
+        # total must be derived from that same (floored) unit price, not the raw
+        # panel_price_tiyin, or it breaks ck_order_items_line_total_formula
+        # (line_total = (unit_cutting + unit_material) * quantity + edge_cost) whenever
+        # panel_price_tiyin isn't divisible by quantity. The order's authoritative
+        # subtotals/total stay exact (computed in _price_result); only the per-line
+        # material display rounds down by up to quantity-1 tiyin.
+        unit_material_price = priced.panel_price_tiyin // quantity
         db.add(
             OrderItem(
                 order_id=order.id,
@@ -193,15 +202,15 @@ async def place_client_order(
                 part_ref=str(priced.part["part_ref"]),
                 length_mm=int(priced.part["length_mm"]),
                 width_mm=int(priced.part["width_mm"]),
-                quantity=int(priced.part["quantity"]),
+                quantity=quantity,
                 edge_top=priced.edge_snapshots["edge_top"],
                 edge_bottom=priced.edge_snapshots["edge_bottom"],
                 edge_left=priced.edge_snapshots["edge_left"],
                 edge_right=priced.edge_snapshots["edge_right"],
                 unit_cutting_price_tiyin=0,
-                unit_material_price_tiyin=priced.panel_price_tiyin // int(priced.part["quantity"]),
+                unit_material_price_tiyin=unit_material_price,
                 edge_cost_tiyin=priced.edge_cost_tiyin,
-                line_total_tiyin=priced.panel_price_tiyin + priced.edge_cost_tiyin,
+                line_total_tiyin=unit_material_price * quantity + priced.edge_cost_tiyin,
             )
         )
 

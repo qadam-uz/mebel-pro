@@ -2,7 +2,13 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
-import type { CuttingPanel, CuttingResult } from '@/shared/stores/cutting'
+import type {
+  CuttingEdgeBand,
+  CuttingPanel,
+  CuttingPart,
+  CuttingPlacement,
+  CuttingResult,
+} from '@/shared/stores/cutting'
 
 const panel: CuttingPanel = {
   id: 'panel-1',
@@ -56,5 +62,93 @@ describe('CuttingPanelSvg', () => {
 
     await placement.trigger('click')
     expect(wrapper.emitted('select-placement')?.[0]).toEqual([panel.placements[0]])
+  })
+})
+
+const BAND: CuttingEdgeBand = { material_id: 'edge-1', source: 'shop' }
+
+function makePart(overrides: Partial<CuttingPart> = {}): CuttingPart {
+  return {
+    part_ref: 'A',
+    material_id: 'mat-1',
+    material_source: 'shop',
+    length_mm: 300,
+    width_mm: 200,
+    quantity: 1,
+    edge_top: null,
+    edge_bottom: null,
+    edge_left: null,
+    edge_right: null,
+    ...overrides,
+  }
+}
+
+function mountWithBanding(part: CuttingPart, placement: Partial<CuttingPlacement> = {}) {
+  const fullPlacement: CuttingPlacement = {
+    id: 'placement-1',
+    part_ref: 'A',
+    part_quantity_index: 1,
+    x_mm: 0,
+    y_mm: 0,
+    length_mm: 300,
+    width_mm: 200,
+    rotated: false,
+    ...placement,
+  }
+  const bandedPanel: CuttingPanel = { ...panel, placements: [fullPlacement] }
+  const bandedResult = {
+    ...result,
+    panels: [bandedPanel],
+    parts_snapshot: [part],
+  } as unknown as CuttingResult
+  return mount(CuttingPanelSvg, {
+    props: { result: bandedResult, panel: bandedPanel, activePlacementId: null },
+  })
+}
+
+function lineOrientations(wrapper: ReturnType<typeof mountWithBanding>) {
+  return wrapper.findAll('.placement line').map((line) => ({
+    horizontal: line.attributes('y1') === line.attributes('y2'),
+    x: Number(line.attributes('x1')),
+    y: Number(line.attributes('y1')),
+  }))
+}
+
+describe('CuttingPanelSvg edge banding', () => {
+  it('draws no band lines for a part with no banding', () => {
+    const wrapper = mountWithBanding(makePart())
+    expect(wrapper.findAll('.placement line')).toHaveLength(0)
+  })
+
+  it('draws one horizontal band line per banded long side (top/bottom), none on sides', () => {
+    const wrapper = mountWithBanding(makePart({ edge_top: BAND, edge_bottom: BAND }))
+    const lines = lineOrientations(wrapper)
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line) => line.horizontal)).toBe(true)
+  })
+
+  it('draws one vertical band line per banded short side (left/right)', () => {
+    const wrapper = mountWithBanding(makePart({ edge_left: BAND }))
+    const lines = lineOrientations(wrapper)
+    expect(lines).toHaveLength(1)
+    expect(lines[0].horizontal).toBe(false)
+  })
+
+  it('maps a rotated part 90° clockwise: edge_top lands on the right (vertical) side', () => {
+    // length/width are stored already-swapped for a rotated placement; the band of
+    // the part's top edge must render as a vertical line near the right edge.
+    const wrapper = mountWithBanding(makePart({ edge_top: BAND }), { rotated: true })
+    const lines = lineOrientations(wrapper)
+    expect(lines).toHaveLength(1)
+    expect(lines[0].horizontal).toBe(false)
+    // right side → x sits past the placement midline (length 300 → x ≈ 296)
+    expect(lines[0].x).toBeGreaterThan(150)
+  })
+
+  it('tolerates a result without parts_snapshot (no crash, no bands)', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: { result, panel, activePlacementId: null },
+    })
+    expect(wrapper.findAll('.placement line')).toHaveLength(0)
   })
 })

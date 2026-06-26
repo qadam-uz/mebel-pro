@@ -864,3 +864,79 @@ async def test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does(
     notifications = await _client_order_notifications(db_session, shop_id)
     assert [n.event_code for n in notifications] == ["order.cancelled"]
     assert notifications[0].payload["to_status"] == "cancelled"
+
+
+async def test_client_order_with_indivisible_panel_price_and_quantity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Regression: a part quantity that doesn't evenly divide its per-part panel price
+    # used to violate ck_order_items_line_total_formula (line_total kept the raw
+    # panel_price while unit_material was floored), 500ing order placement. A panel
+    # price of 250_000 tiyin with quantity 3 leaves a remainder — a failing case the
+    # existing tests (quantity 2, even price) never reach.
+    _, _, branch_id, _ = await _workshop_setup(db_session)
+    panel, _ = await _materials(db_session, branch_id=branch_id)
+    client_access, _ = await _client_access(
+        db_session, phone=f"+99890{uuid.uuid4().int % 10**7:07d}"
+    )
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(client_access))
+    assert created.status_code == 201
+    draft_id = created.json()["id"]
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(client_access),
+        json={
+            "preferred_branch_id": str(branch_id),
+            "parts_snapshot": [
+                {
+                    "part_ref": "indivisible",
+                    "material_id": str(panel.id),
+                    "material_source": "shop",
+                    "length_mm": 260,
+                    "width_mm": 180,
+                    "quantity": 3,
+                    "edge_top": None,
+                    "edge_bottom": None,
+                    "edge_left": None,
+                    "edge_right": None,
+                }
+            ],
+        },
+    )
+    assert patched.status_code == 200
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize",
+        headers=_auth(client_access),
+    )
+    assert optimized.status_code == 200
+
+    placed = await client.post(
+        "/api/v1/client/orders",
+        headers=_auth(client_access),
+        json={
+            "draft_id": optimized.json()["id"],
+            "branch_id": str(branch_id),
+            "contact_name": "Rounding Check",
+            "contact_phone": "+998901555333",
+        },
+    )
+    assert placed.status_code == 201, placed.text
+
+    order_id = uuid.UUID(str(placed.json()["id"]))
+    item = (
+        await db_session.execute(select(OrderItem).where(OrderItem.order_id == order_id))
+    ).scalar_one()
+    assert item.quantity == 3
+    # The stored row must satisfy the DB check-constraint identity exactly.
+    assert (
+        item.line_total_tiyin
+        == (item.unit_cutting_price_tiyin + item.unit_material_price_tiyin) * item.quantity
+        + item.edge_cost_tiyin
+    )
+    order = await db_session.get(Order, order_id)
+    assert order is not None
+    # The regression scenario is genuinely exercised (price not divisible by quantity),
+    # and the order's authoritative material subtotal stays the exact, un-floored cost.
+    assert order.subtotal_materials_tiyin % 3 != 0
+    assert item.unit_material_price_tiyin == order.subtotal_materials_tiyin // 3

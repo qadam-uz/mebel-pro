@@ -7,6 +7,7 @@ import { useDropdownPlacement } from '@/shared/composables/useDropdownPlacement'
 
 const props = withDefaults(
   defineProps<{
+    id?: string
     label: string
     modelValue: string | null
     options: ChoiceOption[]
@@ -29,7 +30,8 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
-const id = nextStableId('mp-form-select')
+const internalId = nextStableId('mp-form-select')
+const controlId = computed(() => props.id ?? internalId)
 const {
   dropUp,
   start: startPlacement,
@@ -39,10 +41,10 @@ const {
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
-  return option ? `${id}-${option.value}` : undefined
+  return option ? `${internalId}-${option.value}` : undefined
 })
 const buttonText = computed(() => selected.value?.label ?? props.placeholder)
-const errorId = computed(() => (props.error ? `${id}-error` : undefined))
+const errorId = computed(() => (props.error ? `${controlId.value}-error` : undefined))
 
 function firstEnabledIndex(start = 0, direction = 1) {
   return findEnabledIndex(props.options, start, direction)
@@ -129,12 +131,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <label :id="`${id}-label`" class="mb-1 block text-sm font-bold text-ink" :for="id">
+    <label
+      :id="`${internalId}-label`"
+      class="mb-1 block text-sm font-bold text-ink"
+      :for="controlId"
+    >
       {{ label }}
     </label>
     <div class="relative">
       <button
-        :id="id"
+        :id="controlId"
         ref="buttonRef"
         type="button"
         class="grid min-h-11 w-full grid-cols-[1fr_auto] items-center gap-3 rounded-md border bg-elevated px-3 text-left text-sm transition hover:border-hairline-strong"
@@ -145,8 +151,8 @@ onBeforeUnmount(() => {
         ]"
         :disabled="disabled"
         :aria-expanded="open"
-        :aria-controls="`${id}-listbox`"
-        :aria-labelledby="`${id}-label ${id}`"
+        :aria-controls="`${internalId}-listbox`"
+        :aria-labelledby="`${internalId}-label ${controlId}`"
         :aria-describedby="errorId"
         aria-haspopup="listbox"
         @click="open ? closeList() : openList()"
@@ -167,19 +173,19 @@ onBeforeUnmount(() => {
 
       <ul
         v-if="open"
-        :id="`${id}-listbox`"
+        :id="`${internalId}-listbox`"
         ref="listRef"
         role="listbox"
         tabindex="0"
         class="absolute z-40 max-h-[min(18rem,40dvh)] w-full overflow-auto overscroll-contain rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
         :class="dropUp ? 'bottom-full mb-1' : 'top-full mt-1'"
-        :aria-labelledby="`${id}-label`"
+        :aria-labelledby="`${internalId}-label`"
         :aria-activedescendant="activeOptionId"
         @keydown="onKeydown"
       >
         <li
           v-for="(option, index) in options"
-          :id="`${id}-${option.value}`"
+          :id="`${internalId}-${option.value}`"
           :key="option.value"
           role="option"
           :aria-selected="option.value === modelValue"

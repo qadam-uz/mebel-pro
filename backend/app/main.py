@@ -49,7 +49,9 @@ def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(
         title=settings.PROJECT_NAME,
-        debug=settings.DEBUG,
+        # Keep 500s on the structured JSON error path; DEBUG only changes the
+        # public message in `unexpected_error_handler`.
+        debug=False,
         # The built-in OpenAPI routes are unauthenticated, so disable them and
         # register guarded replacements below; `/docs` is the docs site.
         openapi_url=None,

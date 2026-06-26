@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  tempPassword,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
 import { adminDateTime } from '@/shared/app/adminUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -26,6 +34,14 @@ const message = ref<string | null>(null)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const loggingOut = ref(false)
+type PasswordField = 'current' | 'next' | 'confirm'
+const fieldErrors = reactive<FieldErrors<PasswordField>>({})
+const fieldIds: Record<PasswordField, string> = {
+  current: 'admin-current-password',
+  next: 'admin-new-password',
+  confirm: 'admin-confirm-password',
+}
+const fieldOrder: PasswordField[] = ['current', 'next', 'confirm']
 const tabOptions = [
   { value: 'profile', label: 'Profil' },
   { value: 'password', label: 'Parol' },
@@ -87,7 +103,19 @@ async function revoke(id: string) {
 }
 
 async function changePassword() {
-  if (passwordMismatch.value) return
+  clearFieldErrors(fieldErrors)
+  fieldErrors.current = requiredText(currentPassword.value, 'Joriy parolni kiriting.') ?? undefined
+  fieldErrors.next =
+    requiredText(newPassword.value, 'Yangi parolni kiriting.') ??
+    tempPassword(newPassword.value) ??
+    undefined
+  fieldErrors.confirm =
+    requiredText(confirmPassword.value, 'Tasdiqlash parolini kiriting.') ??
+    (passwordMismatch.value ? 'Parollar mos kelmadi.' : undefined)
+  if (fieldOrder.some((field) => fieldErrors[field])) {
+    focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+    return
+  }
   saving.value = true
   message.value = null
   error.value = null
@@ -97,8 +125,17 @@ async function changePassword() {
     newPassword.value = ''
     confirmPassword.value = ''
     message.value = "Parol o'zgartirildi."
-  } catch {
-    error.value = "Parolni o'zgartirib bo'lmadi."
+  } catch (changeError) {
+    const fields = fieldErrorsFromApi<PasswordField>(changeError, {
+      invalid_current_password: 'current',
+      weak_password: 'next',
+    })
+    if (Object.keys(fields).length > 0) {
+      Object.assign(fieldErrors, fields)
+      focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+    } else {
+      error.value = "Parolni o'zgartirib bo'lmadi."
+    }
   } finally {
     saving.value = false
   }
@@ -194,7 +231,17 @@ onMounted(loadSessions)
             type="password"
             autocomplete="current-password"
             required
+            :aria-invalid="!!fieldErrors.current"
+            aria-describedby="admin-current-password-error"
           />
+          <span
+            v-if="fieldErrors.current"
+            id="admin-current-password-error"
+            class="admin-field-error"
+            role="alert"
+          >
+            {{ fieldErrors.current }}
+          </span>
         </label>
         <label class="admin-field" for="admin-new-password">
           <span class="admin-field-label">Yangi parol</span>
@@ -205,6 +252,8 @@ onMounted(loadSessions)
             autocomplete="new-password"
             minlength="8"
             required
+            :aria-invalid="!!fieldErrors.next"
+            aria-describedby="admin-new-password-error"
           />
           <span
             v-if="newPassword"
@@ -212,6 +261,14 @@ onMounted(loadSessions)
             :class="passwordStrength >= 3 ? 'text-success' : 'text-ink-muted'"
           >
             Kuchi: {{ passwordStrengthLabel }}
+          </span>
+          <span
+            v-if="fieldErrors.next"
+            id="admin-new-password-error"
+            class="admin-field-error"
+            role="alert"
+          >
+            {{ fieldErrors.next }}
           </span>
         </label>
         <label class="admin-field" for="admin-confirm-password">
@@ -222,16 +279,19 @@ onMounted(loadSessions)
             type="password"
             autocomplete="new-password"
             required
+            :aria-invalid="!!fieldErrors.confirm || passwordMismatch"
+            aria-describedby="admin-confirm-password-error"
           />
-          <span v-if="passwordMismatch" class="mt-1 text-xs font-bold text-danger" role="alert">
-            Parollar mos kelmadi.
+          <span
+            v-if="fieldErrors.confirm || passwordMismatch"
+            id="admin-confirm-password-error"
+            class="admin-field-error"
+            role="alert"
+          >
+            {{ fieldErrors.confirm ?? 'Parollar mos kelmadi.' }}
           </span>
         </label>
-        <button
-          type="submit"
-          class="mp-button mp-button-primary"
-          :disabled="saving || passwordMismatch || !newPassword || !confirmPassword"
-        >
+        <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
           {{ saving ? 'Saqlanmoqda' : "O'zgartirish" }}
         </button>
         <p v-if="message" class="text-sm font-bold text-success" role="status">{{ message }}</p>

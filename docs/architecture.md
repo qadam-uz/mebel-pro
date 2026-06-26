@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-20
+updated: 2026-06-26
 order: 70
 ---
 
@@ -31,14 +31,12 @@ analytics / BI (dashboards are operational-DB aggregates).
 
 ## Current stage
 
-**Pre-production** — shaping business logic and UX directly in the Vue SPAs. Nothing is
-deployed for real users: no production data, no external API consumer, no installed client to
-keep working. So changing today's shape is cheap, and we spend
-that freedom: edit existing migrations in place to keep the history clean rather than stacking
-corrective ones, change schemas and contracts without backward-compat shims, and
-delete-and-replace instead of running deprecation cycles. The guardrails still hold — docs stay
-the source of truth, security defaults stay locked, the check gates run. This posture flips once
-the first real workshop is onboarded with data worth keeping.
+**Production** — the app is deployed for real users and real workshop data. The bundled SPAs
+are still the only API consumers, so internal API contracts may move with a coordinated deploy,
+but database history is append-only once applied: create forward-only migrations, never rewrite
+an applied migration to "clean up" history, and treat data removal or destructive backfills as
+explicit production operations. Docs stay the source of truth, security defaults stay locked, and
+the check gates run before shipping.
 
 ## Topology
 
@@ -159,7 +157,9 @@ specifics, this section just states the requirement.
 
 - Every mutating use case writes an append-only `action_log` row; every order status transition
   writes an append-only `status_change_log` row.
-- Every API response carries `X-Trace-ID`; errors include `trace_id` in the body.
+- Every API response carries `X-Trace-ID`; errors include `trace_id` in the body. Unexpected
+  500s use a generic public message unless `DEBUG=true`, where the response message is the
+  scrubbed exception text.
 
 ### Performance budgets
 

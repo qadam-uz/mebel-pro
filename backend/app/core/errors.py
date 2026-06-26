@@ -12,10 +12,12 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from structlog import get_logger
 
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.principal import AuthenticatedPrincipal
 from app.core.trace import TRACE_HEADER, get_trace_id
 from app.modules.platform.api import record_application_error
+from app.modules.support.api import scrub_text
 
 logger = get_logger(__name__)
 
@@ -126,13 +128,33 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException) -> J
 
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     trace_id = _request_trace_id(request)
+    stack = _exception_stack(exc)
+    response_message = (
+        scrub_text(str(exc) or exc.__class__.__name__)
+        if settings.DEBUG
+        else "Internal server error"
+    )
+    logger.error(
+        "unexpected_api_error",
+        trace_id=trace_id,
+        method=request.method,
+        path=request.url.path,
+        query=request.url.query,
+        exc_type=f"{exc.__class__.__module__}.{exc.__class__.__name__}",
+        exc_message=scrub_text(str(exc) or exc.__class__.__name__),
+        stack=stack,
+    )
     await _record_unexpected_error(request, exc, trace_id=trace_id)
     return _json_error(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "internal_error",
-        "Internal server error",
+        response_message,
         trace_id=trace_id,
     )
+
+
+def _exception_stack(exc: Exception) -> str:
+    return scrub_text("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
 
 
 async def _record_unexpected_error(request: Request, exc: Exception, *, trace_id: str) -> None:
@@ -147,7 +169,7 @@ async def _record_unexpected_error(request: Request, exc: Exception, *, trace_id
             "authorization": request.headers.get("authorization"),
         },
     }
-    stack = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    stack = _exception_stack(exc)
     try:
         async with SessionLocal() as db:
             await record_application_error(
@@ -163,4 +185,10 @@ async def _record_unexpected_error(request: Request, exc: Exception, *, trace_id
             )
             await db.commit()
     except Exception as monitor_exc:
-        logger.warning("error_monitor_record_failed", exc_info=monitor_exc, trace_id=trace_id)
+        logger.warning(
+            "error_monitor_record_failed",
+            trace_id=trace_id,
+            exc_type=f"{monitor_exc.__class__.__module__}.{monitor_exc.__class__.__name__}",
+            exc_message=scrub_text(str(monitor_exc) or monitor_exc.__class__.__name__),
+            stack=_exception_stack(monitor_exc),
+        )

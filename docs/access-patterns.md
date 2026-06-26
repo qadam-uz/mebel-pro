@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-06-02
+updated: 2026-06-26
 order: 50
 ---
 
@@ -53,15 +53,17 @@ Three principal types — three auth surfaces, one per front-end app. They don't
 | Principal                              | Auth                                  | Bound to             | Capability                                                                     | App            |
 | -------------------------------------- | ------------------------------------- | -------------------- | ------------------------------------------------------------------------------ | -------------- |
 | **Platform user** ("superadmin")       | login + password; no permission model | no workshop          | platform-ops scope                                                             | superadmin app |
-| **Workshop user — owner** (`is_owner`) | workshop code + login + password      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
-| **Workshop user — staff**              | workshop code + login + password      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
+| **Workshop user — owner** (`is_owner`) | login + password                      | one workshop         | everything in the workshop on every branch, plus owner-only powers (see below) | workshop app   |
+| **Workshop user — staff**              | login + password                      | one workshop         | exactly the `(permission, branch)` grants the owner gave them                  | workshop app   |
 | **Client**                             | phone + Telegram OTP; no password     | no workshop (global) | own orders & cutting drafts; browse active branches of any workshop            | client app     |
 
 ## The model
 
-- **Workshop users** sign in with workshop `code` + login + password. The code selects the
-  tenant namespace; login is unique only inside that workshop. Owners are created by a platform
-  operator during workshop provisioning.
+- **Workshop users** sign in with login + password. Login remains unique only inside one
+  workshop, so the server resolves the account from the submitted password; a same-login /
+  same-password collision across workshops is rejected as ambiguous. The workshop `code` remains
+  an operational identifier, not a login field. Owners are created by a platform operator during
+  workshop provisioning.
 - **Platform users** sign in with login + password and are seeded via a backend CLI (they're at
   the top of the hierarchy, so no higher principal exists to create them in-app).
 - **Clients** sign in with a **phone number verified by a one-time code sent over Telegram** —

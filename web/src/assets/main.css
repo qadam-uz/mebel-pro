@@ -4201,7 +4201,7 @@
   .admin-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: stretch;
+    align-items: end;
     gap: 12px;
     margin-bottom: 18px;
   }
@@ -4212,9 +4212,9 @@
 
   .admin-filter-input {
     display: flex;
-    min-height: 70px;
-    min-width: 220px;
-    flex: 0 1 240px;
+    min-height: 48px;
+    min-width: 180px;
+    flex: 1 1 200px;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
@@ -4222,7 +4222,7 @@
     border: 1px solid var(--color-hairline-strong);
     border-radius: 8px;
     background: var(--color-elevated);
-    padding: 10px 12px;
+    padding: 7px 12px;
     box-shadow:
       0 1px 2px rgb(15 27 45 / 4%),
       0 4px 10px -3px rgb(15 27 45 / 9%);
@@ -4231,7 +4231,7 @@
   .admin-filter-input > span:not(.sr-only) {
     flex: none;
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 850;
     letter-spacing: 0;
     text-transform: uppercase;
@@ -4250,27 +4250,26 @@
   }
 
   .admin-filters > .relative {
-    min-height: 70px;
-    min-width: 208px;
-    flex: 0 1 220px;
-    align-self: stretch;
+    min-height: 48px;
+    min-width: 160px;
+    flex: 1 1 170px;
   }
 
   .admin-filters > .relative > .mp-surface {
     width: 100%;
     min-width: 0 !important;
-    min-height: 70px;
+    min-height: 48px;
+    padding-block: 7px;
   }
 
   .admin-filters > .relative > button:not(.mp-surface) {
-    min-height: 44px;
+    min-height: 40px;
   }
 
   .admin-filters > .mp-button {
-    min-height: 70px;
-    align-self: stretch;
+    min-height: 48px;
     border-radius: 8px;
-    padding-block: 10px;
+    padding-block: 7px;
   }
 
   .admin-field {
@@ -4288,6 +4287,14 @@
     font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+  }
+
+  .admin-field-error {
+    margin-top: -2px;
+    color: var(--color-danger);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.25;
   }
 
   .admin-field input,
@@ -4568,9 +4575,10 @@
   }
 
   .admin-refresh-button {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     flex: none;
+    align-self: end;
     border-color: var(--color-hairline-strong);
     border-radius: 8px;
     background: var(--color-elevated);

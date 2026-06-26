@@ -61,14 +61,10 @@ def _provision_payload(code: str | None = None) -> dict[str, object]:
             "name": "Main",
             "address": "Tashkent, Chilonzor",
             "phone": "+998902020202",
-            "latitude": "41.2995",
-            "longitude": "69.2401",
             "working_hours": _default_working_hours(),
         },
         "owner": {
-            "full_name": "Atlas Owner",
             "login": "owner",
-            "phone": "+998903030303",
         },
     }
 
@@ -91,6 +87,8 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert body["workshop"]["status"] == "active"
     assert body["branch"]["status"] == "active"
     assert body["owner"]["login"] == "owner"
+    assert "full_name" not in body["owner"]
+    assert "phone" not in body["owner"]
     assert body["owner"]["is_owner"] is True
     assert body["owner"]["home_branch_id"] == body["branch"]["id"]
     assert body["owner"]["password_reset_required"] is True
@@ -142,7 +140,6 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
             "owner": {
                 **_provision_payload()["owner"],
                 "login": "owner-a",
-                "phone": "+998903030301",
             },
         },
     )
@@ -154,7 +151,6 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
             "owner": {
                 **_provision_payload()["owner"],
                 "login": "owner-b",
-                "phone": "+998903030302",
             },
         },
     )
@@ -216,37 +212,31 @@ async def test_platform_provision_rejects_non_canonical_working_hours(
     assert bad_range.status_code == 422
 
 
-async def test_platform_provision_rejects_out_of_range_coordinates(
+async def test_platform_provision_rejects_removed_owner_and_coordinate_fields(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     access_token = await _platform_access_token(client, db_session)
 
-    bad_latitude = await client.post(
+    response = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="bad-latitude"),
+            **_provision_payload(code="removed-fields"),
             "branch": {
                 **_provision_payload()["branch"],
-                "latitude": "91",
+                "latitude": "41.2995",
+                "longitude": "69.2401",
             },
-        },
-    )
-    bad_longitude = await client.post(
-        "/api/v1/platform/workshops",
-        headers=_auth(access_token),
-        json={
-            **_provision_payload(code="bad-longitude"),
-            "branch": {
-                **_provision_payload()["branch"],
-                "longitude": "181",
+            "owner": {
+                **_provision_payload()["owner"],
+                "full_name": "Atlas Owner",
+                "phone": "+998903030303",
             },
         },
     )
 
-    assert bad_latitude.status_code == 422
-    assert bad_longitude.status_code == 422
+    assert response.status_code == 422
 
 
 async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_sessions(
@@ -446,6 +436,7 @@ async def test_platform_jobs_errors_and_audit_surfaces(
         trace_id="trace-platform-error",
         context={"token": "secret", "safe": "kept"},
     )
+    db_session.expire(record, ["updated_at"])
 
     jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
     repeated_jobs = await client.get("/api/v1/platform/jobs", headers=_auth(access_token))
