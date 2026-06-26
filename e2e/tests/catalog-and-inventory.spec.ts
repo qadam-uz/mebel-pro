@@ -211,7 +211,7 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   await manufacturerDialog.getByLabel('Davlat').fill('UZ')
   await manufacturerDialog.getByRole('button', { name: 'Saqlash' }).click()
   await expect(manufacturerDialog).toBeHidden()
-  await expect(materialDialog.getByRole('button', { name: new RegExp(makerName) })).toBeVisible()
+  await expect(materialDialog.getByRole('combobox', { name: new RegExp(makerName) })).toBeVisible()
 
   await materialDialog.getByLabel('Material nomi').fill(materialName)
   await materialDialog.getByLabel('Rang / decor').fill('White')
@@ -259,7 +259,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await stockIn.getByRole('combobox', { name: 'Material' }).press('Escape')
   await stockIn.getByLabel(/Miqdor/).fill('3')
-  await stockIn.getByRole('button', { name: /Yetkazib beruvchi/ }).click()
+  await stockIn.getByRole('combobox', { name: /Yetkazib beruvchi/ }).click()
   await page.getByRole('option', { name: 'Yangi yetkazib beruvchi' }).click()
   await stockIn.getByLabel('Yangi yetkazib beruvchi nomi').fill(`Supplier ${id}`)
   const receiptPath = testInfo.outputPath('receipt.pdf')

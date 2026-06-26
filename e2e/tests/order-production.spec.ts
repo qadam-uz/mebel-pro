@@ -295,7 +295,7 @@ async function chooseOption(
   buttonName: RegExp,
   optionName: RegExp,
 ) {
-  await page.getByRole("button", { name: buttonName }).click();
+  await page.getByRole("combobox", { name: buttonName }).click();
   await page.getByRole("option", { name: optionName }).click();
 }
 
