@@ -331,6 +331,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
               <textarea
                 id="block-reason"
                 v-model="reason"
+                required
                 :aria-invalid="!!blockFieldErrors.reason"
                 aria-describedby="block-reason-error"
               ></textarea>

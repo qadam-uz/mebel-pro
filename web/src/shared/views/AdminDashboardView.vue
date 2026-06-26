@@ -12,7 +12,6 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -81,7 +80,6 @@ onMounted(loadAll)
       <div>
         <h1>Platforma asosiy</h1>
       </div>
-      <AdminRefreshButton :loading="admin.loading || admin.opsLoading" @click="loadAll" />
     </div>
 
     <section v-if="isLoading" class="admin-kpis" aria-live="polite">

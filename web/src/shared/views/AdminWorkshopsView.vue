@@ -21,10 +21,9 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
@@ -360,8 +359,12 @@ onMounted(async () => {
         <span>Qidiruv</span>
         <input v-model="search" placeholder="Ustaxona nomi yoki kod" />
       </label>
-      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-      <AdminRefreshButton :loading="admin.loading" @click="admin.loadWorkshops" />
+      <FormSelect
+        v-model="statusFilter"
+        class="admin-filter-select"
+        label="Holat"
+        :options="statusOptions"
+      />
     </div>
 
     <section v-if="admin.loading" class="admin-card p-5" aria-live="polite">
@@ -695,6 +698,7 @@ onMounted(async () => {
         <textarea
           id="workshop-block-reason"
           v-model="blockReason"
+          required
           :aria-invalid="!!blockFieldErrors.blockReason"
           aria-describedby="workshop-block-reason-error"
         ></textarea>

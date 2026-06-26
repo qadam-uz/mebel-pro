@@ -10,9 +10,8 @@ import {
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type ErrorRecord } from '@/shared/stores/admin'
@@ -193,7 +192,6 @@ watch(
         <h1>Xatolik monitor</h1>
         <p class="sub">Guruhlangan ilova xatoliklari, ko'payish sonlari, trace ID va kontekst.</p>
       </div>
-      <AdminRefreshButton :loading="admin.opsLoading" @click="admin.loadErrors" />
     </div>
 
     <div class="admin-filters">
@@ -201,10 +199,30 @@ watch(
         <span>Qidiruv</span>
         <input v-model="query" placeholder="Kod yoki tavsif" />
       </label>
-      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-      <ProjectDropdown v-model="moduleFilter" label="Modul" :options="moduleOptions" />
-      <ProjectDropdown v-model="thresholdFilter" label="Chastota" :options="thresholdOptions" />
-      <ProjectDropdown v-model="timeFilter" label="Vaqt" :options="timeOptions" />
+      <FormSelect
+        v-model="statusFilter"
+        class="admin-filter-select"
+        label="Holat"
+        :options="statusOptions"
+      />
+      <FormSelect
+        v-model="moduleFilter"
+        class="admin-filter-select"
+        label="Modul"
+        :options="moduleOptions"
+      />
+      <FormSelect
+        v-model="thresholdFilter"
+        class="admin-filter-select"
+        label="Chastota"
+        :options="thresholdOptions"
+      />
+      <FormSelect
+        v-model="timeFilter"
+        class="admin-filter-select"
+        label="Vaqt"
+        :options="timeOptions"
+      />
     </div>
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">

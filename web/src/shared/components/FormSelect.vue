@@ -14,11 +14,13 @@ const props = withDefaults(
     placeholder?: string
     error?: string | null
     disabled?: boolean
+    required?: boolean
   }>(),
   {
     placeholder: 'Tanlang',
     error: null,
     disabled: false,
+    required: false,
   },
 )
 
@@ -137,6 +139,7 @@ onBeforeUnmount(() => {
       :for="controlId"
     >
       {{ label }}
+      <span v-if="required" class="admin-field-required">Majburiy</span>
     </label>
     <div class="relative">
       <button
@@ -154,7 +157,9 @@ onBeforeUnmount(() => {
         :aria-controls="`${internalId}-listbox`"
         :aria-labelledby="`${internalId}-label ${controlId}`"
         :aria-describedby="errorId"
+        :aria-required="required ? 'true' : undefined"
         aria-haspopup="listbox"
+        role="combobox"
         @click="open ? closeList() : openList()"
         @keydown="onKeydown"
       >

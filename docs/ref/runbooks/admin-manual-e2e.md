@@ -2,7 +2,7 @@
 title: Admin manual E2E
 status: stable
 owner: build
-updated: 2026-06-21
+updated: 2026-06-26
 order: 10
 ---
 
@@ -353,8 +353,10 @@ For each screenshot, record pass/fail in `audit.md`:
 - Hierarchy: one clear primary action per page; secondary actions do not compete.
 - Consistency: admin buttons, pills, tabs, dropdowns, empty/error states, and modal headers use
   the same visual language across pages.
-- Admin actions: page refresh controls are icon-only with accessible names, and object-creation
-  buttons use a visible `+` prefix.
+- Admin actions: no standalone page refresh controls appear, and object-creation buttons use a
+  visible `+` prefix.
+- Forms and filters: required markers are visible before submit and unmarked fields are optional;
+  filter labels are visually separate from values and filter controls align to one height.
 - Accessibility: visible focus, reachable controls, labels, role/name/state, modal focus trap,
   Escape behavior, reduced-motion sanity.
 - Feedback: busy state on async actions, disabled state explains why, toast/status appears after

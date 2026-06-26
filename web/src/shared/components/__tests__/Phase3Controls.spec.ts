@@ -60,6 +60,22 @@ describe('Phase 3 shared controls', () => {
     expect(button.attributes('aria-describedby')).toBe(error.attributes('id'))
   })
 
+  it('FormSelect exposes required state in text and ARIA', () => {
+    const wrapper = mount(FormSelect, {
+      props: {
+        label: 'Manufacturer',
+        modelValue: null,
+        options,
+        required: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(wrapper.text()).toContain('Majburiy')
+    expect(wrapper.get('button').attributes('role')).toBe('combobox')
+    expect(wrapper.get('button').attributes('aria-required')).toBe('true')
+  })
+
   it('ConfirmDialog focuses cancel, closes with Escape, and emits confirm', async () => {
     const wrapper = mount(ConfirmDialog, {
       props: {

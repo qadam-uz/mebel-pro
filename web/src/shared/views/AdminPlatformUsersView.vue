@@ -18,7 +18,6 @@ import {
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -282,7 +281,6 @@ onMounted(admin.loadPlatformUsers)
         <span>Qidiruv</span>
         <input v-model="query" placeholder="Ism, login yoki telefon" />
       </label>
-      <AdminRefreshButton :loading="admin.opsLoading" @click="admin.loadPlatformUsers" />
     </div>
 
     <section v-if="admin.opsLoading" class="admin-card p-5" aria-live="polite">
