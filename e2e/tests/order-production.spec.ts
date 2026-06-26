@@ -423,10 +423,9 @@ test("client places an order and workshop completes it through production queues
   const workshopOrderRow = workshopPage.getByRole("row", {
     name: new RegExp(orderNumber as string),
   });
-  await workshopOrderRow
-    .getByRole("button", { name: `${orderNumber as string} amallari` })
-    .click();
-  await workshopPage.getByRole("menuitem", { name: "Tafsilotlar" }).click();
+  // The table row itself opens the order detail (the kebab is only for status
+  // actions); click the order-number cell to navigate.
+  await workshopOrderRow.getByText(orderNumber as string).click();
 
   await expect(
     workshopPage.getByRole("heading", { name: orderNumber as string }),
