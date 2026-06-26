@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { buildAdminMaterialWriteRequest } from '@/shared/app/adminMaterials'
+import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
@@ -24,6 +25,7 @@ import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import ImageUploadField from '@/shared/components/ImageUploadField.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
@@ -59,6 +61,7 @@ const actionId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const manufacturerError = ref<string | null>(null)
+const imageUploadResetKey = ref(0)
 const search = ref('')
 const statusFilter = ref('all')
 const kindFilter = ref('all')
@@ -222,6 +225,16 @@ const dimensionError = computed(
     Number(form.panelWidthMm) > 0 &&
     Number(form.panelLengthMm) < Number(form.panelWidthMm),
 )
+const materialImageTitle = computed(() => form.name.trim() || 'Material rasmi')
+const materialImageMeta = computed(() =>
+  [
+    materialKindLabel(form.kind),
+    admin.manufacturers.find((manufacturer) => manufacturer.id === form.manufacturerId)?.name,
+    form.thicknessMm ? `${form.thicknessMm} mm` : null,
+  ]
+    .filter(Boolean)
+    .join(' · '),
+)
 
 function clearFilters() {
   search.value = ''
@@ -246,6 +259,8 @@ function openCreate() {
   form.grainDirection = true
   form.imageFileId = null
   saveError.value = null
+  uploadError.value = null
+  imageUploadResetKey.value += 1
   clearFieldErrors(materialFieldErrors)
   modalOpen.value = true
 }
@@ -264,6 +279,8 @@ function openEdit(material: Material) {
   form.grainDirection = material.grain_direction ?? false
   form.imageFileId = material.image_file_id
   saveError.value = null
+  uploadError.value = null
+  imageUploadResetKey.value += 1
   clearFieldErrors(materialFieldErrors)
   modalOpen.value = true
 }
@@ -285,24 +302,23 @@ function materialTypeLabel(type: PanelMaterialType | null | undefined) {
   return materialTypeOptions.find((option) => option.value === type)?.label ?? 'Panel'
 }
 
-async function onMaterialFile(event: Event) {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
+async function onMaterialFile(file: File) {
   uploadError.value = null
   try {
-    const uploaded = await files.upload(target.files[0])
+    const uploaded = await files.upload(file)
     form.imageFileId = uploaded.id
     toast.success('Rasm yuklandi')
   } catch {
-    uploadError.value = 'image_upload_failed'
+    uploadError.value = "Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring."
+    imageUploadResetKey.value += 1
     toast.danger("Rasmni yuklab bo'lmadi")
-    target.value = ''
   }
 }
 
 function removeImage() {
   form.imageFileId = null
   uploadError.value = null
+  imageUploadResetKey.value += 1
 }
 
 function validateMaterialForm() {
@@ -418,8 +434,7 @@ onMounted(async () => {
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Platforma material katalogi</h1>
-        <p class="sub">Platforma master materiallari: panel va krom yozuvlari.</p>
+        <h1>Material katalogi</h1>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">
         + Yangi material
@@ -526,11 +541,22 @@ onMounted(async () => {
           <tbody>
             <tr v-for="material in filtered" :key="material.id">
               <td>
-                <AuthFileImage
-                  :file-id="material.image_file_id"
-                  :alt="material.name"
-                  class="size-9 rounded-md object-cover"
-                />
+                <div class="admin-material-thumb">
+                  <span
+                    class="admin-material-thumb-swatch sw"
+                    :class="materialSwatchClass(material)"
+                    aria-hidden="true"
+                  ></span>
+                  <span class="admin-material-thumb-mark" aria-hidden="true">
+                    {{ material.kind === 'panel' ? 'P' : 'K' }}
+                  </span>
+                  <AuthFileImage
+                    v-if="material.image_file_id"
+                    :file-id="material.image_file_id"
+                    :alt="material.name"
+                    class="admin-material-thumb-img"
+                  />
+                </div>
               </td>
               <td class="nm">
                 {{ material.name }}
@@ -771,31 +797,19 @@ onMounted(async () => {
                   Tola yo'nalishi bor
                 </label>
               </template>
-              <label class="admin-field admin-full" for="mat-image">
-                <span>Rasm</span>
-                <input id="mat-image" type="file" accept="image/*" @change="onMaterialFile" />
-                <span v-if="form.imageFileId" class="flex items-center gap-2 text-ink-muted">
-                  <span class="admin-mono">file {{ form.imageFileId.slice(0, 8) }}</span>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="removeImage"
-                  >
-                    Olib tashlash
-                  </button>
-                </span>
-              </label>
+              <ImageUploadField
+                id="mat-image"
+                :file-id="form.imageFileId"
+                :alt="materialImageTitle"
+                :title="materialImageTitle"
+                :meta="materialImageMeta"
+                :uploading="files.uploading"
+                :error="uploadError"
+                :reset-key="imageUploadResetKey"
+                @select="onMaterialFile"
+                @remove="removeImage"
+              />
             </div>
-            <p v-if="files.uploading" class="mt-3 text-sm font-bold text-info" aria-live="polite">
-              Rasm yuklanmoqda...
-            </p>
-            <p
-              v-if="uploadError"
-              class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-              role="alert"
-            >
-              Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring.
-            </p>
             <p
               v-if="saveError"
               class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"

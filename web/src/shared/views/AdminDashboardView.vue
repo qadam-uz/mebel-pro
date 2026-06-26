@@ -78,7 +78,7 @@ onMounted(loadAll)
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Platforma asosiy</h1>
+        <h1>Asosiy</h1>
       </div>
     </div>
 
@@ -94,7 +94,7 @@ onMounted(loadAll)
       v-else-if="hasError"
       :code="admin.error"
       :trace-id="admin.traceId"
-      title="Platforma ma'lumotlari yuklanmadi"
+      title="Ma'lumotlar yuklanmadi"
       @retry="loadAll"
     />
 
@@ -192,7 +192,6 @@ onMounted(loadAll)
                   <tr v-for="workshop in recentWorkshops" :key="workshop.id">
                     <td class="nm">
                       {{ workshop.name }}
-                      <small>{{ workshop.code }}</small>
                     </td>
                     <td class="admin-mono text-ink-muted">{{ workshop.owner_login }}</td>
                     <td class="admin-mono text-ink-muted">{{ workshop.branch_count }}</td>
@@ -287,8 +286,7 @@ onMounted(loadAll)
 
       <section class="admin-card mt-5">
         <div class="admin-card-h">
-          <h2>Platforma resurslari</h2>
-          <span class="sub">katalog va operatorlik yuzalari</span>
+          <h2>Resurslar</h2>
         </div>
         <div class="admin-card-b grid gap-3 md:grid-cols-3">
           <RouterLink
@@ -304,7 +302,7 @@ onMounted(loadAll)
             Materiallar
           </RouterLink>
           <RouterLink :to="rolePath('/admin/platform/users')" class="mp-button mp-button-outline">
-            Operatorlar . {{ overview?.platform_users_active ?? 0 }}
+            Adminlar . {{ overview?.platform_users_active ?? 0 }}
           </RouterLink>
         </div>
       </section>

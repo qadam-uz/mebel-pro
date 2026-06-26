@@ -17,25 +17,23 @@ def _auth(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-async def _owner_login(client: AsyncClient, db_session: AsyncSession) -> tuple[str, str, str]:
-    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+async def _owner_login(client: AsyncClient, db_session: AsyncSession) -> tuple[str, str]:
+    _workshop, branch, owner = await seed_workshop_with_owner(db_session)
     owner.password_reset_required = False
     response = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop.code,
             "login": "owner",
             "password": "Owner123",
         },
     )
     assert response.status_code == 200
-    return response.json()["access_token"], str(branch.id), workshop.code
+    return response.json()["access_token"], str(branch.id)
 
 
 async def _ready_staff_access(
     client: AsyncClient,
     *,
-    workshop_code: str,
     login: str,
     password: str = "StaffTemp123",
     new_password: str = "StaffNew123",
@@ -43,7 +41,6 @@ async def _ready_staff_access(
     staff_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": login,
             "password": password,
         },
@@ -63,7 +60,7 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
 
     created = await client.post(
         "/api/v1/workshop/users",
@@ -80,7 +77,6 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
     staff_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": "cutter",
             "password": "StaffTemp123",
         },
@@ -118,7 +114,7 @@ async def test_staff_branch_context_includes_multiple_active_grant_branches(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     second_branch = await client.post(
         "/api/v1/workshop/branches",
         headers=_auth(owner_access),
@@ -150,7 +146,6 @@ async def test_staff_branch_context_includes_multiple_active_grant_branches(
     )
     staff_access = await _ready_staff_access(
         client,
-        workshop_code=workshop_code,
         login="multigrant",
     )
 
@@ -169,7 +164,7 @@ async def test_staff_branch_context_excludes_inactive_grant_branch(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -184,7 +179,6 @@ async def test_staff_branch_context_excludes_inactive_grant_branch(
     )
     staff_access = await _ready_staff_access(
         client,
-        workshop_code=workshop_code,
         login="inactivegrant",
     )
     before = await client.get("/api/v1/workshop/branch-context", headers=_auth(staff_access))
@@ -208,7 +202,7 @@ async def test_grant_replacement_takes_effect_on_staff_next_request(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -225,7 +219,6 @@ async def test_grant_replacement_takes_effect_on_staff_next_request(
     staff_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": "zerogrant",
             "password": "StaffTemp123",
         },
@@ -258,7 +251,7 @@ async def test_owner_filters_users_and_sees_last_login(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     second_branch = await client.post(
         "/api/v1/workshop/branches",
         headers=_auth(owner_access),
@@ -300,7 +293,6 @@ async def test_owner_filters_users_and_sees_last_login(
     staff_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": "cutterfilter",
             "password": "StaffTemp123",
         },
@@ -331,7 +323,7 @@ async def test_owner_branch_response_includes_operational_counts(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, _ = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     manufacturer = Manufacturer(name="Count Maker", country="UZ")
     db_session.add(manufacturer)
     await db_session.flush()
@@ -387,7 +379,7 @@ async def test_owner_updates_staff_profile_fields(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, _ = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -437,7 +429,7 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -453,7 +445,7 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     user_uuid = uuid.UUID(user_id)
     first_login = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"workshop_code": workshop_code, "login": "office", "password": "StaffTemp123"},
+        json={"login": "office", "password": "StaffTemp123"},
     )
     first_access = first_login.json()["access_token"]
     await client.post(
@@ -463,7 +455,7 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     )
     second_login = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"workshop_code": workshop_code, "login": "office", "password": "StaffNew123"},
+        json={"login": "office", "password": "StaffNew123"},
     )
     sessions = await client.get(
         f"/api/v1/workshop/users/{user_id}/sessions",
@@ -485,7 +477,6 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     blocked_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": "office",
             "password": reset.json()["temp_password"],
         },
@@ -497,7 +488,6 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     unblocked_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": workshop_code,
             "login": "office",
             "password": reset.json()["temp_password"],
         },
@@ -532,7 +522,7 @@ async def test_non_owner_staff_cannot_manage_users(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id, workshop_code = await _owner_login(client, db_session)
+    owner_access, branch_id = await _owner_login(client, db_session)
     created = await client.post(
         "/api/v1/workshop/users",
         headers=_auth(owner_access),
@@ -546,7 +536,7 @@ async def test_non_owner_staff_cannot_manage_users(
     )
     staff_login = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"workshop_code": workshop_code, "login": "staff", "password": "StaffTemp123"},
+        json={"login": "staff", "password": "StaffTemp123"},
     )
     staff_access = staff_login.json()["access_token"]
     await client.post(

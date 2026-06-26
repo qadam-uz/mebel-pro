@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, Index, func, text
+from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -17,7 +17,6 @@ from app.models.enums import BranchStatus, Currency, WorkshopStatus, enum_type
 class Workshop(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "workshops"
     __table_args__ = (
-        Index("uq_workshops_code_ci", func.lower(text("code")), unique=True),
         ForeignKeyConstraint(
             ["owner_user_id", "id"],
             ["workshop_users.id", "workshop_users.workshop_id"],
@@ -29,9 +28,8 @@ class Workshop(UUIDPrimaryKey, Timestamped, Base):
     )
 
     name: Mapped[str] = mapped_column(nullable=False)
-    code: Mapped[str] = mapped_column(nullable=False)
     logo_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
-    phone: Mapped[str] = mapped_column(nullable=False)
+    phone: Mapped[str | None]
     address: Mapped[str | None]
     owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     status: Mapped[WorkshopStatus] = mapped_column(

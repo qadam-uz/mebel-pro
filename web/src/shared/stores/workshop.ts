@@ -49,9 +49,8 @@ export interface WorkshopUserFilters {
 export interface WorkshopSettings {
   id: string
   name: string
-  code: string
   logo_file_id: string | null
-  phone: string
+  phone: string | null
   address: string | null
   status: 'active' | 'blocked'
   currency: 'UZS'

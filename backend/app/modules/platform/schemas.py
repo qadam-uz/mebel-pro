@@ -21,10 +21,9 @@ from app.schemas.common import APIModel
 
 
 class WorkshopInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
-    phone: str
-    address: str | None = None
-    code: str | None = None
     currency: Currency = Currency.UZS
 
 
@@ -57,10 +56,7 @@ class ProvisionWorkshopRequest(BaseModel):
 
 class WorkshopSummary(APIModel):
     id: uuid.UUID
-    code: str
     name: str
-    phone: str
-    address: str | None
     status: WorkshopStatus
     currency: Currency
     owner_user_id: uuid.UUID

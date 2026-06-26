@@ -9,7 +9,6 @@ import {
   requiredText,
   tempPassword,
   uzPhone,
-  workshopCode,
   type FieldErrors,
 } from '@/shared/app/adminValidation'
 import {
@@ -31,8 +30,6 @@ import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 type WorkingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 type ProvisionField =
   | 'name'
-  | 'code'
-  | 'phone'
   | 'branchName'
   | 'branchAddress'
   | 'branchPhone'
@@ -67,7 +64,7 @@ async function confirmBlock() {
   clearFieldErrors(blockFieldErrors)
   if (!blockTarget.value) return
   if (!blockReason.value.trim()) {
-    blockFieldErrors.blockReason = 'Majburiy maydon.'
+    blockFieldErrors.blockReason = "Bu maydonni to'ldiring."
     return
   }
   acting.value = true
@@ -104,7 +101,6 @@ const secretRows = computed(() => {
   const provision = admin.lastProvision
   if (!provision) return []
   return [
-    { label: 'Ustaxona kodi', value: provision.workshop.code },
     { label: 'Ega login', value: provision.owner.login },
     { label: 'Vaqtinchalik parol', value: provision.temp_password },
   ]
@@ -119,13 +115,8 @@ onBeforeUnmount(() => admin.clearSecrets())
 const createError = ref<string | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
-// AB-36: once the operator edits the code, stop re-deriving it from the name.
-const codeTouched = ref(false)
 const form = reactive({
   name: '',
-  code: '',
-  phone: '+998',
-  address: '',
   branchName: '',
   branchAddress: '',
   branchPhone: '+998',
@@ -135,8 +126,6 @@ const form = reactive({
 const provisionFieldErrors = reactive<FieldErrors<ProvisionField>>({})
 const provisionFieldIds: Record<ProvisionField, string> = {
   name: 'w-name',
-  code: 'w-code',
-  phone: 'w-phone',
   branchName: 'b-name',
   branchAddress: 'b-address',
   branchPhone: 'b-phone',
@@ -145,8 +134,6 @@ const provisionFieldIds: Record<ProvisionField, string> = {
 }
 const provisionFieldOrder: ProvisionField[] = [
   'name',
-  'code',
-  'phone',
   'branchName',
   'branchAddress',
   'branchPhone',
@@ -155,9 +142,7 @@ const provisionFieldOrder: ProvisionField[] = [
 ]
 const provisionApiFieldMap: Partial<Record<string, ProvisionField>> = {
   workshop_name_required: 'name',
-  invalid_workshop_code: 'code',
-  workshop_code_exists: 'code',
-  invalid_phone: 'phone',
+  invalid_phone: 'branchPhone',
   branch_name_required: 'branchName',
   branch_address_required: 'branchAddress',
   owner_login_required: 'ownerLogin',
@@ -165,8 +150,6 @@ const provisionApiFieldMap: Partial<Record<string, ProvisionField>> = {
 }
 const provisionApiLocMap: Partial<Record<string, ProvisionField>> = {
   'body.workshop.name': 'name',
-  'body.workshop.code': 'code',
-  'body.workshop.phone': 'phone',
   'body.branch.name': 'branchName',
   'body.branch.address': 'branchAddress',
   'body.branch.phone': 'branchPhone',
@@ -202,10 +185,7 @@ const filtered = computed(() => {
   return admin.workshops.filter((workshop) => {
     if (statusFilter.value !== 'all' && workshop.status !== statusFilter.value) return false
     if (!needle) return true
-    return [workshop.name, workshop.code, workshop.phone, workshop.address ?? '']
-      .join(' ')
-      .toLowerCase()
-      .includes(needle)
+    return [workshop.name, workshop.owner_login].join(' ').toLowerCase().includes(needle)
   })
 })
 
@@ -238,27 +218,14 @@ function workingHoursPayload() {
   )
 }
 
-function codeFromName(value: string) {
-  return value
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 16)
-}
-
 function resetForm() {
   form.name = ''
-  form.code = ''
-  form.phone = '+998'
-  form.address = ''
   form.branchName = ''
   form.branchAddress = ''
   form.branchPhone = '+998'
   form.ownerLogin = ''
   form.tempPassword = ''
   resetWorkingHours()
-  codeTouched.value = false
   clearFieldErrors(provisionFieldErrors)
   createError.value = null
 }
@@ -269,8 +236,6 @@ function validateProvisionForm() {
     if (error) provisionFieldErrors[field] = error
   }
   set('name', requiredText(form.name))
-  set('code', requiredText(form.code) ?? workshopCode(form.code))
-  set('phone', requiredText(form.phone) ?? uzPhone(form.phone))
   set('branchName', requiredText(form.branchName))
   set('branchAddress', requiredText(form.branchAddress))
   set('branchPhone', requiredText(form.branchPhone) ?? uzPhone(form.branchPhone))
@@ -291,9 +256,6 @@ async function createWorkshop() {
     await admin.provision({
       workshop: {
         name: form.name,
-        code: form.code || null,
-        phone: form.phone,
-        address: form.address || null,
       },
       branch: {
         name: form.branchName,
@@ -332,7 +294,6 @@ async function createWorkshop() {
 watch(
   () => form.name,
   (name) => {
-    if (!codeTouched.value) form.code = codeFromName(name)
     if (!form.branchName) form.branchName = name ? 'Asosiy filial' : ''
   },
 )
@@ -347,7 +308,6 @@ onMounted(async () => {
     <div class="admin-page-head">
       <div>
         <h1>Ustaxonalar</h1>
-        <p class="sub">Ustaxonalarni yaratish, bloklash va holatini kuzatish.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="modalOpen = true">
         + Yangi ustaxona
@@ -357,7 +317,7 @@ onMounted(async () => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidiruv</span>
-        <input v-model="search" placeholder="Ustaxona nomi yoki kod" />
+        <input v-model="search" placeholder="Ustaxona nomi yoki egasi" />
       </label>
       <FormSelect
         v-model="statusFilter"
@@ -394,7 +354,6 @@ onMounted(async () => {
               <th>Ustaxona</th>
               <th>Egasi</th>
               <th>Filiallar</th>
-              <th>Telefon</th>
               <th>Yaratildi</th>
               <th>Holat</th>
               <th><span class="sr-only">Amallar</span></th>
@@ -404,11 +363,9 @@ onMounted(async () => {
             <tr v-for="workshop in filtered" :key="workshop.id">
               <td class="nm">
                 {{ workshop.name }}
-                <small>{{ workshop.code }} . {{ workshop.address ?? 'manzil kiritilmagan' }}</small>
               </td>
               <td class="admin-mono text-ink-muted">{{ workshop.owner_login }}</td>
               <td class="admin-mono text-ink-muted">{{ workshop.branch_count }}</td>
-              <td class="admin-mono text-ink-muted">{{ workshop.phone }}</td>
               <td class="admin-mono text-ink-muted">{{ adminDate(workshop.created_at) }}</td>
               <td>
                 <span class="admin-pill" :class="workshopStatusTone(workshop.status)">
@@ -493,50 +450,6 @@ onMounted(async () => {
                 >
                   {{ provisionFieldErrors.name }}
                 </span>
-              </label>
-              <label class="admin-field" for="w-code">
-                <span>Ustaxona kodi</span>
-                <input
-                  id="w-code"
-                  v-model="form.code"
-                  autocomplete="off"
-                  required
-                  :aria-invalid="!!provisionFieldErrors.code"
-                  aria-describedby="w-code-error"
-                  @input="codeTouched = true"
-                />
-                <span
-                  v-if="provisionFieldErrors.code"
-                  id="w-code-error"
-                  class="admin-field-error"
-                  role="alert"
-                >
-                  {{ provisionFieldErrors.code }}
-                </span>
-              </label>
-              <label class="admin-field" for="w-phone">
-                <span>Telefon</span>
-                <input
-                  id="w-phone"
-                  v-model="form.phone"
-                  autocomplete="tel"
-                  inputmode="tel"
-                  required
-                  :aria-invalid="!!provisionFieldErrors.phone"
-                  aria-describedby="w-phone-error"
-                />
-                <span
-                  v-if="provisionFieldErrors.phone"
-                  id="w-phone-error"
-                  class="admin-field-error"
-                  role="alert"
-                >
-                  {{ provisionFieldErrors.phone }}
-                </span>
-              </label>
-              <label class="admin-field" for="w-address">
-                <span>Manzil</span>
-                <input id="w-address" v-model="form.address" autocomplete="street-address" />
               </label>
               <label class="admin-field" for="b-name">
                 <span>Birinchi filial</span>
@@ -694,7 +607,7 @@ onMounted(async () => {
       @cancel="blockTarget = null"
     >
       <label class="admin-field" for="workshop-block-reason">
-        <span>Majburiy sabab</span>
+        <span>Sabab</span>
         <textarea
           id="workshop-block-reason"
           v-model="blockReason"
@@ -728,7 +641,7 @@ onMounted(async () => {
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
       title="Ustaxona yaratildi — bir martalik maxfiy ma'lumot"
-      intro="Ustaxona kodi, ega login va vaqtinchalik parolni egasiga yetkazing."
+      intro="Ega login va vaqtinchalik parolni ustaxona egasiga yetkazing."
       :rows="secretRows"
       @close="closeSecret"
     />

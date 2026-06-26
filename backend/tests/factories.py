@@ -43,12 +43,10 @@ async def seed_platform_user(
 async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, WorkshopUser]:
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
-    suffix = workshop_id.hex[:8]
     workshop = Workshop(
         id=workshop_id,
         owner_user_id=owner_id,
         name="Demo Workshop",
-        code=f"demo-{suffix}",
         phone="+998901111111",
         address="Tashkent",
     )

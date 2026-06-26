@@ -1,7 +1,6 @@
 """Platform operator use cases."""
 
 import asyncio
-import re
 import secrets
 import uuid
 from collections.abc import Sequence
@@ -52,7 +51,6 @@ from app.modules.support.api import (
 from app.modules.workshop.contracts import Branch, Workshop
 from app.modules.workshop.schemas import dump_working_hours
 
-CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$")
 DEFAULT_BRANCH_LATITUDE = Decimal("41.2995")
 DEFAULT_BRANCH_LONGITUDE = Decimal("69.2401")
 JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
@@ -230,7 +228,6 @@ async def provision_workshop(
     payload: ProvisionWorkshopRequest,
 ) -> ProvisionedWorkshop:
     require_platform_operator(principal)
-    code = await _resolve_workshop_code(db, payload.workshop.code, payload.workshop.name)
     temp_password = payload.temp_password or generate_temp_password()
     try:
         validate_password(temp_password)
@@ -243,13 +240,9 @@ async def provision_workshop(
     owner_login = _required_text(payload.owner.login, "owner_login_required")
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
-    workshop_phone = normalize_uz_phone(payload.workshop.phone)
     workshop = Workshop(
         id=workshop_id,
-        code=code,
         name=_required_text(payload.workshop.name, "workshop_name_required"),
-        phone=workshop_phone,
-        address=_optional_text(payload.workshop.address),
         owner_user_id=owner_id,
         status=WorkshopStatus.ACTIVE,
         currency=payload.workshop.currency,
@@ -277,7 +270,7 @@ async def provision_workshop(
         login=owner_login,
         password_hash=hash_password(temp_password),
         full_name=owner_login,
-        phone=workshop_phone,
+        phone=branch.phone,
         is_owner=True,
         home_branch_id=branch.id,
         status=UserStatus.ACTIVE,
@@ -295,7 +288,6 @@ async def provision_workshop(
         workshop_id=workshop.id,
         summary=f"Provisioned workshop {workshop.name}",
         details={
-            "workshop_code": workshop.code,
             "owner_login": owner.login,
             "branch_id": str(branch.id),
         },
@@ -913,39 +905,6 @@ async def list_platform_status_change_logs(
     )
 
 
-async def _resolve_workshop_code(
-    db: AsyncSession,
-    requested_code: str | None,
-    workshop_name: str,
-) -> str:
-    if requested_code is not None:
-        code = requested_code.strip()
-        if not CODE_RE.fullmatch(code):
-            raise APIError(
-                "invalid_workshop_code",
-                "Invalid workshop code",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        if await _workshop_code_exists(db, code):
-            raise APIError(
-                "workshop_code_exists",
-                "Workshop code already exists",
-                status_code=status.HTTP_409_CONFLICT,
-            )
-        return code
-
-    base = _slugify(workshop_name)
-    code = base
-    while await _workshop_code_exists(db, code):
-        code = f"{base}-{secrets.randbelow(10_000):04d}"
-    return code
-
-
-async def _workshop_code_exists(db: AsyncSession, code: str) -> bool:
-    existing = await db.scalar(select(Workshop.id).where(func.lower(Workshop.code) == code.lower()))
-    return existing is not None
-
-
 async def _platform_login_exists(db: AsyncSession, *, login: str) -> bool:
     existing = await db.scalar(
         select(PlatformUser.id).where(func.lower(PlatformUser.login) == login.lower())
@@ -1015,14 +974,6 @@ def _optional_text(value: str | None) -> str | None:
         return None
     normalized = " ".join(value.strip().split())
     return normalized or None
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
-    slug = re.sub(r"-+", "-", slug)
-    if len(slug) < 3:
-        slug = f"workshop-{secrets.randbelow(10_000):04d}"
-    return slug[:32].strip("-")
 
 
 def generate_temp_password() -> str:

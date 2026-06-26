@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import {
+  clearFieldErrors,
+  focusFirstFieldError,
+  requiredText,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 
-const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
+const { config, login, password, isSubmitting, error, submit: submitLogin } = useStaffLogin()
+type LoginField = 'login' | 'password'
+const fieldErrors = reactive<FieldErrors<LoginField>>({})
+const fieldIds: Record<LoginField, string> = {
+  login: 'admin-login',
+  password: 'admin-password',
+}
+const fieldOrder: LoginField[] = ['login', 'password']
 
 // AB-13: useStaffLogin is shared with the workshop login, so map the error CODE
 // to Uzbek locally here rather than translating the shared English text map
@@ -18,6 +31,25 @@ const ADMIN_LOGIN_ERROR_UZ: Record<string, string> = {
 const errorText = computed(() =>
   error.value ? (ADMIN_LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
 )
+
+function clearLoginField(field: LoginField) {
+  delete fieldErrors[field]
+  error.value = null
+}
+
+function validateLogin() {
+  clearFieldErrors(fieldErrors)
+  fieldErrors.login = requiredText(login.value, 'Loginni kiriting.') ?? undefined
+  fieldErrors.password = requiredText(password.value, 'Parolni kiriting.') ?? undefined
+  const hasErrors = fieldOrder.some((field) => Boolean(fieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+  return !hasErrors
+}
+
+async function submit() {
+  if (!validateLogin()) return
+  await submitLogin()
+}
 </script>
 
 <template>
@@ -29,16 +61,30 @@ const errorText = computed(() =>
       </RouterLink>
 
       <form class="space-y-4" novalidate @submit.prevent="submit">
-        <div>
-          <h1 id="admin-login-title" class="font-serif text-3xl font-semibold leading-tight">
-            Operator paneliga kirish
-          </h1>
-          <p class="mt-2 text-sm text-ink-soft">Platforma operatori login va parol bilan kiradi.</p>
-        </div>
+        <h1 id="admin-login-title" class="font-serif text-3xl font-semibold leading-tight">
+          Admin paneliga kirish
+        </h1>
 
         <label class="admin-field" for="admin-login">
           <span class="admin-field-label">Login</span>
-          <input id="admin-login" v-model="login" type="text" autocomplete="username" required />
+          <input
+            id="admin-login"
+            v-model="login"
+            type="text"
+            autocomplete="username"
+            required
+            :aria-invalid="!!fieldErrors.login"
+            :aria-describedby="fieldErrors.login ? 'admin-login-error' : undefined"
+            @input="clearLoginField('login')"
+          />
+          <span
+            v-if="fieldErrors.login"
+            id="admin-login-error"
+            class="admin-field-error"
+            role="alert"
+          >
+            {{ fieldErrors.login }}
+          </span>
         </label>
 
         <label class="admin-field" for="admin-password">
@@ -49,7 +95,18 @@ const errorText = computed(() =>
             type="password"
             autocomplete="current-password"
             required
+            :aria-invalid="!!fieldErrors.password"
+            :aria-describedby="fieldErrors.password ? 'admin-password-error' : undefined"
+            @input="clearLoginField('password')"
           />
+          <span
+            v-if="fieldErrors.password"
+            id="admin-password-error"
+            class="admin-field-error"
+            role="alert"
+          >
+            {{ fieldErrors.password }}
+          </span>
         </label>
 
         <p
@@ -65,10 +122,6 @@ const errorText = computed(() =>
           {{ isSubmitting ? 'Tekshirilmoqda' : 'Kirish' }}
         </button>
       </form>
-
-      <p class="mt-6 border-t border-hairline pt-5 text-center text-xs text-ink-muted">
-        Sessiya serverda saqlanadi va bloklash yoki parol almashtirishda darhol bekor qilinadi.
-      </p>
     </section>
   </main>
 </template>

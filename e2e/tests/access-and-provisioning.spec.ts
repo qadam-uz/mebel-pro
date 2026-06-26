@@ -80,7 +80,6 @@ async function platformToken(request: APIRequestContext, login: string) {
 }
 
 async function provisionWorkshop(request: APIRequestContext, token: string, id: string) {
-  const code = `w-${id}`
   const ownerLogin = `owner-${id}`
   const ownerPassword = 'OwnerTemp123'
   const response = await request.post('/api/v1/platform/workshops', {
@@ -88,9 +87,6 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     data: {
       workshop: {
         name: `Workshop ${id}`,
-        code,
-        phone: phoneFor(id, 2),
-        address: 'Tashkent',
       },
       branch: {
         name: `Branch ${id}`,
@@ -105,13 +101,12 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     },
   })
   expect(response.ok()).toBe(true)
-  return { ...(await response.json()), code, ownerLogin, ownerPassword }
+  return { ...(await response.json()), ownerLogin, ownerPassword }
 }
 
 async function readyOwnerToken(request: APIRequestContext, setup: Awaited<ReturnType<typeof provisionWorkshop>>) {
   const login = await request.post('/api/v1/auth/workshop/login', {
     data: {
-      workshop_code: setup.code,
       login: setup.ownerLogin,
       password: setup.ownerPassword,
     },
@@ -148,9 +143,6 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   await page.getByRole('button', { name: 'Yangi ustaxona' }).click()
   const provisionForm = page.getByRole('dialog', { name: /Yangi ustaxona/ })
   await provisionForm.getByLabel('Ustaxona nomi').fill(`Workshop ${id}`)
-  await provisionForm.getByLabel('Ustaxona kodi').fill(`ui-${id}`)
-  await provisionForm.getByLabel(/^Telefon$/).fill(phoneFor(id, 10))
-  await provisionForm.getByLabel(/^Manzil$/).fill('Tashkent')
   await provisionForm.getByLabel('Birinchi filial').fill(`Branch ${id}`)
   await provisionForm.getByLabel('Filial manzili').fill('Tashkent, Test')
   await provisionForm.getByLabel('Filial telefoni').fill(phoneFor(id, 11))
@@ -162,7 +154,7 @@ test('admin provisions and blocks a workshop', async ({ page }, testInfo) => {
   // then dismiss it before navigating away.
   const secret = page.getByRole('dialog', { name: /maxfiy ma'lumot/ })
   await expect(secret).toBeVisible()
-  await expect(secret.getByText(`ui-${id}`, { exact: true })).toBeVisible()
+  await expect(secret.getByText(`ui-owner-${id}`, { exact: true })).toBeVisible()
   await secret.getByRole('button', { name: /Yopdim/ }).click()
   await page
     .getByRole('row', { name: new RegExp(`Workshop ${id}`) })

@@ -843,7 +843,7 @@ onBeforeUnmount(() => {
         <span class="admin-user-avatar" aria-hidden="true">{{ adminOperatorInitials }}</span>
         <span class="min-w-0">
           <span class="admin-user-name">{{ auth.displayName }}</span>
-          <span class="admin-user-meta">Platforma operatori</span>
+          <span class="admin-user-meta">Platforma admini</span>
         </span>
       </RouterLink>
     </aside>
@@ -960,6 +960,7 @@ onBeforeUnmount(() => {
         <div class="admin-top-actions">
           <NotificationsMenu v-if="!passwordResetRequired" />
           <RouterLink
+            v-if="config.primaryActionLabel && config.primaryActionTo"
             :to="config.primaryActionTo"
             class="admin-primary-action"
             :tabindex="passwordResetRequired ? -1 : undefined"

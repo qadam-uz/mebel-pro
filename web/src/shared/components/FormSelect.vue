@@ -135,11 +135,11 @@ onBeforeUnmount(() => {
   <div class="min-w-0">
     <label
       :id="`${internalId}-label`"
-      class="mb-1 block text-sm font-bold text-ink"
+      class="form-select-label mb-1 block text-sm font-bold text-ink"
       :for="controlId"
     >
       {{ label }}
-      <span v-if="required" class="admin-field-required">Majburiy</span>
+      <span v-if="required" class="admin-field-required" aria-hidden="true">*</span>
     </label>
     <div class="relative">
       <button

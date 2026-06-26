@@ -11,10 +11,7 @@ export type PanelMaterialType = 'dsp' | 'mdf' | 'plywood' | 'natural_wood' | 'ot
 
 export interface WorkshopSummary {
   id: string
-  code: string
   name: string
-  phone: string
-  address: string | null
   status: 'active' | 'blocked'
   owner_user_id: string
   created_at: string
@@ -209,7 +206,7 @@ export interface StatusChangeLog {
 
 // AB-29: typed request payloads for the privileged write paths (was `unknown`).
 export interface ProvisionWorkshopRequest {
-  workshop: { name: string; code: string | null; phone: string; address: string | null }
+  workshop: { name: string }
   branch: {
     name: string
     address: string

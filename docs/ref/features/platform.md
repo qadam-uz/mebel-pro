@@ -44,14 +44,16 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
   drill-down is a planned follow-up — it needs a cross-module branch lookup, so v1 ships
   only the count.
   **+ Yangi material** -> kind-specific form (manufacturer picker with inline-add -> opens the
-  Manufacturers dialog without leaving this page; spec fields per the kind). Row
-  actions: Edit · Activate / Deactivate · Image upload. No Delete. Empty: "No materials
-  yet — add manufacturers, then materials."
+  Manufacturers dialog without leaving this page; spec fields per the kind). The image field
+  previews the selected or existing material image inside the form, keeps upload errors local to
+  the field, and supports remove / replace before save. Row actions: Edit · Activate /
+  Deactivate. No Delete. Empty: "No materials yet — add manufacturers, then materials."
 
 States: loading skeletons, empty, error with `trace_id`; the inline-add for
 manufacturers preserves the in-progress material form. Accessibility: status chip pairs
-colour + text; destructive activation toggles confirm and name the consequence
-("Existing branch selections of this material will be hidden from clients.").
+colour + text; table thumbnails use a fixed framed image with a swatch fallback instead of an
+empty cell; destructive activation toggles confirm and name the consequence ("Existing branch
+selections of this material will be hidden from clients.").
 
 ## Background jobs
 
@@ -131,9 +133,9 @@ Under a **Platform** section:
   affected workshops / users, trace ids; "Resolve" → confirm, and "Reopen" for an
   already-resolved code. Filters: module, code, time range, count threshold. Empty: "No errors
   recorded — nice."
-- **Platform users** (`/admin/platform/users`) — table: name, login, phone, status, last login,
+- **Admins** (`/admin/platform/users`) — table: name, login, phone, status, last login,
   action menu (Edit · Reset password → one-time-secret confirmation · Block / Unblock).
-  **+ Yangi operator** -> dialog (fields + auto / manual temp password).
+  **+ Yangi admin** -> dialog (fields + auto / manual temp password).
 
 The **Audit** viewer lives in [`workshop.md`](workshop.md) — in v1 it is a **superadmin-only**
 surface, rendered cross-workshop in this app. There is **no cross-workshop orders view** in
@@ -141,9 +143,10 @@ v1: the operator provisions, blocks, and monitors, but does not browse workshops
 [`scope.md`](../../scope.md)).
 
 States: loading / empty / error on every page; confirmation on every state-changing action;
-the one-time-secret confirmation after creating a user or resetting a password. Action menus
-are keyboard-operable; destructive actions confirm and name their effect; result badges pair
-colour with text.
+the one-time-secret confirmation after creating a user or resetting a password. Admin pages keep
+page headers terse, mark required fields with `*`, and validate required form fields before the
+server fallback. Action menus are keyboard-operable; destructive actions confirm and name their
+effect; result badges pair colour with text.
 
 ## Edge cases
 

@@ -48,7 +48,7 @@ async function block() {
   clearFieldErrors(blockFieldErrors)
   if (!canBlock.value || !admin.detail) return
   if (!reason.value.trim()) {
-    blockFieldErrors.reason = 'Majburiy maydon.'
+    blockFieldErrors.reason = "Bu maydonni to'ldiring."
     focusFirstFieldError(blockFieldErrors, ['reason'], { reason: 'block-reason' })
     return
   }
@@ -121,10 +121,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <div class="admin-page-head">
       <div>
         <h1>{{ admin.detail.workshop.name }}</h1>
-        <p class="date">
-          {{ admin.detail.workshop.code }} . {{ admin.detail.workshop.phone }} .
-          {{ adminDate(admin.detail.workshop.created_at) }}
-        </p>
+        <p class="date">{{ adminDate(admin.detail.workshop.created_at) }}</p>
       </div>
       <div class="admin-page-tools">
         <span class="admin-pill" :class="workshopStatusTone(admin.detail.workshop.status)">
@@ -191,7 +188,6 @@ onMounted(() => admin.loadWorkshop(workshopId))
     >
       <div class="admin-card-h">
         <h2>Ustaxona profili</h2>
-        <span class="sub">faqat ko'rish; operator tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
         <dl class="grid gap-4 sm:grid-cols-2">
@@ -200,23 +196,15 @@ onMounted(() => admin.loadWorkshop(workshopId))
             <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Kod</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">{{ admin.detail.workshop.code }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Telefon</dt>
-            <dd class="mt-1 font-mono text-sm text-ink">{{ admin.detail.workshop.phone }}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Manzil</dt>
-            <dd class="mt-1 text-base font-bold text-ink">
-              {{ admin.detail.workshop.address ?? '-' }}
-            </dd>
-          </div>
-          <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
             <dd class="mt-1 text-base font-bold text-ink">
               <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-extrabold uppercase text-ink-muted">Yaratildi</dt>
+            <dd class="mt-1 font-mono text-sm text-ink">
+              {{ adminDate(admin.detail.workshop.created_at) }}
             </dd>
           </div>
           <div>
@@ -327,7 +315,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
               ta'sir qilmaydi. Blokdan chiqarilganda sessiyalar avtomatik tiklanmaydi.
             </p>
             <label class="admin-field" for="block-reason">
-              <span>Majburiy sabab</span>
+              <span>Sabab</span>
               <textarea
                 id="block-reason"
                 v-model="reason"

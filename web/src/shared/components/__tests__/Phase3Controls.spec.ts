@@ -71,7 +71,7 @@ describe('Phase 3 shared controls', () => {
       attachTo: document.body,
     })
 
-    expect(wrapper.text()).toContain('Majburiy')
+    expect(wrapper.text()).toContain('*')
     expect(wrapper.get('button').attributes('role')).toBe('combobox')
     expect(wrapper.get('button').attributes('aria-required')).toBe('true')
   })

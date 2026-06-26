@@ -93,7 +93,6 @@ async function platformToken(request: APIRequestContext, login: string) {
 }
 
 async function provisionWorkshop(request: APIRequestContext, token: string, id: string) {
-  const code = `p4-${id}`
   const ownerLogin = `owner-${id}`
   const ownerPassword = 'OwnerTemp123'
   const response = await request.post('/api/v1/platform/workshops', {
@@ -101,9 +100,6 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     data: {
       workshop: {
         name: `Cutting Workshop ${id}`,
-        code,
-        phone: phoneFor(id, 2),
-        address: 'Tashkent',
       },
       branch: {
         name: `Cutting Branch ${id}`,
@@ -118,7 +114,7 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     },
   })
   expect(response.ok()).toBe(true)
-  return { ...(await response.json()), code, ownerLogin, ownerPassword }
+  return { ...(await response.json()), ownerLogin, ownerPassword }
 }
 
 async function readyOwnerToken(
@@ -127,7 +123,6 @@ async function readyOwnerToken(
 ) {
   const login = await request.post('/api/v1/auth/workshop/login', {
     data: {
-      workshop_code: setup.code,
       login: setup.ownerLogin,
       password: setup.ownerPassword,
     },
@@ -345,7 +340,7 @@ asyncio.run(main())
   })
 }
 
-async function loginWorkshop(page: Page, code: string, login: string, password: string) {
+async function loginWorkshop(page: Page, login: string, password: string) {
   await page.goto('/workshop/')
   await page.getByLabel('Login').fill(login)
   await page.getByLabel(passwordLabel).fill(password)
@@ -470,7 +465,7 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
     orderNumber,
   })
 
-  await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/cutting-plans')
   await expect(page.getByRole('heading', { name: 'Kesim rejalar' })).toBeVisible()
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()

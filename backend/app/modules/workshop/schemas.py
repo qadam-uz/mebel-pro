@@ -85,9 +85,8 @@ class BranchContextResponse(APIModel):
 class WorkshopSettingsResponse(APIModel):
     id: uuid.UUID
     name: str
-    code: str
     logo_file_id: uuid.UUID | None
-    phone: str
+    phone: str | None
     address: str | None
     status: WorkshopStatus
     currency: Currency

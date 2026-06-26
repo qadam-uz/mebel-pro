@@ -198,15 +198,15 @@ Use this for every screenshot and action result:
 
 | ID | Setup | Steps | Expected | Screenshots |
 |---|---|---|---|---|
-| `ADM-WORKSHOPS-01` | `workshop.active`, `workshop.blocked` | Open `/admin/workshops`. | Table lists name, owner login, branch count, phone, created date, status, and actions. | desktop/tablet/mobile |
+| `ADM-WORKSHOPS-01` | `workshop.active`, `workshop.blocked` | Open `/admin/workshops`. | Table lists name, owner login, branch count, created date, status, and actions. | desktop/tablet/mobile |
 | `ADM-WORKSHOPS-02` | throttle list request | Open page. | Skeleton appears in table region and reserves space. | desktop |
 | `ADM-WORKSHOPS-03` | fail list request | Open page. | Error state has specific title, retry, trace id if present. | desktop |
-| `ADM-WORKSHOPS-04` | full data | Search by name/code; filter **Faol**, **Bloklangan**, reset filter. | Dropdown labels are clear; filtered results match; no-results differs from first-run empty. | desktop |
+| `ADM-WORKSHOPS-04` | full data | Search by name/owner login; filter **Faol**, **Bloklangan**, reset filter. | Dropdown labels are clear; filtered results match; no-results differs from first-run empty. | desktop |
 | `ADM-WORKSHOPS-05` | full data | Search impossible value. | Empty state says no workshop matched and gives a way forward. | desktop |
 | `ADM-WORKSHOPS-06` | `admin.ready` | Open **+ Yangi ustaxona**. | Wide modal opens, focus enters, labels persist, working-hours grid fits all viewports. | desktop/mobile |
-| `ADM-WORKSHOPS-07` | create modal | Type workshop name, then edit code manually, clear branch name. | Code auto-generates until manually edited; branch name defaults to `Asosiy filial` only when empty. | desktop |
-| `ADM-WORKSHOPS-08` | create modal | Fill valid data, submit. | Busy label `Yaratilmoqda`, success toast, one-time secret modal with code/login/password and copy buttons. | desktop/mobile |
-| `ADM-WORKSHOPS-09` | create modal | Submit missing/invalid fields and duplicate code. | Form remains open, values preserved, error copy is concise and field problems are findable. | desktop |
+| `ADM-WORKSHOPS-07` | create modal | Type workshop name, then clear branch name. | Branch name defaults to `Asosiy filial` only when empty; no removed workshop contact fields appear. | desktop |
+| `ADM-WORKSHOPS-08` | create modal | Fill valid data, submit. | Busy label `Yaratilmoqda`, success toast, one-time secret modal with owner login/password and copy buttons. | desktop/mobile |
+| `ADM-WORKSHOPS-09` | create modal | Submit missing/invalid fields and duplicate owner login. | Form remains open, values preserved, error copy is concise and field problems are findable. | desktop |
 | `ADM-WORKSHOPS-10` | active row | Click **Bloklash**, try confirm without reason, then add reason and confirm. | Confirm disabled until reason; copy names session revocation and frozen orders; row becomes blocked. | desktop |
 | `ADM-WORKSHOPS-11` | blocked row | Click **Blokdan chiqarish**, confirm. | Copy states sessions are not restored; row becomes active; toast confirms. | desktop |
 | `ADM-WORKSHOPS-12` | keyboard only | Operate search, status dropdown, row detail, block/unblock, create modal. | No hover-only actions; focus order follows visual order. | desktop |

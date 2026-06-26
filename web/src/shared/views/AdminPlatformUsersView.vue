@@ -54,7 +54,7 @@ const activeOperatorCount = computed(
 function blockDisabledReason(user: PlatformUser): string | null {
   if (user.id === auth.me?.principal_id) return "O'zini bloklab bo'lmaydi"
   if (user.status === 'active' && activeOperatorCount.value <= 1)
-    return "Oxirgi faol operatorni bloklab bo'lmaydi"
+    return "Oxirgi faol adminni bloklab bo'lmaydi"
   return null
 }
 
@@ -66,7 +66,7 @@ const secretRows = computed(() => {
   const secret = admin.lastPlatformUserSecret
   if (!secret) return []
   return [
-    { label: 'Operator', value: secret.user.login },
+    { label: 'Admin', value: secret.user.login },
     { label: 'Vaqtinchalik parol', value: secret.temp_password },
   ]
 })
@@ -151,7 +151,7 @@ async function saveUser() {
         phone: form.phone,
       })
       modalOpen.value = false
-      toast.success('Operator yangilandi')
+      toast.success('Admin yangilandi')
     } else {
       await admin.createPlatformUser({
         full_name: form.fullName,
@@ -161,7 +161,7 @@ async function saveUser() {
       })
       modalOpen.value = false
       secretOpen.value = true
-      toast.success('Operator yaratildi')
+      toast.success('Admin yaratildi')
     }
   } catch (error) {
     const fields = fieldErrorsFromApi<OperatorField>(error, {
@@ -176,7 +176,7 @@ async function saveUser() {
       focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
     } else {
       actionError.value = 'platform_user_save_failed'
-      toast.danger('Operator amali bajarilmadi')
+      toast.danger('Admin amali bajarilmadi')
     }
   } finally {
     saving.value = false
@@ -216,7 +216,7 @@ async function confirmBlock() {
   clearFieldErrors(blockFieldErrors)
   if (!blockTarget.value) return
   if (!blockReason.value.trim()) {
-    blockFieldErrors.blockReason = 'Majburiy maydon.'
+    blockFieldErrors.blockReason = "Bu maydonni to'ldiring."
     focusFirstFieldError(blockFieldErrors, ['blockReason'], { blockReason: 'op-block-reason' })
     return
   }
@@ -226,7 +226,7 @@ async function confirmBlock() {
     await admin.blockPlatformUser(blockTarget.value.id, blockReason.value)
     blockModalOpen.value = false
     blockTarget.value = null
-    toast.success('Operator bloklandi')
+    toast.success('Admin bloklandi')
   } catch (blockErr) {
     Object.assign(
       blockFieldErrors,
@@ -238,8 +238,8 @@ async function confirmBlock() {
       actionError.value = 'platform_user_block_failed'
       toast.danger(
         apiErrorCode(blockErr) === 'last_platform_operator'
-          ? "Oxirgi faol operatorni bloklab bo'lmaydi"
-          : "Operatorni bloklab bo'lmadi",
+          ? "Oxirgi faol adminni bloklab bo'lmaydi"
+          : "Adminni bloklab bo'lmadi",
       )
     }
   } finally {
@@ -252,10 +252,10 @@ async function unblock(id: string) {
   actionError.value = null
   try {
     await admin.unblockPlatformUser(id)
-    toast.success('Operator blokdan chiqarildi')
+    toast.success('Admin blokdan chiqarildi')
   } catch {
     actionError.value = 'platform_user_unblock_failed'
-    toast.danger("Operatorni blokdan chiqarib bo'lmadi")
+    toast.danger("Adminni blokdan chiqarib bo'lmadi")
   } finally {
     actionId.value = null
   }
@@ -268,12 +268,9 @@ onMounted(admin.loadPlatformUsers)
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Platforma operatorlari</h1>
-        <p class="sub">Platforma doirasi bir xil; alohida ruxsat modeli yo'q.</p>
+        <h1>Adminlar</h1>
       </div>
-      <button type="button" class="admin-primary-action" @click="openCreate">
-        + Yangi operator
-      </button>
+      <button type="button" class="admin-primary-action" @click="openCreate">+ Yangi admin</button>
     </div>
 
     <div class="admin-filters">
@@ -293,13 +290,13 @@ onMounted(admin.loadPlatformUsers)
       v-else-if="admin.opsError"
       :code="admin.opsError"
       :trace-id="admin.opsTraceId"
-      title="Operatorlar yuklanmadi"
+      title="Adminlar yuklanmadi"
       @retry="admin.loadPlatformUsers"
     />
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
-      <h3>Operator topilmadi</h3>
-      <p>Filtrni tozalang yoki yangi operator yarating.</p>
+      <h3>Admin topilmadi</h3>
+      <p>Filtrni tozalang yoki yangi admin yarating.</p>
     </section>
 
     <section v-else class="admin-card">
@@ -307,7 +304,7 @@ onMounted(admin.loadPlatformUsers)
         <table class="admin-table wide">
           <thead>
             <tr>
-              <th>Operator</th>
+              <th>Admin</th>
               <th>Login</th>
               <th>Telefon</th>
               <th>Oxirgi kirish</th>
@@ -337,7 +334,7 @@ onMounted(admin.loadPlatformUsers)
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                    :aria-label="`${user.full_name} operatorini tahrirlash`"
+                    :aria-label="`${user.full_name} adminini tahrirlash`"
                     @click="openEdit(user)"
                   >
                     Tahrirlash
@@ -346,7 +343,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
-                    :aria-label="`${user.full_name} operatori parolini qaytarish`"
+                    :aria-label="`${user.full_name} admini parolini qaytarish`"
                     @click="askReset(user)"
                   >
                     Parol qaytarish
@@ -357,9 +354,7 @@ onMounted(admin.loadPlatformUsers)
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
                     :disabled="blockDisabledReason(user) !== null || actionId === user.id"
                     :title="blockDisabledReason(user) ?? undefined"
-                    :aria-label="
-                      blockDisabledReason(user) ?? `${user.full_name} operatorini bloklash`
-                    "
+                    :aria-label="blockDisabledReason(user) ?? `${user.full_name} adminini bloklash`"
                     @click="askBlock(user)"
                   >
                     {{ blockDisabledReason(user) ?? 'Bloklash' }}
@@ -369,7 +364,7 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
-                    :aria-label="`${user.full_name} operatorini blokdan chiqarish`"
+                    :aria-label="`${user.full_name} adminini blokdan chiqarish`"
                     @click="unblock(user.id)"
                   >
                     Blokdan chiqarish
@@ -387,13 +382,13 @@ onMounted(admin.loadPlatformUsers)
       class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
       role="alert"
     >
-      Operator amali bajarilmadi.
+      Admin amali bajarilmadi.
     </p>
 
     <AdminSecretModal
       :open="secretOpen && !!admin.lastPlatformUserSecret"
       title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
-      intro="Login va vaqtinchalik parolni operatorga yetkazing. Operator birinchi kirishda uni almashtiradi."
+      intro="Login va vaqtinchalik parolni adminga yetkazing. Admin birinchi kirishda uni almashtiradi."
       :rows="secretRows"
       @close="closeSecret"
     />
@@ -423,7 +418,7 @@ onMounted(admin.loadPlatformUsers)
         @keydown="formTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="operator-title">{{ editingId ? 'Operator tahrirlash' : 'Yangi operator' }}</h3>
+          <h3 id="operator-title">{{ editingId ? 'Adminni tahrirlash' : 'Yangi admin' }}</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -540,7 +535,7 @@ onMounted(admin.loadPlatformUsers)
         @keydown="blockTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="block-user-title">Operatorni bloklash</h3>
+          <h3 id="block-user-title">Adminni bloklash</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -554,10 +549,10 @@ onMounted(admin.loadPlatformUsers)
           <div class="admin-modal-b">
             <p class="mb-4 text-sm text-ink-soft">
               {{ blockTarget.full_name }} sessiyalari darhol bekor qilinadi. Blokdan chiqarilganda
-              sessiyalar avtomatik tiklanmaydi — operator qaytadan kiradi.
+              sessiyalar avtomatik tiklanmaydi — admin qaytadan kiradi.
             </p>
             <label class="admin-field" for="op-block-reason">
-              <span>Majburiy sabab</span>
+              <span>Sabab</span>
               <textarea
                 id="op-block-reason"
                 v-model="blockReason"

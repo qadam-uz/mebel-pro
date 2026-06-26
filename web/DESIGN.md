@@ -13,7 +13,11 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
   states, and keyboard operation (`Enter` / `Space`, arrows, `Esc`, `Tab` close).
 - Native controls remain acceptable for text inputs, textareas, checkboxes, radios, and
   file inputs until a project primitive exists for a specific case.
-- Admin forms mark required fields with text, not color alone; unmarked fields are optional.
+- Image uploads use the shared preview primitive: a framed preview, native file input triggered
+  by labelled buttons, upload/error state in the field, and a remove action when an image is set.
+  Data tables show images in fixed-size framed thumbnails with a non-empty fallback.
+- Admin forms mark required fields with a compact `*` beside the persistent label, backed by
+  `required` / `aria-required` semantics and inline errors; unmarked fields are optional.
 - Admin filters use persistent labels outside the input value, and controls in one filter row
   align to the same height. Object-creation buttons in the admin app use a visible `+` prefix
   in the label.

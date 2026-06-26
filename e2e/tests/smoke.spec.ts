@@ -15,14 +15,14 @@ test('role login routes load', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Kirish' })).toBeVisible()
 
   await page.goto('/admin/auth/login')
-  await expect(page.getByRole('heading', { name: 'Operator paneliga kirish' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Admin paneliga kirish' })).toBeVisible()
 })
 
 test('protected role homes redirect to sign-in', async ({ page }) => {
   await page.goto('/admin/')
 
   await expect(page).toHaveURL(/\/admin\/auth\/login/)
-  await expect(page.getByRole('heading', { name: 'Operator paneliga kirish' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Admin paneliga kirish' })).toBeVisible()
 })
 
 test('web host proxies API health same-origin', async ({ request }) => {

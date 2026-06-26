@@ -38,7 +38,7 @@ const workshopName = computed(() => {
 })
 const workshopOptions = computed(() => [
   dropdownOption('all', 'Ustaxona', 'barcha ustaxonalar'),
-  ...admin.workshops.map((workshop) => dropdownOption(workshop.id, workshop.name, workshop.code)),
+  ...admin.workshops.map((workshop) => dropdownOption(workshop.id, workshop.name)),
 ])
 const entityOptions = computed(() => [
   dropdownOption('all', 'Obyekt turi', 'barcha turlar'),
@@ -223,8 +223,7 @@ watch([query, workshopFilter, entityFilter, timeFilter], queueRefresh)
   <section>
     <div class="admin-page-head">
       <div>
-        <h1>Platforma audit logi</h1>
-        <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining o'zgarmas loglari.</p>
+        <h1>Audit logi</h1>
       </div>
     </div>
 

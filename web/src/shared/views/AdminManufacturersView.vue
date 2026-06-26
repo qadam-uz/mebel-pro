@@ -157,7 +157,6 @@ onMounted(async () => {
     <div class="admin-page-head">
       <div>
         <h1>Ishlab chiqaruvchilar</h1>
-        <p class="sub">Platforma material katalogidagi brend va ishlab chiqaruvchilar.</p>
       </div>
       <button type="button" class="admin-primary-action" @click="openCreate">
         + Yangi ishlab chiqaruvchi

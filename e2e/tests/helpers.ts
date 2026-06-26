@@ -94,7 +94,6 @@ export async function provisionWorkshop(
   token: string,
   id: string,
 ) {
-  const code = `p5-${id}`;
   const ownerLogin = `owner-${id}`;
   const ownerPassword = "OwnerTemp123";
   const response = await request.post("/api/v1/platform/workshops", {
@@ -102,9 +101,6 @@ export async function provisionWorkshop(
     data: {
       workshop: {
         name: `Order Workshop ${id}`,
-        code,
-        phone: phoneFor(id, 2),
-        address: "Tashkent",
       },
       branch: {
         name: `Order Branch ${id}`,
@@ -119,7 +115,7 @@ export async function provisionWorkshop(
     },
   });
   expect(response.ok()).toBe(true);
-  return { ...(await response.json()), code, ownerLogin, ownerPassword };
+  return { ...(await response.json()), ownerLogin, ownerPassword };
 }
 
 export async function readyOwnerToken(
@@ -128,7 +124,6 @@ export async function readyOwnerToken(
 ) {
   const login = await request.post("/api/v1/auth/workshop/login", {
     data: {
-      workshop_code: setup.code,
       login: setup.ownerLogin,
       password: setup.ownerPassword,
     },

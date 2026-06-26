@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-06-23
+updated: 2026-06-26
 order: 20
 ---
 
@@ -23,11 +23,10 @@ users, and a settings bundle. Provisioned by a platform operator.
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `code` | text | human-readable login namespace; unique, case-insensitive |
 | `name` | text | required |
 | `logo_file_id` | UUID? | → [file](support.md#file) |
-| `phone` | text | `+998XXXXXXXXX` |
-| `address` | text? | legal/postal |
+| `phone` | text? | `+998XXXXXXXXX`; owner-managed profile contact |
+| `address` | text? | owner-managed legal/postal profile field |
 | `owner_user_id` | UUID | → workshop user with `is_owner`; 1:1 |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
@@ -44,9 +43,8 @@ delivery and a gateway.
 
 Blocking cascades: the owner's + staff's sessions are revoked immediately; open orders freeze
 (no automatic transitions); clients are unaffected. Unblocking does not restore sessions.
-Invariants: `code` is unique case-insensitively and immutable after provisioning; exactly one
-`is_owner = true` workshop user per workshop (DB/service); `owner_user_id` references that user;
-never deleted.
+Invariants: exactly one `is_owner = true` workshop user per workshop (DB/service);
+`owner_user_id` references that user; never deleted.
 
 ## Branch
 

@@ -91,9 +91,7 @@ describe('role route matrix', () => {
     expect(roleDocumentTitle('Buyurtmalar', workshopConfig)).toBe(
       'Buyurtmalar — Mebel Pro · Boshqaruv',
     )
-    expect(roleDocumentTitle(undefined, adminConfig)).toBe(
-      'Platforma asosiy — Mebel Pro · Superadmin',
-    )
+    expect(roleDocumentTitle(undefined, adminConfig)).toBe('Asosiy — Mebel Pro · Superadmin')
   })
 
   it('enforces workshop route permission metadata without affecting other roles', () => {

@@ -52,7 +52,7 @@ const profileRows = computed(() => [
   ['Ism', auth.displayName],
   ['Login', auth.me?.login ?? '-'],
   ['Telefon', auth.me?.phone ?? '-'],
-  ['Ruxsat doirasi', 'Platforma operatori'],
+  ['Ruxsat doirasi', 'Platforma admini'],
   ['Holat', auth.me?.status === 'blocked' ? 'Bloklangan' : 'Faol'],
   ['Sessiya', auth.me?.session_id ?? '-'],
 ])
@@ -171,7 +171,6 @@ onMounted(loadSessions)
     <div class="admin-page-head">
       <div>
         <h1>Profilim</h1>
-        <p class="sub">Platforma operatori profili, parol va faol sessiyalar.</p>
       </div>
       <button
         type="button"
@@ -200,7 +199,6 @@ onMounted(loadSessions)
     >
       <div class="admin-card-h">
         <h2>Profil</h2>
-        <span class="sub">faqat o'qish . operator o'z profilini tahrirlamaydi</span>
       </div>
       <div class="admin-card-b">
         <dl class="grid gap-4 sm:grid-cols-2">

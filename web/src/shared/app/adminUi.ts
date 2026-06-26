@@ -152,7 +152,7 @@ export function errorStatusLabel(status: ErrorRecordStatus) {
 }
 
 const ADMIN_ENTITY_LABELS: Record<string, string> = {
-  platform_user: 'Platforma operatori',
+  platform_user: 'Platforma admini',
   workshop_user: 'Ustaxona xodimi',
   client: 'Mijoz',
   workshop: 'Ustaxona',
@@ -166,7 +166,7 @@ const ADMIN_ENTITY_LABELS: Record<string, string> = {
 }
 
 const ADMIN_ACTOR_LABELS: Record<string, string> = {
-  platform_user: 'Platforma operatori',
+  platform_user: 'Platforma admini',
   workshop_user: 'Ustaxona xodimi',
   client: 'Mijoz',
   system: 'Tizim',

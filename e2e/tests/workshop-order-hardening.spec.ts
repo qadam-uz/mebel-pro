@@ -14,7 +14,6 @@ test.setTimeout(90_000)
 
 async function loginWorkshop(
   page: Page,
-  code: string,
   login: string,
   password: string,
 ) {
@@ -72,7 +71,7 @@ test('owner applies a discount and it persists after reload', async ({ page, req
     edgeId: seeded.edge.id,
   })
 
-  await loginWorkshop(page, seeded.setup.code, seeded.setup.ownerLogin, ownerReadyPassword)
+  await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
 
@@ -101,7 +100,7 @@ test('owner records order income and standalone expense', async ({ page, request
     edgeId: seeded.edge.id,
   })
 
-  await loginWorkshop(page, seeded.setup.code, seeded.setup.ownerLogin, ownerReadyPassword)
+  await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/finance/expenses')
   await expect(page.getByRole('heading', { name: 'Tushum va xarajat' })).toBeVisible()
 
@@ -154,7 +153,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   )
   expect(cutting.status).toBe('cutting')
 
-  await loginWorkshop(page, seeded.setup.code, seeded.setup.ownerLogin, ownerReadyPassword)
+  await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByText('Kesilmoqda', { exact: true }).first()).toBeVisible()
   await page.getByRole('button', { name: 'tasdiqlangan holatiga qaytarish' }).click()

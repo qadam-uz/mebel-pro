@@ -87,7 +87,6 @@ watch(
     <div class="admin-page-head">
       <div>
         <h1>Fon vazifalar</h1>
-        <p class="sub">Fon vazifalar holati, oxirgi natija va qo'lda ishga tushirish.</p>
       </div>
     </div>
 

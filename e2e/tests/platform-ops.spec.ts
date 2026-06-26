@@ -99,10 +99,6 @@ test('reset-required operator sees the gate and a locked nav', async ({ page }, 
     'aria-disabled',
     'true',
   )
-  await expect(page.getByRole('link', { name: 'Yangi ustaxona' })).toHaveAttribute(
-    'aria-disabled',
-    'true',
-  )
   await page.goto('/admin/catalog/materials')
   await expect(page).toHaveURL(/\/admin\/profile/)
 })
@@ -112,15 +108,15 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await seedPlatform(`admin-${id}`)
   await loginAsAdmin(page, `admin-${id}`)
 
-  await page.getByRole('link', { name: 'Operatorlar' }).first().click()
+  await page.getByRole('link', { name: 'Adminlar' }).first().click()
 
   // AB-07: the signed-in operator cannot block themselves — the control is disabled.
   await expect(page.getByRole('button', { name: "O'zini bloklab bo'lmaydi" })).toBeDisabled()
 
   // AB-06: create an operator → the one-time secret modal reveals the temp password.
   const opLogin = `op-${id}`
-  await page.getByRole('button', { name: 'Yangi operator' }).click()
-  const createDialog = page.getByRole('dialog', { name: /Yangi operator/ })
+  await page.getByRole('button', { name: 'Yangi admin' }).click()
+  const createDialog = page.getByRole('dialog', { name: /Yangi admin/ })
   await createDialog.getByLabel('Ism').fill('E2E Operator')
   await createDialog.getByLabel('Telefon').fill(phoneFor(id, 5))
   await createDialog.getByLabel('Login').fill(opLogin)
@@ -136,7 +132,7 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await expect(opRow).toBeVisible()
 
   // Reset password → a fresh one-time secret.
-  await opRow.getByRole('button', { name: /operatori parolini qaytarish/ }).click()
+  await opRow.getByRole('button', { name: /admini parolini qaytarish/ }).click()
   await page.getByRole('dialog', { name: 'Parolni qaytarish' }).getByRole('button', {
     name: 'Parolni qaytarish',
   }).click()
@@ -144,16 +140,16 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await page.getByRole('button', { name: /Yopdim/ }).click()
 
   // Block → row becomes Bloklangan.
-  await opRow.getByRole('button', { name: /operatorini bloklash/ }).click()
+  await opRow.getByRole('button', { name: /adminini bloklash/ }).click()
   await page.getByLabel(/sabab/i).fill('E2E operator block')
   await page
-    .getByRole('dialog', { name: 'Operatorni bloklash' })
+    .getByRole('dialog', { name: 'Adminni bloklash' })
     .getByRole('button', { name: 'Bloklash' })
     .click()
   await expect(opRow.getByText('Bloklangan')).toBeVisible()
 
   // Unblock → back to Faol.
-  await opRow.getByRole('button', { name: /operatorini blokdan chiqarish/ }).click()
+  await opRow.getByRole('button', { name: /adminini blokdan chiqarish/ }).click()
   await expect(opRow.getByText('Faol')).toBeVisible()
 })
 

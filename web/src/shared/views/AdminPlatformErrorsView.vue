@@ -190,7 +190,6 @@ watch(
     <div class="admin-page-head">
       <div>
         <h1>Xatolik monitor</h1>
-        <p class="sub">Guruhlangan ilova xatoliklari, ko'payish sonlari, trace ID va kontekst.</p>
       </div>
     </div>
 

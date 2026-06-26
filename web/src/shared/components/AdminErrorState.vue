@@ -25,7 +25,7 @@ const isDenied = computed(
     <p>
       {{
         isDenied
-          ? 'Platforma operatori huquqi tasdiqlanmadi — chiqib, qaytadan kiring.'
+          ? 'Platforma admini huquqi tasdiqlanmadi — chiqib, qaytadan kiring.'
           : "Birozdan so'ng qayta urinib ko'ring."
       }}
       <span v-if="traceId" class="admin-mono">trace {{ traceId }}</span>

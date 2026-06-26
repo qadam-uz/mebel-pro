@@ -85,7 +85,6 @@ async function platformToken(request: APIRequestContext, login: string) {
 }
 
 async function provisionWorkshop(request: APIRequestContext, token: string, id: string) {
-  const code = `p3-${id}`
   const ownerLogin = `owner-${id}`
   const ownerPassword = 'OwnerTemp123'
   const response = await request.post('/api/v1/platform/workshops', {
@@ -93,9 +92,6 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     data: {
       workshop: {
         name: `Catalog Workshop ${id}`,
-        code,
-        phone: phoneFor(id, 2),
-        address: 'Tashkent',
       },
       branch: {
         name: `Catalog Branch ${id}`,
@@ -110,7 +106,7 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
     },
   })
   expect(response.ok()).toBe(true)
-  return { ...(await response.json()), code, ownerLogin, ownerPassword }
+  return { ...(await response.json()), ownerLogin, ownerPassword }
 }
 
 async function readyOwnerToken(
@@ -119,7 +115,6 @@ async function readyOwnerToken(
 ) {
   const login = await request.post('/api/v1/auth/workshop/login', {
     data: {
-      workshop_code: setup.code,
       login: setup.ownerLogin,
       password: setup.ownerPassword,
     },
@@ -173,7 +168,7 @@ async function loginAdmin(page: Page, login: string) {
   await page.getByRole('button', { name: continueButton }).click()
 }
 
-async function loginWorkshop(page: Page, code: string, login: string, password: string) {
+async function loginWorkshop(page: Page, login: string, password: string) {
   await page.goto('/workshop/')
   await page.getByLabel('Login').fill(login)
   await page.getByLabel(passwordLabel).fill(password)
@@ -198,7 +193,7 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   await loginAdmin(page, login)
 
   await page.getByRole('link', { name: 'Materiallar' }).first().click()
-  await expect(page.getByRole('heading', { name: 'Platforma material katalogi' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Material katalogi' })).toBeVisible()
 
   // On a fresh catalog the empty state also renders a "Yangi material" CTA, so
   // target the always-present page-header action (first in DOM order) — keeps
@@ -235,7 +230,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await readyOwnerToken(request, setup)
   const material = await createCatalogMaterial(request, adminAccess, id)
 
-  await loginWorkshop(page, setup.code, setup.ownerLogin, ownerReadyPassword)
+  await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
   await page.goto('/workshop/catalog')
   await expect(page.getByRole('heading', { name: 'Filial material katalogi' })).toBeVisible()
 
@@ -333,7 +328,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   })
   expect(staff.ok()).toBe(true)
 
-  await loginWorkshop(page, setup.code, staffLogin, 'StaffTemp123')
+  await loginWorkshop(page, staffLogin, 'StaffTemp123')
   await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
   await page.goto(`/workshop/branches/${branchId}`)
 

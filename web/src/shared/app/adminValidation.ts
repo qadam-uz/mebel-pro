@@ -2,25 +2,18 @@ import { ApiError, apiErrorCode } from '@/shared/api/client'
 
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>
 
-const WORKSHOP_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$/
 const UZ_PHONE_RE = /^\+998\d{9}$/
 
 export function clearFieldErrors<Field extends string>(errors: FieldErrors<Field>) {
   for (const key of Object.keys(errors) as Field[]) delete errors[key]
 }
 
-export function requiredText(value: string, message = 'Majburiy maydon.'): string | null {
+export function requiredText(value: string, message = "Bu maydonni to'ldiring."): string | null {
   return value.trim() ? null : message
 }
 
 export function uzPhone(value: string): string | null {
   return UZ_PHONE_RE.test(value.trim()) ? null : '+998XXXXXXXXX formatida kiriting.'
-}
-
-export function workshopCode(value: string): string | null {
-  return WORKSHOP_CODE_RE.test(value.trim())
-    ? null
-    : '3-32 belgi: harf, raqam, "_" yoki "-" kiriting.'
 }
 
 export function tempPassword(value: string): string | null {
@@ -64,15 +57,11 @@ function apiValidationMessage(code: string | null): string {
     case 'branch_name_required':
     case 'branch_address_required':
     case 'reason_required':
-      return 'Majburiy maydon.'
+      return "Bu maydonni to'ldiring."
     case 'invalid_phone':
       return '+998XXXXXXXXX formatida kiriting.'
     case 'invalid_current_password':
       return "Joriy parol noto'g'ri."
-    case 'invalid_workshop_code':
-      return '3-32 belgi: harf, raqam, "_" yoki "-" kiriting.'
-    case 'workshop_code_exists':
-      return 'Bu kod band.'
     case 'login_exists':
       return 'Bu login band.'
     case 'manufacturer_name_exists':

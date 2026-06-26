@@ -15,10 +15,10 @@ and how the surfaces look in the three apps.
 ## Workshop & platform user sign-in
 
 Platform users sign in with login + password. Workshop users also sign in with login +
-password — **no workshop code field**. Workshop-user login is case-insensitive and unique only
-inside one workshop, so the backend resolves the submitted login by checking the password across
-same-login accounts: exactly one password match authenticates, no match fails, and more than one
-match fails as ambiguous. The error on a bad pair is a **generic** "login or password is
+password. Workshop-user login is case-insensitive and unique only inside one workshop, so the
+backend resolves the submitted login by checking the password across same-login accounts:
+exactly one password match authenticates, no match fails, and more than one match fails as
+ambiguous. The error on a bad pair is a **generic** "login or password is
 incorrect" — no account-existence oracle. **Five consecutive bad attempts → a 15-minute
 lockout** (`locked_until`); a correct password resets the counter. Passwords are argon2 /
 bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one digit.
@@ -150,18 +150,19 @@ the phone the client already typed when stepping forward or back:
 
 A platform operator provisions a workshop atomically with its first user and first branch:
 
-- **Create a workshop, first branch, and owner — atomically.** Input: workshop fields + first
-  branch fields (`name`, `address`, `phone`, `working_hours`) + the owner's `login`, plus an
-  auto-generated temp password (manual override).
+- **Create a workshop, first branch, and owner — atomically.** Input: workshop `name`
+  (`currency` defaults to `UZS`) + first branch fields (`name`, `address`, `phone`,
+  `working_hours`) + the owner's `login`, plus an auto-generated temp password (manual
+  override).
   The same transaction creates the `workshop` row, an `active` first `branch` row with empty
   `branch_pricing`, and a `workshop_user` row with `is_owner = true`,
   `home_branch_id = first_branch.id`, and `password_reset_required = true`. Returns the summary
-  and the temp password **once**. Workshop fields include a generated `code` with manual override;
-  the returned summary includes the workshop code and owner login. Only the temp password is
-  secret and shown once. Provisioning creates exactly one owner; after that, v1 has no owner
-  create / demote / delete / transfer path. Platform provisioning does not collect branch
-  coordinates or owner name/phone; precise branch location and owner profile/contact data are
-  owner-managed after first sign-in.
+  and the temp password **once**. The returned confirmation shows the owner login and temp
+  password; only the temp password is secret and shown once. Provisioning creates exactly one
+  owner; after that, v1 has no owner create / demote / delete / transfer path. Platform
+  provisioning does not collect workshop phone/address, branch coordinates, or owner
+  name/phone; workshop profile/contact data and precise branch location are owner-managed
+  after first sign-in.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
@@ -177,13 +178,11 @@ need, it must be specified here first — it is deliberately absent in v1.
 
 ### UX
 
-- **Create-workshop dialog** — workshop fields + first branch name/address/phone/working-hours,
+- **Create-workshop dialog** — workshop name + first branch name/address/phone/working-hours,
   owner login, temp password (auto-generated, copy button, manual toggle). On success:
-  read-only confirmation
-  showing the workshop code + owner login + temp password with "share this with the owner —
-  temp password shown once" + copy button; the owner sees the password-reset gate after sign-in
-  and lands with the first branch available in branch context. The code field
-  auto-generates from the workshop name and stays editable before save.
+  read-only confirmation showing the owner login + temp password with "share this with the
+  owner — temp password shown once" + copy button; the owner sees the password-reset gate after
+  sign-in and lands with the first branch available in branch context.
 - **Block** (in the workshop detail) — mandatory reason; warning that staff sessions are
   revoked and open orders freeze; destructive-styled.
 

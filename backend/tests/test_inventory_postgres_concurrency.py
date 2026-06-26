@@ -49,7 +49,6 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
                 id=workshop_id,
                 owner_user_id=owner_id,
                 name="Concurrent Workshop",
-                code="concurrent",
                 phone="+998901111111",
             )
             setup.add(workshop)

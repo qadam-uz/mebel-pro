@@ -4194,6 +4194,49 @@
     font-weight: 500;
   }
 
+  .admin-material-thumb {
+    position: relative;
+    display: grid;
+    width: 58px;
+    height: 44px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: 9px;
+    background: var(--color-sunk);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 55%);
+  }
+
+  .admin-material-thumb-swatch {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    opacity: 0.9;
+  }
+
+  .admin-material-thumb-mark {
+    position: absolute;
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 88%);
+    color: var(--color-ink-strong);
+    font-size: 11px;
+    font-weight: 850;
+    box-shadow: 0 2px 8px rgb(15 27 45 / 12%);
+  }
+
+  .admin-material-thumb-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   .admin-right {
     text-align: right;
   }
@@ -4220,17 +4263,17 @@
   }
 
   .admin-filter-input > span:not(.sr-only),
-  .admin-filter-select > label,
+  .admin-filter-select > .form-select-label,
   .admin-filters > .relative > span:first-child {
     display: flex;
     flex: none;
     min-height: 18px;
     align-items: center;
-    color: var(--color-ink-muted);
-    font-size: 10.5px;
-    font-weight: 850;
+    color: var(--color-ink-muted) !important;
+    font-size: 10.5px !important;
+    font-weight: 850 !important;
     letter-spacing: 0;
-    line-height: 1.2;
+    line-height: 1.2 !important;
     text-transform: uppercase;
   }
 
@@ -4295,17 +4338,20 @@
     text-transform: uppercase;
   }
 
-  .admin-field:has(input:required, textarea:required) > span:first-child::after,
-  .admin-field-required {
-    margin-left: 8px;
-    border-radius: 999px;
-    background: var(--color-warning-soft);
-    color: var(--color-warning);
-    content: 'Majburiy';
-    font-size: 10px;
-    font-weight: 850;
+  .admin-field:has(input:required, textarea:required) > span:first-child::after {
+    color: var(--color-danger);
+    content: ' *';
+    font-size: 13px;
+    font-weight: 900;
     letter-spacing: 0;
-    padding: 2px 6px;
+  }
+
+  .admin-field-required {
+    margin-left: 4px;
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0;
     text-transform: none;
   }
 
@@ -4386,6 +4432,102 @@
 
   .admin-full {
     grid-column: 1 / -1;
+  }
+
+  .admin-image-upload {
+    display: grid;
+    grid-template-columns: minmax(156px, 220px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: 10px;
+    background: var(--color-sunk);
+    padding: 12px;
+  }
+
+  .admin-image-upload.has-error {
+    border-color: #e7a196;
+    background: var(--color-danger-soft);
+  }
+
+  .admin-image-upload-preview {
+    position: relative;
+    min-height: 132px;
+    overflow: hidden;
+    border: 1px solid var(--color-hairline);
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 65%), rgb(255 255 255 / 10%)), var(--color-elevated);
+  }
+
+  .admin-image-upload-img {
+    width: 100%;
+    height: 100%;
+    min-height: 132px;
+    object-fit: cover;
+  }
+
+  .admin-image-upload-empty {
+    display: grid;
+    height: 100%;
+    min-height: 132px;
+    place-items: center;
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .admin-image-upload-busy {
+    position: absolute;
+    inset: auto 8px 8px;
+    border-radius: 999px;
+    background: rgb(15 27 45 / 82%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 850;
+    padding: 6px 9px;
+    text-align: center;
+  }
+
+  .admin-image-upload-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .admin-image-upload-copy strong {
+    color: var(--color-ink);
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .admin-image-upload-copy span,
+  .admin-image-upload-copy small {
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+
+  .admin-image-upload-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .admin-image-upload-actions .mp-button {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+
+  .admin-image-upload-error {
+    margin: 0;
+    color: var(--color-danger);
+    font-size: 12px;
+    font-weight: 800;
   }
 
   .admin-pill {
@@ -4880,6 +5022,10 @@
 
     .admin-modal-b {
       padding: 16px;
+    }
+
+    .admin-image-upload {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .admin-modal-f {

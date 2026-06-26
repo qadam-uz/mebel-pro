@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-23
+updated: 2026-06-26
 order: 40
 ---
 
@@ -20,7 +20,7 @@ income, expenses, and the worker-production reports live in [`finance.md`](finan
 The workshop's mutable profile:
 
 - **Profile** — name, logo, phone, address. Editable by the workshop's owner. Platform
-  operators can view the profile for incident response, but v1 gives them no edit path.
+  operators can view the operational summary for incident response, but v1 gives them no edit path.
 - **Currency** — UZS, fixed in v1; named here for future-proofing.
 
 Delivery zones, advance %, and payment channels are **not in v1** — v1 is pickup-only and an
@@ -31,12 +31,13 @@ editing settings.
 
 ### UX (superadmin app)
 
-- **Workshops list** (`/admin/workshops`) — table: name, owner login, branch count, phone,
-  created, status badge. Status filter; name search;
+- **Workshops list** (`/admin/workshops`) — table: name, owner login, branch count, created,
+  status badge. Status filter; name/owner search;
   **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." The owner
   is identified by login here — the stable operational handle.
-- **Workshop detail** — header (name, status, owner login, created); tabs: **Profile** (read-only),
-  **Branches** (read-only list), **Block** (block / unblock with a mandatory reason;
+- **Workshop detail** — header (name, status, created); tabs: **Profile** (read-only name,
+  owner login, created date, status), **Branches** (read-only list), **Block** (block / unblock
+  with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze). When the
   workshop is blocked, the detail shows the **reason captured at block time** in the danger
   banner.

@@ -49,13 +49,10 @@ async def _platform_access_token(client: AsyncClient, db_session: AsyncSession) 
     return str(response.json()["access_token"])
 
 
-def _provision_payload(code: str | None = None) -> dict[str, object]:
+def _provision_payload() -> dict[str, object]:
     return {
         "workshop": {
             "name": "Atlas Mebel",
-            "code": code,
-            "phone": "+998901010101",
-            "address": "Tashkent",
         },
         "branch": {
             "name": "Main",
@@ -78,12 +75,15 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     response = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
-        json=_provision_payload(code="atlas"),
+        json=_provision_payload(),
     )
 
     assert response.status_code == 201
     body = response.json()
-    assert body["workshop"]["code"] == "atlas"
+    assert body["workshop"]["name"] == "Atlas Mebel"
+    assert "code" not in body["workshop"]
+    assert "phone" not in body["workshop"]
+    assert "address" not in body["workshop"]
     assert body["workshop"]["status"] == "active"
     assert body["branch"]["status"] == "active"
     assert body["owner"]["login"] == "owner"
@@ -102,7 +102,6 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     owner_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": "ATLAS",
             "login": "owner",
             "password": body["temp_password"],
         },
@@ -119,7 +118,7 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert owner_login.json()["me"]["workshop_id"] == body["workshop"]["id"]
     assert owner_login.json()["me"]["password_reset_required"] is True
     assert listed.status_code == 200
-    assert [row["code"] for row in listed.json()] == ["atlas"]
+    assert [row["name"] for row in listed.json()] == ["Atlas Mebel"]
     assert detail.status_code == 200
     assert detail.json()["owner"]["login"] == "owner"
 
@@ -136,7 +135,7 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="overview-a"),
+            **_provision_payload(),
             "owner": {
                 **_provision_payload()["owner"],
                 "login": "owner-a",
@@ -147,7 +146,7 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="overview-b"),
+            **_provision_payload(),
             "owner": {
                 **_provision_payload()["owner"],
                 "login": "owner-b",
@@ -186,7 +185,7 @@ async def test_platform_provision_rejects_non_canonical_working_hours(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="bad-hours"),
+            **_provision_payload(),
             "branch": {
                 **_provision_payload()["branch"],
                 "working_hours": {"monday": {"open": "09:00", "close": "18:00"}},
@@ -197,7 +196,7 @@ async def test_platform_provision_rejects_non_canonical_working_hours(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="bad-range"),
+            **_provision_payload(),
             "branch": {
                 **_provision_payload()["branch"],
                 "working_hours": {
@@ -212,7 +211,7 @@ async def test_platform_provision_rejects_non_canonical_working_hours(
     assert bad_range.status_code == 422
 
 
-async def test_platform_provision_rejects_removed_owner_and_coordinate_fields(
+async def test_platform_provision_rejects_removed_workshop_owner_and_coordinate_fields(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -222,7 +221,13 @@ async def test_platform_provision_rejects_removed_owner_and_coordinate_fields(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
         json={
-            **_provision_payload(code="removed-fields"),
+            **_provision_payload(),
+            "workshop": {
+                **_provision_payload()["workshop"],
+                "code": "removed-fields",
+                "phone": "+998901010101",
+                "address": "Tashkent",
+            },
             "branch": {
                 **_provision_payload()["branch"],
                 "latitude": "41.2995",
@@ -247,7 +252,7 @@ async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_s
     provisioned = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access_token),
-        json={**_provision_payload(code="blockable"), "temp_password": "OwnerTemp123"},
+        json={**_provision_payload(), "temp_password": "OwnerTemp123"},
     )
     assert provisioned.status_code == 201
     workshop_id = provisioned.json()["workshop"]["id"]
@@ -255,7 +260,6 @@ async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_s
     owner_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": "blockable",
             "login": "owner",
             "password": "OwnerTemp123",
         },
@@ -278,7 +282,6 @@ async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_s
     blocked_owner_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": "blockable",
             "login": "owner",
             "password": "OwnerTemp123",
         },
@@ -291,7 +294,6 @@ async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_s
     unblocked_owner_login = await client.post(
         "/api/v1/auth/workshop/login",
         json={
-            "workshop_code": "blockable",
             "login": "owner",
             "password": "OwnerTemp123",
         },
@@ -562,7 +564,7 @@ async def test_platform_audit_filters_and_offsets_are_server_side(
     provisioned = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access),
-        json=_provision_payload(code="audited"),
+        json=_provision_payload(),
     )
     assert provisioned.status_code == 201
     workshop_id = provisioned.json()["workshop"]["id"]
@@ -711,7 +713,7 @@ async def test_workshop_detail_surfaces_block_reason(
     provisioned = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access),
-        json=_provision_payload(code="reasoned"),
+        json=_provision_payload(),
     )
     assert provisioned.status_code == 201
     workshop_id = provisioned.json()["workshop"]["id"]
@@ -746,7 +748,7 @@ async def test_workshops_list_reports_owner_login_and_branch_count(
     provisioned = await client.post(
         "/api/v1/platform/workshops",
         headers=_auth(access),
-        json=_provision_payload(code="counted"),
+        json=_provision_payload(),
     )
     assert provisioned.status_code == 201
     workshop_id = provisioned.json()["workshop"]["id"]

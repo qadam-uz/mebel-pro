@@ -67,7 +67,7 @@ async def test_workshop_login_resolves_by_login_and_password(
 ) -> None:
     workshop, branch, owner = await seed_workshop_with_owner(db_session)
 
-    # No workshop code needed; login is case-insensitive.
+    # Login is case-insensitive and resolves with the submitted password.
     response = await client.post(
         "/api/v1/auth/workshop/login",
         json={"login": "OWNER", "password": "Owner123"},

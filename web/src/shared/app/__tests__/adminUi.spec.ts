@@ -51,7 +51,7 @@ describe('admin UI helpers', () => {
   })
 
   it('maps admin internals to operator-facing labels', () => {
-    expect(adminEntityLabel('platform_user')).toBe('Platforma operatori')
+    expect(adminEntityLabel('platform_user')).toBe('Platforma admini')
     expect(adminEntityLabel('manufacturer')).toBe('Ishlab chiqaruvchi')
     expect(adminStatusTransitionLabel('active', 'blocked')).toBe('Faol -> Bloklangan')
     expect(adminJobNameLabel('cleanup-expired-sessions')).toBe(
@@ -95,13 +95,13 @@ describe('admin UI helpers', () => {
       { label: 'Asosiy', to: '/admin', group: 'Platforma' },
       { label: 'Ustaxonalar', to: '/admin/workshops', group: 'Platforma' },
       { label: 'Materiallar', to: '/admin/catalog/materials', group: 'Katalog' },
-      { label: 'Audit log', to: '/admin/audit', group: 'Operatorlik' },
+      { label: 'Audit log', to: '/admin/audit', group: 'Admin' },
     ]
 
     expect(groupedNav(items)).toEqual([
       { label: 'Platforma', items: items.slice(0, 2) },
       { label: 'Katalog', items: [items[2]] },
-      { label: 'Operatorlik', items: [items[3]] },
+      { label: 'Admin', items: [items[3]] },
     ])
   })
 

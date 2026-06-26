@@ -86,7 +86,6 @@ onBeforeUnmount(() => clearInterval(pollTimer))
     <div class="admin-page-head">
       <div>
         <h1>Bildirishnomalar</h1>
-        <p class="sub">Operator uchun fon vazifa xatosi va xato ko'payishi xabarlari.</p>
       </div>
       <button
         type="button"
@@ -127,7 +126,7 @@ onBeforeUnmount(() => clearInterval(pollTimer))
 
     <section v-else-if="rows.length === 0" class="admin-empty">
       <h3>Yangilik yo'q</h3>
-      <p>Platforma operatoriga tegishli bildirishnomalar shu yerda ko'rinadi.</p>
+      <p>Platforma adminiga tegishli bildirishnomalar shu yerda ko'rinadi.</p>
     </section>
 
     <section v-else class="admin-card">

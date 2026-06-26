@@ -25,7 +25,7 @@ watch(
   (settings) => {
     if (!settings) return
     form.name = settings.name
-    form.phone = settings.phone
+    form.phone = settings.phone ?? ''
     form.address = settings.address ?? ''
     form.logoFileId = settings.logo_file_id ?? ''
   },

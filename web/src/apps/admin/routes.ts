@@ -15,7 +15,7 @@ export const adminRoutes: RouteRecordRaw[] = [
     path: '/admin',
     name: 'admin-home',
     component: () => import('@/shared/views/AdminDashboardView.vue'),
-    meta: { title: 'Platforma asosiy' },
+    meta: { title: 'Asosiy' },
   },
   {
     path: '/admin/profile',
@@ -69,7 +69,7 @@ export const adminRoutes: RouteRecordRaw[] = [
     path: '/admin/platform/users',
     name: 'admin-platform-users',
     component: () => import('@/shared/views/AdminPlatformUsersView.vue'),
-    meta: { title: 'Operatorlar' },
+    meta: { title: 'Adminlar' },
   },
   {
     path: '/admin/audit',
