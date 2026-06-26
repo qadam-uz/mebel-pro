@@ -12,7 +12,7 @@ test('role login routes load', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Mijoz kabinetiga kirish' })).toBeVisible()
 
   await page.goto('/workshop/auth/login')
-  await expect(page.getByRole('heading', { name: 'Boshqaruv sign-in' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kirish' })).toBeVisible()
 
   await page.goto('/admin/auth/login')
   await expect(page.getByRole('heading', { name: 'Operator paneliga kirish' })).toBeVisible()
