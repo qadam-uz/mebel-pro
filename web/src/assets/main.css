@@ -2118,11 +2118,11 @@
   .od-head h1 {
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 26px;
+    font-size: 20px;
     font-weight: 600;
     letter-spacing: 0;
-    line-height: 1.1;
-    margin: 6px 0;
+    line-height: 1.15;
+    margin: 2px 0;
   }
 
   .od-head .actions {
@@ -2132,6 +2132,192 @@
     border-top: 1px solid var(--color-hairline);
     margin-top: 14px;
     padding-top: 14px;
+  }
+
+  /* Horizontal phase stepper in the order header (QAD-83) — at-a-glance "where
+     is this order", replacing the old Tarix tab. */
+  .od-steps {
+    display: flex;
+    align-items: flex-start;
+    margin-top: 16px;
+  }
+
+  .od-step {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: 54px;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    text-align: center;
+  }
+
+  .od-step .od-dot {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-hairline-strong);
+    border-radius: 999px;
+    background: var(--color-elevated);
+  }
+
+  .od-step.done .od-dot {
+    border-color: var(--color-success);
+    background: var(--color-success);
+  }
+
+  .od-step.current .od-dot {
+    border-color: var(--color-accent);
+    background: var(--color-elevated);
+    box-shadow: 0 0 0 4px rgb(15 118 110 / 16%);
+  }
+
+  .od-step .od-lbl {
+    color: var(--color-ink-muted);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .od-step.done .od-lbl {
+    color: var(--color-ink-soft);
+  }
+
+  .od-step.current .od-lbl {
+    color: var(--color-accent);
+    font-weight: 800;
+  }
+
+  .od-conn {
+    flex: 1 1 auto;
+    min-width: 14px;
+    height: 2px;
+    margin-top: 8px;
+    background: var(--color-hairline-strong);
+  }
+
+  .od-conn.done {
+    background: var(--color-success);
+  }
+
+  .od-cancelled {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 800;
+    padding: 6px 14px;
+  }
+
+  .od-rework {
+    margin-top: 8px;
+    color: var(--color-warning);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Collapsible detailed history (the former Tarix tab), folded into Umumiy. */
+  .collapse-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 22px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .collapse-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .collapse-summary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  .collapse-summary h2 {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .collapse-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+  }
+
+  .od-chev {
+    color: var(--color-ink-muted);
+    transition: transform 0.15s ease;
+  }
+
+  details[open] > summary .od-chev {
+    transform: rotate(180deg);
+  }
+
+  /* Each order-contents panel is a collapsible row — headline always visible,
+     the per-side edge breakdown opens on demand (QAD-85). */
+  .bom-item {
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .bom-item:last-child {
+    border-bottom: 0;
+  }
+
+  .bom-summary {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 0;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .bom-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .bom-summary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  .bom-main {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .bom-qty {
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .bom-body {
+    padding: 0 0 12px;
+  }
+
+  @media (max-width: 620px) {
+    /* Dots-only on a phone — labels won't fit; the header status pill already
+       names the current phase. */
+    .od-step {
+      min-width: 0;
+    }
+
+    .od-step .od-lbl {
+      display: none;
+    }
   }
 
   .back {
@@ -2188,6 +2374,18 @@
     font-family: var(--font-serif);
     font-size: 22px;
     font-weight: 600;
+  }
+
+  /* Settlement (paid / balance) folded under the cost total — one invoice-style
+     money card instead of a separate "To'lov holati" card (QAD-89). */
+  .totals .settle {
+    border-top: 1px solid var(--color-hairline);
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+
+  .totals .num.paid-off {
+    color: var(--color-success);
   }
 
   .ro-figure {
@@ -4461,6 +4659,14 @@
     .od-grid,
     .admin-grid-two {
       grid-template-columns: 1fr;
+    }
+
+    /* QAD-70: on a shop-floor phone the order-detail sidebar (price summary +
+       the single primary action) must not sit below the whole overview. Once
+       .od-grid is a single column, float the aside above main so the totals
+       and the "Amallar" CTA land right under the tabs. Desktop is untouched. */
+    .od-grid > aside {
+      order: -1;
     }
   }
 
