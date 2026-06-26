@@ -25,7 +25,6 @@ import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
@@ -432,7 +431,12 @@ onMounted(async () => {
         <span>Qidiruv</span>
         <input v-model="search" placeholder="Material nomi" />
       </label>
-      <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" />
+      <FormSelect
+        v-model="kindFilter"
+        class="admin-filter-select"
+        label="Tur"
+        :options="kindOptions"
+      />
       <MultiSelectFilter
         v-model="manufacturerFilter"
         label="Ishlab chiqaruvchilar"
@@ -454,7 +458,12 @@ onMounted(async () => {
         empty-label="Hammasi"
         selected-label="tanlangan"
       />
-      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+      <FormSelect
+        v-model="statusFilter"
+        class="admin-filter-select"
+        label="Holat"
+        :options="statusOptions"
+      />
     </div>
 
     <section v-if="admin.materialsLoading" class="admin-card p-5" aria-live="polite">
@@ -616,6 +625,7 @@ onMounted(async () => {
                 :options="materialKindOptions"
                 class="admin-full"
                 :disabled="!!editingId"
+                required
               />
               <div class="admin-full grid gap-2 md:grid-cols-[1fr_auto]">
                 <FormSelect
@@ -625,6 +635,7 @@ onMounted(async () => {
                   :options="manufacturerChoiceOptions"
                   placeholder="Ishlab chiqaruvchini tanlang"
                   :error="materialFieldErrors.manufacturerId"
+                  required
                 />
                 <button
                   type="button"
@@ -660,6 +671,7 @@ onMounted(async () => {
                 label="Panel turi"
                 :options="materialTypeOptions"
                 :error="materialFieldErrors.type"
+                required
               />
               <label class="admin-field" for="mat-thick">
                 <span>Qalinligi, mm</span>

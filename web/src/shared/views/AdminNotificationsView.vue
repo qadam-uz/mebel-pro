@@ -10,7 +10,7 @@ import {
 } from '@/shared/app/adminUi'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useNotificationsStore, type NotificationItem } from '@/shared/stores/notifications'
 
@@ -99,7 +99,12 @@ onBeforeUnmount(() => clearInterval(pollTimer))
     </div>
 
     <div class="admin-filters">
-      <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
+      <FormSelect
+        v-model="filter"
+        class="admin-filter-select"
+        label="Tur"
+        :options="filterOptions"
+      />
     </div>
 
     <section

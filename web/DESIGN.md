@@ -13,6 +13,7 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
   states, and keyboard operation (`Enter` / `Space`, arrows, `Esc`, `Tab` close).
 - Native controls remain acceptable for text inputs, textareas, checkboxes, radios, and
   file inputs until a project primitive exists for a specific case.
-- **Admin refresh actions** are icon-only buttons using the shared admin refresh glyph. They
-  keep a visible focus ring, a minimum 44px hit target, and an accessible name. Object-creation
-  buttons in the admin app use a visible `+` prefix in the label.
+- Admin forms mark required fields with text, not color alone; unmarked fields are optional.
+- Admin filters use persistent labels outside the input value, and controls in one filter row
+  align to the same height. Object-creation buttons in the admin app use a visible `+` prefix
+  in the label.

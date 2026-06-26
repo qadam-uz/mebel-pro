@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-06-21
+updated: 2026-06-26
 order: 70
 ---
 
@@ -58,8 +58,8 @@ colour + text; destructive activation toggles confirm and name the consequence
 The backend runs an **in-process scheduler** — no external queue, no Celery, no cron. The v1
 jobs:
 
-| Job | When | What |
-|---|---|---|
+| Job                        | When   | What                       |
+| -------------------------- | ------ | -------------------------- |
 | `cleanup-expired-sessions` | hourly | prune expired session rows |
 
 Cutting drafts have **no expiry job** — they persist until the client deletes them or hits
@@ -115,9 +115,9 @@ in-app creation is the path.
   but the superadmin UI keeps the navigation terse and does not explain that separate
   prompt inline.
 
-Admin page refresh controls are icon-only buttons with an accessible name. Object-creation
-buttons use a visible `+` prefix in the Uzbek label, while non-action headings keep natural
-Uzbek copy.
+Admin pages do not carry standalone refresh controls; operators use the browser reload action
+when they need a full manual refresh. Object-creation buttons use a visible `+` prefix in the
+Uzbek label, while non-action headings keep natural Uzbek copy.
 
 Under a **Catalog** section, the Manufacturers and Materials surfaces above.
 

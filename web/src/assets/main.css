@@ -3912,7 +3912,7 @@
   .admin-filters {
     display: flex;
     flex-wrap: wrap;
-    align-items: end;
+    align-items: flex-start;
     gap: 12px;
     margin-bottom: 18px;
   }
@@ -3923,64 +3923,70 @@
 
   .admin-filter-input {
     display: flex;
-    min-height: 48px;
     min-width: 180px;
     flex: 1 1 200px;
     flex-direction: column;
     align-items: flex-start;
-    justify-content: center;
     gap: 4px;
+  }
+
+  .admin-filter-input > span:not(.sr-only),
+  .admin-filter-select > label,
+  .admin-filters > .relative > span:first-child {
+    display: flex;
+    flex: none;
+    min-height: 18px;
+    align-items: center;
+    color: var(--color-ink-muted);
+    font-size: 10.5px;
+    font-weight: 850;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .admin-filter-input input {
+    width: 100%;
+    min-height: 48px;
+    min-width: 0;
     border: 1px solid var(--color-hairline-strong);
     border-radius: 8px;
     background: var(--color-elevated);
+    color: var(--color-ink);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+    outline: 0;
     padding: 7px 12px;
     box-shadow:
       0 1px 2px rgb(15 27 45 / 4%),
       0 4px 10px -3px rgb(15 27 45 / 9%);
   }
 
-  .admin-filter-input > span:not(.sr-only) {
-    flex: none;
-    color: var(--color-ink-muted);
-    font-size: 10.5px;
-    font-weight: 850;
-    letter-spacing: 0;
-    text-transform: uppercase;
+  .admin-filter-input input:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
   }
 
-  .admin-filter-input input {
-    width: 100%;
-    min-width: 0;
-    border: 0;
-    background: transparent;
-    color: var(--color-ink);
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1.25;
-    outline: 0;
-  }
-
+  .admin-filter-select,
   .admin-filters > .relative {
-    min-height: 48px;
     min-width: 160px;
     flex: 1 1 170px;
   }
 
-  .admin-filters > .relative > .mp-surface {
+  .admin-filter-select > div > button,
+  .admin-filters > .relative > button {
     width: 100%;
     min-width: 0 !important;
-    min-height: 48px;
-    padding-block: 7px;
-  }
-
-  .admin-filters > .relative > button:not(.mp-surface) {
-    min-height: 40px;
+    min-height: 48px !important;
+    border-radius: 8px;
   }
 
   .admin-filters > .mp-button {
     min-height: 48px;
     border-radius: 8px;
     padding-block: 7px;
+    margin-top: 22px;
   }
 
   .admin-field {
@@ -3998,6 +4004,20 @@
     font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+  }
+
+  .admin-field:has(input:required, textarea:required) > span:first-child::after,
+  .admin-field-required {
+    margin-left: 8px;
+    border-radius: 999px;
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+    content: 'Majburiy';
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0;
+    padding: 2px 6px;
+    text-transform: none;
   }
 
   .admin-field-error {
@@ -4285,32 +4305,6 @@
     opacity: 0.55;
   }
 
-  .admin-refresh-button {
-    width: 48px;
-    height: 48px;
-    flex: none;
-    align-self: end;
-    border-color: var(--color-hairline-strong);
-    border-radius: 8px;
-    background: var(--color-elevated);
-    color: var(--color-ink);
-    box-shadow:
-      0 1px 2px rgb(15 27 45 / 4%),
-      0 4px 10px -3px rgb(15 27 45 / 9%);
-  }
-
-  @keyframes admin-refresh-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .admin-refresh-button.is-loading svg {
-      animation: admin-refresh-spin 900ms linear infinite;
-    }
-  }
-
   .admin-modal-b {
     min-height: 0;
     flex: 1;
@@ -4567,6 +4561,7 @@
     }
 
     .admin-filter-input,
+    .admin-filter-select,
     .admin-filters > .relative,
     .admin-filters > .mp-button {
       width: 100%;

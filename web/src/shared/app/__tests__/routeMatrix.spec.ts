@@ -51,6 +51,12 @@ function sourceFiles(dir: string): string[] {
   })
 }
 
+function adminViewFiles(): string[] {
+  return sourceFiles(join(process.cwd(), 'src', 'shared', 'views')).filter((file) =>
+    file.includes('/Admin'),
+  )
+}
+
 describe('role route matrix', () => {
   it('resolves local bases and prod root bases', () => {
     expect(resolveHistoryBase('/client', '/client/c', true)).toBe('/client/')
@@ -269,5 +275,74 @@ describe('role route matrix', () => {
     })
 
     expect(offenders).toEqual([])
+  })
+
+  it('does not expose standalone admin refresh controls', () => {
+    const files = sourceFiles(join(process.cwd(), 'src'))
+    const refreshComponent = 'Admin' + 'RefreshButton'
+    const refreshClass = 'admin-' + 'refresh-button'
+    const offenders = files.filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return source.includes(refreshComponent) || source.includes(refreshClass)
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps admin load error states retryable', () => {
+    const offenders = adminViewFiles().flatMap((file) => {
+      const source = readFileSync(file, 'utf8')
+      return Array.from(source.matchAll(/<AdminErrorState[\s\S]*?(?:\/>|><\/AdminErrorState>)/g))
+        .filter(([match]) => !match.includes('@retry='))
+        .map((_, index) => `${file}#AdminErrorState-${index + 1}`)
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps admin filter rows on labeled filter controls', () => {
+    const offenders = adminViewFiles().flatMap((file) => {
+      const source = readFileSync(file, 'utf8')
+      return Array.from(source.matchAll(/<div class="admin-filters">[\s\S]*?<\/div>/g)).flatMap(
+        ([match], index) => {
+          const issues: string[] = []
+          if (match.includes('ProjectDropdown')) issues.push('ProjectDropdown')
+          if (/<FormSelect(?![\s\S]*?class="admin-filter-select")/.test(match)) {
+            issues.push('FormSelect without admin-filter-select')
+          }
+          return issues.map((issue) => `${file}#admin-filters-${index + 1}:${issue}`)
+        },
+      )
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps admin required fields covered by visible required markers', () => {
+    const nativeOffenders = adminViewFiles().flatMap((file) => {
+      const source = readFileSync(file, 'utf8')
+      return Array.from(source.matchAll(/<(input|textarea)\b(?=[^>]*\brequired\b)[^>]*>/g))
+        .filter((match) => {
+          const start = match.index ?? 0
+          const labelStart = source.lastIndexOf('<label', start)
+          const labelEndBeforeField = source.lastIndexOf('</label>', start)
+          const labelOpen =
+            labelStart >= 0 ? source.slice(labelStart, source.indexOf('>', labelStart)) : ''
+          return labelStart < labelEndBeforeField || !labelOpen.includes('admin-field')
+        })
+        .map((match) => `${file}:${match[0]}`)
+    })
+    const materials = readFileSync(
+      join(process.cwd(), 'src', 'shared', 'views', 'AdminMaterialsView.vue'),
+      'utf8',
+    )
+    const requiredFormSelectIds = ['mat-kind', 'mat-manufacturer', 'mat-type']
+    const customOffenders = requiredFormSelectIds.filter((id) => {
+      const field = materials.match(new RegExp(`<FormSelect[\\s\\S]*?id="${id}"[\\s\\S]*?/>`))?.[0]
+      return !field?.includes('required')
+    })
+
+    expect(nativeOffenders).toEqual([])
+    expect(customOffenders).toEqual([])
   })
 })

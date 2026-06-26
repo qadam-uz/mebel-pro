@@ -11,9 +11,8 @@ import {
 import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type Manufacturer, type MaterialStatus } from '@/shared/stores/admin'
@@ -170,9 +169,18 @@ onMounted(async () => {
         <span>Qidiruv</span>
         <input v-model="search" placeholder="Ishlab chiqaruvchi nomi" />
       </label>
-      <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-      <ProjectDropdown v-model="countryFilter" label="Davlat" :options="countryOptions" />
-      <AdminRefreshButton :loading="admin.manufacturersLoading" @click="admin.loadManufacturers" />
+      <FormSelect
+        v-model="statusFilter"
+        class="admin-filter-select"
+        label="Holat"
+        :options="statusOptions"
+      />
+      <FormSelect
+        v-model="countryFilter"
+        class="admin-filter-select"
+        label="Davlat"
+        :options="countryOptions"
+      />
     </div>
 
     <section v-if="admin.manufacturersLoading" class="admin-card p-5" aria-live="polite">

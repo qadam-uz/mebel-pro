@@ -9,9 +9,8 @@ import {
   dropdownOption,
 } from '@/shared/app/adminUi'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
-import AdminRefreshButton from '@/shared/components/AdminRefreshButton.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import { useAdminStore, type AuditActionQuery, type AuditStatusQuery } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
@@ -227,7 +226,6 @@ watch([query, workshopFilter, entityFilter, timeFilter], queueRefresh)
         <h1>Platforma audit logi</h1>
         <p class="sub">O'zgartiruvchi amallar va holat o'tishlarining o'zgarmas loglari.</p>
       </div>
-      <AdminRefreshButton :loading="admin.opsLoading" @click="refresh" />
     </div>
 
     <div class="admin-filters">
@@ -235,9 +233,24 @@ watch([query, workshopFilter, entityFilter, timeFilter], queueRefresh)
         <span>Qidiruv</span>
         <input v-model="query" placeholder="Obyekt ID, amal yoki aktor" />
       </label>
-      <ProjectDropdown v-model="workshopFilter" label="Ustaxona" :options="workshopOptions" />
-      <ProjectDropdown v-model="entityFilter" label="Obyekt turi" :options="entityOptions" />
-      <ProjectDropdown v-model="timeFilter" label="Vaqt" :options="timeOptions" />
+      <FormSelect
+        v-model="workshopFilter"
+        class="admin-filter-select"
+        label="Ustaxona"
+        :options="workshopOptions"
+      />
+      <FormSelect
+        v-model="entityFilter"
+        class="admin-filter-select"
+        label="Obyekt turi"
+        :options="entityOptions"
+      />
+      <FormSelect
+        v-model="timeFilter"
+        class="admin-filter-select"
+        label="Vaqt"
+        :options="timeOptions"
+      />
       <button type="button" class="mp-button mp-button-outline" @click="exportCsv">CSV</button>
     </div>
 
