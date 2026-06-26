@@ -51,7 +51,7 @@ const loadedOrderId = ref<string | null>(null)
 const discountKind = ref<WorkshopDiscountKind>('fixed')
 const discountValue = ref('')
 const discountReason = ref('')
-const activeTab = ref<'overview' | 'cutting'>('overview')
+const activeTab = ref<'overview' | 'cutting' | 'timeline'>('overview')
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
 // Which single button is mid-request, so only the clicked one shows a busy
@@ -128,6 +128,7 @@ const discountOptions: ChoiceOption[] = [
 const orderTabs: ChoiceOption[] = [
   { value: 'overview', label: 'Umumiy' },
   { value: 'cutting', label: 'Chizma' },
+  { value: 'timeline', label: 'Tarix' },
 ]
 const phaseSteps = computed(() => (order.value ? orderPhaseSteps(order.value) : []))
 const reworkCount = computed(() => orderReworkCount(order.value?.events ?? []))
@@ -591,63 +592,70 @@ onMounted(loadDetail)
     </section>
 
     <template v-else>
-      <div class="od-head">
-        <h1>{{ order.order_number }}</h1>
-        <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-soft">
-          <span
-            >Mijoz: <b class="text-ink">{{ order.contact_name }}</b> ·
-            {{ order.contact_phone }}</span
-          >
-          <span
-            >Muddat: <b class="text-ink">{{ orderDueLabel(order) }}</b></span
-          >
-          <span
-            >Jami:
-            <b class="font-mono font-semibold text-ink">{{
-              formatTiyin(order.total_tiyin)
-            }}</b></span
-          >
-        </div>
-
-        <div v-if="isCancelled" class="od-cancelled">Bekor qilingan</div>
-        <div v-else class="od-steps" role="list" aria-label="Buyurtma bosqichlari">
-          <template v-for="(step, i) in phaseSteps" :key="step.status">
-            <div
-              class="od-step"
-              :class="step.state"
-              role="listitem"
-              :aria-current="step.state === 'current' ? 'step' : undefined"
-            >
-              <span class="od-dot" aria-hidden="true"></span>
-              <span class="od-lbl">{{ workshopStatusUz[step.status] }}</span>
-            </div>
+      <div class="od-head-row">
+        <div class="od-head">
+          <h1>{{ order.order_number }}</h1>
+          <div class="od-meta">
             <span
-              v-if="i < phaseSteps.length - 1"
-              class="od-conn"
-              :class="{ done: step.state === 'done' }"
-              aria-hidden="true"
-            ></span>
-          </template>
-        </div>
-        <p v-if="reworkCount > 0 && !isCancelled" class="od-rework">
-          ↻ {{ reworkCount }} marta qaytarilgan
-        </p>
+              >Mijoz: <b class="text-ink">{{ order.contact_name }}</b> ·
+              {{ order.contact_phone }}</span
+            >
+            <span
+              >Muddat: <b class="text-ink">{{ orderDueLabel(order) }}</b></span
+            >
+            <span
+              >Jami:
+              <b class="font-mono font-semibold text-ink">{{
+                formatTiyin(order.total_tiyin)
+              }}</b></span
+            >
+          </div>
 
-        <div v-if="order.status === 'cutting' || order.status === 'edge_banding'" class="actions">
-          <RouterLink
-            v-if="order.status === 'cutting'"
-            :to="rolePath('/workshop/cutting')"
-            class="mp-button mp-button-outline min-h-11 px-3 text-xs"
-          >
-            Kesish navbati
-          </RouterLink>
-          <RouterLink
-            v-if="order.status === 'edge_banding'"
-            :to="rolePath('/workshop/banding')"
-            class="mp-button mp-button-outline min-h-11 px-3 text-xs"
-          >
-            Krom navbati
-          </RouterLink>
+          <div v-if="order.status === 'cutting' || order.status === 'edge_banding'" class="actions">
+            <RouterLink
+              v-if="order.status === 'cutting'"
+              :to="rolePath('/workshop/cutting')"
+              class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+            >
+              Kesish navbati
+            </RouterLink>
+            <RouterLink
+              v-if="order.status === 'edge_banding'"
+              :to="rolePath('/workshop/banding')"
+              class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+            >
+              Krom navbati
+            </RouterLink>
+          </div>
+        </div>
+
+        <div class="od-stepper-card">
+          <h2 class="od-stepper-title">Buyurtma holati</h2>
+          <div class="od-stepper-body">
+            <div v-if="isCancelled" class="od-cancelled">Bekor qilingan</div>
+            <div v-else class="od-steps" role="list" aria-label="Buyurtma bosqichlari">
+              <template v-for="(step, i) in phaseSteps" :key="step.status">
+                <div
+                  class="od-step"
+                  :class="step.state"
+                  role="listitem"
+                  :aria-current="step.state === 'current' ? 'step' : undefined"
+                >
+                  <span class="od-dot" aria-hidden="true"></span>
+                  <span class="od-lbl">{{ workshopStatusUz[step.status] }}</span>
+                </div>
+                <span
+                  v-if="i < phaseSteps.length - 1"
+                  class="od-conn"
+                  :class="{ done: step.state === 'done' }"
+                  aria-hidden="true"
+                ></span>
+              </template>
+            </div>
+            <p v-if="reworkCount > 0 && !isCancelled" class="od-rework">
+              ↻ {{ reworkCount }} marta qaytarilgan
+            </p>
+          </div>
         </div>
       </div>
 
@@ -845,32 +853,11 @@ onMounted(loadDetail)
               </div>
             </section>
 
-            <section class="card">
-              <div class="card-h"><h2>Ichki izoh</h2></div>
-              <div class="card-b">
-                <textarea
-                  v-model="noteDraft"
-                  class="mp-input min-h-28 resize-y"
-                  placeholder="Faqat ustaxona xodimlari ko'radi"
-                ></textarea>
-                <button
-                  type="button"
-                  class="mp-button mp-button-outline mt-3 min-h-11 px-3 text-xs"
-                  :disabled="orders.actionLoading || !noteDirty"
-                  @click="saveNote"
-                >
-                  {{
-                    pendingAction === 'note' ? 'Saqlanmoqda…' : noteDirty ? 'Saqlash' : 'Saqlangan'
-                  }}
-                </button>
-              </div>
-            </section>
-
-            <details class="card od-history" open>
+            <details class="card">
               <summary class="collapse-summary">
-                <h2>Holat tarixi</h2>
+                <h2>Ichki izoh</h2>
                 <span class="collapse-meta">
-                  <span>{{ order.events.length }} qadam</span>
+                  <span>{{ order.note_workshop ? 'mavjud' : "bo'sh" }}</span>
                   <svg
                     class="od-chev"
                     viewBox="0 0 20 20"
@@ -890,36 +877,27 @@ onMounted(loadDetail)
                 </span>
               </summary>
               <div class="card-b">
-                <div v-if="order.events.length === 0" class="st-empty !border-0 !py-8">
-                  <h3>Holat tarixi hali yo'q</h3>
-                </div>
-                <ol v-else class="tl">
-                  <li
-                    v-for="(event, index) in order.events"
-                    :key="event.id"
-                    class="step"
-                    :class="timelineStepClass(event, index)"
-                  >
-                    <span class="when">{{ formatDate(event.changed_at) }}</span>
-                    {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
-                    <span class="text-ink-muted">→</span>
-                    {{ workshopStatusUz[event.to_status] }}
-                    <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
-                    <span
-                      v-for="detail in timelineProductionDetails(event)"
-                      :key="detail"
-                      class="block text-ink-soft"
-                    >
-                      {{ detail }}
-                    </span>
-                  </li>
-                </ol>
+                <textarea
+                  v-model="noteDraft"
+                  class="mp-input min-h-28 resize-y"
+                  placeholder="Faqat ustaxona xodimlari ko'radi"
+                ></textarea>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline mt-3 min-h-11 px-3 text-xs"
+                  :disabled="orders.actionLoading || !noteDirty"
+                  @click="saveNote"
+                >
+                  {{
+                    pendingAction === 'note' ? 'Saqlanmoqda…' : noteDirty ? 'Saqlash' : 'Saqlangan'
+                  }}
+                </button>
               </div>
             </details>
           </section>
 
           <section
-            v-else
+            v-else-if="activeTab === 'cutting'"
             id="workshop-order-cutting-panel"
             class="card"
             role="tabpanel"
@@ -1004,6 +982,43 @@ onMounted(loadDetail)
                   </button>
                 </div>
               </aside>
+            </div>
+          </section>
+
+          <section
+            v-else
+            id="workshop-order-timeline-panel"
+            class="card"
+            role="tabpanel"
+            aria-labelledby="workshop-order-timeline-tab"
+            tabindex="0"
+          >
+            <div class="card-h"><h2>Holat tarixi</h2></div>
+            <div class="card-b">
+              <div v-if="order.events.length === 0" class="st-empty !border-0 !py-8">
+                <h3>Holat tarixi hali yo'q</h3>
+              </div>
+              <ol v-else class="tl">
+                <li
+                  v-for="(event, index) in order.events"
+                  :key="event.id"
+                  class="step"
+                  :class="timelineStepClass(event, index)"
+                >
+                  <span class="when">{{ formatDate(event.changed_at) }}</span>
+                  {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
+                  <span class="text-ink-muted">→</span>
+                  {{ workshopStatusUz[event.to_status] }}
+                  <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
+                  <span
+                    v-for="detail in timelineProductionDetails(event)"
+                    :key="detail"
+                    class="block text-ink-soft"
+                  >
+                    {{ detail }}
+                  </span>
+                </li>
+              </ol>
             </div>
           </section>
         </main>
@@ -1287,26 +1302,6 @@ onMounted(loadDetail)
                     pendingAction === 'removeDiscount' ? 'Saqlanmoqda…' : 'Chegirmani olib tashlash'
                   }}
                 </button>
-              </div>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="card-h"><h2>Mijoz</h2></div>
-            <div class="card-b">
-              <div class="row-item">
-                <div>
-                  <div class="nm">{{ order.client_name }}</div>
-                </div>
-                <div></div>
-              </div>
-              <div class="row-item">
-                <div><div class="nm">Aloqa</div></div>
-                <div class="meta">{{ order.contact_name }}</div>
-              </div>
-              <div class="row-item">
-                <div><div class="nm">Telefon</div></div>
-                <div class="meta">{{ order.contact_phone }}</div>
               </div>
             </div>
           </section>

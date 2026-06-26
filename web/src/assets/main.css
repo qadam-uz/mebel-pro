@@ -2106,13 +2106,65 @@
     grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
   }
 
+  /* Order header is two cards side by side (QAD-92): a compact identity card on
+     the left and a wider phase-stepper card on the right. They wrap to stacked
+     full-width cards when the row is too narrow (no shrink → labels never get
+     crushed). */
+  .od-head-row {
+    display: grid;
+    grid-template-columns: fit-content(420px) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
   .od-head {
+    min-width: 0;
     border: 1px solid var(--color-hairline);
     border-radius: 12px;
     background: var(--color-elevated);
     box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
-    margin-bottom: 18px;
     padding: 18px 22px;
+  }
+
+  .od-stepper-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 12px;
+    background: var(--color-elevated);
+    box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
+    padding: 18px 22px;
+  }
+
+  .od-stepper-title {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .od-stepper-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .od-stepper-card .od-steps {
+    margin-top: 0;
+  }
+
+  .od-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
   }
 
   .od-head h1 {
@@ -4657,6 +4709,7 @@
     .two-col,
     .queue-grid,
     .od-grid,
+    .od-head-row,
     .admin-grid-two {
       grid-template-columns: 1fr;
     }
