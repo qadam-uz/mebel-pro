@@ -34,6 +34,9 @@ export function parseDiscountDraft(
   if (!Number.isInteger(value) || value < 0) {
     return { ok: false, message: "Chegirma qiymatini manfiy bo'lmagan butun son qilib kiriting." }
   }
+  if (kind === 'percent' && value > 100) {
+    return { ok: false, message: "Foiz 0 dan 100 gacha bo'lishi kerak." }
+  }
   const reason = reasonText.trim()
   if (!reason) return { ok: false, message: 'Chegirma sababini kiriting.' }
   return {
@@ -191,4 +194,57 @@ export function productionTimelineDetails(
   if (edgeMillimetres !== null) details.push(`Krom sarfi: ${formatMetres(edgeMillimetres)}`)
 
   return details
+}
+
+// Canonical forward lifecycle, used to lay out the header phase stepper and to
+// detect rework (a transition that moves backwards along this order).
+const PHASE_ORDER: OrderStatus[] = [
+  'new',
+  'confirmed',
+  'cutting',
+  'edge_banding',
+  'ready',
+  'completed',
+]
+
+export type OrderPhaseState = 'done' | 'current' | 'upcoming'
+
+export interface OrderPhaseStep {
+  status: OrderStatus
+  state: OrderPhaseState
+}
+
+// The phases to draw for an order (skips edge_banding when it has no banding),
+// each tagged done/current/upcoming. 'cancelled' is off-path — callers render a
+// dedicated badge instead of a stepper. A completed order shows every step done.
+export function orderPhaseSteps(order: {
+  status: OrderStatus
+  has_banding: boolean
+}): OrderPhaseStep[] {
+  const path = PHASE_ORDER.filter((status) => status !== 'edge_banding' || order.has_banding)
+  const currentIndex = path.indexOf(order.status)
+  return path.map((status, index) => {
+    let state: OrderPhaseState
+    if (order.status === 'completed' || (currentIndex >= 0 && index < currentIndex)) {
+      state = 'done'
+    } else if (index === currentIndex) {
+      state = 'current'
+    } else {
+      state = 'upcoming'
+    }
+    return { status, state }
+  })
+}
+
+// How many times the order moved backwards (revert / rework). Cancellation is
+// not a revert (it leaves the forward path), so it is ignored.
+export function orderReworkCount(
+  events: Array<{ from_status: OrderStatus | null; to_status: OrderStatus }>,
+): number {
+  return events.reduce((count, event) => {
+    if (!event.from_status) return count
+    const from = PHASE_ORDER.indexOf(event.from_status)
+    const to = PHASE_ORDER.indexOf(event.to_status)
+    return from >= 0 && to >= 0 && to < from ? count + 1 : count
+  }, 0)
 }

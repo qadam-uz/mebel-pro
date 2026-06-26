@@ -2106,23 +2106,75 @@
     grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
   }
 
+  /* Order header is two cards side by side (QAD-92): a compact identity card on
+     the left and a wider phase-stepper card on the right. They wrap to stacked
+     full-width cards when the row is too narrow (no shrink → labels never get
+     crushed). */
+  .od-head-row {
+    display: grid;
+    grid-template-columns: fit-content(420px) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
   .od-head {
+    min-width: 0;
     border: 1px solid var(--color-hairline);
     border-radius: 12px;
     background: var(--color-elevated);
     box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
-    margin-bottom: 18px;
     padding: 18px 22px;
+  }
+
+  .od-stepper-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 12px;
+    background: var(--color-elevated);
+    box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
+    padding: 18px 22px;
+  }
+
+  .od-stepper-title {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .od-stepper-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .od-stepper-card .od-steps {
+    margin-top: 0;
+  }
+
+  .od-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--color-ink-soft);
+    font-size: 13.5px;
   }
 
   .od-head h1 {
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 26px;
+    font-size: 20px;
     font-weight: 600;
     letter-spacing: 0;
-    line-height: 1.1;
-    margin: 6px 0;
+    line-height: 1.15;
+    margin: 2px 0;
   }
 
   .od-head .actions {
@@ -2132,6 +2184,192 @@
     border-top: 1px solid var(--color-hairline);
     margin-top: 14px;
     padding-top: 14px;
+  }
+
+  /* Horizontal phase stepper in the order header (QAD-83) — at-a-glance "where
+     is this order", replacing the old Tarix tab. */
+  .od-steps {
+    display: flex;
+    align-items: flex-start;
+    margin-top: 16px;
+  }
+
+  .od-step {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: 54px;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    text-align: center;
+  }
+
+  .od-step .od-dot {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-hairline-strong);
+    border-radius: 999px;
+    background: var(--color-elevated);
+  }
+
+  .od-step.done .od-dot {
+    border-color: var(--color-success);
+    background: var(--color-success);
+  }
+
+  .od-step.current .od-dot {
+    border-color: var(--color-accent);
+    background: var(--color-elevated);
+    box-shadow: 0 0 0 4px rgb(15 118 110 / 16%);
+  }
+
+  .od-step .od-lbl {
+    color: var(--color-ink-muted);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .od-step.done .od-lbl {
+    color: var(--color-ink-soft);
+  }
+
+  .od-step.current .od-lbl {
+    color: var(--color-accent);
+    font-weight: 800;
+  }
+
+  .od-conn {
+    flex: 1 1 auto;
+    min-width: 14px;
+    height: 2px;
+    margin-top: 8px;
+    background: var(--color-hairline-strong);
+  }
+
+  .od-conn.done {
+    background: var(--color-success);
+  }
+
+  .od-cancelled {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 800;
+    padding: 6px 14px;
+  }
+
+  .od-rework {
+    margin-top: 8px;
+    color: var(--color-warning);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* Collapsible detailed history (the former Tarix tab), folded into Umumiy. */
+  .collapse-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 22px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .collapse-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .collapse-summary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  .collapse-summary h2 {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .collapse-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+  }
+
+  .od-chev {
+    color: var(--color-ink-muted);
+    transition: transform 0.15s ease;
+  }
+
+  details[open] > summary .od-chev {
+    transform: rotate(180deg);
+  }
+
+  /* Each order-contents panel is a collapsible row — headline always visible,
+     the per-side edge breakdown opens on demand (QAD-85). */
+  .bom-item {
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .bom-item:last-child {
+    border-bottom: 0;
+  }
+
+  .bom-summary {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 0;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .bom-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .bom-summary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  .bom-main {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .bom-qty {
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .bom-body {
+    padding: 0 0 12px;
+  }
+
+  @media (max-width: 620px) {
+    /* Dots-only on a phone — labels won't fit; the header status pill already
+       names the current phase. */
+    .od-step {
+      min-width: 0;
+    }
+
+    .od-step .od-lbl {
+      display: none;
+    }
   }
 
   .back {
@@ -2188,6 +2426,18 @@
     font-family: var(--font-serif);
     font-size: 22px;
     font-weight: 600;
+  }
+
+  /* Settlement (paid / balance) folded under the cost total — one invoice-style
+     money card instead of a separate "To'lov holati" card (QAD-89). */
+  .totals .settle {
+    border-top: 1px solid var(--color-hairline);
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+
+  .totals .num.paid-off {
+    color: var(--color-success);
   }
 
   .ro-figure {
@@ -2496,6 +2746,8 @@
     right: 0;
     z-index: 30;
     min-width: 210px;
+    max-height: 320px;
+    overflow-y: auto;
     border: 1px solid var(--color-hairline-strong);
     border-radius: 8px;
     background: var(--color-elevated);
@@ -2779,36 +3031,48 @@
     display: grid;
     gap: 12px;
     grid-template-columns: repeat(5, minmax(210px, 1fr));
+    grid-auto-rows: minmax(min-content, 1fr);
     overflow-x: auto;
     padding-bottom: 4px;
   }
 
   .board-col {
     min-width: 210px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 10px;
-    background: var(--color-elevated);
-    padding: 10px;
   }
 
   .board-col h4 {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-radius: 8px;
+    background: var(--color-sunk);
     color: var(--color-ink-soft);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.08em;
     margin: 0 0 10px;
+    padding: 7px 10px;
     text-transform: uppercase;
   }
 
   .board-col .ct {
     border-radius: 999px;
-    background: var(--color-sunk);
-    color: var(--color-ink-muted);
+    background: var(--color-elevated);
+    color: var(--color-ink-strong);
     font-family: var(--font-mono);
+    font-weight: 700;
     padding: 1px 7px;
+  }
+
+  /* On the board card the order number is the production identity the cutter
+     keys off, so it leads; the amount is demoted below it. */
+  .board-card .id {
+    color: var(--color-ink);
+    font-size: 13px;
+  }
+
+  .board-card .amt {
+    color: var(--color-ink-soft);
   }
 
   .board-card {
@@ -2819,10 +3083,35 @@
     background: var(--color-elevated);
     box-shadow: 0 1px 2px rgb(15 27 45 / 4%);
     color: inherit;
+    cursor: grab;
     display: block;
     margin-bottom: 8px;
     padding: 12px;
     text-decoration: none;
+  }
+
+  .board-card a {
+    cursor: inherit;
+  }
+
+  .board-card:active {
+    cursor: grabbing;
+  }
+
+  .board-card.is-dragging {
+    opacity: 0.45;
+  }
+
+  /* Highlight the whole valid drop lane (and its header) while dragging so a
+     card can be dropped anywhere in the column, not just on the header. */
+  .board-col.drop-target {
+    background: var(--color-accent-soft);
+    border-radius: 10px;
+  }
+
+  .board-col.drop-target h4 {
+    background: var(--color-accent-tint);
+    color: var(--color-accent);
   }
 
   .board-card:hover {
@@ -4428,8 +4717,17 @@
     .two-col,
     .queue-grid,
     .od-grid,
+    .od-head-row,
     .admin-grid-two {
       grid-template-columns: 1fr;
+    }
+
+    /* QAD-70: on a shop-floor phone the order-detail sidebar (price summary +
+       the single primary action) must not sit below the whole overview. Once
+       .od-grid is a single column, float the aside above main so the totals
+       and the "Amallar" CTA land right under the tabs. Desktop is untouched. */
+    .od-grid > aside {
+      order: -1;
     }
   }
 

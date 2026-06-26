@@ -20,7 +20,10 @@ interface MaterialResponse {
   name: string;
 }
 
-test.setTimeout(90_000);
+// The full client-places → workshop-completes lifecycle (cutting editor +
+// optimise, then every production queue) is the heaviest flow in the suite and
+// sits right on the old 90s budget; give it headroom for slower CI runners.
+test.setTimeout(150_000);
 
 function runId(testInfo: { workerIndex: number }) {
   return `${testInfo.workerIndex}-${Date.now().toString(36).slice(-6)}-${Math.random()
@@ -420,10 +423,9 @@ test("client places an order and workshop completes it through production queues
   const workshopOrderRow = workshopPage.getByRole("row", {
     name: new RegExp(orderNumber as string),
   });
-  await workshopOrderRow
-    .getByRole("button", { name: `${orderNumber as string} amallari` })
-    .click();
-  await workshopPage.getByRole("menuitem", { name: "Tafsilotlar" }).click();
+  // The table row itself opens the order detail (the kebab is only for status
+  // actions); click the order-number cell to navigate.
+  await workshopOrderRow.getByText(orderNumber as string).click();
 
   await expect(
     workshopPage.getByRole("heading", { name: orderNumber as string }),

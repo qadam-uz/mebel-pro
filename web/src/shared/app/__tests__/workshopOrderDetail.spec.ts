@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   discountDraftFromOrder,
+  orderPhaseSteps,
+  orderReworkCount,
   parseDiscountDraft,
   productionTimelineDetails,
   workshopOrderListActions,
@@ -59,6 +61,10 @@ describe('workshop order detail helpers', () => {
       ok: false,
       message: 'Chegirma sababini kiriting.',
     })
+    expect(parseDiscountDraft('percent', '120', 'Promo')).toEqual({
+      ok: false,
+      message: "Foiz 0 dan 100 gacha bo'lishi kerak.",
+    })
   })
 
   it('keeps read-only list menus to the detail action', () => {
@@ -105,6 +111,46 @@ describe('workshop order detail helpers', () => {
         manager,
       ).map((action) => action.kind),
     ).toEqual(['assign', 'revert', 'cancel', 'detail'])
+  })
+
+  it('lays out the phase stepper with the current step marked', () => {
+    expect(orderPhaseSteps({ status: 'cutting', has_banding: true })).toEqual([
+      { status: 'new', state: 'done' },
+      { status: 'confirmed', state: 'done' },
+      { status: 'cutting', state: 'current' },
+      { status: 'edge_banding', state: 'upcoming' },
+      { status: 'ready', state: 'upcoming' },
+      { status: 'completed', state: 'upcoming' },
+    ])
+  })
+
+  it('drops the edge_banding step when the order has no banding', () => {
+    expect(orderPhaseSteps({ status: 'ready', has_banding: false }).map((s) => s.status)).toEqual([
+      'new',
+      'confirmed',
+      'cutting',
+      'ready',
+      'completed',
+    ])
+  })
+
+  it('marks every step done for a completed order', () => {
+    expect(
+      orderPhaseSteps({ status: 'completed', has_banding: true }).every((s) => s.state === 'done'),
+    ).toBe(true)
+  })
+
+  it('counts only backward transitions as rework, ignoring cancellation', () => {
+    expect(
+      orderReworkCount([
+        { from_status: null, to_status: 'new' },
+        { from_status: 'confirmed', to_status: 'cutting' },
+        { from_status: 'edge_banding', to_status: 'cutting' },
+        { from_status: 'cutting', to_status: 'edge_banding' },
+        { from_status: 'edge_banding', to_status: 'cutting' },
+        { from_status: 'cutting', to_status: 'cancelled' },
+      ]),
+    ).toBe(2)
   })
 
   it('summarizes production metadata for the order timeline', () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatDate,
   formatDateInputValue,
+  formatRelativeUz,
   formatStockQuantity,
   formatTiyin,
   parseDisplayQuantity,
@@ -13,6 +14,13 @@ describe('shared formatters', () => {
     expect(formatTiyin(0)).toBe("0 so'm")
     expect(formatTiyin(12_345_600)).toContain('123')
     expect(formatTiyin(12_345_600)).toMatch(/so'm$/)
+  })
+
+  it('formats calendar-relative age in Uzbek', () => {
+    expect(formatRelativeUz(new Date())).toBe('bugun')
+    const threeDaysAgo = new Date()
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+    expect(formatRelativeUz(threeDaysAgo)).toBe('3 kun oldin')
   })
 
   it('formats dates with the Uzbek locale seed', () => {
