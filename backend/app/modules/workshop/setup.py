@@ -1,22 +1,18 @@
 """Workshop profile, branch, and pricing setup use cases."""
 
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
-from app.models.enums import BranchStatus, OrderStatus
+from app.models.enums import BranchStatus
 from app.modules.access.api import normalize_uz_phone
-from app.modules.access.contracts import PermissionGrant, WorkshopUser
-from app.modules.catalog.contracts import BranchMaterial, BranchPricing
-from app.modules.inventory.contracts import StockItem
-from app.modules.sales.contracts import Order
+from app.modules.catalog.contracts import BranchPricing
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
     record_action,
@@ -33,14 +29,6 @@ from app.modules.workshop.schemas import (
     dump_working_hours,
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
-
-
-@dataclass(frozen=True)
-class BranchOperationalCounts:
-    active_orders: int = 0
-    materials: int = 0
-    low_stock: int = 0
-    staff: int = 0
 
 
 async def get_settings(
@@ -64,10 +52,6 @@ async def update_settings(
     workshop = await get_settings(db, principal=principal)
     if "name" in payload.model_fields_set and payload.name is not None:
         workshop.name = _required_text(payload.name, "workshop_name_required")
-    if "phone" in payload.model_fields_set and payload.phone is not None:
-        workshop.phone = normalize_uz_phone(payload.phone)
-    if "address" in payload.model_fields_set:
-        workshop.address = _optional_text(payload.address)
     if "logo_file_id" in payload.model_fields_set:
         workshop.logo_file_id = await replace_attached_file(
             db,
@@ -104,86 +88,6 @@ async def list_branches(
             )
         ).all()
     )
-
-
-async def branch_operational_counts(
-    db: AsyncSession,
-    branch_ids: list[uuid.UUID],
-) -> dict[uuid.UUID, BranchOperationalCounts]:
-    ids = list(dict.fromkeys(branch_ids))
-    if not ids:
-        return {}
-    active_orders: dict[uuid.UUID, int] = {}
-    material_counts: dict[uuid.UUID, int] = {}
-    low_stock_counts: dict[uuid.UUID, int] = {}
-    staff_by_branch: dict[uuid.UUID, set[uuid.UUID]] = {branch_id: set() for branch_id in ids}
-
-    order_rows = (
-        await db.execute(
-            select(Order.branch_id, func.count(Order.id))
-            .where(
-                Order.branch_id.in_(ids),
-                ~Order.status.in_([OrderStatus.COMPLETED, OrderStatus.CANCELLED]),
-            )
-            .group_by(Order.branch_id)
-        )
-    ).all()
-    for branch_id, count in order_rows:
-        active_orders[branch_id] = int(count)
-
-    material_rows = (
-        await db.execute(
-            select(BranchMaterial.branch_id, func.count(BranchMaterial.id))
-            .where(BranchMaterial.branch_id.in_(ids))
-            .group_by(BranchMaterial.branch_id)
-        )
-    ).all()
-    for branch_id, count in material_rows:
-        material_counts[branch_id] = int(count)
-
-    low_stock_rows = (
-        await db.execute(
-            select(StockItem.branch_id, func.count(StockItem.id))
-            .where(
-                StockItem.branch_id.in_(ids),
-                StockItem.on_hand <= StockItem.min_stock,
-            )
-            .group_by(StockItem.branch_id)
-        )
-    ).all()
-    for branch_id, count in low_stock_rows:
-        low_stock_counts[branch_id] = int(count)
-
-    home_rows = (
-        await db.execute(
-            select(WorkshopUser.home_branch_id, WorkshopUser.id).where(
-                WorkshopUser.home_branch_id.in_(ids)
-            )
-        )
-    ).all()
-    for branch_id, user_id in home_rows:
-        if branch_id in staff_by_branch:
-            staff_by_branch[branch_id].add(user_id)
-
-    grant_rows = (
-        await db.execute(
-            select(PermissionGrant.branch_id, PermissionGrant.workshop_user_id).where(
-                PermissionGrant.branch_id.in_(ids)
-            )
-        )
-    ).all()
-    for branch_id, user_id in grant_rows:
-        staff_by_branch[branch_id].add(user_id)
-
-    return {
-        branch_id: BranchOperationalCounts(
-            active_orders=active_orders.get(branch_id, 0),
-            materials=material_counts.get(branch_id, 0),
-            low_stock=low_stock_counts.get(branch_id, 0),
-            staff=len(staff_by_branch.get(branch_id, set())),
-        )
-        for branch_id in ids
-    }
 
 
 async def create_branch(
@@ -249,8 +153,12 @@ async def update_branch(
     payload: BranchPatchRequest,
 ) -> Branch:
     branch = await _owner_branch(db, principal=principal, branch_id=branch_id)
-    latitude = payload.latitude if payload.latitude is not None else branch.latitude
-    longitude = payload.longitude if payload.longitude is not None else branch.longitude
+    latitude = branch.latitude
+    longitude = branch.longitude
+    if "latitude" in payload.model_fields_set:
+        latitude = payload.latitude
+    if "longitude" in payload.model_fields_set:
+        longitude = payload.longitude
     _validate_coordinates(latitude, longitude)
     if "name" in payload.model_fields_set and payload.name is not None:
         branch.name = _required_text(payload.name, "branch_name_required")
@@ -377,7 +285,15 @@ async def _owner_branch(
     return branch
 
 
-def _validate_coordinates(latitude: Decimal, longitude: Decimal) -> None:
+def _validate_coordinates(latitude: Decimal | None, longitude: Decimal | None) -> None:
+    if latitude is None and longitude is None:
+        return
+    if latitude is None or longitude is None:
+        raise APIError(
+            "invalid_coordinates",
+            "Latitude and longitude must be set together",
+            status_code=400,
+        )
     if latitude < Decimal("-90") or latitude > Decimal("90"):
         raise APIError("invalid_latitude", "Latitude is invalid", status_code=400)
     if longitude < Decimal("-180") or longitude > Decimal("180"):

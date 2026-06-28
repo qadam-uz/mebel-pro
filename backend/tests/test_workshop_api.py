@@ -1,10 +1,6 @@
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal
 
-from app.models.enums import MaterialKind, PanelMaterialType
-from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
-from app.modules.inventory.contracts import StockItem
 from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -319,60 +315,69 @@ async def test_owner_filters_users_and_sees_last_login(
     assert no_branch_match.json() == []
 
 
-async def test_owner_branch_response_includes_operational_counts(
+async def test_owner_branch_response_omits_operational_counts(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    owner_access, branch_id = await _owner_login(client, db_session)
-    manufacturer = Manufacturer(name="Count Maker", country="UZ")
-    db_session.add(manufacturer)
-    await db_session.flush()
-    material = Material(
-        kind=MaterialKind.PANEL,
-        manufacturer_id=manufacturer.id,
-        type=PanelMaterialType.DSP,
-        name="Count Panel",
-        thickness_mm=Decimal("18"),
-        color="White",
-        decor_code="COUNT-P",
-        panel_length_mm=2800,
-        panel_width_mm=2070,
-        grain_direction=False,
-    )
-    db_session.add(material)
-    await db_session.flush()
-    db_session.add_all(
-        [
-            BranchMaterial(branch_id=uuid.UUID(branch_id), material_id=material.id, price_tiyin=1),
-            StockItem(
-                branch_id=uuid.UUID(branch_id),
-                material_id=material.id,
-                on_hand=1,
-                min_stock=2,
-                updated_at=datetime.now(UTC),
-            ),
-        ]
-    )
-    staff = await client.post(
-        "/api/v1/workshop/users",
-        headers=_auth(owner_access),
-        json={
-            "full_name": "Count Staff",
-            "phone": "+998906363636",
-            "login": "countstaff",
-            "home_branch_id": branch_id,
-            "temp_password": "StaffTemp123",
-            "grants": [{"permission": "manage_orders", "branch_id": branch_id}],
-        },
-    )
+    owner_access, _branch_id = await _owner_login(client, db_session)
     branches = await client.get("/api/v1/workshop/branches", headers=_auth(owner_access))
 
-    assert staff.status_code == 201
     assert branches.status_code == 200
     [branch] = branches.json()
-    assert branch["material_count"] == 1
-    assert branch["low_stock_count"] == 1
-    assert branch["staff_count"] == 2
+    for key in ["active_orders_count", "material_count", "low_stock_count", "staff_count"]:
+        assert key not in branch
+
+
+async def test_owner_can_create_and_clear_branch_without_coordinates(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, _branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Optional Coords",
+            "address": "Tashkent, Optional",
+            "phone": "+998907777777",
+            "working_hours": default_working_hours(),
+        },
+    )
+    branch_id = created.json()["id"]
+    partial = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"latitude": "41.25"},
+    )
+    with_coordinates = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"latitude": "41.25", "longitude": "69.12"},
+    )
+    partial_clear = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"longitude": None},
+    )
+    cleared = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"latitude": None, "longitude": None},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["latitude"] is None
+    assert created.json()["longitude"] is None
+    assert partial.status_code == 400
+    assert partial.json()["code"] == "invalid_coordinates"
+    assert with_coordinates.status_code == 200
+    assert Decimal(str(with_coordinates.json()["latitude"])) == Decimal("41.25")
+    assert Decimal(str(with_coordinates.json()["longitude"])) == Decimal("69.12")
+    assert partial_clear.status_code == 400
+    assert partial_clear.json()["code"] == "invalid_coordinates"
+    assert cleared.status_code == 200
+    assert cleared.json()["latitude"] is None
+    assert cleared.json()["longitude"] is None
 
 
 async def test_owner_updates_staff_profile_fields(

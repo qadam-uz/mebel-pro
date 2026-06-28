@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-06-28
 order: 20
 ---
 
@@ -48,22 +48,22 @@ Browser clients keep the access token in memory only. The refresh token is issue
 httpOnly, Secure, SameSite cookie scoped to the relevant app/API surface; it is never exposed to
 frontend JavaScript. A page reload restores auth by calling refresh through that cookie.
 
-| Trigger | Effect |
-|---|---|
-| logout (this session) | delete this session |
-| "log out everywhere" | delete all the user's sessions |
-| change own password | delete all *other* sessions; keep the current |
-| reset password (higher principal) | delete all the user's sessions |
-| block user | delete all the user's sessions |
-| block workshop | delete the workshop's owner + staff sessions (clients unaffected) |
-| 5-session cap exceeded | evict the oldest |
-| token expiry | inert; a periodic job prunes the row |
+| Trigger                           | Effect                                                            |
+| --------------------------------- | ----------------------------------------------------------------- |
+| logout (this session)             | delete this session                                               |
+| "log out everywhere"              | delete all the user's sessions                                    |
+| change own password               | delete all _other_ sessions; keep the current                     |
+| reset password (higher principal) | delete all the user's sessions                                    |
+| block user                        | delete all the user's sessions                                    |
+| block workshop                    | delete the workshop's owner + staff sessions (clients unaffected) |
+| 5-session cap exceeded            | evict the oldest                                                  |
+| token expiry                      | inert; a periodic job prunes the row                              |
 
 ### Operations
 
 A user can sign in, sign out, refresh their access token (the refresh path re-checks the
 user, and for workshop users the workshop, is still active), change their own password
-(revokes all *other* sessions; clears `password_reset_required`), list their sessions and
+(revokes all _other_ sessions; clears `password_reset_required`), list their sessions and
 revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant set,
 `password_reset_required`).
 
@@ -103,7 +103,7 @@ that branches to registration only when the number is new. Three steps:
      (1–80 chars; `name_required` if blank) and the system creates the client
      (`status = active`) and logs them in.
 
-There is no account-existence oracle *before* verification — the login-vs-register branch is
+There is no account-existence oracle _before_ verification — the login-vs-register branch is
 only revealed after a correct code. On success a session is created; self-service session
 management is the same as workshop / platform users.
 
@@ -160,9 +160,8 @@ A platform operator provisions a workshop atomically with its first user and fir
   and the temp password **once**. The returned confirmation shows the owner login and temp
   password; only the temp password is secret and shown once. Provisioning creates exactly one
   owner; after that, v1 has no owner create / demote / delete / transfer path. Platform
-  provisioning does not collect workshop phone/address, branch coordinates, or owner
-  name/phone; workshop profile/contact data and precise branch location are owner-managed
-  after first sign-in.
+  provisioning does not collect workshop-level contact data, branch coordinates, or owner
+  name/phone; branch contact and precise branch location are owner-managed after first sign-in.
 - **Block / unblock the workshop.** Blocking revokes the owner's + staff's sessions
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
@@ -171,7 +170,7 @@ A platform operator provisions a workshop atomically with its first user and fir
 The operator's **only** workshop write actions are: provision (workshop + first branch + first
 owner, atomic), block, and unblock. The operator does **not** edit the workshop profile or the
 owner's profile/contact fields (name / phone) — that is owner territory and there is no
-operator path to it. Workshop *editing* (profile, settings) lives in
+operator path to it. Workshop _editing_ (profile, settings) lives in
 [`workshop.md`](workshop.md); owner-identity edits are owner self-service / owner-managed,
 not operator-managed. If correcting an owner's phone via the operator ever becomes a real
 need, it must be specified here first — it is deliberately absent in v1.
@@ -200,15 +199,15 @@ permission on every branch implicitly, plus owner-only carve-outs.
 
 ### Permission catalog
 
-| Permission | Grants on the granted branch |
-|---|---|
-| `view_dashboard` | see the branch's dashboard / KPIs / order summary |
-| `manage_orders` | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md). |
-| `process_production` | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
-| `manage_catalog` | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.) |
-| `manage_inventory` | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions. |
-| `manage_finance` | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md). |
-| `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports. |
+| Permission             | Grants on the granted branch                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `view_dashboard`       | see the branch's dashboard / KPIs / order summary                                                                                                                                                                                                                                                                                                                                                       |
+| `manage_orders`        | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md).    |
+| `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
+| `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
+| `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
+| `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md).                                                                                                                                                                                                                                                            |
+| `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports.                                                                                                                                                                                                                                                                                                     |
 
 `process_delivery` is **gated out of v1** — v1 is pickup-only
 ([`scope.md`](../../scope.md)), so there is no driver workspace and the grant is not in the
@@ -220,8 +219,8 @@ user, not the branch: changing a branch's status doesn't touch grants; a grant o
 
 **Workers are workshop users.** A "cutter" or "edge bander" is just a workshop user holding
 `process_production` on the order's branch — there is **no separate `worker` entity** and
-**no role**: capability is the grant set, and one person may hold `manage_orders` *and*
-`process_production` *and* `manage_finance` and run the whole flow alone. The system stores
+**no role**: capability is the grant set, and one person may hold `manage_orders` _and_
+`process_production` _and_ `manage_finance` and run the whole flow alone. The system stores
 no pay rates; how much a worker is paid is the accountant's manual calculation from the
 work the user actually did, read from the order's production stamps (see
 [`finance.md`](finance.md) and [`orders.md`](orders.md)).
@@ -239,10 +238,10 @@ that **cannot be delegated to staff in v1**:
 ### Operations (owner)
 
 - **Create a workshop user** — `full_name`, `phone`, `login`, `password_reset_required = true`,
-  temp password (auto / manual), a `home_branch_id` (the branch the user works at — gates
-  cutter / edger assignment to an order at that branch; for office staff who span branches,
-  set the branch they sit at), and **an optional initial set of `(permission, branch)`
-  grants**. Created in one atomic operation; returns the user and the temp password
+  temp password (auto / manual), a multi-branch picker that scopes the initial grants matrix,
+  a derived `home_branch_id` (the first selected branch; it remains the assignment home for
+  cutter / edger work), and **an optional initial set of `(permission, branch)` grants**.
+  Created in one atomic operation; returns the user and the temp password
   **once**.
 - **Edit profile fields** — `full_name`, `phone`, `home_branch_id`.
 - **Set grants** — replaces the user's `permission_grant` rows atomically; each
@@ -261,8 +260,8 @@ Under **Settings → Users** (owner-only nav item):
 - **Users list** (`/workshop/settings/users`) — table: name, login, phone, home branch,
   granted-branches count, status, last login, action menu. Filters: home branch, status.
   **+ User**. Empty: "No staff yet — add one to delegate work."
-- **Create-user dialog** — profile fields (incl. home branch) + temp password (auto / manual,
-  copy) + an initial grants matrix (permission rows × branch columns, within the workshop).
+- **Create-user dialog** — profile fields + multi-branch picker + temp password (auto / manual,
+  copy) + an initial grants matrix (permission rows × selected branch columns, within the workshop).
   On success: read-only "share login + temp password — shown once" confirmation with copy.
 - **User detail** (`/workshop/settings/users/:id`) — header (name, status badge, home branch,
   last login); tabs:

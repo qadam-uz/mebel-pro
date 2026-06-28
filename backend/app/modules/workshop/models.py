@@ -29,8 +29,6 @@ class Workshop(UUIDPrimaryKey, Timestamped, Base):
 
     name: Mapped[str] = mapped_column(nullable=False)
     logo_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
-    phone: Mapped[str | None]
-    address: Mapped[str | None]
     owner_user_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     status: Mapped[WorkshopStatus] = mapped_column(
         enum_type(WorkshopStatus, "workshop_status"),
@@ -55,8 +53,8 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     name: Mapped[str] = mapped_column(nullable=False)
     address: Mapped[str] = mapped_column(nullable=False)
     phone: Mapped[str] = mapped_column(nullable=False)
-    latitude: Mapped[Decimal] = mapped_column(nullable=False)
-    longitude: Mapped[Decimal] = mapped_column(nullable=False)
+    latitude: Mapped[Decimal | None]
+    longitude: Mapped[Decimal | None]
     working_hours: Mapped[dict[str, Any]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=False,

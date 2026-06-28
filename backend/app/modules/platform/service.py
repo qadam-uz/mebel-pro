@@ -6,7 +6,6 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 
 from fastapi import status
 from sqlalchemy import func, select
@@ -51,8 +50,6 @@ from app.modules.support.api import (
 from app.modules.workshop.contracts import Branch, Workshop
 from app.modules.workshop.schemas import dump_working_hours
 
-DEFAULT_BRANCH_LATITUDE = Decimal("41.2995")
-DEFAULT_BRANCH_LONGITUDE = Decimal("69.2401")
 JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
 PLATFORM_SCHEDULER_POLL_SECONDS = 60.0
 logger = get_logger(__name__)
@@ -255,8 +252,8 @@ async def provision_workshop(
         name=_required_text(payload.branch.name, "branch_name_required"),
         address=_required_text(payload.branch.address, "branch_address_required"),
         phone=normalize_uz_phone(payload.branch.phone),
-        latitude=DEFAULT_BRANCH_LATITUDE,
-        longitude=DEFAULT_BRANCH_LONGITUDE,
+        latitude=None,
+        longitude=None,
         working_hours=dump_working_hours(payload.branch.working_hours),
         status=BranchStatus.ACTIVE,
     )

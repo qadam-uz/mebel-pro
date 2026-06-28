@@ -6,16 +6,6 @@ const orderAccess = [p.manageOrders]
 const orderDetailAccess = [p.viewDashboard, p.manageOrders, p.processProduction]
 const productionAccess = [p.processProduction, p.manageOrders]
 const financeAccess = [p.manageFinance, p.viewFinanceReports]
-const branchDetailAccess = [
-  p.viewDashboard,
-  p.manageOrders,
-  p.processProduction,
-  p.manageCatalog,
-  p.manageInventory,
-  p.manageFinance,
-  p.viewFinanceReports,
-]
-
 export const workshopRoutes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -99,7 +89,7 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopBranchDetailView.vue'),
     meta: {
       title: 'Filial tafsilotlari',
-      workshopAccess: { any: branchDetailAccess, branchParam: 'branch_id' },
+      workshopAccess: { ownerOnly: true },
     },
   },
   {

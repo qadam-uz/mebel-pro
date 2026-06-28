@@ -50,8 +50,6 @@ export interface WorkshopSettings {
   id: string
   name: string
   logo_file_id: string | null
-  phone: string | null
-  address: string | null
   status: 'active' | 'blocked'
   currency: 'UZS'
   owner_user_id: string
@@ -65,15 +63,11 @@ export interface ManagedBranch {
   name: string
   address: string
   phone: string
-  latitude: string
-  longitude: string
+  latitude: string | null
+  longitude: string | null
   working_hours: Record<string, unknown>
   status: BranchStatus
   closed_reason: string | null
-  active_orders_count: number
-  material_count: number
-  low_stock_count: number
-  staff_count: number
   created_at: string
   updated_at: string
 }
@@ -279,6 +273,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   async function createBranch(payload: unknown) {
     const created = await api.post<ManagedBranch>('/workshop/branches', payload, authInit())
     managedBranches.value = [created, ...managedBranches.value]
+    await loadBranchContext({ force: true }).catch(() => undefined)
     return created
   }
 
@@ -311,6 +306,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     const updated = await api.patch<ManagedBranch>(`/workshop/branches/${id}`, payload, authInit())
     patchManagedBranch(updated)
     selectedBranch.value = updated
+    await loadBranchContext({ force: true }).catch(() => undefined)
     return updated
   }
 

@@ -285,6 +285,11 @@ async def test_owner_branch_setup_pricing_status_and_logo_upload(
         headers=_auth(owner_access),
         json={"logo_file_id": replacement_logo.json()["id"]},
     )
+    stale_contact_settings = await client.patch(
+        "/api/v1/workshop/settings",
+        headers=_auth(owner_access),
+        json={"phone": "+998901010100", "address": "Tashkent"},
+    )
     created = await client.post(
         "/api/v1/workshop/branches",
         headers=_auth(owner_access),
@@ -331,15 +336,19 @@ async def test_owner_branch_setup_pricing_status_and_logo_upload(
     assert logo.status_code == 200
     assert settings.status_code == 200
     assert settings.json()["logo_file_id"] == logo.json()["id"]
+    assert "phone" not in settings.json()
+    assert "address" not in settings.json()
     assert replacement_settings.status_code == 200
     assert replacement_settings.json()["logo_file_id"] == replacement_logo.json()["id"]
+    assert stale_contact_settings.status_code == 422
     old_logo = await db_session.get(File, uuid.UUID(logo.json()["id"]))
     assert old_logo is not None
     assert old_logo.entity_type is None
     assert old_logo.entity_id is None
     assert created.status_code == 201
     assert created.json()["working_hours"]["sunday"] == {"open": None, "close": None}
-    assert created.json()["active_orders_count"] == 0
+    for key in ["active_orders_count", "material_count", "low_stock_count", "staff_count"]:
+        assert key not in created.json()
     assert bad_hours.status_code == 422
     assert pricing.status_code == 200
     assert pricing.json()["cutting_rate_tiyin"] == 120000

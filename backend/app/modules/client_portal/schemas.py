@@ -48,8 +48,8 @@ class ClientBranchResponse(APIModel):
     branch_name: str
     address: str
     phone: str
-    latitude: Decimal
-    longitude: Decimal
+    latitude: Decimal | None
+    longitude: Decimal | None
     working_hours: dict[str, object]
     status: BranchStatus
     closed_reason: str | None

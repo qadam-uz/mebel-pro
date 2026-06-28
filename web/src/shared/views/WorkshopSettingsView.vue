@@ -2,6 +2,13 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 
 import { apiTraceId } from '@/shared/api/client'
+import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  type FieldErrors,
+} from '@/shared/app/adminValidation'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -9,24 +16,27 @@ import { useAuthStore } from '@/shared/stores/auth'
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
+type SettingsField = 'name'
+
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const files = useFilesStore()
 const toast = useToast()
 const form = reactive({
   name: '',
-  phone: '',
-  address: '',
   logoFileId: '',
 })
+const fieldErrors = reactive<FieldErrors<SettingsField>>({})
+const fieldOrder: SettingsField[] = ['name']
+const fieldIds: Record<SettingsField, string> = {
+  name: 'workshop-settings-name',
+}
 
 watch(
   () => workshop.settings,
   (settings) => {
     if (!settings) return
     form.name = settings.name
-    form.phone = settings.phone ?? ''
-    form.address = settings.address ?? ''
     form.logoFileId = settings.logo_file_id ?? ''
   },
   { immediate: true },
@@ -63,20 +73,36 @@ function removeLogo() {
   logoError.value = null
 }
 
+function validateSettingsForm() {
+  clearFieldErrors(fieldErrors)
+  fieldErrors.name = requiredText(form.name) ?? undefined
+  const hasErrors = fieldOrder.some((field) => Boolean(fieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
+  return !hasErrors
+}
+
 async function save() {
+  if (!validateSettingsForm()) return
   saving.value = true
   saveError.value = null
   saved.value = false
   try {
     await workshop.updateSettings({
       name: form.name,
-      phone: form.phone,
-      address: form.address || null,
       logo_file_id: form.logoFileId || null,
     })
     saved.value = true
     toast.success('Ustaxona sozlamalari saqlandi.')
   } catch (caught) {
+    Object.assign(
+      fieldErrors,
+      fieldErrorsFromApi<SettingsField>(
+        caught,
+        { workshop_name_required: 'name' },
+        { name: 'name' },
+      ),
+    )
+    if (fieldErrors.name) focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
     saveError.value = 'settings_save_failed'
     saveTraceId.value = apiTraceId(caught)
   } finally {
@@ -94,7 +120,6 @@ onMounted(() => {
     <div class="page-head">
       <div>
         <h1>Ustaxona sozlamalari</h1>
-        <p class="sub">Ustaxona profili — nom, logo, telefon, manzil.</p>
       </div>
     </div>
 
@@ -114,20 +139,22 @@ onMounted(() => {
       <p>trace_id: {{ workshop.setupTraceId ?? 'unavailable' }}</p>
     </div>
 
-    <form v-else class="card max-w-[720px]" @submit.prevent="save">
+    <form v-else class="card max-w-[720px]" novalidate @submit.prevent="save">
       <div class="card-h"><h2>Ustaxona profili</h2></div>
       <div class="card-b">
-        <label class="field">
+        <label class="field" for="workshop-settings-name">
           <span>Ustaxona nomi</span>
-          <input v-model="form.name" class="mp-input" required />
-        </label>
-        <label class="field">
-          <span>Telefon</span>
-          <input v-model="form.phone" class="mp-input" required />
-        </label>
-        <label class="field">
-          <span>Manzil</span>
-          <input v-model="form.address" class="mp-input" />
+          <input
+            id="workshop-settings-name"
+            v-model="form.name"
+            class="mp-input"
+            required
+            :aria-invalid="!!fieldErrors.name"
+            :aria-describedby="fieldErrors.name ? 'workshop-settings-name-error' : undefined"
+          />
+          <span v-if="fieldErrors.name" id="workshop-settings-name-error" class="mp-field-error">
+            {{ fieldErrors.name }}
+          </span>
         </label>
         <div class="field">
           <label for="workshop-logo-upload">Logo</label>

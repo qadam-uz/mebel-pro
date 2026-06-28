@@ -20,8 +20,8 @@ export interface ClientBranch {
   branch_name: string
   address: string
   phone: string
-  latitude: string
-  longitude: string
+  latitude: string | null
+  longitude: string | null
   working_hours: Record<string, unknown>
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null

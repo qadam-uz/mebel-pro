@@ -1,8 +1,6 @@
 """Public workshop API used by routes and other modules."""
 
 from app.modules.workshop.setup import (
-    BranchOperationalCounts,
-    branch_operational_counts,
     create_branch,
     get_branch,
     get_branch_pricing,
@@ -35,11 +33,9 @@ from app.modules.workshop.users import (
 
 __all__ = [
     "BranchContext",
-    "BranchOperationalCounts",
     "CreatedWorkshopUser",
     "block_user",
     "branch_context",
-    "branch_operational_counts",
     "create_branch",
     "create_user",
     "get_branch",

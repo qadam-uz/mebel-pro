@@ -86,8 +86,6 @@ class WorkshopSettingsResponse(APIModel):
     id: uuid.UUID
     name: str
     logo_file_id: uuid.UUID | None
-    phone: str | None
-    address: str | None
     status: WorkshopStatus
     currency: Currency
     owner_user_id: uuid.UUID
@@ -96,9 +94,9 @@ class WorkshopSettingsResponse(APIModel):
 
 
 class WorkshopSettingsPatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = None
-    phone: str | None = None
-    address: str | None = None
     logo_file_id: uuid.UUID | None = None
 
 
@@ -106,8 +104,8 @@ class BranchCreateRequest(BaseModel):
     name: str
     address: str
     phone: str
-    latitude: Decimal
-    longitude: Decimal
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
     working_hours: WorkingHours
 
     @field_validator("working_hours")
@@ -143,15 +141,11 @@ class BranchResponse(APIModel):
     name: str
     address: str
     phone: str
-    latitude: Decimal
-    longitude: Decimal
+    latitude: Decimal | None
+    longitude: Decimal | None
     working_hours: dict[str, Any]
     status: BranchStatus
     closed_reason: str | None
-    active_orders_count: int = 0
-    material_count: int = 0
-    low_stock_count: int = 0
-    staff_count: int = 0
     created_at: datetime
     updated_at: datetime
 

@@ -57,6 +57,12 @@ function adminViewFiles(): string[] {
   )
 }
 
+function nonAdminViewFiles(): string[] {
+  return sourceFiles(join(process.cwd(), 'src', 'shared', 'views')).filter(
+    (file) => !file.includes('/Admin'),
+  )
+}
+
 describe('role route matrix', () => {
   it('resolves local bases and prod root bases', () => {
     expect(resolveHistoryBase('/client', '/client/c', true)).toBe('/client/')
@@ -133,6 +139,14 @@ describe('role route matrix', () => {
         workshopAccess: { ownerOnly: true },
       }),
     ).toBe(true)
+    expect(
+      roleRoutePermissionAllowed(
+        'workshop',
+        inventoryOnly,
+        { workshopAccess: { ownerOnly: true } },
+        {},
+      ),
+    ).toBe(false)
     expect(
       roleRoutePermissionAllowed('client', null, {
         workshopAccess: { ownerOnly: true },
@@ -311,6 +325,24 @@ describe('role route matrix', () => {
           return issues.map((issue) => `${file}#admin-filters-${index + 1}:${issue}`)
         },
       )
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps admin classes out of non-admin views', () => {
+    const offenders = nonAdminViewFiles().filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return /\bclass="[^"]*\badmin-/.test(source) || /\bclass='[^']*\badmin-/.test(source)
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('keeps admin components out of non-admin views', () => {
+    const offenders = nonAdminViewFiles().filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return /<Admin[A-Z]/.test(source) || /from ['"]@\/shared\/components\/Admin/.test(source)
     })
 
     expect(offenders).toEqual([])

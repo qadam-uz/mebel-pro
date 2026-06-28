@@ -47,8 +47,6 @@ async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, 
         id=workshop_id,
         owner_user_id=owner_id,
         name="Demo Workshop",
-        phone="+998901111111",
-        address="Tashkent",
     )
     db.add(workshop)
     await db.flush()

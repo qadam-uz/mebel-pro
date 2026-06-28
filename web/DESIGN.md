@@ -16,8 +16,11 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
 - Image uploads use the shared preview primitive: a framed preview, native file input triggered
   by labelled buttons, upload/error state in the field, and a remove action when an image is set.
   Data tables show images in fixed-size framed thumbnails with a non-empty fallback.
-- Admin forms mark required fields with a compact `*` beside the persistent label, backed by
+- Forms mark required fields with a compact `*` beside the persistent label, backed by
   `required` / `aria-required` semantics and inline errors; unmarked fields are optional.
-- Admin filters use persistent labels outside the input value, and controls in one filter row
-  align to the same height. Object-creation buttons in the admin app use a visible `+` prefix
-  in the label.
+- Filter rows use shared `mp-*` filter classes with persistent labels outside the input value,
+  and controls in one filter row align to the same height. Role-prefixed classes such as
+  `admin-*` stay inside that role's app. Object-creation buttons in the admin app use a visible
+  `+` prefix in the label.
+- Pointer cursor and row hover belong only on clickable controls or clickable rows. Static table
+  rows stay visually still and use the default cursor.

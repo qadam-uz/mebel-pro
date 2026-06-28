@@ -9,9 +9,8 @@ const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
 
 const showPassword = ref(false)
 
-// useStaffLogin is shared with the admin login and keeps its error text in
-// English; map the error CODE to Uzbek locally (mirrors AdminLoginView) so the
-// workshop SPA stays fully Uzbek.
+// useStaffLogin keeps backend error codes in English; map them to Uzbek locally
+// so the workshop SPA stays fully Uzbek.
 const LOGIN_ERROR_UZ: Record<string, string> = {
   invalid_credentials: "Login yoki parol noto'g'ri.",
   account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",

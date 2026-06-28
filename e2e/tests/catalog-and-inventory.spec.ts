@@ -331,12 +331,11 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
   await loginWorkshop(page, staffLogin, 'StaffTemp123')
   await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
   await page.goto(`/workshop/branches/${branchId}`)
+  await expect(page).toHaveURL(/\/workshop\/?$/)
 
   await expect(page.getByRole('link', { name: 'Filiallar' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Xodimlar' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Materiallar' })).toHaveCount(0)
-  await page.getByRole('tab', { name: 'Ombor' }).click()
-  await page.getByRole('link', { name: 'Omborni ochish' }).click()
+  await page.goto('/workshop/inventory')
   await expect(page.getByRole('heading', { name: 'Kirim yozish' })).toBeVisible()
 })
 

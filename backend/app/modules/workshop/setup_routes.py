@@ -7,8 +7,6 @@ from fastapi import APIRouter, status
 from app.api.deps import AccountReadyPrincipal, Session
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.workshop.api import (
-    BranchOperationalCounts,
-    branch_operational_counts,
     create_branch,
     get_branch,
     get_branch_pricing,
@@ -59,8 +57,7 @@ async def branches_index(
     db: Session,
 ) -> list[BranchResponse]:
     rows = await list_branches(db, principal=principal)
-    counts = await branch_operational_counts(db, [row.id for row in rows])
-    return [_branch_response(row, counts.get(row.id)) for row in rows]
+    return [_branch_response(row) for row in rows]
 
 
 @router.post("/branches", response_model=BranchResponse, status_code=status.HTTP_201_CREATED)
@@ -70,8 +67,7 @@ async def branches_create(
     db: Session,
 ) -> BranchResponse:
     row = await create_branch(db, principal=principal, payload=payload)
-    counts = await branch_operational_counts(db, [row.id])
-    return _branch_response(row, counts.get(row.id))
+    return _branch_response(row)
 
 
 @router.get("/branches/{branch_id}", response_model=BranchResponse)
@@ -81,8 +77,7 @@ async def branches_show(
     db: Session,
 ) -> BranchResponse:
     row = await get_branch(db, principal=principal, branch_id=branch_id)
-    counts = await branch_operational_counts(db, [row.id])
-    return _branch_response(row, counts.get(row.id))
+    return _branch_response(row)
 
 
 @router.patch("/branches/{branch_id}", response_model=BranchResponse)
@@ -93,8 +88,7 @@ async def branches_update(
     db: Session,
 ) -> BranchResponse:
     row = await update_branch(db, principal=principal, branch_id=branch_id, payload=payload)
-    counts = await branch_operational_counts(db, [row.id])
-    return _branch_response(row, counts.get(row.id))
+    return _branch_response(row)
 
 
 @router.post("/branches/{branch_id}/status", response_model=BranchResponse)
@@ -105,8 +99,7 @@ async def branches_status(
     db: Session,
 ) -> BranchResponse:
     row = await set_branch_status(db, principal=principal, branch_id=branch_id, payload=payload)
-    counts = await branch_operational_counts(db, [row.id])
-    return _branch_response(row, counts.get(row.id))
+    return _branch_response(row)
 
 
 @router.get("/branches/{branch_id}/pricing", response_model=BranchPricingResponse)
@@ -130,7 +123,7 @@ async def branch_pricing_update(
     return _branch_pricing_response(row)
 
 
-def _branch_response(row: Branch, counts: BranchOperationalCounts | None = None) -> BranchResponse:
+def _branch_response(row: Branch) -> BranchResponse:
     return BranchResponse(
         id=row.id,
         workshop_id=row.workshop_id,
@@ -142,10 +135,6 @@ def _branch_response(row: Branch, counts: BranchOperationalCounts | None = None)
         working_hours=row.working_hours,
         status=row.status,
         closed_reason=row.closed_reason,
-        active_orders_count=counts.active_orders if counts else 0,
-        material_count=counts.materials if counts else 0,
-        low_stock_count=counts.low_stock if counts else 0,
-        staff_count=counts.staff if counts else 0,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

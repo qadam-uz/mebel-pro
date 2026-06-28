@@ -176,4 +176,24 @@ describe('Phase 3 shared controls', () => {
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
     expect(document.activeElement).toBe(button.element)
   })
+
+  it('MultiSelectFilter exposes required and error state on the trigger', () => {
+    const wrapper = mount(MultiSelectFilter, {
+      props: {
+        label: 'Branches',
+        modelValue: [],
+        options,
+        required: true,
+        error: 'Choose a branch',
+      },
+      attachTo: document.body,
+    })
+
+    const button = wrapper.get('button')
+    const error = wrapper.get('p')
+    expect(wrapper.text()).toContain('*')
+    expect(button.attributes('aria-required')).toBe('true')
+    expect(button.attributes('aria-invalid')).toBe('true')
+    expect(button.attributes('aria-describedby')).toBe(error.attributes('id'))
+  })
 })

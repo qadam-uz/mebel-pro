@@ -2,11 +2,24 @@
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import {
+  clearFieldErrors,
+  coordinatePairRequired,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  latitudeCoordinate,
+  longitudeCoordinate,
+  requiredText,
+  type FieldErrors,
+  uzPhone,
+} from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
+
+type BranchField = 'name' | 'address' | 'phone' | 'latitude' | 'longitude'
 
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
@@ -19,9 +32,18 @@ const branchForm = reactive({
   name: '',
   address: '',
   phone: '+998',
-  latitude: '41.2995',
-  longitude: '69.2401',
+  latitude: '',
+  longitude: '',
 })
+const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
+const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'latitude', 'longitude']
+const branchFieldIds: Record<BranchField, string> = {
+  name: 'branch-name',
+  phone: 'branch-phone',
+  latitude: 'branch-latitude',
+  longitude: 'branch-longitude',
+  address: 'branch-address',
+}
 const hours = reactive([
   { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
   { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
@@ -41,7 +63,30 @@ function workingHoursPayload() {
   )
 }
 
+function validateBranchForm() {
+  clearFieldErrors(branchFieldErrors)
+  branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
+  branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
+  branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
+  branchFieldErrors.latitude =
+    coordinatePairRequired(branchForm.latitude, branchForm.longitude) ??
+    latitudeCoordinate(branchForm.latitude) ??
+    undefined
+  branchFieldErrors.longitude =
+    coordinatePairRequired(branchForm.longitude, branchForm.latitude) ??
+    longitudeCoordinate(branchForm.longitude) ??
+    undefined
+  const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
+  return !hasErrors
+}
+
+function optionalCoordinate(value: string) {
+  return value.trim() || null
+}
+
 async function createBranch() {
+  if (!validateBranchForm()) return
   creatingBranch.value = true
   branchError.value = null
   try {
@@ -49,18 +94,42 @@ async function createBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      latitude: branchForm.latitude,
-      longitude: branchForm.longitude,
+      latitude: optionalCoordinate(branchForm.latitude),
+      longitude: optionalCoordinate(branchForm.longitude),
       working_hours: workingHoursPayload(),
     })
     branchForm.name = ''
     branchForm.address = ''
     branchForm.phone = '+998'
-    branchForm.latitude = '41.2995'
-    branchForm.longitude = '69.2401'
+    branchForm.latitude = ''
+    branchForm.longitude = ''
     showCreate.value = false
     toast.success("Filial qo'shildi.")
-  } catch {
+  } catch (caught) {
+    Object.assign(
+      branchFieldErrors,
+      fieldErrorsFromApi<BranchField>(
+        caught,
+        {
+          branch_name_required: 'name',
+          branch_address_required: 'address',
+          invalid_phone: 'phone',
+          invalid_coordinates: 'latitude',
+          invalid_latitude: 'latitude',
+          invalid_longitude: 'longitude',
+        },
+        {
+          name: 'name',
+          phone: 'phone',
+          latitude: 'latitude',
+          longitude: 'longitude',
+          address: 'address',
+        },
+      ),
+    )
+    if (branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))) {
+      focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
+    }
     branchError.value = 'branch_create_failed'
   } finally {
     creatingBranch.value = false
@@ -77,9 +146,6 @@ onMounted(() => {
     <div class="page-head">
       <div>
         <h1>Filiallar</h1>
-        <p class="sub">
-          {{ workshop.managedBranches.length }} filial · har birining materiali va narxi alohida.
-        </p>
       </div>
       <div class="tools">
         <button
@@ -99,7 +165,7 @@ onMounted(() => {
     </section>
 
     <template v-else>
-      <section v-if="showCreate" class="card mb-5">
+      <section v-if="showCreate" class="card mb-5 max-w-[1120px]">
         <div class="card-h">
           <h2>Yangi filial</h2>
           <button
@@ -110,38 +176,100 @@ onMounted(() => {
             Bekor
           </button>
         </div>
-        <form
-          class="card-b grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-          @submit.prevent="createBranch"
-        >
-          <label class="field">
-            <span>Nom</span>
-            <input v-model="branchForm.name" class="mp-input" placeholder="Sergeli" required />
-          </label>
-          <label class="field">
-            <span>Telefon</span>
-            <input v-model="branchForm.phone" class="mp-input" required />
-          </label>
-          <label class="field">
-            <span>Lat</span>
-            <input v-model="branchForm.latitude" class="mp-input" inputmode="decimal" required />
-          </label>
-          <label class="field">
-            <span>Lng</span>
-            <input v-model="branchForm.longitude" class="mp-input" inputmode="decimal" required />
-          </label>
-          <label class="field md:col-span-2 xl:col-span-4">
-            <span>Manzil</span>
-            <input
-              v-model="branchForm.address"
-              class="mp-input"
-              placeholder="Sergeli 1-mavze 4"
-              required
-            />
-          </label>
-          <fieldset class="md:col-span-2 xl:col-span-4">
+        <form class="card-b grid gap-3" novalidate @submit.prevent="createBranch">
+          <div class="grid gap-3 md:grid-cols-2">
+            <label class="field" for="branch-name">
+              <span>Nom</span>
+              <input
+                id="branch-name"
+                v-model="branchForm.name"
+                class="mp-input"
+                placeholder="Sergeli"
+                required
+                :aria-invalid="!!branchFieldErrors.name"
+                :aria-describedby="branchFieldErrors.name ? 'branch-name-error' : undefined"
+              />
+              <span v-if="branchFieldErrors.name" id="branch-name-error" class="mp-field-error">
+                {{ branchFieldErrors.name }}
+              </span>
+            </label>
+            <label class="field" for="branch-address">
+              <span>Manzil</span>
+              <input
+                id="branch-address"
+                v-model="branchForm.address"
+                class="mp-input"
+                placeholder="Sergeli 1-mavze 4"
+                required
+                :aria-invalid="!!branchFieldErrors.address"
+                :aria-describedby="branchFieldErrors.address ? 'branch-address-error' : undefined"
+              />
+              <span
+                v-if="branchFieldErrors.address"
+                id="branch-address-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.address }}
+              </span>
+            </label>
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <label class="field" for="branch-phone">
+              <span>Telefon</span>
+              <input
+                id="branch-phone"
+                v-model="branchForm.phone"
+                class="mp-input"
+                required
+                :aria-invalid="!!branchFieldErrors.phone"
+                :aria-describedby="branchFieldErrors.phone ? 'branch-phone-error' : undefined"
+              />
+              <span v-if="branchFieldErrors.phone" id="branch-phone-error" class="mp-field-error">
+                {{ branchFieldErrors.phone }}
+              </span>
+            </label>
+            <label class="field" for="branch-latitude">
+              <span>Lat</span>
+              <input
+                id="branch-latitude"
+                v-model="branchForm.latitude"
+                class="mp-input"
+                inputmode="decimal"
+                :aria-invalid="!!branchFieldErrors.latitude"
+                :aria-describedby="branchFieldErrors.latitude ? 'branch-latitude-error' : undefined"
+              />
+              <span
+                v-if="branchFieldErrors.latitude"
+                id="branch-latitude-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.latitude }}
+              </span>
+            </label>
+            <label class="field" for="branch-longitude">
+              <span>Lng</span>
+              <input
+                id="branch-longitude"
+                v-model="branchForm.longitude"
+                class="mp-input"
+                inputmode="decimal"
+                :aria-invalid="!!branchFieldErrors.longitude"
+                :aria-describedby="
+                  branchFieldErrors.longitude ? 'branch-longitude-error' : undefined
+                "
+              />
+              <span
+                v-if="branchFieldErrors.longitude"
+                id="branch-longitude-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.longitude }}
+              </span>
+            </label>
+          </div>
+          <fieldset>
             <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-7">
+            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               <div
                 v-for="day in hours"
                 :key="day.key"
@@ -168,19 +296,12 @@ onMounted(() => {
               </div>
             </div>
           </fieldset>
-          <button
-            type="submit"
-            class="mp-button mp-button-primary md:col-span-2 xl:col-span-4"
-            :disabled="creatingBranch"
-          >
-            {{ creatingBranch ? 'Yaratilmoqda' : 'Yaratish' }}
-          </button>
-          <p
-            v-if="branchError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2 xl:col-span-4"
-          >
-            Filial yaratilmadi.
-          </p>
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <p v-if="branchError" class="text-sm font-bold text-danger">Filial yaratilmadi.</p>
+            <button type="submit" class="mp-button mp-button-primary" :disabled="creatingBranch">
+              {{ creatingBranch ? 'Yaratilmoqda' : 'Yaratish' }}
+            </button>
+          </div>
         </form>
       </section>
 
@@ -202,47 +323,41 @@ onMounted(() => {
         <p>Birinchi filial yaratilgach, mijozlar buyurtma beradigan manzil paydo bo'ladi.</p>
       </section>
 
-      <div v-else class="br-grid">
-        <RouterLink
-          v-for="branch in workshop.managedBranches"
-          :key="branch.id"
-          :to="rolePath(`/workshop/branches/${branch.id}`)"
-          class="br-card"
-        >
-          <div class="top">
-            <div class="min-w-0">
-              <h3>{{ branch.name }}</h3>
-              <div class="addr">{{ branch.address }} · {{ branch.phone }}</div>
-            </div>
-            <span :class="branchPillClass(branch.status)">
-              <span class="pd"></span>{{ branchStatusUz[branch.status] }}
-            </span>
-          </div>
-          <div class="kpi-grid">
-            <div>
-              <div class="l">Faol buyurtma</div>
-              <div class="v">{{ branch.active_orders_count }}</div>
-            </div>
-            <div>
-              <div class="l">Past zaxira</div>
-              <div class="v" :class="{ 'text-warning': branch.low_stock_count > 0 }">
-                {{ branch.low_stock_count }}
-              </div>
-              <div v-if="branch.low_stock_count > 0" class="mt-1 text-xs font-bold text-warning">
-                Tez tekshiring
-              </div>
-            </div>
-            <div>
-              <div class="l">Materiallar</div>
-              <div class="v">{{ branch.material_count }}</div>
-            </div>
-            <div>
-              <div class="l">Xodimlar</div>
-              <div class="v">{{ branch.staff_count }}</div>
-            </div>
-          </div>
-        </RouterLink>
-      </div>
+      <section v-else class="card">
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Filial</th>
+                <th>Manzil</th>
+                <th>Telefon</th>
+                <th>Holat</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="branch in workshop.managedBranches" :key="branch.id">
+                <td class="nm">{{ branch.name }}</td>
+                <td>{{ branch.address }}</td>
+                <td class="num">{{ branch.phone }}</td>
+                <td>
+                  <span :class="branchPillClass(branch.status)">
+                    <span class="pd"></span>{{ branchStatusUz[branch.status] }}
+                  </span>
+                </td>
+                <td class="right">
+                  <RouterLink
+                    :to="rolePath(`/workshop/branches/${branch.id}`)"
+                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                  >
+                    Ochish
+                  </RouterLink>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </template>
   </section>
 </template>

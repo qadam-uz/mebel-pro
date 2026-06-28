@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-06-28
 order: 20
 ---
 
@@ -18,15 +18,14 @@ stamps).
 ## Workshop
 
 The tenant — one furniture-cutting business. Has exactly one owner, many branches, many workshop
-users, and a settings bundle. Provisioned by a platform operator.
+users, and a settings bundle. Provisioned by a platform operator. Public contact data belongs to
+branches, not the workshop.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `name` | text | required |
 | `logo_file_id` | UUID? | → [file](support.md#file) |
-| `phone` | text? | `+998XXXXXXXXX`; owner-managed profile contact |
-| `address` | text? | owner-managed legal/postal profile field |
 | `owner_user_id` | UUID | → workshop user with `is_owner`; 1:1 |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
@@ -58,7 +57,7 @@ whether clients see it and order from it.
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required |
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX` |
-| `latitude` / `longitude` | numeric | owner-managed manual numeric (no geocoder in v1); platform provisioning does not collect it |
+| `latitude` / `longitude` | numeric? | optional owner-managed coordinate pair (no geocoder in v1); both are null when unknown |
 | `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |

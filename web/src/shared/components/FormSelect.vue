@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
       :for="controlId"
     >
       {{ label }}
-      <span v-if="required" class="admin-field-required" aria-hidden="true">*</span>
+      <span v-if="required" class="mp-field-required" aria-hidden="true">*</span>
     </label>
     <div class="relative">
       <button

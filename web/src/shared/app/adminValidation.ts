@@ -30,6 +30,26 @@ export function positiveDecimal(value: string): string | null {
   return Number.isFinite(number) && number > 0 ? null : 'Musbat son kiriting.'
 }
 
+export function coordinatePairRequired(value: string, pairValue: string): string | null {
+  return !value.trim() && pairValue.trim() ? 'Lat va Lng birga kiritiladi.' : null
+}
+
+export function latitudeCoordinate(value: string): string | null {
+  if (!value.trim()) return null
+  const number = Number(value)
+  return Number.isFinite(number) && number >= -90 && number <= 90
+    ? null
+    : '-90 dan 90 gacha kiriting.'
+}
+
+export function longitudeCoordinate(value: string): string | null {
+  if (!value.trim()) return null
+  const number = Number(value)
+  return Number.isFinite(number) && number >= -180 && number <= 180
+    ? null
+    : '-180 dan 180 gacha kiriting.'
+}
+
 export function positiveInteger(value: string): string | null {
   const number = Number(value)
   return Number.isInteger(number) && number > 0 ? null : 'Musbat butun son kiriting.'
@@ -60,6 +80,12 @@ function apiValidationMessage(code: string | null): string {
       return "Bu maydonni to'ldiring."
     case 'invalid_phone':
       return '+998XXXXXXXXX formatida kiriting.'
+    case 'invalid_coordinates':
+      return 'Lat va Lng birga kiritiladi.'
+    case 'invalid_latitude':
+      return '-90 dan 90 gacha kiriting.'
+    case 'invalid_longitude':
+      return '-180 dan 180 gacha kiriting.'
     case 'invalid_current_password':
       return "Joriy parol noto'g'ri."
     case 'login_exists':

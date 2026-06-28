@@ -4,13 +4,22 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { firstEnabledIndex, nextStableId } from '@/shared/app/listboxNav'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 
-const props = defineProps<{
-  label: string
-  modelValue: string[]
-  options: ChoiceOption[]
-  emptyLabel?: string
-  selectedLabel?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    id?: string
+    label: string
+    modelValue: string[]
+    options: ChoiceOption[]
+    emptyLabel?: string
+    selectedLabel?: string
+    error?: string | null
+    required?: boolean
+  }>(),
+  {
+    error: null,
+    required: false,
+  },
+)
 
 const emit = defineEmits<{
   'update:modelValue': [value: string[]]
@@ -20,7 +29,9 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const listRef = ref<HTMLUListElement | null>(null)
 const open = ref(false)
 const activeIndex = ref(0)
-const id = nextStableId('mp-multi-filter')
+const internalId = nextStableId('mp-multi-filter')
+const controlId = computed(() => props.id ?? internalId)
+const errorId = computed(() => (props.error ? `${controlId.value}-error` : undefined))
 
 const selectedOptions = computed(() =>
   props.options.filter((option) => props.modelValue.includes(option.value)),
@@ -32,7 +43,7 @@ const summary = computed(() => {
 })
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
-  return option ? `${id}-${option.value}` : undefined
+  return option ? `${internalId}-${option.value}` : undefined
 })
 
 async function openList() {
@@ -104,14 +115,22 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="relative min-w-0">
-    <span :id="`${id}-label`" class="mb-1 block text-sm font-bold text-ink">{{ label }}</span>
+    <span :id="`${internalId}-label`" class="mb-1 block text-sm font-bold text-ink">
+      {{ label }}
+      <span v-if="required" class="mp-field-required" aria-hidden="true">*</span>
+    </span>
     <button
+      :id="controlId"
       ref="buttonRef"
       type="button"
-      class="grid min-h-11 w-full grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-hairline-strong bg-elevated px-3 text-left text-sm transition hover:border-hairline-strong"
+      class="grid min-h-11 w-full grid-cols-[1fr_auto] items-center gap-3 rounded-md border bg-elevated px-3 text-left text-sm transition hover:border-hairline-strong"
+      :class="error ? 'border-danger' : 'border-hairline-strong'"
       :aria-expanded="open"
-      :aria-controls="`${id}-listbox`"
-      :aria-labelledby="`${id}-label`"
+      :aria-controls="`${internalId}-listbox`"
+      :aria-labelledby="`${internalId}-label`"
+      :aria-describedby="errorId"
+      :aria-invalid="error ? 'true' : undefined"
+      :aria-required="required ? 'true' : undefined"
       aria-haspopup="listbox"
       @click="open ? closeList() : openList()"
       @keydown="onKeydown"
@@ -130,19 +149,19 @@ onBeforeUnmount(() => {
     </button>
     <ul
       v-if="open"
-      :id="`${id}-listbox`"
+      :id="`${internalId}-listbox`"
       ref="listRef"
       role="listbox"
       aria-multiselectable="true"
       tabindex="0"
       class="absolute z-40 mt-1 max-h-72 w-full overflow-auto rounded-md border border-hairline-strong bg-elevated p-1 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
-      :aria-labelledby="`${id}-label`"
+      :aria-labelledby="`${internalId}-label`"
       :aria-activedescendant="activeOptionId"
       @keydown="onKeydown"
     >
       <li
         v-for="(option, index) in options"
-        :id="`${id}-${option.value}`"
+        :id="`${internalId}-${option.value}`"
         :key="option.value"
         role="option"
         :aria-selected="modelValue.includes(option.value)"
@@ -182,5 +201,8 @@ onBeforeUnmount(() => {
         </span>
       </li>
     </ul>
+    <p v-if="error" :id="errorId" class="mp-field-error mt-1" role="alert">
+      {{ error }}
+    </p>
   </div>
 </template>

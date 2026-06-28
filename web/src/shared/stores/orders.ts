@@ -195,6 +195,8 @@ export const activeWorkshopStatuses: OrderStatus[] = [
   'ready',
 ]
 
+const QUOTE_BRANCH_BATCH_SIZE = 50
+
 export const useOrdersStore = defineStore('orders', () => {
   const clientOrders = ref<OrderSummary[]>([])
   const ordersHasMore = ref(false)
@@ -237,11 +239,11 @@ export const useOrdersStore = defineStore('orders', () => {
     )
   }
 
-  // Quote a draft against many branches in ONE request (CB-12) — the backend
-  // prices the validated result once and returns each branch's own quote or error
-  // code (branch_does_not_carry_*, branch_closed, missing_*_rate), so the view can
-  // still name each failure (CB-19/CB-20) without N round-trips. On a whole-request
-  // failure (network/auth) every branch is marked with the generic code + trace.
+  // Quote a draft against many branches in backend-sized batches — the API
+  // returns each branch's own quote or error code (branch_does_not_carry_*,
+  // branch_closed, missing_*_rate), so the view can still name each failure
+  // (CB-19/CB-20). On a whole-request failure (network/auth) every branch in
+  // that failed batch is marked with the generic code + trace.
   async function quoteBranches(draftId: string, branchIds: string[]) {
     if (branchIds.length === 0) {
       return {
@@ -251,47 +253,46 @@ export const useOrdersStore = defineStore('orders', () => {
         requestFailed: false,
       }
     }
-    try {
-      const response = await api.post<{
-        quotes: Record<string, OrderQuote>
-        errors: Record<string, string | null>
-      }>('/client/orders/quote/batch', { draft_id: draftId, branch_ids: branchIds }, authInit())
-      return {
-        quotes: response.quotes,
-        errors: response.errors,
-        firstErrorTraceId: null,
-        requestFailed: false,
-      }
-    } catch (errorValue) {
-      if (
-        errorValue instanceof ApiError &&
-        typeof errorValue.body === 'object' &&
-        errorValue.body !== null &&
-        'errors' in errorValue.body
-      ) {
-        const body = errorValue.body as {
-          quotes?: Record<string, OrderQuote>
-          errors?: Record<string, string | null>
+
+    const quotes: Record<string, OrderQuote> = {}
+    const errors: Record<string, string | null> = {}
+    let firstErrorTraceId: string | null = null
+    let requestFailed = false
+
+    for (let index = 0; index < branchIds.length; index += QUOTE_BRANCH_BATCH_SIZE) {
+      const chunk = branchIds.slice(index, index + QUOTE_BRANCH_BATCH_SIZE)
+      try {
+        const response = await api.post<{
+          quotes: Record<string, OrderQuote>
+          errors: Record<string, string | null>
+        }>('/client/orders/quote/batch', { draft_id: draftId, branch_ids: chunk }, authInit())
+        Object.assign(quotes, response.quotes)
+        Object.assign(errors, response.errors)
+      } catch (errorValue) {
+        const traceId = apiTraceId(errorValue)
+        firstErrorTraceId ??= traceId
+        if (
+          errorValue instanceof ApiError &&
+          typeof errorValue.body === 'object' &&
+          errorValue.body !== null &&
+          'errors' in errorValue.body
+        ) {
+          const body = errorValue.body as {
+            quotes?: Record<string, OrderQuote>
+            errors?: Record<string, string | null>
+          }
+          Object.assign(quotes, body.quotes ?? {})
+          Object.assign(errors, body.errors ?? {})
+          continue
         }
-        return {
-          quotes: body.quotes ?? {},
-          errors: body.errors ?? {},
-          firstErrorTraceId: apiTraceId(errorValue),
-          requestFailed: false,
-        }
-      }
-      const code =
-        apiErrorCode(errorValue) ??
-        (errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null)
-      const errors: Record<string, string | null> = {}
-      for (const branchId of branchIds) errors[branchId] = code
-      return {
-        quotes: {} as Record<string, OrderQuote>,
-        errors,
-        firstErrorTraceId: apiTraceId(errorValue),
-        requestFailed: true,
+        const code =
+          apiErrorCode(errorValue) ??
+          (errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null)
+        for (const branchId of chunk) errors[branchId] = code
+        requestFailed = true
       }
     }
+    return { quotes, errors, firstErrorTraceId, requestFailed }
   }
 
   async function createClientOrder(payload: unknown) {

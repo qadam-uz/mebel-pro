@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-06-28
 order: 40
 ---
 
@@ -19,7 +19,7 @@ income, expenses, and the worker-production reports live in [`finance.md`](finan
 
 The workshop's mutable profile:
 
-- **Profile** — name, logo, phone, address. Editable by the workshop's owner. Platform
+- **Profile** — name and logo. Editable by the workshop's owner. Platform
   operators can view the operational summary for incident response, but v1 gives them no edit path.
 - **Currency** — UZS, fixed in v1; named here for future-proofing.
 
@@ -44,18 +44,18 @@ editing settings.
 
 ### UX (workshop app)
 
-- **Workshop settings** (`/workshop/settings`, owner-only): a single **Profile** tab (name,
-  logo, phone, address).
+- **Workshop settings** (`/workshop/settings`, owner-only): a single profile form with name
+  and logo. Contact phone and address are branch fields.
 
 ## Branches
 
-A workshop owns one or more branches. Each branch has a physical address, working hours, a
-manually-entered `(lat, lng)`, and a `status` — semantics in
+A workshop owns one or more branches. Each branch has a physical address, working hours, an
+optional manually-entered `(lat, lng)` coordinate pair, and a `status` — semantics in
 [`access-patterns.md`](../../access-patterns.md#tenancy).
 
 After platform provisioning creates the first branch, branch operations are **owner only**:
 
-- **Create / edit a branch** — name, address, phone, lat / lng, per-weekday working hours.
+- **Create / edit a branch** — name, address, phone, optional lat / lng, per-weekday working hours.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material selection is built up.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
@@ -73,18 +73,14 @@ Visibility for read operations:
 
 ### UX
 
-- **Branches list** (`/workshop/branches`) — table: name, address, phone, status badge,
-  materials count, workers count, low-stock count, active-orders count, action menu.
-  **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
-- **Branch form dialog** — name, address, phone, lat / lng (numeric, range-validated),
-  working-hours grid (per weekday open / close, with a "closed this day" toggle), status.
-- **Branch detail** (`/workshop/branches/:id`) — header (name, address, status, action set:
-  change status · edit). Tabs: **Overview** (status, active-orders count, revenue 30d,
-  low-stock count) · **Materials** · **Stock** · **Settings** · **Staff** (read-only here;
-  shows everyone with this branch as their `home_branch` plus everyone with a grant on it;
-  managed in [`access-management.md`](access-management.md)) · **Orders**. The Materials,
-  Stock, and Settings tabs are owned by [`catalog-inventory.md`](catalog-inventory.md);
-  Orders by [`orders.md`](orders.md).
+- **Branches list** (`/workshop/branches`) — simple table: name, address, phone, status badge,
+  action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
+- **Branch create form** — name, address, phone, optional lat / lng (numeric, range-validated
+  when present),
+  working-hours grid (per weekday open / close, with a "closed this day" toggle).
+- **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
+  working hours, coordinates, pricing, and status controls. It does not duplicate materials,
+  stock, staff, or order management; those stay in their own sidebar sections.
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.
 

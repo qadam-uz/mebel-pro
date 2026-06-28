@@ -2,6 +2,14 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import {
+  clearFieldErrors,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  requiredText,
+  type FieldErrors,
+  uzPhone,
+} from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
 import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
@@ -11,6 +19,8 @@ import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import { permissionCatalog, useWorkshopStore } from '@/shared/stores/workshop'
+
+type ProfileField = 'fullName' | 'phone' | 'login' | 'homeBranch'
 
 const route = useRoute()
 const rolePath = useRolePath()
@@ -40,6 +50,14 @@ const profileForm = reactive({
   login: '',
   homeBranchId: '',
 })
+const profileFieldErrors = reactive<FieldErrors<ProfileField>>({})
+const profileFieldOrder: ProfileField[] = ['fullName', 'phone', 'login', 'homeBranch']
+const profileFieldIds: Record<ProfileField, string> = {
+  fullName: 'user-profile-full-name',
+  phone: 'user-profile-phone',
+  login: 'user-profile-login',
+  homeBranch: 'user-profile-home-branch',
+}
 const profileBranchOptions = computed<ChoiceOption[]>(() => [
   ...workshop.branches.map((branch) => ({
     value: branch.id,
@@ -84,6 +102,18 @@ function syncProfileForm() {
   profileForm.homeBranchId = user.value.home_branch_id
 }
 
+function validateProfileForm() {
+  clearFieldErrors(profileFieldErrors)
+  profileFieldErrors.fullName = requiredText(profileForm.fullName) ?? undefined
+  profileFieldErrors.phone =
+    requiredText(profileForm.phone) ?? uzPhone(profileForm.phone) ?? undefined
+  profileFieldErrors.login = requiredText(profileForm.login) ?? undefined
+  profileFieldErrors.homeBranch = requiredText(profileForm.homeBranchId) ?? undefined
+  const hasErrors = profileFieldOrder.some((field) => Boolean(profileFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(profileFieldErrors, profileFieldOrder, profileFieldIds)
+  return !hasErrors
+}
+
 async function load() {
   if (!auth.me?.is_owner) return
   // A transient branch-context failure must not skip loadUser and make an existing
@@ -98,6 +128,7 @@ async function load() {
 
 async function saveProfile() {
   if (!user.value || user.value.is_owner) return
+  if (!validateProfileForm()) return
   profileSaving.value = true
   profileError.value = null
   profileTraceId.value = null
@@ -112,7 +143,30 @@ async function saveProfile() {
     syncProfileForm()
     profileSaved.value = 'Profil saqlandi.'
     toast.success('Profil saqlandi.')
-  } catch {
+  } catch (caught) {
+    Object.assign(
+      profileFieldErrors,
+      fieldErrorsFromApi<ProfileField>(
+        caught,
+        {
+          full_name_required: 'fullName',
+          invalid_phone: 'phone',
+          login_required: 'login',
+          home_branch_required: 'homeBranch',
+          branch_not_found: 'homeBranch',
+          login_exists: 'login',
+        },
+        {
+          full_name: 'fullName',
+          phone: 'phone',
+          login: 'login',
+          home_branch_id: 'homeBranch',
+        },
+      ),
+    )
+    if (profileFieldOrder.some((field) => Boolean(profileFieldErrors[field]))) {
+      focusFirstFieldError(profileFieldErrors, profileFieldOrder, profileFieldIds)
+    }
     profileError.value = workshopErrorMessage(workshop.actionError ?? 'user_save_failed')
     profileTraceId.value = workshop.actionTraceId
   } finally {
@@ -316,39 +370,78 @@ onMounted(load)
         <div class="card">
           <div class="card-h"><h2>Profil</h2></div>
           <div class="card-b">
-            <form v-if="!user.is_owner" class="grid gap-3" @submit.prevent="saveProfile">
-              <label class="field">
+            <form v-if="!user.is_owner" class="grid gap-3" novalidate @submit.prevent="saveProfile">
+              <label class="field" for="user-profile-full-name">
                 <span>F.I.O</span>
                 <input
+                  id="user-profile-full-name"
                   v-model="profileForm.fullName"
                   class="mp-input"
                   autocomplete="name"
                   required
+                  :aria-invalid="!!profileFieldErrors.fullName"
+                  :aria-describedby="
+                    profileFieldErrors.fullName ? 'user-profile-full-name-error' : undefined
+                  "
                 />
+                <span
+                  v-if="profileFieldErrors.fullName"
+                  id="user-profile-full-name-error"
+                  class="mp-field-error"
+                >
+                  {{ profileFieldErrors.fullName }}
+                </span>
               </label>
-              <label class="field">
+              <label class="field" for="user-profile-phone">
                 <span>Telefon</span>
                 <input
+                  id="user-profile-phone"
                   v-model="profileForm.phone"
                   class="mp-input"
                   autocomplete="tel"
                   inputmode="tel"
                   required
+                  :aria-invalid="!!profileFieldErrors.phone"
+                  :aria-describedby="
+                    profileFieldErrors.phone ? 'user-profile-phone-error' : undefined
+                  "
                 />
+                <span
+                  v-if="profileFieldErrors.phone"
+                  id="user-profile-phone-error"
+                  class="mp-field-error"
+                >
+                  {{ profileFieldErrors.phone }}
+                </span>
               </label>
-              <label class="field">
+              <label class="field" for="user-profile-login">
                 <span>Login</span>
                 <input
+                  id="user-profile-login"
                   v-model="profileForm.login"
                   class="mp-input"
                   autocomplete="username"
                   required
+                  :aria-invalid="!!profileFieldErrors.login"
+                  :aria-describedby="
+                    profileFieldErrors.login ? 'user-profile-login-error' : undefined
+                  "
                 />
+                <span
+                  v-if="profileFieldErrors.login"
+                  id="user-profile-login-error"
+                  class="mp-field-error"
+                >
+                  {{ profileFieldErrors.login }}
+                </span>
               </label>
               <FormSelect
+                id="user-profile-home-branch"
                 v-model="profileForm.homeBranchId"
                 label="Asosiy filial"
                 :options="profileBranchOptions"
+                :error="profileFieldErrors.homeBranch"
+                required
               />
               <button class="mp-button mp-button-primary" type="submit" :disabled="profileSaving">
                 {{ profileSaving ? 'Saqlanmoqda' : 'Profilni saqlash' }}

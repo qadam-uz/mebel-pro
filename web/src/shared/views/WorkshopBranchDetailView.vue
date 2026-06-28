@@ -1,40 +1,50 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
-import { useRolePath } from '@/shared/app/paths'
-import { orderPillClass, permissionLabels, workshopStatusUz } from '@/shared/app/workshopUi'
-import AppTabs from '@/shared/components/AppTabs.vue'
+import {
+  clearFieldErrors,
+  coordinatePairRequired,
+  fieldErrorsFromApi,
+  focusFirstFieldError,
+  latitudeCoordinate,
+  longitudeCoordinate,
+  requiredText,
+  type FieldErrors,
+  uzPhone,
+} from '@/shared/app/adminValidation'
+import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
-import { formatTiyin } from '@/shared/formatters'
-import { useAuthStore } from '@/shared/stores/auth'
-import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-const route = useRoute()
-const rolePath = useRolePath()
-const auth = useAuthStore()
-const workshop = useWorkshopStore()
-const orders = useOrdersStore()
-const toast = useToast()
-type BranchDetailTab = 'overview' | 'materials' | 'inventory' | 'settings' | 'staff' | 'orders'
+type WorkingDay = {
+  key: string
+  label: string
+  open: boolean
+  from: string
+  to: string
+}
+type BranchField = 'name' | 'address' | 'phone' | 'latitude' | 'longitude'
+type StatusField = 'reason'
 
-const activeTab = ref<BranchDetailTab>('overview')
+const route = useRoute()
+const workshop = useWorkshopStore()
+const toast = useToast()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
 const loading = ref(false)
 const pageError = ref<string | null>(null)
 const pageTraceId = ref<string | null>(null)
-const staffLoadError = ref<string | null>(null)
-const ordersLoadError = ref<string | null>(null)
-const settingsSaving = ref(false)
-const statusCountRefreshing = ref(false)
-const settingsError = ref<string | null>(null)
-const settingsTraceId = ref<string | null>(null)
-const settingsSuccess = ref<string | null>(null)
-const statusCountRefreshedAt = ref<string | null>(null)
+const saving = ref(false)
+const saveError = ref<string | null>(null)
+const saveTraceId = ref<string | null>(null)
+const saved = ref(false)
+const statusSaving = ref(false)
+const statusError = ref<string | null>(null)
+const statusTraceId = ref<string | null>(null)
+const statusSaved = ref(false)
+
 const branchForm = reactive({
   name: '',
   address: '',
@@ -49,86 +59,95 @@ const pricingForm = reactive({
 const statusForm = reactive({
   status: 'active',
   reason: '',
-  confirmed: false,
 })
-
-const contextBranch = computed(() =>
-  workshop.branches.find((branch) => branch.id === branchId.value),
-)
-const canManageCatalog = computed(
-  () => auth.me?.is_owner || contextBranch.value?.permissions.includes('manage_catalog') === true,
-)
-const canManageInventory = computed(
-  () => auth.me?.is_owner || contextBranch.value?.permissions.includes('manage_inventory') === true,
-)
-const canManageSettings = computed(() => auth.me?.is_owner === true)
-const canManageOrders = computed(
-  () => auth.me?.is_owner || contextBranch.value?.permissions.includes('manage_orders') === true,
-)
+const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
+const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'latitude', 'longitude']
+const branchFieldIds: Record<BranchField, string> = {
+  name: 'branch-detail-name',
+  address: 'branch-detail-address',
+  phone: 'branch-detail-phone',
+  latitude: 'branch-detail-latitude',
+  longitude: 'branch-detail-longitude',
+}
+const statusFieldErrors = reactive<FieldErrors<StatusField>>({})
+const statusFieldOrder: StatusField[] = ['reason']
+const statusFieldIds: Record<StatusField, string> = {
+  reason: 'branch-status-reason',
+}
+const hours = reactive<WorkingDay[]>([
+  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
+  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
+  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
+  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
+  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
+  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
+  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
+])
 const statusOptions = [
   { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
   { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: 'sabab bilan ko`rinadi' },
   { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
 ]
-const visibleTabs = computed<Array<{ key: BranchDetailTab; label: string }>>(() => {
-  const tabs: Array<{ key: BranchDetailTab; label: string }> = []
-  if (workshop.selectedBranch) tabs.push({ key: 'overview', label: 'Umumiy' })
-  if (canManageCatalog.value) {
-    tabs.push({
-      key: 'materials',
-      label: `Materiallar (${workshop.selectedBranch?.material_count ?? 0})`,
-    })
-  }
-  if (canManageInventory.value) tabs.push({ key: 'inventory', label: 'Ombor' })
-  if (canManageSettings.value) tabs.push({ key: 'settings', label: 'Sozlamalar' })
-  if (canManageSettings.value) {
-    tabs.push({
-      key: 'staff',
-      label: `Xodimlar (${workshop.selectedBranch?.staff_count ?? 0})`,
-    })
-  }
-  if (canManageOrders.value) {
-    tabs.push({
-      key: 'orders',
-      label: `Buyurtmalar (${workshop.selectedBranch?.active_orders_count ?? 0})`,
-    })
-  }
-  return tabs
-})
-const visibleTabOptions = computed<ChoiceOption[]>(() =>
-  visibleTabs.value.map((tab) => ({ value: tab.key, label: tab.label })),
-)
 
-function selectFirstVisibleTab() {
-  if (visibleTabs.value.some((tab) => tab.key === activeTab.value)) return
-  activeTab.value = visibleTabs.value[0]?.key ?? 'overview'
+function workingHoursPayload() {
+  return Object.fromEntries(
+    hours.map((day) => [
+      day.key,
+      day.open ? { open: day.from, close: day.to } : { open: null, close: null },
+    ]),
+  )
 }
 
-async function loadActiveTab() {
-  if (!branchId.value) return
-  if (activeTab.value === 'staff' && canManageSettings.value) {
-    staffLoadError.value = null
-    try {
-      await workshop.loadUsers({ filters: { branch_id: branchId.value } })
-      staffLoadError.value = workshop.error
-    } catch {
-      staffLoadError.value = 'staff_load_failed'
-    }
+function validateBranchForm() {
+  clearFieldErrors(branchFieldErrors)
+  branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
+  branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
+  branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
+  branchFieldErrors.latitude =
+    coordinatePairRequired(branchForm.latitude, branchForm.longitude) ??
+    latitudeCoordinate(branchForm.latitude) ??
+    undefined
+  branchFieldErrors.longitude =
+    coordinatePairRequired(branchForm.longitude, branchForm.latitude) ??
+    longitudeCoordinate(branchForm.longitude) ??
+    undefined
+  const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
+  return !hasErrors
+}
+
+function validateStatusForm() {
+  clearFieldErrors(statusFieldErrors)
+  if (statusForm.status !== 'active') {
+    statusFieldErrors.reason = requiredText(statusForm.reason) ?? undefined
   }
-  if (activeTab.value === 'orders' && canManageOrders.value) {
-    ordersLoadError.value = null
-    try {
-      await orders.loadWorkshopOrders({
-        branch_id: branchId.value,
-        status: 'all',
-        limit: 6,
-        offset: 0,
-      })
-      ordersLoadError.value = orders.error
-    } catch {
-      ordersLoadError.value = 'orders_load_failed'
-    }
+  const hasErrors = statusFieldOrder.some((field) => Boolean(statusFieldErrors[field]))
+  if (hasErrors) focusFirstFieldError(statusFieldErrors, statusFieldOrder, statusFieldIds)
+  return !hasErrors
+}
+
+function syncForms() {
+  const branch = workshop.selectedBranch
+  if (!branch) return
+  branchForm.name = branch.name
+  branchForm.address = branch.address
+  branchForm.phone = branch.phone
+  branchForm.latitude = branch.latitude ?? ''
+  branchForm.longitude = branch.longitude ?? ''
+  statusForm.status = branch.status
+  statusForm.reason = branch.closed_reason ?? ''
+  for (const day of hours) {
+    const raw = branch.working_hours[day.key]
+    const entry = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+    const open = typeof entry?.open === 'string' ? entry.open : ''
+    const close = typeof entry?.close === 'string' ? entry.close : ''
+    day.open = Boolean(open && close)
+    if (open) day.from = open
+    if (close) day.to = close
   }
+  const pricing = workshop.selectedBranchPricing
+  pricingForm.cuttingRateTiyin = String(pricing?.cutting_rate_tiyin ?? '')
+  pricingForm.edgeBandingRateTiyin = String(pricing?.edge_banding_rate_tiyin ?? '')
 }
 
 async function refreshBranch() {
@@ -140,9 +159,7 @@ async function refreshBranch() {
     await workshop.loadBranchContext()
     workshop.setSelectedBranchContext(branchId.value)
     await workshop.loadBranch(branchId.value)
-    syncBranchForms()
-    selectFirstVisibleTab()
-    await loadActiveTab()
+    syncForms()
   } catch {
     pageError.value = 'branch_detail_load_failed'
     pageTraceId.value = workshop.traceId ?? workshop.setupTraceId
@@ -151,48 +168,24 @@ async function refreshBranch() {
   }
 }
 
-function workingHoursSummary(hours: Record<string, unknown>) {
-  const labels: Record<string, string> = {
-    monday: 'Du',
-    tuesday: 'Se',
-    wednesday: 'Chor',
-    thursday: 'Pay',
-    friday: 'Ju',
-    saturday: 'Sh',
-    sunday: 'Yak',
-  }
-  const rows = Object.entries(labels).map(([key, label]) => {
-    const value = hours[key]
-    const day = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
-    const open = typeof day?.open === 'string' ? day.open : null
-    const close = typeof day?.close === 'string' ? day.close : null
-    return `${label}: ${open && close ? `${open}-${close}` : 'yopiq'}`
-  })
-  return rows.join(' · ')
+function optionalCoordinate(value: string) {
+  return value.trim() || null
 }
 
-function branchPermissionSummary(user: (typeof workshop.users)[number]) {
-  if (user.is_owner) return 'Egasi · barcha ruxsatlar'
-  const branchGrants = user.grants.filter((grant) => grant.branch_id === branchId.value)
-  if (branchGrants.length === 0 && user.home_branch_id === branchId.value) return 'Asosiy filial'
-  if (branchGrants.length === 0) return '—'
-  return branchGrants
-    .map((grant) => permissionLabels[grant.permission] ?? grant.permission)
-    .join(', ')
-}
-
-async function saveBranchSettings() {
-  settingsSaving.value = true
-  settingsError.value = null
-  settingsTraceId.value = null
-  settingsSuccess.value = null
+async function saveBranch() {
+  if (!validateBranchForm()) return
+  saving.value = true
+  saveError.value = null
+  saveTraceId.value = null
+  saved.value = false
   try {
     await workshop.updateBranch(branchId.value, {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      latitude: branchForm.latitude,
-      longitude: branchForm.longitude,
+      latitude: optionalCoordinate(branchForm.latitude),
+      longitude: optionalCoordinate(branchForm.longitude),
+      working_hours: workingHoursPayload(),
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: pricingForm.cuttingRateTiyin
@@ -202,563 +195,328 @@ async function saveBranchSettings() {
         ? Number(pricingForm.edgeBandingRateTiyin)
         : null,
     })
-    settingsSuccess.value = 'Filial sozlamalari saqlandi.'
-    toast.success('Filial sozlamalari saqlandi.')
+    saved.value = true
+    toast.success('Filial saqlandi.')
   } catch (caught) {
-    settingsError.value = 'branch_settings_save_failed'
-    settingsTraceId.value = apiTraceId(caught)
+    Object.assign(
+      branchFieldErrors,
+      fieldErrorsFromApi<BranchField>(
+        caught,
+        {
+          branch_name_required: 'name',
+          branch_address_required: 'address',
+          invalid_phone: 'phone',
+          invalid_coordinates: 'latitude',
+          invalid_latitude: 'latitude',
+          invalid_longitude: 'longitude',
+        },
+        {
+          name: 'name',
+          address: 'address',
+          phone: 'phone',
+          latitude: 'latitude',
+          longitude: 'longitude',
+        },
+      ),
+    )
+    if (branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))) {
+      focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
+    }
+    saveError.value = 'branch_save_failed'
+    saveTraceId.value = apiTraceId(caught)
   } finally {
-    settingsSaving.value = false
-  }
-}
-
-async function refreshBranchStatusCount() {
-  statusCountRefreshing.value = true
-  try {
-    await workshop.loadBranch(branchId.value)
-    statusCountRefreshedAt.value = new Date().toISOString()
-    return true
-  } catch (caught) {
-    settingsError.value = 'branch_load_failed'
-    settingsTraceId.value = apiTraceId(caught)
-    return false
-  } finally {
-    statusCountRefreshing.value = false
+    saving.value = false
   }
 }
 
 async function changeBranchStatus() {
-  const nextStatus = statusForm.status
-  const nextReason = statusForm.reason
-  settingsSaving.value = true
-  settingsError.value = null
-  settingsTraceId.value = null
-  settingsSuccess.value = null
+  if (!validateStatusForm()) return
+  statusSaving.value = true
+  statusError.value = null
+  statusTraceId.value = null
+  statusSaved.value = false
   try {
-    if (nextStatus !== 'active') {
-      const refreshed = await refreshBranchStatusCount()
-      if (!refreshed) return
-    }
     await workshop.setBranchStatus(branchId.value, {
-      status: nextStatus,
-      reason: nextStatus === 'active' ? null : nextReason,
+      status: statusForm.status,
+      reason: statusForm.status === 'active' ? null : statusForm.reason,
     })
-    statusForm.confirmed = false
-    syncBranchForms()
-    settingsSuccess.value = "Filial holati o'zgartirildi."
+    syncForms()
+    statusSaved.value = true
     toast.success("Filial holati o'zgartirildi.")
   } catch (caught) {
-    settingsError.value = 'branch_status_failed'
-    settingsTraceId.value = apiTraceId(caught)
+    Object.assign(
+      statusFieldErrors,
+      fieldErrorsFromApi<StatusField>(caught, { reason_required: 'reason' }, { reason: 'reason' }),
+    )
+    if (statusFieldErrors.reason) {
+      focusFirstFieldError(statusFieldErrors, statusFieldOrder, statusFieldIds)
+    }
+    statusError.value = 'branch_status_failed'
+    statusTraceId.value = apiTraceId(caught)
   } finally {
-    settingsSaving.value = false
-  }
-}
-
-function syncBranchForms() {
-  const branch = workshop.selectedBranch
-  if (branch) {
-    branchForm.name = branch.name
-    branchForm.address = branch.address
-    branchForm.phone = branch.phone
-    branchForm.latitude = String(branch.latitude)
-    branchForm.longitude = String(branch.longitude)
-    statusForm.status = branch.status
-    statusForm.reason = branch.closed_reason ?? ''
-  }
-  const pricing = workshop.selectedBranchPricing
-  if (pricing) {
-    pricingForm.cuttingRateTiyin = String(pricing.cutting_rate_tiyin ?? '')
-    pricingForm.edgeBandingRateTiyin = String(pricing.edge_banding_rate_tiyin ?? '')
-  }
-}
-
-function statusClass(status: string) {
-  return {
-    'bg-success-soft text-success': status === 'active',
-    'bg-warning-soft text-warning': status === 'temporarily_closed',
-    'bg-danger-soft text-danger': status === 'inactive',
+    statusSaving.value = false
   }
 }
 
 watch(branchId, refreshBranch)
-watch(activeTab, () => {
-  void loadActiveTab()
-})
 watch(
   () => statusForm.status,
-  (status) => {
-    if (status !== 'active') void refreshBranchStatusCount()
+  () => {
+    clearFieldErrors(statusFieldErrors)
+    statusSaved.value = false
   },
 )
 onMounted(refreshBranch)
 </script>
 
 <template>
-  <section class="space-y-6">
-    <div class="flex flex-wrap items-end justify-between gap-4">
+  <section>
+    <div class="page-head">
       <div>
-        <h1 class="font-serif text-3xl font-semibold text-ink">
-          {{ workshop.selectedBranch?.name ?? 'Filial' }}
-        </h1>
-        <p class="mt-2 text-base text-ink-soft">
-          Filial holati, xodimlar, buyurtmalar va boshqaruv sahifalariga tez o'tish.
-        </p>
+        <h1>{{ workshop.selectedBranch?.name ?? 'Filial' }}</h1>
       </div>
       <span
         v-if="workshop.selectedBranch"
         class="mp-chip"
-        :class="statusClass(workshop.selectedBranch.status)"
+        :class="branchPillClass(workshop.selectedBranch.status)"
       >
-        <span class="mp-dot" aria-hidden="true"></span>
-        {{
-          workshop.selectedBranch.status === 'active'
-            ? 'Faol'
-            : workshop.selectedBranch.status === 'temporarily_closed'
-              ? 'Vaqtincha yopiq'
-              : 'Faol emas'
-        }}
+        <span class="pd"></span>{{ branchStatusUz[workshop.selectedBranch.status] }}
       </span>
     </div>
 
-    <div v-if="loading" class="rounded-lg bg-info-soft p-4 font-bold text-info" aria-live="polite">
-      Filial sahifasi yuklanmoqda
-    </div>
-    <div v-else-if="pageError" class="rounded-lg bg-danger-soft p-4 font-bold text-danger">
-      Filial sahifasini yuklab bo'lmadi. trace {{ pageTraceId ?? 'unavailable' }}
-    </div>
-
-    <div
-      v-if="workshop.selectedBranch?.status === 'temporarily_closed'"
-      class="banner warn"
-      role="status"
-    >
-      <div class="grow">
-        <b>Vaqtincha yopiq</b>
-        <span v-if="workshop.selectedBranch.closed_reason">
-          · {{ workshop.selectedBranch.closed_reason }}
-        </span>
+    <section v-if="loading" class="card p-5" aria-live="polite">
+      <div class="grid gap-3">
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
+        <span class="sk-line"></span>
       </div>
-    </div>
-    <div v-else-if="workshop.selectedBranch?.status === 'inactive'" class="banner danger">
-      <div class="grow">
-        <b>Faol emas</b> · bu filial yangi buyurtma qabul qilmaydi. Ochiq buyurtmalar odatdagi
-        tartibda yakunlanadi.
-      </div>
-    </div>
-
-    <div v-if="workshop.selectedBranch" class="kpis">
-      <div class="kpi">
-        <div class="lbl">Faol buyurtma</div>
-        <div class="v num">{{ workshop.selectedBranch.active_orders_count }}</div>
-      </div>
-      <div class="kpi">
-        <div class="lbl">Materiallar</div>
-        <div class="v num">{{ workshop.selectedBranch.material_count }}</div>
-      </div>
-      <div class="kpi warn">
-        <div class="lbl">Past zaxira</div>
-        <div class="v num">{{ workshop.selectedBranch.low_stock_count }}</div>
-        <div v-if="workshop.selectedBranch.low_stock_count > 0" class="d">Tez tekshirish kerak</div>
-      </div>
-      <div class="kpi">
-        <div class="lbl">Xodim</div>
-        <div class="v num">{{ workshop.selectedBranch.staff_count }}</div>
-      </div>
-    </div>
-
-    <AppTabs
-      v-if="visibleTabs.length > 0"
-      v-model="activeTab"
-      id-prefix="workshop-branch"
-      label="Filial bo'limlari"
-      :tabs="visibleTabOptions"
-    />
-    <div
-      v-else-if="!loading && !pageError"
-      class="rounded-lg bg-warning-soft p-4 font-bold text-warning"
-    >
-      Bu akkauntda filial bo'yicha ruxsat yo'q.
-    </div>
-
-    <section
-      v-if="activeTab === 'overview' && workshop.selectedBranch"
-      id="workshop-branch-overview-panel"
-      class="space-y-5"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-overview-tab"
-      tabindex="0"
-    >
-      <section class="card">
-        <div class="card-h">
-          <h2>Filial haqida</h2>
-        </div>
-        <div class="card-b pt-0">
-          <div class="row-item">
-            <div>
-              <div class="nm">Manzil</div>
-            </div>
-            <div class="meta">{{ workshop.selectedBranch.address }}</div>
-          </div>
-          <div class="row-item">
-            <div>
-              <div class="nm">Telefon</div>
-            </div>
-            <div class="meta">{{ workshop.selectedBranch.phone }}</div>
-          </div>
-          <div class="row-item">
-            <div>
-              <div class="nm">Ish vaqti</div>
-            </div>
-            <div class="meta">{{ workingHoursSummary(workshop.selectedBranch.working_hours) }}</div>
-          </div>
-          <div class="row-item">
-            <div>
-              <div class="nm">Geo (lat, lng)</div>
-            </div>
-            <div class="meta">
-              {{ workshop.selectedBranch.latitude }}, {{ workshop.selectedBranch.longitude }}
-            </div>
-          </div>
-        </div>
-      </section>
     </section>
 
-    <section
-      v-if="activeTab === 'staff' && canManageSettings"
-      id="workshop-branch-staff-panel"
-      class="space-y-5"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-staff-tab"
-      tabindex="0"
-    >
-      <section class="card">
-        <div class="card-h">
-          <h2>Bu filialdagi xodimlar</h2>
-          <RouterLink class="more" :to="rolePath('/workshop/settings/users')">
-            hammasi →
-          </RouterLink>
-        </div>
-        <div v-if="workshop.loading" class="card-b" aria-live="polite">
-          <span class="sk-line"></span>
-          <span class="sk-line"></span>
-          <span class="sk-line"></span>
-        </div>
-        <div v-else-if="staffLoadError" class="st-error">
-          <h3>Xodimlarni yuklab bo'lmadi</h3>
-          <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
-        </div>
-        <div v-else-if="workshop.users.length === 0" class="st-empty">
-          <h3>Bu filialda xodim yo'q</h3>
-          <p>Xodim qo'shib, filial ruxsatlarini belgilang.</p>
-        </div>
-        <div v-else class="card-b p-0">
-          <table class="tbl">
-            <thead>
-              <tr>
-                <th>Xodim</th>
-                <th>Ruxsatlar</th>
-                <th>Holat</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="user in workshop.users" :key="user.id" class="clickable">
-                <td class="nm">
-                  <RouterLink :to="rolePath(`/workshop/settings/users/${user.id}`)">
-                    {{ user.full_name }}
-                  </RouterLink>
-                  <small>{{ user.login }} · {{ user.phone }}</small>
-                </td>
-                <td>
-                  <small class="text-ink">{{ branchPermissionSummary(user) }}</small>
-                </td>
-                <td>
-                  <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
-                    <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+    <section v-else-if="pageError" class="st-error">
+      <h3>Filialni yuklab bo'lmadi</h3>
+      <p>trace_id: {{ pageTraceId ?? 'unavailable' }}</p>
     </section>
 
-    <section
-      v-if="activeTab === 'orders' && canManageOrders"
-      id="workshop-branch-orders-panel"
-      class="space-y-5"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-orders-tab"
-      tabindex="0"
-    >
-      <section class="card">
+    <template v-else-if="workshop.selectedBranch">
+      <div
+        v-if="workshop.selectedBranch.status === 'temporarily_closed'"
+        class="banner warn mb-5"
+        role="status"
+      >
+        <div class="grow">
+          <b>Vaqtincha yopiq</b>
+          <span v-if="workshop.selectedBranch.closed_reason">
+            · {{ workshop.selectedBranch.closed_reason }}
+          </span>
+        </div>
+      </div>
+      <div v-else-if="workshop.selectedBranch.status === 'inactive'" class="banner danger mb-5">
+        <div class="grow"><b>Faol emas</b> · bu filial yangi buyurtma qabul qilmaydi.</div>
+      </div>
+
+      <form class="card max-w-[1120px]" novalidate @submit.prevent="saveBranch">
         <div class="card-h">
-          <h2>Bu filialdagi buyurtmalar</h2>
-          <RouterLink
-            class="more"
-            :to="rolePath(`/workshop/orders?branch=${workshop.selectedBranch?.id ?? branchId}`)"
-          >
-            hammasi →
-          </RouterLink>
+          <h2>Filial ma'lumotlari</h2>
         </div>
-        <div v-if="orders.loading" class="card-b" aria-live="polite">
-          <span class="sk-line"></span>
-          <span class="sk-line"></span>
-          <span class="sk-line"></span>
-        </div>
-        <div v-else-if="ordersLoadError" class="st-error">
-          <h3>Buyurtmalarni yuklab bo'lmadi</h3>
-          <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
-        </div>
-        <div v-else-if="orders.workshopOrders.length === 0" class="st-empty">
-          <h3>Bu filialda buyurtma yo'q</h3>
-          <p>Filial tanlangach yangi buyurtmalar shu yerda ko'rinadi.</p>
-        </div>
-        <div v-else class="card-b p-0">
-          <table class="tbl">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Mijoz</th>
-                <th>Holat</th>
-                <th class="right">Summa</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="order in orders.workshopOrders.slice(0, 6)"
-                :key="order.id"
-                class="clickable"
+        <div class="card-b grid gap-3">
+          <div class="grid gap-3 md:grid-cols-2">
+            <label class="field" for="branch-detail-name">
+              <span>Nom</span>
+              <input
+                id="branch-detail-name"
+                v-model="branchForm.name"
+                class="mp-input"
+                required
+                :aria-invalid="!!branchFieldErrors.name"
+                :aria-describedby="branchFieldErrors.name ? 'branch-detail-name-error' : undefined"
+              />
+              <span
+                v-if="branchFieldErrors.name"
+                id="branch-detail-name-error"
+                class="mp-field-error"
               >
-                <td class="id">
-                  <RouterLink :to="rolePath(`/workshop/orders/${order.id}`)">
-                    {{ order.order_number }}
-                  </RouterLink>
-                </td>
-                <td class="nm">
-                  {{ order.client_name }}
-                  <small>{{ order.client_phone }}</small>
-                </td>
-                <td>
-                  <span :class="orderPillClass(order.status)">
-                    <span class="pd"></span>{{ workshopStatusUz[order.status] }}
-                  </span>
-                </td>
-                <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-
-    <section
-      v-if="activeTab === 'materials' && canManageCatalog"
-      id="workshop-branch-materials-panel"
-      class="space-y-5"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-materials-tab"
-      tabindex="0"
-    >
-      <section class="card p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Material katalogi</h2>
-        <p class="mt-2 text-sm text-ink-soft">
-          Material qo'shish, narx/min zaxira va mijozga ko'rinish katalog sahifasida boshqariladi.
-        </p>
-        <RouterLink class="mp-button mp-button-primary mt-4" :to="rolePath('/workshop/catalog')">
-          Katalogni ochish
-        </RouterLink>
-      </section>
-    </section>
-
-    <section
-      v-if="activeTab === 'inventory' && canManageInventory"
-      id="workshop-branch-inventory-panel"
-      class="space-y-5"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-inventory-tab"
-      tabindex="0"
-    >
-      <section class="card p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Ombor</h2>
-        <p class="mt-2 text-sm text-ink-soft">
-          Kirim, tuzatish, tranzaksiyalar va yetkazib beruvchilar ombor sahifasida boshqariladi.
-        </p>
-        <RouterLink class="mp-button mp-button-primary mt-4" :to="rolePath('/workshop/inventory')">
-          Omborni ochish
-        </RouterLink>
-      </section>
-    </section>
-
-    <section
-      v-if="activeTab === 'settings' && canManageSettings"
-      id="workshop-branch-settings-panel"
-      class="grid gap-5 xl:grid-cols-2"
-      role="tabpanel"
-      aria-labelledby="workshop-branch-settings-tab"
-      tabindex="0"
-    >
-      <section class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Filial ma'lumotlari va narxlar</h2>
-        <form class="mt-4 grid gap-3" @submit.prevent="saveBranchSettings">
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-name"
-              >Nom</label
-            >
-            <input
-              id="detail-branch-name"
-              v-model="branchForm.name"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-address"
-              >Manzil</label
-            >
-            <input
-              id="detail-branch-address"
-              v-model="branchForm.address"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-              required
-            />
+                {{ branchFieldErrors.name }}
+              </span>
+            </label>
+            <label class="field" for="branch-detail-address">
+              <span>Manzil</span>
+              <input
+                id="branch-detail-address"
+                v-model="branchForm.address"
+                class="mp-input"
+                required
+                :aria-invalid="!!branchFieldErrors.address"
+                :aria-describedby="
+                  branchFieldErrors.address ? 'branch-detail-address-error' : undefined
+                "
+              />
+              <span
+                v-if="branchFieldErrors.address"
+                id="branch-detail-address-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.address }}
+              </span>
+            </label>
           </div>
           <div class="grid gap-3 md:grid-cols-3">
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-phone"
-                >Telefon</label
-              >
+            <label class="field" for="branch-detail-phone">
+              <span>Telefon</span>
               <input
-                id="detail-branch-phone"
+                id="branch-detail-phone"
                 v-model="branchForm.phone"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+                class="mp-input"
                 required
+                :aria-invalid="!!branchFieldErrors.phone"
+                :aria-describedby="
+                  branchFieldErrors.phone ? 'branch-detail-phone-error' : undefined
+                "
               />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-lat"
-                >Latitude</label
+              <span
+                v-if="branchFieldErrors.phone"
+                id="branch-detail-phone-error"
+                class="mp-field-error"
               >
+                {{ branchFieldErrors.phone }}
+              </span>
+            </label>
+            <label class="field" for="branch-detail-latitude">
+              <span>Lat</span>
               <input
-                id="detail-branch-lat"
+                id="branch-detail-latitude"
                 v-model="branchForm.latitude"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+                class="mp-input"
                 inputmode="decimal"
-                required
+                :aria-invalid="!!branchFieldErrors.latitude"
+                :aria-describedby="
+                  branchFieldErrors.latitude ? 'branch-detail-latitude-error' : undefined
+                "
               />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="detail-branch-lng"
-                >Longitude</label
+              <span
+                v-if="branchFieldErrors.latitude"
+                id="branch-detail-latitude-error"
+                class="mp-field-error"
               >
+                {{ branchFieldErrors.latitude }}
+              </span>
+            </label>
+            <label class="field" for="branch-detail-longitude">
+              <span>Lng</span>
               <input
-                id="detail-branch-lng"
+                id="branch-detail-longitude"
                 v-model="branchForm.longitude"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+                class="mp-input"
                 inputmode="decimal"
-                required
+                :aria-invalid="!!branchFieldErrors.longitude"
+                :aria-describedby="
+                  branchFieldErrors.longitude ? 'branch-detail-longitude-error' : undefined
+                "
               />
-            </div>
+              <span
+                v-if="branchFieldErrors.longitude"
+                id="branch-detail-longitude-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.longitude }}
+              </span>
+            </label>
           </div>
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
+            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              <div
+                v-for="day in hours"
+                :key="day.key"
+                class="rounded-md border border-hairline bg-sunk p-3"
+              >
+                <label class="flex items-center gap-2 text-sm font-extrabold text-ink">
+                  <input v-model="day.open" type="checkbox" class="size-4 accent-accent" />
+                  {{ day.label }}
+                </label>
+                <div class="mt-2 grid grid-cols-2 gap-2">
+                  <input
+                    v-model="day.from"
+                    class="mp-input min-h-9 px-2 text-sm"
+                    type="time"
+                    :disabled="!day.open"
+                  />
+                  <input
+                    v-model="day.to"
+                    class="mp-input min-h-9 px-2 text-sm"
+                    type="time"
+                    :disabled="!day.open"
+                  />
+                </div>
+              </div>
+            </div>
+          </fieldset>
           <div class="grid gap-3 md:grid-cols-2">
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="cutting-rate"
-                >Kesish narxi (tiyin)</label
-              >
+            <label class="field">
+              <span>Kesish narxi (tiyin)</span>
+              <input v-model="pricingForm.cuttingRateTiyin" class="mp-input" inputmode="numeric" />
+            </label>
+            <label class="field">
+              <span>Krom narxi (tiyin)</span>
               <input
-                id="cutting-rate"
-                v-model="pricingForm.cuttingRateTiyin"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
-                inputmode="numeric"
-              />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-bold text-ink" for="edge-rate"
-                >Krom narxi (tiyin)</label
-              >
-              <input
-                id="edge-rate"
                 v-model="pricingForm.edgeBandingRateTiyin"
-                class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+                class="mp-input"
                 inputmode="numeric"
               />
-            </div>
+            </label>
           </div>
-          <button class="mp-button mp-button-primary" type="submit" :disabled="settingsSaving">
-            {{ settingsSaving ? 'Saqlanmoqda' : 'Filial sozlamalarini saqlash' }}
-          </button>
-          <p
-            v-if="settingsError === 'branch_settings_save_failed'"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          >
-            Filial sozlamalari saqlanmadi · trace_id:
-            {{ settingsTraceId ?? 'unavailable' }}
-          </p>
-          <p
-            v-else-if="settingsSuccess === 'Filial sozlamalari saqlandi.'"
-            class="rounded-md bg-success-soft px-3 py-2 text-sm font-bold text-success"
-          >
-            {{ settingsSuccess }}
-          </p>
-        </form>
-      </section>
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
+            <p v-else-if="saveError" class="text-sm font-bold text-danger">
+              Saqlab bo'lmadi · trace_id: {{ saveTraceId ?? 'unavailable' }}
+            </p>
+            <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
+              {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
+            </button>
+          </div>
+        </div>
+      </form>
 
-      <section class="mp-surface p-5">
-        <h2 class="font-serif text-xl font-semibold text-ink">Mijozlarga ko'rinish</h2>
-        <form class="mt-4 grid gap-3" @submit.prevent="changeBranchStatus">
-          <FormSelect v-model="statusForm.status" label="Holat" :options="statusOptions" />
-          <div v-if="statusForm.status !== 'active'">
-            <label class="mb-1 block text-sm font-bold text-ink" for="branch-status-reason"
-              >Sabab</label
-            >
+      <form
+        class="card mt-5 max-w-[760px] overflow-visible"
+        novalidate
+        @submit.prevent="changeBranchStatus"
+      >
+        <div class="card-h">
+          <h2>Holat</h2>
+        </div>
+        <div class="card-b grid gap-3">
+          <FormSelect v-model="statusForm.status" label="Holat" :options="statusOptions" required />
+          <label v-if="statusForm.status !== 'active'" class="field" for="branch-status-reason">
+            <span>Sabab</span>
             <input
               id="branch-status-reason"
               v-model="statusForm.reason"
-              class="min-h-11 w-full rounded-md border border-hairline-strong px-3"
+              class="mp-input"
               required
+              :aria-invalid="!!statusFieldErrors.reason"
+              :aria-describedby="
+                statusFieldErrors.reason ? 'branch-status-reason-error' : undefined
+              "
             />
-          </div>
-          <label
-            class="flex items-start gap-3 rounded-md border border-warning bg-warning-soft p-3 text-sm font-bold text-warning"
-          >
-            <input
-              v-model="statusForm.confirmed"
-              type="checkbox"
-              class="mt-1 size-4 accent-warning"
-            />
-            <span>
-              Mijozlarga ko'rinish o'zgarishini tasdiqlayman. Ochiq buyurtmalar soni:
-              {{
-                statusCountRefreshing
-                  ? 'yangilanmoqda...'
-                  : (workshop.selectedBranch?.active_orders_count ?? 0)
-              }}.
-              <span v-if="statusCountRefreshedAt">Hisob submit oldidan yangilanadi.</span>
+            <span
+              v-if="statusFieldErrors.reason"
+              id="branch-status-reason-error"
+              class="mp-field-error"
+            >
+              {{ statusFieldErrors.reason }}
             </span>
           </label>
-          <button
-            class="mp-button mp-button-primary"
-            type="submit"
-            :disabled="settingsSaving || !statusForm.confirmed"
-          >
-            {{ settingsSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}
-          </button>
-          <p
-            v-if="settingsError === 'branch_status_failed'"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          >
-            Filial holati o'zgartirilmadi · trace_id:
-            {{ settingsTraceId ?? 'unavailable' }}
-          </p>
-          <p
-            v-else-if="settingsSuccess === `Filial holati o'zgartirildi.`"
-            class="rounded-md bg-success-soft px-3 py-2 text-sm font-bold text-success"
-          >
-            {{ settingsSuccess }}
-          </p>
-        </form>
-      </section>
-    </section>
+          <div class="flex flex-wrap items-center justify-end gap-3">
+            <p v-if="statusSaved" class="text-sm font-bold text-success">Holat saqlandi</p>
+            <p v-else-if="statusError" class="text-sm font-bold text-danger">
+              Holat saqlanmadi · trace_id: {{ statusTraceId ?? 'unavailable' }}
+            </p>
+            <button class="mp-button mp-button-primary" type="submit" :disabled="statusSaving">
+              {{ statusSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}
+            </button>
+          </div>
+        </div>
+      </form>
+    </template>
   </section>
 </template>

@@ -86,6 +86,8 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert "address" not in body["workshop"]
     assert body["workshop"]["status"] == "active"
     assert body["branch"]["status"] == "active"
+    assert body["branch"]["latitude"] is None
+    assert body["branch"]["longitude"] is None
     assert body["owner"]["login"] == "owner"
     assert "full_name" not in body["owner"]
     assert "phone" not in body["owner"]
