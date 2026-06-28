@@ -244,15 +244,42 @@ export const useOrdersStore = defineStore('orders', () => {
   // failure (network/auth) every branch is marked with the generic code + trace.
   async function quoteBranches(draftId: string, branchIds: string[]) {
     if (branchIds.length === 0) {
-      return { quotes: {} as Record<string, OrderQuote>, errors: {}, firstErrorTraceId: null }
+      return {
+        quotes: {} as Record<string, OrderQuote>,
+        errors: {},
+        firstErrorTraceId: null,
+        requestFailed: false,
+      }
     }
     try {
       const response = await api.post<{
         quotes: Record<string, OrderQuote>
         errors: Record<string, string | null>
       }>('/client/orders/quote/batch', { draft_id: draftId, branch_ids: branchIds }, authInit())
-      return { quotes: response.quotes, errors: response.errors, firstErrorTraceId: null }
+      return {
+        quotes: response.quotes,
+        errors: response.errors,
+        firstErrorTraceId: null,
+        requestFailed: false,
+      }
     } catch (errorValue) {
+      if (
+        errorValue instanceof ApiError &&
+        typeof errorValue.body === 'object' &&
+        errorValue.body !== null &&
+        'errors' in errorValue.body
+      ) {
+        const body = errorValue.body as {
+          quotes?: Record<string, OrderQuote>
+          errors?: Record<string, string | null>
+        }
+        return {
+          quotes: body.quotes ?? {},
+          errors: body.errors ?? {},
+          firstErrorTraceId: apiTraceId(errorValue),
+          requestFailed: false,
+        }
+      }
       const code =
         apiErrorCode(errorValue) ??
         (errorValue instanceof ApiError && errorValue.status === 403 ? 'permission_denied' : null)
@@ -262,6 +289,7 @@ export const useOrdersStore = defineStore('orders', () => {
         quotes: {} as Record<string, OrderQuote>,
         errors,
         firstErrorTraceId: apiTraceId(errorValue),
+        requestFailed: true,
       }
     }
   }

@@ -34,6 +34,7 @@ const quoteByBranch = ref<Record<string, OrderQuote>>({})
 const quoteErrors = ref<Record<string, string>>({})
 const quoteErrorCodes = ref<Record<string, string | null>>({})
 const quotesTraceId = ref<string | null>(null)
+const quotesRequestFailed = ref(false)
 const quotesLoading = ref(false)
 const contactName = ref('')
 const contactPhone = ref('')
@@ -71,17 +72,18 @@ const quotesFailedAll = computed(
     activeBranches.value.length > 0 &&
     Object.keys(quoteByBranch.value).length === 0,
 )
-const hasNotCarriedFailure = computed(() =>
-  Object.values(quoteErrorCodes.value).some(
-    (code) => code != null && NOT_CARRIED_CODES.includes(code),
-  ),
-)
-// CB-19/115: all branches failed and at least one lacks a material in the set →
+const hasOnlyNotCarriedFailures = computed(() => {
+  const codes = Object.values(quoteErrorCodes.value).filter((code) => code != null)
+  return codes.length > 0 && codes.every((code) => NOT_CARRIED_CODES.includes(code))
+})
+// CB-19/115: all branches failed because none carries the material set →
 // name the materials and point back to the editor to fix them.
-const showCarryRecovery = computed(() => quotesFailedAll.value && hasNotCarriedFailure.value)
-// CB-21: all branches failed for some other reason (network/system) → a generic
-// retryable page error.
-const showQuotesError = computed(() => quotesFailedAll.value && !hasNotCarriedFailure.value)
+const showCarryRecovery = computed(() => quotesFailedAll.value && hasOnlyNotCarriedFailures.value)
+// CB-21: a whole-request failure (network/auth/system) gets the generic retryable error.
+// Per-branch setup failures still render disabled branch cards with their own reason.
+const showQuotesError = computed(
+  () => quotesFailedAll.value && !hasOnlyNotCarriedFailures.value && quotesRequestFailed.value,
+)
 const draftMaterialNames = computed(() => {
   const result = chosenResult.value
   if (!result) return []
@@ -195,16 +197,18 @@ async function loadQuotes() {
   quoteErrors.value = {}
   quoteErrorCodes.value = {}
   quotesTraceId.value = null
+  quotesRequestFailed.value = false
   try {
     // The store attributes each branch its own error code (CB-20); we keep the
     // raw codes (for the aggregate recovery states) and map to Uzbek per card.
-    const { quotes, errors, firstErrorTraceId } = await orders.quoteBranches(
+    const { quotes, errors, firstErrorTraceId, requestFailed } = await orders.quoteBranches(
       draftId.value,
       activeBranches.value.map((branch) => branch.branch_id),
     )
     quoteByBranch.value = quotes
     quoteErrorCodes.value = errors
     quotesTraceId.value = firstErrorTraceId
+    quotesRequestFailed.value = requestFailed
     quoteErrors.value = Object.fromEntries(
       Object.entries(errors).map(([branchId, code]) => [branchId, quoteErrorLabel(code)]),
     )

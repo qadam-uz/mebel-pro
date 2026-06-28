@@ -6,8 +6,10 @@ from datetime import date
 from io import StringIO
 
 from fastapi import APIRouter, Query, Response, status
+from fastapi.responses import JSONResponse
 
 from app.api.deps import AccountReadyPrincipal, Session
+from app.core.trace import get_trace_id
 from app.modules.cutting.api import cutting_result_response, render_cutting_pdf, render_cutting_svg
 from app.modules.sales.api import (
     apply_discount,
@@ -102,13 +104,25 @@ async def client_orders_quote_batch(
     payload: BatchOrderQuoteRequest,
     principal: AccountReadyPrincipal,
     db: Session,
-) -> BatchOrderQuoteResponse:
-    return await quote_client_order_batch(
+) -> BatchOrderQuoteResponse | JSONResponse:
+    result = await quote_client_order_batch(
         db,
         principal=principal,
         draft_id=payload.draft_id,
         branch_ids=payload.branch_ids,
     )
+    if not result.quotes and result.errors:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": "order_quote_unavailable",
+                "message": "No requested branch can accept this order",
+                "trace_id": get_trace_id(),
+                "quotes": {},
+                "errors": result.errors,
+            },
+        )
+    return result
 
 
 @router.get("/client/orders/{order_id}", response_model=OrderDetailResponse)

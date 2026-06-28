@@ -20,6 +20,15 @@ interface MaterialResponse {
   name: string;
 }
 
+interface TokenResponse {
+  access_token: string;
+}
+
+interface CuttingDraftResponse {
+  id: string;
+  chosen_result_id: string | null;
+}
+
 // The full client-places → workshop-completes lifecycle (cutting editor +
 // optimise, then every production queue) is the heaviest flow in the suite and
 // sits right on the old 90s budget; give it headroom for slower CI runners.
@@ -250,6 +259,65 @@ async function stockIn(
     },
   );
   expect(response.ok()).toBe(true);
+}
+
+async function clientToken(request: APIRequestContext, phone: string, name: string) {
+  const requested = await request.post("/api/v1/auth/client/otp/request", {
+    data: { phone },
+  });
+  expect(requested.ok()).toBe(true);
+  const verified = await request.post("/api/v1/auth/client/otp/verify", {
+    data: { phone, code: "000000", name },
+  });
+  expect(verified.ok()).toBe(true);
+  return (await verified.json()) as TokenResponse;
+}
+
+async function optimizedDraftWithoutPricing(
+  request: APIRequestContext,
+  token: string,
+  branchId: string,
+  panel: MaterialResponse,
+) {
+  const created = await request.post("/api/v1/client/cutting-drafts", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(created.ok()).toBe(true);
+  const draft = (await created.json()) as CuttingDraftResponse;
+
+  const patched = await request.patch(
+    `/api/v1/client/cutting-drafts/${draft.id}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        preferred_branch_id: branchId,
+        parts_snapshot: [
+          {
+            part_ref: `price-${draft.id.slice(0, 8)}`,
+            material_id: panel.id,
+            material_source: "shop",
+            length_mm: 260,
+            width_mm: 180,
+            quantity: 1,
+            edge_top: null,
+            edge_bottom: null,
+            edge_left: null,
+            edge_right: null,
+          },
+        ],
+      },
+    },
+  );
+  expect(patched.ok()).toBe(true);
+
+  const optimized = await request.post(
+    `/api/v1/client/cutting-drafts/${draft.id}/optimize`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  expect(optimized.ok()).toBe(true);
+  const result = (await optimized.json()) as CuttingDraftResponse;
+  expect(result.chosen_result_id).not.toBeNull();
+  return result;
 }
 
 async function loginClient(page: Page, phone: string, name?: string) {
@@ -497,4 +565,46 @@ test("client places an order and workshop completes it through production queues
   await page.getByRole("link", { name: "Tafsilot" }).click();
   await expect(page.getByRole("heading", { name: orderNumber as string })).toBeVisible();
   await expect(page.getByText("Topshirildi", { exact: true }).first()).toBeVisible();
+});
+
+test("client sees branch pricing setup errors while placing an order", async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo);
+  const adminLogin = `p5-price-admin-${id}`;
+  const clientPhone = phoneFor(id, 41);
+  await seedPlatform(adminLogin);
+  const adminAccess = await platformToken(request, adminLogin);
+  const setup = await provisionWorkshop(request, adminAccess, id);
+  const ownerAccess = await readyOwnerToken(request, setup);
+  const { panel } = await createCatalogMaterials(request, adminAccess, id);
+  const branchId = setup.branch.id as string;
+  await addBranchMaterial(request, ownerAccess, branchId, panel.id, 250_000, 1);
+  const clientAccess = await clientToken(request, clientPhone, `Price Client ${id}`);
+  const draft = await optimizedDraftWithoutPricing(
+    request,
+    clientAccess.access_token,
+    branchId,
+    panel,
+  );
+
+  await loginClient(page, clientPhone, `Price Client ${id}`);
+  const allQuotesFailed = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/api/v1/client/orders/quote/batch") &&
+      response.status() === 409,
+  );
+  await page.goto(`/client/c/orders/new/${draft.id}`);
+  await allQuotesFailed;
+
+  await expect(page.getByRole("heading", { name: "Ustaxonani tanlang" })).toBeVisible();
+  const branchCard = page.getByRole("button", {
+    name: new RegExp(`Order Workshop ${id}.*Order Branch ${id}`),
+  });
+  await expect(branchCard).toBeVisible();
+  await expect(branchCard).toBeDisabled();
+  await expect(branchCard).toContainText("Bu ustaxona narxlari hali sozlanmagan.");
+  await expect(page.getByText("Ustaxonalardan narx olinmadi")).toBeHidden();
 });
