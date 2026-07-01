@@ -94,6 +94,12 @@ const statusOptions = [
 const createGrantBranches = computed(() =>
   workshop.branches.filter((branch) => form.branchIds.includes(branch.id)),
 )
+// The home branch (cutter/edger assignment home) is the FIRST selected branch.
+// Surface it explicitly so the derived value is never silently wrong when the
+// selection order changes.
+const homeBranchName = computed(() =>
+  form.branchIds.length ? branchName(form.branchIds[0]) : null,
+)
 
 function branchName(id: string | null) {
   if (!id) return '—'
@@ -368,16 +374,21 @@ onBeforeUnmount(() => {
                 {{ staffFieldErrors.login }}
               </span>
             </label>
-            <MultiSelectFilter
-              id="staff-branches"
-              v-model="form.branchIds"
-              label="Filiallar"
-              :options="branchOptions"
-              empty-label="Filial tanlang"
-              selected-label="filial tanlandi"
-              :error="staffFieldErrors.branches"
-              required
-            />
+            <div class="grid gap-1">
+              <MultiSelectFilter
+                id="staff-branches"
+                v-model="form.branchIds"
+                label="Filiallar"
+                :options="branchOptions"
+                empty-label="Filial tanlang"
+                selected-label="filial tanlandi"
+                :error="staffFieldErrors.branches"
+                required
+              />
+              <p v-if="homeBranchName" class="text-xs text-ink-soft">
+                Asosiy filial: <b class="text-ink">{{ homeBranchName }}</b> (birinchi tanlangan)
+              </p>
+            </div>
             <label class="field md:col-span-2" for="staff-temp-password">
               <span>Vaqtinchalik parol</span>
               <input
