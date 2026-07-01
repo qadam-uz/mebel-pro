@@ -5,11 +5,10 @@ import { useRoute } from 'vue-router'
 import { apiTraceId } from '@/shared/api/client'
 import {
   clearFieldErrors,
-  coordinatePairRequired,
+  coordinateFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
-  latitudeCoordinate,
-  longitudeCoordinate,
+  nonNegativeInteger,
   requiredText,
   type FieldErrors,
   uzPhone,
@@ -26,7 +25,14 @@ type WorkingDay = {
   from: string
   to: string
 }
-type BranchField = 'name' | 'address' | 'phone' | 'latitude' | 'longitude'
+type BranchField =
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'latitude'
+  | 'longitude'
+  | 'cuttingRate'
+  | 'edgeBandingRate'
 type StatusField = 'reason'
 
 const route = useRoute()
@@ -61,13 +67,23 @@ const statusForm = reactive({
   reason: '',
 })
 const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
-const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'latitude', 'longitude']
+const branchFieldOrder: BranchField[] = [
+  'name',
+  'address',
+  'phone',
+  'latitude',
+  'longitude',
+  'cuttingRate',
+  'edgeBandingRate',
+]
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
   address: 'branch-detail-address',
   phone: 'branch-detail-phone',
   latitude: 'branch-detail-latitude',
   longitude: 'branch-detail-longitude',
+  cuttingRate: 'branch-detail-cutting-rate',
+  edgeBandingRate: 'branch-detail-edge-rate',
 }
 const statusFieldErrors = reactive<FieldErrors<StatusField>>({})
 const statusFieldOrder: StatusField[] = ['reason']
@@ -103,13 +119,13 @@ function validateBranchForm() {
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
-  branchFieldErrors.latitude =
-    coordinatePairRequired(branchForm.latitude, branchForm.longitude) ??
-    latitudeCoordinate(branchForm.latitude) ??
-    undefined
-  branchFieldErrors.longitude =
-    coordinatePairRequired(branchForm.longitude, branchForm.latitude) ??
-    longitudeCoordinate(branchForm.longitude) ??
+  const coords = coordinateFieldErrors(branchForm.latitude, branchForm.longitude)
+  branchFieldErrors.latitude = coords.latitude ?? undefined
+  branchFieldErrors.longitude = coords.longitude ?? undefined
+  branchFieldErrors.cuttingRate =
+    nonNegativeInteger(pricingForm.cuttingRateTiyin, 'Butun tiyin qiymatini kiriting.') ?? undefined
+  branchFieldErrors.edgeBandingRate =
+    nonNegativeInteger(pricingForm.edgeBandingRateTiyin, 'Butun tiyin qiymatini kiriting.') ??
     undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
@@ -451,17 +467,45 @@ onMounted(refreshBranch)
             </div>
           </fieldset>
           <div class="grid gap-3 md:grid-cols-2">
-            <label class="field">
+            <label class="field" for="branch-detail-cutting-rate">
               <span>Kesish narxi (tiyin)</span>
-              <input v-model="pricingForm.cuttingRateTiyin" class="mp-input" inputmode="numeric" />
+              <input
+                id="branch-detail-cutting-rate"
+                v-model="pricingForm.cuttingRateTiyin"
+                class="mp-input"
+                inputmode="numeric"
+                :aria-invalid="!!branchFieldErrors.cuttingRate"
+                :aria-describedby="
+                  branchFieldErrors.cuttingRate ? 'branch-detail-cutting-rate-error' : undefined
+                "
+              />
+              <span
+                v-if="branchFieldErrors.cuttingRate"
+                id="branch-detail-cutting-rate-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.cuttingRate }}
+              </span>
             </label>
-            <label class="field">
+            <label class="field" for="branch-detail-edge-rate">
               <span>Krom narxi (tiyin)</span>
               <input
+                id="branch-detail-edge-rate"
                 v-model="pricingForm.edgeBandingRateTiyin"
                 class="mp-input"
                 inputmode="numeric"
+                :aria-invalid="!!branchFieldErrors.edgeBandingRate"
+                :aria-describedby="
+                  branchFieldErrors.edgeBandingRate ? 'branch-detail-edge-rate-error' : undefined
+                "
               />
+              <span
+                v-if="branchFieldErrors.edgeBandingRate"
+                id="branch-detail-edge-rate-error"
+                class="mp-field-error"
+              >
+                {{ branchFieldErrors.edgeBandingRate }}
+              </span>
             </label>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3">

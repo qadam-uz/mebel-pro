@@ -4,11 +4,9 @@ import { RouterLink } from 'vue-router'
 
 import {
   clearFieldErrors,
-  coordinatePairRequired,
+  coordinateFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
-  latitudeCoordinate,
-  longitudeCoordinate,
   requiredText,
   type FieldErrors,
   uzPhone,
@@ -68,14 +66,9 @@ function validateBranchForm() {
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
-  branchFieldErrors.latitude =
-    coordinatePairRequired(branchForm.latitude, branchForm.longitude) ??
-    latitudeCoordinate(branchForm.latitude) ??
-    undefined
-  branchFieldErrors.longitude =
-    coordinatePairRequired(branchForm.longitude, branchForm.latitude) ??
-    longitudeCoordinate(branchForm.longitude) ??
-    undefined
+  const coords = coordinateFieldErrors(branchForm.latitude, branchForm.longitude)
+  branchFieldErrors.latitude = coords.latitude ?? undefined
+  branchFieldErrors.longitude = coords.longitude ?? undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   return !hasErrors
