@@ -500,15 +500,23 @@ async def _validate_parts(
         raise APIError("empty_parts", "At least one part is required")
     if sum(part.quantity for part in parts) > 100:
         raise APIError("too_many_parts", "Too many parts for one optimization")
+    errors: list[dict[str, Any]] = []
+    seen_part_refs: set[str] = set()
     material_ids: set[uuid.UUID] = set()
-    for part in parts:
+    for row_index, part in enumerate(parts, start=1):
+        part.part_ref = part.part_ref.strip()
+        if not part.part_ref:
+            errors.append(_row_error(part, row_index, "invalid_part_ref", part.material_id))
+        elif part.part_ref in seen_part_refs:
+            errors.append(_row_error(part, row_index, "duplicate_part_ref", part.material_id))
+        else:
+            seen_part_refs.add(part.part_ref)
         material_ids.add(part.material_id)
         for side in ("edge_top", "edge_bottom", "edge_left", "edge_right"):
             edge = getattr(part, side)
             if edge is not None:
                 material_ids.add(edge.material_id)
     material_rows = await _material_rows(db, material_ids)
-    errors: list[dict[str, Any]] = []
     panel_specs: dict[uuid.UUID, PanelSpec] = {}
     material_snapshots: dict[str, dict[str, Any]] = {}
     optimizer_parts: list[PartInput] = []

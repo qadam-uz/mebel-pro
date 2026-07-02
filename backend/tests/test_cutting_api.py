@@ -223,18 +223,17 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     )
     results = optimized.json()["results"]
     chosen_result_id = optimized.json()["chosen_result_id"]
-    alternate_id = next(row["id"] for row in results if row["id"] != chosen_result_id)
     chosen = await client.post(
         f"/api/v1/client/cutting-drafts/{draft_id}/chosen-result",
         headers=_auth(access),
-        json={"result_id": alternate_id},
+        json={"result_id": chosen_result_id},
     )
     svg = await client.get(
-        f"/api/v1/client/cutting-results/{alternate_id}/svg",
+        f"/api/v1/client/cutting-results/{chosen_result_id}/svg",
         headers=_auth(access),
     )
     pdf = await client.get(
-        f"/api/v1/client/cutting-results/{alternate_id}/pdf",
+        f"/api/v1/client/cutting-results/{chosen_result_id}/pdf",
         headers=_auth(access),
     )
     deleted = await client.delete(
@@ -252,7 +251,7 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert updated.status_code == 200
     assert updated.json()["parts_snapshot"][0]["part_ref"] == "shelf"
     assert optimized.status_code == 200
-    assert {row["algorithm_name"] for row in results} == {"ffd-guillotine", "bfd-guillotine"}
+    assert [row["algorithm_name"] for row in results] == ["cutting-engine-best"]
     assert optimized.json()["chosen_result_id"] in {row["id"] for row in results}
     first_result = results[0]
     assert first_result["parts_snapshot"][0]["quantity"] == 2
@@ -262,7 +261,7 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert first_result["edge_consumed_shop_by_material"] == {str(edge.id): 500}
     assert first_result["edge_banded_sides_by_material"] == {str(edge.id): {"shop": 2, "own": 2}}
     assert chosen.status_code == 200
-    assert chosen.json()["chosen_result_id"] == alternate_id
+    assert chosen.json()["chosen_result_id"] == chosen_result_id
     assert svg.status_code == 200
     assert svg.headers["content-type"].startswith("image/svg+xml")
     assert b"<svg" in svg.content
@@ -309,6 +308,27 @@ async def test_cutting_draft_ownership_validation_and_limit(
     assert capped.status_code == 409
     assert capped.json()["code"] == "draft_limit_exceeded"
     assert first_client.id != second_client.id
+
+
+async def test_cutting_draft_rejects_duplicate_part_refs(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    panel, edge, _ = await _materials(db_session)
+    access, _ = await _client_access(db_session, phone="+998901111010")
+    draft = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    parts = _parts(panel.id, edge.id)
+    parts.append({**parts[0]})
+
+    response = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft.json()['id']}",
+        headers=_auth(access),
+        json={"parts_snapshot": parts},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_cutting_parts"
+    assert response.json()["details"]["errors"][0]["code"] == "duplicate_part_ref"
 
 
 async def test_client_cutting_material_picker_marks_branch_carried_materials(

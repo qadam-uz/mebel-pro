@@ -46,7 +46,7 @@ def _part(
     )
 
 
-def test_guillotine_algorithms_place_every_instance_without_overlap() -> None:
+def test_cutting_engine_places_every_instance_without_overlap() -> None:
     panel = _panel()
     parts = [
         _part(material_id=panel.material_id, part_ref="a", length=320, width=180, quantity=2),
@@ -55,12 +55,12 @@ def test_guillotine_algorithms_place_every_instance_without_overlap() -> None:
 
     results = run_all_algorithms(parts, {panel.material_id: panel})
 
-    assert {result.algorithm_name for result in results} == {"ffd-guillotine", "bfd-guillotine"}
+    assert [result.algorithm_name for result in results] == ["cutting-engine-best"]
     for result in results:
         placements = [
             placement for panel_result in result.panels for placement in panel_result.placements
         ]
-        assert [(p.part_ref, p.part_quantity_index) for p in placements] == [
+        assert sorted((p.part_ref, p.part_quantity_index) for p in placements) == [
             ("a", 1),
             ("a", 2),
             ("b", 1),
@@ -143,6 +143,19 @@ def test_timeout_rejected_before_work_starts() -> None:
         run_all_algorithms([part], {panel.material_id: panel}, timeout_seconds=0)
 
     assert exc.value.code == "optimization_timeout"
+
+
+def test_duplicate_part_refs_are_rejected() -> None:
+    panel = _panel()
+    parts = [
+        _part(material_id=panel.material_id, part_ref="same"),
+        _part(material_id=panel.material_id, part_ref="same"),
+    ]
+
+    with pytest.raises(OptimizerError) as exc:
+        run_all_algorithms(parts, {panel.material_id: panel})
+
+    assert exc.value.code == "duplicate_part_ref"
 
 
 def _assert_no_overlap(placements: list[PlacementResult]) -> None:

@@ -416,16 +416,13 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // the real draft id (no longer /new).
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
   await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
-  // The algorithm comparison is collapsed behind a link by default — expand it.
-  await page.getByRole('button', { name: 'Algoritmlarni solishtirish' }).click()
-  await expect(page.getByRole('cell', { name: 'ffd-guillotine' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'bfd-guillotine' })).toBeVisible()
+  await expect(page.getByText('cutting-engine-best')).toBeVisible()
   // CB-87: panels are grouped under a material heading; the chip is "Panel N".
   await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
   await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
-  await expect(page.getByRole('button', { name: /Shuni tanlash|Tanlangan/ })).toHaveCount(2)
+  await expect(page.getByRole('button', { name: /Shuni tanlash|Tanlangan/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 
   const download = page.waitForEvent('download')

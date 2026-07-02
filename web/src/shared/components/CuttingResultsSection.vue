@@ -39,6 +39,7 @@ const toast = useToast()
 
 const activePlacementId = ref<string | null>(null)
 const algorithmsOpen = ref(false)
+const canCompareAlgorithms = computed(() => props.draft.results.length > 1)
 
 const chosenResult = computed(() => {
   const draft = props.draft
@@ -154,9 +155,7 @@ async function choose(result: CuttingResult) {
     <div class="client-card-h">
       <div>
         <h2>Natija</h2>
-        <p class="mt-1 text-sm text-ink-muted">
-          Algoritmlarni solishtiring, PDF yuklab oling yoki tanlangan natijadan buyurtma bering.
-        </p>
+        <p class="mt-1 text-sm text-ink-muted">PDF yuklab oling yoki natijadan buyurtma bering.</p>
       </div>
       <span
         v-if="chosenResult"
@@ -241,6 +240,7 @@ async function choose(result: CuttingResult) {
               Algoritm: <span class="text-accent">{{ chosenResult.algorithm_name }}</span>
             </div>
             <button
+              v-if="canCompareAlgorithms"
               type="button"
               class="-mr-2 inline-flex min-h-11 items-center px-3 text-sm font-bold text-accent"
               @click="algorithmsOpen = !algorithmsOpen"
@@ -248,7 +248,7 @@ async function choose(result: CuttingResult) {
               {{ algorithmsOpen ? 'Yopish' : 'Algoritmlarni solishtirish' }}
             </button>
           </div>
-          <div v-if="algorithmsOpen" class="overflow-x-auto">
+          <div v-if="canCompareAlgorithms && algorithmsOpen" class="overflow-x-auto">
             <table class="w-full min-w-[560px] text-sm">
               <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
                 <tr>

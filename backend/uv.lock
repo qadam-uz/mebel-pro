@@ -456,6 +456,11 @@ wheels = [
 ]
 
 [[package]]
+name = "cutting-engine"
+version = "0.1.0"
+source = { git = "https://github.com/BerdiyorovAbrorjon/cutting-engine.git?rev=7e8da05cc6c269e8d0191ff939af9476fb3918e2#7e8da05cc6c269e8d0191ff939af9476fb3918e2" }
+
+[[package]]
 name = "dnspython"
 version = "2.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -943,6 +948,7 @@ dependencies = [
     { name = "argon2-cffi" },
     { name = "asyncpg" },
     { name = "boto3" },
+    { name = "cutting-engine" },
     { name = "fastapi", extra = ["standard"] },
     { name = "markdown" },
     { name = "pydantic" },
@@ -970,6 +976,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "boto3", specifier = ">=1.43.6" },
+    { name = "cutting-engine", git = "https://github.com/BerdiyorovAbrorjon/cutting-engine.git?rev=7e8da05cc6c269e8d0191ff939af9476fb3918e2" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pydantic", specifier = ">=2.10" },
