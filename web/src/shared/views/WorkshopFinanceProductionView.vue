@@ -113,11 +113,7 @@ watch(
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="font-serif text-3xl font-semibold text-ink">Xodimlar mehnati</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Maosh hisoblashda buxgalter ishlatadigan ishlab chiqarish sanog'i.
-        </p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="refresh">Yangilash</button>
     </div>
 
     <section v-if="!canViewFinance" class="mp-surface p-5 text-sm font-bold text-warning">

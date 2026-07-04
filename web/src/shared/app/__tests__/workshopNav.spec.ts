@@ -18,10 +18,8 @@ describe('workshop navigation permissions', () => {
       'Buyurtmalar',
       'Kesish navbati',
       'Krom navbati',
-      'Kesim rejalar',
       'Ombor',
       'Material katalogi',
-      'Hisobotlar',
       'Tushum va xarajat',
       'Xodimlar mehnati',
       'Filiallar',
@@ -82,10 +80,10 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Asosiy', 'Kesish navbati', 'Krom navbati', 'Kesim rejalar'])
+    ).toEqual(['Asosiy', 'Kesish navbati', 'Krom navbati'])
   })
 
-  it('shows finance only to staff with finance grants', () => {
+  it('shows only worker production to reports-only finance staff', () => {
     expect(
       workshopNavItems({
         isOwner: false,
@@ -93,6 +91,17 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Asosiy', 'Hisobotlar', 'Tushum va xarajat', 'Xodimlar mehnati'])
+    ).toEqual(['Asosiy', 'Xodimlar mehnati'])
+  })
+
+  it('shows income/expenses and worker production to finance managers', () => {
+    expect(
+      workshopNavItems({
+        isOwner: false,
+        branches: [{ id: 'branch-1', permissions: ['manage_finance'] }],
+        selectedBranchId: 'branch-1',
+        path: identity,
+      }).map((item) => item.label),
+    ).toEqual(['Asosiy', 'Tushum va xarajat', 'Xodimlar mehnati'])
   })
 })

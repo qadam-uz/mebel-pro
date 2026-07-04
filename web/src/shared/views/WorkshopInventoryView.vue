@@ -469,7 +469,6 @@ onBeforeUnmount(() => {
     <div class="page-head">
       <div>
         <h1>Ombor</h1>
-        <p class="sub">Filiallarda mavjud panellar va krom materiallari.</p>
       </div>
       <div class="tools">
         <RouterLink

@@ -117,7 +117,7 @@ onMounted(() => {
         :to="rolePath('/c/cutting/drafts')"
         class="mp-button mp-button-primary"
       >
-        Yangi buyurtma
+        + Yangi buyurtma
       </RouterLink>
     </div>
 
@@ -150,7 +150,7 @@ onMounted(() => {
       <template v-if="noFilter">
         <p>Hali buyurtma bermagansiz — chizmadan boshlang.</p>
         <RouterLink :to="rolePath('/c/cutting/drafts')" class="mp-button mp-button-primary mt-4">
-          Yangi buyurtma
+          + Yangi buyurtma
         </RouterLink>
       </template>
       <template v-else>

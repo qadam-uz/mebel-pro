@@ -296,9 +296,6 @@ onBeforeUnmount(() => {
     <div class="page-head">
       <div>
         <h1>Filial material katalogi</h1>
-        <p class="sub">
-          Filial qaysi materiallarni sotadi va qanday narxda — mijozlar shu ro'yxatdan ko'radi.
-        </p>
       </div>
       <div class="tools">
         <RouterLink

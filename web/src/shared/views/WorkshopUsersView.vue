@@ -301,7 +301,7 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-primary"
           @click="openCreateForm"
         >
-          Yangi xodim
+          + Yangi xodim
         </button>
       </div>
     </div>

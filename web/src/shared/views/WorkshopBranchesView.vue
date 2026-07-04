@@ -127,7 +127,7 @@ onMounted(() => {
           class="mp-button mp-button-primary"
           @click="showCreate = !showCreate"
         >
-          Yangi filial
+          + Yangi filial
         </button>
       </div>
     </div>

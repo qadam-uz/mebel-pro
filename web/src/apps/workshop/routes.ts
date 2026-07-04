@@ -93,18 +93,6 @@ export const workshopRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/workshop/cutting-plans',
-    name: 'workshop-cutting-plans',
-    component: () => import('@/shared/views/WorkshopCuttingPlansView.vue'),
-    meta: { title: 'Kesim rejalar', workshopAccess: { any: productionAccess } },
-  },
-  {
-    path: '/workshop/finance',
-    name: 'workshop-finance',
-    component: () => import('@/shared/views/WorkshopFinanceView.vue'),
-    meta: { title: 'Hisobotlar', workshopAccess: { any: financeAccess } },
-  },
-  {
     path: '/workshop/finance/income',
     name: 'workshop-finance-income',
     component: () => import('@/shared/views/WorkshopFinanceExpensesView.vue'),
@@ -121,12 +109,6 @@ export const workshopRoutes: RouteRecordRaw[] = [
     name: 'workshop-finance-production',
     component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),
     meta: { title: 'Ishlab chiqarish hisobotlari', workshopAccess: { any: financeAccess } },
-  },
-  {
-    path: '/workshop/cutting-plans/:result_id',
-    name: 'workshop-cutting-plan-detail',
-    component: () => import('@/shared/views/WorkshopCuttingPlanDetailView.vue'),
-    meta: { title: 'Kesim reja tafsilotlari', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/settings/users/:user_id',

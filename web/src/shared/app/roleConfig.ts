@@ -105,7 +105,6 @@ export const workshopConfig: RoleConfig = {
     { label: 'Krom navbati', to: '/workshop/banding', group: 'Ishlab chiqarish', icon: 'layers' },
     { label: 'Ombor', to: '/workshop/inventory', group: 'Resurslar', icon: 'box' },
     { label: 'Material katalogi', to: '/workshop/catalog', group: 'Resurslar', icon: 'grid' },
-    { label: 'Hisobotlar', to: '/workshop/finance', group: 'Moliya', icon: 'chart' },
     {
       label: 'Tushum va xarajat',
       to: '/workshop/finance/expenses',

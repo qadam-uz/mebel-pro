@@ -88,7 +88,6 @@ onMounted(() => {
     <div class="page-head">
       <div>
         <h1>Bildirishnomalar</h1>
-        <p class="sub">Buyurtma, ombor, moliya va tizim ogohlantirishlari.</p>
       </div>
       <div class="tools">
         <button class="mp-button mp-button-outline" type="button" @click="markAll">

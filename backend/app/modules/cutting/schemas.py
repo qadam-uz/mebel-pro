@@ -112,21 +112,3 @@ class ClientCatalogMaterialOption(APIModel):
     branch_carried: bool
     price_tiyin: int | None
     display_unit: str
-
-
-class WorkshopCuttingPlanSummary(APIModel):
-    id: uuid.UUID
-    order_id: uuid.UUID
-    order_number: str
-    client_id: uuid.UUID
-    branch_id: uuid.UUID
-    algorithm_name: str
-    waste_percentage: Decimal
-    panels_used_by_material: dict[str, int]
-    total_cut_length_mm: int
-    total_edge_length_mm: int
-    confirmed_at: datetime | None
-
-
-class WorkshopCuttingPlanDetail(WorkshopCuttingPlanSummary):
-    result: CuttingResultResponse

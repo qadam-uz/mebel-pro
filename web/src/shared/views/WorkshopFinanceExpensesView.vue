@@ -594,18 +594,8 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>Tushum va xarajat</h1>
-        <p class="sub">
-          Buyurtma to'lovlari, boshqa tushumlar va ustaxona xarajatlari (maosh ham shu yerda).
-        </p>
       </div>
       <div class="tools">
-        <button
-          type="button"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-          @click="refresh"
-        >
-          Yangilash
-        </button>
         <button
           v-if="canManageFinance"
           type="button"

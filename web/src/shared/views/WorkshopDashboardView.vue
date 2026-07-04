@@ -285,7 +285,7 @@ watch(
           <div class="d"><span>faol buyurtmalar</span></div>
         </RouterLink>
 
-        <RouterLink v-if="canFinance" :to="rolePath('/workshop/finance')" class="kpi no-underline">
+        <div v-if="canFinance" class="kpi">
           <div class="lbl">Tushum</div>
           <div class="v num">
             <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</span>
@@ -294,7 +294,7 @@ watch(
           <div class="d">
             <span>so'nggi {{ chartDays }} kun</span>
           </div>
-        </RouterLink>
+        </div>
 
         <RouterLink
           v-if="canFinance"
@@ -313,19 +313,14 @@ watch(
           </div>
         </RouterLink>
 
-        <RouterLink
-          v-if="canFinance"
-          :to="rolePath('/workshop/finance')"
-          class="kpi no-underline"
-          :class="netPositive ? '' : 'bad'"
-        >
+        <div v-if="canFinance" class="kpi" :class="netPositive ? '' : 'bad'">
           <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">Foyda</div>
           <div class="v num" :class="netPositive ? 'success-text' : 'danger-text'">
             <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.net_tiyin ?? 0) }}</span>
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d"><span>tushum − xarajat</span></div>
-        </RouterLink>
+        </div>
 
         <RouterLink
           v-if="canInventory"

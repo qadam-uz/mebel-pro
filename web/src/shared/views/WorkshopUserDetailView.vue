@@ -40,6 +40,7 @@ const userTabs = computed<ChoiceOption[]>(() => [
 const reason = ref('')
 const blockOpen = ref(false)
 const unblockOpen = ref(false)
+const resetOpen = ref(false)
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
 const acting = ref(false)
@@ -206,8 +207,10 @@ async function resetPassword() {
   acting.value = true
   try {
     await workshop.resetPassword(userId)
+    resetOpen.value = false
     toast.success('Vaqtinchalik parol yaratildi.')
   } catch {
+    resetOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'password_reset_failed')
     actionTraceId.value = workshop.actionTraceId
   } finally {
@@ -347,7 +350,7 @@ onMounted(load)
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             :disabled="acting"
-            @click="resetPassword"
+            @click="resetOpen = true"
           >
             Parolni tiklash
           </button>
@@ -657,6 +660,19 @@ onMounted(load)
         :busy="acting"
         @cancel="unblockOpen = false"
         @confirm="unblock"
+      />
+
+      <ConfirmDialog
+        :open="resetOpen"
+        title="Parolni tiklash"
+        :message="`${user.full_name} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
+        confirm-label="Parolni tiklash"
+        cancel-label="Bekor qilish"
+        busy-label="Tiklanmoqda"
+        danger
+        :busy="acting"
+        @cancel="resetOpen = false"
+        @confirm="resetPassword"
       />
     </template>
   </section>
