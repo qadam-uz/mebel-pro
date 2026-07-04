@@ -165,7 +165,7 @@ onMounted(async () => {
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span>Qidiruv</span>
+        <span>Qidirish</span>
         <input v-model="search" placeholder="Ishlab chiqaruvchi nomi" />
       </label>
       <FormSelect

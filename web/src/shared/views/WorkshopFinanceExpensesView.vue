@@ -542,6 +542,16 @@ async function uploadIncomeReceipt(event: Event) {
   }
 }
 
+function removeExpenseReceipt() {
+  expenseForm.receiptFileId = null
+  expenseForm.receiptName = ''
+}
+
+function removeIncomeReceipt() {
+  incomeForm.receiptFileId = null
+  incomeForm.receiptName = ''
+}
+
 async function confirmVoid() {
   if (!voidTarget.value || !voidReason.value.trim() || !canManageFinance.value) return
   actionError.value = null
@@ -670,12 +680,12 @@ onMounted(async () => {
             <span>Chek</span>
             <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
-              :disabled="files.uploading"
+              :uploading="files.uploading"
+              :selected-name="expenseForm.receiptName"
+              removable
               @change="uploadExpenseReceipt"
+              @remove="removeExpenseReceipt"
             />
-            <small v-if="expenseForm.receiptName" class="text-ink-soft">
-              {{ expenseForm.receiptName }}
-            </small>
           </label>
           <div class="flex items-end gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
@@ -767,12 +777,12 @@ onMounted(async () => {
             <span>Chek</span>
             <FilePicker
               accept="image/png,image/jpeg,image/webp,application/pdf"
-              :disabled="files.uploading"
+              :uploading="files.uploading"
+              :selected-name="incomeForm.receiptName"
+              removable
               @change="uploadIncomeReceipt"
+              @remove="removeIncomeReceipt"
             />
-            <small v-if="incomeForm.receiptName" class="text-ink-soft">
-              {{ incomeForm.receiptName }}
-            </small>
           </label>
           <div class="flex items-end gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">

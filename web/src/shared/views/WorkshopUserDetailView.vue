@@ -13,8 +13,10 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -36,6 +38,8 @@ const userTabs = computed<ChoiceOption[]>(() => [
   ...(user.value?.is_owner ? [] : [{ value: 'sessions', label: 'Sessiyalar' }]),
 ])
 const reason = ref('')
+const blockOpen = ref(false)
+const unblockOpen = ref(false)
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
 const acting = ref(false)
@@ -66,10 +70,16 @@ const profileBranchOptions = computed<ChoiceOption[]>(() => [
     disabled: branch.status !== 'active',
   })),
 ])
-const canBlock = computed(
-  () => user.value?.status === 'active' && !user.value.is_owner && reason.value.trim().length > 0,
-)
-const canUnblock = computed(() => user.value?.status === 'blocked' && !user.value.is_owner)
+// Staff actions are header buttons. Reset runs directly; block/unblock open a
+// modal (block requires a reason via the modal's confirmDisabled).
+function openBlock() {
+  reason.value = ''
+  blockOpen.value = true
+}
+
+function openUnblock() {
+  unblockOpen.value = true
+}
 const grants = computed(() =>
   [...selected.value].map((value) => {
     const [permission, branch_id] = value.split('|')
@@ -206,15 +216,17 @@ async function resetPassword() {
 }
 
 async function block() {
-  if (!canBlock.value) return
+  if (!user.value || user.value.is_owner || !reason.value.trim()) return
   actionError.value = null
   actionTraceId.value = null
   acting.value = true
   try {
     await workshop.blockUser(userId, reason.value)
     reason.value = ''
+    blockOpen.value = false
     toast.success('Xodim bloklandi.')
   } catch {
+    blockOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_block_failed')
     actionTraceId.value = workshop.actionTraceId
   } finally {
@@ -223,14 +235,16 @@ async function block() {
 }
 
 async function unblock() {
-  if (!canUnblock.value) return
+  if (!user.value || user.value.is_owner) return
   actionError.value = null
   actionTraceId.value = null
   acting.value = true
   try {
     await workshop.unblockUser(userId)
+    unblockOpen.value = false
     toast.success('Xodim faollashtirildi.')
   } catch {
+    unblockOpen.value = false
     actionError.value = workshopErrorMessage(workshop.actionError ?? 'user_unblock_failed')
     actionTraceId.value = workshop.actionTraceId
   } finally {
@@ -314,6 +328,13 @@ onMounted(load)
               <h1>
                 {{ user.full_name }}
                 <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Egasi</span>
+                <span
+                  v-else
+                  class="ml-2 align-middle"
+                  :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'"
+                >
+                  <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
+                </span>
               </h1>
               <p class="sub">
                 {{ user.login }} · {{ user.phone }} · {{ branchName(user.home_branch_id) }}
@@ -321,35 +342,43 @@ onMounted(load)
             </div>
           </div>
         </div>
-        <div class="tools">
+        <div v-if="!user.is_owner" class="tools">
           <button
-            v-if="!user.is_owner"
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             :disabled="acting"
             @click="resetPassword"
           >
-            Parol qaytarish
+            Parolni tiklash
           </button>
           <button
-            v-if="!user.is_owner && user.status === 'active'"
+            v-if="user.status === 'active'"
             type="button"
             class="mp-button bg-danger text-white min-h-9 px-3 text-xs"
-            :disabled="acting || !canBlock"
-            @click="block"
+            :disabled="acting"
+            @click="openBlock"
           >
             Bloklash
           </button>
           <button
-            v-else-if="!user.is_owner"
+            v-else
             type="button"
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-            :disabled="acting || !canUnblock"
-            @click="unblock"
+            :disabled="acting"
+            @click="openUnblock"
           >
             Faollashtirish
           </button>
         </div>
+      </div>
+
+      <div v-if="!user.is_owner && user.status === 'blocked'" class="banner warn mt-3">
+        <div class="grow">
+          Bu xodim bloklangan. Faollashtirish uchun amallar menyusidan foydalaning.
+        </div>
+      </div>
+      <div v-else-if="user.is_owner" class="banner info mt-3">
+        <div class="grow">Egasi bloklanmaydi va barcha ruxsatlarga ega.</div>
       </div>
 
       <AppTabs
@@ -362,7 +391,7 @@ onMounted(load)
       <section
         v-if="activeTab === 'profile'"
         id="workshop-user-profile-panel"
-        class="grid gap-5 lg:grid-cols-2"
+        class="grid max-w-[640px] gap-5"
         role="tabpanel"
         aria-labelledby="workshop-user-profile-tab"
         tabindex="0"
@@ -394,12 +423,9 @@ onMounted(load)
               </label>
               <label class="field" for="user-profile-phone">
                 <span>Telefon</span>
-                <input
+                <PhoneInput
                   id="user-profile-phone"
                   v-model="profileForm.phone"
-                  class="mp-input"
-                  autocomplete="tel"
-                  inputmode="tel"
                   required
                   :aria-invalid="!!profileFieldErrors.phone"
                   :aria-describedby="
@@ -444,7 +470,7 @@ onMounted(load)
                 required
               />
               <button class="mp-button mp-button-primary" type="submit" :disabled="profileSaving">
-                {{ profileSaving ? 'Saqlanmoqda' : 'Profilni saqlash' }}
+                {{ profileSaving ? 'Saqlanmoqda' : 'Saqlash' }}
               </button>
               <p
                 v-if="profileSaved"
@@ -477,22 +503,6 @@ onMounted(load)
                 <div class="meta">{{ branchName(user.home_branch_id) }}</div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h2>Holat</h2></div>
-          <div class="card-b">
-            <span :class="user.status === 'active' ? 'pill p-ok' : 'pill p-bad'">
-              <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
-            </span>
-            <label v-if="!user.is_owner" class="field mt-4">
-              <span>Bloklash sababi</span>
-              <input v-model="reason" class="mp-input" placeholder="sessiyalar yopiladi" />
-            </label>
-            <p v-if="user.is_owner" class="muted mt-4 text-sm">
-              Egasi bloklanmaydi va barcha ruxsatlarga ega.
-            </p>
           </div>
         </div>
       </section>
@@ -611,6 +621,43 @@ onMounted(load)
       <div v-if="actionError" class="banner danger mt-4">
         <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
       </div>
+
+      <ConfirmDialog
+        :open="blockOpen"
+        title="Xodimni bloklash"
+        message="Bloklangan xodim tizimga kira olmaydi va barcha sessiyalari yopiladi."
+        confirm-label="Bloklash"
+        cancel-label="Bekor qilish"
+        busy-label="Bloklanmoqda"
+        danger
+        :busy="acting"
+        :confirm-disabled="!reason.trim()"
+        @cancel="blockOpen = false"
+        @confirm="block"
+      >
+        <label class="field" for="block-reason">
+          <span>Bloklash sababi</span>
+          <input
+            id="block-reason"
+            v-model="reason"
+            class="mp-input"
+            required
+            placeholder="Masalan: ishdan bo'shadi"
+          />
+        </label>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        :open="unblockOpen"
+        title="Xodimni faollashtirish"
+        message="Xodim yana tizimga kira oladi."
+        confirm-label="Faollashtirish"
+        cancel-label="Bekor qilish"
+        busy-label="Faollashtirilmoqda"
+        :busy="acting"
+        @cancel="unblockOpen = false"
+        @confirm="unblock"
+      />
     </template>
   </section>
 </template>

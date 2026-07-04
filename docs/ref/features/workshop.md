@@ -49,13 +49,14 @@ editing settings.
 
 ## Branches
 
-A workshop owns one or more branches. Each branch has a physical address, working hours, an
-optional manually-entered `(lat, lng)` coordinate pair, and a `status` — semantics in
-[`access-patterns.md`](../../access-patterns.md#tenancy).
+A workshop owns one or more branches. Each branch has a physical address, working hours, and a
+`status` — semantics in [`access-patterns.md`](../../access-patterns.md#tenancy). The data model
+still keeps an optional `(lat, lng)` coordinate pair (no geocoder in v1; see the entity
+reference), but the branch UI does not collect it — the API/DB fields stay for future use.
 
 After platform provisioning creates the first branch, branch operations are **owner only**:
 
-- **Create / edit a branch** — name, address, phone, optional lat / lng, per-weekday working hours.
+- **Create / edit a branch** — name, address, phone, per-weekday working hours.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material selection is built up.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
@@ -75,11 +76,10 @@ Visibility for read operations:
 
 - **Branches list** (`/workshop/branches`) — simple table: name, address, phone, status badge,
   action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
-- **Branch create form** — name, address, phone, optional lat / lng (numeric, range-validated
-  when present),
-  working-hours grid (per weekday open / close, with a "closed this day" toggle).
+- **Branch create form** — name, address, phone, working-hours grid (per weekday open / close,
+  with a "closed this day" toggle).
 - **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
-  working hours, coordinates, pricing, and status controls. It does not duplicate materials,
+  working hours, pricing (entered in so'm), and status controls. It does not duplicate materials,
   stock, staff, or order management; those stay in their own sidebar sections.
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.

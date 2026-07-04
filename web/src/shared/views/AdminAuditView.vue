@@ -229,7 +229,7 @@ watch([query, workshopFilter, entityFilter, timeFilter], queueRefresh)
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span>Qidiruv</span>
+        <span>Qidirish</span>
         <input v-model="query" placeholder="Obyekt ID, amal yoki aktor" />
       </label>
       <FormSelect

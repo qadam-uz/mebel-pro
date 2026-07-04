@@ -11,12 +11,18 @@ import { branchOptions } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatStockQuantity, parseDisplayQuantity } from '@/shared/formatters'
+import {
+  formatDate,
+  formatStockQuantity,
+  formatStockUnit,
+  parseDisplayQuantity,
+} from '@/shared/formatters'
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore, type StockItem, type Supplier } from '@/shared/stores/workshop'
 
@@ -57,6 +63,7 @@ const stockInForm = reactive({
   supplierId: null as string | null,
   inlineSupplierName: '',
   receiptFileId: '',
+  receiptName: '',
   note: '',
 })
 const adjustmentForm = reactive({
@@ -345,11 +352,18 @@ async function onReceiptFile(event: Event) {
   try {
     const uploaded = await files.upload(target.files[0])
     stockInForm.receiptFileId = uploaded.id
+    stockInForm.receiptName = uploaded.original_name
     toast.success('Chek biriktirildi.')
   } catch {
     stockInReceiptError.value = 'Chek yuklanmadi. Qayta urinib ko`ring.'
   }
   target.value = ''
+}
+
+function removeStockInReceipt() {
+  stockInForm.receiptFileId = ''
+  stockInForm.receiptName = ''
+  stockInReceiptError.value = null
 }
 
 function editSupplier(supplier: Supplier) {
@@ -366,6 +380,7 @@ function resetStockInForm() {
   stockInForm.supplierId = null
   stockInForm.inlineSupplierName = ''
   stockInForm.receiptFileId = ''
+  stockInForm.receiptName = ''
   stockInForm.note = ''
   stockInMaterialError.value = null
   stockInSupplierError.value = null
@@ -526,7 +541,13 @@ onBeforeUnmount(() => {
               :error="stockInMaterialError"
             />
             <label class="field">
-              <span>Miqdor {{ selectedStockInItem?.display_unit ?? '' }}</span>
+              <span
+                >Miqdor{{
+                  selectedStockInItem
+                    ? ` (${formatStockUnit(selectedStockInItem.display_unit)})`
+                    : ''
+                }}</span
+              >
               <input v-model="stockInForm.quantity" class="mp-input" inputmode="decimal" required />
             </label>
             <FormSelect
@@ -544,12 +565,12 @@ onBeforeUnmount(() => {
               <span>Chek</span>
               <FilePicker
                 accept="image/png,image/jpeg,image/webp,application/pdf"
-                :disabled="files.uploading"
+                :uploading="files.uploading"
+                :selected-name="stockInForm.receiptName"
+                removable
                 @change="onReceiptFile"
+                @remove="removeStockInReceipt"
               />
-              <small v-if="stockInForm.receiptFileId" class="text-ink-soft">
-                chek {{ stockInForm.receiptFileId.slice(0, 8) }}
-              </small>
               <small v-if="stockInReceiptError" class="font-bold text-danger">
                 {{ stockInReceiptError }}
               </small>
@@ -574,7 +595,13 @@ onBeforeUnmount(() => {
               :error="adjustmentMaterialError"
             />
             <label class="field">
-              <span>Belgili miqdor {{ selectedAdjustmentItem?.display_unit ?? '' }}</span>
+              <span
+                >Belgili miqdor{{
+                  selectedAdjustmentItem
+                    ? ` (${formatStockUnit(selectedAdjustmentItem.display_unit)})`
+                    : ''
+                }}</span
+              >
               <input
                 v-model="adjustmentForm.quantity"
                 class="mp-input"
@@ -799,7 +826,7 @@ onBeforeUnmount(() => {
             </label>
             <label class="field">
               <span>Telefon</span>
-              <input v-model="supplierForm.phone" class="mp-input" inputmode="tel" />
+              <PhoneInput v-model="supplierForm.phone" />
             </label>
             <label class="field">
               <span>Izoh</span>

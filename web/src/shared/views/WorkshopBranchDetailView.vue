@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import {
   clearFieldErrors,
-  coordinateFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
-  nonNegativeInteger,
+  nonNegativeAmount,
   requiredText,
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
@@ -25,17 +26,11 @@ type WorkingDay = {
   from: string
   to: string
 }
-type BranchField =
-  | 'name'
-  | 'address'
-  | 'phone'
-  | 'latitude'
-  | 'longitude'
-  | 'cuttingRate'
-  | 'edgeBandingRate'
+type BranchField = 'name' | 'address' | 'phone' | 'cuttingRate' | 'edgeBandingRate'
 type StatusField = 'reason'
 
 const route = useRoute()
+const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const toast = useToast()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
@@ -55,12 +50,10 @@ const branchForm = reactive({
   name: '',
   address: '',
   phone: '',
-  latitude: '',
-  longitude: '',
 })
 const pricingForm = reactive({
-  cuttingRateTiyin: '',
-  edgeBandingRateTiyin: '',
+  cuttingRateSom: '',
+  edgeBandingRateSom: '',
 })
 const statusForm = reactive({
   status: 'active',
@@ -71,8 +64,6 @@ const branchFieldOrder: BranchField[] = [
   'name',
   'address',
   'phone',
-  'latitude',
-  'longitude',
   'cuttingRate',
   'edgeBandingRate',
 ]
@@ -80,8 +71,6 @@ const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
   address: 'branch-detail-address',
   phone: 'branch-detail-phone',
-  latitude: 'branch-detail-latitude',
-  longitude: 'branch-detail-longitude',
   cuttingRate: 'branch-detail-cutting-rate',
   edgeBandingRate: 'branch-detail-edge-rate',
 }
@@ -119,14 +108,10 @@ function validateBranchForm() {
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
-  const coords = coordinateFieldErrors(branchForm.latitude, branchForm.longitude)
-  branchFieldErrors.latitude = coords.latitude ?? undefined
-  branchFieldErrors.longitude = coords.longitude ?? undefined
   branchFieldErrors.cuttingRate =
-    nonNegativeInteger(pricingForm.cuttingRateTiyin, 'Butun tiyin qiymatini kiriting.') ?? undefined
+    nonNegativeAmount(pricingForm.cuttingRateSom, "Kesish narxini so'mda kiriting.") ?? undefined
   branchFieldErrors.edgeBandingRate =
-    nonNegativeInteger(pricingForm.edgeBandingRateTiyin, 'Butun tiyin qiymatini kiriting.') ??
-    undefined
+    nonNegativeAmount(pricingForm.edgeBandingRateSom, "Krom narxini so'mda kiriting.") ?? undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   return !hasErrors
@@ -148,8 +133,6 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
-  branchForm.latitude = branch.latitude ?? ''
-  branchForm.longitude = branch.longitude ?? ''
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
   for (const day of hours) {
@@ -161,9 +144,13 @@ function syncForms() {
     if (open) day.from = open
     if (close) day.to = close
   }
+  // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
+  // tiyin). Show so'm on load; convert back on submit.
   const pricing = workshop.selectedBranchPricing
-  pricingForm.cuttingRateTiyin = String(pricing?.cutting_rate_tiyin ?? '')
-  pricingForm.edgeBandingRateTiyin = String(pricing?.edge_banding_rate_tiyin ?? '')
+  pricingForm.cuttingRateSom =
+    pricing?.cutting_rate_tiyin != null ? String(pricing.cutting_rate_tiyin / 100) : ''
+  pricingForm.edgeBandingRateSom =
+    pricing?.edge_banding_rate_tiyin != null ? String(pricing.edge_banding_rate_tiyin / 100) : ''
 }
 
 async function refreshBranch() {
@@ -184,10 +171,6 @@ async function refreshBranch() {
   }
 }
 
-function optionalCoordinate(value: string) {
-  return value.trim() || null
-}
-
 async function saveBranch() {
   if (!validateBranchForm()) return
   saving.value = true
@@ -199,16 +182,14 @@ async function saveBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      latitude: optionalCoordinate(branchForm.latitude),
-      longitude: optionalCoordinate(branchForm.longitude),
       working_hours: workingHoursPayload(),
     })
     await workshop.updateBranchPricing(branchId.value, {
-      cutting_rate_tiyin: pricingForm.cuttingRateTiyin
-        ? Number(pricingForm.cuttingRateTiyin)
+      cutting_rate_tiyin: pricingForm.cuttingRateSom
+        ? Math.round(Number(pricingForm.cuttingRateSom) * 100)
         : null,
-      edge_banding_rate_tiyin: pricingForm.edgeBandingRateTiyin
-        ? Number(pricingForm.edgeBandingRateTiyin)
+      edge_banding_rate_tiyin: pricingForm.edgeBandingRateSom
+        ? Math.round(Number(pricingForm.edgeBandingRateSom) * 100)
         : null,
     })
     saved.value = true
@@ -222,16 +203,11 @@ async function saveBranch() {
           branch_name_required: 'name',
           branch_address_required: 'address',
           invalid_phone: 'phone',
-          invalid_coordinates: 'latitude',
-          invalid_latitude: 'latitude',
-          invalid_longitude: 'longitude',
         },
         {
           name: 'name',
           address: 'address',
           phone: 'phone',
-          latitude: 'latitude',
-          longitude: 'longitude',
         },
       ),
     )
@@ -287,6 +263,7 @@ onMounted(refreshBranch)
 
 <template>
   <section>
+    <RouterLink :to="rolePath('/workshop/branches')" class="back">← Filiallar</RouterLink>
     <div class="page-head">
       <div>
         <h1>{{ workshop.selectedBranch?.name ?? 'Filial' }}</h1>
@@ -375,68 +352,23 @@ onMounted(refreshBranch)
               </span>
             </label>
           </div>
-          <div class="grid gap-3 md:grid-cols-3">
-            <label class="field" for="branch-detail-phone">
-              <span>Telefon</span>
-              <input
-                id="branch-detail-phone"
-                v-model="branchForm.phone"
-                class="mp-input"
-                required
-                :aria-invalid="!!branchFieldErrors.phone"
-                :aria-describedby="
-                  branchFieldErrors.phone ? 'branch-detail-phone-error' : undefined
-                "
-              />
-              <span
-                v-if="branchFieldErrors.phone"
-                id="branch-detail-phone-error"
-                class="mp-field-error"
-              >
-                {{ branchFieldErrors.phone }}
-              </span>
-            </label>
-            <label class="field" for="branch-detail-latitude">
-              <span>Lat</span>
-              <input
-                id="branch-detail-latitude"
-                v-model="branchForm.latitude"
-                class="mp-input"
-                inputmode="decimal"
-                :aria-invalid="!!branchFieldErrors.latitude"
-                :aria-describedby="
-                  branchFieldErrors.latitude ? 'branch-detail-latitude-error' : undefined
-                "
-              />
-              <span
-                v-if="branchFieldErrors.latitude"
-                id="branch-detail-latitude-error"
-                class="mp-field-error"
-              >
-                {{ branchFieldErrors.latitude }}
-              </span>
-            </label>
-            <label class="field" for="branch-detail-longitude">
-              <span>Lng</span>
-              <input
-                id="branch-detail-longitude"
-                v-model="branchForm.longitude"
-                class="mp-input"
-                inputmode="decimal"
-                :aria-invalid="!!branchFieldErrors.longitude"
-                :aria-describedby="
-                  branchFieldErrors.longitude ? 'branch-detail-longitude-error' : undefined
-                "
-              />
-              <span
-                v-if="branchFieldErrors.longitude"
-                id="branch-detail-longitude-error"
-                class="mp-field-error"
-              >
-                {{ branchFieldErrors.longitude }}
-              </span>
-            </label>
-          </div>
+          <label class="field" for="branch-detail-phone">
+            <span>Telefon</span>
+            <PhoneInput
+              id="branch-detail-phone"
+              v-model="branchForm.phone"
+              required
+              :aria-invalid="!!branchFieldErrors.phone"
+              :aria-describedby="branchFieldErrors.phone ? 'branch-detail-phone-error' : undefined"
+            />
+            <span
+              v-if="branchFieldErrors.phone"
+              id="branch-detail-phone-error"
+              class="mp-field-error"
+            >
+              {{ branchFieldErrors.phone }}
+            </span>
+          </label>
           <fieldset>
             <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
             <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -468,10 +400,10 @@ onMounted(refreshBranch)
           </fieldset>
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="branch-detail-cutting-rate">
-              <span>Kesish narxi (tiyin)</span>
+              <span>Kesish narxi (so'm)</span>
               <input
                 id="branch-detail-cutting-rate"
-                v-model="pricingForm.cuttingRateTiyin"
+                v-model="pricingForm.cuttingRateSom"
                 class="mp-input"
                 inputmode="numeric"
                 :aria-invalid="!!branchFieldErrors.cuttingRate"
@@ -488,10 +420,10 @@ onMounted(refreshBranch)
               </span>
             </label>
             <label class="field" for="branch-detail-edge-rate">
-              <span>Krom narxi (tiyin)</span>
+              <span>Krom yopishtirish narxi (so'm)</span>
               <input
                 id="branch-detail-edge-rate"
-                v-model="pricingForm.edgeBandingRateTiyin"
+                v-model="pricingForm.edgeBandingRateSom"
                 class="mp-input"
                 inputmode="numeric"
                 :aria-invalid="!!branchFieldErrors.edgeBandingRate"

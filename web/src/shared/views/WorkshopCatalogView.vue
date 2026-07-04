@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
             />
           </label>
           <label class="field">
-            <span>Min zaxira {{ materialMinStockUnit }}</span>
+            <span>Min zaxira ({{ materialMinStockUnit }})</span>
             <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
           </label>
           <div class="flex flex-wrap gap-2 md:col-span-4">

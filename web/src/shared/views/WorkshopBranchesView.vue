@@ -4,7 +4,6 @@ import { RouterLink } from 'vue-router'
 
 import {
   clearFieldErrors,
-  coordinateFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
   requiredText,
@@ -13,11 +12,12 @@ import {
 } from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-type BranchField = 'name' | 'address' | 'phone' | 'latitude' | 'longitude'
+type BranchField = 'name' | 'address' | 'phone'
 
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
@@ -29,17 +29,13 @@ const branchError = ref<string | null>(null)
 const branchForm = reactive({
   name: '',
   address: '',
-  phone: '+998',
-  latitude: '',
-  longitude: '',
+  phone: '',
 })
 const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
-const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'latitude', 'longitude']
+const branchFieldOrder: BranchField[] = ['name', 'address', 'phone']
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-name',
   phone: 'branch-phone',
-  latitude: 'branch-latitude',
-  longitude: 'branch-longitude',
   address: 'branch-address',
 }
 const hours = reactive([
@@ -66,16 +62,9 @@ function validateBranchForm() {
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
-  const coords = coordinateFieldErrors(branchForm.latitude, branchForm.longitude)
-  branchFieldErrors.latitude = coords.latitude ?? undefined
-  branchFieldErrors.longitude = coords.longitude ?? undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   return !hasErrors
-}
-
-function optionalCoordinate(value: string) {
-  return value.trim() || null
 }
 
 async function createBranch() {
@@ -87,15 +76,11 @@ async function createBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      latitude: optionalCoordinate(branchForm.latitude),
-      longitude: optionalCoordinate(branchForm.longitude),
       working_hours: workingHoursPayload(),
     })
     branchForm.name = ''
     branchForm.address = ''
-    branchForm.phone = '+998'
-    branchForm.latitude = ''
-    branchForm.longitude = ''
+    branchForm.phone = ''
     showCreate.value = false
     toast.success("Filial qo'shildi.")
   } catch (caught) {
@@ -107,15 +92,10 @@ async function createBranch() {
           branch_name_required: 'name',
           branch_address_required: 'address',
           invalid_phone: 'phone',
-          invalid_coordinates: 'latitude',
-          invalid_latitude: 'latitude',
-          invalid_longitude: 'longitude',
         },
         {
           name: 'name',
           phone: 'phone',
-          latitude: 'latitude',
-          longitude: 'longitude',
           address: 'address',
         },
       ),
@@ -206,60 +186,19 @@ onMounted(() => {
               </span>
             </label>
           </div>
-          <div class="grid gap-3 md:grid-cols-3">
-            <label class="field" for="branch-phone">
-              <span>Telefon</span>
-              <input
-                id="branch-phone"
-                v-model="branchForm.phone"
-                class="mp-input"
-                required
-                :aria-invalid="!!branchFieldErrors.phone"
-                :aria-describedby="branchFieldErrors.phone ? 'branch-phone-error' : undefined"
-              />
-              <span v-if="branchFieldErrors.phone" id="branch-phone-error" class="mp-field-error">
-                {{ branchFieldErrors.phone }}
-              </span>
-            </label>
-            <label class="field" for="branch-latitude">
-              <span>Lat</span>
-              <input
-                id="branch-latitude"
-                v-model="branchForm.latitude"
-                class="mp-input"
-                inputmode="decimal"
-                :aria-invalid="!!branchFieldErrors.latitude"
-                :aria-describedby="branchFieldErrors.latitude ? 'branch-latitude-error' : undefined"
-              />
-              <span
-                v-if="branchFieldErrors.latitude"
-                id="branch-latitude-error"
-                class="mp-field-error"
-              >
-                {{ branchFieldErrors.latitude }}
-              </span>
-            </label>
-            <label class="field" for="branch-longitude">
-              <span>Lng</span>
-              <input
-                id="branch-longitude"
-                v-model="branchForm.longitude"
-                class="mp-input"
-                inputmode="decimal"
-                :aria-invalid="!!branchFieldErrors.longitude"
-                :aria-describedby="
-                  branchFieldErrors.longitude ? 'branch-longitude-error' : undefined
-                "
-              />
-              <span
-                v-if="branchFieldErrors.longitude"
-                id="branch-longitude-error"
-                class="mp-field-error"
-              >
-                {{ branchFieldErrors.longitude }}
-              </span>
-            </label>
-          </div>
+          <label class="field" for="branch-phone">
+            <span>Telefon</span>
+            <PhoneInput
+              id="branch-phone"
+              v-model="branchForm.phone"
+              required
+              :aria-invalid="!!branchFieldErrors.phone"
+              :aria-describedby="branchFieldErrors.phone ? 'branch-phone-error' : undefined"
+            />
+            <span v-if="branchFieldErrors.phone" id="branch-phone-error" class="mp-field-error">
+              {{ branchFieldErrors.phone }}
+            </span>
+          </label>
           <fieldset>
             <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
             <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">

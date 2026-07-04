@@ -195,7 +195,7 @@ watch(
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span>Qidiruv</span>
+        <span>Qidirish</span>
         <input v-model="query" placeholder="Kod yoki tavsif" />
       </label>
       <FormSelect

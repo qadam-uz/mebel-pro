@@ -260,7 +260,7 @@ test('owner adds a branch material and records stock movement with a receipt', a
   const receiptPath = testInfo.outputPath('receipt.pdf')
   writeFileSync(receiptPath, '%PDF-1.4\n% receipt\n')
   await stockIn.getByLabel('Chek').setInputFiles(receiptPath)
-  await expect(stockIn.getByText(/chek /)).toBeVisible()
+  await expect(stockIn.getByText('receipt.pdf')).toBeVisible()
   await stockIn.getByRole('button', { name: 'Kirim yozish' }).click()
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),

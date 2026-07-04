@@ -20,6 +20,7 @@ import {
 } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -44,7 +45,7 @@ const createdTempPassword = ref<string | null>(null)
 let usersSearchTimer: number | undefined
 const form = reactive({
   fullName: '',
-  phone: '+998',
+  phone: '',
   login: '',
   branchIds: [] as string[],
   tempPassword: '',
@@ -234,7 +235,7 @@ async function createStaff() {
       }),
     })
     form.fullName = ''
-    form.phone = '+998'
+    form.phone = ''
     form.login = ''
     form.branchIds = defaultBranchIds()
     form.tempPassword = ''
@@ -319,7 +320,7 @@ onBeforeUnmount(() => {
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             @click="showCreate = false"
           >
-            Bekor
+            Bekor qilish
           </button>
         </div>
         <form class="card-b grid gap-4" novalidate @submit.prevent="createStaff">
@@ -345,12 +346,9 @@ onBeforeUnmount(() => {
             </label>
             <label class="field" for="staff-phone">
               <span>Telefon</span>
-              <input
+              <PhoneInput
                 id="staff-phone"
                 v-model="form.phone"
-                class="mp-input"
-                autocomplete="tel"
-                inputmode="tel"
                 required
                 :aria-invalid="!!staffFieldErrors.phone"
                 :aria-describedby="staffFieldErrors.phone ? 'staff-phone-error' : undefined"
@@ -481,7 +479,7 @@ onBeforeUnmount(() => {
       <div class="mp-filters">
         <label class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" class="mp-input min-w-64" placeholder="Ism yoki login..." />
+          <input v-model="search" placeholder="Ism yoki login..." />
         </label>
         <FormSelect
           v-model="branchFilter"

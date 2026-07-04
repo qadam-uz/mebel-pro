@@ -12,6 +12,7 @@ import {
 } from '@/shared/app/clientUi'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useRolePath } from '@/shared/app/paths'
 import { formatTiyin } from '@/shared/formatters'
@@ -187,7 +188,7 @@ function gotoBranch() {
 
 function resetField(field: 'name' | 'phone') {
   if (field === 'name') contactName.value = auth.me?.name ?? ''
-  else contactPhone.value = auth.me?.phone ?? '+998'
+  else contactPhone.value = auth.me?.phone ?? ''
 }
 
 async function loadQuotes() {
@@ -259,7 +260,7 @@ async function placeOrder() {
 
 onMounted(async () => {
   contactName.value = auth.me?.name ?? ''
-  contactPhone.value = auth.me?.phone ?? '+998'
+  contactPhone.value = auth.me?.phone ?? ''
   await cutting.loadDraft(draftId.value)
   // A draft already bound to an order can't be re-ordered — don't walk the user
   // through the whole wizard only to fail at submit; send them to the order (CB-18).
@@ -525,13 +526,7 @@ onMounted(async () => {
                 </label>
                 <label class="grid gap-1 text-sm font-bold text-ink">
                   Telefon
-                  <input
-                    v-model="contactPhone"
-                    class="mp-input"
-                    autocomplete="tel"
-                    inputmode="tel"
-                    placeholder="+998XXXXXXXXX"
-                  />
+                  <PhoneInput v-model="contactPhone" required />
                   <span v-if="contactPhone && !isUzPhone(contactPhone)" class="text-xs text-danger">
                     Telefon +998XXXXXXXXX shaklida bo'lishi kerak
                   </span>

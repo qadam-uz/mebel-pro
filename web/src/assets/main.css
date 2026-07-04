@@ -1957,7 +1957,7 @@
   .workshop-page {
     min-width: 0;
     flex: 1;
-    padding: 28px;
+    padding: 16px 28px;
   }
 
   .page-head {
@@ -1966,7 +1966,7 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 14px;
-    margin-bottom: 26px;
+    margin-bottom: 18px;
   }
 
   .page-head h1 {
@@ -2845,7 +2845,7 @@
     gap: 4px;
     overflow-x: auto;
     border-bottom: 1px solid var(--color-hairline-strong);
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .tab {
@@ -4354,7 +4354,11 @@
     text-transform: uppercase;
   }
 
-  :where(.mp-filter-input, .admin-filter-input) > input {
+  /* Real-specificity (not :where()) so a form-field class like .mp-input can't
+     silently out-specify this and desync the filter row's height/skin. Matches
+     the FormSelect trigger: 48px tall, 8px radius, 400 weight, no shadow. */
+  .mp-filter-input > input,
+  .admin-filter-input > input {
     width: 100%;
     min-height: 48px;
     min-width: 0;
@@ -4363,16 +4367,14 @@
     background: var(--color-elevated);
     color: var(--color-ink);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 400;
     line-height: 1.25;
     outline: 0;
     padding: 7px 12px;
-    box-shadow:
-      0 1px 2px rgb(15 27 45 / 4%),
-      0 4px 10px -3px rgb(15 27 45 / 9%);
   }
 
-  :where(.mp-filter-input, .admin-filter-input) > input:focus-visible {
+  .mp-filter-input > input:focus-visible,
+  .admin-filter-input > input:focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
   }
@@ -5213,6 +5215,75 @@
       min-width: 0;
       flex: 1 1 auto;
       white-space: nowrap;
+    }
+  }
+
+  /* Shared phone field (PhoneInput.vue). The wrapper owns the field look so every
+     phone input matches across the three apps; the inner control is reset with a
+     winning selector so surrounding form rules (e.g. `.admin-field input`) can't
+     re-skin it. Placed late in the layer so any focus-state ties resolve here. */
+  .mp-phone {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--color-hairline-strong);
+    background: var(--color-elevated);
+    padding: 0 12px;
+    color: var(--color-ink);
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .mp-phone:focus-within {
+    border-color: var(--color-accent);
+  }
+
+  .mp-phone.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .mp-phone:has(.mp-phone-native[aria-invalid='true']) {
+    border-color: var(--color-danger);
+  }
+
+  .mp-phone-prefix {
+    flex-shrink: 0;
+    color: var(--color-ink-muted);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .mp-phone .mp-phone-native,
+  .mp-phone .mp-phone-native:focus {
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 10px 0;
+    color: inherit;
+    font: inherit;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    outline: 0;
+    box-shadow: none;
+  }
+
+  .mp-phone .mp-phone-native::placeholder {
+    color: var(--color-ink-muted);
+  }
+
+  /* iOS Safari zooms when focusing a sub-16px control; match .mp-input (CB-68). */
+  @media (max-width: 768px) {
+    .mp-phone .mp-phone-native {
+      font-size: 16px;
     }
   }
 }

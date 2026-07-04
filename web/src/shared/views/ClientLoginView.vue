@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { isUzPhone, normalizeUzPhone } from '@/shared/app/clientUi'
 import { safeRedirectPath } from '@/shared/app/redirect'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { useResendCooldown } from '@/shared/composables/useResendCooldown'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -14,7 +15,7 @@ const route = useRoute()
 const router = useRouter()
 const isDev = import.meta.env.DEV
 
-const phone = ref('+998')
+const phone = ref('')
 const otpCode = ref('')
 const clientName = ref('')
 const clientStep = ref<'phone' | 'code' | 'name'>('phone')
@@ -63,20 +64,6 @@ const errorTone = computed(() =>
 
 async function finish() {
   await router.replace(redirectTo.value)
-}
-
-function sanitizePhone() {
-  // Live-format as +998 XX XXX XX XX and cap at 9 national digits (type="tel" enforces nothing).
-  let digits = phone.value.replace(/\D/g, '')
-  if (digits.startsWith('8998')) digits = digits.slice(1)
-  if (digits.startsWith('998')) {
-    digits = digits.slice(3)
-  } else {
-    digits = digits.replace(/^0+/, '')
-  }
-  digits = digits.slice(0, 9)
-  const groups = [digits.slice(0, 2), digits.slice(2, 5), digits.slice(5, 7), digits.slice(7, 9)]
-  phone.value = digits ? `+998 ${groups.filter(Boolean).join(' ')}` : '+998'
 }
 
 function sanitizeOtp() {
@@ -182,17 +169,9 @@ async function resendOtp() {
           </p>
         </div>
 
-        <label class="block">
+        <label class="block" for="client-phone">
           <span class="mb-1 block text-sm font-bold text-ink">Telefon raqami</span>
-          <input
-            v-model="phone"
-            class="mp-input"
-            type="tel"
-            inputmode="tel"
-            autocomplete="tel"
-            required
-            @input="sanitizePhone"
-          />
+          <PhoneInput id="client-phone" v-model="phone" required />
         </label>
 
         <div v-if="clientErrorText" class="client-banner" :class="errorTone">
