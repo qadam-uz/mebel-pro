@@ -16,7 +16,7 @@ dependencies = [
     "boto3>=1.43.6",
     "argon2-cffi>=25.1.0",
     "reportlab>=4.5.1",
-    "cutting-engine @ git+https://github.com/BerdiyorovAbrorjon/cutting-engine.git@7e8da05cc6c269e8d0191ff939af9476fb3918e2",
+    "cutting-engine==0.1.0",
 ]
 
 [dependency-groups]
@@ -59,6 +59,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["reportlab.*"]  # no stubs bundled; used only for cutting PDF byte generation
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["cutting_engine.*"]  # 0.1.0 ships without py.typed; drop once >=0.1.1 is pinned
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

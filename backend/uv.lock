@@ -458,7 +458,11 @@ wheels = [
 [[package]]
 name = "cutting-engine"
 version = "0.1.0"
-source = { git = "https://github.com/BerdiyorovAbrorjon/cutting-engine.git?rev=7e8da05cc6c269e8d0191ff939af9476fb3918e2#7e8da05cc6c269e8d0191ff939af9476fb3918e2" }
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d5/c1/b7d05b9e955e27326443d4bc90107a12980652b970ecc818b86f8ab7af81/cutting_engine-0.1.0.tar.gz", hash = "sha256:d94da0644aec7d750f8dc71041a6fe6bca88ce986de6d9256e9943779979fc44", size = 58016, upload-time = "2026-07-02T10:24:03.537Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/9c/1bcd2a6b88902f3dd7be3848754b87027711722f6fd9f0e83763aac5a604/cutting_engine-0.1.0-py3-none-any.whl", hash = "sha256:f3a1c5e3797fab4c00d817ec3a1af1c54cd6840d2964c9187b855ae434f8d4ab", size = 16306, upload-time = "2026-07-02T10:24:04.662Z" },
+]
 
 [[package]]
 name = "dnspython"
@@ -976,7 +980,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "boto3", specifier = ">=1.43.6" },
-    { name = "cutting-engine", git = "https://github.com/BerdiyorovAbrorjon/cutting-engine.git?rev=7e8da05cc6c269e8d0191ff939af9476fb3918e2" },
+    { name = "cutting-engine", specifier = "==0.1.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pydantic", specifier = ">=2.10" },
