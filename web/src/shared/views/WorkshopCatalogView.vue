@@ -1,30 +1,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
-import { useRolePath } from '@/shared/app/paths'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { branchOptions } from '@/shared/app/workshopUi'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatStockQuantity, formatTiyin, parseDisplayQuantity } from '@/shared/formatters'
-import type { MaterialKind, MaterialStatus, PanelMaterialType } from '@/shared/stores/admin'
+import type { MaterialKind, MaterialStatus } from '@/shared/stores/admin'
 import { useWorkshopStore, type BranchMaterial } from '@/shared/stores/workshop'
 
-const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
 const toast = useToast()
 const route = useRoute()
-const selectedBranchId = ref('')
 const statusFilter = ref<'all' | MaterialStatus>('all')
 const kindFilter = ref<'all' | MaterialKind>('all')
 const manufacturerFilter = ref('all')
-const materialTypeFilter = ref<'all' | PanelMaterialType>('all')
 const search = ref('')
 const rowActionId = ref<string | null>(null)
 const rowActionError = ref<string | null>(null)
@@ -44,58 +40,36 @@ const canUseCatalog = computed(() => permissions.can(p.manageCatalog))
 const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageCatalog]),
 )
-const branchFilterOptions = computed(() =>
-  branchOptions(
-    accessibleBranches.value,
-    permissions.isOwner.value ? 'Barcha filiallar' : 'Mening filiallarim',
-  ),
-)
-const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha holatlar', status: 'active' as const },
-  { value: 'active', label: 'Faol', meta: 'mijozlarga ko‘rinadi', status: 'active' as const },
-  {
-    value: 'inactive',
-    label: 'Faol emas',
-    meta: 'mijozlardan yashirilgan',
-    status: 'blocked' as const,
-  },
+// Branch is driven by the topbar context picker (AppShell); the page follows it
+// and falls back to the first accessible branch until context is set.
+const selectedBranchId = computed(() => {
+  const context = workshop.selectedBranchContext
+  if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
+  return accessibleBranches.value[0]?.id ?? ''
+})
+const statusOptions: DropdownOption[] = [
+  { value: 'all', label: 'Hammasi' },
+  { value: 'active', label: 'Faol', dot: 'success' },
+  { value: 'inactive', label: 'Faol emas', dot: 'muted' },
 ]
-const kindOptions = [
-  { value: 'all', label: 'Barcha turlar', meta: 'panel va krom', status: 'active' as const },
-  { value: 'panel', label: 'Panel', meta: 'dona/panel narxi', status: 'active' as const },
-  { value: 'edge', label: 'Krom', meta: 'metr narxi', status: 'active' as const },
-]
-const materialTypeOptions = [
-  { value: 'all', label: 'Barcha panel turlari', meta: 'panel turi', status: 'active' as const },
-  { value: 'dsp', label: 'DSP', meta: 'laminat panel', status: 'active' as const },
-  { value: 'mdf', label: 'MDF', meta: 'MDF panel', status: 'active' as const },
-  { value: 'plywood', label: 'Fanera', meta: 'plywood', status: 'active' as const },
-  {
-    value: 'natural_wood',
-    label: "Tabiiy yog'och",
-    meta: 'natural_wood',
-    status: 'active' as const,
-  },
-  { value: 'other', label: 'Boshqa', meta: 'other', status: 'active' as const },
+const kindOptions: DropdownOption[] = [
+  { value: 'all', label: 'Barcha turlar' },
+  { value: 'panel', label: 'Panel' },
+  { value: 'edge', label: 'Krom' },
 ]
 const selectedBranch = computed(
   () => accessibleBranches.value.find((branch) => branch.id === selectedBranchId.value) ?? null,
 )
-const manufacturerOptions = computed(() => {
+const manufacturerOptions = computed<DropdownOption[]>(() => {
   const byId = new Map<string, string>()
   for (const row of workshop.branchMaterials) {
     byId.set(row.material.manufacturer_id, row.material.manufacturer_name)
   }
   return [
-    {
-      value: 'all',
-      label: 'Barcha ishlab chiqaruvchilar',
-      meta: 'filtr',
-      status: 'active' as const,
-    },
+    { value: 'all', label: 'Barcha ishlab chiqaruvchilar' },
     ...[...byId.entries()]
       .sort((left, right) => left[1].localeCompare(right[1]))
-      .map(([value, label]) => ({ value, label, meta: 'manufacturer', status: 'active' as const })),
+      .map(([value, label]) => ({ value, label })),
   ]
 })
 const availableCatalogOptions = computed(() =>
@@ -119,13 +93,6 @@ const materialMinStockUnit = computed(() => {
   const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
   return material?.kind === 'edge' ? 'm' : 'panel'
 })
-function applyContextBranch() {
-  const contextBranchId = workshop.selectedBranchContext
-  if (!contextBranchId) return
-  if (!accessibleBranches.value.some((branch) => branch.id === contextBranchId)) return
-  selectedBranchId.value = contextBranchId
-}
-
 function routeSearchValue() {
   const value = route.query.search
   return typeof value === 'string' ? value : ''
@@ -147,14 +114,13 @@ function priceUnit(kind: MaterialKind) {
 }
 
 async function refreshCatalog() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   rowActionError.value = null
   rowActionTraceId.value = null
   const filters = {
     status: statusFilter.value === 'all' ? null : statusFilter.value,
     kind: kindFilter.value === 'all' ? null : kindFilter.value,
     manufacturer_id: manufacturerFilter.value === 'all' ? null : manufacturerFilter.value,
-    material_type: materialTypeFilter.value === 'all' ? null : materialTypeFilter.value,
     search: search.value,
   }
   await Promise.all([
@@ -164,7 +130,7 @@ async function refreshCatalog() {
 }
 
 async function saveBranchMaterial() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   materialSaving.value = true
   materialError.value = null
   materialFieldError.value = null
@@ -230,7 +196,7 @@ function resetMaterialForm() {
 }
 
 async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   rowActionId.value = row.id
   rowActionError.value = null
   rowActionTraceId.value = null
@@ -249,7 +215,7 @@ async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) 
   }
 }
 
-watch([selectedBranchId, statusFilter, kindFilter, manufacturerFilter, materialTypeFilter], () => {
+watch([selectedBranchId, statusFilter, kindFilter, manufacturerFilter], () => {
   void refreshCatalog()
 })
 
@@ -258,17 +224,10 @@ watch(search, () => {
   searchTimer = window.setTimeout(() => void refreshCatalog(), 250)
 })
 
-watch(selectedBranchId, (value) => {
-  if (value && value !== 'all') workshop.setSelectedBranchContext(value)
+// Reset the add/edit form whenever the topbar switches the branch.
+watch(selectedBranchId, () => {
   resetMaterialForm()
 })
-
-watch(
-  () => workshop.selectedBranchContext,
-  () => {
-    applyContextBranch()
-  },
-)
 
 watch(
   () => route.query.search,
@@ -280,8 +239,6 @@ watch(
 onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
-  selectedBranchId.value = accessibleBranches.value[0]?.id ?? ''
-  applyContextBranch()
   window.clearTimeout(searchTimer)
   await refreshCatalog()
 })
@@ -295,16 +252,7 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Filial material katalogi</h1>
-      </div>
-      <div class="tools">
-        <RouterLink
-          v-if="selectedBranch"
-          :to="rolePath(`/workshop/branches/${selectedBranch.id}`)"
-          class="mp-button mp-button-primary"
-        >
-          Filial tafsiloti
-        </RouterLink>
+        <h1>Material katalogi</h1>
       </div>
     </div>
 
@@ -319,24 +267,19 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <div class="filters">
-        <label class="grid gap-1">
-          <span class="filter-label">Qidirish</span>
-          <input v-model="search" class="mp-input min-w-64" placeholder="Material qidirish..." />
+      <div class="mp-filters">
+        <label class="mp-filter-input">
+          <span>Qidirish</span>
+          <input v-model="search" placeholder="Material qidirish..." />
         </label>
-        <ProjectDropdown v-model="selectedBranchId" label="Filial" :options="branchFilterOptions" />
-        <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" />
+        <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" top-label />
         <ProjectDropdown
           v-model="manufacturerFilter"
           label="Ishlab chiqaruvchi"
           :options="manufacturerOptions"
+          top-label
         />
-        <ProjectDropdown
-          v-model="materialTypeFilter"
-          label="Panel turi"
-          :options="materialTypeOptions"
-        />
-        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
+        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
       </div>
 
       <div v-if="rowActionError" class="banner danger mb-4">
@@ -421,7 +364,6 @@ onBeforeUnmount(() => {
               <tr>
                 <th>Material</th>
                 <th>Tur</th>
-                <th>Filial</th>
                 <th class="right">Narx</th>
                 <th class="right">Min zaxira</th>
                 <th>Holat</th>
@@ -445,7 +387,6 @@ onBeforeUnmount(() => {
                     >{{ row.material.kind === 'edge' ? 'Krom (metr)' : 'Panel' }}
                   </span>
                 </td>
-                <td>{{ selectedBranch?.name ?? '—' }}</td>
                 <td class="amt">
                   {{ formatTiyin(row.price_tiyin) }}
                   <small>{{ priceUnit(row.material.kind) }}</small>
@@ -466,7 +407,7 @@ onBeforeUnmount(() => {
                     class="mp-button mp-button-outline min-h-8 px-2 text-xs"
                     @click="editBranchMaterial(row)"
                   >
-                    Narx / min
+                    Tahrirlash
                   </button>
                   <button
                     type="button"
@@ -478,14 +419,14 @@ onBeforeUnmount(() => {
                       rowActionId === row.id
                         ? 'Saqlanmoqda'
                         : row.status === 'active'
-                          ? 'Mijozdan yashirish'
-                          : "Mijozga ko'rsatish"
+                          ? 'Yashirish'
+                          : "Ko'rsatish"
                     }}
                   </button>
                 </td>
               </tr>
               <tr v-if="workshop.branchMaterials.length === 0">
-                <td colspan="7">
+                <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
                     <h3>Bu filialga material qo'shilmagan</h3>
                     <p>Platforma katalogidan material qo'shing.</p>

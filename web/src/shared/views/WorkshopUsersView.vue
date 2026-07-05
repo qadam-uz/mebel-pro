@@ -12,15 +12,16 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import {
   grantSummary,
   initials,
   permissionLabels,
   workshopErrorMessage,
 } from '@/shared/app/workshopUi'
-import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -68,29 +69,14 @@ const branchOptions = computed(() => [
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   })),
 ])
-const branchFilterOptions = computed(() => [
-  {
-    value: 'all',
-    label: 'Barcha filiallar',
-    meta: `${workshop.branches.length} filial`,
-    status: 'active' as const,
-  },
-  ...workshop.branches.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.address,
-    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
-  })),
+const branchFilterOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: 'Barcha filiallar' },
+  ...workshop.branches.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
-const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha xodimlar', status: 'active' as const },
-  { value: 'active', label: 'Faol', meta: 'kirishi mumkin', status: 'active' as const },
-  {
-    value: 'blocked',
-    label: 'Bloklangan',
-    meta: 'kirishi to`xtatilgan',
-    status: 'blocked' as const,
-  },
+const statusOptions: DropdownOption[] = [
+  { value: 'all', label: 'Hammasi' },
+  { value: 'active', label: 'Faol', dot: 'success' },
+  { value: 'blocked', label: 'Bloklangan', dot: 'danger' },
 ]
 const createGrantBranches = computed(() =>
   workshop.branches.filter((branch) => form.branchIds.includes(branch.id)),
@@ -481,18 +467,13 @@ onBeforeUnmount(() => {
           <span>Qidirish</span>
           <input v-model="search" placeholder="Ism yoki login..." />
         </label>
-        <FormSelect
+        <ProjectDropdown
           v-model="branchFilter"
-          class="mp-filter-select"
           label="Filial"
           :options="branchFilterOptions"
+          top-label
         />
-        <FormSelect
-          v-model="statusFilter"
-          class="mp-filter-select"
-          label="Holat"
-          :options="statusOptions"
-        />
+        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
       </div>
 
       <section v-if="workshop.loading" class="card p-5" aria-live="polite">

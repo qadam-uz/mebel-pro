@@ -13,8 +13,13 @@ export interface NavItem {
 export interface DropdownOption {
   value: string
   label: string
-  meta: string
-  status: 'active' | 'pending' | 'blocked'
+  // Secondary line + status dot — rendered by the rich dropdown skin only
+  // (topbar, forms). Filter bars use the compact skin, which ignores both.
+  meta?: string
+  status?: 'active' | 'pending' | 'blocked'
+  // Colored dot for the compact filter skin; set only on status filters
+  // (mapped from the matching pill palette), omitted everywhere else.
+  dot?: 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'muted'
 }
 
 export interface RoleConfig {

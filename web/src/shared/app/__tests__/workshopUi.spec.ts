@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { workshopErrorMessage } from '@/shared/app/workshopUi'
+import { stockTransactionTypeLabel, workshopErrorMessage } from '@/shared/app/workshopUi'
 
 describe('workshop UI helpers', () => {
   it('maps backend/action error codes to Uzbek operator copy', () => {
@@ -12,5 +12,12 @@ describe('workshop UI helpers', () => {
   it('hides unknown raw codes behind a generic recovery message', () => {
     expect(workshopErrorMessage('future_raw_code')).toBe("Amal bajarilmadi. Qayta urinib ko'ring.")
     expect(workshopErrorMessage(null)).toBe("Amal bajarilmadi. Qayta urinib ko'ring.")
+  })
+
+  it('localizes stock transaction types', () => {
+    expect(stockTransactionTypeLabel('stock_in')).toBe('Kirim')
+    expect(stockTransactionTypeLabel('consume')).toBe('Sarf')
+    expect(stockTransactionTypeLabel('restore')).toBe('Qaytarish')
+    expect(stockTransactionTypeLabel('adjust')).toBe('Tuzatish')
   })
 })

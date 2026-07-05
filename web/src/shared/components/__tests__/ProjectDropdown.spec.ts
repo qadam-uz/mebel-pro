@@ -77,4 +77,77 @@ describe('ProjectDropdown', () => {
     expect(listbox.style.width).toBe('260px')
     wrapper.unmount()
   })
+
+  it('renders an external caption in top-label mode', () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: { label: 'Holat', modelValue: 'a', options, topLabel: true },
+    })
+    const caption = wrapper.get('.mp-filter-dd-label')
+    expect(caption.text()).toBe('Holat')
+    expect(caption.attributes('aria-hidden')).toBe('true')
+    // The in-trigger eyebrow duplicate is hidden from sight for AT-only use.
+    expect(wrapper.get('button .sr-only').text()).toBe('Holat')
+  })
+
+  it('compact filter skin drops the icon tile, meta text, and status dots', async () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: { label: 'Tur', modelValue: 'a', options, topLabel: true },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+    // No rich-skin icon tile or secondary meta line on the trigger.
+    expect(button.find('.mp-dot').exists()).toBe(false)
+    expect(button.text()).not.toContain('open')
+
+    await button.trigger('click')
+    await nextTick()
+    const listbox = document.querySelector('[role="listbox"]') as HTMLUListElement
+    // Option rows show only labels: no meta, no status-derived dots.
+    expect(listbox.textContent).toContain('A branch')
+    expect(listbox.textContent).not.toContain('open')
+    expect(listbox.querySelectorAll('.bg-success, .bg-warning, .bg-ink-muted')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('compact skin renders colored dots only when options declare them', async () => {
+    const statusOptions: DropdownOption[] = [
+      { value: 'all', label: 'Hammasi' },
+      { value: 'active', label: 'Faol', dot: 'success' },
+      { value: 'cancelled', label: 'Bekor qilingan', dot: 'danger' },
+    ]
+    const wrapper = mount(ProjectDropdown, {
+      props: { label: 'Holat', modelValue: 'active', options: statusOptions, topLabel: true },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+    // The trigger mirrors the selected option's dot.
+    expect(button.find('.bg-success').exists()).toBe(true)
+
+    await button.trigger('click')
+    await nextTick()
+    const listbox = document.querySelector('[role="listbox"]') as HTMLUListElement
+    expect(listbox.querySelectorAll('.bg-success')).toHaveLength(1)
+    expect(listbox.querySelectorAll('.bg-danger')).toHaveLength(1)
+    // Dot-less options keep an invisible placeholder so labels align.
+    expect(listbox.querySelectorAll('.bg-transparent')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('stops Escape from bubbling out of an open listbox (two-stage close)', async () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: { label: 'Branch', modelValue: 'a', options },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+    await button.trigger('click')
+    await nextTick()
+
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    const stop = vi.spyOn(event, 'stopPropagation')
+    button.element.dispatchEvent(event)
+    await nextTick()
+    expect(stop).toHaveBeenCalled()
+    expect(document.querySelector('[role="listbox"]')).toBeNull()
+    wrapper.unmount()
+  })
 })

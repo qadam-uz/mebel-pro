@@ -2824,14 +2824,6 @@
     margin: 4px 0;
   }
 
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 10px;
-    margin-bottom: 16px;
-  }
-
   .filter-label {
     color: var(--color-ink-muted);
     font-size: 11px;
@@ -4348,8 +4340,13 @@
     gap: 4px;
   }
 
+  /* Workshop search fields may flex, but never balloon across the row. */
+  .mp-filter-input {
+    max-width: 340px;
+  }
+
   :where(.mp-filter-input, .admin-filter-input) > span:not(.sr-only),
-  :where(.mp-filter-select, .admin-filter-select) > .form-select-label,
+  :where(.admin-filter-select) > .form-select-label,
   :where(.mp-filters, .admin-filters) > .relative > span:first-child {
     display: flex;
     flex: none;
@@ -4382,21 +4379,38 @@
     padding: 7px 12px;
   }
 
+  /* Workshop filter row runs at the slimmer 40px control height. */
+  .mp-filter-input > input {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
   .mp-filter-input > input:focus-visible,
   .admin-filter-input > input:focus-visible {
     outline: 3px solid var(--color-accent);
     outline-offset: 2px;
   }
 
-  :where(.mp-filter-select, .admin-filter-select),
-  :where(.mp-filters, .admin-filters) > .relative {
+  :where(.admin-filter-select),
+  .admin-filters > .relative {
     min-width: 160px;
     flex: 1 1 170px;
   }
 
-  .mp-filter-select > div > button,
+  /* Workshop filter selects are quiet: they size to their content instead of
+     growing to fill the row (the admin app keeps the older stretched look). */
+  .mp-filters > .relative {
+    min-width: 8rem;
+    max-width: 15rem;
+    flex: 0 1 auto;
+  }
+
+  /* The date-range picker's trigger carries two full dates — more room. */
+  .mp-filters > .mp-filter-date {
+    max-width: 19rem;
+  }
+
   .admin-filter-select > div > button,
-  .mp-filters > .relative > button,
   .admin-filters > .relative > button {
     width: 100%;
     min-width: 0 !important;
@@ -4404,11 +4418,99 @@
     border-radius: 8px !important;
   }
 
-  :where(.mp-filters, .admin-filters) > .mp-button {
+  .mp-filters > .relative > button {
+    width: 100%;
+  }
+
+  .admin-filters > .mp-button {
     min-height: 48px;
     border-radius: 8px;
     padding-block: 7px;
     margin-top: 22px;
+  }
+
+  .mp-filters > .mp-button {
+    min-height: 40px;
+    border-radius: 8px;
+    padding-block: 5px;
+    margin-top: 22px;
+  }
+
+  /* Top-label ProjectDropdown caption when the dropdown stands alone (outside a
+     `.mp-filters` bar the shared caption rule above already covers it). */
+  .mp-filter-dd-label {
+    color: var(--color-ink-muted);
+    font-size: 10.5px;
+    font-weight: 850;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  /* Toggle chip used as a boolean filter (e.g. low-stock only). Sits in a
+     `.mp-filters` row; margin-top drops it to the control baseline, skipping the
+     18px caption row the labelled controls carry. */
+  .mp-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: 999px;
+    background: var(--color-elevated);
+    color: var(--color-ink-soft);
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+    transition:
+      border-color 150ms ease,
+      background 150ms ease,
+      color 150ms ease;
+  }
+
+  .mp-filters > .mp-filter-chip {
+    margin-top: 22px;
+  }
+
+  .mp-filter-chip[aria-pressed='true'] {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  .mp-filter-chip:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .mp-filter-chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.45;
+  }
+
+  .mp-filter-chip[aria-pressed='true'] .mp-filter-chip-dot {
+    opacity: 1;
+  }
+
+  /* Text-only clear action; drops to the control baseline like the chip. */
+  .mp-filters > .mp-filter-reset {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    margin-top: 22px;
+    padding: 0 8px;
+    color: var(--color-ink-soft);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    transition: color 150ms ease;
+  }
+
+  .mp-filters > .mp-filter-reset:hover {
+    color: var(--color-ink);
   }
 
   .admin-field {
@@ -5096,12 +5198,19 @@
     }
 
     :where(.mp-filter-input, .admin-filter-input),
-    :where(.mp-filter-select, .admin-filter-select),
+    :where(.admin-filter-select),
     :where(.mp-filters, .admin-filters) > .relative,
     :where(.mp-filters, .admin-filters) > .mp-button {
       width: 100%;
       min-width: 0;
       flex: none;
+    }
+
+    /* Single-column layout: compact workshop controls widen back out. */
+    .mp-filters > .relative,
+    .mp-filters > .mp-filter-date,
+    .mp-filter-input {
+      max-width: none;
     }
 
     .admin-modal {

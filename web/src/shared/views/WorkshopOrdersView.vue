@@ -4,6 +4,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
+import { isoDate, type DateRangePreset } from '@/shared/app/dateRange'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import { useRolePath } from '@/shared/app/paths'
 import { assignmentChipsForOrder } from '@/shared/app/workshopAssignments'
 import {
@@ -15,6 +17,7 @@ import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -41,7 +44,9 @@ const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
 const search = ref('')
-const dateFilter = ref<'all' | 'today' | 'week' | 'month'>('all')
+const datePreset = ref<DateRangePreset>('all')
+const dateFrom = ref('')
+const dateTo = ref('')
 const openActionMenuId = ref<string | null>(null)
 const listActionError = ref<string | null>(null)
 const listActionTraceId = ref<string | null>(null)
@@ -69,22 +74,17 @@ const workerOptionsByBranch = ref<Record<string, WorkshopWorkerOption[]>>({})
 const workerOptionLoadingBranches = new Set<string>()
 let timer: number | undefined
 
-const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: '', status: 'active' as const },
-  { value: 'active', label: 'Faol', meta: '', status: 'active' as const },
-  { value: 'new', label: 'Yangi', meta: '', status: 'pending' as const },
-  { value: 'confirmed', label: 'Tasdiqlangan', meta: '', status: 'pending' as const },
-  { value: 'cutting', label: 'Kesilmoqda', meta: '', status: 'active' as const },
-  { value: 'edge_banding', label: 'Kromda', meta: '', status: 'active' as const },
-  { value: 'ready', label: 'Tayyor', meta: '', status: 'active' as const },
-  { value: 'completed', label: 'Tugatilgan', meta: '', status: 'blocked' as const },
-  { value: 'cancelled', label: 'Bekor qilingan', meta: '', status: 'blocked' as const },
-]
-const dateOptions = [
-  { value: 'all', label: 'Barcha sanalar', meta: '', status: 'active' as const },
-  { value: 'today', label: 'Bugun', meta: '', status: 'active' as const },
-  { value: 'week', label: 'Oxirgi 7 kun', meta: '', status: 'pending' as const },
-  { value: 'month', label: 'Joriy oy', meta: '', status: 'pending' as const },
+// Dots mirror the order-status pill palette (orderPillClass).
+const statusOptions: DropdownOption[] = [
+  { value: 'all', label: 'Hammasi' },
+  { value: 'active', label: 'Faol', dot: 'accent' },
+  { value: 'new', label: 'Yangi', dot: 'muted' },
+  { value: 'confirmed', label: 'Tasdiqlangan', dot: 'info' },
+  { value: 'cutting', label: 'Kesilmoqda', dot: 'accent' },
+  { value: 'edge_banding', label: 'Kromda', dot: 'accent' },
+  { value: 'ready', label: 'Tayyor', dot: 'success' },
+  { value: 'completed', label: 'Tugatilgan', dot: 'muted' },
+  { value: 'cancelled', label: 'Bekor qilingan', dot: 'danger' },
 ]
 const boardColumns = computed(() =>
   activeWorkshopStatuses.map((state) => ({
@@ -98,11 +98,12 @@ const visibleOrderBranchIds = computed(() => [
 ])
 // Branch and search are driven by the topbar (context + global search), so the
 // in-page reset only clears the status / date dropdowns.
-const hasActiveFilters = computed(() => status.value !== 'active' || dateFilter.value !== 'all')
+const hasActiveFilters = computed(() => status.value !== 'active' || datePreset.value !== 'all')
 
 function resetFilters() {
   status.value = 'active'
-  dateFilter.value = 'all'
+  // DateRangePicker re-derives from/to (to open) when the preset flips to 'all'.
+  datePreset.value = 'all'
 }
 
 function applyContextBranch() {
@@ -137,41 +138,13 @@ function applyRouteBranch() {
   return false
 }
 
-function isoDate(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function dateRange() {
-  const now = new Date()
-  if (dateFilter.value === 'today') {
-    const today = isoDate(now)
-    return { date_from: today, date_to: today }
-  }
-  if (dateFilter.value === 'week') {
-    const start = new Date(now)
-    start.setDate(now.getDate() - 6)
-    return { date_from: isoDate(start), date_to: isoDate(now) }
-  }
-  if (dateFilter.value === 'month') {
-    return {
-      date_from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-      date_to: isoDate(now),
-    }
-  }
-  return { date_from: null, date_to: null }
-}
-
 function listFilters() {
-  const range = dateRange()
   return {
     branch_id: branchId.value === 'all' ? null : branchId.value,
     status: status.value,
     search: search.value,
-    date_from: range.date_from,
-    date_to: range.date_to,
+    date_from: dateFrom.value || null,
+    date_to: dateTo.value || null,
   }
 }
 
@@ -605,7 +578,7 @@ watch(branchId, (value) => {
   if (value !== 'all') workshop.setSelectedBranchContext(value)
 })
 
-watch([branchId, status, search, dateFilter], () => {
+watch([branchId, status, search, dateFrom, dateTo], () => {
   window.clearTimeout(timer)
   timer = window.setTimeout(() => void refresh(), 250)
 })
@@ -674,15 +647,14 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="filters">
-      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" hide-label />
-      <ProjectDropdown v-model="dateFilter" label="Sana" :options="dateOptions" hide-label />
-      <button
-        v-if="hasActiveFilters"
-        type="button"
-        class="min-h-11 self-end px-2 text-xs font-bold text-ink-soft transition hover:text-ink"
-        @click="resetFilters"
-      >
+    <div class="mp-filters">
+      <ProjectDropdown v-model="status" label="Holat" :options="statusOptions" top-label />
+      <DateRangePicker
+        v-model:preset="datePreset"
+        v-model:date-from="dateFrom"
+        v-model:date-to="dateTo"
+      />
+      <button v-if="hasActiveFilters" type="button" class="mp-filter-reset" @click="resetFilters">
         Tozalash
       </button>
     </div>

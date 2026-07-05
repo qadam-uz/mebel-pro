@@ -2,10 +2,13 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -58,8 +61,10 @@ const orderBalanceError = ref<string | null>(null)
 const orderBalanceTraceId = ref<string | null>(null)
 const voidTarget = ref<{ kind: 'expense' | 'income'; id: string } | null>(null)
 const voidReason = ref('')
-const dateFrom = ref(formatDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)))
-const dateTo = ref(today)
+const initialRange = presetRange('month', now)
+const datePreset = ref<DateRangePreset>('month')
+const dateFrom = ref(initialRange.from ?? '')
+const dateTo = ref(initialRange.to ?? '')
 const filterBranchId = ref('all')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
@@ -114,19 +119,12 @@ const branchOptions = computed(() => [
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   })),
 ])
-const filterBranchOptions = computed(() => [
+const filterBranchOptions = computed<DropdownOption[]>(() => [
   {
     value: 'all',
     label: permissions.isOwner.value ? 'Hamma filiallar' : 'Mening filiallarim',
-    meta: 'ruxsat doirasi',
-    status: 'active' as const,
   },
-  ...financeBranches.value.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.address,
-    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
-  })),
+  ...financeBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
 const orderOptions = computed(() => [
   { value: '', label: 'Buyurtmani tanlang', meta: 'to`lov bog`lanadi', status: 'pending' as const },
@@ -187,15 +185,10 @@ const methodOptions = [
   { value: 'bank_transfer', label: 'Bank / karta', meta: 'o`tkazma', status: 'active' as const },
   { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi', status: 'active' as const },
 ]
-const statusOptions = [
-  { value: 'recorded', label: 'Yozilgan', meta: 'hisobotga kiradi', status: 'active' as const },
-  {
-    value: 'voided',
-    label: 'Bekor qilingan',
-    meta: 'hisobotdan chiqqan',
-    status: 'blocked' as const,
-  },
-  { value: 'all', label: 'Hammasi', meta: 'barcha holatlar', status: 'pending' as const },
+const statusOptions: DropdownOption[] = [
+  { value: 'recorded', label: 'Yozilgan', dot: 'success' },
+  { value: 'voided', label: 'Bekor qilingan', dot: 'danger' },
+  { value: 'all', label: 'Hammasi' },
 ]
 const categoryLabel = Object.fromEntries(
   categoryOptions.map((option) => [option.value, option.label]),
@@ -293,6 +286,15 @@ async function refresh() {
 watch(activeTab, (next, previous) => {
   if (next === previous) return
   void refresh()
+})
+
+// Filters auto-apply (the explicit "Qo'llash" button is gone). Debounced so a
+// preset-driven from+to change or fast dropdown edits collapse into one fetch.
+// activeTab is intentionally excluded — its own watcher above already refreshes.
+let filterTimer: number | undefined
+watch([dateFrom, dateTo, filterBranchId, expenseCategory, incomeType, statusFilter], () => {
+  window.clearTimeout(filterTimer)
+  filterTimer = window.setTimeout(() => void refresh(), 250)
 })
 
 function resetExpenseForm() {
@@ -785,27 +787,33 @@ onMounted(async () => {
         </form>
       </section>
 
-      <div class="filters">
-        <label class="field">
-          <span>Sana boshidan</span>
-          <input v-model="dateFrom" type="date" class="mp-input" />
-        </label>
-        <label class="field">
-          <span>Sana oxiri</span>
-          <input v-model="dateTo" type="date" class="mp-input" />
-        </label>
+      <div class="mp-filters">
+        <DateRangePicker
+          v-model:preset="datePreset"
+          v-model:date-from="dateFrom"
+          v-model:date-to="dateTo"
+        />
         <ProjectDropdown
           v-if="activeTab === 'expense'"
           v-model="expenseCategory"
           label="Kategoriya"
           :options="categoryOptions"
+          top-label
         />
-        <ProjectDropdown v-else v-model="incomeType" label="Tur" :options="incomeTypeOptions" />
-        <ProjectDropdown v-model="filterBranchId" label="Filial" :options="filterBranchOptions" />
-        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" />
-        <button type="button" class="mp-button mp-button-primary self-end" @click="refresh">
-          Qo'llash
-        </button>
+        <ProjectDropdown
+          v-else
+          v-model="incomeType"
+          label="Tur"
+          :options="incomeTypeOptions"
+          top-label
+        />
+        <ProjectDropdown
+          v-model="filterBranchId"
+          label="Filial"
+          :options="filterBranchOptions"
+          top-label
+        />
+        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
       </div>
 
       <section v-if="finance.loading" class="card p-5" aria-live="polite">

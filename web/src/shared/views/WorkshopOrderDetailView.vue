@@ -692,7 +692,7 @@ onMounted(loadDetail)
                 {{
                   hasShortfall
                     ? 'Kesishdan keyin zaxira yetishmaydi:'
-                    : 'Kesishdan keyin past zaxira:'
+                    : 'Kesishdan keyin kam qoladi:'
                 }}
                 <b>
                   {{

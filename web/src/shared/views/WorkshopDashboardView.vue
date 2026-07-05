@@ -328,12 +328,12 @@ watch(
           class="kpi no-underline"
           :class="lowStock.length > 0 ? 'warn' : ''"
         >
-          <div class="lbl">Past zaxiralar</div>
+          <div class="lbl">Kam qolgan materiallar</div>
           <div class="v num" :class="lowStock.length > 0 ? 'warn-text' : ''">
             <span v-if="dashboardReady">{{ lowStock.length }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
-          <div class="d"><span>me'yordan past</span></div>
+          <div class="d"><span>me'yordan kam</span></div>
         </RouterLink>
       </div>
 
@@ -582,7 +582,7 @@ watch(
         <div class="grid content-start gap-[18px]">
           <div class="card">
             <div class="card-h">
-              <h2>Tugayotgan zaxira</h2>
+              <h2>Kam qolgan materiallar</h2>
               <RouterLink :to="rolePath('/workshop/inventory')" class="more">ombor</RouterLink>
             </div>
             <div class="card-b">
@@ -596,7 +596,7 @@ watch(
                 <p>trace_id: {{ workshop.inventoryTraceId ?? 'unavailable' }}</p>
               </div>
               <div v-else-if="lowStock.length === 0" class="st-empty !py-8">
-                <h3>Past zaxira yo'q</h3>
+                <h3>Kam qolgan material yo'q</h3>
                 <p>Tanlangan filial materiallari me'yorda.</p>
               </div>
               <div v-else>
@@ -612,7 +612,7 @@ watch(
                   </div>
                   <div class="meta warn-text">
                     {{ formatStockQuantity(item.on_hand, item.display_unit) }}
-                    <small class="block text-[11px] font-extrabold">Past zaxira</small>
+                    <small class="block text-[11px] font-extrabold">Kam qolgan</small>
                   </div>
                 </div>
               </div>

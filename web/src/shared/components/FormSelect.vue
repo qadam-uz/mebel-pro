@@ -102,7 +102,12 @@ function onKeydown(event: KeyboardEvent) {
     event.preventDefault()
     move(-1)
   } else if (event.key === 'Escape') {
-    closeList(true)
+    // Two-stage Escape: only swallow the key while the listbox is open, so a
+    // second press can still close a host dialog.
+    if (open.value) {
+      event.stopPropagation()
+      closeList(true)
+    }
   } else if (event.key === 'Tab') {
     closeList()
   }

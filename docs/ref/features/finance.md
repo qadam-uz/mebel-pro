@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-04
+updated: 2026-07-05
 order: 55
 ---
 
@@ -109,7 +109,10 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
 (visible with `manage_finance` or `view_finance_reports`). The group's own pages:
 
 - **Income & expenses** (`/workshop/finance/expenses`, with an income deep-link at
-  `/workshop/finance/income`; `manage_finance`) — one page, two tabs.
+  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The date range is
+  the app-wide date-range picker: one trigger opening preset shortcuts (today / last
+  7 days / this month / last month / last 30 days / all) beside a calendar for custom
+  spans; every filter auto-applies — there is no separate apply button.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, branch, status, min / max
     amount. **+ Income** → form (type → if `order_payment`, an order picker scoped to the
@@ -120,7 +123,8 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     status, min / max amount. **+ Expense** → form (category, branch, amount, date, vendor,
     description, receipt). Row actions: Edit · Void (reason). No Delete.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
-  `manage_finance`) — period + branch picker; table per worker (panels, cuts, orders
+  `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
+  per worker (panels, cuts, orders
   banded, metres by edge material, with a thickness rollup); a "record salary expense"
   shortcut that opens the Expense form pre-set to `category = salary` for that worker
   (the accountant fills the amount). Empty: "No production in this period."
