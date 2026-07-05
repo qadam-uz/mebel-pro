@@ -23,6 +23,7 @@ import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
@@ -119,7 +120,7 @@ const form = reactive({
   name: '',
   branchName: '',
   branchAddress: '',
-  branchPhone: '+998',
+  branchPhone: '',
   ownerLogin: '',
   tempPassword: '',
 })
@@ -222,7 +223,7 @@ function resetForm() {
   form.name = ''
   form.branchName = ''
   form.branchAddress = ''
-  form.branchPhone = '+998'
+  form.branchPhone = ''
   form.ownerLogin = ''
   form.tempPassword = ''
   resetWorkingHours()
@@ -316,7 +317,7 @@ onMounted(async () => {
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span>Qidiruv</span>
+        <span>Qidirish</span>
         <input v-model="search" placeholder="Ustaxona nomi yoki egasi" />
       </label>
       <FormSelect
@@ -471,11 +472,9 @@ onMounted(async () => {
               </label>
               <label class="admin-field" for="b-phone">
                 <span>Filial telefoni</span>
-                <input
+                <PhoneInput
                   id="b-phone"
                   v-model="form.branchPhone"
-                  autocomplete="tel"
-                  inputmode="tel"
                   required
                   :aria-invalid="!!provisionFieldErrors.branchPhone"
                   aria-describedby="b-phone-error"

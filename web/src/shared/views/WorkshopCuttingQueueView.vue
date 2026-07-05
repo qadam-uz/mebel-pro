@@ -115,7 +115,6 @@ onMounted(refresh)
     <div class="page-head">
       <div>
         <h1>Kesish navbati</h1>
-        <p class="sub">Sizga tayinlangan buyurtmalar. Boshqaning ishi bu yerda ko'rinmaydi.</p>
       </div>
       <div class="tools">
         <RouterLink

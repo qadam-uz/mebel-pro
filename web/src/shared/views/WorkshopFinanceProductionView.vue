@@ -2,12 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { useRolePath } from '@/shared/app/paths'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import FormSelect from '@/shared/components/FormSelect.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
+import DateRangePicker from '@/shared/components/DateRangePicker.vue'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDateInputValue, formatStockQuantity } from '@/shared/formatters'
+import { formatStockQuantity } from '@/shared/formatters'
 import {
   useFinanceStore,
   type WorkerProductionEdgeLine,
@@ -21,8 +23,10 @@ const workshop = useWorkshopStore()
 const permissions = useWorkshopPermissions()
 const rolePath = useRolePath()
 const today = new Date()
-const dateFrom = ref(formatDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)))
-const dateTo = ref(formatDateInputValue(today))
+const initialRange = presetRange('month', today)
+const datePreset = ref<DateRangePreset>('month')
+const dateFrom = ref(initialRange.from ?? '')
+const dateTo = ref(initialRange.to ?? '')
 const branchId = ref('all')
 
 const financePermissions = [p.manageFinance, p.viewFinanceReports]
@@ -31,13 +35,9 @@ const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, financePermissions),
 )
 
-const branchOptions = computed<ChoiceOption[]>(() => [
-  { value: 'all', label: 'Barcha filiallar', meta: 'ruxsatli ishlab chiqarish' },
-  ...accessibleBranches.value.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address,
-  })),
+const branchOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: 'Barcha filiallar' },
+  ...accessibleBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
 
 function applyContextBranch() {
@@ -100,6 +100,13 @@ watch(branchId, (value) => {
   void refresh()
 })
 
+// Date range auto-applies now that the explicit "Qo'llash" button is gone.
+let dateTimer: number | undefined
+watch([dateFrom, dateTo], () => {
+  window.clearTimeout(dateTimer)
+  dateTimer = window.setTimeout(() => void refresh(), 250)
+})
+
 watch(
   () => workshop.selectedBranchContext,
   () => {
@@ -113,11 +120,7 @@ watch(
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="font-serif text-3xl font-semibold text-ink">Xodimlar mehnati</h1>
-        <p class="mt-2 max-w-2xl text-base text-ink-soft">
-          Maosh hisoblashda buxgalter ishlatadigan ishlab chiqarish sanog'i.
-        </p>
       </div>
-      <button type="button" class="mp-button mp-button-outline" @click="refresh">Yangilash</button>
     </div>
 
     <section v-if="!canViewFinance" class="mp-surface p-5 text-sm font-bold text-warning">
@@ -125,19 +128,13 @@ watch(
     </section>
 
     <section v-else class="mp-surface p-4">
-      <div class="grid gap-3 md:grid-cols-[220px_1fr_1fr_auto]">
-        <FormSelect v-model="branchId" label="Filial" :options="branchOptions" />
-        <label class="block text-sm font-bold text-ink" for="production-filter-from">
-          Boshlanish
-          <input id="production-filter-from" v-model="dateFrom" type="date" class="mp-input mt-1" />
-        </label>
-        <label class="block text-sm font-bold text-ink" for="production-filter-to">
-          Tugash
-          <input id="production-filter-to" v-model="dateTo" type="date" class="mp-input mt-1" />
-        </label>
-        <button type="button" class="mp-button mp-button-primary self-end" @click="refresh">
-          Qo'llash
-        </button>
+      <div class="mp-filters !mb-0">
+        <ProjectDropdown v-model="branchId" label="Filial" :options="branchOptions" top-label />
+        <DateRangePicker
+          v-model:preset="datePreset"
+          v-model:date-from="dateFrom"
+          v-model:date-to="dateTo"
+        />
       </div>
     </section>
 

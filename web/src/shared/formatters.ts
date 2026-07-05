@@ -38,6 +38,16 @@ export function formatDateInputValue(value: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// Localize a backend stock-unit enum for display. The API emits "metre" (edges)
+// and "panel" (panels); map those (and any legacy piece/pcs) to short Uzbek
+// labels so a raw English enum never surfaces in the UI.
+export function formatStockUnit(unit: string): string {
+  if (unit === 'metre' || unit === 'm') return 'm'
+  if (unit === 'panel') return 'panel'
+  if (unit === 'pcs' || unit === 'piece') return 'dona'
+  return unit
+}
+
 export function formatStockQuantity(value: number, displayUnit: string): string {
   if (displayUnit === 'm' || displayUnit === 'metre') {
     // metres use a dot decimal so 2.5 m is not misread as 2,500 m (uz-UZ uses a comma decimal)
@@ -46,7 +56,7 @@ export function formatStockQuantity(value: number, displayUnit: string): string 
       .replace(',', '.')
     return `${metres} m`
   }
-  return `${new Intl.NumberFormat('uz-UZ').format(value)} ${displayUnit}`
+  return `${new Intl.NumberFormat('uz-UZ').format(value)} ${formatStockUnit(displayUnit)}`
 }
 
 export function parseDisplayQuantity(value: string, displayUnit: string): number {

@@ -113,24 +113,6 @@ export interface ClientBranchOption {
   today_hours: { open: string | null; close: string | null }
 }
 
-export interface WorkshopCuttingPlanSummary {
-  id: string
-  order_id: string
-  order_number: string
-  client_id: string
-  branch_id: string
-  algorithm_name: string
-  waste_percentage: string
-  panels_used_by_material: Record<string, number>
-  total_cut_length_mm: number
-  total_edge_length_mm: number
-  confirmed_at: string | null
-}
-
-export interface WorkshopCuttingPlanDetail extends WorkshopCuttingPlanSummary {
-  result: CuttingResult
-}
-
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
   if (!material) return "Material yo'q"
   const size =
@@ -212,13 +194,10 @@ export const useCuttingStore = defineStore('cutting', () => {
   // drives client-side filtering — so reuse a recent result instead of re-fetching
   // an identical payload. Keyed by the full query; ~30s freshness like branch-options.
   const materialsCache = new Map<string, { at: number; items: ClientCatalogMaterialOption[] }>()
-  const workshopPlans = ref<WorkshopCuttingPlanSummary[]>([])
-  const currentWorkshopPlan = ref<WorkshopCuttingPlanDetail | null>(null)
   const loading = ref(false)
   const saving = ref(false)
   const optimizing = ref(false)
   const materialsLoading = ref(false)
-  const workshopLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
   // PDF download feedback (CB-17): id of the result currently downloading, plus
@@ -399,47 +378,6 @@ export const useCuttingStore = defineStore('cutting', () => {
     )
   }
 
-  async function loadWorkshopPlans() {
-    workshopLoading.value = true
-    error.value = null
-    traceId.value = null
-    try {
-      workshopPlans.value = await api.get<WorkshopCuttingPlanSummary[]>(
-        '/workshop/cutting-plans',
-        authInit(),
-      )
-    } catch (errorValue) {
-      captureError(errorValue, 'workshop_cutting_plans_load_failed')
-    } finally {
-      workshopLoading.value = false
-    }
-  }
-
-  async function loadWorkshopPlan(id: string) {
-    workshopLoading.value = true
-    error.value = null
-    traceId.value = null
-    currentWorkshopPlan.value = null
-    try {
-      currentWorkshopPlan.value = await api.get<WorkshopCuttingPlanDetail>(
-        `/workshop/cutting-plans/${id}`,
-        authInit(),
-      )
-    } catch (errorValue) {
-      captureError(errorValue, 'workshop_cutting_plan_load_failed')
-    } finally {
-      workshopLoading.value = false
-    }
-  }
-
-  async function downloadWorkshopPdf(resultId: string) {
-    await downloadPdf(
-      `/workshop/cutting-plans/${resultId}/pdf`,
-      `cutting-${resultId}.pdf`,
-      resultId,
-    )
-  }
-
   async function downloadPdf(path: string, filename: string, id: string) {
     downloadingId.value = id
     downloadError.value = null
@@ -461,13 +399,10 @@ export const useCuttingStore = defineStore('cutting', () => {
     panelOptions.value = []
     edgeOptions.value = []
     materialsCache.clear()
-    workshopPlans.value = []
-    currentWorkshopPlan.value = null
     loading.value = false
     saving.value = false
     optimizing.value = false
     materialsLoading.value = false
-    workshopLoading.value = false
     error.value = null
     traceId.value = null
     downloadingId.value = null
@@ -482,13 +417,10 @@ export const useCuttingStore = defineStore('cutting', () => {
     branchOptions,
     panelOptions,
     edgeOptions,
-    workshopPlans,
-    currentWorkshopPlan,
     loading,
     saving,
     optimizing,
     materialsLoading,
-    workshopLoading,
     error,
     traceId,
     downloadingId,
@@ -504,9 +436,6 @@ export const useCuttingStore = defineStore('cutting', () => {
     loadBranchOptions,
     loadMaterials,
     downloadClientPdf,
-    loadWorkshopPlans,
-    loadWorkshopPlan,
-    downloadWorkshopPdf,
     reset,
   }
 })

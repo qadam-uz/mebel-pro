@@ -13,9 +13,7 @@ from app.modules.cutting.api import (
     delete_draft,
     get_client_result,
     get_draft,
-    get_workshop_cutting_plan,
     list_drafts,
-    list_workshop_cutting_plans,
     optimize_draft,
     render_cutting_pdf,
     render_cutting_svg,
@@ -26,8 +24,6 @@ from app.modules.cutting.schemas import (
     CuttingChooseResultRequest,
     CuttingDraftPatchRequest,
     CuttingDraftResponse,
-    WorkshopCuttingPlanDetail,
-    WorkshopCuttingPlanSummary,
 )
 
 router = APIRouter(tags=["cutting"])
@@ -155,41 +151,3 @@ async def client_catalog_materials_index(
         carried_only=carried_only,
         limit=limit,
     )
-
-
-@router.get("/workshop/cutting-plans", response_model=list[WorkshopCuttingPlanSummary])
-async def workshop_cutting_plans_index(
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> list[WorkshopCuttingPlanSummary]:
-    return await list_workshop_cutting_plans(db, principal=principal)
-
-
-@router.get("/workshop/cutting-plans/{result_id}", response_model=WorkshopCuttingPlanDetail)
-async def workshop_cutting_plans_show(
-    result_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> WorkshopCuttingPlanDetail:
-    return await get_workshop_cutting_plan(db, principal=principal, result_id=result_id)
-
-
-@router.get("/workshop/cutting-plans/{result_id}/svg")
-async def workshop_cutting_plans_svg(
-    result_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> Response:
-    plan = await get_workshop_cutting_plan(db, principal=principal, result_id=result_id)
-    return Response(render_cutting_svg(plan.result), media_type="image/svg+xml")
-
-
-@router.get("/workshop/cutting-plans/{result_id}/pdf")
-async def workshop_cutting_plans_pdf(
-    result_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> Response:
-    plan = await get_workshop_cutting_plan(db, principal=principal, result_id=result_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{plan.id}.pdf"'}
-    return Response(render_cutting_pdf(plan.result), media_type="application/pdf", headers=headers)

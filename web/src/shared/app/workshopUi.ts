@@ -1,6 +1,5 @@
-import type { DropdownOption } from '@/shared/app/roleConfig'
 import type { OrderStatus } from '@/shared/stores/orders'
-import type { BranchStatus } from '@/shared/stores/workshop'
+import type { BranchStatus, StockTransactionType } from '@/shared/stores/workshop'
 
 export const workshopStatusUz: Record<OrderStatus, string> = {
   new: 'Yangi',
@@ -44,6 +43,17 @@ export function branchPillClass(status: BranchStatus) {
   return 'pill p-dn'
 }
 
+export const stockTransactionTypeUz: Record<StockTransactionType, string> = {
+  stock_in: 'Kirim',
+  consume: 'Sarf',
+  restore: 'Qaytarish',
+  adjust: 'Tuzatish',
+}
+
+export function stockTransactionTypeLabel(type: StockTransactionType) {
+  return stockTransactionTypeUz[type] ?? type
+}
+
 export const permissionLabels: Record<string, string> = {
   view_dashboard: 'Asosiy panel',
   manage_orders: 'Buyurtmalar',
@@ -72,30 +82,6 @@ export function initials(name: string | null | undefined, fallback = 'MP') {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('')
-}
-
-export function branchOptions(
-  branches: Array<{ id: string; name: string; address: string; status: string }>,
-  allLabel = 'Barcha filiallar',
-): DropdownOption[] {
-  return [
-    ...(branches.length > 1
-      ? [
-          {
-            value: 'all',
-            label: allLabel,
-            meta: `${branches.length} filial`,
-            status: 'active' as const,
-          },
-        ]
-      : []),
-    ...branches.map((branch) => ({
-      value: branch.id,
-      label: branch.name,
-      meta: branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address,
-      status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
-    })),
-  ]
 }
 
 export const workshopErrorMessages: Record<string, string> = {

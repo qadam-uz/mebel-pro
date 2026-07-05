@@ -4,19 +4,27 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
+import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { branchOptions } from '@/shared/app/workshopUi'
+import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
+import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatStockQuantity, parseDisplayQuantity } from '@/shared/formatters'
+import {
+  formatDate,
+  formatStockQuantity,
+  formatStockUnit,
+  parseDisplayQuantity,
+} from '@/shared/formatters'
 import { useFilesStore } from '@/shared/stores/files'
 import { useWorkshopStore, type StockItem, type Supplier } from '@/shared/stores/workshop'
 
@@ -28,15 +36,18 @@ const toast = useToast()
 const route = useRoute()
 const activeTab = ref<'stock' | 'tx' | 'suppliers'>('stock')
 const inventoryTabs: ChoiceOption[] = [
-  { value: 'stock', label: 'Joriy ombor' },
+  { value: 'stock', label: 'Zaxira' },
   { value: 'tx', label: 'Tranzaksiyalar' },
   { value: 'suppliers', label: 'Yetkazib beruvchilar' },
 ]
-const selectedBranchId = ref('')
 const search = ref('')
 const lowOnly = ref(false)
-const txDateFrom = ref(dateOffsetIso(-30))
-const txDateTo = ref(dateOffsetIso(0))
+const txPreset = ref<DateRangePreset>('days30')
+const initialTxRange = presetRange('days30')
+const txDateFrom = ref(initialTxRange.from ?? '')
+const txDateTo = ref(initialTxRange.to ?? '')
+const stockInOpen = ref(false)
+const adjustmentOpen = ref(false)
 const movementSaving = ref(false)
 const supplierSaving = ref(false)
 const movementError = ref<string | null>(null)
@@ -57,6 +68,7 @@ const stockInForm = reactive({
   supplierId: null as string | null,
   inlineSupplierName: '',
   receiptFileId: '',
+  receiptName: '',
   note: '',
 })
 const adjustmentForm = reactive({
@@ -74,15 +86,13 @@ const canUseInventory = computed(() => permissions.can(p.manageInventory))
 const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageInventory]),
 )
-const branchFilterOptions = computed(() =>
-  branchOptions(
-    accessibleBranches.value,
-    permissions.isOwner.value ? 'Barcha filiallar' : 'Mening filiallarim',
-  ),
-)
-const selectedBranch = computed(
-  () => accessibleBranches.value.find((branch) => branch.id === selectedBranchId.value) ?? null,
-)
+// Branch is driven by the topbar context picker (AppShell); the page follows it
+// and falls back to the first accessible branch until context is set.
+const selectedBranchId = computed(() => {
+  const context = workshop.selectedBranchContext
+  if (context && accessibleBranches.value.some((branch) => branch.id === context)) return context
+  return accessibleBranches.value[0]?.id ?? ''
+})
 const displayUnitByMaterialId = computed(
   () => new Map(workshop.stockItems.map((item) => [item.material_id, item.display_unit])),
 )
@@ -110,19 +120,6 @@ const activeListEmpty = computed(() => {
   if (activeTab.value === 'tx') return workshop.stockTransactions.length === 0
   return workshop.suppliers.length === 0
 })
-
-function dateOffsetIso(offsetDays: number) {
-  const value = new Date()
-  value.setDate(value.getDate() + offsetDays)
-  return value.toISOString().slice(0, 10)
-}
-
-function applyContextBranch() {
-  const contextBranchId = workshop.selectedBranchContext
-  if (!contextBranchId) return
-  if (!accessibleBranches.value.some((branch) => branch.id === contextBranchId)) return
-  selectedBranchId.value = contextBranchId
-}
 
 function stockItemByMaterial(materialId: string | null): StockItem | null {
   return workshop.stockItems.find((item) => item.material_id === materialId) ?? null
@@ -157,7 +154,7 @@ function stockFilterKey() {
 }
 
 async function refreshActiveInventoryTab(options: { force?: boolean; offset?: number } = {}) {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   const branchId = selectedBranchId.value
   const offset = options.offset ?? 0
   const txKey = transactionFilterKey()
@@ -200,13 +197,13 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
 }
 
 async function loadMoreTransactions() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   activeTab.value = 'tx'
   await refreshActiveInventoryTab({ force: true, offset: workshop.stockTransactions.length })
 }
 
 async function ensureSuppliersLoaded() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   if (suppliersLoadedBranch.value === selectedBranchId.value) return
   try {
     await workshop.loadSuppliers(selectedBranchId.value)
@@ -227,7 +224,7 @@ function validAdjustmentQuantity(item: StockItem | null) {
 }
 
 async function recordStockIn() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   movementSaving.value = true
   movementError.value = null
   stockInMaterialError.value = null
@@ -260,6 +257,7 @@ async function recordStockIn() {
       note: stockInForm.note || null,
     })
     resetStockInForm()
+    stockInOpen.value = false
     toast.success('Kirim yozildi.')
   } catch {
     movementError.value = 'stock_in_failed'
@@ -269,7 +267,7 @@ async function recordStockIn() {
 }
 
 async function recordAdjustment() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   movementSaving.value = true
   movementError.value = null
   adjustmentMaterialError.value = null
@@ -287,6 +285,7 @@ async function recordAdjustment() {
       note: adjustmentForm.note,
     })
     resetAdjustmentForm()
+    adjustmentOpen.value = false
     toast.success('Ombor tuzatishi yozildi.')
   } catch {
     movementError.value = 'adjustment_failed'
@@ -296,7 +295,7 @@ async function recordAdjustment() {
 }
 
 async function saveSupplier() {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   supplierSaving.value = true
   supplierError.value = null
   try {
@@ -321,7 +320,7 @@ async function saveSupplier() {
 }
 
 async function toggleSupplierStatus(supplier: Supplier) {
-  if (!selectedBranchId.value || selectedBranchId.value === 'all') return
+  if (!selectedBranchId.value) return
   supplierSaving.value = true
   supplierError.value = null
   try {
@@ -345,11 +344,18 @@ async function onReceiptFile(event: Event) {
   try {
     const uploaded = await files.upload(target.files[0])
     stockInForm.receiptFileId = uploaded.id
+    stockInForm.receiptName = uploaded.original_name
     toast.success('Chek biriktirildi.')
   } catch {
     stockInReceiptError.value = 'Chek yuklanmadi. Qayta urinib ko`ring.'
   }
   target.value = ''
+}
+
+function removeStockInReceipt() {
+  stockInForm.receiptFileId = ''
+  stockInForm.receiptName = ''
+  stockInReceiptError.value = null
 }
 
 function editSupplier(supplier: Supplier) {
@@ -366,6 +372,7 @@ function resetStockInForm() {
   stockInForm.supplierId = null
   stockInForm.inlineSupplierName = ''
   stockInForm.receiptFileId = ''
+  stockInForm.receiptName = ''
   stockInForm.note = ''
   stockInMaterialError.value = null
   stockInSupplierError.value = null
@@ -396,10 +403,9 @@ function applyRouteSearch() {
   if (value !== search.value) search.value = value
 }
 
+// The topbar owns the branch context; the page reloads whenever the resolved
+// branch changes (context switch or the branch list arriving on mount).
 watch(selectedBranchId, () => {
-  if (selectedBranchId.value && selectedBranchId.value !== 'all') {
-    workshop.setSelectedBranchContext(selectedBranchId.value)
-  }
   stockLoadedKey.value = null
   transactionsLoadedKey.value = null
   suppliersLoadedBranch.value = null
@@ -410,13 +416,6 @@ watch(selectedBranchId, () => {
 watch(activeTab, () => {
   void refreshActiveInventoryTab()
 })
-
-watch(
-  () => workshop.selectedBranchContext,
-  () => {
-    applyContextBranch()
-  },
-)
 
 watch(
   () => route.query.search,
@@ -439,8 +438,6 @@ watch([search, lowOnly], () => {
 onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
-  selectedBranchId.value = accessibleBranches.value[0]?.id ?? ''
-  applyContextBranch()
   await refreshActiveInventoryTab({ force: true })
 })
 
@@ -454,16 +451,6 @@ onBeforeUnmount(() => {
     <div class="page-head">
       <div>
         <h1>Ombor</h1>
-        <p class="sub">Filiallarda mavjud panellar va krom materiallari.</p>
-      </div>
-      <div class="tools">
-        <RouterLink
-          v-if="selectedBranch"
-          :to="rolePath(`/workshop/branches/${selectedBranch.id}`)"
-          class="mp-button mp-button-primary"
-        >
-          Filial omborini ochish
-        </RouterLink>
       </div>
     </div>
 
@@ -485,117 +472,133 @@ onBeforeUnmount(() => {
         :tabs="inventoryTabs"
       />
 
-      <div class="filters">
-        <label class="grid gap-1">
-          <span class="filter-label">Qidirish</span>
-          <input v-model="search" class="mp-input min-w-64" placeholder="Material qidirish..." />
+      <div v-if="activeTab !== 'suppliers'" class="mp-filters">
+        <label v-if="activeTab === 'stock'" class="mp-filter-input">
+          <span>Qidirish</span>
+          <input v-model="search" placeholder="Material qidirish..." />
         </label>
-        <ProjectDropdown v-model="selectedBranchId" label="Filial" :options="branchFilterOptions" />
-        <label
+        <button
           v-if="activeTab === 'stock'"
-          class="flex min-h-10 items-center gap-2 text-sm font-bold text-ink"
+          type="button"
+          class="mp-filter-chip"
+          :aria-pressed="lowOnly"
+          @click="lowOnly = !lowOnly"
         >
-          <input v-model="lowOnly" type="checkbox" class="size-4 accent-[var(--color-accent)]" />
-          Faqat past zaxiralar
-        </label>
-        <label v-if="activeTab === 'tx'" class="grid gap-1">
-          <span class="filter-label">Boshlanish</span>
-          <input v-model="txDateFrom" class="mp-input" type="date" />
-        </label>
-        <label v-if="activeTab === 'tx'" class="grid gap-1">
-          <span class="filter-label">Tugash</span>
-          <input v-model="txDateTo" class="mp-input" type="date" />
-        </label>
+          <span class="mp-filter-chip-dot" aria-hidden="true"></span>
+          Kam qolgan materiallar
+        </button>
+        <DateRangePicker
+          v-if="activeTab === 'tx'"
+          v-model:preset="txPreset"
+          v-model:date-from="txDateFrom"
+          v-model:date-to="txDateTo"
+        />
       </div>
 
-      <div
-        v-if="activeTab === 'stock'"
-        id="workshop-inventory-stock-panel"
-        class="mb-4 grid gap-4 xl:grid-cols-2"
-        role="tabpanel"
-        aria-labelledby="workshop-inventory-stock-tab"
-        tabindex="0"
-      >
-        <section class="card p-4">
-          <h2 class="mb-3 text-base font-extrabold text-ink">Kirim yozish</h2>
-          <form class="grid gap-3" @submit.prevent="recordStockIn">
-            <SearchCombobox
-              v-model="stockInForm.materialId"
-              label="Material"
-              :options="stockOptions"
-              :error="stockInMaterialError"
-            />
-            <label class="field">
-              <span>Miqdor {{ selectedStockInItem?.display_unit ?? '' }}</span>
-              <input v-model="stockInForm.quantity" class="mp-input" inputmode="decimal" required />
-            </label>
-            <FormSelect
-              v-model="stockInForm.supplierId"
-              label="Yetkazib beruvchi"
-              :options="activeSupplierOptions"
-              :error="stockInSupplierError"
-              @focusin="ensureSuppliersLoaded"
-            />
-            <label v-if="stockInForm.supplierId === 'inline'" class="field">
-              <span>Yangi yetkazib beruvchi nomi</span>
-              <input v-model="stockInForm.inlineSupplierName" class="mp-input" required />
-            </label>
-            <label class="field">
-              <span>Chek</span>
-              <FilePicker
-                accept="image/png,image/jpeg,image/webp,application/pdf"
-                :disabled="files.uploading"
-                @change="onReceiptFile"
-              />
-              <small v-if="stockInForm.receiptFileId" class="text-ink-soft">
-                chek {{ stockInForm.receiptFileId.slice(0, 8) }}
-              </small>
-              <small v-if="stockInReceiptError" class="font-bold text-danger">
-                {{ stockInReceiptError }}
-              </small>
-            </label>
-            <label class="field">
-              <span>Izoh</span>
-              <input v-model="stockInForm.note" class="mp-input" />
-            </label>
-            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-              {{ movementSaving ? 'Yozilmoqda' : 'Kirim yozish' }}
-            </button>
-          </form>
-        </section>
-
-        <section class="card p-4">
-          <h2 class="mb-3 text-base font-extrabold text-ink">Tuzatish yozish</h2>
-          <form class="grid gap-3" @submit.prevent="recordAdjustment">
-            <SearchCombobox
-              v-model="adjustmentForm.materialId"
-              label="Material"
-              :options="stockOptions"
-              :error="adjustmentMaterialError"
-            />
-            <label class="field">
-              <span>Belgili miqdor {{ selectedAdjustmentItem?.display_unit ?? '' }}</span>
-              <input
-                v-model="adjustmentForm.quantity"
-                class="mp-input"
-                inputmode="decimal"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>Izoh</span>
-              <input v-model="adjustmentForm.note" class="mp-input" required />
-            </label>
-            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-              {{ movementSaving ? 'Yozilmoqda' : 'Tuzatish yozish' }}
-            </button>
-          </form>
-        </section>
+      <div v-if="activeTab === 'stock'" class="mb-4 flex flex-wrap gap-2">
+        <button type="button" class="mp-button mp-button-primary" @click="stockInOpen = true">
+          Kirim
+        </button>
+        <button type="button" class="mp-button mp-button-outline" @click="adjustmentOpen = true">
+          Tuzatish
+        </button>
       </div>
 
-      <div v-if="movementError" class="banner danger mb-4">
-        <div class="grow">Ombor harakati yozilmadi.</div>
-      </div>
+      <AppModal :open="stockInOpen" title="Kirim" @close="stockInOpen = false">
+        <form class="grid gap-3" @submit.prevent="recordStockIn">
+          <SearchCombobox
+            v-model="stockInForm.materialId"
+            label="Material"
+            :options="stockOptions"
+            :error="stockInMaterialError"
+          />
+          <label class="field">
+            <span
+              >Miqdor{{
+                selectedStockInItem ? ` (${formatStockUnit(selectedStockInItem.display_unit)})` : ''
+              }}</span
+            >
+            <input v-model="stockInForm.quantity" class="mp-input" inputmode="decimal" required />
+          </label>
+          <FormSelect
+            v-model="stockInForm.supplierId"
+            label="Yetkazib beruvchi"
+            :options="activeSupplierOptions"
+            :error="stockInSupplierError"
+            @focusin="ensureSuppliersLoaded"
+          />
+          <label v-if="stockInForm.supplierId === 'inline'" class="field">
+            <span>Yangi yetkazib beruvchi nomi</span>
+            <input v-model="stockInForm.inlineSupplierName" class="mp-input" required />
+          </label>
+          <label class="field">
+            <span>Chek</span>
+            <FilePicker
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              :uploading="files.uploading"
+              :selected-name="stockInForm.receiptName"
+              removable
+              @change="onReceiptFile"
+              @remove="removeStockInReceipt"
+            />
+            <small v-if="stockInReceiptError" class="font-bold text-danger">
+              {{ stockInReceiptError }}
+            </small>
+          </label>
+          <label class="field">
+            <span>Izoh</span>
+            <input v-model="stockInForm.note" class="mp-input" />
+          </label>
+          <p
+            v-if="movementError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          >
+            Ombor harakati yozilmadi.
+          </p>
+          <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
+            {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+          </button>
+        </form>
+      </AppModal>
+
+      <AppModal :open="adjustmentOpen" title="Tuzatish" @close="adjustmentOpen = false">
+        <form class="grid gap-3" @submit.prevent="recordAdjustment">
+          <SearchCombobox
+            v-model="adjustmentForm.materialId"
+            label="Material"
+            :options="stockOptions"
+            :error="adjustmentMaterialError"
+          />
+          <label class="field">
+            <span
+              >Belgili miqdor{{
+                selectedAdjustmentItem
+                  ? ` (${formatStockUnit(selectedAdjustmentItem.display_unit)})`
+                  : ''
+              }}</span
+            >
+            <input
+              v-model="adjustmentForm.quantity"
+              class="mp-input"
+              inputmode="decimal"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Izoh</span>
+            <input v-model="adjustmentForm.note" class="mp-input" required />
+          </label>
+          <p
+            v-if="movementError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          >
+            Ombor harakati yozilmadi.
+          </p>
+          <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
+            {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+          </button>
+        </form>
+      </AppModal>
 
       <div v-if="workshop.inventoryLoading && activeListEmpty" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
@@ -622,11 +625,9 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th>Material</th>
-                <th>Filial</th>
                 <th class="right">Mavjud</th>
                 <th class="right">Min</th>
                 <th>Holat</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -640,11 +641,10 @@ onBeforeUnmount(() => {
                     </span>
                   </div>
                 </td>
-                <td>{{ selectedBranch?.name ?? '—' }}</td>
                 <td class="amt" :class="{ 'warn-text': item.is_low_stock }">
                   {{ formatStockQuantity(item.on_hand, item.display_unit) }}
                   <small v-if="item.is_low_stock" class="block text-[11px] font-extrabold">
-                    Past zaxira
+                    Kam qolgan
                   </small>
                 </td>
                 <td class="amt muted">
@@ -652,21 +652,12 @@ onBeforeUnmount(() => {
                 </td>
                 <td>
                   <span :class="item.is_low_stock ? 'pill p-warn' : 'pill p-ok'">
-                    <span class="pd"></span>{{ item.is_low_stock ? 'Past' : 'OK' }}
+                    <span class="pd"></span>{{ item.is_low_stock ? 'Kam' : 'OK' }}
                   </span>
-                </td>
-                <td class="right">
-                  <RouterLink
-                    v-if="selectedBranch"
-                    :to="rolePath(`/workshop/branches/${selectedBranch.id}`)"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                  >
-                    Ombor kartasi
-                  </RouterLink>
                 </td>
               </tr>
               <tr v-if="workshop.stockItems.length === 0">
-                <td colspan="6">
+                <td colspan="4">
                   <div class="st-empty !border-0 !py-8">
                     <h3>Bu filialga material qo'shilmagan</h3>
                     <p>Katalogdan material qo'shing.</p>
@@ -697,7 +688,6 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th>Vaqt</th>
-                <th>Filial</th>
                 <th>Turi</th>
                 <th>Material</th>
                 <th class="right">Miqdor</th>
@@ -711,7 +701,6 @@ onBeforeUnmount(() => {
             <tbody>
               <tr v-for="tx in workshop.stockTransactions" :key="tx.id">
                 <td class="num text-ink-muted">{{ formatDate(tx.created_at) }}</td>
-                <td>{{ selectedBranch?.name ?? '—' }}</td>
                 <td>
                   <span
                     :class="
@@ -724,7 +713,7 @@ onBeforeUnmount(() => {
                             : 'pill p-bad'
                     "
                   >
-                    <span class="pd"></span>{{ tx.type }}
+                    <span class="pd"></span>{{ stockTransactionTypeLabel(tx.type) }}
                   </span>
                 </td>
                 <td class="nm">{{ tx.material_name }}</td>
@@ -757,7 +746,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="workshop.stockTransactions.length === 0">
-                <td colspan="10">
+                <td colspan="9">
                   <div class="st-empty !border-0 !py-8"><h3>Tranzaksiya yo'q</h3></div>
                 </td>
               </tr>
@@ -799,7 +788,7 @@ onBeforeUnmount(() => {
             </label>
             <label class="field">
               <span>Telefon</span>
-              <input v-model="supplierForm.phone" class="mp-input" inputmode="tel" />
+              <PhoneInput v-model="supplierForm.phone" />
             </label>
             <label class="field">
               <span>Izoh</span>
@@ -865,7 +854,7 @@ onBeforeUnmount(() => {
                       :disabled="supplierSaving"
                       @click="toggleSupplierStatus(supplier)"
                     >
-                      {{ supplier.status === 'active' ? "O'chirish" : 'Faollashtirish' }}
+                      {{ supplier.status === 'active' ? 'Bloklash' : 'Faollashtirish' }}
                     </button>
                   </td>
                 </tr>

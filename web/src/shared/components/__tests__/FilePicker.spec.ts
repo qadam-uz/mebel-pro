@@ -39,4 +39,30 @@ describe('FilePicker', () => {
     expect(wrapper.get('button').attributes('disabled')).toBeDefined()
     expect(wrapper.get('button').text()).toBe('Yuklash')
   })
+
+  it('shows a busy state and disables the input while uploading', () => {
+    const wrapper = mount(FilePicker, { props: { uploading: true } })
+    expect(wrapper.text()).toContain('Yuklanmoqda')
+    expect(wrapper.get('input[type="file"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows the parent-controlled name over the locally picked one', () => {
+    const wrapper = mount(FilePicker, { props: { selectedName: 'Biriktirilgan chek' } })
+    expect(wrapper.text()).toContain('Biriktirilgan chek')
+    expect(wrapper.text()).not.toContain('Fayl tanlanmagan')
+  })
+
+  it('emits remove and clears the local name when the remove action is used', async () => {
+    const wrapper = mount(FilePicker, { props: { removable: true } })
+    const input = wrapper.get('input[type="file"]')
+    Object.defineProperty(input.element, 'files', {
+      value: [new File(['x'], 'chek.pdf', { type: 'application/pdf' })],
+      configurable: true,
+    })
+    await input.trigger('change')
+    const removeButton = wrapper.get('button[aria-label="Faylni olib tashlash"]')
+    await removeButton.trigger('click')
+    expect(wrapper.emitted('remove')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Fayl tanlanmagan')
+  })
 })

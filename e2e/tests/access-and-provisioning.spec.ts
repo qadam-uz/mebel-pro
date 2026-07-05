@@ -371,7 +371,7 @@ test("workshop staff direct URLs respect branch-scoped grants", async ({
   await page.getByRole("button", { name: continueButton }).click();
   await changeRequiredPassword(page, "StaffTemp123", staffReadyPassword);
 
-  await page.goto("/workshop/finance");
+  await page.goto("/workshop/finance/expenses");
   await expect(page).toHaveURL(/\/workshop\/?$/);
   await expect(page.getByRole("heading", { name: "Asosiy" })).toBeVisible();
 

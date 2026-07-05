@@ -130,7 +130,7 @@ onMounted(() => {
         </p>
       </div>
       <button type="button" class="mp-button mp-button-primary" @click="newCutting">
-        Yangi chizma
+        + Yangi chizma
       </button>
     </div>
 
@@ -164,7 +164,7 @@ onMounted(() => {
       <h3>Saqlangan chizma yo'q</h3>
       <p>Saqlangan chizma yo'q — yangisini boshlang.</p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-        Yangi chizma
+        + Yangi chizma
       </button>
     </div>
 

@@ -9,16 +9,13 @@ from typing import Any
 from fastapi import status
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
-    AuthenticatedPrincipalType,
     CuttingResultStatus,
     MaterialKind,
     MaterialStatus,
-    Permission,
 )
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.client_portal.api import get_client_profile, require_client, visible_branch
@@ -43,20 +40,12 @@ from app.modules.cutting.schemas import (
     CuttingPart,
     CuttingPlacementResponse,
     CuttingResultResponse,
-    WorkshopCuttingPlanDetail,
-    WorkshopCuttingPlanSummary,
 )
 from app.modules.inventory.api import display_unit
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
 
 DRAFT_LIMIT = 50
-WORKSHOP_CUTTING_PERMISSIONS = frozenset(
-    {
-        Permission.VIEW_DASHBOARD,
-        Permission.MANAGE_ORDERS,
-    }
-)
 
 
 async def create_draft(
@@ -409,58 +398,6 @@ async def client_catalog_materials(
     ]
 
 
-async def list_workshop_cutting_plans(
-    db: AsyncSession,
-    *,
-    principal: AuthenticatedPrincipal,
-) -> list[WorkshopCuttingPlanSummary]:
-    _require_workshop_principal(principal)
-    query = (
-        select(CuttingResult, Order)
-        .join(Order, Order.id == CuttingResult.order_id)
-        .where(
-            CuttingResult.status == CuttingResultStatus.CONFIRMED,
-            CuttingResult.order_id.is_not(None),
-        )
-        .order_by(CuttingResult.confirmed_at.desc().nullslast(), CuttingResult.created_at.desc())
-    )
-    query = _apply_workshop_scope(query, principal)
-    rows = (await db.execute(query)).all()
-    return [_plan_summary(result, order) for result, order in rows]
-
-
-async def get_workshop_cutting_plan(
-    db: AsyncSession,
-    *,
-    principal: AuthenticatedPrincipal,
-    result_id: uuid.UUID,
-) -> WorkshopCuttingPlanDetail:
-    _require_workshop_principal(principal)
-    query = (
-        select(CuttingResult, Order)
-        .join(Order, Order.id == CuttingResult.order_id)
-        .where(
-            CuttingResult.id == result_id,
-            CuttingResult.status == CuttingResultStatus.CONFIRMED,
-            CuttingResult.order_id.is_not(None),
-        )
-    )
-    query = _apply_workshop_scope(query, principal)
-    row = (await db.execute(query)).one_or_none()
-    if row is None:
-        raise APIError(
-            "cutting_plan_not_found",
-            "Cutting plan not found",
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-    result, order = row
-    summary = _plan_summary(result, order)
-    return WorkshopCuttingPlanDetail(
-        **summary.model_dump(),
-        result=await _result_response(db, result),
-    )
-
-
 async def cutting_result_response(
     db: AsyncSession,
     result: CuttingResult,
@@ -811,67 +748,4 @@ async def _result_response(
         confirmed_at=result.confirmed_at,
         invalidated_at=result.invalidated_at,
         panels=panels,
-    )
-
-
-def _require_workshop_principal(principal: AuthenticatedPrincipal) -> None:
-    if (
-        principal.principal_type is not AuthenticatedPrincipalType.WORKSHOP_USER
-        or principal.workshop_id is None
-    ):
-        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
-
-
-def _workshop_branch_ids(principal: AuthenticatedPrincipal) -> set[uuid.UUID]:
-    return {
-        grant.branch_id
-        for grant in principal.grants
-        if grant.permission in WORKSHOP_CUTTING_PERMISSIONS
-    }
-
-
-def _production_branch_ids(principal: AuthenticatedPrincipal) -> set[uuid.UUID]:
-    return {
-        grant.branch_id
-        for grant in principal.grants
-        if grant.permission is Permission.PROCESS_PRODUCTION
-    }
-
-
-def _apply_workshop_scope(query: Any, principal: AuthenticatedPrincipal) -> Any:
-    if principal.is_owner:
-        return query.where(Order.workshop_id == principal.workshop_id)
-    branch_ids = _workshop_branch_ids(principal)
-    production_branch_ids = _production_branch_ids(principal)
-    conditions: list[ColumnElement[bool]] = []
-    if branch_ids:
-        conditions.append(Order.branch_id.in_(branch_ids))
-    if production_branch_ids:
-        conditions.append(
-            and_(
-                Order.branch_id.in_(production_branch_ids),
-                Order.assigned_cutter_user_id == principal.principal_id,
-            )
-        )
-    if not conditions:
-        return query.where(Order.branch_id.in_([]))
-    return query.where(
-        Order.workshop_id == principal.workshop_id,
-        or_(*conditions),
-    )
-
-
-def _plan_summary(result: CuttingResult, order: Order) -> WorkshopCuttingPlanSummary:
-    return WorkshopCuttingPlanSummary(
-        id=result.id,
-        order_id=order.id,
-        order_number=order.order_number,
-        client_id=order.client_id,
-        branch_id=order.branch_id,
-        algorithm_name=result.algorithm_name,
-        waste_percentage=result.waste_percentage,
-        panels_used_by_material=result.panels_used_by_material,
-        total_cut_length_mm=result.total_cut_length_mm,
-        total_edge_length_mm=result.total_edge_length_mm,
-        confirmed_at=result.confirmed_at,
     )

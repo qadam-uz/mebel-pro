@@ -5,10 +5,7 @@ from decimal import Decimal
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
-    Currency,
-    CuttingResultStatus,
     MaterialKind,
-    OrderStatus,
     PanelMaterialType,
     Permission,
     UserStatus,
@@ -18,17 +15,13 @@ from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.cutting.contracts import (
     CuttingDraft,
-    CuttingPanel,
-    CuttingPlacement,
-    CuttingResult,
 )
-from app.modules.sales.contracts import Order
 from app.modules.support.contracts import ActionLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_platform_user, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -52,20 +45,6 @@ async def _client_access(
     return tokens.access_token, client
 
 
-async def _platform_access(db: AsyncSession) -> str:
-    platform = await seed_platform_user(
-        db,
-        login=f"platform-{uuid.uuid4().hex[:8]}",
-        password_reset_required=False,
-    )
-    tokens = await create_session(
-        db,
-        principal_type=AuthenticatedPrincipalType.PLATFORM_USER,
-        principal_id=platform.id,
-    )
-    return tokens.access_token
-
-
 async def _workshop_owner_access(
     db: AsyncSession,
 ) -> tuple[str, uuid.UUID, uuid.UUID, uuid.UUID]:
@@ -77,22 +56,6 @@ async def _workshop_owner_access(
         principal_id=owner.id,
     )
     return tokens.access_token, workshop.id, branch.id, owner.id
-
-
-async def _staff_access(
-    db: AsyncSession,
-    *,
-    workshop_id: uuid.UUID,
-    branch_id: uuid.UUID,
-    permission: Permission,
-) -> str:
-    access, _ = await _staff_user_access(
-        db,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=permission,
-    )
-    return access
 
 
 async def _staff_user_access(
@@ -387,217 +350,3 @@ async def test_client_catalog_materials_limit_caps_the_no_branch_load(
     assert capped.status_code == 200
     assert len(capped.json()) == 1
     assert bad_limit.status_code == 422
-
-
-async def test_workshop_cutting_plans_are_order_bound_and_branch_scoped(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    owner_access, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
-    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
-    _, client_row = await _client_access(db_session, phone="+998901111003")
-    result = await _confirmed_result(db_session, client_row.id, workshop_id, branch_id, panel, edge)
-    scoped_staff = await _staff_access(
-        db_session,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=Permission.VIEW_DASHBOARD,
-    )
-    catalog_staff = await _staff_access(
-        db_session,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=Permission.MANAGE_CATALOG,
-    )
-    client_access, _ = await _client_access(db_session, phone="+998901111004")
-    platform_access = await _platform_access(db_session)
-
-    owner_list = await client.get("/api/v1/workshop/cutting-plans", headers=_auth(owner_access))
-    staff_detail = await client.get(
-        f"/api/v1/workshop/cutting-plans/{result.id}",
-        headers=_auth(scoped_staff),
-    )
-    staff_svg = await client.get(
-        f"/api/v1/workshop/cutting-plans/{result.id}/svg",
-        headers=_auth(scoped_staff),
-    )
-    staff_pdf = await client.get(
-        f"/api/v1/workshop/cutting-plans/{result.id}/pdf",
-        headers=_auth(scoped_staff),
-    )
-    denied_staff = await client.get(
-        f"/api/v1/workshop/cutting-plans/{result.id}",
-        headers=_auth(catalog_staff),
-    )
-    denied_client = await client.get(
-        "/api/v1/workshop/cutting-plans",
-        headers=_auth(client_access),
-    )
-    denied_platform = await client.get(
-        "/api/v1/workshop/cutting-plans",
-        headers=_auth(platform_access),
-    )
-
-    assert owner_list.status_code == 200
-    assert owner_list.json()[0]["id"] == str(result.id)
-    assert staff_detail.status_code == 200
-    assert staff_detail.json()["result"]["order_id"] == str(result.order_id)
-    assert staff_svg.status_code == 200
-    assert b"<svg" in staff_svg.content
-    assert staff_pdf.status_code == 200
-    assert staff_pdf.content.startswith(b"%PDF")
-    assert denied_staff.status_code == 404
-    assert denied_client.status_code == 403
-    assert denied_platform.status_code == 403
-
-
-async def test_production_staff_sees_only_assigned_cutting_plans(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    owner_access, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
-    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
-    _, first_client = await _client_access(db_session, phone="+998901111031")
-    _, second_client = await _client_access(db_session, phone="+998901111032")
-    assigned_result = await _confirmed_result(
-        db_session,
-        first_client.id,
-        workshop_id,
-        branch_id,
-        panel,
-        edge,
-    )
-    unassigned_result = await _confirmed_result(
-        db_session,
-        second_client.id,
-        workshop_id,
-        branch_id,
-        panel,
-        edge,
-    )
-    production_access, worker = await _staff_user_access(
-        db_session,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        permission=Permission.PROCESS_PRODUCTION,
-    )
-    assert assigned_result.order_id is not None
-    assigned_order = await db_session.get(Order, assigned_result.order_id)
-    assert assigned_order is not None
-    assigned_order.assigned_cutter_user_id = worker.id
-    await db_session.flush()
-
-    owner_list = await client.get("/api/v1/workshop/cutting-plans", headers=_auth(owner_access))
-    production_list = await client.get(
-        "/api/v1/workshop/cutting-plans",
-        headers=_auth(production_access),
-    )
-    assigned_detail = await client.get(
-        f"/api/v1/workshop/cutting-plans/{assigned_result.id}",
-        headers=_auth(production_access),
-    )
-    unassigned_detail = await client.get(
-        f"/api/v1/workshop/cutting-plans/{unassigned_result.id}",
-        headers=_auth(production_access),
-    )
-
-    assert owner_list.status_code == 200
-    assert {row["id"] for row in owner_list.json()} == {
-        str(assigned_result.id),
-        str(unassigned_result.id),
-    }
-    assert production_list.status_code == 200
-    assert [row["id"] for row in production_list.json()] == [str(assigned_result.id)]
-    assert assigned_detail.status_code == 200
-    assert unassigned_detail.status_code == 404
-
-
-async def _confirmed_result(
-    db: AsyncSession,
-    client_id: uuid.UUID,
-    workshop_id: uuid.UUID,
-    branch_id: uuid.UUID,
-    panel: Material,
-    edge: Material,
-) -> CuttingResult:
-    now = datetime.now(UTC)
-    result = CuttingResult(
-        algorithm_name="ffd-guillotine",
-        algorithm_version="1.0",
-        status=CuttingResultStatus.CONFIRMED,
-        kerf_mm=4,
-        edge_trim_mm=10,
-        panels_used_by_material={str(panel.id): 1},
-        waste_percentage=Decimal("0.25"),
-        total_cut_length_mm=640,
-        total_edge_length_mm=220,
-        edge_length_by_material={str(edge.id): 220},
-        parts_snapshot=[],
-        material_snapshots={
-            str(panel.id): {
-                "id": str(panel.id),
-                "kind": "panel",
-                "manufacturer_name": "Egger",
-                "name": panel.name,
-                "panel_length_mm": panel.panel_length_mm,
-                "panel_width_mm": panel.panel_width_mm,
-            },
-            str(edge.id): {
-                "id": str(edge.id),
-                "kind": "edge",
-                "manufacturer_name": "Egger",
-                "name": edge.name,
-            },
-        },
-        edge_length_shop_by_material={str(edge.id): 220},
-        edge_length_own_by_material={},
-        edge_consumed_shop_by_material={str(edge.id): 280},
-        edge_consumed_own_by_material={},
-        edge_banded_sides_by_material={str(edge.id): {"shop": 2, "own": 0}},
-        created_at=now,
-        confirmed_at=now,
-    )
-    db.add(result)
-    await db.flush()
-    order = Order(
-        order_number=f"ORD-{uuid.uuid4().hex[:8]}",
-        client_id=client_id,
-        workshop_id=workshop_id,
-        branch_id=branch_id,
-        cutting_result_id=result.id,
-        status=OrderStatus.NEW,
-        version=1,
-        contact_name="Client",
-        contact_phone="+998901111003",
-        subtotal_cutting_tiyin=0,
-        subtotal_materials_tiyin=0,
-        subtotal_edge_banding_tiyin=0,
-        discount_tiyin=0,
-        total_tiyin=0,
-        currency=Currency.UZS,
-    )
-    db.add(order)
-    await db.flush()
-    result.order_id = order.id
-    panel_row = CuttingPanel(
-        cutting_result_id=result.id,
-        material_id=panel.id,
-        panel_index=1,
-        waste_area_mm2=1000,
-    )
-    db.add(panel_row)
-    await db.flush()
-    db.add(
-        CuttingPlacement(
-            cutting_panel_id=panel_row.id,
-            part_ref="shelf",
-            part_quantity_index=1,
-            x_mm=10,
-            y_mm=10,
-            length_mm=220,
-            width_mm=120,
-            rotated=False,
-        )
-    )
-    await db.flush()
-    return result

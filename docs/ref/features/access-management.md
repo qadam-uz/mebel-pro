@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-06-28
+updated: 2026-07-04
 order: 20
 ---
 
@@ -207,7 +207,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
 | `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
 | `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md).                                                                                                                                                                                                                                                            |
-| `view_finance_reports` | read-only access to the finance dashboards, the finance reports, and the worker-production reports.                                                                                                                                                                                                                                                                                                     |
+| `view_finance_reports` | read-only access to the home finance summary tiles (income · expenses · net) and the worker-production report. The income / expense ledgers themselves require `manage_finance`. See [`finance.md`](finance.md).                                                                                                                                                                                          |
 
 `process_delivery` is **gated out of v1** — v1 is pickup-only
 ([`scope.md`](../../scope.md)), so there is no driver workspace and the grant is not in the

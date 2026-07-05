@@ -167,7 +167,12 @@ function onKeydown(event: KeyboardEvent) {
     if (option) choose(option)
   } else if (event.key === 'Escape') {
     // Only act when open; refocusing a closed list would retrigger @focus → reopen.
-    if (open.value) closeList(true)
+    // Two-stage Escape: closing the listbox must not bubble into a host
+    // dialog's focus trap and dismiss the whole modal.
+    if (open.value) {
+      event.stopPropagation()
+      closeList(true)
+    }
   } else if (event.key === 'Tab') {
     closeList()
   }

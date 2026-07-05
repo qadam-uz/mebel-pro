@@ -132,9 +132,9 @@ test('admin creates, resets, blocks and unblocks a platform operator', async ({ 
   await expect(opRow).toBeVisible()
 
   // Reset password → a fresh one-time secret.
-  await opRow.getByRole('button', { name: /admini parolini qaytarish/ }).click()
-  await page.getByRole('dialog', { name: 'Parolni qaytarish' }).getByRole('button', {
-    name: 'Parolni qaytarish',
+  await opRow.getByRole('button', { name: /admini parolini tiklash/ }).click()
+  await page.getByRole('dialog', { name: 'Parolni tiklash' }).getByRole('button', {
+    name: 'Parolni tiklash',
   }).click()
   await expect(page.getByRole('dialog', { name: /maxfiy ma'lumot/ })).toBeVisible()
   await page.getByRole('button', { name: /Yopdim/ }).click()

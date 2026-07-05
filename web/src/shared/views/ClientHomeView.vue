@@ -180,7 +180,7 @@ onMounted(() => {
         hisoblaydi.
       </p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-        Yangi chizma
+        + Yangi chizma
       </button>
     </div>
 
@@ -293,7 +293,7 @@ onMounted(() => {
           <h3>Faol buyurtma yo'q</h3>
           <p>Saqlangan chizmangizdan buyurtma bering yoki yangisidan boshlang.</p>
           <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            Yangi chizma
+            + Yangi chizma
           </button>
         </div>
 
@@ -370,7 +370,7 @@ onMounted(() => {
           <h3>Saqlangan chizma yo'q</h3>
           <p>Yangisini boshlang.</p>
           <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
-            Yangi chizma
+            + Yangi chizma
           </button>
         </div>
 

@@ -57,7 +57,7 @@ whether clients see it and order from it.
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required |
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX` |
-| `latitude` / `longitude` | numeric? | optional owner-managed coordinate pair (no geocoder in v1); both are null when unknown |
+| `latitude` / `longitude` | numeric? | optional coordinate pair (no geocoder in v1; **not collected via the UI** in v1, but the columns/API fields remain); both are null when unknown |
 | `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |

@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-05
 order: 30
 ---
 
@@ -299,9 +299,10 @@ Permission names below are the per-branch grants from
     assigned cutter / edger chip when set. **No drag between status columns** — status
     changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: status dropdown, search, date range,
-    branch. Empty: "No orders in your branch(es)." Zero branches: "No branches assigned
-    — ask your workshop owner."
+    total, items, created, action menu. Filters: status dropdown and the app-wide
+    date-range picker (preset shortcuts + a calendar for custom spans); branch and
+    search come from the topbar. Empty: "No orders in your
+    branch(es)." Zero branches: "No branches assigned — ask your workshop owner."
 - **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client
   mini-card link, status badge, total) with the status-appropriate actions:
 

@@ -692,7 +692,7 @@ onMounted(loadDetail)
                 {{
                   hasShortfall
                     ? 'Kesishdan keyin zaxira yetishmaydi:'
-                    : 'Kesishdan keyin past zaxira:'
+                    : 'Kesishdan keyin kam qoladi:'
                 }}
                 <b>
                   {{
@@ -1110,7 +1110,7 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading || !edgerId"
                   @click="assignEdgerOnly"
                 >
-                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
+                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Saqlash' }}
                 </button>
                 <button
                   type="button"
@@ -1136,7 +1136,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !cutterId"
                     @click="assignCutterOnly"
                   >
-                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Kesuvchini saqlash' }}
+                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Saqlash' }}
                   </button>
                 </template>
                 <FormSelect
@@ -1170,7 +1170,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !edgerId"
                     @click="assignEdgerOnly"
                   >
-                    Kromchini saqlash
+                    Saqlash
                   </button>
                 </template>
                 <FormSelect

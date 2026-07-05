@@ -285,7 +285,7 @@ watch(
           <div class="d"><span>faol buyurtmalar</span></div>
         </RouterLink>
 
-        <RouterLink v-if="canFinance" :to="rolePath('/workshop/finance')" class="kpi no-underline">
+        <div v-if="canFinance" class="kpi">
           <div class="lbl">Tushum</div>
           <div class="v num">
             <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.income_tiyin ?? 0) }}</span>
@@ -294,7 +294,7 @@ watch(
           <div class="d">
             <span>so'nggi {{ chartDays }} kun</span>
           </div>
-        </RouterLink>
+        </div>
 
         <RouterLink
           v-if="canFinance"
@@ -313,19 +313,14 @@ watch(
           </div>
         </RouterLink>
 
-        <RouterLink
-          v-if="canFinance"
-          :to="rolePath('/workshop/finance')"
-          class="kpi no-underline"
-          :class="netPositive ? '' : 'bad'"
-        >
+        <div v-if="canFinance" class="kpi" :class="netPositive ? '' : 'bad'">
           <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">Foyda</div>
           <div class="v num" :class="netPositive ? 'success-text' : 'danger-text'">
             <span v-if="dashboardReady">{{ formatTiyin(finance.summary?.net_tiyin ?? 0) }}</span>
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d"><span>tushum − xarajat</span></div>
-        </RouterLink>
+        </div>
 
         <RouterLink
           v-if="canInventory"
@@ -333,12 +328,12 @@ watch(
           class="kpi no-underline"
           :class="lowStock.length > 0 ? 'warn' : ''"
         >
-          <div class="lbl">Past zaxiralar</div>
+          <div class="lbl">Kam qolgan materiallar</div>
           <div class="v num" :class="lowStock.length > 0 ? 'warn-text' : ''">
             <span v-if="dashboardReady">{{ lowStock.length }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
-          <div class="d"><span>me'yordan past</span></div>
+          <div class="d"><span>me'yordan kam</span></div>
         </RouterLink>
       </div>
 
@@ -587,7 +582,7 @@ watch(
         <div class="grid content-start gap-[18px]">
           <div class="card">
             <div class="card-h">
-              <h2>Tugayotgan zaxira</h2>
+              <h2>Kam qolgan materiallar</h2>
               <RouterLink :to="rolePath('/workshop/inventory')" class="more">ombor</RouterLink>
             </div>
             <div class="card-b">
@@ -601,7 +596,7 @@ watch(
                 <p>trace_id: {{ workshop.inventoryTraceId ?? 'unavailable' }}</p>
               </div>
               <div v-else-if="lowStock.length === 0" class="st-empty !py-8">
-                <h3>Past zaxira yo'q</h3>
+                <h3>Kam qolgan material yo'q</h3>
                 <p>Tanlangan filial materiallari me'yorda.</p>
               </div>
               <div v-else>
@@ -617,7 +612,7 @@ watch(
                   </div>
                   <div class="meta warn-text">
                     {{ formatStockQuantity(item.on_hand, item.display_unit) }}
-                    <small class="block text-[11px] font-extrabold">Past zaxira</small>
+                    <small class="block text-[11px] font-extrabold">Kam qolgan</small>
                   </div>
                 </div>
               </div>

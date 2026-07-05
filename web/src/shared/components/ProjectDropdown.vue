@@ -11,11 +11,26 @@ const props = defineProps<{
   // Visually hide the eyebrow label (still read by screen readers) to keep the
   // trigger compact — used by the workshop topbar branch picker.
   hideLabel?: boolean
+  // Filter-bar variant: external uppercase caption above the trigger (the
+  // in-trigger eyebrow goes screen-reader-only) and the COMPACT skin — a lean
+  // one-line trigger and option rows without icon tile, meta line, or status
+  // dots (only explicit `option.dot` markers render). The rich skin stays for
+  // the topbar and forms.
+  topLabel?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+
+const DOT_CLASS: Record<NonNullable<DropdownOption['dot']>, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  info: 'bg-info',
+  accent: 'bg-accent',
+  muted: 'bg-ink-muted',
+}
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const listboxRef = ref<HTMLUListElement | null>(null)
@@ -33,8 +48,12 @@ const selected = computed(
       label: 'No context',
       meta: 'empty',
       status: 'pending' as const,
+      dot: undefined,
     },
 )
+// Status filters mix dotted and dot-less options ("Hammasi") — reserve the dot
+// column for the whole list so labels stay aligned.
+const hasDots = computed(() => props.options.some((option) => option.dot))
 const activeOptionId = computed(() => {
   const option = props.options[activeIndex.value]
   return option ? `${listboxId}-${option.value}` : undefined
@@ -46,7 +65,10 @@ function updatePopoverPosition() {
   const rect = button.getBoundingClientRect()
   const viewportWidth = window.visualViewport?.width ?? window.innerWidth
   const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-  const panelWidth = Math.min(Math.max(rect.width, 260), Math.max(160, viewportWidth - 16))
+  const panelWidth = Math.min(
+    Math.max(rect.width, props.topLabel ? 200 : 260),
+    Math.max(160, viewportWidth - 16),
+  )
   const listHeight = Math.min(
     listboxRef.value?.offsetHeight || POPOVER_MAX_HEIGHT,
     POPOVER_MAX_HEIGHT,
@@ -119,6 +141,9 @@ function onButtonKeydown(event: KeyboardEvent) {
     event.preventDefault()
     move(-1)
   } else if (event.key === 'Escape' && open.value) {
+    // Two-stage Escape: swallow only while open so a host dialog isn't dismissed
+    // by the same keypress that closes this listbox.
+    event.stopPropagation()
     closeList({ returnFocus: true })
   } else if (event.key === 'Tab') {
     closeList()
@@ -150,11 +175,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative inline-flex">
+  <div class="relative" :class="topLabel ? 'flex flex-col gap-1' : 'inline-flex'">
+    <span v-if="topLabel" class="mp-filter-dd-label" aria-hidden="true">{{ label }}</span>
     <button
       ref="buttonRef"
       type="button"
-      class="mp-surface flex min-h-11 min-w-52 items-center gap-3 px-3 py-2 text-left transition hover:border-hairline-strong"
+      :class="
+        topLabel
+          ? [
+              'flex min-h-10 items-center gap-2 rounded-lg border bg-elevated px-3 text-left transition',
+              open ? 'border-accent' : 'border-hairline-strong hover:bg-sunk',
+            ]
+          : 'mp-surface flex min-h-11 min-w-52 items-center gap-3 px-3 py-2 text-left transition hover:border-hairline-strong'
+      "
       :aria-expanded="open"
       :aria-controls="listboxId"
       aria-haspopup="listbox"
@@ -162,25 +195,45 @@ onBeforeUnmount(() => {
       @keydown="onButtonKeydown"
     >
       <span
+        v-if="!topLabel"
         class="grid size-7 place-items-center rounded-md bg-accent-soft text-accent"
         aria-hidden="true"
       >
         <span class="mp-dot"></span>
       </span>
+      <span
+        v-else-if="selected.dot"
+        class="size-2 shrink-0 rounded-full"
+        :class="DOT_CLASS[selected.dot]"
+        aria-hidden="true"
+      ></span>
       <span class="min-w-0 flex-1">
         <span
           :class="
-            hideLabel
+            hideLabel || topLabel
               ? 'sr-only'
               : 'block text-[11px] font-bold uppercase tracking-[0.13em] text-ink-muted'
           "
         >
           {{ label }}
         </span>
-        <span class="block truncate text-sm font-bold text-ink">{{ selected.label }}</span>
-        <span class="block truncate font-mono text-[11px] text-ink-muted">{{ selected.meta }}</span>
+        <span
+          :class="
+            topLabel
+              ? 'block truncate text-[13px] font-semibold text-ink'
+              : 'block truncate text-sm font-bold text-ink'
+          "
+        >
+          {{ selected.label }}
+        </span>
+        <span
+          v-if="!topLabel && selected.meta"
+          class="block truncate font-mono text-[11px] text-ink-muted"
+        >
+          {{ selected.meta }}
+        </span>
       </span>
-      <svg class="size-4 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
+      <svg class="size-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
         <path
           d="M5 7.5 10 12l5-4.5"
           fill="none"
@@ -211,8 +264,9 @@ onBeforeUnmount(() => {
           :key="option.value"
           role="option"
           :aria-selected="option.value === selected.value"
-          class="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 rounded-md px-3 py-2 text-sm"
+          class="cursor-pointer items-center rounded-md px-3 py-2"
           :class="[
+            topLabel ? 'flex gap-2.5 text-[13px]' : 'grid grid-cols-[auto_1fr_auto] gap-3 text-sm',
             index === activeIndex ? 'bg-sunk' : 'bg-elevated',
             option.value === selected.value ? 'text-accent' : 'text-ink',
           ]"
@@ -220,6 +274,7 @@ onBeforeUnmount(() => {
           @click="choose(option)"
         >
           <span
+            v-if="!topLabel"
             class="size-2 rounded-full"
             :class="{
               'bg-success': option.status === 'active',
@@ -228,13 +283,26 @@ onBeforeUnmount(() => {
             }"
             aria-hidden="true"
           ></span>
-          <span>
-            <span class="block font-bold">{{ option.label }}</span>
-            <span class="block font-mono text-[11px] text-ink-muted">{{ option.meta }}</span>
+          <span
+            v-else-if="hasDots"
+            class="size-2 shrink-0 rounded-full"
+            :class="option.dot ? DOT_CLASS[option.dot] : 'bg-transparent'"
+            aria-hidden="true"
+          ></span>
+          <span :class="topLabel ? 'min-w-0 flex-1' : ''">
+            <span :class="topLabel ? 'block truncate font-semibold' : 'block font-bold'">
+              {{ option.label }}
+            </span>
+            <span
+              v-if="!topLabel && option.meta"
+              class="block font-mono text-[11px] text-ink-muted"
+            >
+              {{ option.meta }}
+            </span>
           </span>
           <svg
             v-if="option.value === selected.value"
-            class="size-4"
+            class="size-4 shrink-0"
             viewBox="0 0 20 20"
             aria-hidden="true"
           >

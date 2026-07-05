@@ -19,11 +19,11 @@ const toast = useToast()
 const filter = ref('all')
 
 const filterOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha bildirishnomalar', status: 'active' as const },
-  { value: 'unread', label: "O'qilmagan", meta: 'faqat yangi', status: 'pending' as const },
-  { value: 'order', label: 'Buyurtmalar', meta: 'order event', status: 'active' as const },
-  { value: 'inventory', label: 'Ombor', meta: 'stock event', status: 'active' as const },
-  { value: 'finance', label: 'Moliya', meta: 'ledger event', status: 'active' as const },
+  { value: 'all', label: 'Hammasi' },
+  { value: 'unread', label: "O'qilmagan" },
+  { value: 'order', label: 'Buyurtmalar' },
+  { value: 'inventory', label: 'Ombor' },
+  { value: 'finance', label: 'Moliya' },
 ]
 
 const filtered = computed(() =>
@@ -88,7 +88,6 @@ onMounted(() => {
     <div class="page-head">
       <div>
         <h1>Bildirishnomalar</h1>
-        <p class="sub">Buyurtma, ombor, moliya va tizim ogohlantirishlari.</p>
       </div>
       <div class="tools">
         <button class="mp-button mp-button-outline" type="button" @click="markAll">
@@ -97,8 +96,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="filters">
-      <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" />
+    <div class="mp-filters">
+      <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" top-label />
     </div>
 
     <div v-if="notifications.actionError" class="banner danger mb-4 max-w-[800px]">

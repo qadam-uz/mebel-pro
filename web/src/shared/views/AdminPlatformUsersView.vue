@@ -20,6 +20,7 @@ import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type PlatformUser } from '@/shared/stores/admin'
@@ -80,7 +81,7 @@ onBeforeUnmount(() => admin.clearSecrets())
 const form = reactive({
   fullName: '',
   login: '',
-  phone: '+998',
+  phone: '',
   tempPassword: '',
 })
 type OperatorField = 'fullName' | 'phone' | 'login' | 'tempPassword'
@@ -106,7 +107,7 @@ function openCreate() {
   editingId.value = null
   form.fullName = ''
   form.login = ''
-  form.phone = '+998'
+  form.phone = ''
   form.tempPassword = ''
   actionError.value = null
   clearFieldErrors(fieldErrors)
@@ -275,7 +276,7 @@ onMounted(admin.loadPlatformUsers)
 
     <div class="admin-filters">
       <label class="admin-filter-input">
-        <span>Qidiruv</span>
+        <span>Qidirish</span>
         <input v-model="query" placeholder="Ism, login yoki telefon" />
       </label>
     </div>
@@ -343,10 +344,10 @@ onMounted(admin.loadPlatformUsers)
                     type="button"
                     class="mp-button mp-button-outline min-h-9 px-3 text-xs"
                     :disabled="actionId === user.id"
-                    :aria-label="`${user.full_name} admini parolini qaytarish`"
+                    :aria-label="`${user.full_name} admini parolini tiklash`"
                     @click="askReset(user)"
                   >
-                    Parol qaytarish
+                    Parolni tiklash
                   </button>
                   <button
                     v-if="user.status === 'active'"
@@ -395,9 +396,9 @@ onMounted(admin.loadPlatformUsers)
 
     <ConfirmDialog
       :open="resetTarget !== null"
-      title="Parolni qaytarish"
+      title="Parolni tiklash"
       :message="`${resetTarget?.full_name ?? ''} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
-      confirm-label="Parolni qaytarish"
+      confirm-label="Parolni tiklash"
       busy-label="Qaytarilmoqda"
       cancel-label="Bekor qilish"
       :busy="actionId === resetTarget?.id"
@@ -452,11 +453,9 @@ onMounted(admin.loadPlatformUsers)
               </label>
               <label class="admin-field" for="op-phone">
                 <span>Telefon</span>
-                <input
+                <PhoneInput
                   id="op-phone"
                   v-model="form.phone"
-                  autocomplete="tel"
-                  inputmode="tel"
                   required
                   :aria-invalid="!!fieldErrors.phone"
                   aria-describedby="op-phone-error"

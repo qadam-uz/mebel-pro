@@ -30,48 +30,24 @@ export function positiveDecimal(value: string): string | null {
   return Number.isFinite(number) && number > 0 ? null : 'Musbat son kiriting.'
 }
 
-export function coordinatePairRequired(value: string, pairValue: string): string | null {
-  return !value.trim() && pairValue.trim() ? 'Lat va Lng birga kiritiladi.' : null
-}
-
-export function latitudeCoordinate(value: string): string | null {
-  if (!value.trim()) return null
-  const number = Number(value)
-  return Number.isFinite(number) && number >= -90 && number <= 90
-    ? null
-    : '-90 dan 90 gacha kiriting.'
-}
-
-export function longitudeCoordinate(value: string): string | null {
-  if (!value.trim()) return null
-  const number = Number(value)
-  return Number.isFinite(number) && number >= -180 && number <= 180
-    ? null
-    : '-180 dan 180 gacha kiriting.'
-}
-
-// Validate the (lat, lng) pair together so the two fields never show
-// contradictory guidance: an out-of-range coordinate reports its own range
-// error and suppresses the "enter both together" nag on its partner until the
-// value it depends on is itself valid.
-export function coordinateFieldErrors(
-  latitude: string,
-  longitude: string,
-): { latitude: string | null; longitude: string | null } {
-  const latRange = latitudeCoordinate(latitude)
-  const lngRange = longitudeCoordinate(longitude)
-  return {
-    latitude: latRange ?? (lngRange ? null : coordinatePairRequired(latitude, longitude)),
-    longitude: lngRange ?? (latRange ? null : coordinatePairRequired(longitude, latitude)),
-  }
-}
-
 // Optional non-negative integer (blank is allowed → null). Guards fields like
 // tiyin rates from silently becoming NaN when non-numeric text is submitted.
 export function nonNegativeInteger(value: string, message = 'Butun son kiriting.'): string | null {
   if (!value.trim()) return null
   const number = Number(value)
   return Number.isInteger(number) && number >= 0 ? null : message
+}
+
+// Optional non-negative amount (blank is allowed → null). Used for so'm price
+// fields, which may carry decimals when a legacy tiyin rate is not a round
+// number of so'm; the caller rounds back to integer tiyin on submit.
+export function nonNegativeAmount(
+  value: string,
+  message = "To'g'ri qiymat kiriting.",
+): string | null {
+  if (!value.trim()) return null
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? null : message
 }
 
 export function positiveInteger(value: string): string | null {

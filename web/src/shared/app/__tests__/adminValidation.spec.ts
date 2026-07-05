@@ -1,40 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { coordinateFieldErrors, nonNegativeInteger } from '@/shared/app/adminValidation'
-
-describe('coordinateFieldErrors', () => {
-  it('accepts an empty pair', () => {
-    expect(coordinateFieldErrors('', '')).toEqual({ latitude: null, longitude: null })
-  })
-
-  it('accepts a valid pair', () => {
-    expect(coordinateFieldErrors('41.25', '69.12')).toEqual({ latitude: null, longitude: null })
-  })
-
-  it('requires the partner when only one coordinate is filled', () => {
-    expect(coordinateFieldErrors('41.25', '')).toEqual({
-      latitude: null,
-      longitude: 'Lat va Lng birga kiritiladi.',
-    })
-    expect(coordinateFieldErrors('', '69.12')).toEqual({
-      latitude: 'Lat va Lng birga kiritiladi.',
-      longitude: null,
-    })
-  })
-
-  it('reports only the range error and suppresses the pair nag when a value is out of range', () => {
-    // Regression: an out-of-range latitude used to also trigger a contradictory
-    // "enter both together" error on the empty longitude.
-    expect(coordinateFieldErrors('999', '')).toEqual({
-      latitude: '-90 dan 90 gacha kiriting.',
-      longitude: null,
-    })
-    expect(coordinateFieldErrors('', '999')).toEqual({
-      latitude: null,
-      longitude: '-180 dan 180 gacha kiriting.',
-    })
-  })
-})
+import { nonNegativeAmount, nonNegativeInteger } from '@/shared/app/adminValidation'
 
 describe('nonNegativeInteger', () => {
   it('treats blank as valid (optional field)', () => {
@@ -53,5 +19,23 @@ describe('nonNegativeInteger', () => {
     )
     expect(nonNegativeInteger('-5')).toBe('Butun son kiriting.')
     expect(nonNegativeInteger('1.5')).toBe('Butun son kiriting.')
+  })
+})
+
+describe('nonNegativeAmount', () => {
+  it('treats blank as valid (optional field)', () => {
+    expect(nonNegativeAmount('')).toBeNull()
+    expect(nonNegativeAmount('   ')).toBeNull()
+  })
+
+  it('accepts non-negative integers and decimals (legacy tiyin round-trip)', () => {
+    expect(nonNegativeAmount('0')).toBeNull()
+    expect(nonNegativeAmount('5000')).toBeNull()
+    expect(nonNegativeAmount('123.45')).toBeNull()
+  })
+
+  it('rejects non-numeric and negative input with the given message', () => {
+    expect(nonNegativeAmount('12a', 'Narxni kiriting.')).toBe('Narxni kiriting.')
+    expect(nonNegativeAmount('-5')).toBe("To'g'ri qiymat kiriting.")
   })
 })

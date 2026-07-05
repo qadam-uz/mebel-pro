@@ -254,7 +254,7 @@ async function confirmCuttingResult(args: {
   workshopId: string
   branchId: string
   orderNumber: string
-}) {
+}): Promise<string> {
   const script = `
 import asyncio
 import os
@@ -324,20 +324,26 @@ async def main() -> None:
 
 asyncio.run(main())
 `
-  await execFileAsync('uv', ['--directory', '../backend', 'run', 'python', '-c', script], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      ENV: 'test',
-      DATABASE_URL: databaseUrl,
-      OTP_DEV_CODES: '["000000"]',
-      RESULT_ID: args.resultId,
-      CLIENT_ID: args.clientId,
-      WORKSHOP_ID: args.workshopId,
-      BRANCH_ID: args.branchId,
-      ORDER_NUMBER: args.orderNumber,
+  const { stdout } = await execFileAsync(
+    'uv',
+    ['--directory', '../backend', 'run', 'python', '-c', script],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        ENV: 'test',
+        DATABASE_URL: databaseUrl,
+        OTP_DEV_CODES: '["000000"]',
+        RESULT_ID: args.resultId,
+        CLIENT_ID: args.clientId,
+        WORKSHOP_ID: args.workshopId,
+        BRANCH_ID: args.branchId,
+        ORDER_NUMBER: args.orderNumber,
+      },
     },
-  })
+  )
+  // The script prints the created order id on its last stdout line.
+  return stdout.trim().split('\n').pop()?.trim() ?? ''
 }
 
 async function loginWorkshop(page: Page, login: string, password: string) {
@@ -430,7 +436,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
 })
 
-test('workshop opens a confirmed read-only cutting plan and downloads PDF', async ({
+test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -454,7 +460,7 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
     edge,
   )
   const orderNumber = `P4-${id.toUpperCase()}`
-  await confirmCuttingResult({
+  const orderId = await confirmCuttingResult({
     resultId,
     clientId: clientLogin.me.principal_id,
     workshopId: setup.workshop.id as string,
@@ -463,18 +469,16 @@ test('workshop opens a confirmed read-only cutting plan and downloads PDF', asyn
   })
 
   await loginWorkshop(page, setup.ownerLogin, ownerReadyPassword)
-  await page.goto('/workshop/cutting-plans')
-  await expect(page.getByRole('heading', { name: 'Kesim rejalar' })).toBeVisible()
+  await page.goto(`/workshop/orders/${orderId}`)
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()
-  await page.getByRole('link', { name: 'Ochish' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Kesim reja' })).toBeVisible()
-  await expect(page.getByText(orderNumber)).toBeVisible()
+  // The cutting plan lives under the order's "Chizma" tab.
+  await page.getByRole('tab', { name: 'Chizma' }).click()
+  await expect(page.getByRole('heading', { name: 'Chizma rejasi' })).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
-  await expect(page.getByText('Joylashuvlar')).toBeVisible()
 
   const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'PDF yuklab olish' }).click()
-  expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
+  await page.getByRole('button', { name: 'Chizma (PDF)' }).click()
+  expect((await download).suggestedFilename()).toMatch(/^order-[0-9a-f-]+-cutting\.pdf$/)
 })

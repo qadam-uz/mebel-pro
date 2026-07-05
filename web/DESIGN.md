@@ -19,8 +19,14 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
 - Forms mark required fields with a compact `*` beside the persistent label, backed by
   `required` / `aria-required` semantics and inline errors; unmarked fields are optional.
 - Filter rows use shared `mp-*` filter classes with persistent labels outside the input value,
-  and controls in one filter row align to the same height. Role-prefixed classes such as
-  `admin-*` stay inside that role's app. Object-creation buttons in the admin app use a visible
+  and controls in one filter row align to the same height. Workshop filter controls are
+  compact: 40px tall, sized to their content (not stretched across the row), and filter
+  selects show the plain value only — no secondary description text. Colored dot prefixes
+  are reserved for status filters, mapped from the matching status-pill palette. Date
+  ranges use the shared date-range picker primitive: one trigger opening a popover with
+  preset shortcuts and a calendar; selections auto-apply (no apply button). Role-prefixed
+  classes such as `admin-*` stay inside that role's app (the admin app keeps its older
+  48px stretched filter look). Object-creation buttons in the admin app use a visible
   `+` prefix in the label.
 - Pointer cursor and row hover belong only on clickable controls or clickable rows. Static table
   rows stay visually still and use the default cursor.

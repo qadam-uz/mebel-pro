@@ -110,7 +110,6 @@ onMounted(refresh)
     <div class="page-head">
       <div>
         <h1>Krom yopishtirish navbati</h1>
-        <p class="sub">Sizga tayinlangan, krom yopishtirilishi kerak bo'lgan buyurtmalar.</p>
       </div>
       <div class="tools">
         <RouterLink

@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-25
+updated: 2026-07-05
 order: 55
 ---
 
@@ -90,10 +90,12 @@ regardless of when the order was collected. A job reverted ([`orders.md`](orders
 clears its stamp, so reverted work doesn't appear. Read-only; `view_finance_reports` (or
 `manage_finance`).
 
-## Finance reports
+## Finance summary
 
-Period selection (date range; presets: this month, last month, YTD, custom) and a branch
-filter (or workshop-wide). Read-only.
+Computed by the backend over a period (date range) and a branch filter (or
+workshop-wide), and surfaced on the workshop home (**Asosiy**) dashboard as KPI tiles —
+there is no standalone finance-reports page. Read-only; visible with
+`view_finance_reports` or `manage_finance`.
 
 - **Income** — sum of `recorded` income in the period, split `order_payment` vs `other`.
 - **Expenses** — sum of `recorded` expenses by category and total, in the period.
@@ -102,27 +104,33 @@ filter (or workshop-wide). Read-only.
 
 ## UX
 
-A top-level **Finance** nav item in the workshop app (visible to anyone with
-`manage_finance` or `view_finance_reports`).
+A **Moliya** nav group in the workshop app. The income · expenses · net summary is not a
+page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI tiles
+(visible with `manage_finance` or `view_finance_reports`). The group's own pages:
 
-- **Dashboard** (`/workshop/finance`, `view_finance_reports` or `manage_finance`) — Income ·
-  Expenses · Net as KPI cards + a timeseries; branch filter; date-range picker; drill-down
-  to the lists.
-- **Income** (`/workshop/finance/income`, `manage_finance` to mutate; `view_finance_reports`
-  read-only) — table: date, type, order # (when `order_payment`), method, amount, note,
-  status, action menu. Filters: date range, type, method, branch, status, min / max amount.
-  **+ Income** → form (type → if `order_payment`, an order picker scoped to the branch;
-  amount; method; date; note; receipt). Row actions: Edit · Void (reason). No Delete.
-- **Expenses** (`/workshop/finance/expenses`, same permissions) — table: date, category,
-  branch, vendor, amount, description (first 60 chars), receipt indicator, status, action
-  menu. Filters: date range, category, branch, status, min / max amount. **+ Expense** →
-  form (category, branch, amount, date, vendor, description, receipt). Row actions: Edit ·
-  Void (reason). No Delete.
+- **Income & expenses** (`/workshop/finance/expenses`, with an income deep-link at
+  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The date range is
+  the app-wide date-range picker: one trigger opening preset shortcuts (today / last
+  7 days / this month / last month / last 30 days / all) beside a calendar for custom
+  spans; every filter auto-applies — there is no separate apply button.
+  - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
+    status, action menu. Filters: date range, type, method, branch, status, min / max
+    amount. **+ Income** → form (type → if `order_payment`, an order picker scoped to the
+    branch; amount; method; date; note; receipt). Row actions: Edit · Void (reason). No
+    Delete.
+  - *Expenses* — table: date, category, branch, vendor, amount, description (first 60
+    chars), receipt indicator, status, action menu. Filters: date range, category, branch,
+    status, min / max amount. **+ Expense** → form (category, branch, amount, date, vendor,
+    description, receipt). Row actions: Edit · Void (reason). No Delete.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
-  `manage_finance`) — period + branch picker; table per worker (panels, cuts, orders
+  `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
+  per worker (panels, cuts, orders
   banded, metres by edge material, with a thickness rollup); a "record salary expense"
   shortcut that opens the Expense form pre-set to `category = salary` for that worker
   (the accountant fills the amount). Empty: "No production in this period."
+
+Because the income / expense ledgers require `manage_finance`, a `view_finance_reports`-only
+user sees the home summary tiles and worker-production report, but not the ledger pages.
 
 States: dashboards, lists, and detail all have loading / empty / error; mutating actions
 confirm; mandatory reasons block submit until filled; receipt upload uses the shared

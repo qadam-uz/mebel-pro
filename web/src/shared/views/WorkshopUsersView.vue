@@ -12,14 +12,16 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import {
   grantSummary,
   initials,
   permissionLabels,
   workshopErrorMessage,
 } from '@/shared/app/workshopUi'
-import FormSelect from '@/shared/components/FormSelect.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
+import PhoneInput from '@/shared/components/PhoneInput.vue'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -44,7 +46,7 @@ const createdTempPassword = ref<string | null>(null)
 let usersSearchTimer: number | undefined
 const form = reactive({
   fullName: '',
-  phone: '+998',
+  phone: '',
   login: '',
   branchIds: [] as string[],
   tempPassword: '',
@@ -67,29 +69,14 @@ const branchOptions = computed(() => [
     status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   })),
 ])
-const branchFilterOptions = computed(() => [
-  {
-    value: 'all',
-    label: 'Barcha filiallar',
-    meta: `${workshop.branches.length} filial`,
-    status: 'active' as const,
-  },
-  ...workshop.branches.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.address,
-    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
-  })),
+const branchFilterOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: 'Barcha filiallar' },
+  ...workshop.branches.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
-const statusOptions = [
-  { value: 'all', label: 'Hammasi', meta: 'barcha xodimlar', status: 'active' as const },
-  { value: 'active', label: 'Faol', meta: 'kirishi mumkin', status: 'active' as const },
-  {
-    value: 'blocked',
-    label: 'Bloklangan',
-    meta: 'kirishi to`xtatilgan',
-    status: 'blocked' as const,
-  },
+const statusOptions: DropdownOption[] = [
+  { value: 'all', label: 'Hammasi' },
+  { value: 'active', label: 'Faol', dot: 'success' },
+  { value: 'blocked', label: 'Bloklangan', dot: 'danger' },
 ]
 const createGrantBranches = computed(() =>
   workshop.branches.filter((branch) => form.branchIds.includes(branch.id)),
@@ -234,7 +221,7 @@ async function createStaff() {
       }),
     })
     form.fullName = ''
-    form.phone = '+998'
+    form.phone = ''
     form.login = ''
     form.branchIds = defaultBranchIds()
     form.tempPassword = ''
@@ -300,7 +287,7 @@ onBeforeUnmount(() => {
           class="mp-button mp-button-primary"
           @click="openCreateForm"
         >
-          Yangi xodim
+          + Yangi xodim
         </button>
       </div>
     </div>
@@ -319,7 +306,7 @@ onBeforeUnmount(() => {
             class="mp-button mp-button-outline min-h-9 px-3 text-xs"
             @click="showCreate = false"
           >
-            Bekor
+            Bekor qilish
           </button>
         </div>
         <form class="card-b grid gap-4" novalidate @submit.prevent="createStaff">
@@ -345,12 +332,9 @@ onBeforeUnmount(() => {
             </label>
             <label class="field" for="staff-phone">
               <span>Telefon</span>
-              <input
+              <PhoneInput
                 id="staff-phone"
                 v-model="form.phone"
-                class="mp-input"
-                autocomplete="tel"
-                inputmode="tel"
                 required
                 :aria-invalid="!!staffFieldErrors.phone"
                 :aria-describedby="staffFieldErrors.phone ? 'staff-phone-error' : undefined"
@@ -481,20 +465,15 @@ onBeforeUnmount(() => {
       <div class="mp-filters">
         <label class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" class="mp-input min-w-64" placeholder="Ism yoki login..." />
+          <input v-model="search" placeholder="Ism yoki login..." />
         </label>
-        <FormSelect
+        <ProjectDropdown
           v-model="branchFilter"
-          class="mp-filter-select"
           label="Filial"
           :options="branchFilterOptions"
+          top-label
         />
-        <FormSelect
-          v-model="statusFilter"
-          class="mp-filter-select"
-          label="Holat"
-          :options="statusOptions"
-        />
+        <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
       </div>
 
       <section v-if="workshop.loading" class="card p-5" aria-live="polite">
