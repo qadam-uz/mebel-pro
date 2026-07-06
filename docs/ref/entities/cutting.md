@@ -16,14 +16,14 @@ algorithm). Drafts are mutable while the client iterates; results are immutable.
 
 The client's editable workspace for one set of parts. Holds the parts list, the most recent
 optimisation run's results (one per algorithm — see below), the client's chosen result, and
-an optional intended-branch pre-filter. Private to the client. Persists indefinitely (no
+the branch the cutting is scoped to. Private to the client. Persists indefinitely (no
 expiry); a client may have at most 50 drafts open at once.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `client_id` | UUID | the client who owns it |
-| `preferred_branch_id` | UUID? | optional — when set, the material picker is pre-filtered to this branch's selection; the order step defaults to it. Seeded from the client's `preferred_branch_id` on draft create; the client can clear or change it on the draft without affecting the profile default. Never enforces destructively (rows referencing materials this branch doesn't carry stay editable with inline recovery affordances — see [`cutting.md`](../features/cutting.md)). |
+| `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively (rows referencing materials the branch doesn't carry stay editable with inline recovery affordances). |
 | `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id` (a `panel`), `material_source` (`shop` / `own`), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <edge-material>, "source": "shop" \| "own" }`. Grain is derived from the panel material (not stored on the part); edge thickness/colour are derived from each side's edge material. |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |

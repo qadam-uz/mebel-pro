@@ -41,9 +41,10 @@ Set at creation:
   brings the panel; cutting service only, no stock movement for that panel). Each banded
   edge side is independently `shop` (workshop supplies that tape; inventory decrements
   consumed length as integer millimetres internally, shown and priced as metres) or `own`
-  (client brings the tape; no stock movement for that side). An order can mix sources at
-  every level; a fully-`own` order touches no stock and can be placed at any active branch
-  with a saw.
+  (client brings the tape; no stock movement for that side). The data model and pricing
+  support mixing sources at every level, but the **client cutting editor no longer offers
+  `own`** ([`cutting.md`](cutting.md#parts-and-materials)) — new orders are fully `shop`;
+  `own` remains meaningful for historical orders.
 - **Handover — pickup only.** The client collects at the branch. Delivery is out of v1
   ([`scope.md`](../../scope.md)).
 
@@ -253,9 +254,9 @@ chosen at placement, against a specific cutting — defaulted from the draft's
      (cutting, panel materials per material — `shop` share only, edge banding per edge
      material — `shop` share only, **subtotal**). Tapping a card commits the branch and
      freezes pricing. Empty / error states: no branch carries the set (inline panel
-     listing the offending materials + a "flip these to *I'll bring it*" link); branch
-     went `temporarily_closed` (greyed card with reason); branch pricing incomplete
-     (greyed, "this branch can't take orders right now").
+     listing the offending materials + a "go back to the cutting and pick a different
+     material" link); branch went `temporarily_closed` (greyed card with reason); branch
+     pricing incomplete (greyed, "this branch can't take orders right now").
   2. **Checkout** — one scrollable page, two sections:
      - **Contact** — phone and name, prefilled from the client's profile, editable
        inline, then frozen onto the order as the workshop-facing contact snapshot. It
@@ -357,7 +358,7 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Order has banded parts but the branch's `edge_banding_rate_tiyin` is not set** →
   `missing_edge_banding_rate`; same gating + flag.
 - **Branch doesn't carry a `shop` panel the cutting uses** → `branch_does_not_carry_panel`;
-  the cutting wizard's recovery affordance (bring own / swap) covers this earlier; the
+  the cutting wizard's recovery affordance (material swap) covers this earlier; the
   order step is the final gate.
 - **Branch doesn't carry a `shop` edge material a side uses** →
   `branch_does_not_carry_edge`; same affordance path.

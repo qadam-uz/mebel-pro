@@ -886,10 +886,6 @@
     stroke-linecap: round;
   }
 
-  .client-edge-svg .side.own {
-    stroke-dasharray: 3 2;
-  }
-
   .client-edge-svg .lbl {
     fill: var(--color-accent);
     font-family: var(--font-mono);
@@ -1150,10 +1146,6 @@
     border-style: solid;
     background: var(--color-accent-soft);
     color: var(--color-accent);
-  }
-
-  .edge-btn.set.own {
-    background: rgb(15 118 110 / 16%);
   }
 
   .edge-btn.h {

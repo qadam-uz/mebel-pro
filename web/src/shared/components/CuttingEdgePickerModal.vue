@@ -12,16 +12,11 @@ import {
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
-import {
-  useCuttingStore,
-  type CuttingEdgeBand,
-  type CuttingPart,
-  type MaterialSource,
-} from '@/shared/stores/cutting'
+import { useCuttingStore, type CuttingEdgeBand, type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: the edge-banding modal. The editor owns which part is open
 // (`part` prop = the part being edited, null = closed) and the preferred-edge memory;
-// this dialog owns its own working selection (sides / source / search / thickness),
+// this dialog owns its own working selection (sides / search / thickness),
 // the recommended-edge ranking, the Tab focus-trap, the Escape handler, and the body
 // scroll-lock. It EMITS the chosen edges on apply (the editor writes them onto the
 // part + remembers the material) and `close` on cancel — it never mutates the part.
@@ -44,7 +39,6 @@ const emit = defineEmits<{
 const cutting = useCuttingStore()
 
 const edgePickerState = ref<Record<EdgeField, CuttingEdgeBand | null>>(blankEdgeState())
-const edgePickerSource = ref<MaterialSource>('shop')
 const edgePickerSearch = ref('')
 const edgePickerThickness = ref<string | null>('all')
 const edgeDialogRef = ref<HTMLElement | null>(null)
@@ -92,16 +86,6 @@ function bandedEdgeFields(state: Record<EdgeField, CuttingEdgeBand | null>) {
   return edgeFields.filter((side) => state[side])
 }
 
-function commonEdgeSource(part: CuttingPart): MaterialSource {
-  return (
-    part.edge_top?.source ??
-    part.edge_bottom?.source ??
-    part.edge_left?.source ??
-    part.edge_right?.source ??
-    'shop'
-  )
-}
-
 function cloneEdgeStateFromPart(part: CuttingPart): Record<EdgeField, CuttingEdgeBand | null> {
   return {
     edge_top: part.edge_top ? { ...part.edge_top } : null,
@@ -137,14 +121,14 @@ function pickerSideThickness(side: EdgeField) {
   return material?.thickness_mm ? `${material.thickness_mm}mm` : ''
 }
 
-// Tailwind classes for a side strip in the diagram: filled (shop = accent, own =
-// dark teal) when banded, dashed/muted when empty.
+// Tailwind classes for a side strip in the diagram: filled when banded,
+// dashed/muted when empty.
 function sideClass(side: EdgeField) {
   const edge = edgePickerState.value[side]
   if (!edge) {
     return 'border border-dashed border-hairline-strong bg-sunk text-ink-muted hover:border-ink-soft'
   }
-  return edge.source === 'own' ? 'bg-[#0b5a54] text-white' : 'bg-accent text-white'
+  return 'bg-accent text-white'
 }
 
 function sideAria(side: EdgeField) {
@@ -202,14 +186,14 @@ const edgePickerBranchNote = computed(() => {
   const missing = new Map<string, string>()
   for (const side of edgeFields) {
     const edge = edgePickerState.value[side]
-    if (!edge || edge.source === 'own') continue
+    if (!edge) continue
     const material = edgeById(edge.material_id)
     if (material && !material.branch_carried) {
       missing.set(material.id, edgeShortLabel(material, true))
     }
   }
   if (!missing.size) return null
-  return `${props.preferredBranchName} filialida ${[...missing.values()].join(' · ')} hozir mavjud emas. Manbani "O'zim olib kelaman" qiling yoki boshqa krom tanlang.`
+  return `${props.preferredBranchName} filialida ${[...missing.values()].join(' · ')} hozir mavjud emas. Boshqa krom tanlang.`
 })
 
 function applyEdgePattern(key: string) {
@@ -224,7 +208,7 @@ function applyEdgePattern(key: string) {
   if (!fallback) return
   const next = blankEdgeState()
   for (const side of pattern.sides) {
-    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
+    next[side] = { material_id: fallback.id, source: 'shop' }
   }
   edgePickerState.value = next
 }
@@ -237,16 +221,7 @@ function togglePickerSide(side: EdgeField) {
   } else {
     const fallback = recommendedEdgeForPart()
     if (!fallback) return
-    next[side] = { material_id: fallback.id, source: edgePickerSource.value }
-  }
-  edgePickerState.value = next
-}
-
-function setPickerSource(source: MaterialSource) {
-  edgePickerSource.value = source
-  const next = { ...edgePickerState.value }
-  for (const side of edgeFields) {
-    if (next[side]) next[side] = { ...next[side], source }
+    next[side] = { material_id: fallback.id, source: 'shop' }
   }
   edgePickerState.value = next
 }
@@ -259,7 +234,7 @@ function selectPickerMaterial(materialId: string) {
   if (active.length === 0) return
   const next = { ...edgePickerState.value }
   for (const side of active) {
-    next[side] = { material_id: materialId, source: edgePickerSource.value }
+    next[side] = { material_id: materialId, source: 'shop' }
   }
   edgePickerState.value = next
 }
@@ -324,10 +299,6 @@ watch(
     if (part && !previous) {
       edgePickerState.value = cloneEdgeStateFromPart(part)
       const active = bandedEdgeFields(edgePickerState.value)
-      edgePickerSource.value =
-        active.length > 0 && active.every((side) => edgePickerState.value[side]?.source === 'own')
-          ? 'own'
-          : commonEdgeSource(part)
       // First-time pick (no banding yet) opens the tape list; editing an existing
       // banded part starts collapsed to the compact summary.
       showTapeList.value = active.length === 0
@@ -520,37 +491,6 @@ onBeforeUnmount(() => {
           >
             O'zgartirish →
           </button>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2.5">
-          <span class="text-xs font-bold text-ink-muted">Manba:</span>
-          <div class="inline-flex overflow-hidden rounded-lg border border-hairline-strong">
-            <button
-              type="button"
-              class="px-3.5 py-2 text-xs font-bold transition"
-              :class="
-                edgePickerSource === 'shop' ? 'bg-accent text-white' : 'bg-elevated text-ink-muted'
-              "
-              :aria-pressed="edgePickerSource === 'shop'"
-              @click="setPickerSource('shop')"
-            >
-              Ustaxonadan
-            </button>
-            <button
-              type="button"
-              class="border-l border-hairline-strong px-3.5 py-2 text-xs font-bold transition"
-              :class="
-                edgePickerSource === 'own' ? 'bg-accent text-white' : 'bg-elevated text-ink-muted'
-              "
-              :aria-pressed="edgePickerSource === 'own'"
-              @click="setPickerSource('own')"
-            >
-              O'zim olib kelaman
-            </button>
-          </div>
-          <span class="text-[11.5px] text-ink-muted">{{
-            edgePickerSource === 'shop' ? "narxga qo'shiladi" : 'faqat yopishtirish'
-          }}</span>
         </div>
 
         <div v-if="showTapeList" class="ep-tools">
