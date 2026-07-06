@@ -786,33 +786,17 @@ onBeforeRouteLeave(() => {
                 {{ parts.length }} qator · {{ totalQuantity }} dona
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
-                <button
-                  type="button"
-                  class="rounded-md bg-elevated px-3 py-2 text-sm font-bold text-ink shadow-sm"
-                >
-                  Qo'lda
-                </button>
-                <button
-                  type="button"
-                  class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
-                  disabled
-                >
-                  Fayldan
-                  <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]"
-                    >tez kunda</span
-                  >
-                </button>
-              </div>
-            </div>
           </div>
 
+          <!-- Bulk bar: actions only — the row checkboxes already show what's
+               selected, so a "N selected" counter would repeat them; the count
+               still reads out via the group label and the bulk-dialog titles. -->
           <div
             v-if="selectedParts.length > 0"
+            role="group"
+            :aria-label="`${selectedParts.length} qism tanlandi — guruh amallari`"
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
-            <span class="text-accent">{{ selectedParts.length }} qism tanlandi</span>
             <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
               Krom qo'llash
             </button>
@@ -918,6 +902,10 @@ onBeforeRouteLeave(() => {
               <Icon name="plus" class="size-4" />
               Qism qo'shish
             </button>
+            <!-- The upcoming file import is a quiet one-liner here (where import
+                 would act), not a disabled header mode switch — dead controls
+                 shouldn't take prime header space (docs/ref/features/cutting.md). -->
+            <p class="text-center text-xs text-ink-muted">Tez kunda: .bas / .xlsx fayldan import</p>
           </div>
 
           <div

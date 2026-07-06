@@ -214,11 +214,14 @@ doesn't carry get a per-row warning + recovery affordances (below).
 
 ### Parts editor (top)
 
-A mode switch at the top: **Manual entry** (default) · **Upload file** (`.bas` / `.xlsx`;
-disabled in v1 with a "Coming soon" pill). The page header carries a **Clear parts list**
-trash icon, shown only once there are rows. The primary **Optimise** button lives in a
-**sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
-reason shown inline) — so it stays reachable above a long list.
+Manual entry is the only input mode in v1. The upcoming file import (`.bas` / `.xlsx`)
+is advertised as a quiet muted one-liner under the **Add part** tile — *"Coming soon:
+import from a .bas / .xlsx file"* — not as a disabled header mode switch (a dead control
+shouldn't take prime header space; the hint sits where import will act). The page header
+carries a **Clear parts list** trash icon, shown only once there are rows. The primary
+**Optimise** button lives in a **sticky bottom action bar** — alongside the row / piece
+count (and, when it's disabled, the reason shown inline) — so it stays reachable above a
+long list.
 
 Adding a row follows the content rather than a fixed header control: an empty editor shows a
 centred **Add part** call-to-action, and once there are rows a dashed **Add part** tile sits
