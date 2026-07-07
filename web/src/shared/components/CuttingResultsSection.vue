@@ -353,9 +353,6 @@ async function choose(result: CuttingResult) {
                 <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
               </li>
             </ul>
-            <p class="mt-2 text-xs text-ink-muted">
-              Ustaxona {{ metres(consumedShop) }} · O'zim {{ metres(consumedOwn) }}
-            </p>
           </template>
           <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
         </div>

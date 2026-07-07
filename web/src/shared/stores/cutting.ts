@@ -392,6 +392,14 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
+  // Drop the loaded panel/edge catalogs without touching drafts or branch options
+  // — used when the editor has no branch selected (the catalog is branch-scoped,
+  // so there's nothing valid to keep showing).
+  function clearMaterials() {
+    panelOptions.value = []
+    edgeOptions.value = []
+  }
+
   function reset() {
     drafts.value = []
     currentDraft.value = null
@@ -435,6 +443,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     chooseResult,
     loadBranchOptions,
     loadMaterials,
+    clearMaterials,
     downloadClientPdf,
     reset,
   }

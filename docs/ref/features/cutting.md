@@ -37,17 +37,22 @@ and unsaved, so abandoned/empty editors never mint a draft (see *Lifecycle*).
 
 A draft owns:
 
-- **An optional `preferred_branch_id`.** Seeded from the client's stored
-  [profile default](../entities/identity.md#client) when one exists; the current profile UI does
-  not expose setting that default. The client can still change or clear it on the draft without
-  touching the profile. When set, the material picker is **pre-filtered**
-  to materials this branch carries and the order step defaults to this branch — but the
-  filter is a help, never a data operation: parts already in the list stay editable even
-  when their materials aren't carried at the new branch (see *Recovery affordances*).
-- **Parts.** Each part picks its own **panel** material from the platform catalog, its own
-  source (`shop` / `own`), dimensions (length × width × quantity), and a per-side **edge**
-  material (top, bottom, left, right — each `null` for no banding, or a catalog edge
-  material with its own source). Grain is **not** a per-part choice — it's a property of
+- **A `preferred_branch_id` — required to build the parts list.** Seeded from the client's
+  stored [profile default](../entities/identity.md#client) when one exists; the current profile
+  UI does not expose setting that default. Selecting a workshop is **mandatory**: the catalog is
+  scoped to the chosen branch, so the parts editor stays gated behind a "pick a workshop" prompt
+  until one is set, and **Optimise** is disabled without it. The client can **change** the branch
+  (there is no "clear to none" — the field is required once you're editing), and the order step
+  defaults to it. Switching branches is not a data operation: parts already in the list stay
+  editable even when their materials aren't carried at the new branch (see *Recovery
+  affordances*). The column stays nullable in storage for drafts that predate this rule and for
+  the brief unsaved window before the first branch pick.
+- **Parts.** Each part picks its own **panel** material from the platform catalog,
+  dimensions (length × width × quantity), and a per-side **edge** material (top, bottom,
+  left, right — each `null` for no banding, or a catalog edge material). Every material is
+  **workshop-supplied**: the editor offers no "I'll bring it myself" choice (the snapshot's
+  `material_source` / side `source` fields are always `shop`; see *Parts and materials*).
+  Grain is **not** a per-part choice — it's a property of
   the chosen panel material. Edge thickness and colour are properties of the chosen edge
   material — the user picks the tape, not a thickness.
 - **Algorithm results.** Re-running the optimiser produces one result per available
@@ -93,22 +98,19 @@ eager creation.
 ### Parts and materials
 
 - A part's panel material is a reference to the **platform catalog** (the shared list
-  curated by platform operators). All catalog `panel` materials are pickable in the editor
-  regardless of branch availability; the branch indicator (below) flags where this
-  composition can be fulfilled.
-- A part's `material_source = shop` means the workshop supplies the panel; `own` means the
-  client brings it, and only the cutting service is purchased for that part. Different
-  parts can have different sources — including parts of the same material (some from shop,
-  some brought).
-- An `own` part still picks a catalog material — the entry supplies panel dimensions,
-  thickness, kerf-relevant data, and the grain rule. Non-catalog materials are out of
-  scope for v1.
+  curated by platform operators), but the client only ever picks from the **selected
+  branch's carried materials** — a branch is required before the parts editor opens
+  (see *Branch selector*), so the picker is always branch-scoped. The branch indicator
+  (below) flags any already-entered row whose material the current branch can't fulfil.
+- **All materials are workshop-supplied.** The data model keeps a per-part
+  `material_source` and a per-side edge `source` (`shop` / `own` — the optimiser, pricing,
+  and the workshop side still understand both, and historical orders may carry `own`), but
+  the client flow no longer offers the choice: the editor always writes `shop`, and a
+  legacy draft saved with `own` parts or sides is normalized back to `shop` when it loads.
 - **Edge tape is a catalog material too.** Each side of a part is either `null` (no banding)
-  or `(edge material, source)`. The picker UX pins decor-matching edges at the top of one
+  or a catalog edge material. The picker UX pins decor-matching edges at the top of one
   material list so the common case ("match the panel decor in 0.4 mm") is a single tap
-  without hiding the rest of the catalog (see *UX*). Like panels, edges can be `shop`
-  (workshop supplies) or `own` (client brings their own spool); a side's source is
-  independent of the panel's source on the same part and of other sides' sources.
+  without hiding the rest of the catalog (see *UX*).
 
 ### The optimiser
 
@@ -170,13 +172,11 @@ Every optimisation run is audited.
 
 - As a client, I want all my parts in one cutting even when they need different materials,
   so I don't run multiple cuttings and reconcile panels / prices afterwards.
-- As a client, I want to mark some parts or some edges as "I'll bring this material myself,"
-  so I can use a leftover I already have.
 - As a client, I want to compare algorithm results before committing, so I can pick "fewer
   panels" over "lowest waste" when I care more about cost than offcuts.
-- As a client, I want to pre-filter the catalog to one branch's selection so I don't pick
-  materials that branch can't fulfil — but I don't want that filter to throw away parts
-  I've already entered.
+- As a client, I want to choose the workshop up front so I only ever pick materials it can
+  actually cut — but when I switch workshops I don't want that to throw away parts I've
+  already entered.
 - As a client, I want to filter the catalog by manufacturer so I get the brand the workshop
   near me reliably carries (Egger vs. Kronospan).
 - As a client, I want the matching edge for my panel decor offered first so I'm not hunting
@@ -193,32 +193,35 @@ A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first optimi
 cutting** button, which opens an empty, unsaved editor; the draft is created and persisted on
 the first **Optimise** (see *Lifecycle*). A secondary **My drafts** entry lists unbound drafts.
 
-### Branch pre-filter (top of the editor)
+### Branch selector (top of the editor)
 
-A small affordance under the page header naming the active pre-filter:
+A small affordance under the page header naming the active branch. Choosing one is
+**required** — the catalog is scoped to the branch, so until one is set the parts editor
+shows a **"pick a workshop first"** gate (a `store`-icon empty state with a single **Pick a
+workshop** button) in place of the parts list, and a caption on the selector explains the
+list is built from the chosen workshop's catalog.
 
-- **No pre-filter** → "all branches" + a **Pick a branch** link.
-- **Pre-filter set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Clear**
-  button and a **Change** button.
+- **None set** → "No workshop selected" + a **Pick a workshop** button.
+- **Set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Change** button.
+  There is **no Clear** — the field is required once you're editing.
 
 Picking or changing the branch opens a single flat branch list — one row per branch, naming
 the branch, its workshop, and today's hours, with a status pill (`temporarily_closed`
 branches stay selectable, the row just flags why); a search field appears once the list is
-long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`. Clearing
-removes it. **Neither edits the parts list.** Rows that reference materials the new branch
+long. One tap selects a branch; **Apply** sets the draft's `preferred_branch_id`.
+**Changing it never edits the parts list.** Rows that reference materials the new branch
 doesn't carry get a per-row warning + recovery affordances (below).
-
-The **Show all catalog** toggle lives inside this same pre-filter affordance and appears
-**only once a branch is selected** — without one the catalog isn't branch-narrowed, so the
-toggle has nothing to widen and stays hidden.
 
 ### Parts editor (top)
 
-A mode switch at the top: **Manual entry** (default) · **Upload file** (`.bas` / `.xlsx`;
-disabled in v1 with a "Coming soon" pill). The page header carries a **Clear parts list**
-trash icon, shown only once there are rows. The primary **Optimise** button lives in a
-**sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
-reason shown inline) — so it stays reachable above a long list.
+Manual entry is the only input mode in v1. The upcoming file import (`.bas` / `.xlsx`)
+is advertised as a quiet muted one-liner under the **Add part** tile — *"Coming soon:
+import from a .bas / .xlsx file"* — not as a disabled header mode switch (a dead control
+shouldn't take prime header space; the hint sits where import will act). The page header
+carries a **Clear parts list** trash icon, shown only once there are rows. The primary
+**Optimise** button lives in a **sticky bottom action bar** — alongside the row / piece
+count (and, when it's disabled, the reason shown inline) — so it stays reachable above a
+long list.
 
 Adding a row follows the content rather than a fixed header control: an empty editor shows a
 centred **Add part** call-to-action, and once there are rows a dashed **Add part** tile sits
@@ -235,7 +238,7 @@ The parts table:
 | Column | Behaviour |
 | --- | --- |
 | **#** | row number |
-| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). When `preferred_branch_id` is set, the picker is pre-filtered to that branch's selection by default; a toggle "Show all catalog" widens it. Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`) with an inline source chip: `From shop` ↔ `I'll bring it`. A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
+| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
@@ -256,7 +259,7 @@ panel has grain — a passive cue, not a control.
   rectangle that draws its banded sides thick so it reads spatially, not just by text — and
   the diagram below shows
   the part with all four sides **labelled** (top / bottom / left / right) — tap a side to
-  toggle its banding; banded sides fill (shop vs. "I'll bring it" read as distinct fills).
+  toggle its banding; banded sides fill.
   Choosing a tape applies it only to the **currently banded** sides; with **no** side
   selected the tape is just remembered (highlighted in the list) and used by the next side
   toggled on — picking a tape never auto-bands all four sides.
@@ -267,12 +270,8 @@ panel has grain — a passive cue, not a control.
   marker; same-`color` matches follow; all other active edge materials continue in the same
   list, filtered by search + a thickness dropdown. If no panel is selected, matching appears
   once the panel is picked but catalog search still works.
-- **Source is quiet by default.** `shop` is the default. A segmented source control
-  (`Workshop supplies` / `I'll bring it`) applies to the currently banded sides; mixed
-  per-side source remains possible through the diagram but is not presented as a separate
-  step.
 - **The edge picker applies to the row it was opened from.** The footer has only **Cancel**
-  and **Apply**; **Apply** saves the selected side pattern, tape, and source to the row whose
+  and **Apply**; **Apply** saves the selected side pattern and tape to the row whose
   **Edges** cell opened the picker, and never edits sibling rows from inside the picker.
   **Bulk edge apply** is instead an explicit **list-level** action (see _Bulk row actions_
   below) — the picker stays single-purpose, exactly as foreseen here.
@@ -280,7 +279,7 @@ panel has grain — a passive cue, not a control.
 **Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
 column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
 **Apply edges** (opens the edge picker seeded from the first selected row and writes the
-applied side pattern / tape / source to every selected row), **Change material** (a small
+applied side pattern / tape to every selected row), **Change material** (a small
 picker that sets one panel material on every selected row), and **Delete**. This is the
 list-level path for re-banding or re-materialing many identical parts without N picker
 round-trips — a desktop power feature; on mobile each row is edited individually (its own
@@ -297,23 +296,18 @@ the row is **not** disabled, **not** dropped, **not** moved. It stays in place, 
 with a **per-row warning** on each affected row (there is no separate top-level roll-up
 banner — the warning lives on the row that has the issue):
 
-- The warning reads *"Not at <branch>."* with two inline buttons:
-  - **I'll bring my own** — flips the row's panel source (or for an affected edge side,
-    that side's source) to `own`. The branch no longer needs to carry it.
-  - **Pick a different material** — opens the picker pre-filtered to the new branch (panel
-    swap on the panel cell; edge swap inside the edge picker with the affected side
-    already active and the same inline note visible).
+- The warning reads *"Not at <branch> — pick a different material or change the branch."*
+  Recovery is a material swap: the panel is swapped on the row's panel cell (the picker is
+  pre-filtered to the branch), and when an edge side is affected the warning carries an
+  inline **Pick a different tape** button that opens the edge picker with the same inline
+  note visible.
 - The row's **Delete** (trash) button still works; removal is opt-in and never automatic.
-
-For a row whose **own**-source panel is referenced (i.e. the client already brings the
-panel), there's no warning — `own` doesn't care which branch carries it. Same for `own`
-edge sides.
 
 ### Clearing the parts list (deliberate)
 
 A **Clear parts list** trash icon next to the page header runs a danger-styled action
 (confirmation: *"Remove all N parts? This can't be undone."*). This is the only way to wipe
-parts wholesale; the branch pre-filter never invokes it.
+parts wholesale; changing the branch never invokes it.
 
 ### Run and the result panel
 
@@ -405,10 +399,10 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **Catalog change while a draft sits** — if a material a part references is later removed
   from the catalog, the draft is flagged on next open with that row highlighted; the
   client picks a replacement before re-running.
-- **`preferred_branch_id` set but the branch later goes `inactive`** — the pre-filter is
-  treated as "no carried materials" for that branch; the wizard surfaces the same
-  not-carried recovery affordances on every row, plus a banner pointing at the branch's
-  status; the client clears or changes the pre-filter to unlock.
+- **`preferred_branch_id` set but the branch later goes `inactive`** — the branch is
+  treated as "no carried materials"; the wizard surfaces the same not-carried recovery
+  affordances on every row, plus a banner pointing at the branch's status; the client
+  **changes** the branch to unlock (the selector offers no clear, only a switch).
 - **`cutting_result_not_usable`** — the order step finds the draft is already `confirmed`
   (concurrent placement, or back-navigation after placing) → redirect to its detail.
 - **Algorithm replaced later** — old `confirmed` results stay exactly as they were,
@@ -423,5 +417,5 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - [`orders.md`](orders.md) — how a chosen cutting result becomes a placed order and which
   cutting metrics drive which price component.
 - [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog (manufacturers,
-  panels, edges) the wizard reads from, and the branch's selection that drives the
-  pre-filter.
+  panels, edges) the wizard reads from, and the branch's selection that scopes the
+  editor's catalog.
