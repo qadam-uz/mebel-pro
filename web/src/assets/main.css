@@ -1592,13 +1592,27 @@
     gap: 2px;
   }
 
+  .workshop-nav-group + .workshop-nav-group {
+    margin-top: 6px;
+  }
+
   .workshop-nav-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: var(--color-ink-muted);
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.15em;
     padding: 4px 10px;
     text-transform: uppercase;
+  }
+
+  .workshop-nav-label::after {
+    content: '';
+    height: 1px;
+    flex: 1;
+    background: var(--color-hairline-strong);
   }
 
   .workshop-nav-item {
@@ -2027,7 +2041,7 @@
   .chart {
     display: block;
     width: 100%;
-    height: 218px;
+    height: 196px;
   }
 
   .chart .grid line {
@@ -2056,11 +2070,33 @@
     fill: var(--color-ink-strong);
   }
 
-  .chart text {
-    fill: var(--color-ink-muted);
+  .chart-plot {
+    position: relative;
+  }
+
+  /* Value of the top gridline (the peak day): bar heights scale so the max
+     lands exactly on that line, so this one label gives the chart a scale. */
+  .chart-max {
+    position: absolute;
+    top: 20px;
+    right: 0;
+    z-index: 1;
+    color: var(--color-ink-muted);
+    background: color-mix(in srgb, var(--color-elevated) 85%, transparent);
     font-family: var(--font-mono);
     font-size: 10.5px;
     font-weight: 600;
+    padding-left: 6px;
+  }
+
+  .chart-x {
+    display: flex;
+    justify-content: space-between;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    margin-top: 6px;
   }
 
   .chart-legend {
@@ -2106,13 +2142,6 @@
     text-decoration: underline;
   }
 
-  .two-col {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  }
-
-  .two-col > *,
   .od-grid > *,
   .admin-grid-two > * {
     min-width: 0;
@@ -2574,9 +2603,28 @@
     padding: 18px 20px 16px;
   }
 
+  /* Only link-cards get the lift, so clickable KPIs read as clickable. */
+  a.kpi {
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
+  }
+
+  a.kpi:hover {
+    border-color: var(--color-hairline-strong);
+    box-shadow: 0 8px 18px -10px rgb(15 27 45 / 22%);
+    transform: translateY(-1px);
+  }
+
   .kpi.warn {
     border-color: #f6e3c2;
     background: var(--color-warning-soft);
+  }
+
+  .kpi.bad {
+    border-color: #f2d5cf;
+    background: var(--color-danger-soft);
   }
 
   .kpi .lbl {
@@ -2595,6 +2643,33 @@
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1;
+    white-space: nowrap;
+  }
+
+  /* Currency/unit suffix — deliberately smaller than the numeral so money
+     values stay on one line and the number carries the visual weight. */
+  .kpi .v small {
+    color: var(--color-ink-soft);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* State tints for KPI values/labels: these compound selectors out-specify
+     the base `.kpi .v` / `.kpi .lbl` color, which would otherwise silently
+     swallow the single-class utilities (.danger-text & co). */
+  .kpi .lbl.success-text,
+  .kpi .v.success-text {
+    color: var(--color-success);
+  }
+
+  .kpi .v.warn-text {
+    color: var(--color-warning);
+  }
+
+  .kpi .lbl.danger-text,
+  .kpi .v.danger-text {
+    color: var(--color-danger);
   }
 
   .kpi .d {
@@ -2711,6 +2786,30 @@
     font-family: var(--font-mono);
     font-weight: 800;
     white-space: nowrap;
+  }
+
+  /* State tints on money/quantity cells: compound selectors so they out-specify
+     `.tbl .amt`'s own color (same trap as the KPI value tints). */
+  .tbl .amt.success-text,
+  .amt.success-text {
+    color: var(--color-success);
+  }
+
+  .tbl .amt.warn-text,
+  .amt.warn-text {
+    color: var(--color-warning);
+  }
+
+  .tbl .amt.danger-text,
+  .amt.danger-text {
+    color: var(--color-danger);
+  }
+
+  /* Voided ledger rows are .muted, but `.tbl .amt` kept their sums bold black —
+     demote the amount together with the rest of the row. */
+  .tbl tr.muted .amt {
+    color: var(--color-ink-muted);
+    font-weight: 500;
   }
 
   .mp-action-menu-wrap {
@@ -2959,6 +3058,16 @@
     font-size: 12px;
     font-weight: 800;
     text-align: right;
+  }
+
+  /* Compound selector so the state tint survives `.row-item .meta`'s own color
+     (same specificity trap as the KPI value tints). */
+  .row-item .meta.warn-text {
+    color: var(--color-warning);
+  }
+
+  .row-item .meta.danger-text {
+    color: var(--color-danger);
   }
 
   .banner {
@@ -3261,7 +3370,9 @@
     font-weight: 800;
   }
 
-  .field > span {
+  /* :not(.mp-field-error) — the error span lives inside the label too, and the
+     label rule would otherwise repaint it bold black (specificity trap). */
+  .field > span:not(.mp-field-error) {
     color: var(--color-ink);
     font-size: 13px;
     font-weight: 800;
@@ -5039,7 +5150,6 @@
   }
 
   @media (max-width: 1100px) {
-    .two-col,
     .queue-grid,
     .od-grid,
     .od-head-row,
@@ -5076,7 +5186,23 @@
     }
 
     .workshop-topbar {
+      gap: 10px;
       padding: 12px 16px;
+    }
+
+    /* Compact 3-row topbar on phones: [Menyu ⋯ bell/avatar], [branch], [search]
+       instead of four stacked rows with dead space. */
+    .workshop-top-actions {
+      order: 2;
+    }
+
+    .workshop-branch-dd {
+      order: 3;
+      flex-basis: 100%;
+    }
+
+    .workshop-branch-dd > button {
+      width: 100%;
     }
 
     .workshop-search-wrap {

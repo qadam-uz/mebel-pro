@@ -586,6 +586,7 @@ onBeforeUnmount(() => {
 
         <ProjectDropdown
           v-model="selectedContext"
+          class="workshop-branch-dd"
           :label="config.dropdownLabel"
           :options="dropdownOptions"
           hide-label

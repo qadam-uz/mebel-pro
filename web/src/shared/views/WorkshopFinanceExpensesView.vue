@@ -14,7 +14,7 @@ import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatDateInputValue, formatTiyin } from '@/shared/formatters'
+import { formatDate, formatDateInputValue, formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import {
   useFinanceStore,
   type Expense,
@@ -238,10 +238,12 @@ function incomeOrderLabel(orderId: string | null) {
   return financeOrderReferenceLabel(orderId, orders.workshopOrders, orders.currentOrder)
 }
 
-function amountTiyin(value: string) {
-  const parsed = Number(value.replace(/\s/g, '').replace(',', '.'))
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) : 0
-}
+// Live-parsed amounts drive both the "= 12 500 000 so'm" preview under the
+// input and the submit guard — an unparseable amount blocks the save instead
+// of silently booking 0 (or a 1000x-smaller sum).
+const AMOUNT_HINT = 'Summani tekshiring — masalan: 1 500 000'
+const expenseAmountTiyin = computed(() => parseSomToTiyin(expenseForm.amount))
+const incomeAmountTiyin = computed(() => parseSomToTiyin(incomeForm.amount))
 
 function moneyInputValue(tiyin: number) {
   return String(Math.max(tiyin, 0) / 100)
@@ -436,6 +438,11 @@ function applyExpensePresetFromRoute() {
 
 async function saveExpense() {
   if (!canManageFinance.value) return
+  if (expenseAmountTiyin.value === null) {
+    actionError.value = AMOUNT_HINT
+    actionTraceId.value = null
+    return
+  }
   saving.value = true
   actionError.value = null
   actionTraceId.value = null
@@ -443,7 +450,7 @@ async function saveExpense() {
     const payload = {
       branch_id: expenseForm.branchId === 'workshop' ? null : expenseForm.branchId,
       category: expenseForm.category,
-      amount_tiyin: amountTiyin(expenseForm.amount),
+      amount_tiyin: expenseAmountTiyin.value,
       incurred_on: expenseForm.incurredOn,
       vendor: expenseForm.vendor || null,
       description: expenseForm.description,
@@ -465,6 +472,11 @@ async function saveExpense() {
 
 async function saveIncome() {
   if (!canManageFinance.value) return
+  if (incomeAmountTiyin.value === null) {
+    actionError.value = AMOUNT_HINT
+    actionTraceId.value = null
+    return
+  }
   saving.value = true
   actionError.value = null
   actionTraceId.value = null
@@ -473,7 +485,7 @@ async function saveIncome() {
       type: incomeForm.type,
       branch_id: incomeForm.branchId === 'workshop' ? null : incomeForm.branchId,
       order_id: incomeForm.type === 'order_payment' ? incomeForm.orderId || null : null,
-      amount_tiyin: amountTiyin(incomeForm.amount),
+      amount_tiyin: incomeAmountTiyin.value,
       method: incomeForm.method,
       received_on: incomeForm.receivedOn,
       note: incomeForm.note || null,
@@ -657,6 +669,12 @@ onMounted(async () => {
           <label class="field">
             <span>Summa (so'm)</span>
             <input v-model="expenseForm.amount" class="mp-input" inputmode="numeric" required />
+            <small v-if="expenseAmountTiyin !== null" class="text-ink-muted">
+              = {{ formatTiyin(expenseAmountTiyin) }}
+            </small>
+            <small v-else-if="expenseForm.amount.trim()" class="mp-field-error">
+              {{ AMOUNT_HINT }}
+            </small>
           </label>
           <label class="field">
             <span>Sana</span>
@@ -748,6 +766,12 @@ onMounted(async () => {
           <label class="field">
             <span>Summa (to'liq yoki qisman)</span>
             <input v-model="incomeForm.amount" class="mp-input" inputmode="numeric" required />
+            <small v-if="incomeAmountTiyin !== null" class="text-ink-muted">
+              = {{ formatTiyin(incomeAmountTiyin) }}
+            </small>
+            <small v-else-if="incomeForm.amount.trim()" class="mp-field-error">
+              {{ AMOUNT_HINT }}
+            </small>
           </label>
           <ProjectDropdown v-model="incomeForm.method" label="Usul" :options="methodOptions" />
           <ProjectDropdown v-model="incomeForm.branchId" label="Filial" :options="branchOptions" />

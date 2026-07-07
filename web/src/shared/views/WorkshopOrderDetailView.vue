@@ -1110,16 +1110,20 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading || !edgerId"
                   @click="assignEdgerOnly"
                 >
-                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Saqlash' }}
+                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
                 </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
-                  @click="assignWorkers"
-                >
-                  {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash va boshlash' }}
-                </button>
+                <!-- Partial saves sit under their own dropdown; the combined start action
+                     stays separated below so it can't be mistaken for a per-worker save. -->
+                <div :class="{ 'border-t border-hairline pt-3': order.has_banding }">
+                  <button
+                    type="button"
+                    class="mp-button mp-button-primary w-full"
+                    :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
+                    @click="assignWorkers"
+                  >
+                    {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash va boshlash' }}
+                  </button>
+                </div>
               </template>
 
               <template v-else-if="order.status === 'cutting' && canCompleteCutting">
@@ -1136,7 +1140,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !cutterId"
                     @click="assignCutterOnly"
                   >
-                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Saqlash' }}
+                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Kesuvchini saqlash' }}
                   </button>
                 </template>
                 <FormSelect
@@ -1170,7 +1174,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !edgerId"
                     @click="assignEdgerOnly"
                   >
-                    Saqlash
+                    {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
                   </button>
                 </template>
                 <FormSelect

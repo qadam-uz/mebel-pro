@@ -57,6 +57,18 @@ async function loadWorkerOptionsFor(branchIds: string[]) {
   }
 }
 
+// Corner tag on a queue card: an usta only ever sees their own jobs, so
+// "Sizga" is honest for them; the owner sees ALL workers' jobs, so the tag
+// must name the actual assignee instead (or stay empty until options load).
+function assigneeLabel(order: OrderSummary) {
+  if (!auth.me?.is_owner) return 'Sizga'
+  return (
+    workerOptionsFor(order.branch_id).find(
+      (option) => option.value === order.assigned_edger_user_id,
+    )?.label ?? null
+  )
+}
+
 function seedCompletedByDrafts() {
   const next = { ...completedByDraft.value }
   for (const order of queueOrders.value) {
@@ -112,6 +124,14 @@ onMounted(refresh)
         <h1>Krom yopishtirish navbati</h1>
       </div>
       <div class="tools">
+        <button
+          type="button"
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          :disabled="orders.loading"
+          @click="refresh"
+        >
+          {{ orders.loading ? 'Yuklanmoqda' : 'Yangilash' }}
+        </button>
         <RouterLink
           :to="rolePath('/workshop/orders')"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
@@ -140,8 +160,11 @@ onMounted(refresh)
     </section>
 
     <section v-else-if="queueOrders.length === 0" class="st-empty">
-      <h3>Sizga tayinlangan krom ishi yo'q</h3>
-      <p>
+      <h3>{{ auth.me?.is_owner ? "Krom navbati bo'sh" : "Sizga tayinlangan krom ishi yo'q" }}</h3>
+      <p v-if="auth.me?.is_owner">
+        Kesish tugagan buyurtma ustaga tayinlangach, u shu navbatda ko'rinadi.
+      </p>
+      <p v-else>
         Kesish tugagan buyurtmani rahbar sizga tayinlagach, u shu navbatda ko'rinadi. Agar krom ishi
         kutayotgan bo'lsa, rahbardan tayinlashni so'rang.
       </p>
@@ -176,7 +199,9 @@ onMounted(refresh)
                   {{ formatDate(order.created_at) }} · {{ formatTiyin(order.total_tiyin) }}
                 </div>
               </div>
-              <span class="assigned-tag">Sizga</span>
+              <span v-if="assigneeLabel(order)" class="assigned-tag">{{
+                assigneeLabel(order)
+              }}</span>
             </div>
             <div class="act">
               <FormSelect

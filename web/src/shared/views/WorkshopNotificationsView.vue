@@ -2,11 +2,17 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import {
+  notificationBody,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import { useRolePath } from '@/shared/app/paths'
 import {
   workshopNotificationDestination,
   workshopNotificationMatchesFilter,
 } from '@/shared/app/workshopNotifications'
+import Icon from '@/shared/components/AppIcon.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
@@ -30,15 +36,14 @@ const filtered = computed(() =>
   notifications.items.filter((item) => workshopNotificationMatchesFilter(item, filter.value)),
 )
 
+// Render through the same shared presenter as the bell menu (CB-101) so the
+// full page never falls back to raw event codes / entity types.
 function title(item: NotificationItem) {
-  const summary = item.payload.summary
-  if (typeof summary === 'string' && summary.trim()) return summary
-  return item.event_code
+  return notificationTitle(item, 'workshop')
 }
 
 function body(item: NotificationItem) {
-  const detail = item.payload.detail ?? item.payload.body ?? item.payload.branch_name
-  return typeof detail === 'string' ? detail : (item.entity_type ?? 'system')
+  return notificationBody(item)
 }
 
 function destination(item: NotificationItem) {
@@ -130,28 +135,21 @@ onMounted(() => {
         v-for="item in filtered"
         :key="item.id"
         type="button"
-        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-hairline bg-elevated p-4 text-left transition hover:border-ink"
-        :class="{ 'bg-accent-soft': item.read_at === null }"
+        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-hairline p-4 text-left transition hover:border-ink"
+        :class="item.read_at === null ? 'bg-accent-soft' : 'bg-elevated'"
         @click="openItem(item)"
       >
         <span
-          class="grid size-10 place-items-center rounded-lg font-serif font-bold text-white"
-          :class="
-            item.entity_type === 'order'
-              ? 'bg-accent'
-              : item.event_code.includes('stock')
-                ? 'bg-warning'
-                : item.event_code.includes('finance')
-                  ? 'bg-success'
-                  : 'bg-ink-soft'
-          "
+          class="client-notif-icon grid size-10 place-items-center rounded-lg bg-sunk text-ink-soft"
           aria-hidden="true"
         >
-          {{ (item.entity_type ?? item.event_code).slice(0, 1).toUpperCase() }}
+          <Icon :name="notificationIconName(item)" />
         </span>
         <span class="min-w-0">
           <span class="block truncate text-sm font-extrabold text-ink">{{ title(item) }}</span>
-          <span class="mt-1 block truncate text-xs text-ink-soft">{{ body(item) }}</span>
+          <span v-if="body(item)" class="mt-1 block truncate text-xs text-ink-soft">
+            {{ body(item) }}
+          </span>
         </span>
         <span class="font-mono text-[11px] text-ink-muted">{{ formatDate(item.created_at) }}</span>
       </button>

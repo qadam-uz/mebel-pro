@@ -8,7 +8,7 @@ import {
   workshopQueuePartsLine,
 } from '@/shared/app/workshopProduction'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
@@ -60,6 +60,18 @@ async function loadWorkerOptionsFor(branchIds: string[]) {
       })),
     }
   }
+}
+
+// Corner tag on a queue card: an usta only ever sees their own jobs, so
+// "Sizga" is honest for them; the owner sees ALL workers' jobs, so the tag
+// must name the actual assignee instead (or stay empty until options load).
+function assigneeLabel(order: OrderSummary) {
+  if (!auth.me?.is_owner) return 'Sizga'
+  return (
+    workerOptionsFor(order.branch_id).find(
+      (option) => option.value === order.assigned_cutter_user_id,
+    )?.label ?? null
+  )
 }
 
 function seedCompletedByDrafts() {
@@ -117,6 +129,14 @@ onMounted(refresh)
         <h1>Kesish navbati</h1>
       </div>
       <div class="tools">
+        <button
+          type="button"
+          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+          :disabled="orders.loading"
+          @click="refresh"
+        >
+          {{ orders.loading ? 'Yuklanmoqda' : 'Yangilash' }}
+        </button>
         <RouterLink
           :to="rolePath('/workshop/orders')"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs"
@@ -145,8 +165,13 @@ onMounted(refresh)
     </section>
 
     <section v-else-if="queueOrders.length === 0" class="st-empty">
-      <h3>Sizga tayinlangan kesish ishi yo'q</h3>
-      <p>
+      <h3>
+        {{ auth.me?.is_owner ? "Kesish navbati bo'sh" : "Sizga tayinlangan kesish ishi yo'q" }}
+      </h3>
+      <p v-if="auth.me?.is_owner">
+        Buyurtma tasdiqlanib ustaga tayinlangach, u shu navbatda ko'rinadi.
+      </p>
+      <p v-else>
         Rahbar tasdiqlangan buyurtmani sizga tayinlagach, u shu navbatda ko'rinadi. Agar ustaxonada
         ish kutayotgan bo'lsa, rahbardan tayinlashni so'rang.
       </p>
@@ -172,7 +197,7 @@ onMounted(refresh)
             <span class="ct">{{ awaiting.length }}</span>
           </h2>
           <div v-if="awaiting.length === 0" class="st-empty !px-4 !py-8">
-            <h3>Hozir kesishni kutayotgan ishingiz yo'q</h3>
+            <h3>Kesishni kutayotgan ish yo'q</h3>
             <p>Yangi ish rahbar tayinlagandan keyin shu ustunda chiqadi.</p>
           </div>
           <article v-for="order in awaiting" v-else :key="order.id" class="q-card">
@@ -184,7 +209,9 @@ onMounted(refresh)
                   {{ formatDate(order.created_at) }}
                 </div>
               </div>
-              <span class="assigned-tag">Sizga</span>
+              <span v-if="assigneeLabel(order)" class="assigned-tag">{{
+                assigneeLabel(order)
+              }}</span>
             </div>
             <div class="act">
               <RouterLink
@@ -211,7 +238,7 @@ onMounted(refresh)
             <span class="ct">{{ inProgress.length }}</span>
           </h2>
           <div v-if="inProgress.length === 0" class="st-empty !px-4 !py-8">
-            <h3>Hozir kesilayotgan ishingiz yo'q</h3>
+            <h3>Hozir kesilayotgan ish yo'q</h3>
             <p>Boshlangan kesish ishlari shu yerda ko'rinadi.</p>
           </div>
           <article v-for="order in inProgress" v-else :key="order.id" class="q-card">
@@ -223,9 +250,9 @@ onMounted(refresh)
                   {{ formatTiyin(order.total_tiyin) }}
                 </div>
               </div>
-              <span :class="orderPillClass(order.status)">
-                <span class="pd"></span>{{ workshopStatusUz[order.status] }}
-              </span>
+              <span v-if="assigneeLabel(order)" class="assigned-tag">{{
+                assigneeLabel(order)
+              }}</span>
             </div>
             <div class="act">
               <FormSelect
