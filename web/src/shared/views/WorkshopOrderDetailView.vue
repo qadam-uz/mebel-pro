@@ -422,7 +422,9 @@ async function markCollected() {
 
 function requestRevertOrder() {
   if (!canManageOrders.value) return
-  reasonDraft.value = 'Ishlab chiqarish tuzatishi'
+  // Start the reason blank so the destructive confirm isn't armed the instant the
+  // dialog opens — the required-reason guard keeps confirm disabled until typed.
+  reasonDraft.value = ''
   reasonDialogAction.value = 'revert'
 }
 
@@ -1321,8 +1323,8 @@ onMounted(loadDetail)
           ? `Buyurtma ${revertTargetLabel} qaytadi. Sababni yozing.`
           : 'Buyurtma yopiladi. Bekor qilish sababini yozing.'
       "
-      :confirm-label="reasonDialogAction === 'revert' ? 'Qaytarish' : 'Bekor qilish'"
-      cancel-label="Orqaga"
+      :confirm-label="reasonDialogAction === 'revert' ? 'Ha, qaytarilsin' : 'Bekor qilish'"
+      cancel-label="Yopish"
       busy-label="Bajarilmoqda"
       :danger="reasonDialogAction === 'cancel'"
       :busy="orders.actionLoading"

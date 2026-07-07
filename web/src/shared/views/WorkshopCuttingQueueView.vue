@@ -9,6 +9,7 @@ import {
 } from '@/shared/app/workshopProduction'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
@@ -25,6 +26,7 @@ const permissions = useWorkshopPermissions()
 const actionError = ref<string | null>(null)
 const completedByDraft = ref<Record<string, string>>({})
 const workerOptionsByBranch = ref<Record<string, ChoiceOption[]>>({})
+const pendingComplete = ref<OrderSummary | null>(null)
 
 const queueOrders = computed(() =>
   orders.workshopOrders.filter((order) => {
@@ -93,11 +95,13 @@ async function refresh() {
   seedCompletedByDrafts()
 }
 
-async function complete(order: OrderSummary) {
-  actionError.value = null
+// "Kesish tugadi" advances a live order irreversibly (only a manager can revert),
+// so gate the mutation behind a confirm dialog: requestComplete validates the
+// credited worker first and only then arms the dialog, complete() runs on confirm.
+function resolveCompletion(order: OrderSummary): string | null {
   if (!canProcessOrder(order)) {
     actionError.value = "Bu filialda ishlab chiqarishni yakunlash ruxsatingiz yo'q."
-    return
+    return null
   }
   const completedBy = resolveProductionCreditUser(
     order.assigned_cutter_user_id,
@@ -106,17 +110,37 @@ async function complete(order: OrderSummary) {
   )
   if (!completedBy) {
     actionError.value = 'Kesishni bajargan xodimni tanlang.'
-    return
+    return null
   }
+  return completedBy
+}
+
+function requestComplete(order: OrderSummary) {
+  actionError.value = null
+  if (resolveCompletion(order)) pendingComplete.value = order
+}
+
+async function complete(order: OrderSummary) {
+  actionError.value = null
+  const completedBy = resolveCompletion(order)
+  if (!completedBy) return false
   try {
     await orders.cuttingDone(order.id, {
       version: order.version,
       completed_by_user_id: completedBy,
     })
     toast.success('Kesish yakunlandi.')
+    return true
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'cutting_complete_failed')
+    return false
   }
+}
+
+async function confirmComplete() {
+  const order = pendingComplete.value
+  if (!order) return
+  if (await complete(order)) pendingComplete.value = null
 }
 
 onMounted(refresh)
@@ -154,9 +178,20 @@ onMounted(refresh)
       </div>
     </section>
 
-    <section v-else-if="orders.error" class="st-error">
+    <section v-else-if="orders.error" class="st-error" role="alert">
       <h3>Kesish navbatini yuklab bo'lmadi</h3>
-      <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="orders.loading"
+        @click="refresh"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="orders.traceId" class="mt-3 text-xs text-ink-muted">
+        trace_id: {{ orders.traceId }}
+      </p>
     </section>
 
     <section v-else-if="!canProcessAny" class="st-empty">
@@ -266,7 +301,7 @@ onMounted(refresh)
                 type="button"
                 class="mp-button mp-button-primary min-h-9 px-3 text-xs"
                 :disabled="orders.actionLoading || !canProcessOrder(order)"
-                @click="complete(order)"
+                @click="requestComplete(order)"
               >
                 Kesish tugadi
               </button>
@@ -289,5 +324,18 @@ onMounted(refresh)
         </section>
       </div>
     </template>
+
+    <ConfirmDialog
+      :open="pendingComplete !== null"
+      :title="pendingComplete?.order_number ?? ''"
+      :message="`${pendingComplete?.order_number ?? ''} buyurtma uchun kesish tugadimi? Buni faqat rahbar orqaga qaytara oladi.`"
+      confirm-label="Ha, tugadi"
+      cancel-label="Yopish"
+      busy-label="Bajarilmoqda"
+      danger
+      :busy="orders.actionLoading"
+      @cancel="pendingComplete = null"
+      @confirm="confirmComplete"
+    />
   </section>
 </template>

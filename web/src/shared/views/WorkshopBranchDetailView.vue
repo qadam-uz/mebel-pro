@@ -285,9 +285,18 @@ onMounted(refreshBranch)
       </div>
     </section>
 
-    <section v-else-if="pageError" class="st-error">
+    <section v-else-if="pageError" class="st-error" role="alert">
       <h3>Filialni yuklab bo'lmadi</h3>
-      <p>trace_id: {{ pageTraceId ?? 'unavailable' }}</p>
+      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="loading"
+        @click="refreshBranch"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="pageTraceId" class="mt-3 text-xs text-ink-muted">trace_id: {{ pageTraceId }}</p>
     </section>
 
     <template v-else-if="workshop.selectedBranch">

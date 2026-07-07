@@ -11,6 +11,7 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { copyText } from '@/shared/app/clipboard'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import {
@@ -43,7 +44,27 @@ const branchFilter = ref('all')
 const statusFilter = ref('all')
 const selected = ref<Set<string>>(new Set())
 const createdTempPassword = ref<string | null>(null)
+const copiedTempPassword = ref(false)
 let usersSearchTimer: number | undefined
+let copiedResetTimer: number | undefined
+
+// Copy the freshly generated temp password to the clipboard. copyText guards
+// insecure contexts / older browsers and returns false, in which case the mono
+// value stays select-all so the owner can still copy it by hand.
+async function copyTempPassword(value: string | null) {
+  if (!value) return
+  const ok = await copyText(value)
+  if (!ok) {
+    toast.danger("Nusxalab bo'lmadi. Parolni belgilab, qo'lda nusxalang.")
+    return
+  }
+  toast.success('Parol nusxalandi.')
+  copiedTempPassword.value = true
+  window.clearTimeout(copiedResetTimer)
+  copiedResetTimer = window.setTimeout(() => {
+    copiedTempPassword.value = false
+  }, 1800)
+}
 const form = reactive({
   fullName: '',
   phone: '',
@@ -271,6 +292,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(usersSearchTimer)
+  window.clearTimeout(copiedResetTimer)
 })
 </script>
 
@@ -455,10 +477,26 @@ onBeforeUnmount(() => {
         </form>
       </section>
 
-      <div v-if="createdTempPassword" class="banner info">
+      <div v-if="createdTempPassword" class="banner info" role="status">
         <div class="grow">
-          <b>Vaqtinchalik parol:</b>
-          <span class="font-mono">{{ createdTempPassword }}</span>
+          <b>Vaqtinchalik parol</b>
+          <div class="mt-1.5 flex flex-wrap items-center gap-2">
+            <span
+              class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
+            >
+              {{ createdTempPassword }}
+            </span>
+            <button
+              type="button"
+              class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+              @click="copyTempPassword(createdTempPassword)"
+            >
+              {{ copiedTempPassword ? 'Nusxalandi' : 'Nusxalash' }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs">
+            Bu parol faqat 1 marta ko'rsatiladi — xodimga yetkazib qo'ying.
+          </p>
         </div>
       </div>
 

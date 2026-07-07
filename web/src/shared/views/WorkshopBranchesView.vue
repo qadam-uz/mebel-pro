@@ -250,9 +250,20 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="workshop.setupError" class="st-error">
+      <section v-else-if="workshop.setupError" class="st-error" role="alert">
         <h3>Filiallarni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.setupTraceId ?? 'unavailable' }}</p>
+        <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+        <button
+          type="button"
+          class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+          :disabled="workshop.setupLoading"
+          @click="workshop.loadManagedBranches()"
+        >
+          Qayta urinish
+        </button>
+        <p v-if="workshop.setupTraceId" class="mt-3 text-xs text-ink-muted">
+          trace_id: {{ workshop.setupTraceId }}
+        </p>
       </section>
 
       <section v-else-if="workshop.managedBranches.length === 0" class="st-empty">
