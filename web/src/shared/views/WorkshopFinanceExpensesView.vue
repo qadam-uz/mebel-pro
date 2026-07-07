@@ -238,6 +238,21 @@ function incomeOrderLabel(orderId: string | null) {
   return financeOrderReferenceLabel(orderId, orders.workshopOrders, orders.currentOrder)
 }
 
+// Names the record the void will hit — date · category/type · sum — so the
+// confirmation identifies its target instead of a bare reason box.
+const voidTargetLabel = computed(() => {
+  const target = voidTarget.value
+  if (!target) return ''
+  if (target.kind === 'expense') {
+    const expense = finance.expenses.find((row) => row.id === target.id)
+    if (!expense) return ''
+    return `${formatDate(expense.incurred_on)} · ${categoryLabel[expense.category] ?? expense.category} · ${formatTiyin(expense.amount_tiyin)}`
+  }
+  const income = finance.incomes.find((row) => row.id === target.id)
+  if (!income) return ''
+  return `${formatDate(income.received_on)} · ${incomeTypeLabel[income.type] ?? income.type} · ${formatTiyin(income.amount_tiyin)}`
+})
+
 // Live-parsed amounts drive both the "= 12 500 000 so'm" preview under the
 // input and the submit guard — an unparseable amount blocks the save instead
 // of silently booking 0 (or a 1000x-smaller sum).
@@ -1026,6 +1041,10 @@ onMounted(async () => {
         class="card mt-4 grid gap-3 p-5 md:grid-cols-[1fr_auto_auto]"
         @submit.prevent="confirmVoid"
       >
+        <div class="md:col-span-3">
+          <h2 class="font-bold text-ink">Yozuvni bekor qilish</h2>
+          <p class="mt-1 text-sm text-ink-soft">{{ voidTargetLabel }}</p>
+        </div>
         <label class="field !mb-0">
           <span>Bekor qilish sababi</span>
           <input v-model="voidReason" class="mp-input" required />
@@ -1034,7 +1053,7 @@ onMounted(async () => {
           Tasdiqlash
         </button>
         <button type="button" class="mp-button mp-button-outline self-end" @click="closeVoidForm">
-          Bekor
+          Yopish
         </button>
       </form>
 

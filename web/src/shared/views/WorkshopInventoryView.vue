@@ -73,6 +73,9 @@ const stockInForm = reactive({
 })
 const adjustmentForm = reactive({
   materialId: null as string | null,
+  // Direction is picked explicitly so the user never has to type a negative sign;
+  // decrease is the common correction (damage/miscount/shortage write-offs).
+  direction: 'decrease' as 'decrease' | 'increase',
   quantity: '',
   note: '',
 })
@@ -115,6 +118,11 @@ const activeSupplierOptions = computed(() => [
 ])
 const selectedStockInItem = computed(() => stockItemByMaterial(stockInForm.materialId))
 const selectedAdjustmentItem = computed(() => stockItemByMaterial(adjustmentForm.materialId))
+// Edges are measured in metres (decimal keypad); panels are whole pieces (numeric).
+const adjustmentInputMode = computed(() => {
+  const unit = selectedAdjustmentItem.value?.display_unit
+  return unit === 'metre' || unit === 'm' ? 'decimal' : 'numeric'
+})
 const activeListEmpty = computed(() => {
   if (activeTab.value === 'stock') return workshop.stockItems.length === 0
   if (activeTab.value === 'tx') return workshop.stockTransactions.length === 0
@@ -220,7 +228,7 @@ function validStockInQuantity(item: StockItem | null) {
 
 function validAdjustmentQuantity(item: StockItem | null) {
   const quantity = parseDisplayQuantity(adjustmentForm.quantity, item?.display_unit ?? 'piece')
-  return Number.isFinite(quantity) && quantity !== 0 ? quantity : null
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : null
 }
 
 async function recordStockIn() {
@@ -274,14 +282,17 @@ async function recordAdjustment() {
   const item = selectedAdjustmentItem.value
   const quantity = validAdjustmentQuantity(item)
   if (!item || quantity === null) {
-    adjustmentMaterialError.value = "Material va nol bo'lmagan miqdorni to'g'ri kiriting."
+    adjustmentMaterialError.value = 'Material tanlang va musbat miqdor kiriting.'
     movementSaving.value = false
     return
   }
+  // The API takes a signed delta; derive it from the direction toggle so the user
+  // types only a positive number and can never accidentally add when meaning to subtract.
+  const signedQuantity = adjustmentForm.direction === 'decrease' ? -quantity : quantity
   try {
     await workshop.recordAdjustment(selectedBranchId.value, {
       material_id: item.material_id,
-      quantity,
+      quantity: signedQuantity,
       note: adjustmentForm.note,
     })
     resetAdjustmentForm()
@@ -381,6 +392,7 @@ function resetStockInForm() {
 
 function resetAdjustmentForm() {
   adjustmentForm.materialId = null
+  adjustmentForm.direction = 'decrease'
   adjustmentForm.quantity = ''
   adjustmentForm.note = ''
   adjustmentMaterialError.value = null
@@ -415,6 +427,12 @@ watch(selectedBranchId, () => {
 
 watch(activeTab, () => {
   void refreshActiveInventoryTab()
+})
+
+// Clear the adjustment form (direction toggle included) when the modal closes so a
+// fresh open always starts from the safe default rather than the last entry.
+watch(adjustmentOpen, (open) => {
+  if (!open) resetAdjustmentForm()
 })
 
 watch(
@@ -569,9 +587,40 @@ onBeforeUnmount(() => {
             :options="stockOptions"
             :error="adjustmentMaterialError"
           />
+          <div class="field">
+            <span>Yo'nalish</span>
+            <div class="flex gap-1" role="group" aria-label="Tuzatish yo'nalishi">
+              <button
+                type="button"
+                class="mp-button min-h-11 flex-1 px-3"
+                :class="
+                  adjustmentForm.direction === 'decrease'
+                    ? 'mp-button-primary'
+                    : 'mp-button-outline'
+                "
+                :aria-pressed="adjustmentForm.direction === 'decrease'"
+                @click="adjustmentForm.direction = 'decrease'"
+              >
+                Kamaytirish (−)
+              </button>
+              <button
+                type="button"
+                class="mp-button min-h-11 flex-1 px-3"
+                :class="
+                  adjustmentForm.direction === 'increase'
+                    ? 'mp-button-primary'
+                    : 'mp-button-outline'
+                "
+                :aria-pressed="adjustmentForm.direction === 'increase'"
+                @click="adjustmentForm.direction = 'increase'"
+              >
+                Ko'paytirish (+)
+              </button>
+            </div>
+          </div>
           <label class="field">
             <span
-              >Belgili miqdor{{
+              >Miqdor{{
                 selectedAdjustmentItem
                   ? ` (${formatStockUnit(selectedAdjustmentItem.display_unit)})`
                   : ''
@@ -580,7 +629,7 @@ onBeforeUnmount(() => {
             <input
               v-model="adjustmentForm.quantity"
               class="mp-input"
-              inputmode="decimal"
+              :inputmode="adjustmentInputMode"
               required
             />
           </label>

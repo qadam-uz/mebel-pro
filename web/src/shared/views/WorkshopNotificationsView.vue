@@ -59,11 +59,7 @@ async function openItem(item: NotificationItem) {
   if (item.read_at === null) {
     await notifications.markRead(item.id)
     if (notifications.actionError) {
-      toast.danger(
-        `Bildirishnomani o'qilgan deb belgilab bo'lmadi · trace_id: ${
-          notifications.traceId ?? 'unavailable'
-        }`,
-      )
+      toast.danger("Bildirishnomani o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     }
   }
   await router.push(rolePath(to))
@@ -72,11 +68,7 @@ async function openItem(item: NotificationItem) {
 async function markAll() {
   await notifications.markAllRead()
   if (notifications.actionError) {
-    toast.danger(
-      `Hammasini o'qilgan deb belgilab bo'lmadi · trace_id: ${
-        notifications.traceId ?? 'unavailable'
-      }`,
-    )
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     return
   }
   await notifications.loadList(50)
@@ -95,7 +87,12 @@ onMounted(() => {
         <h1>Bildirishnomalar</h1>
       </div>
       <div class="tools">
-        <button class="mp-button mp-button-outline" type="button" @click="markAll">
+        <button
+          class="mp-button mp-button-outline"
+          type="button"
+          :disabled="notifications.unread === 0"
+          @click="markAll"
+        >
           Hammasini o'qilgan deb belgilash
         </button>
       </div>
@@ -105,23 +102,25 @@ onMounted(() => {
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" top-label />
     </div>
 
-    <div v-if="notifications.actionError" class="banner danger mb-4 max-w-[800px]">
-      <div class="grow">
-        Amal bajarilmadi · trace_id: {{ notifications.traceId ?? 'unavailable' }}
-      </div>
-    </div>
-
     <div v-if="notifications.loading" class="card max-w-[800px] p-5" aria-live="polite">
       <span class="sk-line"></span>
       <span class="sk-line mt-3"></span>
       <span class="sk-line mt-3"></span>
     </div>
 
-    <div v-else-if="notifications.error" class="st-error max-w-[800px]">
+    <div v-else-if="notifications.error" class="st-error max-w-[800px]" role="alert">
       <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
-      <p>
-        Asosiy ma'lumotlar tegishli sahifalarda baribir mavjud. trace_id:
-        {{ notifications.traceId ?? 'unavailable' }}
+      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="notifications.loading"
+        @click="notifications.loadList(50)"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="notifications.traceId" class="mt-3 text-xs text-ink-muted">
+        trace_id: {{ notifications.traceId }}
       </p>
     </div>
 

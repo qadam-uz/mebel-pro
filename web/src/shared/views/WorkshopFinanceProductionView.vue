@@ -144,8 +144,20 @@ watch(
     >
       Hisobot yuklanmoqda
     </section>
-    <section v-else-if="finance.error" class="mp-surface p-5 text-sm font-bold text-danger">
-      Hisobotni yuklab bo'lmadi.
+    <section v-else-if="finance.error" class="mp-surface p-5" role="alert">
+      <p class="text-sm font-bold text-danger">Hisobotni yuklab bo'lmadi.</p>
+      <p class="mt-1 text-sm text-ink-soft">Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="finance.loading"
+        @click="refresh"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="finance.traceId" class="mt-3 text-xs text-ink-muted">
+        trace_id: {{ finance.traceId }}
+      </p>
     </section>
     <section
       v-else-if="!finance.production || finance.production.rows.length === 0"
