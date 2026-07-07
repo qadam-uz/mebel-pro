@@ -9,6 +9,24 @@ export function formatTiyin(value: number): string {
   return `${amount} so'm`
 }
 
+// Compact money for KPI-sized numerals: sums from 1 mln so'm up are scaled to
+// "mln/mlrd" so the value always fits on one line; the exact amount travels in
+// `full` for a title tooltip. The unit is returned separately so templates can
+// render it smaller than the numeral.
+export function formatTiyinParts(value: number): { amount: string; unit: string; full: string } {
+  const som = Math.round(value / 100)
+  const abs = Math.abs(som)
+  const format = (amount: number, maximumFractionDigits: number) =>
+    new Intl.NumberFormat('uz-UZ', { maximumFractionDigits }).format(amount)
+  if (abs >= 1_000_000_000) {
+    return { amount: format(som / 1_000_000_000, 2), unit: "mlrd so'm", full: formatTiyin(value) }
+  }
+  if (abs >= 1_000_000) {
+    return { amount: format(som / 1_000_000, 2), unit: "mln so'm", full: formatTiyin(value) }
+  }
+  return { amount: format(som, 0), unit: "so'm", full: formatTiyin(value) }
+}
+
 export function formatDate(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value
   const day = String(date.getDate()).padStart(2, '0')
