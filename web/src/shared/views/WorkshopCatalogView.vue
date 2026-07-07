@@ -10,7 +10,12 @@ import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatStockQuantity, formatTiyin, parseDisplayQuantity } from '@/shared/formatters'
+import {
+  formatStockQuantity,
+  formatTiyin,
+  parseDisplayQuantity,
+  parseSomToTiyin,
+} from '@/shared/formatters'
 import type { MaterialKind, MaterialStatus } from '@/shared/stores/admin'
 import { useWorkshopStore, type BranchMaterial } from '@/shared/stores/workshop'
 
@@ -32,9 +37,14 @@ const editingBranchMaterialId = ref<string | null>(null)
 let searchTimer: number | undefined
 const materialForm = reactive({
   materialId: null as string | null,
-  priceTiyin: '0',
+  // Deliberately empty, not '0': a pre-filled 0 satisfies `required` and lets a
+  // hurried owner publish a 0 so'm material to the client-facing catalog.
+  priceTiyin: '',
   minStock: '0',
 })
+const priceFieldError = ref<string | null>(null)
+const minStockFieldError = ref<string | null>(null)
+const priceTiyinParsed = computed(() => parseSomToTiyin(materialForm.priceTiyin))
 
 const canUseCatalog = computed(() => permissions.can(p.manageCatalog))
 const accessibleBranches = computed(() =>
@@ -93,6 +103,10 @@ const materialMinStockUnit = computed(() => {
   const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
   return material?.kind === 'edge' ? 'm' : 'panel'
 })
+const materialPriceUnit = computed(() => {
+  const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
+  return material ? priceUnit(material.kind) : ''
+})
 function routeSearchValue() {
   const value = route.query.search
   return typeof value === 'string' ? value : ''
@@ -134,6 +148,8 @@ async function saveBranchMaterial() {
   materialSaving.value = true
   materialError.value = null
   materialFieldError.value = null
+  priceFieldError.value = null
+  minStockFieldError.value = null
   try {
     if (!editingBranchMaterialId.value && !materialForm.materialId) {
       materialFieldError.value = 'Material tanlang'
@@ -144,15 +160,16 @@ async function saveBranchMaterial() {
       materialForm.minStock,
       material?.kind === 'edge' ? 'm' : 'pcs',
     )
-    // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100 tiyin).
-    const priceTiyin = Math.round(Number(materialForm.priceTiyin) * 100)
-    if (
-      !Number.isFinite(priceTiyin) ||
-      priceTiyin < 0 ||
-      !Number.isFinite(minStock) ||
-      minStock < 0
-    ) {
-      materialFieldError.value = "Narx va min zaxirani to'g'ri kiriting"
+    // The price field is entered in so'm; the backend stores tiyin (1 so'm = 100
+    // tiyin). null covers both unparseable input and 0 — a 0 so'm material must
+    // never reach the client catalog by accident.
+    const priceTiyin = priceTiyinParsed.value
+    if (priceTiyin === null) {
+      priceFieldError.value = "Narxni to'g'ri kiriting — masalan: 350 000"
+      return
+    }
+    if (!Number.isFinite(minStock) || minStock < 0) {
+      minStockFieldError.value = "Min zaxirani to'g'ri kiriting"
       return
     }
     const payload = { price_tiyin: priceTiyin, min_stock: minStock }
@@ -190,9 +207,11 @@ function editBranchMaterial(row: BranchMaterial) {
 function resetMaterialForm() {
   editingBranchMaterialId.value = null
   materialForm.materialId = null
-  materialForm.priceTiyin = '0'
+  materialForm.priceTiyin = ''
   materialForm.minStock = '0'
   materialFieldError.value = null
+  priceFieldError.value = null
+  minStockFieldError.value = null
 }
 
 async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) {
@@ -311,10 +330,19 @@ onBeforeUnmount(() => {
               inputmode="numeric"
               required
             />
+            <small v-if="priceTiyinParsed !== null" class="text-ink-muted">
+              = {{ formatTiyin(priceTiyinParsed) }} {{ materialPriceUnit }}
+            </small>
+            <small v-else-if="priceFieldError" class="mp-field-error">
+              {{ priceFieldError }}
+            </small>
           </label>
           <label class="field">
             <span>Min zaxira ({{ materialMinStockUnit }})</span>
             <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
+            <small v-if="minStockFieldError" class="mp-field-error">
+              {{ minStockFieldError }}
+            </small>
           </label>
           <div class="flex flex-wrap gap-2 md:col-span-4">
             <button class="mp-button mp-button-primary" type="submit" :disabled="materialSaving">

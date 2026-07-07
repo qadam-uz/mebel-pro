@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import {
   clearFieldErrors,
@@ -22,6 +22,7 @@ type BranchField = 'name' | 'address' | 'phone'
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const rolePath = useRolePath()
+const router = useRouter()
 const toast = useToast()
 const showCreate = ref(false)
 const creatingBranch = ref(false)
@@ -72,7 +73,7 @@ async function createBranch() {
   creatingBranch.value = true
   branchError.value = null
   try {
-    await workshop.createBranch({
+    const created = await workshop.createBranch({
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
@@ -82,7 +83,11 @@ async function createBranch() {
     branchForm.address = ''
     branchForm.phone = ''
     showCreate.value = false
-    toast.success("Filial qo'shildi.")
+    // The branch is live for client orders the moment it exists, but with no
+    // cutting/banding pricing yet — land the owner on the detail page where
+    // those two numbers are set instead of silently closing the form.
+    toast.success("Filial qo'shildi. Endi kesish va krom narxlarini kiriting.")
+    await router.push(rolePath(`/workshop/branches/${created.id}`))
   } catch (caught) {
     Object.assign(
       branchFieldErrors,

@@ -9,6 +9,26 @@ export function formatTiyin(value: number): string {
   return `${amount} so'm`
 }
 
+// Parse a human-entered so'm amount into integer tiyin. Accepts the formats the
+// app itself displays and people actually type: space/NBSP grouping ("12 500"),
+// dot- or comma-grouped thousands ("1.500.000", "12,500"), and a comma or dot
+// decimal mark ("12,5" / "12.5"). Returns null for anything unclear or <= 0 —
+// callers must block the submit instead of coercing to 0 (a "12.500" read as
+// 12,5 so'm once booked a 1000x-smaller expense with a success toast).
+export function parseSomToTiyin(value: string): number | null {
+  let text = value.trim().replace(/[\s ]/g, '')
+  if (!text) return null
+  if (/^\d{1,3}([.,]\d{3})+$/.test(text)) {
+    text = text.replace(/[.,]/g, '')
+  } else {
+    text = text.replace(/,/g, '.')
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null
+  const som = Number(text)
+  if (som <= 0) return null
+  return Math.round(som * 100)
+}
+
 // Compact money for KPI-sized numerals: sums from 1 mln so'm up are scaled to
 // "mln/mlrd" so the value always fits on one line; the exact amount travels in
 // `full` for a title tooltip. The unit is returned separately so templates can

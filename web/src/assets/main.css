@@ -2796,6 +2796,30 @@
     white-space: nowrap;
   }
 
+  /* State tints on money/quantity cells: compound selectors so they out-specify
+     `.tbl .amt`'s own color (same trap as the KPI value tints). */
+  .tbl .amt.success-text,
+  .amt.success-text {
+    color: var(--color-success);
+  }
+
+  .tbl .amt.warn-text,
+  .amt.warn-text {
+    color: var(--color-warning);
+  }
+
+  .tbl .amt.danger-text,
+  .amt.danger-text {
+    color: var(--color-danger);
+  }
+
+  /* Voided ledger rows are .muted, but `.tbl .amt` kept their sums bold black —
+     demote the amount together with the rest of the row. */
+  .tbl tr.muted .amt {
+    color: var(--color-ink-muted);
+    font-weight: 500;
+  }
+
   .mp-action-menu-wrap {
     position: relative;
     display: inline-block;
@@ -3354,7 +3378,9 @@
     font-weight: 800;
   }
 
-  .field > span {
+  /* :not(.mp-field-error) — the error span lives inside the label too, and the
+     label rule would otherwise repaint it bold black (specificity trap). */
+  .field > span:not(.mp-field-error) {
     color: var(--color-ink);
     font-size: 13px;
     font-weight: 800;
