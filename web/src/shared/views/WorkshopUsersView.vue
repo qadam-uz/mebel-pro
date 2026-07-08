@@ -20,6 +20,7 @@ import {
   permissionLabels,
   workshopErrorMessage,
 } from '@/shared/app/workshopUi'
+import AppModal from '@/shared/components/AppModal.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
@@ -182,8 +183,8 @@ function ensureCreateBranches() {
 }
 
 function openCreateForm() {
-  showCreate.value = !showCreate.value
-  if (showCreate.value) ensureCreateBranches()
+  ensureCreateBranches()
+  showCreate.value = true
 }
 
 function validateCreateStaff() {
@@ -320,18 +321,15 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
-      <section v-if="showCreate" class="card mb-5">
-        <div class="card-h">
-          <h2>Yangi xodim</h2>
-          <button
-            type="button"
-            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-            @click="showCreate = false"
-          >
-            Bekor qilish
-          </button>
-        </div>
-        <form class="card-b grid gap-4" novalidate @submit.prevent="createStaff">
+      <AppModal
+        :open="showCreate"
+        title="Yangi xodim"
+        max-width="max-w-2xl"
+        @close="showCreate = false"
+      >
+        <!-- grid-cols-1 pins the track to minmax(0,1fr) so the 720px-min permission
+             matrix h-scrolls inside its table-wrap instead of widening the modal. -->
+        <form class="grid grid-cols-1 gap-4" novalidate @submit.prevent="createStaff">
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="staff-full-name">
               <span>F.I.O</span>
@@ -466,7 +464,7 @@ onBeforeUnmount(() => {
           </div>
 
           <button class="mp-button mp-button-primary" type="submit" :disabled="creating">
-            {{ creating ? 'Yaratilmoqda' : 'Yaratish' }}
+            {{ creating ? "Qo'shilmoqda" : "Qo'shish" }}
           </button>
           <p
             v-if="createError"
@@ -475,7 +473,7 @@ onBeforeUnmount(() => {
             {{ createError }} · trace_id: {{ createTraceId ?? 'unavailable' }}
           </p>
         </form>
-      </section>
+      </AppModal>
 
       <div v-if="createdTempPassword" class="banner info" role="status">
         <div class="grow">

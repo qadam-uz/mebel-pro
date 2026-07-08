@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
-import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
@@ -14,14 +12,12 @@ import {
   useFinanceStore,
   type WorkerProductionEdgeLine,
   type WorkerProductionRow,
-  type WorkerProductionThicknessLine,
 } from '@/shared/stores/finance'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const finance = useFinanceStore()
 const workshop = useWorkshopStore()
 const permissions = useWorkshopPermissions()
-const rolePath = useRolePath()
 const today = new Date()
 const initialRange = presetRange('month', today)
 const datePreset = ref<DateRangePreset>('month')
@@ -47,37 +43,37 @@ function applyContextBranch() {
   branchId.value = contextBranchId
 }
 
-function edgeLengths(row: WorkerProductionRow) {
+// One entry per edge material / thickness so the cell can stack them as lines
+// (label left, metres right) instead of one unreadable `·`-joined string.
+interface EdgeCellLine {
+  label: string
+  length: string
+}
+
+function edgeLengthLines(row: WorkerProductionRow): EdgeCellLine[] {
   if (row.edge_lines.length > 0) {
-    return row.edge_lines.map((line) => edgeLine(line)).join(' · ')
+    return row.edge_lines.map((line) => ({
+      label: edgeLabel(line),
+      length: formatStockQuantity(line.length_mm, 'm'),
+    }))
   }
-  const entries = Object.entries(row.edge_length_by_material)
-  if (entries.length === 0) return "Krom metri yo'q"
-  return entries
-    .map(([key, length]) => `Material ${key.slice(0, 8)}: ${formatStockQuantity(length, 'm')}`)
-    .join(' · ')
+  return Object.entries(row.edge_length_by_material).map(([key, length]) => ({
+    label: `Material ${key.slice(0, 8)}`,
+    length: formatStockQuantity(length, 'm'),
+  }))
 }
 
-function thicknessLengths(row: WorkerProductionRow) {
-  if (row.edge_length_by_thickness.length === 0) return "Qalinlik bo'yicha jamlanma yo'q"
-  return row.edge_length_by_thickness.map((line) => thicknessLine(line)).join(' · ')
-}
-
-function edgeLine(line: WorkerProductionEdgeLine) {
-  return `${edgeLabel(line)}: ${formatStockQuantity(line.length_mm, 'm')}`
+function thicknessLines(row: WorkerProductionRow): EdgeCellLine[] {
+  return row.edge_length_by_thickness.map((line) => ({
+    label: line.thickness_mm ? `${line.thickness_mm} mm` : "Noma'lum",
+    length: formatStockQuantity(line.length_mm, 'm'),
+  }))
 }
 
 function edgeLabel(line: WorkerProductionEdgeLine) {
   return [line.material_label, line.thickness_mm ? `${line.thickness_mm} mm` : null, line.color]
     .filter(Boolean)
     .join(' · ')
-}
-
-function thicknessLine(line: WorkerProductionThicknessLine) {
-  return `${line.thickness_mm ? `${line.thickness_mm} mm` : "Noma'lum"}: ${formatStockQuantity(
-    line.length_mm,
-    'm',
-  )}`
 }
 
 async function refresh() {
@@ -176,7 +172,6 @@ watch(
               <th class="px-5 py-3">Kromlangan buyurtma</th>
               <th class="px-5 py-3">Krom metri</th>
               <th class="px-5 py-3">Qalinlik jamlanmasi</th>
-              <th class="px-5 py-3"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-hairline">
@@ -185,22 +180,35 @@ watch(
               <td class="px-5 py-3 font-mono text-xs">{{ row.panels_cut }}</td>
               <td class="px-5 py-3 font-mono text-xs">{{ row.cut_count }}</td>
               <td class="px-5 py-3 font-mono text-xs">{{ row.orders_banded }}</td>
-              <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                {{ edgeLengths(row) }}
+              <td class="px-5 py-3 text-xs">
+                <span v-if="edgeLengthLines(row).length === 0" class="text-ink-muted">
+                  Krom metri yo'q
+                </span>
+                <ul v-else class="grid min-w-52 gap-1">
+                  <li
+                    v-for="(line, index) in edgeLengthLines(row)"
+                    :key="index"
+                    class="flex items-baseline justify-between gap-4"
+                  >
+                    <span class="text-ink-soft">{{ line.label }}</span>
+                    <b class="whitespace-nowrap font-mono text-ink">{{ line.length }}</b>
+                  </li>
+                </ul>
               </td>
-              <td class="px-5 py-3 font-mono text-xs text-ink-soft">
-                {{ thicknessLengths(row) }}
-              </td>
-              <td class="px-5 py-3 text-right">
-                <RouterLink
-                  :to="{
-                    path: rolePath('/workshop/finance/expenses'),
-                    query: { preset: 'salary', worker: row.full_name },
-                  }"
-                  class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                >
-                  Maosh yozish
-                </RouterLink>
+              <td class="px-5 py-3 text-xs">
+                <span v-if="thicknessLines(row).length === 0" class="text-ink-muted">
+                  Jamlanma yo'q
+                </span>
+                <ul v-else class="grid min-w-32 gap-1">
+                  <li
+                    v-for="(line, index) in thicknessLines(row)"
+                    :key="index"
+                    class="flex items-baseline justify-between gap-4"
+                  >
+                    <span class="text-ink-soft">{{ line.label }}</span>
+                    <b class="whitespace-nowrap font-mono text-ink">{{ line.length }}</b>
+                  </li>
+                </ul>
               </td>
             </tr>
           </tbody>

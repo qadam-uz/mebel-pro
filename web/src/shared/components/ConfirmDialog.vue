@@ -37,10 +37,19 @@ const slots = useSlots()
 const id = nextStableId('mp-confirm')
 let previousFocus: HTMLElement | null = null
 
-function focusableButtons() {
-  return Array.from(
-    panelRef.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [],
-  )
+// The trap must cycle slot fields too (a reason input/textarea sits before the
+// footer buttons) — a buttons-only cycle makes those fields keyboard-unreachable.
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not(:disabled)',
+  'textarea:not(:disabled)',
+  'input:not(:disabled)',
+  'select:not(:disabled)',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ')
+
+function focusableElements() {
+  return Array.from(panelRef.value?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [])
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -49,9 +58,16 @@ function onKeydown(event: KeyboardEvent) {
     emit('cancel')
     return
   }
+  // Enter in a single-line slot field confirms, matching the form these dialogs
+  // replace (textareas keep Enter for newlines; buttons keep their own Enter).
+  if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+    event.preventDefault()
+    if (!props.busy && !props.confirmDisabled) emit('confirm')
+    return
+  }
   if (event.key !== 'Tab') return
 
-  const focusable = focusableButtons()
+  const focusable = focusableElements()
   if (focusable.length === 0) return
 
   const first = focusable[0]
@@ -67,10 +83,12 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-async function focusCancelAction() {
+async function focusInitial() {
   previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   await nextTick()
-  cancelButtonRef.value?.focus()
+  // The first focusable is the slot's field when one exists, else Cancel.
+  const target = focusableElements()[0] ?? cancelButtonRef.value
+  target?.focus()
 }
 
 watch(
@@ -81,7 +99,7 @@ watch(
     if (open) lockBodyScroll()
     else unlockBodyScroll()
     if (open) {
-      await focusCancelAction()
+      await focusInitial()
     } else if (previousFocus) {
       previousFocus.focus()
       previousFocus = null
@@ -93,7 +111,7 @@ watch(
 onMounted(() => {
   if (props.open) {
     lockBodyScroll()
-    void focusCancelAction()
+    void focusInitial()
   }
 })
 

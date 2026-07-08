@@ -20,7 +20,7 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
-  formatDate,
+  formatDateTime,
   formatStockQuantity,
   formatStockUnit,
   parseDisplayQuantity,
@@ -57,6 +57,7 @@ const stockInSupplierError = ref<string | null>(null)
 const stockInReceiptError = ref<string | null>(null)
 const adjustmentMaterialError = ref<string | null>(null)
 const editingSupplierId = ref<string | null>(null)
+const supplierModalOpen = ref(false)
 const stockLoadedKey = ref<string | null>(null)
 const transactionsLoadedKey = ref<string | null>(null)
 const suppliersLoadedBranch = ref<string | null>(null)
@@ -322,6 +323,7 @@ async function saveSupplier() {
       await workshop.createSupplier(selectedBranchId.value, payload)
     }
     resetSupplierForm()
+    supplierModalOpen.value = false
     toast.success(wasEditing ? 'Yetkazib beruvchi saqlandi.' : "Yetkazib beruvchi qo'shildi.")
   } catch {
     supplierError.value = 'supplier_save_failed'
@@ -369,12 +371,24 @@ function removeStockInReceipt() {
   stockInReceiptError.value = null
 }
 
+function openCreateSupplier() {
+  resetSupplierForm()
+  supplierError.value = null
+  supplierModalOpen.value = true
+}
+
 function editSupplier(supplier: Supplier) {
-  activeTab.value = 'suppliers'
   editingSupplierId.value = supplier.id
   supplierForm.name = supplier.name
   supplierForm.phone = supplier.phone ?? ''
   supplierForm.note = supplier.note ?? ''
+  supplierError.value = null
+  supplierModalOpen.value = true
+}
+
+function closeSupplierModal() {
+  supplierModalOpen.value = false
+  resetSupplierForm()
 }
 
 function resetStockInForm() {
@@ -513,7 +527,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div v-if="activeTab === 'stock'" class="mb-4 flex flex-wrap gap-2">
+      <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
         <button type="button" class="mp-button mp-button-primary" @click="stockInOpen = true">
           Kirim
         </button>
@@ -749,7 +763,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <tr v-for="tx in workshop.stockTransactions" :key="tx.id">
-                <td class="num text-ink-muted">{{ formatDate(tx.created_at) }}</td>
+                <td class="num text-ink-muted">{{ formatDateTime(tx.created_at) }}</td>
                 <td>
                   <span
                     :class="
@@ -824,13 +838,18 @@ onBeforeUnmount(() => {
         aria-labelledby="workshop-inventory-suppliers-tab"
         tabindex="0"
       >
-        <section class="card mb-4 p-4">
-          <h2 class="mb-3 text-base font-extrabold text-ink">
-            {{
-              editingSupplierId ? 'Yetkazib beruvchini tahrirlash' : 'Yetkazib beruvchi yaratish'
-            }}
-          </h2>
-          <form class="grid gap-3 md:grid-cols-3" @submit.prevent="saveSupplier">
+        <div class="mb-3 flex justify-end">
+          <button type="button" class="mp-button mp-button-primary" @click="openCreateSupplier">
+            + Yangi yetkazib beruvchi
+          </button>
+        </div>
+
+        <AppModal
+          :open="supplierModalOpen"
+          :title="editingSupplierId ? 'Yetkazib beruvchini tahrirlash' : 'Yangi yetkazib beruvchi'"
+          @close="closeSupplierModal"
+        >
+          <form class="grid gap-3" @submit.prevent="saveSupplier">
             <label class="field">
               <span>Nom</span>
               <input v-model="supplierForm.name" class="mp-input" required />
@@ -843,27 +862,22 @@ onBeforeUnmount(() => {
               <span>Izoh</span>
               <input v-model="supplierForm.note" class="mp-input" />
             </label>
-            <div class="flex items-end gap-2 md:col-span-3">
+            <p
+              v-if="supplierError"
+              class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+            >
+              Yetkazib beruvchi saqlanmadi.
+            </p>
+            <div class="flex items-center gap-2">
               <button type="submit" class="mp-button mp-button-primary" :disabled="supplierSaving">
-                {{ supplierSaving ? 'Saqlanmoqda' : editingSupplierId ? 'Saqlash' : 'Yaratish' }}
+                {{ supplierSaving ? 'Saqlanmoqda' : editingSupplierId ? 'Saqlash' : "Qo'shish" }}
               </button>
-              <button
-                v-if="editingSupplierId"
-                type="button"
-                class="mp-button mp-button-outline"
-                @click="resetSupplierForm"
-              >
+              <button type="button" class="mp-button mp-button-outline" @click="closeSupplierModal">
                 Bekor
               </button>
             </div>
           </form>
-          <p
-            v-if="supplierError"
-            class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          >
-            Yetkazib beruvchi saqlanmadi.
-          </p>
-        </section>
+        </AppModal>
 
         <section class="card">
           <div class="table-wrap">
@@ -895,7 +909,7 @@ onBeforeUnmount(() => {
                       :disabled="supplierSaving"
                       @click="editSupplier(supplier)"
                     >
-                      Tahrir
+                      Tahrirlash
                     </button>
                     <button
                       type="button"

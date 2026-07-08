@@ -272,7 +272,7 @@ async function createWorkshop() {
     resetForm()
     modalOpen.value = false
     secretOpen.value = true
-    toast.success('Ustaxona yaratildi')
+    toast.success("Ustaxona qo'shildi")
     await admin.loadOverview()
   } catch (error) {
     const fields = fieldErrorsFromApi<ProvisionField>(
@@ -285,7 +285,7 @@ async function createWorkshop() {
       focusFirstFieldError(provisionFieldErrors, provisionFieldOrder, provisionFieldIds)
     } else {
       createError.value = 'workshop_create_failed'
-      toast.danger('Ustaxona yaratilmadi')
+      toast.danger("Ustaxona qo'shilmadi")
     }
   } finally {
     creating.value = false
@@ -577,7 +577,7 @@ onMounted(async () => {
               v-if="createError"
               class="mt-4 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Ustaxona yaratilmadi. Maydonlarni tekshiring.
+              Ustaxona qo'shilmadi. Maydonlarni tekshiring.
             </p>
           </div>
           <div class="admin-modal-f">
@@ -585,7 +585,7 @@ onMounted(async () => {
               Bekor
             </button>
             <button type="submit" class="mp-button mp-button-primary" :disabled="creating">
-              {{ creating ? 'Yaratilmoqda' : 'Yaratish' }}
+              {{ creating ? "Qo'shilmoqda" : "Qo'shish" }}
             </button>
           </div>
         </form>
@@ -639,7 +639,7 @@ onMounted(async () => {
 
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
-      title="Ustaxona yaratildi — bir martalik maxfiy ma'lumot"
+      title="Ustaxona qo'shildi — bir martalik maxfiy ma'lumot"
       intro="Ega login va vaqtinchalik parolni ustaxona egasiga yetkazing."
       :rows="secretRows"
       @close="closeSecret"

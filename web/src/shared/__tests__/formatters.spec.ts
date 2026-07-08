@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatDate,
   formatDateInputValue,
+  formatDateTime,
   formatRelativeUz,
   formatStockQuantity,
   formatStockUnit,
@@ -27,6 +28,31 @@ describe('shared formatters', () => {
 
   it('formats dates with the Uzbek locale seed', () => {
     expect(formatDate(new Date(2026, 5, 2))).toBe('02.06.2026')
+  })
+
+  it('formats date-only strings as the same calendar day in every timezone', () => {
+    // "2026-07-05" must never render as 04.07 for UTC-negative users — the
+    // parts are read directly instead of round-tripping through UTC midnight.
+    // Pin a UTC-negative zone so this actually exercises the failure mode
+    // (Node honors runtime TZ changes on POSIX; the sanity check guards that).
+    const previousTz = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    try {
+      expect(new Date('2026-07-05').getDate()).toBe(4) // sanity: raw UTC parse shifts here
+      expect(formatDate('2026-07-05')).toBe('05.07.2026')
+      expect(formatDate('2026-01-01')).toBe('01.01.2026')
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ
+      else process.env.TZ = previousTz
+    }
+  })
+
+  it('formats datetimes as DD.MM.YYYY HH:mm in local time', () => {
+    expect(formatDateTime(new Date(2026, 6, 5, 14, 32))).toBe('05.07.2026 14:32')
+    expect(formatDateTime(new Date(2026, 0, 9, 7, 5))).toBe('09.01.2026 07:05')
+    // Full ISO strings with an offset parse through `new Date` (tz-aware).
+    const parsed = new Date('2026-07-05T09:32:00+05:00')
+    expect(formatDateTime('2026-07-05T09:32:00+05:00')).toBe(formatDateTime(parsed))
   })
 
   it('formats date input values using the local calendar day', () => {

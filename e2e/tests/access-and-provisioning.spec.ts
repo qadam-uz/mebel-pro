@@ -173,7 +173,7 @@ test("admin provisions and blocks a workshop", async ({ page }, testInfo) => {
   await provisionForm.getByLabel("Filial telefoni").fill(phoneFor(id, 11));
   await provisionForm.getByLabel("Ega login").fill(`ui-owner-${id}`);
   await provisionForm.getByLabel("Vaqtinchalik parol").fill("OwnerTemp123");
-  await provisionForm.getByRole("button", { name: "Yaratish" }).click();
+  await provisionForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
 
   // The one-time secret is now shown in a focus-trapped modal (AB-03); assert it,
   // then dismiss it before navigating away.
@@ -222,10 +222,8 @@ test("owner changes temp password, creates staff, and saves a grant", async ({
   await page.goto("/workshop/settings/users");
 
   await page.getByRole("button", { name: "Yangi xodim" }).click();
-  const staffForm = page
-    .getByRole("heading", { name: "Yangi xodim" })
-    .locator("xpath=ancestor::section[1]");
-  await staffForm.getByRole("button", { name: "Yaratish" }).click();
+  const staffForm = page.getByRole("dialog", { name: "Yangi xodim" });
+  await staffForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
   await expect(
     staffForm.getByText("Bu maydonni to'ldiring.").first(),
   ).toBeVisible();
@@ -236,7 +234,7 @@ test("owner changes temp password, creates staff, and saves a grant", async ({
   await staffForm.getByLabel("Telefon").fill(phoneFor(id, 20));
   await staffForm.getByLabel("Login").fill(`staff-${id}`);
   await staffForm.getByLabel("Vaqtinchalik parol").fill("StaffTemp123");
-  await staffForm.getByRole("button", { name: "Yaratish" }).click();
+  await staffForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
   await expect(page.getByText("StaffTemp123")).toBeVisible();
   await page
     .getByRole("row", { name: /E2E Staff/ })

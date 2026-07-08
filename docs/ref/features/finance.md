@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-05
+updated: 2026-07-07
 order: 55
 ---
 
@@ -113,21 +113,25 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   the app-wide date-range picker: one trigger opening preset shortcuts (today / last
   7 days / this month / last month / last 30 days / all) beside a calendar for custom
   spans; every filter auto-applies — there is no separate apply button.
+  Each tab carries its own create action above the list; both open modal dialogs. The
+  date column pairs the business date with the entry timestamp beneath it — a backdated
+  record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, branch, status, min / max
-    amount. **+ Income** → form (type → if `order_payment`, an order picker scoped to the
-    branch; amount; method; date; note; receipt). Row actions: Edit · Void (reason). No
-    Delete.
+    amount. **+ Income** → modal form (type → if `order_payment`, a searchable order
+    picker scoped to the branch; amount; method; date; note; receipt). Row actions: Edit
+    (modal) · Void (dialog with a mandatory reason). No Delete.
   - *Expenses* — table: date, category, branch, vendor, amount, description (first 60
     chars), receipt indicator, status, action menu. Filters: date range, category, branch,
-    status, min / max amount. **+ Expense** → form (category, branch, amount, date, vendor,
-    description, receipt). Row actions: Edit · Void (reason). No Delete.
+    status, min / max amount. **+ Expense** → modal form (category, branch, amount, date,
+    vendor, description, receipt). Row actions: Edit (modal) · Void (dialog with a
+    mandatory reason). No Delete.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
-  per worker (panels, cuts, orders
-  banded, metres by edge material, with a thickness rollup); a "record salary expense"
-  shortcut that opens the Expense form pre-set to `category = salary` for that worker
-  (the accountant fills the amount). Empty: "No production in this period."
+  per worker (panels, cuts, orders banded, metres per edge material listed one line per
+  material, with a thickness rollup). The accountant books pay through the Expense form's
+  `salary` category — the report page itself is read-only (the earlier "record salary
+  expense" shortcut was dropped as redundant). Empty: "No production in this period."
 
 Because the income / expense ledgers require `manage_finance`, a `view_finance_reports`-only
 user sees the home summary tiles and worker-production report, but not the ledger pages.

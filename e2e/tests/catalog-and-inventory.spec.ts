@@ -234,15 +234,32 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await page.goto('/workshop/catalog')
   await expect(page.getByRole('heading', { name: 'Material katalogi' })).toBeVisible()
 
-  const addMaterial = page
-    .getByRole('heading', { name: "Filialga material qo'shish" })
-    .locator('xpath=ancestor::section[1]')
+  // The trigger appears in the page head and, while the list is empty, again as
+  // the empty-state CTA — target the always-present header action.
+  await page.getByRole('button', { name: "+ Material qo'shish" }).first().click()
+  const addMaterial = page.getByRole('dialog', { name: "Material qo'shish" })
   await addMaterial.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await addMaterial.getByLabel(/Narx/).fill('2500')
   await addMaterial.getByLabel(/Min zaxira/).fill('2')
-  await addMaterial.getByRole('button', { name: "Material qo'shish" }).click()
-  await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
+  await addMaterial.getByRole('button', { name: "Qo'shish", exact: true }).click()
+  // Two cells carry the material name now (the name cell and the Holat switch's
+  // accessible name) — the first one is the name cell.
+  await expect(page.getByRole('cell', { name: material.name }).first()).toBeVisible()
+
+  // The Holat column is an in-row switch; a toggle must flip aria-checked and persist.
+  const materialSwitch = () =>
+    page
+      .getByRole('row', { name: new RegExp(escapeRegExp(material.name)) })
+      .getByRole('switch')
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
+  await materialSwitch().click()
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+  await page.reload()
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'false')
+  // Restore visibility so the client-facing flows keep seeing the material.
+  await materialSwitch().click()
+  await expect(materialSwitch()).toHaveAttribute('aria-checked', 'true')
 
   await page.goto('/workshop/inventory')
   await expect(page.getByRole('heading', { name: 'Ombor' })).toBeVisible()

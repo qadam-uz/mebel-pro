@@ -24,11 +24,6 @@ async function loginWorkshop(
   await expect(page).toHaveURL(/\/workshop\/?$/)
 }
 
-async function chooseDropdown(page: Page, label: RegExp, option: RegExp) {
-  await page.getByRole('button', { name: label }).click()
-  await page.getByRole('option', { name: option }).click()
-}
-
 async function orderDetail(
   request: APIRequestContext,
   ownerAccess: string,
@@ -104,21 +99,22 @@ test('owner records order income and standalone expense', async ({ page, request
   await page.goto('/workshop/finance/expenses')
   await expect(page.getByRole('heading', { name: 'Tushum va xarajat' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Tushum' }).click()
-  const incomePanel = page
-    .getByRole('heading', { name: 'Tushum yozish' })
-    .locator('xpath=ancestor::section[1]')
-  await chooseDropdown(page, /^Buyurtma/, new RegExp(placed.order.order_number))
+  await page.getByRole('tab', { name: 'Tushumlar' }).click()
+  await page.getByRole('button', { name: '+ Tushum' }).click()
+  const incomePanel = page.getByRole('dialog', { name: 'Tushum yozish' })
+  await incomePanel
+    .getByRole('combobox', { name: 'Buyurtma', exact: true })
+    .fill(placed.order.order_number)
+  await page.getByRole('option', { name: new RegExp(placed.order.order_number) }).click()
   await expect(incomePanel.getByText('Qoldiq:')).toBeVisible()
   await incomePanel.getByRole('button', { name: 'Qoldiqni kiritish' }).click()
   await incomePanel.getByLabel('Izoh').fill('E2E order payment')
   await incomePanel.getByRole('button', { name: 'Yozish' }).click()
   await expect(page.getByText('E2E order payment')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Xarajat' }).click()
-  const expensePanel = page
-    .getByRole('heading', { name: 'Xarajat yozish' })
-    .locator('xpath=ancestor::section[1]')
+  await page.getByRole('tab', { name: 'Xarajatlar' }).click()
+  await page.getByRole('button', { name: '+ Xarajat' }).click()
+  const expensePanel = page.getByRole('dialog', { name: 'Xarajat yozish' })
   await expensePanel.getByLabel('Tavsif').fill('E2E standalone expense')
   await expensePanel.getByLabel("Summa (so'm)").fill('1000')
   await expensePanel.getByRole('button', { name: 'Yozish' }).click()

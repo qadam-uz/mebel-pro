@@ -26,7 +26,21 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
   ranges use the shared date-range picker primitive: one trigger opening a popover with
   preset shortcuts and a calendar; selections auto-apply (no apply button). Role-prefixed
   classes such as `admin-*` stay inside that role's app (the admin app keeps its older
-  48px stretched filter look). Object-creation buttons in the admin app use a visible
-  `+` prefix in the label.
+  48px stretched filter look).
+- Create/edit forms open in `AppModal` dialogs, never as inline on-page cards; reason-gated
+  confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use the
+  inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
+  `ProjectDropdown` teleports its panel at z-50 and would render behind the modal layer
+  (z-80).
+- Object-creation buttons use a visible `+` prefix in the label (all apps). Placement
+  follows scope: page-scoped creates sit in the page-head tools; tab-scoped list-add
+  actions sit as a normal-size button right-aligned above the tab's content; a pair of
+  primary operations (Ombor's Kirim + Tuzatish) spans the full row as a two-column grid.
+- Table cells: numeric columns (money, quantities) right-align in mono with the unit on a
+  small muted second line so digits align for comparison. Event timestamps render as
+  `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted "Kiritildi:"
+  entry-timestamp line beneath. In-place status toggles are `role="switch"` buttons —
+  track + thumb plus the current state's word as a visible text label (never color
+  alone), disabled while the row saves.
 - Pointer cursor and row hover belong only on clickable controls or clickable rows. Static table
   rows stay visually still and use the default cursor.

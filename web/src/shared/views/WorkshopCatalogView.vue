@@ -6,6 +6,7 @@ import { apiTraceId } from '@/shared/api/client'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import AppModal from '@/shared/components/AppModal.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -34,6 +35,7 @@ const materialSaving = ref(false)
 const materialError = ref<string | null>(null)
 const materialFieldError = ref<string | null>(null)
 const editingBranchMaterialId = ref<string | null>(null)
+const materialModalOpen = ref(false)
 let searchTimer: number | undefined
 const materialForm = reactive({
   materialId: null as string | null,
@@ -127,6 +129,14 @@ function priceUnit(kind: MaterialKind) {
   return kind === 'edge' ? '/ metr' : '/ panel'
 }
 
+// Split "2.5 m" / "12 panel" so the unit can sit on its own muted line and the
+// digits stay aligned on the column's right edge.
+function minStockParts(row: BranchMaterial) {
+  const text = formatStockQuantity(row.min_stock, row.material.kind === 'edge' ? 'm' : 'panel')
+  const splitAt = text.lastIndexOf(' ')
+  return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
+}
+
 async function refreshCatalog() {
   if (!selectedBranchId.value) return
   rowActionError.value = null
@@ -187,6 +197,7 @@ async function saveBranchMaterial() {
       })
     }
     resetMaterialForm()
+    materialModalOpen.value = false
     await refreshCatalog()
     toast.success(wasEditing ? 'Material sozlamasi saqlandi.' : "Material filialga qo'shildi.")
   } catch {
@@ -196,12 +207,25 @@ async function saveBranchMaterial() {
   }
 }
 
+function openCreateMaterial() {
+  resetMaterialForm()
+  materialError.value = null
+  materialModalOpen.value = true
+}
+
 function editBranchMaterial(row: BranchMaterial) {
   editingBranchMaterialId.value = row.id
   materialForm.materialId = row.material_id
   materialForm.priceTiyin = String(row.price_tiyin / 100)
   materialForm.minStock =
     row.material.kind === 'edge' ? String(row.min_stock / 1000) : String(row.min_stock)
+  materialError.value = null
+  materialModalOpen.value = true
+}
+
+function closeMaterialModal() {
+  materialModalOpen.value = false
+  resetMaterialForm()
 }
 
 function resetMaterialForm() {
@@ -243,8 +267,10 @@ watch(search, () => {
   searchTimer = window.setTimeout(() => void refreshCatalog(), 250)
 })
 
-// Reset the add/edit form whenever the topbar switches the branch.
+// Reset (and close) the add/edit dialog whenever the topbar switches the branch —
+// a draft priced for one branch must not silently save into another.
 watch(selectedBranchId, () => {
+  materialModalOpen.value = false
   resetMaterialForm()
 })
 
@@ -272,6 +298,16 @@ onBeforeUnmount(() => {
     <div class="page-head">
       <div>
         <h1>Material katalogi</h1>
+      </div>
+      <div class="tools">
+        <button
+          v-if="selectedBranch"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="openCreateMaterial"
+        >
+          + Material qo'shish
+        </button>
       </div>
     </div>
 
@@ -307,20 +343,18 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <section v-if="selectedBranch" class="card mb-4 p-4">
-        <h2 class="mb-3 text-base font-extrabold text-ink">
-          {{
-            editingBranchMaterialId ? 'Material narxi va min zaxira' : "Filialga material qo'shish"
-          }}
-        </h2>
-        <form class="grid gap-3 md:grid-cols-4" @submit.prevent="saveBranchMaterial">
+      <AppModal
+        :open="materialModalOpen"
+        :title="editingBranchMaterialId ? 'Materialni tahrirlash' : `Material qo'shish`"
+        @close="closeMaterialModal"
+      >
+        <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
           <SearchCombobox
             v-model="materialForm.materialId"
             label="Material"
             :options="availableCatalogOptions"
             :disabled="editingBranchMaterialId !== null"
             :error="materialFieldError"
-            class="md:col-span-2"
           />
           <label class="field">
             <span>Narx (so'm)</span>
@@ -344,33 +378,24 @@ onBeforeUnmount(() => {
               {{ minStockFieldError }}
             </small>
           </label>
-          <div class="flex flex-wrap gap-2 md:col-span-4">
+          <p
+            v-if="materialError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          >
+            Filial materiali saqlanmadi.
+          </p>
+          <div class="flex items-center gap-2">
             <button class="mp-button mp-button-primary" type="submit" :disabled="materialSaving">
               {{
-                materialSaving
-                  ? 'Saqlanmoqda'
-                  : editingBranchMaterialId
-                    ? 'Saqlash'
-                    : "Material qo'shish"
+                materialSaving ? 'Saqlanmoqda' : editingBranchMaterialId ? 'Saqlash' : "Qo'shish"
               }}
             </button>
-            <button
-              v-if="editingBranchMaterialId"
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="resetMaterialForm"
-            >
+            <button type="button" class="mp-button mp-button-outline" @click="closeMaterialModal">
               Bekor
             </button>
           </div>
         </form>
-        <p
-          v-if="materialError"
-          class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-        >
-          Filial materiali saqlanmadi.
-        </p>
-      </section>
+      </AppModal>
 
       <section v-if="workshop.catalogLoading" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
@@ -417,17 +442,42 @@ onBeforeUnmount(() => {
                 </td>
                 <td class="amt">
                   {{ formatTiyin(row.price_tiyin) }}
-                  <small>{{ priceUnit(row.material.kind) }}</small>
+                  <small class="block font-normal text-ink-muted">
+                    {{ priceUnit(row.material.kind) }}
+                  </small>
                 </td>
                 <td class="amt muted">
-                  {{
-                    formatStockQuantity(row.min_stock, row.material.kind === 'edge' ? 'm' : 'panel')
-                  }}
+                  {{ minStockParts(row).value }}
+                  <small class="block font-normal">{{ minStockParts(row).unit }}</small>
                 </td>
                 <td>
-                  <span :class="row.status === 'active' ? 'pill p-ok' : 'pill p-dn'">
-                    <span class="pd"></span>{{ row.status === 'active' ? 'Faol' : 'Faol emas' }}
-                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    :aria-checked="row.status === 'active'"
+                    :aria-label="`${row.material.name} holati`"
+                    :aria-busy="rowActionId === row.id || undefined"
+                    :disabled="rowActionId === row.id"
+                    class="inline-flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
+                    @click="toggleVisibility(row)"
+                  >
+                    <span
+                      class="relative h-5 w-9 shrink-0 rounded-full transition-colors"
+                      :class="row.status === 'active' ? 'bg-accent' : 'bg-hairline-strong'"
+                      aria-hidden="true"
+                    >
+                      <span
+                        class="absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform"
+                        :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
+                      ></span>
+                    </span>
+                    <span
+                      class="text-xs font-bold"
+                      :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
+                    >
+                      {{ row.status === 'active' ? 'Faol' : 'Faol emas' }}
+                    </span>
+                  </button>
                 </td>
                 <td class="right">
                   <button
@@ -437,20 +487,6 @@ onBeforeUnmount(() => {
                   >
                     Tahrirlash
                   </button>
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline ml-2 min-h-8 px-2 text-xs"
-                    :disabled="rowActionId === row.id"
-                    @click="toggleVisibility(row)"
-                  >
-                    {{
-                      rowActionId === row.id
-                        ? 'Saqlanmoqda'
-                        : row.status === 'active'
-                          ? 'Yashirish'
-                          : "Ko'rsatish"
-                    }}
-                  </button>
                 </td>
               </tr>
               <tr v-if="workshop.branchMaterials.length === 0">
@@ -458,6 +494,13 @@ onBeforeUnmount(() => {
                   <div class="st-empty !border-0 !py-8">
                     <h3>Bu filialga material qo'shilmagan</h3>
                     <p>Platforma katalogidan material qo'shing.</p>
+                    <button
+                      type="button"
+                      class="mp-button mp-button-primary mt-3"
+                      @click="openCreateMaterial"
+                    >
+                      + Material qo'shish
+                    </button>
                   </div>
                 </td>
               </tr>

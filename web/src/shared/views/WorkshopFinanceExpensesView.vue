@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
@@ -7,14 +7,24 @@ import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/a
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
+import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
+import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
-import { formatDate, formatDateInputValue, formatTiyin, parseSomToTiyin } from '@/shared/formatters'
+import {
+  formatDate,
+  formatDateInputValue,
+  formatDateTime,
+  formatTiyin,
+  parseSomToTiyin,
+} from '@/shared/formatters'
 import {
   useFinanceStore,
   type Expense,
@@ -50,7 +60,8 @@ watch(
     activeTab.value = financeLedgerTabFromPath(path)
   },
 )
-const formMode = ref<'expense' | 'income' | null>(null)
+const expenseModalOpen = ref(false)
+const incomeModalOpen = ref(false)
 const editingExpenseId = ref<string | null>(null)
 const editingIncomeId = ref<string | null>(null)
 const saving = ref(false)
@@ -69,15 +80,13 @@ const filterBranchId = ref('all')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
 const statusFilter = ref<LedgerStatus | 'all'>('recorded')
-const expenseFormPanel = ref<HTMLElement | null>(null)
-const incomeFormPanel = ref<HTMLElement | null>(null)
-const voidFormPanel = ref<HTMLElement | null>(null)
-const lastFormTrigger = ref<HTMLElement | null>(null)
 let orderBalanceRequestId = 0
 
+// Select-bound fields are `string | null` (FormSelect/SearchCombobox model type,
+// same convention as the inventory modals); payloads coerce before sending.
 const expenseForm = reactive({
-  branchId: 'workshop',
-  category: 'other' as ExpenseCategory,
+  branchId: 'workshop' as string | null,
+  category: 'other' as string | null,
   amount: '',
   incurredOn: today,
   vendor: '',
@@ -86,11 +95,11 @@ const expenseForm = reactive({
   receiptName: '',
 })
 const incomeForm = reactive({
-  type: 'order_payment' as IncomeType,
-  branchId: 'workshop',
-  orderId: '',
+  type: 'order_payment' as string | null,
+  branchId: 'workshop' as string | null,
+  orderId: null as string | null,
   amount: '',
-  method: 'cash' as MoneyMethod,
+  method: 'cash' as string | null,
   receivedOn: today,
   note: '',
   receiptFileId: null as string | null,
@@ -101,22 +110,14 @@ const canManageFinance = computed(() => permissions.can(p.manageFinance))
 const financeBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageFinance]),
 )
-const branchOptions = computed(() => [
+const branchOptions = computed<ChoiceOption[]>(() => [
   ...(permissions.isOwner.value
-    ? [
-        {
-          value: 'workshop',
-          label: 'Ustaxona-keng',
-          meta: 'filialsiz yozuv',
-          status: 'active' as const,
-        },
-      ]
+    ? [{ value: 'workshop', label: 'Ustaxona-keng', meta: 'filialsiz yozuv' }]
     : []),
   ...financeBranches.value.map((branch) => ({
     value: branch.id,
     label: branch.name,
     meta: branch.address,
-    status: branch.status === 'active' ? ('active' as const) : ('pending' as const),
   })),
 ])
 const filterBranchOptions = computed<DropdownOption[]>(() => [
@@ -126,9 +127,8 @@ const filterBranchOptions = computed<DropdownOption[]>(() => [
   },
   ...financeBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
 ])
-const orderOptions = computed(() => [
-  { value: '', label: 'Buyurtmani tanlang', meta: 'to`lov bog`lanadi', status: 'pending' as const },
-  ...orders.workshopOrders
+const orderOptions = computed<ChoiceOption[]>(() =>
+  orders.workshopOrders
     .filter((order) => {
       if (order.status === 'cancelled') return false
       if (incomeForm.branchId === 'workshop') return true
@@ -138,52 +138,38 @@ const orderOptions = computed(() => [
       value: order.id,
       label: `${order.order_number} · ${order.contact_name}`,
       meta: formatTiyin(order.total_tiyin),
-      status: order.status === 'completed' ? ('active' as const) : ('pending' as const),
     })),
-])
+)
 const selectedIncomeOrderDetail = computed(() =>
   orders.currentOrder?.id === incomeForm.orderId ? orders.currentOrder : null,
 )
 const selectedIncomeSettlement = computed(() => selectedIncomeOrderDetail.value?.settlement ?? null)
-const categoryOptions = [
-  { value: 'all', label: 'Hamma kategoriyalar', meta: 'filtr', status: 'active' as const },
-  { value: 'rent', label: 'Ijara', meta: 'joy xarajati', status: 'active' as const },
-  { value: 'utilities', label: 'Kommunal', meta: 'elektr/gaz/suv', status: 'active' as const },
-  {
-    value: 'raw_materials',
-    label: 'Xom ashyo',
-    meta: 'material xaridi',
-    status: 'active' as const,
-  },
-  { value: 'supplies', label: 'Aksessuar', meta: 'mayda ta`minot', status: 'active' as const },
-  { value: 'transport', label: 'Transport', meta: 'yetkazish/yo`l', status: 'active' as const },
-  { value: 'equipment', label: 'Texnika', meta: 'uskuna', status: 'active' as const },
-  { value: 'marketing', label: 'Marketing', meta: 'reklama', status: 'active' as const },
-  {
-    value: 'taxes_and_fees',
-    label: 'Soliqlar',
-    meta: 'majburiy to`lovlar',
-    status: 'active' as const,
-  },
-  { value: 'salary', label: 'Maosh', meta: 'xodim to`lovi', status: 'active' as const },
-  { value: 'other', label: 'Boshqalar', meta: 'tasniflanmagan', status: 'active' as const },
+// Shared by the filter dropdowns (compact skin ignores meta) and the modal
+// FormSelects (meta renders as the option's hint line).
+const categoryOptions: ChoiceOption[] = [
+  { value: 'all', label: 'Hamma kategoriyalar', meta: 'filtr' },
+  { value: 'rent', label: 'Ijara', meta: 'joy xarajati' },
+  { value: 'utilities', label: 'Kommunal', meta: 'elektr/gaz/suv' },
+  { value: 'raw_materials', label: 'Xom ashyo', meta: 'material xaridi' },
+  { value: 'supplies', label: 'Aksessuar', meta: 'mayda ta`minot' },
+  { value: 'transport', label: 'Transport', meta: 'yetkazish/yo`l' },
+  { value: 'equipment', label: 'Texnika', meta: 'uskuna' },
+  { value: 'marketing', label: 'Marketing', meta: 'reklama' },
+  { value: 'taxes_and_fees', label: 'Soliqlar', meta: 'majburiy to`lovlar' },
+  { value: 'salary', label: 'Maosh', meta: 'xodim to`lovi' },
+  { value: 'other', label: 'Boshqalar', meta: 'tasniflanmagan' },
 ]
 const createCategoryOptions = categoryOptions.filter((option) => option.value !== 'all')
-const incomeTypeOptions = [
-  { value: 'all', label: 'Hamma turlar', meta: 'filtr', status: 'active' as const },
-  {
-    value: 'order_payment',
-    label: "Buyurtma to'lovi",
-    meta: 'buyurtmaga bog`langan',
-    status: 'active' as const,
-  },
-  { value: 'other', label: 'Boshqa tushum', meta: 'qo`lda yozuv', status: 'active' as const },
+const incomeTypeOptions: ChoiceOption[] = [
+  { value: 'all', label: 'Hamma turlar', meta: 'filtr' },
+  { value: 'order_payment', label: "Buyurtma to'lovi", meta: 'buyurtmaga bog`langan' },
+  { value: 'other', label: 'Boshqa tushum', meta: 'qo`lda yozuv' },
 ]
 const createIncomeTypeOptions = incomeTypeOptions.filter((option) => option.value !== 'all')
-const methodOptions = [
-  { value: 'cash', label: 'Naqd', meta: 'kassa', status: 'active' as const },
-  { value: 'bank_transfer', label: 'Bank / karta', meta: 'o`tkazma', status: 'active' as const },
-  { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi', status: 'active' as const },
+const methodOptions: ChoiceOption[] = [
+  { value: 'cash', label: 'Naqd', meta: 'kassa' },
+  { value: 'bank_transfer', label: 'Bank / karta', meta: 'o`tkazma' },
+  { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi' },
 ]
 const statusOptions: DropdownOption[] = [
   { value: 'recorded', label: 'Yozilgan', dot: 'success' },
@@ -203,7 +189,7 @@ watch(
   () => {
     if (incomeForm.branchId === 'workshop' || !incomeForm.orderId) return
     const selectedOrder = orders.workshopOrders.find((order) => order.id === incomeForm.orderId)
-    if (selectedOrder && selectedOrder.branch_id !== incomeForm.branchId) incomeForm.orderId = ''
+    if (selectedOrder && selectedOrder.branch_id !== incomeForm.branchId) incomeForm.orderId = null
   },
 )
 
@@ -334,7 +320,7 @@ function resetIncomeForm() {
   incomeForm.branchId = permissions.isOwner.value
     ? 'workshop'
     : (financeBranches.value[0]?.id ?? 'workshop')
-  incomeForm.orderId = ''
+  incomeForm.orderId = null
   incomeForm.amount = ''
   incomeForm.method = 'cash'
   incomeForm.receivedOn = today
@@ -347,49 +333,26 @@ function resetIncomeForm() {
   orderBalanceTraceId.value = null
 }
 
-function rememberTrigger(event?: Event) {
-  const target = event?.currentTarget
-  lastFormTrigger.value = target instanceof HTMLElement ? target : null
+// The modals own focus (useFocusTrap moves focus in, restores it on close) — no
+// manual scroll-into-view / trigger-tracking machinery needed.
+function clearActionError() {
+  actionError.value = null
+  actionTraceId.value = null
 }
 
-async function focusFirstField(panel: () => HTMLElement | null) {
-  await nextTick()
-  const current = panel()
-  current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  const field = current?.querySelector<HTMLElement>(
-    'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [role="combobox"]:not([aria-disabled="true"])',
-  )
-  field?.focus({ preventScroll: true })
-}
-
-function restoreLastTrigger() {
-  void nextTick(() => lastFormTrigger.value?.focus())
-}
-
-function openCreateExpense(event?: Event) {
-  rememberTrigger(event)
+function openCreateExpense() {
   resetExpenseForm()
-  activeTab.value = 'expense'
-  const opening = formMode.value !== 'expense'
-  formMode.value = opening ? 'expense' : null
-  if (opening) void focusFirstField(() => expenseFormPanel.value)
-  else restoreLastTrigger()
+  clearActionError()
+  expenseModalOpen.value = true
 }
 
-function openCreateIncome(event?: Event) {
-  rememberTrigger(event)
+function openCreateIncome() {
   resetIncomeForm()
-  activeTab.value = 'income'
-  const opening = formMode.value !== 'income'
-  formMode.value = opening ? 'income' : null
-  if (opening) void focusFirstField(() => incomeFormPanel.value)
-  else restoreLastTrigger()
+  clearActionError()
+  incomeModalOpen.value = true
 }
 
-function editExpense(expense: Expense, event?: Event) {
-  rememberTrigger(event)
-  activeTab.value = 'expense'
-  formMode.value = 'expense'
+function editExpense(expense: Expense) {
   editingExpenseId.value = expense.id
   expenseForm.branchId = expense.branch_id ?? 'workshop'
   expenseForm.category = expense.category
@@ -399,17 +362,15 @@ function editExpense(expense: Expense, event?: Event) {
   expenseForm.description = expense.description
   expenseForm.receiptFileId = expense.receipt_file_id
   expenseForm.receiptName = expense.receipt_file_id ? 'Biriktirilgan chek' : ''
-  void focusFirstField(() => expenseFormPanel.value)
+  clearActionError()
+  expenseModalOpen.value = true
 }
 
-function editIncome(income: Income, event?: Event) {
-  rememberTrigger(event)
-  activeTab.value = 'income'
-  formMode.value = 'income'
+function editIncome(income: Income) {
   editingIncomeId.value = income.id
   incomeForm.type = income.type
   incomeForm.branchId = income.branch_id ?? 'workshop'
-  incomeForm.orderId = income.order_id ?? ''
+  incomeForm.orderId = income.order_id ?? null
   incomeForm.amount = String(income.amount_tiyin / 100)
   incomeForm.method = income.method
   incomeForm.receivedOn = income.received_on
@@ -417,38 +378,29 @@ function editIncome(income: Income, event?: Event) {
   incomeForm.receiptFileId = income.receipt_file_id
   incomeForm.receiptName = income.receipt_file_id ? 'Biriktirilgan chek' : ''
   if (income.order_id) void loadSelectedOrderBalance(income.order_id)
-  void focusFirstField(() => incomeFormPanel.value)
+  clearActionError()
+  incomeModalOpen.value = true
 }
 
-function closeForm() {
-  formMode.value = null
+function closeExpenseModal() {
+  expenseModalOpen.value = false
   editingExpenseId.value = null
-  editingIncomeId.value = null
-  restoreLastTrigger()
 }
 
-function openVoidForm(kind: 'expense' | 'income', id: string, event?: Event) {
-  rememberTrigger(event)
+function closeIncomeModal() {
+  incomeModalOpen.value = false
+  editingIncomeId.value = null
+}
+
+function openVoidForm(kind: 'expense' | 'income', id: string) {
   voidTarget.value = { kind, id }
   voidReason.value = ''
-  void focusFirstField(() => voidFormPanel.value)
+  clearActionError()
 }
 
 function closeVoidForm() {
   voidTarget.value = null
   voidReason.value = ''
-  restoreLastTrigger()
-}
-
-function applyExpensePresetFromRoute() {
-  if (route.query.preset !== 'salary') return
-  const workerName = typeof route.query.worker === 'string' ? route.query.worker : ''
-  activeTab.value = 'expense'
-  resetExpenseForm()
-  formMode.value = 'expense'
-  expenseForm.category = 'salary'
-  expenseForm.vendor = workerName
-  expenseForm.description = workerName ? `Maosh: ${workerName}` : 'Maosh'
 }
 
 async function saveExpense() {
@@ -463,8 +415,9 @@ async function saveExpense() {
   actionTraceId.value = null
   try {
     const payload = {
-      branch_id: expenseForm.branchId === 'workshop' ? null : expenseForm.branchId,
-      category: expenseForm.category,
+      branch_id:
+        !expenseForm.branchId || expenseForm.branchId === 'workshop' ? null : expenseForm.branchId,
+      category: (expenseForm.category ?? 'other') as ExpenseCategory,
       amount_tiyin: expenseAmountTiyin.value,
       incurred_on: expenseForm.incurredOn,
       vendor: expenseForm.vendor || null,
@@ -474,7 +427,7 @@ async function saveExpense() {
     const wasEditing = Boolean(editingExpenseId.value)
     if (editingExpenseId.value) await finance.updateExpense(editingExpenseId.value, payload)
     else await finance.createExpense(payload)
-    closeForm()
+    closeExpenseModal()
     await refresh()
     toast.success(wasEditing ? 'Xarajat saqlandi.' : 'Xarajat yozildi.')
   } catch {
@@ -497,11 +450,12 @@ async function saveIncome() {
   actionTraceId.value = null
   try {
     const payload = {
-      type: incomeForm.type,
-      branch_id: incomeForm.branchId === 'workshop' ? null : incomeForm.branchId,
-      order_id: incomeForm.type === 'order_payment' ? incomeForm.orderId || null : null,
+      type: (incomeForm.type ?? 'other') as IncomeType,
+      branch_id:
+        !incomeForm.branchId || incomeForm.branchId === 'workshop' ? null : incomeForm.branchId,
+      order_id: incomeForm.type === 'order_payment' ? incomeForm.orderId : null,
       amount_tiyin: incomeAmountTiyin.value,
-      method: incomeForm.method,
+      method: (incomeForm.method ?? 'cash') as MoneyMethod,
       received_on: incomeForm.receivedOn,
       note: incomeForm.note || null,
       receipt_file_id: incomeForm.receiptFileId,
@@ -509,12 +463,7 @@ async function saveIncome() {
     const wasEditing = Boolean(editingIncomeId.value)
     if (editingIncomeId.value) {
       await finance.updateIncome(editingIncomeId.value, {
-        branch_id:
-          incomeForm.type === 'order_payment'
-            ? undefined
-            : incomeForm.branchId === 'workshop'
-              ? null
-              : incomeForm.branchId,
+        branch_id: incomeForm.type === 'order_payment' ? undefined : payload.branch_id,
         amount_tiyin: payload.amount_tiyin,
         method: payload.method,
         received_on: payload.received_on,
@@ -524,7 +473,7 @@ async function saveIncome() {
     } else {
       await finance.createIncome(payload)
     }
-    closeForm()
+    closeIncomeModal()
     await refresh()
     toast.success(wasEditing ? 'Tushum saqlandi.' : 'Tushum yozildi.')
   } catch {
@@ -608,8 +557,6 @@ onMounted(async () => {
     expenseForm.branchId = firstBranchId
     incomeForm.branchId = firstBranchId
   }
-  applyExpensePresetFromRoute()
-  if (formMode.value === 'expense') void focusFirstField(() => expenseFormPanel.value)
   if (!canManageFinance.value) return
   await Promise.all([
     orders.loadWorkshopOrders({ status: 'active' }).catch(() => undefined),
@@ -623,24 +570,6 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>Tushum va xarajat</h1>
-      </div>
-      <div class="tools">
-        <button
-          v-if="canManageFinance"
-          type="button"
-          class="mp-button mp-button-outline"
-          @click="openCreateIncome($event)"
-        >
-          Tushum
-        </button>
-        <button
-          v-if="canManageFinance"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openCreateExpense($event)"
-        >
-          Xarajat
-        </button>
       </div>
     </div>
 
@@ -657,18 +586,34 @@ onMounted(async () => {
         :tabs="financeTabs"
       />
 
-      <section v-if="formMode === 'expense'" ref="expenseFormPanel" class="card mb-4">
-        <div class="card-h">
-          <h2>{{ editingExpenseId ? 'Xarajatni tahrirlash' : 'Xarajat yozish' }}</h2>
-        </div>
-        <form class="card-b grid gap-3 md:grid-cols-2 xl:grid-cols-4" @submit.prevent="saveExpense">
-          <ProjectDropdown
+      <div class="mb-3 flex justify-end">
+        <button
+          v-if="activeTab === 'expense'"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="openCreateExpense"
+        >
+          + Xarajat
+        </button>
+        <button v-else type="button" class="mp-button mp-button-primary" @click="openCreateIncome">
+          + Tushum
+        </button>
+      </div>
+
+      <AppModal
+        :open="expenseModalOpen"
+        :title="editingExpenseId ? 'Xarajatni tahrirlash' : 'Xarajat yozish'"
+        max-width="max-w-2xl"
+        @close="closeExpenseModal"
+      >
+        <form class="grid gap-3 md:grid-cols-2" @submit.prevent="saveExpense">
+          <FormSelect
             v-model="expenseForm.category"
             label="Kategoriya"
             :options="createCategoryOptions"
           />
-          <ProjectDropdown v-model="expenseForm.branchId" label="Filial" :options="branchOptions" />
-          <label class="field">
+          <FormSelect v-model="expenseForm.branchId" label="Filial" :options="branchOptions" />
+          <label class="field md:col-span-2">
             <span>Tavsif</span>
             <input
               v-model="expenseForm.description"
@@ -712,23 +657,31 @@ onMounted(async () => {
               @remove="removeExpenseReceipt"
             />
           </label>
-          <div class="flex items-end gap-2 md:col-span-2">
+          <p
+            v-if="actionError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2"
+          >
+            {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+          </p>
+          <div class="flex items-center gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
               {{ saving ? 'Saqlanmoqda' : editingExpenseId ? 'Saqlash' : 'Yozish' }}
             </button>
-            <button type="button" class="mp-button mp-button-outline" @click="closeForm">
+            <button type="button" class="mp-button mp-button-outline" @click="closeExpenseModal">
               Bekor
             </button>
           </div>
         </form>
-      </section>
+      </AppModal>
 
-      <section v-if="formMode === 'income'" ref="incomeFormPanel" class="card mb-4">
-        <div class="card-h">
-          <h2>{{ editingIncomeId ? 'Tushumni tahrirlash' : 'Tushum yozish' }}</h2>
-        </div>
-        <form class="card-b grid gap-3 md:grid-cols-2 xl:grid-cols-4" @submit.prevent="saveIncome">
-          <ProjectDropdown
+      <AppModal
+        :open="incomeModalOpen"
+        :title="editingIncomeId ? 'Tushumni tahrirlash' : 'Tushum yozish'"
+        max-width="max-w-2xl"
+        @close="closeIncomeModal"
+      >
+        <form class="grid gap-3 md:grid-cols-2" @submit.prevent="saveIncome">
+          <FormSelect
             v-if="!editingIncomeId"
             v-model="incomeForm.type"
             label="Turi"
@@ -738,15 +691,17 @@ onMounted(async () => {
             <span>Turi</span>
             <input
               class="mp-input"
-              :value="incomeTypeLabel[incomeForm.type] ?? incomeForm.type"
+              :value="(incomeForm.type && incomeTypeLabel[incomeForm.type]) || incomeForm.type"
               disabled
             />
           </label>
-          <ProjectDropdown
+          <SearchCombobox
             v-if="incomeForm.type === 'order_payment' && !editingIncomeId"
             v-model="incomeForm.orderId"
             label="Buyurtma"
             :options="orderOptions"
+            placeholder="Buyurtmani tanlang"
+            clearable
           />
           <label v-else-if="incomeForm.type === 'order_payment'" class="field">
             <span>Buyurtma</span>
@@ -788,8 +743,8 @@ onMounted(async () => {
               {{ AMOUNT_HINT }}
             </small>
           </label>
-          <ProjectDropdown v-model="incomeForm.method" label="Usul" :options="methodOptions" />
-          <ProjectDropdown v-model="incomeForm.branchId" label="Filial" :options="branchOptions" />
+          <FormSelect v-model="incomeForm.method" label="Usul" :options="methodOptions" />
+          <FormSelect v-model="incomeForm.branchId" label="Filial" :options="branchOptions" />
           <label class="field">
             <span>Qabul sanasi</span>
             <input
@@ -815,16 +770,22 @@ onMounted(async () => {
               @remove="removeIncomeReceipt"
             />
           </label>
-          <div class="flex items-end gap-2 md:col-span-2">
+          <p
+            v-if="actionError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2"
+          >
+            {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+          </p>
+          <div class="flex items-center gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
               {{ saving ? 'Saqlanmoqda' : editingIncomeId ? 'Saqlash' : 'Yozish' }}
             </button>
-            <button type="button" class="mp-button mp-button-outline" @click="closeForm">
+            <button type="button" class="mp-button mp-button-outline" @click="closeIncomeModal">
               Bekor
             </button>
           </div>
         </form>
-      </section>
+      </AppModal>
 
       <div class="mp-filters">
         <DateRangePicker
@@ -897,7 +858,12 @@ onMounted(async () => {
                 :key="expense.id"
                 :class="{ muted: expense.status === 'voided' }"
               >
-                <td class="num text-ink-muted">{{ formatDate(expense.incurred_on) }}</td>
+                <td class="num text-ink-muted">
+                  {{ formatDate(expense.incurred_on) }}
+                  <small class="block whitespace-nowrap font-sans text-[11px]">
+                    Kiritildi: {{ formatDateTime(expense.created_at) }}
+                  </small>
+                </td>
                 <td>{{ categoryLabel[expense.category] ?? expense.category }}</td>
                 <td class="nm">
                   {{ expense.description }}
@@ -925,15 +891,15 @@ onMounted(async () => {
                     v-if="canManageFinance && expense.status === 'recorded'"
                     type="button"
                     class="mp-button mp-button-outline mr-2 min-h-8 px-2 text-xs"
-                    @click="editExpense(expense, $event)"
+                    @click="editExpense(expense)"
                   >
-                    Tahrir
+                    Tahrirlash
                   </button>
                   <button
                     v-if="canManageFinance && expense.status === 'recorded'"
                     type="button"
                     class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="openVoidForm('expense', expense.id, $event)"
+                    @click="openVoidForm('expense', expense.id)"
                   >
                     Bekor qilish
                   </button>
@@ -979,7 +945,12 @@ onMounted(async () => {
                 :key="income.id"
                 :class="{ muted: income.status === 'voided' }"
               >
-                <td class="num text-ink-muted">{{ formatDate(income.received_on) }}</td>
+                <td class="num text-ink-muted">
+                  {{ formatDate(income.received_on) }}
+                  <small class="block whitespace-nowrap font-sans text-[11px]">
+                    Kiritildi: {{ formatDateTime(income.created_at) }}
+                  </small>
+                </td>
                 <td>{{ incomeTypeLabel[income.type] ?? income.type }}</td>
                 <td>{{ incomeOrderLabel(income.order_id) }}</td>
                 <td>
@@ -1011,15 +982,15 @@ onMounted(async () => {
                     v-if="canManageFinance && income.status === 'recorded'"
                     type="button"
                     class="mp-button mp-button-outline mr-2 min-h-8 px-2 text-xs"
-                    @click="editIncome(income, $event)"
+                    @click="editIncome(income)"
                   >
-                    Tahrir
+                    Tahrirlash
                   </button>
                   <button
                     v-if="canManageFinance && income.status === 'recorded'"
                     type="button"
                     class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="openVoidForm('income', income.id, $event)"
+                    @click="openVoidForm('income', income.id)"
                   >
                     Bekor qilish
                   </button>
@@ -1035,31 +1006,29 @@ onMounted(async () => {
         </div>
       </section>
 
-      <form
-        v-if="voidTarget"
-        ref="voidFormPanel"
-        class="card mt-4 grid gap-3 p-5 md:grid-cols-[1fr_auto_auto]"
-        @submit.prevent="confirmVoid"
+      <ConfirmDialog
+        :open="voidTarget !== null"
+        title="Yozuvni bekor qilish"
+        message="Bekor qilingan yozuv hisobotlarda va buyurtma to'lovlarida hisobga olinmaydi. Sababni yozing."
+        confirm-label="Bekor qilish"
+        cancel-label="Yopish"
+        busy-label="Bekor qilinmoqda"
+        danger
+        :busy="saving"
+        :confirm-disabled="voidReason.trim().length === 0"
+        @cancel="closeVoidForm"
+        @confirm="confirmVoid"
       >
-        <div class="md:col-span-3">
-          <h2 class="font-bold text-ink">Yozuvni bekor qilish</h2>
-          <p class="mt-1 text-sm text-ink-soft">{{ voidTargetLabel }}</p>
-        </div>
+        <!-- Names the record the void will hit (date · category/type · sum). -->
+        <p v-if="voidTargetLabel" class="mb-3 text-sm font-bold text-ink">{{ voidTargetLabel }}</p>
         <label class="field !mb-0">
           <span>Bekor qilish sababi</span>
           <input v-model="voidReason" class="mp-input" required />
         </label>
-        <button type="submit" class="mp-button bg-danger text-white self-end" :disabled="saving">
-          Tasdiqlash
-        </button>
-        <button type="button" class="mp-button mp-button-outline self-end" @click="closeVoidForm">
-          Yopish
-        </button>
-      </form>
-
-      <div v-if="actionError" class="banner danger mt-4">
-        <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
-      </div>
+        <p v-if="actionError" class="mt-2 text-sm font-bold text-danger">
+          {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+        </p>
+      </ConfirmDialog>
     </template>
   </section>
 </template>

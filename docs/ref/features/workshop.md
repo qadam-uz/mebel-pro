@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-06-28
+updated: 2026-07-07
 order: 40
 ---
 
@@ -76,8 +76,8 @@ Visibility for read operations:
 
 - **Branches list** (`/workshop/branches`) — simple table: name, address, phone, status badge,
   action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
-- **Branch create form** — name, address, phone, working-hours grid (per weekday open / close,
-  with a "closed this day" toggle).
+- **Branch create dialog** — modal form: name, address, phone, working-hours grid (per weekday
+  open / close, with a "closed this day" toggle).
 - **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
   working hours, pricing (entered in so'm), and status controls. It does not duplicate materials,
   stock, staff, or order management; those stay in their own sidebar sections.

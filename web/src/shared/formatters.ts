@@ -47,17 +47,37 @@ export function formatTiyinParts(value: number): { amount: string; unit: string;
   return { amount: format(som, 0), unit: "so'm", full: formatTiyin(value) }
 }
 
+// Date-only strings ("2026-07-05") parse as UTC midnight via `new Date`, which
+// shifts a calendar day for users west of Greenwich once local getters read it —
+// build a local date from the parts instead. Full ISO datetimes carry an offset
+// and parse correctly.
+function parseDateValue(value: string | Date): Date {
+  if (typeof value !== 'string') return value
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year, month - 1, day)
+  }
+  return new Date(value)
+}
+
 export function formatDate(value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value
+  const date = parseDateValue(value)
   const day = String(date.getDate()).padStart(2, '0')
   const month = String(date.getMonth() + 1).padStart(2, '0')
   return `${day}.${month}.${date.getFullYear()}`
 }
 
+export function formatDateTime(value: string | Date): string {
+  const date = parseDateValue(value)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${formatDate(date)} ${hours}:${minutes}`
+}
+
 // Calendar-relative age in Uzbek ("bugun", "kecha", "5 kun oldin", …) for
 // at-a-glance freshness; pair with the absolute date in a title attribute.
 export function formatRelativeUz(value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value
+  const date = parseDateValue(value)
   const now = new Date()
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())

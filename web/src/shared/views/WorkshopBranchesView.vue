@@ -12,6 +12,7 @@ import {
 } from '@/shared/app/adminValidation'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import AppModal from '@/shared/components/AppModal.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -130,7 +131,7 @@ onMounted(() => {
           v-if="auth.me?.is_owner"
           type="button"
           class="mp-button mp-button-primary"
-          @click="showCreate = !showCreate"
+          @click="showCreate = true"
         >
           + Yangi filial
         </button>
@@ -139,22 +140,17 @@ onMounted(() => {
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
       <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
-      <p>Filial yaratish va holatini boshqarish egaga tegishli.</p>
+      <p>Filial qo'shish va holatini boshqarish egaga tegishli.</p>
     </section>
 
     <template v-else>
-      <section v-if="showCreate" class="card mb-5 max-w-[1120px]">
-        <div class="card-h">
-          <h2>Yangi filial</h2>
-          <button
-            type="button"
-            class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-            @click="showCreate = false"
-          >
-            Bekor
-          </button>
-        </div>
-        <form class="card-b grid gap-3" novalidate @submit.prevent="createBranch">
+      <AppModal
+        :open="showCreate"
+        title="Yangi filial"
+        max-width="max-w-2xl"
+        @close="showCreate = false"
+      >
+        <form class="grid gap-3" novalidate @submit.prevent="createBranch">
           <div class="grid gap-3 md:grid-cols-2">
             <label class="field" for="branch-name">
               <span>Nom</span>
@@ -206,7 +202,7 @@ onMounted(() => {
           </label>
           <fieldset>
             <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            <div class="grid gap-2 md:grid-cols-2">
               <div
                 v-for="day in hours"
                 :key="day.key"
@@ -234,13 +230,16 @@ onMounted(() => {
             </div>
           </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">
-            <p v-if="branchError" class="text-sm font-bold text-danger">Filial yaratilmadi.</p>
+            <p v-if="branchError" class="text-sm font-bold text-danger">Filial qo'shilmadi.</p>
+            <button type="button" class="mp-button mp-button-outline" @click="showCreate = false">
+              Bekor
+            </button>
             <button type="submit" class="mp-button mp-button-primary" :disabled="creatingBranch">
-              {{ creatingBranch ? 'Yaratilmoqda' : 'Yaratish' }}
+              {{ creatingBranch ? "Qo'shilmoqda" : "Qo'shish" }}
             </button>
           </div>
         </form>
-      </section>
+      </AppModal>
 
       <section v-if="workshop.setupLoading" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
@@ -268,7 +267,7 @@ onMounted(() => {
 
       <section v-else-if="workshop.managedBranches.length === 0" class="st-empty">
         <h3>Hali filial yo'q</h3>
-        <p>Birinchi filial yaratilgach, mijozlar buyurtma beradigan manzil paydo bo'ladi.</p>
+        <p>Birinchi filial qo'shilgach, mijozlar buyurtma beradigan manzil paydo bo'ladi.</p>
       </section>
 
       <section v-else class="card">

@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-05
+updated: 2026-07-07
 order: 50
 ---
 
@@ -161,9 +161,9 @@ now-redundant branch column:
 
 - **Materials** (`manage_catalog`) — table from the master (image, kind, manufacturer,
   type/thickness, colour/decor, panel size for panels, the branch's unit price,
-  status). Filters: search, kind, manufacturer, status. **+ Material** → catalog picker
-  (kind + manufacturer + search) → per-branch form (price, min-stock). Row:
-  Edit · Show / Hide (client visibility). No Delete.
+  status). Filters: search, kind, manufacturer, status. **+ Material** → modal: searchable
+  catalog picker + the branch's price and min-stock. Row: Edit (modal) · client visibility
+  toggled by a status switch in the row itself. No Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**
   — the cutting rate (`cutting_rate_tiyin`, per panel) and the edge-banding labour rate
   (`edge_banding_rate_tiyin`, per metre, all thicknesses); it's the home future branch
@@ -179,9 +179,9 @@ now-redundant branch column:
   (signed delta + mandatory reason). **Transactions** — full log: type (`stock_in` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, order link (for consume/restore), supplier (for stock_in), actor,
-  note, date; filtered by the shared date-range picker; read-only.
+  note, date-time; filtered by the shared date-range picker; read-only.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
-  add / edit / block (reversible). Mostly reached inline from stock-in.
+  add / edit in a modal dialog · block (reversible). Mostly reached inline from stock-in.
 
 In the **client app** cutting wizard's material steps: the branch's active `panel`
 selection as a searchable grid with manufacturer / type / thickness dropdown filters (name,
