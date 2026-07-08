@@ -52,13 +52,13 @@ export const clientRoutes: RouteRecordRaw[] = [
     // Must precede the `:id` route so "new" isn't matched as a draft id.
     path: '/c/cutting/new',
     name: 'client-cutting-new',
-    component: () => import('@/shared/views/ClientCuttingEditorView.vue'),
+    component: () => import('@/shared/views/CuttingEditorView.vue'),
     meta: { title: 'Yangi kesim chizmasi' },
   },
   {
     path: '/c/cutting/:id',
     name: 'client-cutting-editor',
-    component: () => import('@/shared/views/ClientCuttingEditorView.vue'),
+    component: () => import('@/shared/views/CuttingEditorView.vue'),
     meta: { title: 'Kesim chizmasi' },
   },
   {

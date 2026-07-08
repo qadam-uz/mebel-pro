@@ -8,6 +8,7 @@ import {
   formatStockUnit,
   formatTiyin,
   parseDisplayQuantity,
+  parseSomToTiyin,
 } from '@/shared/formatters'
 
 describe('shared formatters', () => {
@@ -47,6 +48,25 @@ describe('shared formatters', () => {
     expect(formatStockUnit('panel')).toBe('panel')
     expect(formatStockUnit('pcs')).toBe('dona')
     expect(formatStockUnit('piece')).toBe('dona')
+  })
+
+  it("parses human-entered so'm amounts into tiyin across local formats", () => {
+    expect(parseSomToTiyin('12 500')).toBe(1_250_000)
+    expect(parseSomToTiyin('12.500')).toBe(1_250_000)
+    expect(parseSomToTiyin('12,500')).toBe(1_250_000)
+    expect(parseSomToTiyin('1.500.000')).toBe(150_000_000)
+    expect(parseSomToTiyin('12,5')).toBe(1_250)
+    expect(parseSomToTiyin('12.5')).toBe(1_250)
+    expect(parseSomToTiyin('340000')).toBe(34_000_000)
+  })
+
+  it("rejects unclear or non-positive so'm inputs instead of coercing to 0", () => {
+    expect(parseSomToTiyin('')).toBeNull()
+    expect(parseSomToTiyin('0')).toBeNull()
+    expect(parseSomToTiyin('abc')).toBeNull()
+    expect(parseSomToTiyin('-5')).toBeNull()
+    expect(parseSomToTiyin('12.3456')).toBeNull()
+    expect(parseSomToTiyin('1,23,45')).toBeNull()
   })
 
   it('parses display quantities back to storage units (mm for metres)', () => {

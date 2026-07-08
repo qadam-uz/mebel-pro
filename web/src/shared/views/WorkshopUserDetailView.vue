@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -10,6 +10,7 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { copyText } from '@/shared/app/clipboard'
 import { useRolePath } from '@/shared/app/paths'
 import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
@@ -44,6 +45,26 @@ const resetOpen = ref(false)
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
 const acting = ref(false)
+const copiedTempPassword = ref(false)
+let copiedResetTimer: number | undefined
+
+// Copy the freshly generated temp password to the clipboard. copyText guards
+// insecure contexts / older browsers and returns false, in which case the mono
+// value stays select-all so the owner can still copy it by hand.
+async function copyTempPassword(value: string | null) {
+  if (!value) return
+  const ok = await copyText(value)
+  if (!ok) {
+    toast.danger("Nusxalab bo'lmadi. Parolni belgilab, qo'lda nusxalang.")
+    return
+  }
+  toast.success('Parol nusxalandi.')
+  copiedTempPassword.value = true
+  window.clearTimeout(copiedResetTimer)
+  copiedResetTimer = window.setTimeout(() => {
+    copiedTempPassword.value = false
+  }, 1800)
+}
 const profileSaving = ref(false)
 const profileError = ref<string | null>(null)
 const profileTraceId = ref<string | null>(null)
@@ -290,6 +311,7 @@ watch(user, () => {
   if (user.value?.is_owner && activeTab.value === 'sessions') activeTab.value = 'profile'
 })
 onMounted(load)
+onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 </script>
 
 <template>
@@ -372,6 +394,29 @@ onMounted(load)
           >
             Faollashtirish
           </button>
+        </div>
+      </div>
+
+      <div v-if="workshop.lastTempPassword" class="banner info mt-3" role="status">
+        <div class="grow">
+          <b>Yangi vaqtinchalik parol</b>
+          <div class="mt-1.5 flex flex-wrap items-center gap-2">
+            <span
+              class="select-all rounded bg-white px-2.5 py-1 font-mono text-base font-bold text-ink"
+            >
+              {{ workshop.lastTempPassword }}
+            </span>
+            <button
+              type="button"
+              class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+              @click="copyTempPassword(workshop.lastTempPassword)"
+            >
+              {{ copiedTempPassword ? 'Nusxalandi' : 'Nusxalash' }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs">
+            Bu parol faqat 1 marta ko'rsatiladi — xodimga yetkazib qo'ying.
+          </p>
         </div>
       </div>
 
@@ -615,12 +660,6 @@ onMounted(load)
         </div>
       </section>
 
-      <div v-if="workshop.lastTempPassword" class="banner info mt-4">
-        <div class="grow">
-          <b>Yangi vaqtinchalik parol:</b>
-          <span class="font-mono">{{ workshop.lastTempPassword }}</span>
-        </div>
-      </div>
       <div v-if="actionError" class="banner danger mt-4">
         <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
       </div>

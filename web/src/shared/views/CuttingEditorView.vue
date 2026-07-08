@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
-import { MAX_PARTS, MIN_PART_MM, NO_BRANCH_CATALOG_LIMIT } from '@/shared/app/constants'
+import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import {
+  clientCuttingEditorAdapter,
+  cuttingEditorAdapterKey,
+  type CuttingEditorAdapterFactory,
+} from '@/shared/app/cuttingEditorAdapter'
 import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
@@ -25,7 +30,6 @@ import {
   useCuttingStore,
   type CuttingEdgeBand,
   type CuttingPart,
-  type MaterialSource,
 } from '@/shared/stores/cutting'
 import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
@@ -35,10 +39,24 @@ const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const clientProfile = useClientProfileStore()
 const toast = useToast()
+// Role adapter (see cuttingEditorAdapter.ts): the route carries a factory under
+// `meta.cuttingEditorAdapter`; resolve it once at mount and provide it so the
+// results section (a grandchild) can read the same link targets. No route
+// adapter → the client default, so the client app needs zero configuration.
+const adapter = (
+  (route.meta.cuttingEditorAdapter as CuttingEditorAdapterFactory | undefined) ??
+  clientCuttingEditorAdapter
+)()
+provide(cuttingEditorAdapterKey, adapter)
+// Fixed-branch mode (workshop): the branch comes from the app's current context,
+// not a picker; the walk-in identity strip shows in workshop scope.
+const fixedBranch = computed(() => adapter.branch.fixed ?? null)
+const isWorkshopScope = computed(() => cutting.scope === 'workshop')
 const draftId = computed(() => String(route.params.id))
-// Unsaved editor: opened via `/c/cutting/new`, the draft has no server id yet.
-// It's created and persisted on the first optimise (docs/ref/features/cutting.md).
-const isNewDraft = computed(() => route.name === 'client-cutting-new')
+// Unsaved editor: opened via the adapter's new-draft route, the draft has no
+// server id yet. It's created and persisted on the first optimise
+// (docs/ref/features/cutting.md).
+const isNewDraft = computed(() => route.name === adapter.newRouteName)
 // Branch pre-filter while unsaved — held locally (no draft to PATCH); seeded from
 // the client profile default for parity with a server-created draft.
 const localBranchId = ref<string | null>(null)
@@ -62,7 +80,6 @@ const optimizeRowError = ref<{
 } | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
-const showAllCatalog = ref(false)
 const clearPartsConfirmOpen = ref(false)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
@@ -87,24 +104,26 @@ const boundOrderId = computed(
 const isReadOnly = computed(() => boundOrderId.value !== null)
 // The active branch pre-filter: the local pick while unsaved, the draft's saved
 // preference otherwise. Every branch-dependent read routes through this.
-const activeBranchId = computed(() =>
-  isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null),
-)
+const activeBranchId = computed(() => {
+  // Fixed-branch mode locks every branch-dependent read to the app context.
+  if (fixedBranch.value) return fixedBranch.value.id
+  return isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null)
+})
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
 // Every row's panel picker draws from this branch-filtered catalog; the picker's
-// own search narrows further, and "Show all catalog" widens past the active branch.
+// own search narrows further. With a branch selected only its carried materials show.
 const panelOptions = computed(() =>
   cutting.panelOptions.filter((material) =>
-    activeBranchId.value && !showAllCatalog.value ? material.branch_carried : true,
+    activeBranchId.value ? material.branch_carried : true,
   ),
 )
 const panelChoices = computed<ChoiceOption[]>(() => {
   // Always keep a material a row already references in the options, even if the
-  // branch filter (or "Show all catalog" being off) would drop it — otherwise the
-  // picker shows an empty "Panel tanlang" for a row that does have a (not-carried)
-  // panel, which reads as "nothing selected" while the not-carried warning fires.
+  // branch filter would drop it — otherwise the picker shows an empty
+  // "Panel tanlang" for a row that does have a (not-carried) panel, which
+  // reads as "nothing selected" while the not-carried warning fires.
   const list = [...panelOptions.value]
   const present = new Set(list.map((material) => material.id))
   for (const part of parts.value) {
@@ -147,12 +166,16 @@ const optimizedUnchanged = computed(
 const canOptimize = computed(
   () =>
     !isReadOnly.value &&
+    // A branch is mandatory: the catalog is scoped to the chosen workshop, so
+    // there's nothing to optimise against until one is picked.
+    !!activeBranchId.value &&
     parts.value.length > 0 &&
     hasPersistableParts.value &&
     totalQuantity.value <= MAX_PARTS &&
     !optimizedUnchanged.value,
 )
 const optimizeDisabledHint = computed(() => {
+  if (!activeBranchId.value) return 'Avval ustaxona tanlang'
   if (parts.value.length === 0) return "Avval qism qo'shing"
   if (!hasPersistableParts.value) return "Qatorlardagi xatolarni to'g'rilang"
   if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
@@ -363,10 +386,6 @@ function applyBulkMaterial() {
   bulkMaterialOpen.value = false
 }
 
-function setPanelSource(part: CuttingPart, source: MaterialSource) {
-  part.material_source = source
-}
-
 function setPanel(part: CuttingPart, value: string | null) {
   part.material_id = value ?? ''
 }
@@ -414,16 +433,17 @@ function onEdgePickerApply(payload: {
   closeEdgePicker()
 }
 
-function bringOwn(part: CuttingPart) {
-  // Flip only the not-carried panel/sides to "own" — sides whose tape IS carried
-  // must stay shop-sourced so we don't silently change what the client is billed.
-  const issues = rowNotCarried(part)
-  if (issues.includes('panel')) part.material_source = 'own'
+// The client flow no longer offers "I'll bring it" — every material is
+// workshop-supplied. Legacy drafts saved with `own` parts/sides are coerced
+// back to `shop` on hydration so the not-carried warnings and pricing read
+// consistently; the next autosave persists the normalized snapshot.
+function normalizeSources(part: CuttingPart): CuttingPart {
+  const next: CuttingPart = { ...part, material_source: 'shop' }
   for (const side of edgeFields) {
-    if (issues.includes(side) && part[side]) {
-      part[side] = { ...part[side], source: 'own' } as CuttingEdgeBand
-    }
+    const band = next[side]
+    if (band && band.source !== 'shop') next[side] = { ...band, source: 'shop' }
   }
+  return next
 }
 
 // Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
@@ -527,22 +547,31 @@ async function optimize() {
 async function optimizeNewDraft() {
   try {
     // Reuse a draft from a previous failed attempt so a retry doesn't orphan a
-    // second empty draft.
+    // second empty draft. In fixed-branch (workshop) mode the store seeds the
+    // draft with the walk-in client + context branch; the client path passes no
+    // args and the backend seeds the profile default.
     if (!pendingDraftId.value) {
-      pendingDraftId.value = (await cutting.createDraft()).id
+      pendingDraftId.value = (
+        await cutting.createDraft(
+          fixedBranch.value ? { branchId: fixedBranch.value.id } : undefined,
+        )
+      ).id
     }
     const id = pendingDraftId.value
     await cutting.updateDraft(id, {
       parts_snapshot: parts.value,
       // Only send the branch when the user changed it — otherwise let the
-      // backend's profile-default seed stand (docs/ref/features/cutting.md).
-      ...(branchTouched.value ? { preferred_branch_id: localBranchId.value } : {}),
+      // backend's seed stand (profile default on the client path, the fixed
+      // context branch on the workshop path).
+      ...(branchTouched.value && !fixedBranch.value
+        ? { preferred_branch_id: localBranchId.value }
+        : {}),
     })
     await cutting.optimizeDraft(id)
     lastOptimizedSignature.value = partsSignature()
     // Hand off to the saved editor; the guard must not treat this as discarding.
     leavingAfterCreate.value = true
-    await router.replace(rolePath(`/c/cutting/${id}`))
+    await router.replace(rolePath(adapter.paths.editor(id)))
   } catch (errorValue) {
     // The parts are still in local state, so the user keeps their work and can
     // retry; the row attribution still maps because the parts are unchanged.
@@ -557,16 +586,17 @@ async function optimizeNewDraft() {
 }
 
 async function loadMaterials() {
-  // Use the active pre-filter (local pick while unsaved, draft preference
-  // otherwise) so picking a branch in the new editor scopes the catalog too.
+  // A branch is mandatory and the catalog is always scoped to it. With no branch
+  // there's nothing to show — clear the options so a stale per-branch list can't
+  // linger, and let the "pick a workshop" gate stand.
   const branchId = activeBranchId.value
-  // CB-40: cap ONLY the unbounded no-preferred-branch load so a fresh draft doesn't
-  // pull the whole catalog. A branch-scoped load stays unlimited (CB-84 filters +
-  // CB-19/86 recovery need the full per-branch list client-side).
-  const limit = branchId ? undefined : NO_BRANCH_CATALOG_LIMIT
+  if (!branchId) {
+    cutting.clearMaterials()
+    return
+  }
   await Promise.all([
-    cutting.loadMaterials({ kind: 'panel', branchId, carriedOnly: false, limit }),
-    cutting.loadMaterials({ kind: 'edge', branchId, carriedOnly: false, limit }),
+    cutting.loadMaterials({ kind: 'panel', branchId, carriedOnly: false }),
+    cutting.loadMaterials({ kind: 'edge', branchId, carriedOnly: false }),
   ])
 }
 
@@ -585,7 +615,7 @@ watch(
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
       autosave.hydrate(() => {
-        parts.value = value.parts_snapshot.map((part) => ({ ...part }))
+        parts.value = value.parts_snapshot.map((part) => normalizeSources(part))
         hydratedDraftId = value.id
       })
     }
@@ -608,11 +638,21 @@ watch(
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
   if (isNewDraft.value) {
+    // Fixed-branch mode: the branch is the app context — skip the client-only
+    // branch-options + profile-default seed and lock the pre-filter to it.
+    if (fixedBranch.value) {
+      localBranchId.value = fixedBranch.value.id
+      selectedBranchId.value = fixedBranch.value.id
+      await loadMaterials()
+      return
+    }
     // Unsaved editor: nothing to load. Populate the branch picker and seed the
     // pre-filter from the client's profile default (parity with a server draft).
     await cutting.loadBranchOptions()
-    const profile = await clientProfile.load().catch(() => null)
-    localBranchId.value = profile?.preferred_branch_id ?? null
+    if (adapter.useProfileDefaultBranch) {
+      const profile = await clientProfile.load().catch(() => null)
+      localBranchId.value = profile?.preferred_branch_id ?? null
+    }
     selectedBranchId.value = localBranchId.value
     await loadMaterials()
     return
@@ -620,7 +660,9 @@ onMounted(async () => {
   // Reuse an already-loaded draft (e.g. just optimised from the new editor) to
   // avoid a load flash; otherwise fetch it.
   if (cutting.currentDraft?.id !== draftId.value) await cutting.loadDraft(draftId.value)
-  await cutting.loadBranchOptions()
+  // Branch options power the picker; in fixed-branch mode there's no picker and
+  // no workshop branch-options endpoint, so skip the load.
+  if (!fixedBranch.value) await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
   await loadMaterials()
 })
@@ -717,7 +759,7 @@ onBeforeRouteLeave(() => {
     <template v-else-if="draft || isNewDraft">
       <RouterLink
         v-if="isReadOnly"
-        :to="rolePath(`/c/orders/${boundOrderId}`)"
+        :to="rolePath(adapter.paths.orderDetail(String(boundOrderId)))"
         class="client-banner info hover:border-accent"
       >
         <span class="grid size-6 shrink-0 place-items-center text-accent" aria-hidden="true">
@@ -730,7 +772,30 @@ onBeforeRouteLeave(() => {
       </RouterLink>
 
       <fieldset :disabled="isReadOnly" class="contents">
+        <!-- Walk-in identity strip (workshop scope only): staff always sees who
+             the order is being created for. -->
         <section
+          v-if="isWorkshopScope && cutting.walkInClient"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
+        >
+          <span
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft font-mono font-black text-accent"
+            aria-hidden="true"
+          >
+            @
+          </span>
+          <div class="min-w-0 flex-1">
+            <b class="text-ink">{{ cutting.walkInClient.name }}</b>
+            <span class="ml-2 font-mono text-xs text-ink-muted">{{
+              cutting.walkInClient.phone
+            }}</span>
+          </div>
+        </section>
+
+        <!-- Fixed-branch mode: a locked label, no picker (the branch is the app
+             context and can't change mid-draft). -->
+        <section
+          v-if="fixedBranch"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
@@ -740,61 +805,59 @@ onBeforeRouteLeave(() => {
             i
           </span>
           <div class="min-w-0 flex-1">
-            <b class="text-ink">
-              {{
-                preferredBranch
-                  ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
-                  : 'barcha ustaxonalar'
-              }}
-            </b>
+            <b class="text-ink">{{ fixedBranch.name }}</b>
           </div>
-          <button
-            type="button"
-            class="mp-button mp-button-outline"
-            @click="branchPickerOpen = true"
-          >
-            {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
-          </button>
-          <button
-            v-if="preferredBranch"
-            type="button"
-            class="mp-button mp-button-outline"
-            @click="setPreferredBranch(null)"
-          >
-            Tozalash
-          </button>
-          <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
-            Filial tanlanmagani uchun faqat dastlabki {{ NO_BRANCH_CATALOG_LIMIT }} ta material
-            ko'rsatilmoqda — to'liq katalog uchun ustaxona tanlang.
-          </p>
-          <!-- The "Show all catalog" toggle only changes anything once a branch
-               pre-filters the catalog (see the material filter), so it lives with
-               the branch context and appears only when a branch is selected. -->
-          <label
-            v-if="preferredBranch"
-            class="inline-flex min-h-9 basis-full items-center gap-2 text-sm font-semibold text-ink-soft"
-          >
-            <input v-model="showAllCatalog" type="checkbox" class="size-4" />
-            Barcha katalogni ko'rsatish
-          </label>
         </section>
 
-        <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
-          <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
-          <div class="flex flex-wrap justify-end gap-2">
-            <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
-              Bekor qilish
-            </button>
+        <template v-else>
+          <section
+            class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
+          >
+            <span
+              class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
+              aria-hidden="true"
+            >
+              i
+            </span>
+            <div class="min-w-0 flex-1">
+              <b class="text-ink">
+                {{
+                  preferredBranch
+                    ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+                    : 'Ustaxona tanlanmagan'
+                }}
+              </b>
+            </div>
             <button
               type="button"
-              class="mp-button mp-button-primary"
-              :disabled="!selectedBranchId"
-              @click="setPreferredBranch(selectedBranchId)"
+              class="mp-button mp-button-outline"
+              @click="branchPickerOpen = true"
             >
-              Qo'llash
+              {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
             </button>
-          </div>
-        </section>
+            <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
+              Kesish ro'yxati tanlangan ustaxona katalogi asosida tuziladi — davom etish uchun
+              ustaxona tanlang.
+            </p>
+          </section>
+
+          <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
+            <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
+            <div class="flex flex-wrap justify-end gap-2">
+              <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                class="mp-button mp-button-primary"
+                :disabled="!selectedBranchId"
+                @click="setPreferredBranch(selectedBranchId)"
+              >
+                Qo'llash
+              </button>
+            </div>
+          </section>
+        </template>
 
         <section class="client-card">
           <div class="client-card-h">
@@ -804,33 +867,17 @@ onBeforeRouteLeave(() => {
                 {{ parts.length }} qator · {{ totalQuantity }} dona
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
-                <button
-                  type="button"
-                  class="rounded-md bg-elevated px-3 py-2 text-sm font-bold text-ink shadow-sm"
-                >
-                  Qo'lda
-                </button>
-                <button
-                  type="button"
-                  class="rounded-md px-3 py-2 text-sm font-bold text-ink-muted"
-                  disabled
-                >
-                  Fayldan
-                  <span class="ml-1 rounded-full bg-hairline px-2 py-0.5 text-[10px]"
-                    >tez kunda</span
-                  >
-                </button>
-              </div>
-            </div>
           </div>
 
+          <!-- Bulk bar: actions only — the row checkboxes already show what's
+               selected, so a "N selected" counter would repeat them; the count
+               still reads out via the group label and the bulk-dialog titles. -->
           <div
             v-if="selectedParts.length > 0"
+            role="group"
+            :aria-label="`${selectedParts.length} qism tanlandi — guruh amallari`"
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
-            <span class="text-accent">{{ selectedParts.length }} qism tanlandi</span>
             <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
               Krom qo'llash
             </button>
@@ -849,7 +896,25 @@ onBeforeRouteLeave(() => {
             </button>
           </div>
 
-          <div v-if="parts.length === 0" class="client-card-b">
+          <div v-if="!activeBranchId" class="client-card-b">
+            <div class="client-empty">
+              <div class="client-empty-icon"><Icon name="store" /></div>
+              <h3>Avval ustaxona tanlang</h3>
+              <p>
+                Qism qo'shish uchun kesish qaysi ustaxonada bajarilishini tanlang — katalog o'sha
+                ustaxona materiallaridan tuziladi.
+              </p>
+              <button
+                type="button"
+                class="mp-button mp-button-primary mt-4"
+                @click="branchPickerOpen = true"
+              >
+                Ustaxona tanlash
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="plus" /></div>
               <h3>Bu chizmada qism yo'q</h3>
@@ -904,10 +969,8 @@ onBeforeRouteLeave(() => {
               @update:width="part.width_mm = $event"
               @update:quantity="part.quantity = $event"
               @update:material="setPanel(part, $event)"
-              @update:source="setPanelSource(part, $event)"
               @delete="deleteRow(index)"
               @open-edge-picker="openEdgePicker(part, $event)"
-              @bring-own="bringOwn(part)"
             />
             <!-- Add the next row where it appears: a dashed tile under the last
                  row, echoing the empty-state CTA. Replaces the header button so
@@ -920,6 +983,10 @@ onBeforeRouteLeave(() => {
               <Icon name="plus" class="size-4" />
               Qism qo'shish
             </button>
+            <!-- The upcoming file import is a quiet one-liner here (where import
+                 would act), not a disabled header mode switch — dead controls
+                 shouldn't take prime header space (docs/ref/features/cutting.md). -->
+            <p class="text-center text-xs text-ink-muted">Tez kunda: .bas / .xlsx fayldan import</p>
           </div>
 
           <div
@@ -979,6 +1046,7 @@ onBeforeRouteLeave(() => {
         v-if="draft && (draft.results.length > 0 || optimizeError)"
         :draft="draft"
         :optimize-error="optimizeError"
+        :checkout-path="adapter.paths.checkout(draft.id)"
         v-model:active-result-id="activeResultId"
         v-model:active-panel-id="activePanelId"
       />

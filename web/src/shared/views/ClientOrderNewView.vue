@@ -345,8 +345,7 @@ onMounted(async () => {
               <p>
                 Bu materiallarni hozir hech qaysi faol ustaxona tashimaydi:
                 <b class="text-ink">{{ draftMaterialNames.join(' · ') }}</b
-                >. Chizmaga qaytib ushbu qismlarni "O'zim olib kelaman"ga aylantiring yoki boshqa
-                material tanlang.
+                >. Chizmaga qaytib boshqa material tanlang.
               </p>
               <RouterLink
                 :to="rolePath(`/c/cutting/${draftId}`)"

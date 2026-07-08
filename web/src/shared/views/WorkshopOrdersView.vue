@@ -40,6 +40,17 @@ const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
+// "+ Yangi buyurtma" is enabled only when the staffer can place orders on the
+// CURRENT topbar branch and that branch is open — the flow is fixed to it.
+const currentBranch = computed(() =>
+  workshop.branches.find((item) => item.id === workshop.selectedBranchContext),
+)
+const canCreateWalkIn = computed(
+  () =>
+    !!currentBranch.value &&
+    currentBranch.value.status === 'active' &&
+    permissions.canOnBranch(p.manageOrders, currentBranch.value.id),
+)
 const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
@@ -389,7 +400,7 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
     return {
       title: 'Buyurtmani qaytarish',
       message: `${order.order_number} ${target} qaytadi. Sababni yozing.`,
-      confirmLabel: 'Qaytarish',
+      confirmLabel: 'Ha, qaytarilsin',
       danger: true,
     }
   }
@@ -426,7 +437,9 @@ function startListAction(action: WorkshopOrderListAction, order: OrderSummary) {
   }
   const reason = reasonConfig(action, order)
   if (reason) {
-    reasonDraft.value = action.kind === 'revert' ? 'Ishlab chiqarish tuzatishi' : ''
+    // Start the reason blank so a destructive confirm isn't armed the instant the
+    // dialog opens — the required-reason guard keeps confirm disabled until typed.
+    reasonDraft.value = ''
     pendingReasonAction.value = { action, order, ...reason }
   }
 }
@@ -612,6 +625,22 @@ onBeforeUnmount(() => {
         <p class="sub">Buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
+        <RouterLink
+          v-if="canCreateWalkIn"
+          :to="rolePath('/workshop/orders/new')"
+          class="mp-button mp-button-primary min-h-11 px-3 text-xs"
+        >
+          + Yangi buyurtma
+        </RouterLink>
+        <button
+          v-else
+          class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+          type="button"
+          disabled
+          title="Yangi buyurtma yaratish uchun tegishli filialni tanlang (buyurtma boshqaruvi ruxsati bilan)"
+        >
+          + Yangi buyurtma
+        </button>
         <div class="flex gap-1" role="group" aria-label="Ko'rinish">
           <button
             class="mp-button min-h-11 px-3 text-xs"
@@ -696,9 +725,24 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-else-if="orders.error && orders.workshopOrders.length === 0" class="st-error">
+    <section
+      v-else-if="orders.error && orders.workshopOrders.length === 0"
+      class="st-error"
+      role="alert"
+    >
       <h3>Buyurtmalarni yuklab bo'lmadi</h3>
-      <p>trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="orders.loading"
+        @click="refresh"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="orders.traceId" class="mt-3 text-xs text-ink-muted">
+        trace_id: {{ orders.traceId }}
+      </p>
     </section>
 
     <section v-else-if="workshop.branches.length === 0" class="st-empty">
@@ -1020,7 +1064,7 @@ onBeforeUnmount(() => {
       :title="pendingReasonAction?.title ?? ''"
       :message="pendingReasonAction?.message ?? ''"
       :confirm-label="pendingReasonAction?.confirmLabel ?? 'Tasdiqlash'"
-      cancel-label="Orqaga"
+      cancel-label="Yopish"
       :danger="pendingReasonAction?.danger ?? false"
       :busy="orders.actionLoading"
       :confirm-disabled="reasonDraft.trim().length === 0"

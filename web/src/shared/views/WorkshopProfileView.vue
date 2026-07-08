@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { formatDate } from '@/shared/formatters'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useSessions } from '@/shared/composables/useSessions'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -13,8 +14,16 @@ const config = useRoleConfig()
 const auth = useAuthStore()
 const toast = useToast()
 const workshop = useWorkshopStore()
-const { sessions, loadSessions, deviceLabel, revokeRow, logoutCurrent, logoutEverywhere } =
-  useSessions()
+const {
+  sessions,
+  logoutCurrentOpen,
+  logoutEverywhereOpen,
+  loadSessions,
+  deviceLabel,
+  revokeRow,
+  logoutCurrent,
+  logoutEverywhere,
+} = useSessions()
 
 const workshopProfileTab = ref<'profile' | 'password' | 'sessions'>('profile')
 const currentPassword = ref('')
@@ -91,7 +100,11 @@ onMounted(async () => {
         <h1>Mening profilim</h1>
         <p class="sub">{{ workshopProfileSubtitle }}</p>
       </div>
-      <button type="button" class="mp-button mp-button-outline text-danger" @click="logoutCurrent">
+      <button
+        type="button"
+        class="mp-button mp-button-outline text-danger"
+        @click="logoutCurrentOpen = true"
+      >
         Chiqib ketish
       </button>
     </div>
@@ -267,7 +280,7 @@ onMounted(async () => {
         <button
           type="button"
           class="mp-button mp-button-outline min-h-9 px-3 text-xs text-danger"
-          @click="logoutEverywhere"
+          @click="logoutEverywhereOpen = true"
         >
           Hammasi yopilsin
         </button>
@@ -305,5 +318,26 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <ConfirmDialog
+      :open="logoutCurrentOpen"
+      title="Chiqib ketish"
+      message="Ustaxona kabinetidan chiqasiz."
+      confirm-label="Chiqish"
+      cancel-label="Bekor qilish"
+      danger
+      @cancel="logoutCurrentOpen = false"
+      @confirm="logoutCurrent"
+    />
+    <ConfirmDialog
+      :open="logoutEverywhereOpen"
+      title="Hammasi chiqsin"
+      message="Barcha qurilmalardan chiqasiz."
+      confirm-label="Hammasini chiqarish"
+      cancel-label="Bekor qilish"
+      danger
+      @cancel="logoutEverywhereOpen = false"
+      @confirm="logoutEverywhere"
+    />
   </section>
 </template>

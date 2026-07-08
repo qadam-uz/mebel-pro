@@ -28,8 +28,10 @@ from app.modules.sales.api import (
     list_workshop_orders,
     mark_collected,
     place_client_order,
+    place_workshop_order,
     quote_client_order,
     quote_client_order_batch,
+    quote_workshop_order,
     revert_order,
     update_workshop_note,
 )
@@ -44,6 +46,7 @@ from app.modules.sales.schemas import (
     VersionedRequest,
     WorkshopOrderAssignRequest,
     WorkshopOrderCompleteRequest,
+    WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
     WorkshopOrderNoteRequest,
     WorkshopWorkerOption,
@@ -262,6 +265,36 @@ async def workshop_order_workers(
     db: Session,
 ) -> list[WorkshopWorkerOption]:
     return await list_worker_options(db, principal=principal, branch_id=branch_id)
+
+
+# Staff create + quote for walk-in orders. Declared BEFORE `/{order_id}` so the
+# literal `quote` segment isn't captured as an order id.
+@router.get("/workshop/orders/quote", response_model=OrderQuoteResponse)
+async def workshop_orders_quote(
+    draft_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderQuoteResponse:
+    return await quote_workshop_order(
+        db,
+        principal=principal,
+        draft_id=draft_id,
+        branch_id=branch_id,
+    )
+
+
+@router.post(
+    "/workshop/orders",
+    response_model=OrderDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def workshop_orders_create(
+    payload: WorkshopOrderCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await place_workshop_order(db, principal=principal, payload=payload)
 
 
 @router.get("/workshop/orders/{order_id}", response_model=OrderDetailResponse)

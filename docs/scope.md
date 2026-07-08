@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-06-07
+updated: 2026-07-08
 order: 20
 ---
 
@@ -18,8 +18,9 @@ that's a considered substitution.
 ## In scope
 
 - **Identity & access** — platform operators provision workshops; owners manage staff with
-  per-branch permissions; clients self-register with phone + Telegram OTP. Tenant-isolated,
-  revocable, brute-force-protected.
+  per-branch permissions; clients self-register with phone + Telegram OTP (walk-ins may be
+  registered at the counter by workshop staff). Tenant-isolated, revocable,
+  brute-force-protected.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
@@ -29,10 +30,11 @@ that's a considered substitution.
   in one request; the platform returns the best result and **names the winning algorithm**.
   Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a
   print-ready cutting map.
-- **Orders** — client-placed orders from a finalized cutting result, with **frozen pricing**
-  and a small production workflow (verify → cut → band → ready → collected, pickup-only),
-  one-step operator revert, and reasoned cancellation. The order tracks production only — it
-  moves no money and holds no stock.
+- **Orders** — orders from a finalized cutting result — placed by the client, or by workshop
+  staff on behalf of a walk-in client — with **frozen pricing** and a small production workflow
+  (verify → cut → band → ready → collected, pickup-only), one-step operator revert, and
+  reasoned cancellation. The order tracks production only — it moves no money and holds no
+  stock.
 - **Finance & accounting** — a workshop money ledger: income (incl. order payments) and
   expenses (incl. staff salary) recorded by hand, worker-production reports the accountant
   uses to compute pay, and revenue / expense / net reporting by branch and period — enough
@@ -54,7 +56,6 @@ that's a considered substitution.
   fixed-fee zones, driver flow, distance-based pricing, the `process_delivery` grant) is
   designed but gated out of v1.
 - **Delegating workshop-wide controls to non-owner staff** — owner-only in v1.
-- **Operator-created orders** — orders are always client-placed.
 - **Inter-branch stock transfers** — each branch's stock is independent in v1 (arrivals and
   adjustments only); there is no branch-to-branch transfer. Moving material is booked by hand
   as an adjustment at each branch if it ever needs to happen.

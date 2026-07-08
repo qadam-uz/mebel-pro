@@ -57,6 +57,31 @@ def can_access_branch(
     return PermissionGrantKey(permission=permission, branch_id=branch_id) in principal.grants
 
 
+def require_manage_orders_workshop(principal: AuthenticatedPrincipal) -> uuid.UUID:
+    """Require a workshop principal holding ``manage_orders`` on ≥1 branch;
+    return their workshop id. Owner bypass applies (an owner holds every
+    permission on every branch). Used to gate workshop-scoped surfaces (walk-in
+    client resolve, staff cutting drafts) where no single branch is fixed yet.
+    """
+    if (
+        principal.principal_type is not AuthenticatedPrincipalType.WORKSHOP_USER
+        or principal.workshop_id is None
+    ):
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    workshop_id = principal.workshop_id
+    if principal.is_owner or any(
+        can_access_branch(
+            principal,
+            workshop_id=workshop_id,
+            branch_id=grant.branch_id,
+            permission=Permission.MANAGE_ORDERS,
+        )
+        for grant in principal.grants
+    ):
+        return workshop_id
+    raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+
+
 async def resolve_branch_scope(
     db: AsyncSession,
     principal: AuthenticatedPrincipal,

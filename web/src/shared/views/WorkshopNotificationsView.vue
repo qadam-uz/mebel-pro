@@ -2,11 +2,17 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import {
+  notificationBody,
+  notificationIconName,
+  notificationTitle,
+} from '@/shared/app/notificationPresenter'
 import { useRolePath } from '@/shared/app/paths'
 import {
   workshopNotificationDestination,
   workshopNotificationMatchesFilter,
 } from '@/shared/app/workshopNotifications'
+import Icon from '@/shared/components/AppIcon.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
@@ -30,15 +36,14 @@ const filtered = computed(() =>
   notifications.items.filter((item) => workshopNotificationMatchesFilter(item, filter.value)),
 )
 
+// Render through the same shared presenter as the bell menu (CB-101) so the
+// full page never falls back to raw event codes / entity types.
 function title(item: NotificationItem) {
-  const summary = item.payload.summary
-  if (typeof summary === 'string' && summary.trim()) return summary
-  return item.event_code
+  return notificationTitle(item, 'workshop')
 }
 
 function body(item: NotificationItem) {
-  const detail = item.payload.detail ?? item.payload.body ?? item.payload.branch_name
-  return typeof detail === 'string' ? detail : (item.entity_type ?? 'system')
+  return notificationBody(item)
 }
 
 function destination(item: NotificationItem) {
@@ -54,11 +59,7 @@ async function openItem(item: NotificationItem) {
   if (item.read_at === null) {
     await notifications.markRead(item.id)
     if (notifications.actionError) {
-      toast.danger(
-        `Bildirishnomani o'qilgan deb belgilab bo'lmadi · trace_id: ${
-          notifications.traceId ?? 'unavailable'
-        }`,
-      )
+      toast.danger("Bildirishnomani o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     }
   }
   await router.push(rolePath(to))
@@ -67,11 +68,7 @@ async function openItem(item: NotificationItem) {
 async function markAll() {
   await notifications.markAllRead()
   if (notifications.actionError) {
-    toast.danger(
-      `Hammasini o'qilgan deb belgilab bo'lmadi · trace_id: ${
-        notifications.traceId ?? 'unavailable'
-      }`,
-    )
+    toast.danger("Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.")
     return
   }
   await notifications.loadList(50)
@@ -90,7 +87,12 @@ onMounted(() => {
         <h1>Bildirishnomalar</h1>
       </div>
       <div class="tools">
-        <button class="mp-button mp-button-outline" type="button" @click="markAll">
+        <button
+          class="mp-button mp-button-outline"
+          type="button"
+          :disabled="notifications.unread === 0"
+          @click="markAll"
+        >
           Hammasini o'qilgan deb belgilash
         </button>
       </div>
@@ -100,23 +102,25 @@ onMounted(() => {
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" top-label />
     </div>
 
-    <div v-if="notifications.actionError" class="banner danger mb-4 max-w-[800px]">
-      <div class="grow">
-        Amal bajarilmadi · trace_id: {{ notifications.traceId ?? 'unavailable' }}
-      </div>
-    </div>
-
     <div v-if="notifications.loading" class="card max-w-[800px] p-5" aria-live="polite">
       <span class="sk-line"></span>
       <span class="sk-line mt-3"></span>
       <span class="sk-line mt-3"></span>
     </div>
 
-    <div v-else-if="notifications.error" class="st-error max-w-[800px]">
+    <div v-else-if="notifications.error" class="st-error max-w-[800px]" role="alert">
       <h3>Bildirishnomalarni yuklab bo'lmadi</h3>
-      <p>
-        Asosiy ma'lumotlar tegishli sahifalarda baribir mavjud. trace_id:
-        {{ notifications.traceId ?? 'unavailable' }}
+      <p>Internet aloqasini tekshirib, qayta urinib ko'ring.</p>
+      <button
+        type="button"
+        class="mp-button mp-button-outline mt-4 min-h-11 px-4"
+        :disabled="notifications.loading"
+        @click="notifications.loadList(50)"
+      >
+        Qayta urinish
+      </button>
+      <p v-if="notifications.traceId" class="mt-3 text-xs text-ink-muted">
+        trace_id: {{ notifications.traceId }}
       </p>
     </div>
 
@@ -130,28 +134,21 @@ onMounted(() => {
         v-for="item in filtered"
         :key="item.id"
         type="button"
-        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-hairline bg-elevated p-4 text-left transition hover:border-ink"
-        :class="{ 'bg-accent-soft': item.read_at === null }"
+        class="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-hairline p-4 text-left transition hover:border-ink"
+        :class="item.read_at === null ? 'bg-accent-soft' : 'bg-elevated'"
         @click="openItem(item)"
       >
         <span
-          class="grid size-10 place-items-center rounded-lg font-serif font-bold text-white"
-          :class="
-            item.entity_type === 'order'
-              ? 'bg-accent'
-              : item.event_code.includes('stock')
-                ? 'bg-warning'
-                : item.event_code.includes('finance')
-                  ? 'bg-success'
-                  : 'bg-ink-soft'
-          "
+          class="client-notif-icon grid size-10 place-items-center rounded-lg bg-sunk text-ink-soft"
           aria-hidden="true"
         >
-          {{ (item.entity_type ?? item.event_code).slice(0, 1).toUpperCase() }}
+          <Icon :name="notificationIconName(item)" />
         </span>
         <span class="min-w-0">
           <span class="block truncate text-sm font-extrabold text-ink">{{ title(item) }}</span>
-          <span class="mt-1 block truncate text-xs text-ink-soft">{{ body(item) }}</span>
+          <span v-if="body(item)" class="mt-1 block truncate text-xs text-ink-soft">
+            {{ body(item) }}
+          </span>
         </span>
         <span class="font-mono text-[11px] text-ink-muted">{{ formatDate(item.created_at) }}</span>
       </button>

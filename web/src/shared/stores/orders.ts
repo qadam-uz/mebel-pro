@@ -118,6 +118,17 @@ export interface WorkshopWorkerOption {
   home_branch_id: string
 }
 
+// Walk-in order placed by staff on the client's behalf: same shape as the
+// client create, plus the explicit draft/branch pair the checkout quoted.
+export interface WorkshopOrderCreatePayload {
+  draft_id: string
+  branch_id: string
+  contact_name: string
+  contact_phone: string
+  // Matches the backend field so a staff note isn't silently dropped.
+  note_client?: string | null
+}
+
 export interface WorkshopOrderFilters {
   branch_id?: string | null
   status?: string
@@ -239,6 +250,15 @@ export const useOrdersStore = defineStore('orders', () => {
     )
   }
 
+  // Workshop mirror of quoteForDraft for the walk-in checkout — the branch is
+  // fixed there, so no batch variant is needed.
+  async function quoteWorkshopBranch(draftId: string, branchId: string) {
+    return await api.get<OrderQuote>(
+      withQuery('/workshop/orders/quote', { draft_id: draftId, branch_id: branchId }),
+      authInit(),
+    )
+  }
+
   // Quote a draft against many branches in backend-sized batches — the API
   // returns each branch's own quote or error code (branch_does_not_carry_*,
   // branch_closed, missing_*_rate), so the view can still name each failure
@@ -301,6 +321,21 @@ export const useOrdersStore = defineStore('orders', () => {
       const order = await api.post<OrderDetail>('/client/orders', payload, authInit())
       currentOrder.value = order
       clientOrders.value = [order, ...clientOrders.value.filter((item) => item.id !== order.id)]
+      return order
+    } finally {
+      actionLoading.value = false
+    }
+  }
+
+  // Workshop walk-in order creation (mirrors createClientOrder): the order
+  // lands `confirmed` server-side and joins the workshop list like any other
+  // workshop mutation. Errors propagate to the checkout view.
+  async function createWorkshopOrder(payload: WorkshopOrderCreatePayload) {
+    actionLoading.value = true
+    try {
+      const order = await api.post<OrderDetail>('/workshop/orders', payload, authInit())
+      currentOrder.value = order
+      patchWorkshopOrder(order)
       return order
     } finally {
       actionLoading.value = false
@@ -601,8 +636,10 @@ export const useOrdersStore = defineStore('orders', () => {
     downloadError,
     downloadTraceId,
     quoteForDraft,
+    quoteWorkshopBranch,
     quoteBranches,
     createClientOrder,
+    createWorkshopOrder,
     ordersHasMore,
     loadClientOrders,
     loadClientOrder,

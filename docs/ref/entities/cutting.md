@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-06-07
+updated: 2026-07-08
 order: 40
 ---
 
@@ -16,25 +16,30 @@ algorithm). Drafts are mutable while the client iterates; results are immutable.
 
 The client's editable workspace for one set of parts. Holds the parts list, the most recent
 optimisation run's results (one per algorithm — see below), the client's chosen result, and
-an optional intended-branch pre-filter. Private to the client. Persists indefinitely (no
-expiry); a client may have at most 50 drafts open at once.
+the branch the cutting is scoped to. Private to the client — or, when minted by workshop
+staff for a walk-in, to that workshop's staff until the order is placed. Persists
+indefinitely (no expiry); a client may have at most 50 self-made drafts open at once.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
 | `client_id` | UUID | the client who owns it |
-| `preferred_branch_id` | UUID? | optional — when set, the material picker is pre-filtered to this branch's selection; the order step defaults to it. Seeded from the client's `preferred_branch_id` on draft create; the client can clear or change it on the draft without affecting the profile default. Never enforces destructively (rows referencing materials this branch doesn't carry stay editable with inline recovery affordances — see [`cutting.md`](../features/cutting.md)). |
+| `created_via_workshop_id` | UUID? | null for a client self-made draft. Set to the minting workshop when staff created the draft for a walk-in ([`cutting.md`](../features/cutting.md#access)): staff access is scoped by it (workshop-wide), the draft is hidden from the client until the order is placed, and it is excluded from the 50-draft cap. On such a draft `preferred_branch_id` is the staff flow's fixed branch, frozen at creation. |
+| `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively (rows referencing materials the branch doesn't carry stay editable with inline recovery affordances). |
 | `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id` (a `panel`), `material_source` (`shop` / `own`), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <edge-material>, "source": "shop" \| "own" }`. Grain is derived from the panel material (not stored on the part); edge thickness/colour are derived from each side's edge material. |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |
 
-Invariants: created by a client, owned by them, never shared; `parts_snapshot` has 1..100
+Invariants: owned by the client (`client_id`) whether self-made (`created_via_workshop_id`
+null) or staff-minted for a walk-in (set); never visible beyond the access rules in
+[`cutting.md`](../features/cutting.md#access); `parts_snapshot` has 1..100
 parts; every referenced `material_id` is a `panel`-kind material; every side's `edge_*` (when
 non-null) references an `edge`-kind material; on each optimise the previous run's results
 are replaced and `chosen_result_id` re-points (defaulting to the lowest-waste algorithm); a
 draft has at most one `chosen` at a time; on order placement the chosen result transitions
 to `confirmed` (bound to the order) and the draft + the unchosen results are deleted;
-deletable by the client at any time (cascades to results, panels, placements).
+a self-made draft is deletable by the client at any time, a staff-minted one by the minting
+workshop's staff (cascades to results, panels, placements).
 
 ## Cutting result
 

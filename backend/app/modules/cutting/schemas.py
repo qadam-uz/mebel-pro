@@ -38,6 +38,14 @@ class CuttingChooseResultRequest(BaseModel):
     result_id: uuid.UUID
 
 
+class WorkshopCuttingDraftCreateRequest(BaseModel):
+    """Staff opening a draft for a walk-in client at a fixed branch (both
+    resolved before the editor: the client by phone, the branch from context)."""
+
+    client_id: uuid.UUID
+    branch_id: uuid.UUID
+
+
 class CuttingPlacementResponse(APIModel):
     id: uuid.UUID
     part_ref: str

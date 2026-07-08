@@ -27,6 +27,9 @@ const props = defineProps<{
   optimizeError: string | null
   activeResultId: string | null
   activePanelId: string | null
+  // Role-specific "place order" target (client vs workshop checkout), injected
+  // by the editor from its adapter so this presentational component stays dumb.
+  checkoutPath: string
 }>()
 const emit = defineEmits<{
   'update:activeResultId': [string | null]
@@ -321,7 +324,7 @@ async function choose(result: CuttingResult) {
       <aside class="space-y-4">
         <RouterLink
           v-if="draft.chosen_result_id"
-          :to="rolePath(`/c/orders/new/${draft.id}`)"
+          :to="rolePath(props.checkoutPath)"
           class="mp-button mp-button-primary w-full"
         >
           Buyurtma berish
@@ -353,9 +356,6 @@ async function choose(result: CuttingResult) {
                 <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
               </li>
             </ul>
-            <p class="mt-2 text-xs text-ink-muted">
-              Ustaxona {{ metres(consumedShop) }} · O'zim {{ metres(consumedOwn) }}
-            </p>
           </template>
           <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
         </div>

@@ -65,6 +65,7 @@ from app.modules.sales.schemas import (
     VersionedRequest,
     WorkshopOrderAssignRequest,
     WorkshopOrderCompleteRequest,
+    WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
     WorkshopOrderNoteRequest,
     WorkshopWorkerOption,
@@ -183,36 +184,7 @@ async def place_client_order(
     db.add(order)
     await db.flush()
 
-    for priced in pricing.priced_parts:
-        quantity = int(priced.part["quantity"])
-        # The per-part panel cost is divided into an integer per-unit price; the line
-        # total must be derived from that same (floored) unit price, not the raw
-        # panel_price_tiyin, or it breaks ck_order_items_line_total_formula
-        # (line_total = (unit_cutting + unit_material) * quantity + edge_cost) whenever
-        # panel_price_tiyin isn't divisible by quantity. The order's authoritative
-        # subtotals/total stay exact (computed in _price_result); only the per-line
-        # material display rounds down by up to quantity-1 tiyin.
-        unit_material_price = priced.panel_price_tiyin // quantity
-        db.add(
-            OrderItem(
-                order_id=order.id,
-                material_id=uuid.UUID(str(priced.part["material_id"])),
-                material_source=MaterialSource(str(priced.part["material_source"])),
-                material_snapshot=priced.material_snapshot,
-                part_ref=str(priced.part["part_ref"]),
-                length_mm=int(priced.part["length_mm"]),
-                width_mm=int(priced.part["width_mm"]),
-                quantity=quantity,
-                edge_top=priced.edge_snapshots["edge_top"],
-                edge_bottom=priced.edge_snapshots["edge_bottom"],
-                edge_left=priced.edge_snapshots["edge_left"],
-                edge_right=priced.edge_snapshots["edge_right"],
-                unit_cutting_price_tiyin=0,
-                unit_material_price_tiyin=unit_material_price,
-                edge_cost_tiyin=priced.edge_cost_tiyin,
-                line_total_tiyin=unit_material_price * quantity + priced.edge_cost_tiyin,
-            )
-        )
+    _add_order_items(db, order=order, pricing=pricing)
 
     result.status = CuttingResultStatus.CONFIRMED
     result.order_id = order.id
@@ -260,6 +232,47 @@ async def place_client_order(
     )
 
 
+def _add_order_items(
+    db: AsyncSession,
+    *,
+    order: Order,
+    pricing: PricingSnapshot,
+) -> None:
+    """Append one OrderItem per priced part. Shared by the client and workshop
+    create paths so the line-total formula (ck_order_items_line_total_formula)
+    stays in one place."""
+    for priced in pricing.priced_parts:
+        quantity = int(priced.part["quantity"])
+        # The per-part panel cost is divided into an integer per-unit price; the line
+        # total must be derived from that same (floored) unit price, not the raw
+        # panel_price_tiyin, or it breaks ck_order_items_line_total_formula
+        # (line_total = (unit_cutting + unit_material) * quantity + edge_cost) whenever
+        # panel_price_tiyin isn't divisible by quantity. The order's authoritative
+        # subtotals/total stay exact (computed in _price_result); only the per-line
+        # material display rounds down by up to quantity-1 tiyin.
+        unit_material_price = priced.panel_price_tiyin // quantity
+        db.add(
+            OrderItem(
+                order_id=order.id,
+                material_id=uuid.UUID(str(priced.part["material_id"])),
+                material_source=MaterialSource(str(priced.part["material_source"])),
+                material_snapshot=priced.material_snapshot,
+                part_ref=str(priced.part["part_ref"]),
+                length_mm=int(priced.part["length_mm"]),
+                width_mm=int(priced.part["width_mm"]),
+                quantity=quantity,
+                edge_top=priced.edge_snapshots["edge_top"],
+                edge_bottom=priced.edge_snapshots["edge_bottom"],
+                edge_left=priced.edge_snapshots["edge_left"],
+                edge_right=priced.edge_snapshots["edge_right"],
+                unit_cutting_price_tiyin=0,
+                unit_material_price_tiyin=unit_material_price,
+                edge_cost_tiyin=priced.edge_cost_tiyin,
+                line_total_tiyin=unit_material_price * quantity + priced.edge_cost_tiyin,
+            )
+        )
+
+
 async def quote_client_order(
     db: AsyncSession,
     *,
@@ -276,6 +289,166 @@ async def quote_client_order(
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     return _build_quote_response(draft_id, branch, pricing)
+
+
+async def _workshop_order_branch(
+    db: AsyncSession,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> tuple[Branch, Workshop]:
+    """Active branch of the principal's OWN workshop that they may place orders
+    on (manage_orders on that branch; owner bypass via can_access_branch)."""
+    _require_workshop(principal)
+    branch, workshop = await _active_branch_for_order(db, branch_id)
+    if workshop.id != principal.workshop_id or not can_access_branch(
+        principal,
+        workshop_id=workshop.id,
+        branch_id=branch.id,
+        permission=Permission.MANAGE_ORDERS,
+    ):
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    return branch, workshop
+
+
+async def _workshop_orderable_draft_result(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    draft_id: uuid.UUID,
+) -> tuple[CuttingDraft, CuttingResult]:
+    """Draft-scope guard for the workshop path: the draft must have been minted
+    via THIS workshop (created_via_workshop_id), else 404 — mirrors the client
+    path's ownership check, which lives here (not the route) for both surfaces."""
+    draft = await db.get(CuttingDraft, draft_id)
+    if draft is None or draft.created_via_workshop_id != workshop_id:
+        raise APIError("cutting_result_not_usable", "Cutting result is not usable", status_code=404)
+    if draft.chosen_result_id is None:
+        raise APIError("cutting_result_not_usable", "Choose a cutting result first")
+    result = await db.get(CuttingResult, draft.chosen_result_id)
+    if (
+        result is None
+        or result.draft_id != draft.id
+        or result.status is not CuttingResultStatus.CANDIDATE
+    ):
+        raise APIError("cutting_result_not_usable", "Cutting result is not usable")
+    return draft, result
+
+
+async def quote_workshop_order(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    draft_id: uuid.UUID,
+    branch_id: uuid.UUID,
+) -> OrderQuoteResponse:
+    branch, workshop = await _workshop_order_branch(db, principal, branch_id)
+    _, result = await _workshop_orderable_draft_result(
+        db,
+        workshop_id=workshop.id,
+        draft_id=draft_id,
+    )
+    pricing = await _price_result(db, branch_id=branch.id, result=result)
+    return _build_quote_response(draft_id, branch, pricing)
+
+
+async def place_workshop_order(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    payload: WorkshopOrderCreateRequest,
+) -> OrderDetailResponse:
+    """Staff create + auto-confirm an order for a walk-in client. The client is
+    the draft owner (resolved earlier by phone); the order arrives `confirmed`
+    with both the ∅→new and new→confirmed events authored by the staff user."""
+    branch, workshop = await _workshop_order_branch(db, principal, payload.branch_id)
+    draft, result = await _workshop_orderable_draft_result(
+        db,
+        workshop_id=workshop.id,
+        draft_id=payload.draft_id,
+    )
+    pricing = await _price_result(db, branch_id=branch.id, result=result)
+    now = datetime.now(UTC)
+    order = Order(
+        order_number=await _next_order_number(db, now),
+        client_id=draft.client_id,
+        workshop_id=workshop.id,
+        branch_id=branch.id,
+        cutting_result_id=result.id,
+        status=OrderStatus.NEW,
+        version=1,
+        contact_name=_contact_name(payload.contact_name),
+        contact_phone=_contact_phone(payload.contact_phone),
+        note_client=_optional_text(payload.note_client),
+        subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
+        subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
+        subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
+        discount_tiyin=0,
+        total_tiyin=pricing.total_tiyin,
+        currency=Currency.UZS,
+    )
+    db.add(order)
+    await db.flush()
+
+    _add_order_items(db, order=order, pricing=pricing)
+
+    result.status = CuttingResultStatus.CONFIRMED
+    result.order_id = order.id
+    result.draft_id = None
+    result.confirmed_at = now
+    draft.chosen_result_id = None
+    await db.flush()
+    await _delete_other_candidate_results(db, draft_id=draft.id, keep_result_id=result.id)
+    await db.delete(draft)
+
+    # ∅→new authored by the staff user (actor shape: workshop_user + user id).
+    await _append_order_event(
+        db,
+        order=order,
+        from_status=None,
+        to_status=OrderStatus.NEW,
+        actor_type=ActorType.WORKSHOP_USER,
+        actor_user_id=principal.principal_id,
+        reason=None,
+        metadata={"cutting_result_id": str(result.id)},
+    )
+    action = await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.create",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Created order {order.order_number}",
+        details={"cutting_result_id": str(result.id), "on_behalf": True},
+    )
+    await record_status_change(
+        db,
+        actor=actor_from_principal(principal),
+        entity_type="order",
+        entity_id=order.id,
+        to_status=OrderStatus.NEW.value,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        action_log_id=action.id,
+    )
+    # Auto-confirm in the same call — the creator is the approver. _transition
+    # writes the new→confirmed event (staff actor) + the standard order.confirmed
+    # client notification; set confirmed_at like approve_order does.
+    order.confirmed_at = now
+    await _transition(
+        db,
+        principal=principal,
+        order=order,
+        to_status=OrderStatus.CONFIRMED,
+        reason=None,
+        metadata={},
+    )
+    await db.flush()
+    return cast(
+        OrderDetailResponse,
+        await _order_response(db, order, include_detail=True),
+    )
 
 
 def _build_quote_response(

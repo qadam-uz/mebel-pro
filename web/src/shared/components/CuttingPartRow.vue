@@ -12,12 +12,7 @@ import {
 import Icon from '@/shared/components/AppIcon.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
-import {
-  useCuttingStore,
-  type CuttingEdgeBand,
-  type CuttingPart,
-  type MaterialSource,
-} from '@/shared/stores/cutting'
+import { useCuttingStore, type CuttingEdgeBand, type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: one parts-table row. Purely presentational — the editor stays the
 // single owner of `parts`, validation (size/missing/not-carried/optimiser errors),
@@ -42,10 +37,8 @@ const emit = defineEmits<{
   'update:width': [number]
   'update:quantity': [number]
   'update:material': [string | null]
-  'update:source': [MaterialSource]
   delete: []
   'open-edge-picker': [Event | undefined]
-  'bring-own': []
   'toggle-select': []
 }>()
 
@@ -108,14 +101,10 @@ function edgeSummary() {
   return sides
 }
 
-function edgeSourceSummary() {
-  const part = props.part
-  const active = edgeFields.filter((side) => part[side])
+function edgeSideSummary() {
+  const active = edgeFields.filter((side) => props.part[side])
   if (active.length === 0) return 'tomonlar tanlanmagan'
-  const own = active.filter((side) => part[side]?.source === 'own').length
-  if (own === active.length) return "o'zim olib kelaman"
-  if (own > 0) return 'aralash manba'
-  return 'ustaxonadan'
+  return active.map((side) => sideLabels[side]).join(' · ')
 }
 
 function edgeCellTitle() {
@@ -123,8 +112,7 @@ function edgeCellTitle() {
   const lines = edgeFields.map((side) => {
     const edge = part[side]
     const material = edgeById(edge?.material_id)
-    const source = edge?.source === 'own' ? " (o'zim)" : ''
-    return `${sideLabels[side]}: ${edge ? `${edgeShortLabel(material, true)}${source}` : '-'}`
+    return `${sideLabels[side]}: ${edge ? edgeShortLabel(material, true) : '-'}`
   })
   return `Krom yopishtirish - tahrirlash uchun bosing\n${lines.join(' · ')}`
 }
@@ -182,29 +170,6 @@ function edgeCellLabel(side: EdgeField) {
             :error="!part.material_id ? 'Material tanlang' : null"
             @update:model-value="emit('update:material', $event)"
           />
-          <button
-            type="button"
-            class="hidden h-9 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-bold lg:inline-flex"
-            :class="
-              part.material_source === 'own'
-                ? 'border-accent-tint bg-accent-soft text-accent'
-                : 'border-hairline-strong bg-elevated text-ink-soft'
-            "
-            :title="
-              part.material_source === 'shop'
-                ? 'Ustaxonadan — bosib almashtiring'
-                : 'O\'zim — bosib almashtiring'
-            "
-            :aria-label="
-              part.material_source === 'shop'
-                ? 'Manba: ustaxonadan — almashtirish'
-                : 'Manba: o\'zim — almashtirish'
-            "
-            @click="emit('update:source', part.material_source === 'shop' ? 'own' : 'shop')"
-          >
-            <span aria-hidden="true">⇄</span>
-            {{ part.material_source === 'shop' ? 'Ustaxona' : "O'zim" }}
-          </button>
           <span
             v-if="grain"
             class="hidden h-9 shrink-0 items-center gap-1 rounded-md bg-info-soft px-2 text-xs font-bold text-info lg:inline-flex"
@@ -214,29 +179,14 @@ function edgeCellLabel(side: EdgeField) {
             <span aria-hidden="true">↕</span> Tola
           </span>
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
+        <div v-if="grain" class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
           <span
-            v-if="grain"
             class="mp-chip bg-info-soft text-info"
             title="Tola yo'nalishi bor — bu qism burilmaydi"
             aria-label="Tola yo'nalishi bor — bu qism burilmaydi"
           >
             <span aria-hidden="true">↕</span> Tola
           </span>
-          <button
-            type="button"
-            class="mp-chip"
-            :class="part.material_source === 'own' ? 'bg-accent-soft text-accent' : ''"
-            :aria-label="
-              part.material_source === 'shop'
-                ? 'Manba: ustaxonadan — almashtirish'
-                : 'Manba: o\'zim olib kelaman — almashtirish'
-            "
-            @click="emit('update:source', part.material_source === 'shop' ? 'own' : 'shop')"
-          >
-            <span aria-hidden="true">⇄</span>
-            {{ part.material_source === 'shop' ? 'Ustaxonadan' : "O'zim olib kelaman" }}
-          </button>
         </div>
       </div>
 
@@ -317,7 +267,6 @@ function edgeCellLabel(side: EdgeField) {
               stroke="var(--color-accent)"
               stroke-linecap="round"
               :stroke-width="edgeStrokeWidth(part.edge_top)"
-              :stroke-dasharray="part.edge_top.source === 'own' ? '3 2' : undefined"
             />
             <line
               v-if="part.edge_bottom"
@@ -328,7 +277,6 @@ function edgeCellLabel(side: EdgeField) {
               stroke="var(--color-accent)"
               stroke-linecap="round"
               :stroke-width="edgeStrokeWidth(part.edge_bottom)"
-              :stroke-dasharray="part.edge_bottom.source === 'own' ? '3 2' : undefined"
             />
             <line
               v-if="part.edge_left"
@@ -339,7 +287,6 @@ function edgeCellLabel(side: EdgeField) {
               stroke="var(--color-accent)"
               stroke-linecap="round"
               :stroke-width="edgeStrokeWidth(part.edge_left)"
-              :stroke-dasharray="part.edge_left.source === 'own' ? '3 2' : undefined"
             />
             <line
               v-if="part.edge_right"
@@ -350,7 +297,6 @@ function edgeCellLabel(side: EdgeField) {
               stroke="var(--color-accent)"
               stroke-linecap="round"
               :stroke-width="edgeStrokeWidth(part.edge_right)"
-              :stroke-dasharray="part.edge_right.source === 'own' ? '3 2' : undefined"
             />
           </svg>
           <span class="truncate text-xs font-bold text-ink">{{
@@ -374,7 +320,6 @@ function edgeCellLabel(side: EdgeField) {
               x2="62"
               y2="13"
               :stroke-width="edgeStrokeWidth(part.edge_top)"
-              :class="{ own: part.edge_top.source === 'own' }"
             />
             <line
               v-if="part.edge_bottom"
@@ -384,7 +329,6 @@ function edgeCellLabel(side: EdgeField) {
               x2="62"
               y2="35"
               :stroke-width="edgeStrokeWidth(part.edge_bottom)"
-              :class="{ own: part.edge_bottom.source === 'own' }"
             />
             <line
               v-if="part.edge_left"
@@ -394,7 +338,6 @@ function edgeCellLabel(side: EdgeField) {
               x2="14"
               y2="35"
               :stroke-width="edgeStrokeWidth(part.edge_left)"
-              :class="{ own: part.edge_left.source === 'own' }"
             />
             <line
               v-if="part.edge_right"
@@ -404,7 +347,6 @@ function edgeCellLabel(side: EdgeField) {
               x2="62"
               y2="35"
               :stroke-width="edgeStrokeWidth(part.edge_right)"
-              :class="{ own: part.edge_right.source === 'own' }"
             />
             <text v-if="part.edge_top" class="lbl" x="38" y="7" text-anchor="middle">
               {{ edgeCellLabel('edge_top') }}
@@ -421,7 +363,7 @@ function edgeCellLabel(side: EdgeField) {
           </svg>
           <span class="client-edge-summary">
             <b>{{ edgeSummary() }}</b>
-            <small>{{ edgeSourceSummary() }}</small>
+            <small>{{ edgeSideSummary() }}</small>
           </span>
         </button>
       </div>
@@ -470,11 +412,9 @@ function edgeCellLabel(side: EdgeField) {
       <span class="min-w-0 flex-1">
         Bu qator
         <b>{{ preferredBranchName }}</b>
-        filialida mavjud bo'lmagan materialdan foydalanadi.
+        filialida mavjud bo'lmagan materialdan foydalanadi — boshqa material tanlang yoki filialni
+        o'zgartiring.
       </span>
-      <button type="button" class="mp-button mp-button-outline" @click="emit('bring-own')">
-        O'zim olib kelaman
-      </button>
       <button
         v-if="notCarriedNonPanel"
         type="button"

@@ -9,6 +9,19 @@ import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 export type MaterialSource = 'shop' | 'own'
 export type CuttingResultStatus = 'candidate' | 'confirmed' | 'invalidated'
 
+// Which API surface the store talks to: the client SPA uses `/client/*`, the
+// workshop SPA the mirrored `/workshop/*` staff endpoints. Each SPA has its own
+// Pinia instance, so the scope is set once at bootstrap and never flips.
+export type CuttingScope = 'client' | 'workshop'
+
+// The walk-in client a staffer resolved (phone → find-or-create) before
+// entering the workshop editor; drafts are created on this client's behalf.
+export interface CuttingWalkInClient {
+  id: string
+  name: string
+  phone: string
+}
+
 export interface CuttingEdgeBand {
   material_id: string
   source: MaterialSource
@@ -184,6 +197,51 @@ export function partNotCarried(
 }
 
 export const useCuttingStore = defineStore('cutting', () => {
+  // Role scope (default 'client' — the client SPA needs zero configuration).
+  // The workshop SPA calls configureScope('workshop') once at bootstrap
+  // (createRoleApp), before any view runs.
+  const scope = ref<CuttingScope>('client')
+  // Workshop-only: the resolved walk-in client the current draft belongs to.
+  const walkInClient = ref<CuttingWalkInClient | null>(null)
+
+  // Single seam between the client and workshop API surfaces: every request
+  // path in this store is built here so the '/client' vs '/workshop' prefix
+  // can never drift per-call. Note `/workshop/branch-options` does NOT exist —
+  // the workshop editor runs with a fixed branch, so loadBranchOptions guards
+  // on scope instead of ever building a workshop path.
+  function scopedPath(path: string) {
+    return `/${scope.value}${path}`
+  }
+
+  function configureScope(next: CuttingScope) {
+    scope.value = next
+  }
+
+  function setWalkInClient(client: CuttingWalkInClient | null) {
+    walkInClient.value = client
+  }
+
+  // Workshop-only: resolve a walk-in client by phone (find-or-create). `created`
+  // tells the caller whether the name was just registered or is a disclosed
+  // existing one (the walk-in view asks the staffer to confirm the latter).
+  async function resolveWalkInClient(input: { phone: string; name?: string }) {
+    const resolved = await api.post<CuttingWalkInClient & { created: boolean }>(
+      '/workshop/clients/resolve',
+      { phone: input.phone, name: input.name },
+      authInit(),
+    )
+    walkInClient.value = { id: resolved.id, name: resolved.name, phone: resolved.phone }
+    return resolved
+  }
+
+  // Workshop-only: rehydrate the walk-in client after a mid-flow reload (the
+  // editor/checkout carry only the id in the route).
+  async function loadWalkInClient(id: string) {
+    const loaded = await api.get<CuttingWalkInClient>(`/workshop/clients/${id}`, authInit())
+    walkInClient.value = loaded
+    return loaded
+  }
+
   const drafts = ref<CuttingDraft[]>([])
   const currentDraft = ref<CuttingDraft | null>(null)
   const branchOptions = ref<ClientBranchOption[]>([])
@@ -219,7 +277,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     error.value = null
     traceId.value = null
     try {
-      drafts.value = await api.get<CuttingDraft[]>('/client/cutting-drafts', authInit())
+      drafts.value = await api.get<CuttingDraft[]>(scopedPath('/cutting-drafts'), authInit())
     } catch (errorValue) {
       captureError(errorValue, 'cutting_drafts_load_failed')
     } finally {
@@ -227,10 +285,25 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
-  async function createDraft() {
+  // Client scope: POST with no body (server binds the draft to the caller).
+  // Workshop scope: the draft is created on behalf of the resolved walk-in
+  // client at the fixed branch — both are required by the contract; the route
+  // guard resolves them before the editor mounts, so a miss here is a
+  // programming error, not a user-reachable state.
+  async function createDraft(options: { branchId?: string | null } = {}) {
     saving.value = true
     try {
-      const draft = await api.post<CuttingDraft>('/client/cutting-drafts', undefined, authInit())
+      let payload: { client_id: string; branch_id: string } | undefined
+      if (scope.value === 'workshop') {
+        if (!walkInClient.value) {
+          throw new Error('Workshop draft creation requires a resolved walk-in client')
+        }
+        if (!options.branchId) {
+          throw new Error('Workshop draft creation requires a fixed branch id')
+        }
+        payload = { client_id: walkInClient.value.id, branch_id: options.branchId }
+      }
+      const draft = await api.post<CuttingDraft>(scopedPath('/cutting-drafts'), payload, authInit())
       drafts.value = [draft, ...drafts.value]
       currentDraft.value = draft
       return draft
@@ -245,7 +318,10 @@ export const useCuttingStore = defineStore('cutting', () => {
     traceId.value = null
     currentDraft.value = null
     try {
-      currentDraft.value = await api.get<CuttingDraft>(`/client/cutting-drafts/${id}`, authInit())
+      currentDraft.value = await api.get<CuttingDraft>(
+        scopedPath(`/cutting-drafts/${id}`),
+        authInit(),
+      )
     } catch (errorValue) {
       captureError(errorValue, 'cutting_draft_load_failed')
     } finally {
@@ -260,7 +336,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     saving.value = true
     try {
       const draft = await api.patch<CuttingDraft>(
-        `/client/cutting-drafts/${id}`,
+        scopedPath(`/cutting-drafts/${id}`),
         payload,
         authInit(),
       )
@@ -273,7 +349,7 @@ export const useCuttingStore = defineStore('cutting', () => {
   }
 
   async function deleteDraft(id: string) {
-    await api.del(`/client/cutting-drafts/${id}`, authInit())
+    await api.del(scopedPath(`/cutting-drafts/${id}`), authInit())
     drafts.value = drafts.value.filter((draft) => draft.id !== id)
     if (currentDraft.value?.id === id) currentDraft.value = null
   }
@@ -284,7 +360,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     traceId.value = null
     try {
       const draft = await api.post<CuttingDraft>(
-        `/client/cutting-drafts/${id}/optimize`,
+        scopedPath(`/cutting-drafts/${id}/optimize`),
         undefined,
         authInit(),
       )
@@ -301,7 +377,7 @@ export const useCuttingStore = defineStore('cutting', () => {
 
   async function chooseResult(draftId: string, resultId: string) {
     const draft = await api.post<CuttingDraft>(
-      `/client/cutting-drafts/${draftId}/chosen-result`,
+      scopedPath(`/cutting-drafts/${draftId}/chosen-result`),
       { result_id: resultId },
       authInit(),
     )
@@ -315,9 +391,13 @@ export const useCuttingStore = defineStore('cutting', () => {
   // A search always fetches and invalidates the freshness window.
   const branchOptionsLoadedAt = ref(0)
   async function loadBranchOptions(search?: string, options: { force?: boolean } = {}) {
+    // Client-only endpoint — there is no /workshop/branch-options mirror (the
+    // workshop editor runs with a fixed branch and never shows the picker).
+    // Guarded no-op so a stray call in workshop scope can't hit a 404.
+    if (scope.value === 'workshop') return
     if (search) {
       branchOptions.value = await api.get<ClientBranchOption[]>(
-        withQuery('/client/branch-options', { search }),
+        withQuery(scopedPath('/branch-options'), { search }),
         authInit(),
       )
       branchOptionsLoadedAt.value = 0
@@ -327,7 +407,7 @@ export const useCuttingStore = defineStore('cutting', () => {
       branchOptions.value.length > 0 && Date.now() - branchOptionsLoadedAt.value < 30_000
     if (!options.force && fresh) return
     branchOptions.value = await api.get<ClientBranchOption[]>(
-      withQuery('/client/branch-options', {}),
+      withQuery(scopedPath('/branch-options'), {}),
       authInit(),
     )
     branchOptionsLoadedAt.value = Date.now()
@@ -352,7 +432,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     materialsLoading.value = true
     try {
       const materials = await api.get<ClientCatalogMaterialOption[]>(
-        withQuery('/client/catalog/materials', {
+        withQuery(scopedPath('/catalog/materials'), {
           kind: params.kind,
           branch_id: params.branchId,
           search: params.search,
@@ -372,7 +452,7 @@ export const useCuttingStore = defineStore('cutting', () => {
 
   async function downloadClientPdf(resultId: string) {
     await downloadPdf(
-      `/client/cutting-results/${resultId}/pdf`,
+      scopedPath(`/cutting-results/${resultId}/pdf`),
       `cutting-${resultId}.pdf`,
       resultId,
     )
@@ -392,7 +472,18 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
+  // Drop the loaded panel/edge catalogs without touching drafts or branch options
+  // — used when the editor has no branch selected (the catalog is branch-scoped,
+  // so there's nothing valid to keep showing).
+  function clearMaterials() {
+    panelOptions.value = []
+    edgeOptions.value = []
+  }
+
   function reset() {
+    // `scope` deliberately survives reset: it's app identity fixed at
+    // bootstrap, not session state. The walk-in client IS session state.
+    walkInClient.value = null
     drafts.value = []
     currentDraft.value = null
     branchOptions.value = []
@@ -412,6 +503,12 @@ export const useCuttingStore = defineStore('cutting', () => {
   }
 
   return {
+    scope,
+    walkInClient,
+    configureScope,
+    setWalkInClient,
+    resolveWalkInClient,
+    loadWalkInClient,
     drafts,
     currentDraft,
     branchOptions,
@@ -435,6 +532,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     chooseResult,
     loadBranchOptions,
     loadMaterials,
+    clearMaterials,
     downloadClientPdf,
     reset,
   }

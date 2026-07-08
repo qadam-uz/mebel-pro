@@ -422,7 +422,9 @@ async function markCollected() {
 
 function requestRevertOrder() {
   if (!canManageOrders.value) return
-  reasonDraft.value = 'Ishlab chiqarish tuzatishi'
+  // Start the reason blank so the destructive confirm isn't armed the instant the
+  // dialog opens — the required-reason guard keeps confirm disabled until typed.
+  reasonDraft.value = ''
   reasonDialogAction.value = 'revert'
 }
 
@@ -1110,16 +1112,20 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading || !edgerId"
                   @click="assignEdgerOnly"
                 >
-                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Saqlash' }}
+                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
                 </button>
-                <button
-                  type="button"
-                  class="mp-button mp-button-primary w-full"
-                  :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
-                  @click="assignWorkers"
-                >
-                  {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash va boshlash' }}
-                </button>
+                <!-- Partial saves sit under their own dropdown; the combined start action
+                     stays separated below so it can't be mistaken for a per-worker save. -->
+                <div :class="{ 'border-t border-hairline pt-3': order.has_banding }">
+                  <button
+                    type="button"
+                    class="mp-button mp-button-primary w-full"
+                    :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
+                    @click="assignWorkers"
+                  >
+                    {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash va boshlash' }}
+                  </button>
+                </div>
               </template>
 
               <template v-else-if="order.status === 'cutting' && canCompleteCutting">
@@ -1136,7 +1142,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !cutterId"
                     @click="assignCutterOnly"
                   >
-                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Saqlash' }}
+                    {{ pendingAction === 'assignCutter' ? 'Saqlanmoqda…' : 'Kesuvchini saqlash' }}
                   </button>
                 </template>
                 <FormSelect
@@ -1170,7 +1176,7 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !edgerId"
                     @click="assignEdgerOnly"
                   >
-                    Saqlash
+                    {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
                   </button>
                 </template>
                 <FormSelect
@@ -1317,8 +1323,8 @@ onMounted(loadDetail)
           ? `Buyurtma ${revertTargetLabel} qaytadi. Sababni yozing.`
           : 'Buyurtma yopiladi. Bekor qilish sababini yozing.'
       "
-      :confirm-label="reasonDialogAction === 'revert' ? 'Qaytarish' : 'Bekor qilish'"
-      cancel-label="Orqaga"
+      :confirm-label="reasonDialogAction === 'revert' ? 'Ha, qaytarilsin' : 'Bekor qilish'"
+      cancel-label="Yopish"
       busy-label="Bajarilmoqda"
       :danger="reasonDialogAction === 'cancel'"
       :busy="orders.actionLoading"

@@ -22,11 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal
-from app.models.enums import AuthenticatedPrincipalType, UserStatus
-from app.modules.access.contracts import Client, PhoneVerificationChallenge, Session
+from app.models.enums import AuthenticatedPrincipalType
+from app.modules.access.clients import find_or_create_client, normalize_uz_phone
+from app.modules.access.contracts import PhoneVerificationChallenge, Session
 from app.modules.access.sessions import PlainSessionTokens, create_session, principal_from_session
 
-PHONE_RE = re.compile(r"^\+998\d{9}$")
 CODE_RE = re.compile(r"^\d{6}$")
 OTP_TTL = timedelta(minutes=5)
 RESEND_COOLDOWN = timedelta(seconds=60)
@@ -114,13 +114,6 @@ class ClientOtpLoginResult:
 class ClientOtpVerifyResult:
     is_new: bool
     login: ClientOtpLoginResult | None = None
-
-
-def normalize_uz_phone(phone: str) -> str:
-    normalized = phone.strip()
-    if not PHONE_RE.fullmatch(normalized):
-        raise APIError("invalid_phone", "Invalid phone", status_code=status.HTTP_400_BAD_REQUEST)
-    return normalized
 
 
 def resolve_client_ip(
@@ -226,30 +219,24 @@ async def verify_otp_code(
             details={"attempts_remaining": MAX_VERIFY_ATTEMPTS - challenge.attempt_count},
         )
 
-    client = await db.scalar(select(Client).where(Client.phone == normalized_phone))
-    if client is None:
+    try:
+        resolution = await find_or_create_client(db, phone=normalized_phone, name=name)
+    except APIError as exc:
+        if exc.code == "account_blocked":
+            challenge.consumed_at = current
+        raise
+    if resolution is None:
         if name is None:
             # First-time phone, no name supplied yet → prompt the registration step.
             return ClientOtpVerifyResult(is_new=True)
-        client_name = _normalize_name(name)
-        if client_name is None:
-            # A name was supplied but is blank/whitespace — reject it explicitly
-            # instead of silently re-prompting forever (CB-79).
-            raise APIError(
-                "name_required",
-                "Name is required",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        client = Client(phone=normalized_phone, name=client_name, status=UserStatus.ACTIVE)
-        db.add(client)
-        await db.flush()
-    elif client.status is not UserStatus.ACTIVE:
-        challenge.consumed_at = current
+        # A name was supplied but is blank/whitespace — reject it explicitly
+        # instead of silently re-prompting forever (CB-79).
         raise APIError(
-            "account_blocked",
-            "Account is blocked",
-            status_code=status.HTTP_403_FORBIDDEN,
+            "name_required",
+            "Name is required",
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
+    client = resolution.client
 
     client.last_login_at = current
     challenge.consumed_at = current
@@ -388,17 +375,6 @@ def _raise_rate_limited(retry_at: datetime, now: datetime) -> None:
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         details={"retry_after_seconds": retry_after},
     )
-
-
-def _normalize_name(name: str | None) -> str | None:
-    if name is None:
-        return None
-    normalized = " ".join(name.strip().split())
-    if not normalized:
-        return None
-    if len(normalized) > 80:
-        raise APIError("name_required", "Name is required", status_code=status.HTTP_400_BAD_REQUEST)
-    return normalized
 
 
 def _generate_code() -> str:

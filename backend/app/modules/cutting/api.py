@@ -30,6 +30,16 @@ from app.modules.cutting.service import (
     optimize_draft,
     update_draft,
 )
+from app.modules.cutting.workshop_service import (
+    choose_workshop_result,
+    create_workshop_draft,
+    delete_workshop_draft,
+    get_workshop_draft,
+    get_workshop_result,
+    optimize_workshop_draft,
+    update_workshop_draft,
+    workshop_catalog_materials,
+)
 
 __all__ = [
     "ALGORITHM_VERSION",
@@ -47,16 +57,24 @@ __all__ = [
     "PartInput",
     "PlacementResult",
     "choose_result",
+    "choose_workshop_result",
     "client_catalog_materials",
     "create_draft",
+    "create_workshop_draft",
     "cutting_result_response",
     "delete_draft",
+    "delete_workshop_draft",
     "get_client_result",
     "get_draft",
+    "get_workshop_draft",
+    "get_workshop_result",
     "list_drafts",
     "optimize_draft",
+    "optimize_workshop_draft",
     "render_cutting_pdf",
     "render_cutting_svg",
     "run_all_algorithms",
     "update_draft",
+    "update_workshop_draft",
+    "workshop_catalog_materials",
 ]
