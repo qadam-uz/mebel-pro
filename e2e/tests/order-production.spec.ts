@@ -522,6 +522,9 @@ test("client places an order and workshop completes it through production queues
     (response) => response.url().includes("/cutting-done") && response.ok(),
   );
   await workshopPage.getByRole("button", { name: "Kesish tugadi" }).click();
+  // Completing cutting is irreversible, so it goes through a confirmation
+  // dialog — confirm it to fire the request.
+  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
   await cuttingDone;
 
   await workshopPage
@@ -538,6 +541,9 @@ test("client places an order and workshop completes it through production queues
     (response) => response.url().includes("/banding-done") && response.ok(),
   );
   await workshopPage.getByRole("button", { name: "Krom tugadi" }).click();
+  // Completing banding is irreversible, so it goes through a confirmation
+  // dialog — confirm it to fire the request.
+  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
   await bandingDone;
 
   await workshopPage.goto(workshopOrderUrl);
