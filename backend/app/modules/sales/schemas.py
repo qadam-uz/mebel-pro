@@ -20,6 +20,18 @@ class ClientOrderCreateRequest(BaseModel):
     note_client: str | None = None
 
 
+class WorkshopOrderCreateRequest(BaseModel):
+    """Staff placing an order on behalf of a walk-in client. The client is the
+    draft owner (resolved earlier by phone); contact fields are the frozen order
+    snapshot, prefilled from that client but staff-editable."""
+
+    draft_id: uuid.UUID
+    branch_id: uuid.UUID
+    contact_name: str
+    contact_phone: str
+    note_client: str | None = None
+
+
 class MaterialPriceLine(APIModel):
     material_id: uuid.UUID
     material_name: str

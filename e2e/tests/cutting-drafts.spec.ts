@@ -439,6 +439,82 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
 })
 
+test('client resumes a saved cutting draft after reload and from the drafts list', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const adminLogin = `p4-admin-${id}`
+  await seedPlatform(adminLogin)
+  const adminAccess = await platformToken(request, adminLogin)
+  const setup = await provisionWorkshop(request, adminAccess, id)
+  const ownerAccess = await readyOwnerToken(request, setup)
+  const { panel, edge } = await createCatalogMaterials(request, adminAccess, id)
+  const branchId = setup.branch.id as string
+  await addBranchMaterial(request, ownerAccess, branchId, panel.id)
+  await addBranchMaterial(request, ownerAccess, branchId, edge.id)
+
+  await page.goto('/client/auth/login')
+  await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))
+  await page.getByRole('button', { name: 'Kod yuborish' }).click()
+  await page.getByLabel('Tasdiqlash kodi').fill('000000')
+  await page.getByRole('button', { name: 'Tasdiqlash' }).click()
+  await page.getByLabel('Ismingiz').fill('Resume Client')
+  await page.getByRole('button', { name: 'Davom etish' }).click()
+  await expect(page).toHaveURL(/\/client\/c$/)
+
+  const branchesLoaded = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/v1/client/branch-options') &&
+      response.ok(),
+  )
+  await page.getByRole('button', { name: 'Yangi chizma' }).click()
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/new$/)
+  await branchesLoaded
+
+  await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
+  await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
+  await page.getByRole('button', { name: "Qo'llash" }).click()
+  await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
+
+  await page.getByRole('button', { name: "Qism qo'shish" }).first().click()
+  await page.getByRole('combobox', { name: 'Panel materiali' }).fill(panel.name)
+  await page.getByRole('option', { name: new RegExp(panel.name) }).click()
+  await page.getByRole('combobox', { name: 'Panel materiali' }).press('Escape')
+  await page.getByLabel('Uzunlik millimetr').fill('260')
+  await page.getByLabel('Eni millimetr').fill('180')
+  await page.getByLabel('Soni').fill('2')
+  await page.getByRole('button', { name: 'Optimallashtirish' }).click()
+
+  // The first optimise persists the draft and hands off to its real id route.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
+  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  const editorUrl = page.url()
+
+  // Resume path #1 — reload on /cutting/:id: the part rows, the selected
+  // branch, and the optimiser results must all re-hydrate from the server.
+  await page.reload()
+  await expect(page.getByLabel('Uzunlik millimetr')).toHaveValue('260')
+  await expect(page.getByLabel('Eni millimetr')).toHaveValue('180')
+  await expect(page.getByLabel('Soni')).toHaveValue('2')
+  await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
+
+  // Resume path #2 — drafts list → open: the saved draft is listed and
+  // re-opens the editor fully hydrated on the same URL.
+  await page.goto('/client/c/cutting/drafts')
+  await expect(page.getByRole('heading', { name: 'Saqlangan chizmalar' })).toBeVisible()
+  await page.getByRole('button', { name: 'Ochish →' }).click()
+  await expect(page).toHaveURL(editorUrl)
+  await expect(page.getByLabel('Uzunlik millimetr')).toHaveValue('260')
+  await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
+})
+
 test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   page,
   request,

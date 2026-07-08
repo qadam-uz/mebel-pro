@@ -12,6 +12,7 @@ import {
   type WorkshopRouteRequirement,
 } from '@/shared/app/workshopPermissions'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
+import { useCuttingStore } from '@/shared/stores/cutting'
 
 export function resolveHistoryBase(
   localBase: string,
@@ -116,6 +117,13 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
     scrollBehavior: () => ({ top: 0 }),
   })
   const auth = useAuthStore(pinia)
+
+  // The shared cutting store defaults to the client API surface ('/client/*');
+  // the workshop SPA flips it to the '/workshop/*' mirror once at bootstrap.
+  // Each SPA owns its Pinia instance, so this can never leak across apps.
+  if (roleConfig.role === 'workshop') {
+    useCuttingStore(pinia).configureScope('workshop')
+  }
 
   // Transparent 401 handling (CB-08): the API client refreshes silently and
   // retries; if that fails (refreshSession has already cleared auth) it bounces

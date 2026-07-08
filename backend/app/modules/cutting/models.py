@@ -19,6 +19,10 @@ class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
 
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False)
     preferred_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
+    # Set when workshop staff minted this draft for a walk-in client; such
+    # drafts are hidden from the client's own draft surface until ordered and
+    # do not count toward the client's draft limit.
+    created_via_workshop_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshops.id"))
     parts_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=False,

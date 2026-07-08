@@ -40,6 +40,17 @@ const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
 const router = useRouter()
+// "+ Yangi buyurtma" is enabled only when the staffer can place orders on the
+// CURRENT topbar branch and that branch is open — the flow is fixed to it.
+const currentBranch = computed(() =>
+  workshop.branches.find((item) => item.id === workshop.selectedBranchContext),
+)
+const canCreateWalkIn = computed(
+  () =>
+    !!currentBranch.value &&
+    currentBranch.value.status === 'active' &&
+    permissions.canOnBranch(p.manageOrders, currentBranch.value.id),
+)
 const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
@@ -614,6 +625,22 @@ onBeforeUnmount(() => {
         <p class="sub">Buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
+        <RouterLink
+          v-if="canCreateWalkIn"
+          :to="rolePath('/workshop/orders/new')"
+          class="mp-button mp-button-primary min-h-11 px-3 text-xs"
+        >
+          + Yangi buyurtma
+        </RouterLink>
+        <button
+          v-else
+          class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+          type="button"
+          disabled
+          title="Yangi buyurtma yaratish uchun tegishli filialni tanlang (buyurtma boshqaruvi ruxsati bilan)"
+        >
+          + Yangi buyurtma
+        </button>
         <div class="flex gap-1" role="group" aria-label="Ko'rinish">
           <button
             class="mp-button min-h-11 px-3 text-xs"

@@ -54,8 +54,13 @@ async def create_draft(
     principal: AuthenticatedPrincipal,
 ) -> CuttingDraftResponse:
     client = await get_client_profile(db, principal=principal)
+    # Staff-minted drafts (created_via_workshop_id set) never count toward the
+    # client's own draft budget — the limit is a client-path backstop only.
     count = await db.scalar(
-        select(func.count(CuttingDraft.id)).where(CuttingDraft.client_id == client.id)
+        select(func.count(CuttingDraft.id)).where(
+            CuttingDraft.client_id == client.id,
+            CuttingDraft.created_via_workshop_id.is_(None),
+        )
     )
     if count is not None and count >= DRAFT_LIMIT:
         raise APIError(
@@ -90,7 +95,12 @@ async def list_drafts(
     rows = (
         await db.execute(
             select(CuttingDraft)
-            .where(CuttingDraft.client_id == client.id)
+            # Staff-minted drafts stay invisible on the client's own surface
+            # until the order is placed (symmetric privacy).
+            .where(
+                CuttingDraft.client_id == client.id,
+                CuttingDraft.created_via_workshop_id.is_(None),
+            )
             .order_by(CuttingDraft.updated_at.desc(), CuttingDraft.created_at.desc())
         )
     ).scalars()
@@ -119,13 +129,34 @@ async def update_draft(
     parts_snapshot: list[CuttingPart] | None,
 ) -> CuttingDraftResponse:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
+    resolved_branch_id = preferred_branch_id
+    if preferred_branch_id_set and preferred_branch_id is not None:
+        # Client browsability check (public catalog); tenancy is not the concern
+        # on the client path.
+        resolved_branch_id = (await visible_branch(db, preferred_branch_id)).id
+    return await _apply_update(
+        db,
+        draft=draft,
+        principal=principal,
+        preferred_branch_id_set=preferred_branch_id_set,
+        preferred_branch_id=resolved_branch_id,
+        parts_snapshot=parts_snapshot,
+    )
+
+
+async def _apply_update(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    principal: AuthenticatedPrincipal,
+    preferred_branch_id_set: bool,
+    preferred_branch_id: uuid.UUID | None,
+    parts_snapshot: list[CuttingPart] | None,
+) -> CuttingDraftResponse:
+    """Shared update body: branch id is already resolved/authorized by the caller."""
     parts_changed = parts_snapshot is not None
     if preferred_branch_id_set:
-        if preferred_branch_id is not None:
-            branch = await visible_branch(db, preferred_branch_id)
-            draft.preferred_branch_id = branch.id
-        else:
-            draft.preferred_branch_id = None
+        draft.preferred_branch_id = preferred_branch_id
     if parts_changed:
         normalized_parts, _, _, _ = await _validate_parts(db, parts_snapshot or [])
         draft.parts_snapshot = normalized_parts
@@ -157,6 +188,15 @@ async def delete_draft(
     draft_id: uuid.UUID,
 ) -> None:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
+    await _apply_delete(db, draft=draft, principal=principal)
+
+
+async def _apply_delete(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    principal: AuthenticatedPrincipal,
+) -> None:
     draft.chosen_result_id = None
     await db.flush()
     await _delete_candidate_results(db, draft.id)
@@ -178,6 +218,15 @@ async def optimize_draft(
     draft_id: uuid.UUID,
 ) -> CuttingDraftResponse:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
+    return await _apply_optimize(db, draft=draft, principal=principal)
+
+
+async def _apply_optimize(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    principal: AuthenticatedPrincipal,
+) -> CuttingDraftResponse:
     if not draft.parts_snapshot:
         raise APIError("empty_parts", "At least one part is required")
     parts, optimizer_parts, panel_specs, material_snapshots = await _validate_parts(
@@ -270,6 +319,16 @@ async def choose_result(
     result_id: uuid.UUID,
 ) -> CuttingDraftResponse:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
+    return await _apply_choose(db, draft=draft, principal=principal, result_id=result_id)
+
+
+async def _apply_choose(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    principal: AuthenticatedPrincipal,
+    result_id: uuid.UUID,
+) -> CuttingDraftResponse:
     result = await db.get(CuttingResult, result_id)
     if (
         result is None
@@ -311,7 +370,13 @@ async def get_client_result(
         )
     if result.status is CuttingResultStatus.CANDIDATE:
         draft = await db.get(CuttingDraft, result.draft_id) if result.draft_id else None
-        if draft is None or draft.client_id != principal.principal_id:
+        # Candidate results of staff-minted drafts stay hidden from the client
+        # until the order is placed (then the order-ownership branch applies).
+        if (
+            draft is None
+            or draft.client_id != principal.principal_id
+            or draft.created_via_workshop_id is not None
+        ):
             raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     else:
         order = await db.get(Order, result.order_id) if result.order_id else None
@@ -334,7 +399,29 @@ async def client_catalog_materials(
     require_client(principal)
     if branch_id is not None:
         await visible_branch(db, branch_id)
+    return await _catalog_materials(
+        db,
+        kind=kind,
+        branch_id=branch_id,
+        search=search,
+        manufacturer_id=manufacturer_id,
+        carried_only=carried_only,
+        limit=limit,
+    )
 
+
+async def _catalog_materials(
+    db: AsyncSession,
+    *,
+    kind: MaterialKind,
+    branch_id: uuid.UUID | None,
+    search: str | None,
+    manufacturer_id: uuid.UUID | None,
+    carried_only: bool,
+    limit: int | None,
+) -> list[ClientCatalogMaterialOption]:
+    """Catalog listing shared by the client and workshop editors — the caller
+    authorizes the branch (public browsability vs workshop tenancy) first."""
     query = (
         select(Material, Manufacturer, BranchMaterial)
         .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
@@ -413,7 +500,9 @@ async def _client_draft(
 ) -> CuttingDraft:
     client = await get_client_profile(db, principal=principal)
     draft = await db.get(CuttingDraft, draft_id)
-    if draft is None or draft.client_id != client.id:
+    # Staff-minted drafts (created_via_workshop_id set) are not part of the
+    # client's own surface pre-order — same 404 as a foreign draft.
+    if draft is None or draft.client_id != client.id or draft.created_via_workshop_id is not None:
         raise APIError(
             "cutting_draft_not_found",
             "Cutting draft not found",

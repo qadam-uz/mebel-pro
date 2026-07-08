@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-07-08
 order: 50
 ---
 
@@ -16,10 +16,11 @@ finance context ([`finance.md`](finance.md)); the order holds **no payment rows*
 ## Order
 
 A client's request for panels cut to size at a branch — the header that owns the items, the
-status history, the production stamps, and a frozen price snapshot. Created only by a client,
-from a cutting draft with a chosen algorithm result. v1 is pickup-only; the order references
-its confirmed cutting result. Material source is **per item** for the panel and **per side**
-for each edge — see [Order item](#order-item).
+status history, the production stamps, and a frozen price snapshot. Created by the client —
+or by workshop staff on behalf of a walk-in client — from a cutting draft with a chosen
+algorithm result. v1 is pickup-only; the order references its confirmed cutting result.
+Material source is **per item** for the panel and **per side** for each edge — see
+[Order item](#order-item).
 
 **Identity & lifecycle**
 
@@ -27,7 +28,7 @@ for each edge — see [Order item](#order-item).
 |---|---|---|
 | `id` | UUID | PK |
 | `order_number` | text | human-readable, `ORD-2026-000123` (per-year sequence); unique |
-| `client_id` | UUID | the client who placed it |
+| `client_id` | UUID | the client the order belongs to — its placer, or the walk-in it was placed for |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
 | `status` | enum | `new` / `confirmed` / `cutting` / `edge_banding` / `ready` / `completed` / `cancelled`; default `new` |
@@ -65,9 +66,12 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 | `edge_length_snapshot` | json? | `edge_banding → ready` | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — consumed banding length in integer millimetres by edge material (only `shop` source). UI/reports display metres. Thickness is derived from each material at report read time. |
 | `picked_up_at` | timestamp? | `ready → completed` | |
 
-Invariants: created only by a client, from a cutting draft with a `chosen` result (which
-becomes `confirmed` and bound); the checkout contact snapshot is frozen at creation so later
-client profile edits do not rewrite the workshop-facing order; all money fields are integer
+Invariants: created by the client — or by workshop staff on behalf of a walk-in client
+([`orders.md`](../features/orders.md#staff-created-orders-walk-in-clients)) — from a cutting
+draft with a `chosen` result (which becomes `confirmed` and bound); a staff-created order
+lands `confirmed` with `confirmed_at` set at creation; the checkout contact snapshot is
+frozen at creation so later client profile edits do not rewrite the workshop-facing order;
+all money fields are integer
 tiyin; `total_tiyin` follows the formula and can't go negative; the price snapshot is frozen
 at creation (no re-pricing — there is no modification); status transitions follow the state
 machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
@@ -128,9 +132,12 @@ from this.
 | `metadata` | json? | optional context (e.g. the credited user on an on-behalf completion) |
 | `changed_at` | timestamp | |
 
-Invariants: written for **every** transition in the same atomic operation; `to_status` is a
-legal transition (or revert) from `from_status` per the state machine; cancellation and
-revert carry a `reason`; never updated or deleted.
+Invariants: written for **every** transition in the same atomic operation; the creation
+event (`from_status` null) carries the order's creator as actor — `client` on the self-serve
+path, `workshop_user` on the staff walk-in path, which writes both `∅ → new` and
+`new → confirmed` with the same actor in one operation; `to_status` is a legal transition
+(or revert) from `from_status` per the state machine; cancellation and revert carry a
+`reason`; never updated or deleted.
 
 ## Order cancellation
 

@@ -232,6 +232,10 @@ describe('role route matrix', () => {
       '/workshop',
       '/workshop/profile',
       '/workshop/orders',
+      '/workshop/orders/new',
+      '/workshop/orders/new/cutting',
+      '/workshop/orders/cutting/:id',
+      '/workshop/orders/new/:draft_id/checkout',
       '/workshop/orders/:order_id',
       '/workshop/cutting',
       '/workshop/banding',
@@ -371,5 +375,35 @@ describe('role route matrix', () => {
 
     expect(nativeOffenders).toEqual([])
     expect(customOffenders).toEqual([])
+  })
+
+  // The workshop order flow REUSES the client cutting editor — there must be
+  // exactly one editor module, not a fork. Resolving both apps' lazy editor
+  // routes must return the identical module (AC3).
+  it('serves one shared cutting editor module to both the client and workshop apps', async () => {
+    function lazyComponent(routes: typeof clientRoutes, name: string) {
+      const record = routes.find((route) => route.name === name)
+      if (!record || typeof record.component !== 'function') {
+        throw new Error(`route ${name} is not a lazy component`)
+      }
+      return record.component as () => Promise<{ default: unknown }>
+    }
+
+    const clientEditor = await lazyComponent(clientRoutes, 'client-cutting-editor')()
+    const workshopEditor = await lazyComponent(workshopRoutes, 'workshop-order-cutting-editor')()
+    expect(clientEditor.default).toBe(workshopEditor.default)
+  })
+
+  it('keeps the workshop editor routes out of the cutter-queue namespace', () => {
+    // /workshop/cutting is the process_production cutter queue; the manage_orders
+    // editor lives under /workshop/orders/* so the two never collide.
+    const editorPaths = workshopRoutes
+      .map((route) => route.path)
+      .filter((path) => path.includes('cutting') && path.includes('orders'))
+    expect(editorPaths).toContain('/workshop/orders/new/cutting')
+    expect(editorPaths).toContain('/workshop/orders/cutting/:id')
+    expect(workshopRoutes.find((r) => r.path === '/workshop/cutting')?.name).toBe(
+      'workshop-cutting-queue',
+    )
   })
 })

@@ -45,6 +45,24 @@ class ClientOtpRegistrationRequiredResponse(APIModel):
     is_new: Literal[True] = True
 
 
+class WorkshopClientResolveRequest(BaseModel):
+    phone: str
+    name: str | None = Field(default=None, max_length=80)
+
+
+class WorkshopClientResolveResponse(APIModel):
+    id: uuid.UUID
+    name: str
+    phone: str
+    created: bool
+
+
+class WorkshopClientResponse(APIModel):
+    id: uuid.UUID
+    name: str
+    phone: str
+
+
 class PermissionGrantResponse(APIModel):
     permission: Permission
     branch_id: uuid.UUID

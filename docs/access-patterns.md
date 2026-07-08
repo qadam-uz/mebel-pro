@@ -2,7 +2,7 @@
 title: Identity, access & tenancy
 status: stable
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-08
 order: 50
 ---
 
@@ -40,7 +40,8 @@ work, keeping stock and suppliers current, and recording the workshop's income a
 ### Client
 
 The workshop's customer — a person or a small business that needs panels cut, often first-time
-and often comparing options across workshops. Self-registers on demand and is global to the
+and often comparing options across workshops. Self-registers on demand — or is registered at
+the counter by workshop staff when they walk in without the app — and is global to the
 platform, picking a workshop and a branch per order. Works from both a desktop browser and a
 phone; in v1 the priority is the desktop web experience, with a mobile-first pass to follow. Sees
 only their own side — catalog, cutting result, their orders, and what they owe once an order is
@@ -67,7 +68,11 @@ Three principal types — three auth surfaces, one per front-end app. They don't
   the top of the hierarchy, so no higher principal exists to create them in-app).
 - **Clients** sign in with a **phone number verified by a one-time code sent over Telegram** —
   no password, no fallback path. The phone is the identity; they self-register (name only) the
-  first time a new number is verified.
+  first time a new number is verified. A walk-in's client row may also be created by workshop
+  staff resolving them by phone at the counter
+  ([`ref/features/access-management.md`](ref/features/access-management.md)); OTP verification
+  remains the **only** client login path — a staff-created row is claimed the first time its
+  number is verified.
 - **Sessions are opaque DB-backed tokens**, not JWTs — the system needs _instant revocation_
   (block, "log out everywhere", password change) and _fresh authorization_ (a new grant must
   apply on the next request). A user cannot reset their own password — a higher principal

@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-08
 order: 10
 ---
 
@@ -87,28 +87,36 @@ an `inactive` branch is inert.
 
 The customer. A **separate entity** from workshop/platform users. Identified by a **phone
 number verified by a one-time code sent over Telegram**; self-registers (name only) the first
-time a new number is verified; global to the platform (no workshop/branch binding); picks a
-branch per order. Uses the client app.
+time a new number is verified, or is registered at the counter by workshop staff resolving a
+walk-in by phone; global to the platform (no workshop/branch binding); picks a branch per
+order. Uses the client app.
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `phone` | text | `+998XXXXXXXXX`; **unique, required** — the verified identity and natural key |
+| `phone` | text | `+998XXXXXXXXX`; **unique, required** — the identity and natural key (verified by OTP on the self-serve path; staff-entered for a walk-in until their first OTP login) |
 | `name` | text | required; the client's own display name, typed at registration (1–80 chars); how the workshop addresses them |
 | `preferred_branch_id` | UUID? | optional default branch — seeds the `preferred_branch_id` of every new cutting draft this client opens; clearing or changing it on a draft never touches this default. The field is kept on the model; the **profile UI to set it is not currently surfaced**. |
 | `status` | enum | `active` / `blocked` (soft delete only) |
 | `created_at` / `updated_at` / `last_login_at` | timestamp / timestamp / timestamp? | |
 
-The phone is the only verified fact; `name` is self-entered and editable by the client (no
-external source of truth — nothing is synced from Telegram, which is only the delivery channel
-for the login code). No password, no password-reset warning / lockout (auth integrity is the
-OTP check).
-A client cannot exist without a phone that has been verified via the
-[code challenge](#phone-verification-challenge); the row is created only on the first
-successful verification of a new number.
+The phone is the identity; `name` is self-entered and editable by the client (no external
+source of truth — nothing is synced from Telegram, which is only the delivery channel for the
+login code). No password, no password-reset warning / lockout (auth integrity is the OTP
+check).
+A client row is created by the first successful verification of a new number via the
+[code challenge](#phone-verification-challenge), **or by workshop staff resolving a walk-in
+by phone** (find-or-create; semantics and rationale in
+[`access-management.md`](../features/access-management.md#staff-resolved-walk-ins-find-or-create)).
+On the self-serve path the phone is verified before the row exists; on the staff path it is
+staff-entered and verified the first time the client logs in via OTP — which is also when
+they claim the row. The staff path never creates a client session — OTP remains the only
+login.
 
 Invariants: `phone` unique (DB) and `+998XXXXXXXXX`-shaped; blocking deletes its sessions;
-created only by a successful first verification (never by an operator or another principal);
+created only by a successful first verification or by workshop staff resolving a walk-in
+(never by a platform operator); a `blocked` client can neither sign in nor be resolved by
+staff (`account_blocked` on both paths);
 `preferred_branch_id`, when set, references a branch the client may see (any workshop's
 `active` or `temporarily_closed` branch); the field is **not** scope-enforced (a branch
 later going `inactive` doesn't clear it — the cutting wizard surfaces the situation as the

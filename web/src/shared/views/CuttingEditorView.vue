@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import {
+  clientCuttingEditorAdapter,
+  cuttingEditorAdapterKey,
+  type CuttingEditorAdapterFactory,
+} from '@/shared/app/cuttingEditorAdapter'
 import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
@@ -34,10 +39,24 @@ const rolePath = useRolePath()
 const cutting = useCuttingStore()
 const clientProfile = useClientProfileStore()
 const toast = useToast()
+// Role adapter (see cuttingEditorAdapter.ts): the route carries a factory under
+// `meta.cuttingEditorAdapter`; resolve it once at mount and provide it so the
+// results section (a grandchild) can read the same link targets. No route
+// adapter → the client default, so the client app needs zero configuration.
+const adapter = (
+  (route.meta.cuttingEditorAdapter as CuttingEditorAdapterFactory | undefined) ??
+  clientCuttingEditorAdapter
+)()
+provide(cuttingEditorAdapterKey, adapter)
+// Fixed-branch mode (workshop): the branch comes from the app's current context,
+// not a picker; the walk-in identity strip shows in workshop scope.
+const fixedBranch = computed(() => adapter.branch.fixed ?? null)
+const isWorkshopScope = computed(() => cutting.scope === 'workshop')
 const draftId = computed(() => String(route.params.id))
-// Unsaved editor: opened via `/c/cutting/new`, the draft has no server id yet.
-// It's created and persisted on the first optimise (docs/ref/features/cutting.md).
-const isNewDraft = computed(() => route.name === 'client-cutting-new')
+// Unsaved editor: opened via the adapter's new-draft route, the draft has no
+// server id yet. It's created and persisted on the first optimise
+// (docs/ref/features/cutting.md).
+const isNewDraft = computed(() => route.name === adapter.newRouteName)
 // Branch pre-filter while unsaved — held locally (no draft to PATCH); seeded from
 // the client profile default for parity with a server-created draft.
 const localBranchId = ref<string | null>(null)
@@ -85,9 +104,11 @@ const boundOrderId = computed(
 const isReadOnly = computed(() => boundOrderId.value !== null)
 // The active branch pre-filter: the local pick while unsaved, the draft's saved
 // preference otherwise. Every branch-dependent read routes through this.
-const activeBranchId = computed(() =>
-  isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null),
-)
+const activeBranchId = computed(() => {
+  // Fixed-branch mode locks every branch-dependent read to the app context.
+  if (fixedBranch.value) return fixedBranch.value.id
+  return isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null)
+})
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
@@ -526,22 +547,31 @@ async function optimize() {
 async function optimizeNewDraft() {
   try {
     // Reuse a draft from a previous failed attempt so a retry doesn't orphan a
-    // second empty draft.
+    // second empty draft. In fixed-branch (workshop) mode the store seeds the
+    // draft with the walk-in client + context branch; the client path passes no
+    // args and the backend seeds the profile default.
     if (!pendingDraftId.value) {
-      pendingDraftId.value = (await cutting.createDraft()).id
+      pendingDraftId.value = (
+        await cutting.createDraft(
+          fixedBranch.value ? { branchId: fixedBranch.value.id } : undefined,
+        )
+      ).id
     }
     const id = pendingDraftId.value
     await cutting.updateDraft(id, {
       parts_snapshot: parts.value,
       // Only send the branch when the user changed it — otherwise let the
-      // backend's profile-default seed stand (docs/ref/features/cutting.md).
-      ...(branchTouched.value ? { preferred_branch_id: localBranchId.value } : {}),
+      // backend's seed stand (profile default on the client path, the fixed
+      // context branch on the workshop path).
+      ...(branchTouched.value && !fixedBranch.value
+        ? { preferred_branch_id: localBranchId.value }
+        : {}),
     })
     await cutting.optimizeDraft(id)
     lastOptimizedSignature.value = partsSignature()
     // Hand off to the saved editor; the guard must not treat this as discarding.
     leavingAfterCreate.value = true
-    await router.replace(rolePath(`/c/cutting/${id}`))
+    await router.replace(rolePath(adapter.paths.editor(id)))
   } catch (errorValue) {
     // The parts are still in local state, so the user keeps their work and can
     // retry; the row attribution still maps because the parts are unchanged.
@@ -608,11 +638,21 @@ watch(
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
   if (isNewDraft.value) {
+    // Fixed-branch mode: the branch is the app context — skip the client-only
+    // branch-options + profile-default seed and lock the pre-filter to it.
+    if (fixedBranch.value) {
+      localBranchId.value = fixedBranch.value.id
+      selectedBranchId.value = fixedBranch.value.id
+      await loadMaterials()
+      return
+    }
     // Unsaved editor: nothing to load. Populate the branch picker and seed the
     // pre-filter from the client's profile default (parity with a server draft).
     await cutting.loadBranchOptions()
-    const profile = await clientProfile.load().catch(() => null)
-    localBranchId.value = profile?.preferred_branch_id ?? null
+    if (adapter.useProfileDefaultBranch) {
+      const profile = await clientProfile.load().catch(() => null)
+      localBranchId.value = profile?.preferred_branch_id ?? null
+    }
     selectedBranchId.value = localBranchId.value
     await loadMaterials()
     return
@@ -620,7 +660,9 @@ onMounted(async () => {
   // Reuse an already-loaded draft (e.g. just optimised from the new editor) to
   // avoid a load flash; otherwise fetch it.
   if (cutting.currentDraft?.id !== draftId.value) await cutting.loadDraft(draftId.value)
-  await cutting.loadBranchOptions()
+  // Branch options power the picker; in fixed-branch mode there's no picker and
+  // no workshop branch-options endpoint, so skip the load.
+  if (!fixedBranch.value) await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
   await loadMaterials()
 })
@@ -717,7 +759,7 @@ onBeforeRouteLeave(() => {
     <template v-else-if="draft || isNewDraft">
       <RouterLink
         v-if="isReadOnly"
-        :to="rolePath(`/c/orders/${boundOrderId}`)"
+        :to="rolePath(adapter.paths.orderDetail(String(boundOrderId)))"
         class="client-banner info hover:border-accent"
       >
         <span class="grid size-6 shrink-0 place-items-center text-accent" aria-hidden="true">
@@ -730,7 +772,30 @@ onBeforeRouteLeave(() => {
       </RouterLink>
 
       <fieldset :disabled="isReadOnly" class="contents">
+        <!-- Walk-in identity strip (workshop scope only): staff always sees who
+             the order is being created for. -->
         <section
+          v-if="isWorkshopScope && cutting.walkInClient"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
+        >
+          <span
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft font-mono font-black text-accent"
+            aria-hidden="true"
+          >
+            @
+          </span>
+          <div class="min-w-0 flex-1">
+            <b class="text-ink">{{ cutting.walkInClient.name }}</b>
+            <span class="ml-2 font-mono text-xs text-ink-muted">{{
+              cutting.walkInClient.phone
+            }}</span>
+          </div>
+        </section>
+
+        <!-- Fixed-branch mode: a locked label, no picker (the branch is the app
+             context and can't change mid-draft). -->
+        <section
+          v-if="fixedBranch"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
@@ -740,43 +805,59 @@ onBeforeRouteLeave(() => {
             i
           </span>
           <div class="min-w-0 flex-1">
-            <b class="text-ink">
-              {{
-                preferredBranch
-                  ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
-                  : 'Ustaxona tanlanmagan'
-              }}
-            </b>
+            <b class="text-ink">{{ fixedBranch.name }}</b>
           </div>
-          <button
-            type="button"
-            class="mp-button mp-button-outline"
-            @click="branchPickerOpen = true"
-          >
-            {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
-          </button>
-          <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
-            Kesish ro'yxati tanlangan ustaxona katalogi asosida tuziladi — davom etish uchun
-            ustaxona tanlang.
-          </p>
         </section>
 
-        <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
-          <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
-          <div class="flex flex-wrap justify-end gap-2">
-            <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
-              Bekor qilish
-            </button>
+        <template v-else>
+          <section
+            class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
+          >
+            <span
+              class="grid size-6 shrink-0 place-items-center rounded-md bg-info-soft font-mono font-black text-info"
+              aria-hidden="true"
+            >
+              i
+            </span>
+            <div class="min-w-0 flex-1">
+              <b class="text-ink">
+                {{
+                  preferredBranch
+                    ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
+                    : 'Ustaxona tanlanmagan'
+                }}
+              </b>
+            </div>
             <button
               type="button"
-              class="mp-button mp-button-primary"
-              :disabled="!selectedBranchId"
-              @click="setPreferredBranch(selectedBranchId)"
+              class="mp-button mp-button-outline"
+              @click="branchPickerOpen = true"
             >
-              Qo'llash
+              {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
             </button>
-          </div>
-        </section>
+            <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
+              Kesish ro'yxati tanlangan ustaxona katalogi asosida tuziladi — davom etish uchun
+              ustaxona tanlang.
+            </p>
+          </section>
+
+          <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
+            <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
+            <div class="flex flex-wrap justify-end gap-2">
+              <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                class="mp-button mp-button-primary"
+                :disabled="!selectedBranchId"
+                @click="setPreferredBranch(selectedBranchId)"
+              >
+                Qo'llash
+              </button>
+            </div>
+          </section>
+        </template>
 
         <section class="client-card">
           <div class="client-card-h">
@@ -965,6 +1046,7 @@ onBeforeRouteLeave(() => {
         v-if="draft && (draft.results.length > 0 || optimizeError)"
         :draft="draft"
         :optimize-error="optimizeError"
+        :checkout-path="adapter.paths.checkout(draft.id)"
         v-model:active-result-id="activeResultId"
         v-model:active-panel-id="activePanelId"
       />

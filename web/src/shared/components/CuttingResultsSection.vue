@@ -27,6 +27,9 @@ const props = defineProps<{
   optimizeError: string | null
   activeResultId: string | null
   activePanelId: string | null
+  // Role-specific "place order" target (client vs workshop checkout), injected
+  // by the editor from its adapter so this presentational component stays dumb.
+  checkoutPath: string
 }>()
 const emit = defineEmits<{
   'update:activeResultId': [string | null]
@@ -321,7 +324,7 @@ async function choose(result: CuttingResult) {
       <aside class="space-y-4">
         <RouterLink
           v-if="draft.chosen_result_id"
-          :to="rolePath(`/c/orders/new/${draft.id}`)"
+          :to="rolePath(props.checkoutPath)"
           class="mp-button mp-button-primary w-full"
         >
           Buyurtma berish

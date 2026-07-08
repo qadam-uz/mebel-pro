@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-08
 order: 80
 ---
 
@@ -30,10 +30,12 @@ manufacturer's spool to load and surprises clients at the counter.
 
 ### What's in a cutting
 
-A **cutting draft** is the working surface a client edits and re-optimises until they place an
-order. It's private to the client and persists indefinitely (no expiry; cap at 50 open
-drafts). The draft becomes a server entity on the **first optimise** — the editor opens local
-and unsaved, so abandoned/empty editors never mint a draft (see *Lifecycle*).
+A **cutting draft** is the working surface a client — or, for a walk-in order, workshop staff
+on the client's behalf ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) — edits
+and re-optimises until an order is placed. It's private (see *Access*) and persists
+indefinitely (no expiry; the client's self-made drafts cap at 50). The draft becomes a server
+entity on the **first optimise** — the editor opens local and unsaved, so abandoned/empty
+editors never mint a draft (see *Lifecycle*).
 
 A draft owns:
 
@@ -159,14 +161,31 @@ eager creation.
 | Part maximum | panel − 2× edge trim (for the part's chosen panel material) |
 | Parts per optimisation | ≤ 100 (across all materials) |
 | Panels per material per result | ≤ 20 (a single material above this must be split into separate orders) |
-| Open drafts per client | ≤ 50 (anti-abuse; client deletes to add more) |
+| Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see *Access*) |
 | Hard timeout per run | 5 s → `optimization_timeout` |
 
 ### Access
 
-A client sees only their own drafts and confirmed results. Workshop staff and the owner see
-confirmed results bound to orders in their scope; the PDF download is gated the same way.
-Every optimisation run is audited.
+- A client sees only their own **self-made** drafts and confirmed results. A staff-minted
+  draft (below) is **invisible to the client — list and get — until the order is placed**
+  (symmetric privacy: staff never see a client's self-made drafts either), and it doesn't
+  count toward the client's 50-draft cap (the cap stays a backstop on the client path only).
+- A draft minted by workshop staff for a walk-in
+  ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) is stamped with the
+  creating workshop (`created_via_workshop_id` —
+  [`../entities/cutting.md`](../entities/cutting.md)). Staff access to it is
+  **workshop-scoped, not branch-scoped**: any staffer holding `manage_orders` in that
+  workshop may pick it up. Deliberate: the colleague who started a walk-in draft may be
+  off-shift or at another desk, and branch- or per-creator scoping would strand the draft
+  mid-sale. Revisit if intra-workshop draft visibility becomes a confidentiality concern —
+  then tighten to branch scope. Outside the minting workshop a draft simply doesn't exist
+  (404, no existence oracle).
+- Abandonment of a staff-minted draft is a **recorded punt**: there is **no staff draft
+  listing in v1**. The editor's leave-guard offers to discard (delete) a never-ordered
+  walk-in draft on exit; a draft left behind anyway is invisible to the client and harmless.
+  Revisit when workshops ask to resume walk-in drafts — then add a listing.
+- Workshop staff and the owner see confirmed results bound to orders in their scope; the PDF
+  download is gated the same way. Every optimisation run is audited.
 
 ## User stories
 
@@ -377,6 +396,14 @@ the client deletes them or hits the cap.
 Same workspace, editing disabled, with a banner naming the bound order.
 
 ### Workshop side
+
+The workshop app runs the **same editor component** for staff-created walk-in drafts
+([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) in a **fixed-branch mode**:
+the branch selector is hidden, the branch is locked to the branch the flow was entered from
+and frozen into the draft at creation (a later topbar branch switch never retargets an
+in-progress draft), and a persistent **identity strip** in the editor header names the
+walk-in client (name + phone). Everything else — parts editor, edge picker, optimise,
+results — is this page, unchanged.
 
 An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
 

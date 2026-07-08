@@ -2,14 +2,15 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-05
+updated: 2026-07-08
 order: 30
 ---
 
 # Orders
 
-The order lifecycle: a client places an order from a finished cutting, the workshop verifies
-it, two production phases run, and the client collects it. v1 is **pickup-only**, the order
+The order lifecycle: a client places an order from a finished cutting — or workshop staff
+place it for a walk-in client (see [Staff-created orders](#staff-created-orders-walk-in-clients))
+— the workshop verifies it, two production phases run, and the client collects it. v1 is **pickup-only**, the order
 **never moves money** (the finance module records what the client paid —
 [`finance.md`](finance.md)) and **never holds stock balances** (the inventory module
 auto-decrements as production completes — [`catalog-inventory.md`](catalog-inventory.md)).
@@ -26,9 +27,9 @@ transition a recorded row.
 
 A **client's request for panels cut to size at one branch** — the header that owns the
 items, the status history, the production stamps, and a frozen price snapshot. Created
-**only by a client**, from a cutting **draft** with a **chosen algorithm result** (no order
-without one — the draft becomes `confirmed` and is bound on creation; see
-[`cutting.md`](cutting.md)).
+**by the client — or by workshop staff on behalf of a walk-in client** — from a cutting
+**draft** with a **chosen algorithm result** (no order without one — the draft becomes
+`confirmed` and is bound on creation; see [`cutting.md`](cutting.md)).
 
 Set at creation:
 
@@ -51,6 +52,49 @@ Set at creation:
 There is **no post-placement modification.** If anything is wrong, the order is cancelled
 (with a reason) and the client re-cuts and re-orders — one rule, no re-pricing machinery.
 
+## Staff-created orders (walk-in clients)
+
+A walk-in customer at the counter has no app and no OTP session. Staff holding
+`manage_orders` on the branch place the order **for** them, through the **same cutting
+editor the client app uses** ([`cutting.md`](cutting.md#workshop-side)) — the walk-in flow
+parameterizes the client flow, it doesn't fork it. The flow:
+
+1. **Entry** — a **+ New order** action on the Orders screen, enabled only when the staffer
+   holds `manage_orders` on the **current topbar branch** and that branch is `active`;
+   otherwise it's disabled with a hint to switch branch.
+2. **Walk-in resolve** — phone-first find-or-create: the staffer enters the client's phone;
+   an existing client's registered name comes back and must be explicitly **confirmed**
+   before continuing; the name is asked only when the number is new; a blocked client is
+   rejected. Semantics, guardrails, and the decision rationale live in
+   [`access-management.md`](access-management.md#staff-resolved-walk-ins-find-or-create).
+3. **Shared editor** — the client app's editor in fixed-branch mode: the branch is locked
+   to the entry branch and frozen into the draft at creation, and a persistent strip names
+   the walk-in (name + phone). Draft visibility and lifecycle rules:
+   [`cutting.md`](cutting.md#access).
+4. **Checkout** — single-branch: a quote at the locked branch, contact prefilled from the
+   resolved client, **Place order**. Pricing setup gaps fail with the same error codes as
+   the client path (see [Pricing](#pricing)); the error copy names the branch and that the
+   owner sets its pricing.
+5. **The order lands `confirmed`** and opens on its detail. From `confirmed` onward a
+   staff-created order is indistinguishable from a client-placed one — same state machine,
+   same stock and money seams.
+
+**Create + auto-confirm.** A staff-placed order is created and confirmed in one operation:
+two append-only status events are written (`∅ → new`, `new → confirmed`), both with
+`actor_type = workshop_user` and the acting staffer's id, and **`confirmed_at` is set to
+creation time**. The standard `order.confirmed` client notification fires as usual — the
+walk-in sees it, along with the order in their history, after they first log in via OTP
+with the same phone.
+
+**Why auto-confirm.** The `new → confirmed` gate exists so staff verify a *client's*
+self-serve order; a staff-placed order is verified by construction — the same staffer just
+built it with the client at the counter. Landing it at `new` for a second Approve tap would
+be ceremony (two events, same actor, seconds apart), while skipping the `∅ → new` event
+would break the append-only spine every timeline and report reads — so both events are
+written atomically, by the same actor. Revisit if workshops ask for a second-person review
+of staff-placed orders — then drop the auto-confirm and land staff orders at `new` like any
+other.
+
 ## The state machine
 
 One straight spine with a single gateway — *does any part need edge banding?* Read it top to
@@ -60,7 +104,7 @@ any non-terminal status can go to `cancelled` (see the table below).
 
 ```mermaid
 flowchart TD
-    start([▶ client places order]) --> new[new<br/>placed · awaiting review]
+    start([▶ order placed]) --> new[new<br/>placed · awaiting review]
     new -->|operator approves| confirmed[confirmed<br/>verified · awaiting cutter]
     confirmed -->|operator assigns a cutter| cutting[cutting<br/>cutter at the saw]
     cutting -->|Cutting done| gate{any part<br/>edge-banded?}
@@ -84,8 +128,8 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 
 | From → To | Trigger · who | Effect |
 |---|---|---|
-| — → `new` | client places the order from a chosen cutting result | price snapshot frozen |
-| `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) | — |
+| — → `new` | client places the order from a chosen cutting result · or `manage_orders` staff place it for a walk-in ([Staff-created orders](#staff-created-orders-walk-in-clients)) | price snapshot frozen |
+| `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) · automatic on a staff-created order (same staff actor, same operation) | — |
 | `new → cancelled` | **Cancel** · client (only while `new`) or `manage_orders` + reason | — |
 | `confirmed → cutting` | **Assign a cutter** · `manage_orders` — the assignment *is* the trigger; the edger is assigned now too if any part is banded | — |
 | `cutting → edge_banding` | **Cutting done** · `process_production`, or `manage_orders` on-behalf — *gateway: a part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
@@ -304,6 +348,18 @@ Permission names below are the per-branch grants from
     date-range picker (preset shortcuts + a calendar for custom spans); branch and
     search come from the topbar. Empty: "No orders in your
     branch(es)." Zero branches: "No branches assigned — ask your workshop owner."
+- **New order — walk-in flow** (`manage_orders`) — the **+ New order** button on the Orders
+  screen starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's
+  enabled per the entry gate there, disabled with a "switch branch" hint otherwise. Screens:
+  - `/workshop/orders/new` — walk-in resolve: a phone field; on a match, a confirm card with
+    the registered name; on a new number, a name field; the target (topbar) branch named
+    throughout.
+  - `/workshop/orders/new/cutting?client=` — the shared editor, new-draft mode.
+  - `/workshop/orders/cutting/:id` — the shared editor on a saved walk-in draft.
+  - `/workshop/orders/new/:draft_id/checkout` — the single-branch checkout (quote at the
+    locked branch, contact prefilled from the resolved client, **Place order**).
+
+  Success routes to the order detail, already `confirmed`.
 - **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client
   mini-card link, status badge, total) with the status-appropriate actions:
 
