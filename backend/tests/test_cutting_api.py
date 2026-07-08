@@ -378,6 +378,8 @@ async def test_cutting_draft_rejects_duplicate_part_refs(
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_cutting_parts"
     assert response.json()["details"]["errors"][0]["code"] == "duplicate_part_ref"
+
+
 async def test_client_surface_hides_staff_minted_drafts(
     client: AsyncClient,
     db_session: AsyncSession,
