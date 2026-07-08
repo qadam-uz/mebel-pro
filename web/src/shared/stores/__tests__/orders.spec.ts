@@ -77,6 +77,7 @@ function quote(branchId: string): OrderQuote {
 describe('orders store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    vi.mocked(api.get).mockReset()
     vi.mocked(api.post).mockReset()
   })
 
@@ -125,5 +126,43 @@ describe('orders store', () => {
       firstErrorTraceId: 'trace-409',
       requestFailed: false,
     })
+  })
+
+  it('quotes a workshop branch against the workshop mirror endpoint', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(quote('branch-1'))
+
+    const result = await useOrdersStore().quoteWorkshopBranch('draft-1', 'branch-1')
+
+    expect(api.get).toHaveBeenCalledWith('/workshop/orders/quote', expect.anything())
+    expect(result).toMatchObject({ branch_id: 'branch-1' })
+  })
+
+  it('creates a workshop walk-in order and joins the workshop list', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ id: 'order-1', status: 'confirmed' })
+    const store = useOrdersStore()
+
+    const order = await store.createWorkshopOrder({
+      draft_id: 'draft-1',
+      branch_id: 'branch-1',
+      contact_name: 'Ali Valiyev',
+      contact_phone: '+998901234567',
+      note_client: 'walk-in',
+    })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/workshop/orders',
+      {
+        draft_id: 'draft-1',
+        branch_id: 'branch-1',
+        contact_name: 'Ali Valiyev',
+        contact_phone: '+998901234567',
+        note_client: 'walk-in',
+      },
+      expect.anything(),
+    )
+    expect(order).toMatchObject({ id: 'order-1', status: 'confirmed' })
+    expect(store.currentOrder).toMatchObject({ id: 'order-1' })
+    expect(store.workshopOrders).toHaveLength(1)
+    expect(store.workshopOrders[0]).toMatchObject({ id: 'order-1' })
   })
 })

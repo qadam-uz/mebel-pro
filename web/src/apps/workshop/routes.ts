@@ -1,6 +1,26 @@
-import type { RouteRecordRaw } from 'vue-router'
+import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router'
 
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import { useCuttingStore } from '@/shared/stores/cutting'
+import { workshopCuttingEditorAdapter } from '@/apps/workshop/cuttingEditorAdapter'
+
+// New-editor guard: the walk-in client must be resolved before the editor opens.
+// After a mid-flow reload the store is empty, so rehydrate from the `client`
+// query param; with neither, bounce back to the walk-in step.
+async function ensureWalkInClient(to: RouteLocationNormalized) {
+  const cutting = useCuttingStore()
+  if (cutting.walkInClient) return true
+  const clientId = typeof to.query.client === 'string' ? to.query.client : null
+  if (clientId) {
+    try {
+      await cutting.loadWalkInClient(clientId)
+      return true
+    } catch {
+      // fall through to the redirect
+    }
+  }
+  return { path: '/workshop/orders/new' }
+}
 
 const orderAccess = [p.manageOrders]
 const orderDetailAccess = [p.viewDashboard, p.manageOrders, p.processProduction]
@@ -34,6 +54,41 @@ export const workshopRoutes: RouteRecordRaw[] = [
     name: 'workshop-orders',
     component: () => import('@/shared/views/WorkshopOrdersView.vue'),
     meta: { title: 'Buyurtmalar', workshopAccess: { any: orderAccess } },
+  },
+  // Staff order-creation flow. All under /workshop/orders/* and declared BEFORE
+  // the `:order_id` detail route so `new`/`cutting` aren't captured as order ids.
+  {
+    path: '/workshop/orders/new',
+    name: 'workshop-order-new-walkin',
+    component: () => import('@/shared/views/WorkshopWalkInClientView.vue'),
+    meta: { title: 'Yangi buyurtma', workshopAccess: { any: orderAccess } },
+  },
+  {
+    path: '/workshop/orders/new/cutting',
+    name: 'workshop-order-cutting-new',
+    component: () => import('@/shared/views/CuttingEditorView.vue'),
+    beforeEnter: ensureWalkInClient,
+    meta: {
+      title: 'Kesim chizmasi',
+      workshopAccess: { any: orderAccess },
+      cuttingEditorAdapter: workshopCuttingEditorAdapter,
+    },
+  },
+  {
+    path: '/workshop/orders/cutting/:id',
+    name: 'workshop-order-cutting-editor',
+    component: () => import('@/shared/views/CuttingEditorView.vue'),
+    meta: {
+      title: 'Kesim chizmasi',
+      workshopAccess: { any: orderAccess },
+      cuttingEditorAdapter: workshopCuttingEditorAdapter,
+    },
+  },
+  {
+    path: '/workshop/orders/new/:draft_id/checkout',
+    name: 'workshop-order-checkout',
+    component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),
+    meta: { title: 'Buyurtmani rasmiylashtirish', workshopAccess: { any: orderAccess } },
   },
   {
     path: '/workshop/orders/:order_id',

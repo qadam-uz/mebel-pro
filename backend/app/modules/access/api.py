@@ -9,9 +9,15 @@ from app.modules.access.auth import (
 from app.modules.access.authz import (
     BranchScope,
     can_access_branch,
+    require_manage_orders_workshop,
     resolve_branch_scope,
     visible_branch_ids,
     visible_workshop_ids,
+)
+from app.modules.access.clients import (
+    ClientResolution,
+    find_or_create_client,
+    normalize_uz_phone,
 )
 from app.modules.access.otp import (
     ClientOtpLoginResult,
@@ -21,7 +27,6 @@ from app.modules.access.otp import (
     TelegramDeliveryError,
     TelegramGatewaySender,
     hash_otp_code,
-    normalize_uz_phone,
     request_otp_code,
     resolve_client_ip,
     verify_otp_code,
@@ -51,6 +56,7 @@ __all__ = [
     "BranchScope",
     "ClientOtpLoginResult",
     "ClientOtpVerifyResult",
+    "ClientResolution",
     "OtpRequestResult",
     "OtpSender",
     "PlainSessionTokens",
@@ -61,6 +67,7 @@ __all__ = [
     "can_access_branch",
     "change_password",
     "create_session",
+    "find_or_create_client",
     "get_session_by_access_token",
     "get_session_by_refresh_token",
     "hash_otp_code",
@@ -69,6 +76,7 @@ __all__ = [
     "prune_expired_sessions",
     "refresh_session",
     "request_otp_code",
+    "require_manage_orders_workshop",
     "resolve_branch_scope",
     "resolve_client_ip",
     "revoke_for_principal",

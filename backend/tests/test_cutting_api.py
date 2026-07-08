@@ -274,6 +274,64 @@ async def test_cutting_draft_ownership_validation_and_limit(
     assert first_client.id != second_client.id
 
 
+async def test_client_surface_hides_staff_minted_drafts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, workshop_id, _, _ = await _workshop_owner_access(db_session)
+    access, client_row = await _client_access(db_session)
+    own = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    staff_minted = CuttingDraft(
+        client_id=client_row.id,
+        created_via_workshop_id=workshop_id,
+        parts_snapshot=[],
+    )
+    db_session.add(staff_minted)
+    await db_session.flush()
+
+    listed = await client.get("/api/v1/client/cutting-drafts", headers=_auth(access))
+    hidden_get = await client.get(
+        f"/api/v1/client/cutting-drafts/{staff_minted.id}",
+        headers=_auth(access),
+    )
+    hidden_delete = await client.delete(
+        f"/api/v1/client/cutting-drafts/{staff_minted.id}",
+        headers=_auth(access),
+    )
+
+    assert own.status_code == 201
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [own.json()["id"]]
+    assert hidden_get.status_code == 404
+    assert hidden_get.json()["code"] == "cutting_draft_not_found"
+    assert hidden_delete.status_code == 404
+
+
+async def test_draft_limit_count_excludes_staff_minted_drafts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, workshop_id, _, _ = await _workshop_owner_access(db_session)
+    access, client_row = await _client_access(db_session)
+    for _ in range(49):
+        db_session.add(CuttingDraft(client_id=client_row.id, parts_snapshot=[]))
+    db_session.add(
+        CuttingDraft(
+            client_id=client_row.id,
+            created_via_workshop_id=workshop_id,
+            parts_snapshot=[],
+        )
+    )
+    await db_session.flush()
+
+    fits = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    capped = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+
+    assert fits.status_code == 201
+    assert capped.status_code == 409
+    assert capped.json()["code"] == "draft_limit_exceeded"
+
+
 async def test_client_cutting_material_picker_marks_branch_carried_materials(
     client: AsyncClient,
     db_session: AsyncSession,

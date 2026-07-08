@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-04
+updated: 2026-07-08
 order: 20
 ---
 
@@ -107,6 +107,37 @@ There is no account-existence oracle _before_ verification — the login-vs-regi
 only revealed after a correct code. On success a session is created; self-service session
 management is the same as workshop / platform users.
 
+### Staff-resolved walk-ins (find-or-create)
+
+A walk-in customer at the counter has no app session, but their order still belongs to a
+real client row. Workshop staff holding `manage_orders` resolve the walk-in **by phone**
+from the workshop app's order-creation flow
+([`orders.md`](orders.md#staff-created-orders-walk-in-clients)):
+
+- **Phone-first.** The staffer submits the phone (`+998XXXXXXXXX`). A match returns the
+  client's registered name, and the staffer must explicitly confirm "this is the right
+  person" before continuing — the confirm step is what stops a phone typo attaching an
+  order to a stranger. The name is asked **only when no row exists**; then a client row is
+  created (`status = active`) exactly as OTP registration would create it.
+- **A blocked client is rejected** (`account_blocked`) — mirrors OTP verification.
+- **Never a login.** The staff path finds or creates the row; it creates **no client
+  session**. OTP remains the only way a client signs in — the first time the walk-in
+  verifies that number they claim the row and see their order history.
+- **Guardrails.** Resolve deliberately discloses an existing client's stored name to
+  `manage_orders` staff — the trade for the anti-typo confirmation, and the name is already
+  what the counter conversation runs on. In exchange the operation is **rate-limited per
+  staff user** (the same convention as the OTP send limits) and **every call writes an
+  audit row** (the phone, whether a row was created, the acting staffer) — a staffer
+  scanning phone numbers is throttled and visible. Revisit if name disclosure draws a real
+  privacy complaint — then mask the returned name, at the cost of a weaker confirmation.
+
+**Why find-or-create, not a guest entity.** `phone` is unique on the client and the account
+is passwordless — OTP verification is itself already a find-or-create on the phone. Reusing
+that identity makes a staff-created client automatically claimable (no merge tooling, no
+orphaned guest rows, order history intact) and needs no order schema change. A separate
+guest/walk-in entity, or staff-typed contact fields with no client link, were rejected:
+both split the customer's history and require a claim/merge path v1 doesn't have.
+
 ### Dev & local sign-in
 
 Local, CI, and E2E runs have no Telegram Gateway and no real phone, so a code can't actually be
@@ -202,7 +233,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | Permission             | Grants on the granted branch                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `view_dashboard`       | see the branch's dashboard / KPIs / order summary                                                                                                                                                                                                                                                                                                                                                       |
-| `manage_orders`        | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, and cancel any pre-`completed` order with a reason. Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md).    |
+| `manage_orders`        | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, cancel any pre-`completed` order with a reason, and **create a cutting draft + place an order on behalf of a walk-in client**, resolving them by phone ([Staff-resolved walk-ins](#staff-resolved-walk-ins-find-or-create)). Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md).    |
 | `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
 | `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
