@@ -103,7 +103,7 @@ function apiValidationMessage(code: string | null): string {
     case 'invalid_panel_material':
       return "Panel maydonlarini to'ldiring."
     case 'invalid_grain':
-      return "Tola yo'nalishini belgilang."
+      return "Tekstura yo'nalishini belgilang."
     default:
       return 'Maydon qiymatini tekshiring.'
   }

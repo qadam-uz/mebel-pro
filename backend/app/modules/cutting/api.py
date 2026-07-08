@@ -1,5 +1,6 @@
 """Public cutting API used by other modules."""
 
+from app.modules.cutting.imports import parse_import_file
 from app.modules.cutting.optimizer import (
     ALGORITHM_VERSION,
     EDGE_OVERHANG_MM,
@@ -71,6 +72,7 @@ __all__ = [
     "list_drafts",
     "optimize_draft",
     "optimize_workshop_draft",
+    "parse_import_file",
     "render_cutting_pdf",
     "render_cutting_svg",
     "run_all_algorithms",

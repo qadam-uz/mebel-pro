@@ -20,6 +20,7 @@ class CuttingPart(BaseModel):
     part_ref: str
     material_id: uuid.UUID
     material_source: MaterialSource = MaterialSource.SHOP
+    follow_grain: bool = True
     length_mm: int
     width_mm: int
     quantity: int

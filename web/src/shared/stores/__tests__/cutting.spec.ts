@@ -3,7 +3,12 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { api } from '@/shared/api/client'
 import { downloadBlob } from '@/shared/app/downloadBlob'
-import { useCuttingStore, type CuttingDraft } from '@/shared/stores/cutting'
+import {
+  partFitError,
+  useCuttingStore,
+  type ClientCatalogMaterialOption,
+  type CuttingDraft,
+} from '@/shared/stores/cutting'
 
 vi.mock('@/shared/app/authInit', () => ({
   authInit: () => ({ accessToken: 'access-token' }),
@@ -58,6 +63,15 @@ function draft(id = 'draft-1'): CuttingDraft {
 }
 
 const WALK_IN = { id: 'client-9', name: 'Ali Valiyev', phone: '+998901112233' }
+
+const basePanel: Pick<
+  ClientCatalogMaterialOption,
+  'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
+> = {
+  panel_length_mm: 600,
+  panel_width_mm: 400,
+  grain_direction: true,
+}
 
 // Drives every store action that talks to the API and returns the request
 // paths per HTTP verb — the scope tests assert the '/client' vs '/workshop'
@@ -211,4 +225,20 @@ describe('cutting store scope', () => {
     expect(store.walkInClient).toBeNull()
     expect(store.scope).toBe('workshop')
   })
+})
+
+describe('partFitError', () => {
+  it.each([
+    [true, true, 'impossible_grain'],
+    [true, false, null],
+    [false, true, null],
+    [false, false, null],
+  ] as const)(
+    'locks rotation only when material grain is %s and follow_grain is %s',
+    (materialGrain, followGrain, expected) => {
+      const panel = { ...basePanel, grain_direction: materialGrain }
+
+      expect(partFitError(360, 500, panel, followGrain)).toBe(expected)
+    },
+  )
 })

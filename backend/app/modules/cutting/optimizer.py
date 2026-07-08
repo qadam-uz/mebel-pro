@@ -79,6 +79,7 @@ class PartInput:
     length_mm: int
     width_mm: int
     quantity: int
+    follow_grain: bool = True
     edge_top: EdgeBandInput | None = None
     edge_bottom: EdgeBandInput | None = None
     edge_left: EdgeBandInput | None = None
@@ -249,17 +250,7 @@ def _run_best_engine_result(
 def _optimize_material(material: PanelSpec, parts: list[PartInput]) -> EngineCuttingResult:
     request = CuttingRequest(
         sheet=Sheet(width=material.length_mm, height=material.width_mm),
-        parts=tuple(
-            Part(
-                id=part.part_ref,
-                width=part.length_mm,
-                height=part.width_mm,
-                quantity=part.quantity,
-                can_rotate=not material.grain_direction,
-                grain=GrainDirection.VERTICAL if material.grain_direction else GrainDirection.NONE,
-            )
-            for part in parts
-        ),
+        parts=tuple(_engine_part(material, part) for part in parts),
         settings=CuttingSettings(
             kerf=KERF_MM,
             trim=EDGE_TRIM_MM,
@@ -277,6 +268,18 @@ def _optimize_material(material: PanelSpec, parts: list[PartInput]) -> EngineCut
             row_index=first.row_index if first is not None else None,
             material_id=material.material_id,
         ) from exc
+
+
+def _engine_part(material: PanelSpec, part: PartInput) -> Part:
+    locked = _rotation_locked(material, part)
+    return Part(
+        id=part.part_ref,
+        width=part.length_mm,
+        height=part.width_mm,
+        quantity=part.quantity,
+        can_rotate=not locked,
+        grain=GrainDirection.VERTICAL if locked else GrainDirection.NONE,
+    )
 
 
 def _ensure_inputs(parts: list[PartInput], materials: dict[uuid.UUID, PanelSpec]) -> None:
@@ -325,7 +328,8 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
     fits_rotated = (
         part.width_mm <= material.usable_length_mm and part.length_mm <= material.usable_width_mm
     )
-    if material.grain_direction and not fits_normal:
+    locked = _rotation_locked(material, part)
+    if locked and not fits_normal:
         raise OptimizerError(
             "impossible_grain",
             "Part cannot fit a grained panel without rotation",
@@ -333,7 +337,7 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
             row_index=part.row_index,
             material_id=part.material_id,
         )
-    if not material.grain_direction and not (fits_normal or fits_rotated):
+    if not locked and not (fits_normal or fits_rotated):
         raise OptimizerError(
             "part_too_large",
             "Part is larger than the usable panel area",
@@ -341,6 +345,10 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
             row_index=part.row_index,
             material_id=part.material_id,
         )
+
+
+def _rotation_locked(material: PanelSpec, part: PartInput) -> bool:
+    return material.grain_direction and part.follow_grain
 
 
 def _build_result(

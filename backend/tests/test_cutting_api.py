@@ -165,6 +165,22 @@ def _parts(panel_id: uuid.UUID, edge_id: uuid.UUID) -> list[dict[str, object]]:
     ]
 
 
+def _rotated_only_part(panel_id: uuid.UUID, *, follow_grain: bool) -> dict[str, object]:
+    return {
+        "part_ref": f"rotated-{uuid.uuid4().hex[:8]}",
+        "material_id": str(panel_id),
+        "material_source": "shop",
+        "follow_grain": follow_grain,
+        "length_mm": 360,
+        "width_mm": 500,
+        "quantity": 1,
+        "edge_top": None,
+        "edge_bottom": None,
+        "edge_left": None,
+        "edge_right": None,
+    }
+
+
 async def test_client_cutting_draft_crud_optimize_choose_and_render(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -232,6 +248,76 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert pdf.content.startswith(b"%PDF")
     assert deleted.status_code == 204
     assert action_count == 5
+
+
+async def test_grained_part_follow_grain_controls_rotation_validation_and_result(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, grained_panel = await _materials(db_session)
+    access, client_row = await _client_access(db_session, phone="+998901111020")
+
+    locked_draft = CuttingDraft(
+        client_id=client_row.id,
+        parts_snapshot=[_rotated_only_part(grained_panel.id, follow_grain=True)],
+    )
+    db_session.add(locked_draft)
+    await db_session.flush()
+    locked = await client.post(
+        f"/api/v1/client/cutting-drafts/{locked_draft.id}/optimize",
+        headers=_auth(access),
+    )
+
+    unlocked = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    unlocked_draft_id = unlocked.json()["id"]
+    updated = await client.patch(
+        f"/api/v1/client/cutting-drafts/{unlocked_draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": [_rotated_only_part(grained_panel.id, follow_grain=False)]},
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{unlocked_draft_id}/optimize",
+        headers=_auth(access),
+    )
+    result = optimized.json()["results"][0]
+    placements = [placement for panel in result["panels"] for placement in panel["placements"]]
+
+    assert locked.status_code == 400
+    assert locked.json()["code"] == "invalid_cutting_parts"
+    assert locked.json()["details"]["errors"][0]["code"] == "impossible_grain"
+    assert updated.status_code == 200
+    assert updated.json()["parts_snapshot"][0]["follow_grain"] is False
+    assert optimized.status_code == 200
+    assert result["parts_snapshot"][0]["follow_grain"] is False
+    assert placements[0]["rotated"] is True
+
+
+async def test_old_cutting_part_snapshots_default_to_follow_grain_true(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    panel, edge, _ = await _materials(db_session)
+    access, client_row = await _client_access(db_session, phone="+998901111021")
+    old_part = _parts(panel.id, edge.id)[0]
+    old_part.pop("follow_grain", None)
+    draft = CuttingDraft(client_id=client_row.id, parts_snapshot=[old_part])
+    db_session.add(draft)
+    await db_session.flush()
+
+    loaded = await client.get(
+        f"/api/v1/client/cutting-drafts/{draft.id}",
+        headers=_auth(access),
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft.id}/optimize",
+        headers=_auth(access),
+    )
+
+    assert loaded.status_code == 200
+    assert loaded.json()["parts_snapshot"][0]["follow_grain"] is True
+    assert optimized.status_code == 200
+    assert optimized.json()["parts_snapshot"][0]["follow_grain"] is True
+    assert optimized.json()["results"][0]["parts_snapshot"][0]["follow_grain"] is True
 
 
 async def test_cutting_draft_ownership_validation_and_limit(

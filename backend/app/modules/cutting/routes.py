@@ -1,10 +1,14 @@
 """Client and workshop cutting routes."""
 
 import uuid
+from functools import partial
+from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+import anyio.to_thread
+from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
 
 from app.api.deps import AccountReadyPrincipal, Session
+from app.core.errors import APIError
 from app.models.enums import MaterialKind
 from app.modules.cutting.api import (
     choose_result,
@@ -21,11 +25,18 @@ from app.modules.cutting.api import (
     list_drafts,
     optimize_draft,
     optimize_workshop_draft,
+    parse_import_file,
     render_cutting_pdf,
     render_cutting_svg,
     update_draft,
     update_workshop_draft,
     workshop_catalog_materials,
+)
+from app.modules.cutting.import_schemas import ImportParseResponse
+from app.modules.cutting.imports.base import (
+    MAX_IMPORT_FILE_BYTES,
+    ImportParseError,
+    parse_options_json,
 )
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
@@ -36,6 +47,33 @@ from app.modules.cutting.schemas import (
 )
 
 router = APIRouter(tags=["cutting"])
+
+
+@router.post("/client/cutting/import/parse", response_model=ImportParseResponse)
+async def client_cutting_import_parse(
+    principal: AccountReadyPrincipal,
+    file: Annotated[UploadFile, File()],
+    options: Annotated[str | None, Form()] = None,
+) -> ImportParseResponse:
+    del principal
+    content = await file.read(MAX_IMPORT_FILE_BYTES + 1)
+    try:
+        parse_options = parse_options_json(options)
+        return await anyio.to_thread.run_sync(
+            partial(
+                parse_import_file,
+                filename=file.filename,
+                content=content,
+                options=parse_options,
+            )
+        )
+    except ImportParseError as exc:
+        raise APIError(
+            exc.code,
+            exc.message,
+            status_code=exc.status_code,
+            details=exc.details,
+        ) from exc
 
 
 @router.get("/client/cutting-drafts", response_model=list[CuttingDraftResponse])

@@ -18,6 +18,7 @@ import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
+import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -28,9 +29,11 @@ import {
   partFitError,
   partNotCarried,
   useCuttingStore,
+  type ClientCatalogMaterialOption,
   type CuttingEdgeBand,
   type CuttingPart,
 } from '@/shared/stores/cutting'
+import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
 import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
 const route = useRoute()
@@ -81,6 +84,9 @@ const optimizeRowError = ref<{
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
 const clearPartsConfirmOpen = ref(false)
+const importWizardOpen = ref(false)
+const importReplaceConfirmOpen = ref(false)
+const pendingImportedParts = ref<CuttingPart[] | null>(null)
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
@@ -119,6 +125,22 @@ const panelOptions = computed(() =>
     activeBranchId.value ? material.branch_carried : true,
   ),
 )
+function catalogChoice(material: ClientCatalogMaterialOption): ChoiceOption {
+  return {
+    value: material.id,
+    label: materialLabel(material),
+    meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
+      material.branch_carried ? '' : " · filialda yo'q"
+    }`,
+  }
+}
+const branchPanelChoices = computed<ChoiceOption[]>(() => panelOptions.value.map(catalogChoice))
+const allPanelChoices = computed<ChoiceOption[]>(() => cutting.panelOptions.map(catalogChoice))
+const edgeOptions = computed(() =>
+  cutting.edgeOptions.filter((material) => (activeBranchId.value ? material.branch_carried : true)),
+)
+const edgeChoices = computed<ChoiceOption[]>(() => edgeOptions.value.map(catalogChoice))
+const allEdgeChoices = computed<ChoiceOption[]>(() => cutting.edgeOptions.map(catalogChoice))
 const panelChoices = computed<ChoiceOption[]>(() => {
   // Always keep a material a row already references in the options, even if the
   // branch filter would drop it — otherwise the picker shows an empty
@@ -134,13 +156,7 @@ const panelChoices = computed<ChoiceOption[]>(() => {
       present.add(material.id)
     }
   }
-  return list.map((material) => ({
-    value: material.id,
-    label: materialLabel(material),
-    meta: `${material.color}${material.decor_code ? ` · ${material.decor_code}` : ''}${
-      material.branch_carried ? '' : " · filialda yo'q"
-    }`,
-  }))
+  return list.map(catalogChoice)
 })
 const hasPersistableParts = computed(() => parts.value.every((part) => !partIsInvalid(part)))
 const lastOptimizedSignature = ref<string | null>(null)
@@ -149,6 +165,7 @@ function partsSignature(list: CuttingPart[] = parts.value) {
     list.map((part) => [
       part.material_id,
       part.material_source,
+      part.follow_grain !== false,
       part.length_mm,
       part.width_mm,
       part.quantity,
@@ -193,6 +210,7 @@ function blankPart(): CuttingPart {
     // auto-selecting the first catalog panel silently risked the wrong material.
     material_id: '',
     material_source: 'shop',
+    follow_grain: true,
     length_mm: 100,
     width_mm: 100,
     quantity: 1,
@@ -218,12 +236,12 @@ function rowNotCarried(part: CuttingPart) {
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
   if (!panel || panel.panel_length_mm == null || panel.panel_width_mm == null) return null
-  const code = partFitError(part.length_mm, part.width_mm, panel)
+  const code = partFitError(part.length_mm, part.width_mm, panel, part.follow_grain !== false)
   if (!code) return null
   const usableLength = panel.panel_length_mm - 2 * EDGE_TRIM_MM
   const usableWidth = panel.panel_width_mm - 2 * EDGE_TRIM_MM
   if (code === 'impossible_grain')
-    return `Tola yo'nalishi qat'iy — qism ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
+    return `Tekstura yo'nalishi qat'iy — qism ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
   return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${EDGE_TRIM_MM} mm chetki qirqim).`
 }
 
@@ -253,7 +271,7 @@ function optimizeRowMessage(code: string | undefined): string {
   if (code === 'part_too_large')
     return "Bu qism panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
   if (code === 'impossible_grain')
-    return "Tola yo'nalishi bu qismni joylashtirishga to'sqinlik qiladi."
+    return "Tekstura yo'nalishi bu qismni joylashtirishga to'sqinlik qiladi."
   if (code === 'material_not_found')
     return "Bu qatordagi material endi katalogda yo'q — boshqasini tanlang."
   return "Bu qatorni optimallashtirib bo'lmadi."
@@ -330,6 +348,46 @@ function clearParts() {
   clearSelection()
 }
 
+function openImportWizard() {
+  importWizardOpen.value = true
+}
+
+function closeImportWizard() {
+  importWizardOpen.value = false
+  importReplaceConfirmOpen.value = false
+  pendingImportedParts.value = null
+}
+
+function commitImportedParts(mode: ImportLoadMode, importedParts: CuttingPart[]) {
+  parts.value = applyImportedParts(parts.value, importedParts, mode).map(normalizeSources)
+  if (mode === 'replace') preferredEdgeByPart.value = {}
+  optimizeError.value = null
+  optimizeRowError.value = null
+  clearSelection()
+  importWizardOpen.value = false
+}
+
+function onImportLoad(payload: { mode: ImportLoadMode; parts: CuttingPart[] }) {
+  if (payload.mode === 'replace' && parts.value.length > 0) {
+    pendingImportedParts.value = payload.parts
+    importReplaceConfirmOpen.value = true
+    return
+  }
+  commitImportedParts(payload.mode, payload.parts)
+}
+
+function confirmImportReplace() {
+  const importedParts = pendingImportedParts.value
+  pendingImportedParts.value = null
+  importReplaceConfirmOpen.value = false
+  if (importedParts) commitImportedParts('replace', importedParts)
+}
+
+function cancelImportReplace() {
+  pendingImportedParts.value = null
+  importReplaceConfirmOpen.value = false
+}
+
 // --- Bulk selection (desktop power-feature) --------------------------------
 // Select rows, then apply edges / change material / delete in one action so
 // banding or re-materialing many identical parts isn't N modal round-trips.
@@ -388,6 +446,10 @@ function applyBulkMaterial() {
 
 function setPanel(part: CuttingPart, value: string | null) {
   part.material_id = value ?? ''
+}
+
+function setFollowGrain(part: CuttingPart, value: boolean) {
+  part.follow_grain = value
 }
 
 function preferredEdgeId(part: CuttingPart) {
@@ -615,7 +677,9 @@ watch(
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
       autosave.hydrate(() => {
-        parts.value = value.parts_snapshot.map((part) => normalizeSources(part))
+        parts.value = value.parts_snapshot.map((part) =>
+          normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
+        )
         hydratedDraftId = value.id
       })
     }
@@ -867,6 +931,36 @@ onBeforeRouteLeave(() => {
                 {{ parts.length }} qator · {{ totalQuantity }} dona
               </p>
             </div>
+            <div v-if="!isReadOnly && activeBranchId" class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
+                <button
+                  type="button"
+                  class="rounded-md px-3 py-2 text-sm font-bold transition"
+                  :class="
+                    importWizardOpen
+                      ? 'text-ink-muted hover:bg-elevated hover:text-ink'
+                      : 'bg-elevated text-ink shadow-sm'
+                  "
+                  :aria-pressed="!importWizardOpen"
+                  @click="importWizardOpen = false"
+                >
+                  Qo'lda kiritish
+                </button>
+                <button
+                  type="button"
+                  class="rounded-md px-3 py-2 text-sm font-bold transition"
+                  :class="
+                    importWizardOpen
+                      ? 'bg-elevated text-ink shadow-sm'
+                      : 'text-ink-muted hover:bg-elevated hover:text-ink'
+                  "
+                  :aria-pressed="importWizardOpen"
+                  @click="openImportWizard"
+                >
+                  Fayldan yuklash
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Bulk bar: actions only — the row checkboxes already show what's
@@ -932,7 +1026,7 @@ onBeforeRouteLeave(() => {
                  real select-all checkbox; the rest are decorative labels. -->
             <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
               <div
-                class="grid grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[30px_30px_minmax(200px,1.4fr)_74px_82px_82px_66px_minmax(150px,1fr)_44px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
                 <input
                   type="checkbox"
@@ -944,6 +1038,7 @@ onBeforeRouteLeave(() => {
                 />
                 <span aria-hidden="true">#</span>
                 <span aria-hidden="true">Panel materiali</span>
+                <span aria-hidden="true">Tekstura</span>
                 <span aria-hidden="true">Uzunlik</span>
                 <span aria-hidden="true">Eni</span>
                 <span aria-hidden="true">Soni</span>
@@ -969,6 +1064,7 @@ onBeforeRouteLeave(() => {
               @update:width="part.width_mm = $event"
               @update:quantity="part.quantity = $event"
               @update:material="setPanel(part, $event)"
+              @update:follow-grain="setFollowGrain(part, $event)"
               @delete="deleteRow(index)"
               @open-edge-picker="openEdgePicker(part, $event)"
             />
@@ -983,10 +1079,6 @@ onBeforeRouteLeave(() => {
               <Icon name="plus" class="size-4" />
               Qism qo'shish
             </button>
-            <!-- The upcoming file import is a quiet one-liner here (where import
-                 would act), not a disabled header mode switch — dead controls
-                 shouldn't take prime header space (docs/ref/features/cutting.md). -->
-            <p class="text-center text-xs text-ink-muted">Tez kunda: .bas / .xlsx fayldan import</p>
           </div>
 
           <div
@@ -1061,6 +1153,30 @@ onBeforeRouteLeave(() => {
       danger
       @cancel="clearPartsConfirmOpen = false"
       @confirm="clearParts"
+    />
+
+    <CuttingImportWizard
+      :open="importWizardOpen"
+      :panel-choices="branchPanelChoices"
+      :all-panel-choices="allPanelChoices"
+      :edge-choices="edgeChoices"
+      :all-edge-choices="allEdgeChoices"
+      :has-existing-parts="parts.length > 0"
+      :current-pieces="totalQuantity"
+      :preferred-branch-name="preferredBranch?.branch_name ?? null"
+      @close="closeImportWizard"
+      @load="onImportLoad"
+    />
+
+    <ConfirmDialog
+      :open="importReplaceConfirmOpen"
+      title="Qismlarni almashtirish"
+      :message="`Hozirgi ${parts.length} qator import qilingan ro'yxat bilan almashtirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
+      confirm-label="Almashtirish"
+      cancel-label="Bekor qilish"
+      danger
+      @cancel="cancelImportReplace"
+      @confirm="confirmImportReplace"
     />
 
     <ConfirmDialog

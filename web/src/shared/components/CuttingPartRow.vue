@@ -37,6 +37,7 @@ const emit = defineEmits<{
   'update:width': [number]
   'update:quantity': [number]
   'update:material': [string | null]
+  'update:follow-grain': [boolean]
   delete: []
   'open-edge-picker': [Event | undefined]
   'toggle-select': []
@@ -67,6 +68,24 @@ const quantityModel = computed({
 })
 
 const grain = computed(() => materialById(props.part.material_id)?.grain_direction ?? false)
+const followsGrain = computed(() => props.part.follow_grain !== false)
+const grainTitle = computed(() =>
+  !grain.value
+    ? "Tekstura yo'nalishi bu materialda yo'q — sozlama saqlanadi, lekin natijaga ta'sir qilmaydi"
+    : followsGrain.value
+      ? "Tekstura yo'nalishi bo'yicha — burilmaydi"
+      : 'Tekstura hisobga olinmaydi — burilishi mumkin',
+)
+const grainToggleClass = computed(() =>
+  !grain.value
+    ? 'border border-hairline-strong bg-elevated text-ink-muted'
+    : followsGrain.value
+      ? 'bg-info-soft text-info'
+      : 'border border-hairline-strong bg-sunk text-ink-muted opacity-80',
+)
+const grainLabelClass = computed(() =>
+  followsGrain.value ? (grain.value ? '' : 'opacity-70') : 'line-through opacity-70',
+)
 
 const swatchStyle = computed(() => {
   const material = materialById(props.part.material_id)
@@ -142,7 +161,7 @@ function edgeCellLabel(side: EdgeField) {
     "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[30px_30px_minmax(210px,1.6fr)_82px_82px_66px_minmax(150px,1fr)_44px] lg:items-start lg:gap-2"
+      class="grid gap-3 lg:grid-cols-[30px_30px_minmax(200px,1.4fr)_74px_82px_82px_66px_minmax(150px,1fr)_44px] lg:items-start lg:gap-2"
     >
       <div class="hidden lg:flex lg:justify-center">
         <input
@@ -170,24 +189,38 @@ function edgeCellLabel(side: EdgeField) {
             :error="!part.material_id ? 'Material tanlang' : null"
             @update:model-value="emit('update:material', $event)"
           />
-          <span
-            v-if="grain"
-            class="hidden h-9 shrink-0 items-center gap-1 rounded-md bg-info-soft px-2 text-xs font-bold text-info lg:inline-flex"
-            title="Tola yo'nalishi bor — bu qism burilmaydi"
-            aria-label="Tola yo'nalishi bor"
-          >
-            <span aria-hidden="true">↕</span> Tola
-          </span>
         </div>
-        <div v-if="grain" class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
-          <span
-            class="mp-chip bg-info-soft text-info"
-            title="Tola yo'nalishi bor — bu qism burilmaydi"
-            aria-label="Tola yo'nalishi bor — bu qism burilmaydi"
+        <div class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
+          <button
+            type="button"
+            data-test="follow-grain-mobile"
+            class="mp-chip"
+            :class="grainToggleClass"
+            :title="grainTitle"
+            :aria-label="grainTitle"
+            :aria-pressed="followsGrain"
+            @click="emit('update:follow-grain', !followsGrain)"
           >
-            <span aria-hidden="true">↕</span> Tola
-          </span>
+            <span aria-hidden="true">↕</span>
+            <span :class="grainLabelClass">Tekstura</span>
+          </button>
         </div>
+      </div>
+
+      <div class="hidden lg:flex lg:justify-center">
+        <button
+          type="button"
+          data-test="follow-grain-desktop"
+          class="inline-flex h-9 w-full items-center justify-center gap-1 rounded-md px-2 text-xs font-bold"
+          :class="grainToggleClass"
+          :title="grainTitle"
+          :aria-label="grainTitle"
+          :aria-pressed="followsGrain"
+          @click="emit('update:follow-grain', !followsGrain)"
+        >
+          <span aria-hidden="true">↕</span>
+          <span :class="grainLabelClass">Tekstura</span>
+        </button>
       </div>
 
       <!-- Sub-lg: the three dimensions share one row; lg:contents

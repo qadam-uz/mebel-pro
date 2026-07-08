@@ -234,6 +234,7 @@ async def _apply_optimize(
         [CuttingPart.model_validate(part) for part in draft.parts_snapshot],
         require_non_empty=True,
     )
+    draft.parts_snapshot = parts
     try:
         optimizer_results = run_all_algorithms(optimizer_parts, panel_specs)
     except OptimizerError as exc:
@@ -567,9 +568,10 @@ async def _validate_parts(
         usable_width = panel.panel_width_mm - 2 * EDGE_TRIM_MM
         fits_normal = part.length_mm <= usable_length and part.width_mm <= usable_width
         fits_rotated = part.width_mm <= usable_length and part.length_mm <= usable_width
-        if panel.grain_direction and not fits_normal:
+        locked = bool(panel.grain_direction) and part.follow_grain
+        if locked and not fits_normal:
             errors.append(_row_error(part, row_index, "impossible_grain", panel.id))
-        elif not panel.grain_direction and not (fits_normal or fits_rotated):
+        elif not locked and not (fits_normal or fits_rotated):
             errors.append(_row_error(part, row_index, "part_too_large", panel.id))
         edge_inputs: dict[str, EdgeBandInput | None] = {}
         for field_name in ("edge_top", "edge_bottom", "edge_left", "edge_right"):
@@ -617,6 +619,7 @@ async def _validate_parts(
                 row_index=row_index,
                 material_id=part.material_id,
                 material_source=part.material_source,
+                follow_grain=part.follow_grain,
                 length_mm=part.length_mm,
                 width_mm=part.width_mm,
                 quantity=part.quantity,
@@ -752,7 +755,7 @@ async def _draft_response(
         id=draft.id,
         client_id=draft.client_id,
         preferred_branch_id=draft.preferred_branch_id,
-        parts_snapshot=draft.parts_snapshot,
+        parts_snapshot=_parts_snapshot_response(draft.parts_snapshot),
         chosen_result_id=draft.chosen_result_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
@@ -825,7 +828,7 @@ async def _result_response(
         total_cut_length_mm=result.total_cut_length_mm,
         total_edge_length_mm=result.total_edge_length_mm,
         edge_length_by_material=result.edge_length_by_material,
-        parts_snapshot=result.parts_snapshot,
+        parts_snapshot=_parts_snapshot_response(result.parts_snapshot),
         material_snapshots=result.material_snapshots,
         edge_length_shop_by_material=result.edge_length_shop_by_material,
         edge_length_own_by_material=result.edge_length_own_by_material,
@@ -838,3 +841,7 @@ async def _result_response(
         invalidated_at=result.invalidated_at,
         panels=panels,
     )
+
+
+def _parts_snapshot_response(parts_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [CuttingPart.model_validate(part).model_dump(mode="json") for part in parts_snapshot]

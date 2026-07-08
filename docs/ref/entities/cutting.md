@@ -26,7 +26,7 @@ indefinitely (no expiry); a client may have at most 50 self-made drafts open at 
 | `client_id` | UUID | the client who owns it |
 | `created_via_workshop_id` | UUID? | null for a client self-made draft. Set to the minting workshop when staff created the draft for a walk-in ([`cutting.md`](../features/cutting.md#access)): staff access is scoped by it (workshop-wide), the draft is hidden from the client until the order is placed, and it is excluded from the 50-draft cap. On such a draft `preferred_branch_id` is the staff flow's fixed branch, frozen at creation. |
 | `preferred_branch_id` | UUID? | the branch the cutting is scoped to; the material picker offers only this branch's carried materials and the order step defaults to it. **Required by the editor** — the parts UI is gated until it's set (see [`cutting.md`](../features/cutting.md)) — but the column stays nullable for drafts predating this rule and for the unsaved window before the first branch pick. Seeded from the client's `preferred_branch_id` on draft create; the client can change it on the draft (no clear-to-none) without affecting the profile default. Never enforces destructively (rows referencing materials the branch doesn't carry stay editable with inline recovery affordances). |
-| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id` (a `panel`), `material_source` (`shop` / `own`), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <edge-material>, "source": "shop" \| "own" }`. Grain is derived from the panel material (not stored on the part); edge thickness/colour are derived from each side's edge material. |
+| `parts_snapshot` | json | the parts list as the client has edited it — each part has `part_ref` (UUID), `material_id` (a `panel`), `material_source` (currently normalised to `shop` by the editor), `follow_grain` (bool, default `true` for old snapshots), `length_mm`, `width_mm`, `quantity`, and per-side `edge_<top\|bottom\|left\|right>` — each either `null` (no banding on that side) or `{ "material_id": <edge-material>, "source": "shop" }`. Grain direction is derived from the panel material; `follow_grain` only locks rotation when that material is grained. Edge thickness/colour are derived from each side's edge material. |
 | `chosen_result_id` | UUID? | the result the client picked from the latest run; null between edits and the next optimise |
 | `created_at` / `updated_at` | timestamps | |
 
@@ -60,7 +60,7 @@ the algorithm later doesn't touch past results.
 | `waste_percentage` | numeric | 0.0–1.0; weighted across all panel materials in the result |
 | `total_cut_length_mm` / `total_edge_length_mm` | int | feed pricing metrics |
 | `edge_length_by_material` | json | `{ "<edge-material_id>": 12500, "<edge-material_id>": 4800 }` — per-edge-material geometric length in integer millimetres; UI/pricing displays metres. |
-| `parts_snapshot` | json | source parts copied from the draft at optimise time, so the result remains renderable after the draft is deleted on order placement |
+| `parts_snapshot` | json | source parts copied from the draft at optimise time, including each part's `follow_grain`, so the result remains renderable after the draft is deleted on order placement |
 | `material_snapshots` | json | material display/spec facts copied at optimise time for every panel/edge material referenced by the result; used for labels and PDFs after catalog edits |
 | `edge_length_shop_by_material` / `edge_length_own_by_material` | json | source-split geometric edge length, keyed by edge material id, in integer millimetres |
 | `edge_consumed_shop_by_material` / `edge_consumed_own_by_material` | json | source-split edge consumption, keyed by edge material id, in integer millimetres; includes the fixed 30 mm overhang per banded side |
@@ -116,5 +116,6 @@ was rotated), and whether it was rotated 90°.
 
 Invariants: every input part-instance (each `part_ref` × each quantity index) in the source
 parts list appears exactly once across the result's placements; the placement sits on a
-panel whose `material_id` matches the part's panel material; a part on a grained material is
-never `rotated`; placements don't overlap and stay within `panel − 2× edge_trim`; immutable.
+panel whose `material_id` matches the part's panel material; a locked part (grained material
+and `follow_grain=true`) is never `rotated`; placements don't overlap and stay within
+`panel − 2× edge_trim`; immutable.

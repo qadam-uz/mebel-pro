@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from app.models.enums import MaterialSource
+from app.modules.cutting import optimizer as optimizer_module
 from app.modules.cutting.api import (
     EDGE_OVERHANG_MM,
     EDGE_TRIM_MM,
@@ -12,6 +13,7 @@ from app.modules.cutting.api import (
     PlacementResult,
     run_all_algorithms,
 )
+from cutting_engine import GrainDirection
 
 
 def _panel(*, length: int = 1000, width: int = 800, grain: bool = False) -> PanelSpec:
@@ -30,6 +32,7 @@ def _part(
     length: int = 300,
     width: int = 200,
     quantity: int = 1,
+    follow_grain: bool = True,
     edge_top: EdgeBandInput | None = None,
     edge_left: EdgeBandInput | None = None,
 ) -> PartInput:
@@ -41,6 +44,7 @@ def _part(
         length_mm=length,
         width_mm=width,
         quantity=quantity,
+        follow_grain=follow_grain,
         edge_top=edge_top,
         edge_left=edge_left,
     )
@@ -96,6 +100,47 @@ def test_grained_material_rejects_rotation_locked_impossible_part() -> None:
 
     assert exc.value.code == "impossible_grain"
     assert exc.value.part_ref == "part-1"
+
+
+@pytest.mark.parametrize(
+    ("material_grain", "follow_grain", "expected_can_rotate", "expected_grain"),
+    [
+        (True, True, False, GrainDirection.VERTICAL),
+        (True, False, True, GrainDirection.NONE),
+        (False, True, True, GrainDirection.NONE),
+        (False, False, True, GrainDirection.NONE),
+    ],
+)
+def test_engine_part_rotation_lock_follows_material_and_part_grain_matrix(
+    material_grain: bool,
+    follow_grain: bool,
+    expected_can_rotate: bool,
+    expected_grain: GrainDirection,
+) -> None:
+    panel = _panel(grain=material_grain)
+    part = _part(material_id=panel.material_id, follow_grain=follow_grain)
+
+    engine_part = optimizer_module._engine_part(panel, part)
+
+    assert engine_part.can_rotate is expected_can_rotate
+    assert engine_part.grain is expected_grain
+
+
+def test_grained_material_allows_rotation_when_part_does_not_follow_grain() -> None:
+    panel = _panel(length=300, width=200, grain=True)
+    part = _part(
+        material_id=panel.material_id,
+        length=170,
+        width=260,
+        follow_grain=False,
+    )
+
+    result = run_all_algorithms([part], {panel.material_id: panel})[0]
+
+    placement = result.panels[0].placements[0]
+    assert placement.rotated is True
+    assert placement.length_mm == 260
+    assert placement.width_mm == 170
 
 
 def test_edge_metrics_split_shop_and_own_with_consumed_overhang() -> None:

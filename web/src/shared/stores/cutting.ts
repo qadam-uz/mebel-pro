@@ -31,6 +31,7 @@ export interface CuttingPart {
   part_ref: string
   material_id: string
   material_source: MaterialSource
+  follow_grain: boolean
   length_mm: number
   width_mm: number
   quantity: number
@@ -144,9 +145,9 @@ export const EDGE_TRIM_MM = 10
 
 /**
  * Pure check of whether a part fits its chosen panel, mirroring the backend
- * validation (panel usable area = panel − 2×edge-trim; non-grained panels may
- * rotate the part, grained panels may not). Returns the matching backend error
- * code, or null when the part fits (or the panel size is unknown).
+ * validation (panel usable area = panel − 2×edge-trim; rotation is locked only
+ * when the panel has grain and this part follows it). Returns the matching
+ * backend error code, or null when the part fits (or the panel size is unknown).
  */
 export function partFitError(
   lengthMm: number,
@@ -155,6 +156,7 @@ export function partFitError(
     ClientCatalogMaterialOption,
     'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
   >,
+  followGrain: boolean,
   trimMm: number = EDGE_TRIM_MM,
 ): 'impossible_grain' | 'part_too_large' | null {
   if (panel.panel_length_mm == null || panel.panel_width_mm == null) return null
@@ -165,7 +167,8 @@ export function partFitError(
   const usableWidth = panel.panel_width_mm - 2 * trimMm
   const fitsNormal = length <= usableLength && width <= usableWidth
   const fitsRotated = width <= usableLength && length <= usableWidth
-  if (panel.grain_direction) return fitsNormal ? null : 'impossible_grain'
+  const locked = Boolean(panel.grain_direction && followGrain)
+  if (locked) return fitsNormal ? null : 'impossible_grain'
   return fitsNormal || fitsRotated ? null : 'part_too_large'
 }
 

@@ -54,8 +54,9 @@ A draft owns:
   left, right — each `null` for no banding, or a catalog edge material). Every material is
   **workshop-supplied**: the editor offers no "I'll bring it myself" choice (the snapshot's
   `material_source` / side `source` fields are always `shop`; see *Parts and materials*).
-  Grain is **not** a per-part choice — it's a property of
-  the chosen panel material. Edge thickness and colour are properties of the chosen edge
+  Grain direction is a property of the chosen panel material, and each part stores
+  `follow_grain` (default `true`) to say whether that part must respect it. The instruction
+  matters only on grained panels. Edge thickness and colour are properties of the chosen edge
   material — the user picks the tape, not a thickness.
 - **Algorithm results.** Re-running the optimiser produces one result per available
   algorithm in a single call against the same input. All N results are kept on the draft until
@@ -125,12 +126,19 @@ eager creation.
   cut topology.
 - **Guillotine cuts only.** A cut runs edge-to-edge; the algorithm recursively splits the
   panel into smaller rectangles. Non-guillotine, L-shaped, and CNC paths are out of scope.
-- **Grain — a property of the panel material, not the part.** Each catalog `panel` material
-  declares whether it has a visible grain direction. For a **grained material**, every part
-  on it has its length aligned with the panel's grain (the long side); the algorithm may
-  not rotate the part 90°. For a **non-grained material**, the algorithm is free to rotate
-  parts. If a part on a grained material can't fit in its forced orientation, the run fails
-  with `impossible_grain`. The user is never asked to set grain on a part.
+- **Grain lock = material grain × part instruction.** Each catalog `panel` material declares
+  whether it has a visible grain direction. Each part also carries `follow_grain` (default
+  `true`). Rotation is locked only when `material.grain_direction && part.follow_grain`.
+  Otherwise the algorithm may rotate the part 90°. If a locked part can't fit in its forced
+  orientation, the run fails with `impossible_grain`.
+
+| Material `grain_direction` | Part `follow_grain` | Rotation |
+| --- | --- | --- |
+| `true` | `true` | locked; no 90° rotation |
+| `true` | `false` | free rotation |
+| `false` | `true` | free rotation |
+| `false` | `false` | free rotation |
+
 - **One catalog material → one standard panel size.** The same spec in another size is a
   separate catalog material (size is part of its identity and name); custom panel sizes
   per run are future.
@@ -160,6 +168,7 @@ eager creation.
 | Part minimum | 50 mm × 50 mm |
 | Part maximum | panel − 2× edge trim (for the part's chosen panel material) |
 | Parts per optimisation | ≤ 100 (across all materials) |
+| Import file | ≤ 1 MiB; `.csv` only |
 | Panels per material per result | ≤ 20 (a single material above this must be split into separate orders) |
 | Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see *Access*) |
 | Hard timeout per run | 5 s → `optimization_timeout` |
@@ -233,24 +242,49 @@ doesn't carry get a per-row warning + recovery affordances (below).
 
 ### Parts editor (top)
 
-Manual entry is the only input mode in v1. The upcoming file import (`.bas` / `.xlsx`)
-is advertised as a quiet muted one-liner under the **Add part** tile — *"Coming soon:
-import from a .bas / .xlsx file"* — not as a disabled header mode switch (a dead control
-shouldn't take prime header space; the hint sits where import will act). The page header
-carries a **Clear parts list** trash icon, shown only once there are rows. The primary
-**Optimise** button lives in a **sticky bottom action bar** — alongside the row / piece
-count (and, when it's disabled, the reason shown inline) — so it stays reachable above a
-long list.
+A mode switch at the top: **Manual entry** (default) · **Upload file** (`.csv` only).
+Upload opens the import wizard; manual entry stays as the plain row editor. The expected
+source is БАЗИС-Мебельщик's **Спецификация в CSV** export; Excel-made lists must be saved
+as CSV first. The page header carries a **Clear parts list** trash icon, shown only once
+there are rows. The primary **Optimise** button lives in a
+**sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
+reason shown inline) — so it stays reachable above a long list.
 
 Adding a row follows the content rather than a fixed header control: an empty editor shows a
 centred **Add part** call-to-action, and once there are rows a dashed **Add part** tile sits
 beneath the last row (there is no separate header add button).
 
 On wide layouts the parts table renders as a dense, scannable grid: a shared column header
-and one compact single-line row per part (the panel cell carries a colour swatch, an inline
-source toggle, a grain badge, and a leading row checkbox for bulk actions; a trailing
-**Delete** trash button removes the row). On narrow screens each row stacks into a labelled
-card.
+and one compact single-line row per part (the panel cell carries a colour swatch, a separate
+texture-follow column, and a leading row checkbox for bulk actions;
+a trailing **Delete** trash button removes the row). On narrow screens each row stacks into
+a labelled card.
+
+### File import wizard
+
+The import wizard is stateless: it never stores the file, creates a draft, or writes to the
+database. It only parses a local `.csv` file into ordinary editor parts.
+
+1. **File.** The client picks a file; the UI pre-checks the 1 MiB size cap and extension,
+   then calls `POST /api/v1/client/cutting/import/parse` without a mapping.
+2. **Columns.** The backend always returns a preview and suggested column roles. The user
+   confirms or changes the mapping and sets how many top rows to skip. Length and width
+   must be mapped before continuing.
+3. **Materials.** Materials from the file become groups only. The user must pick a panel
+   catalog item for every panel group and an edge catalog item for every edge group. When
+   the CSV carries a `Толщина`/thickness column, the wizard shows that value as a muted
+   hint next to the panel group. The uploaded file name is shown above the material list,
+   which helps the БАЗИС-Мебельщик "by material" export mode where the material name lives
+   in the file name. There is deliberately no automatic material matching.
+4. **Report and load.** The wizard shows total parts/pieces, skipped rows, and warnings
+   before it writes anything into the editor. Empty editors get a single **Load** action;
+   non-empty editors offer **Append** and a danger-confirmed **Replace**.
+
+Rows skipped because they cannot be represented (for example an `Итого` footer in a numeric
+column) appear in the report. Recoverable domain problems still import: a sub-50 mm part is
+loaded and then flagged by the editor's normal validation. Imports over 100 pieces are
+rejected at parse time; imports that make the current editor exceed 100 pieces show a notice
+and the optimiser remains blocked until rows are removed.
 
 The parts table:
 
@@ -258,14 +292,16 @@ The parts table:
 | --- | --- |
 | **#** | row number |
 | **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part should follow texture direction; unpressed means rotation is allowed. The setting locks rotation only when the selected panel material is grained; on non-grained panels it is visible but has no optimisation effect |
 | **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
 | **W mm** | same |
 | **Qty** | integer ≥ 1 |
 | **Edges** | per-side summary — a small panel diagram (line weight signals thickness) + a one-line label (e.g. `H1334 · 0.4 mm` · `T·B · H1334 2.0` · `Mixed · 2 edges` · `None`). Tap → edge picker |
 | **Delete** | a trash icon button removes the row |
 
-The grain indicator (a small arrow) appears **on the panel chip itself** when the chosen
-panel has grain — a passive cue, not a control.
+The grain toggle (small arrow + `Tekstura`) appears on the row.
+Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
+`follow_grain=false` and the optimiser may rotate it.
 
 **Edge picker** (opens from the Edges cell — popover on desktop, bottom sheet on mobile):
 
@@ -413,11 +449,23 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
   editor flags the row; the optimiser refuses to run.
 - **`part_too_large` / `part_too_small`** — outside the bounds for the chosen panel
   material → the wizard names the offending part and the max size.
-- **`impossible_grain`** — a part on a grained material can't fit rotated-locked → the row
-  is flagged.
+- **`impossible_grain`** — a locked part (`material.grain_direction && part.follow_grain`)
+  can't fit in its forced orientation → the row is flagged.
 - **`too_many_parts` / `too_many_panels_needed`** — over the caps → reject; split the job.
 - **`optimization_timeout`** — no result within 5 s → retry or simplify.
 - **`draft_limit_exceeded`** — > 50 open drafts → delete some first.
+- **Unsupported import file** — the wizard accepts only `.csv`; `.xlsx`, legacy `.xls`,
+  proprietary CAD files, PDFs, JSON/XML/text, empty files, oversized files, and binary junk
+  are rejected with a clear error before they touch the editor.
+- **Import footers / summary rows** — non-empty rows whose mapped numeric cells cannot be
+  parsed, such as an `Итого` footer, are listed in the import report as skipped rows with
+  the original row number and preview text.
+- **Recoverable imported typos** — imported parts below the 50 mm minimum or otherwise
+  outside the chosen panel's bounds are loaded into the editor and flagged inline by the
+  existing validation, so the client can correct them instead of losing the row.
+- **Import piece cap** — a parsed file above 100 pieces is rejected; an append that makes
+  the editor exceed 100 pieces is allowed to land but the optimiser stays blocked until the
+  client removes rows.
 - **All-`own` cutting** — no `shop` materials at all; the order step accepts any active
   branch with a saw.
 - **Edges all `own`** — the order's `edge_length_by_material` still records the total

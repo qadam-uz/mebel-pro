@@ -532,7 +532,7 @@ onMounted(async () => {
               <th>Turi / o'lcham</th>
               <th>Qalinligi</th>
               <th>Panel o'lchami</th>
-              <th>Tola</th>
+              <th>Tekstura</th>
               <th>Holat</th>
               <th>Ustaxonalar</th>
               <th><span class="sr-only">Amallar</span></th>
@@ -794,7 +794,7 @@ onMounted(async () => {
                     type="checkbox"
                     class="size-4 accent-accent"
                   />
-                  Tola yo'nalishi bor
+                  Tekstura yo'nalishi bor
                 </label>
               </template>
               <ImageUploadField

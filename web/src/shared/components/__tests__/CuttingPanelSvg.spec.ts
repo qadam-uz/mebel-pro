@@ -72,6 +72,7 @@ function makePart(overrides: Partial<CuttingPart> = {}): CuttingPart {
     part_ref: 'A',
     material_id: 'mat-1',
     material_source: 'shop',
+    follow_grain: true,
     length_mm: 300,
     width_mm: 200,
     quantity: 1,
