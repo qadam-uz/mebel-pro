@@ -159,7 +159,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   await page.getByRole('button', { name: 'tasdiqlangan holatiga qaytarish' }).click()
   const revertDialog = page.getByRole('dialog', { name: 'Buyurtmani qaytarish' })
   await revertDialog.getByLabel('Sabab').fill('E2E revert reason')
-  await revertDialog.getByRole('button', { name: 'Qaytarish' }).click()
+  await revertDialog.getByRole('button', { name: 'Ha, qaytarilsin' }).click()
   await expect(page.getByText('Tasdiqlangan', { exact: true }).first()).toBeVisible()
 
   const freshBeforeConflict = await orderDetail(request, seeded.ownerAccess, placed.order.id)

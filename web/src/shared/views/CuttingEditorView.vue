@@ -893,11 +893,12 @@ onBeforeRouteLeave(() => {
               </b>
             </div>
             <button
+              v-if="preferredBranch"
               type="button"
               class="mp-button mp-button-outline"
               @click="branchPickerOpen = true"
             >
-              {{ preferredBranch ? "O'zgartirish" : 'Ustaxona tanlash' }}
+              O'zgartirish
             </button>
             <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
               Kesish ro'yxati tanlangan ustaxona katalogi asosida tuziladi — davom etish uchun
