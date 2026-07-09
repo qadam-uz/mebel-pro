@@ -32,10 +32,23 @@ interaction behavior — for the three Vue SPAs. Realize it in shared code: `@th
   inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
   `ProjectDropdown` teleports its panel at z-50 and would render behind the modal layer
   (z-80).
-- Object-creation buttons use a visible `+` prefix in the label (all apps). Placement
-  follows scope: page-scoped creates sit in the page-head tools; tab-scoped list-add
-  actions sit as a normal-size button right-aligned above the tab's content; a pair of
-  primary operations (Ombor's Kirim + Tuzatish) spans the full row as a two-column grid.
+- Object-creation buttons use a visible `+` prefix in the label (all apps). In the
+  workshop app every list-add create button sits at the **right end of the filter row**
+  (`.mp-filters > .mp-button`, baseline-aligned with the 40px controls); a page or tab
+  without filters renders the button as a lone right-aligned `.mp-filters` row directly
+  above the table. Page heads are title-only. The one exception is a pair of primary
+  operations (Ombor's Kirim + Tuzatish), which spans the full row as a two-column grid.
+- Form input **values** render semibold (600) with placeholders pinned to regular — a
+  filled field must read as data, a hint must not. This spans all three apps
+  (`input.mp-input` for workshop/client, `.admin-field input` was already 600) and the
+  composed controls (PhoneInput, FormSelect and SearchCombobox selected values);
+  `textarea.mp-input` reason fields stay regular.
+- Numeric fields sanitize **as you type** (the PhoneInput pattern — an invalid character
+  never sticks, paste included) via `src/shared/app/inputSanitizers.ts`: money fields
+  keep digits/grouping/one decimal mark, quantities keep digits + one separator, and the
+  inventory adjustment takes a **signed quantity with a required leading + or −**
+  ("-2" decreases, "+5" increases; inputmode stays text so mobile keyboards carry the
+  signs) — structural validation stays with the submit-path parsers.
 - Table cells: numeric columns (money, quantities) right-align in mono with the unit on a
   small muted second line so digits align for comparison. Event timestamps render as
   `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted "Kiritildi:"

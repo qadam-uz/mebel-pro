@@ -19,6 +19,7 @@ export function useSessions() {
   const sessions = ref<SessionResponse[]>([])
   const logoutCurrentOpen = ref(false)
   const logoutEverywhereOpen = ref(false)
+  const loggingOut = ref(false)
 
   async function loadSessions() {
     sessions.value = await auth.fetchSessions()
@@ -49,20 +50,37 @@ export function useSessions() {
     }
   }
 
+  // `loggingOut` feeds the confirm dialogs' :busy so the confirm can't double-fire,
+  // and an API failure resurfaces as a toast instead of an unhandled rejection.
   async function logoutCurrent() {
-    await auth.logoutCurrent()
-    await router.replace(config.loginPath)
+    loggingOut.value = true
+    try {
+      await auth.logoutCurrent()
+      await router.replace(config.loginPath)
+    } catch {
+      toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+    } finally {
+      loggingOut.value = false
+    }
   }
 
   async function logoutEverywhere() {
-    await auth.logoutEverywhere()
-    await router.replace(config.loginPath)
+    loggingOut.value = true
+    try {
+      await auth.logoutEverywhere()
+      await router.replace(config.loginPath)
+    } catch {
+      toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+    } finally {
+      loggingOut.value = false
+    }
   }
 
   return {
     sessions,
     logoutCurrentOpen,
     logoutEverywhereOpen,
+    loggingOut,
     loadSessions,
     deviceLabel,
     revokeRow,

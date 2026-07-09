@@ -7,16 +7,17 @@ import {
   clearFieldErrors,
   fieldErrorsFromApi,
   focusFirstFieldError,
-  nonNegativeAmount,
   requiredText,
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
+import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 type WorkingDay = {
@@ -55,6 +56,31 @@ const pricingForm = reactive({
   cuttingRateSom: '',
   edgeBandingRateSom: '',
 })
+// Rates are optional (empty = "not set"), but a non-empty value must parse via
+// the strict so'm parser — bare Number() read "12.500" as 12,5 so'm (1000x) and
+// turned "12 500" into NaN that silently cleared the rate on save.
+const cuttingRateTiyin = computed(() =>
+  pricingForm.cuttingRateSom.trim() ? parseSomToTiyin(pricingForm.cuttingRateSom) : null,
+)
+const edgeBandingRateTiyin = computed(() =>
+  pricingForm.edgeBandingRateSom.trim() ? parseSomToTiyin(pricingForm.edgeBandingRateSom) : null,
+)
+
+// Type-time sanitization (PhoneInput precedent) — invalid characters never stick.
+watch(
+  () => pricingForm.cuttingRateSom,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) pricingForm.cuttingRateSom = clean
+  },
+)
+watch(
+  () => pricingForm.edgeBandingRateSom,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) pricingForm.edgeBandingRateSom = clean
+  },
+)
 const statusForm = reactive({
   status: 'active',
   reason: '',
@@ -109,9 +135,13 @@ function validateBranchForm() {
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
   branchFieldErrors.cuttingRate =
-    nonNegativeAmount(pricingForm.cuttingRateSom, "Kesish narxini so'mda kiriting.") ?? undefined
+    pricingForm.cuttingRateSom.trim() && cuttingRateTiyin.value === null
+      ? "Kesish narxini to'g'ri kiriting — masalan: 25 000."
+      : undefined
   branchFieldErrors.edgeBandingRate =
-    nonNegativeAmount(pricingForm.edgeBandingRateSom, "Krom narxini so'mda kiriting.") ?? undefined
+    pricingForm.edgeBandingRateSom.trim() && edgeBandingRateTiyin.value === null
+      ? "Krom narxini to'g'ri kiriting — masalan: 5 000."
+      : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   return !hasErrors
@@ -185,12 +215,8 @@ async function saveBranch() {
       working_hours: workingHoursPayload(),
     })
     await workshop.updateBranchPricing(branchId.value, {
-      cutting_rate_tiyin: pricingForm.cuttingRateSom
-        ? Math.round(Number(pricingForm.cuttingRateSom) * 100)
-        : null,
-      edge_banding_rate_tiyin: pricingForm.edgeBandingRateSom
-        ? Math.round(Number(pricingForm.edgeBandingRateSom) * 100)
-        : null,
+      cutting_rate_tiyin: cuttingRateTiyin.value,
+      edge_banding_rate_tiyin: edgeBandingRateTiyin.value,
     })
     saved.value = true
     toast.success('Filial saqlandi.')
@@ -420,6 +446,9 @@ onMounted(refreshBranch)
                   branchFieldErrors.cuttingRate ? 'branch-detail-cutting-rate-error' : undefined
                 "
               />
+              <small v-if="cuttingRateTiyin !== null" class="text-ink-muted">
+                = {{ formatTiyin(cuttingRateTiyin) }}
+              </small>
               <span
                 v-if="branchFieldErrors.cuttingRate"
                 id="branch-detail-cutting-rate-error"
@@ -440,6 +469,9 @@ onMounted(refreshBranch)
                   branchFieldErrors.edgeBandingRate ? 'branch-detail-edge-rate-error' : undefined
                 "
               />
+              <small v-if="edgeBandingRateTiyin !== null" class="text-ink-muted">
+                = {{ formatTiyin(edgeBandingRateTiyin) }}
+              </small>
               <span
                 v-if="branchFieldErrors.edgeBandingRate"
                 id="branch-detail-edge-rate-error"

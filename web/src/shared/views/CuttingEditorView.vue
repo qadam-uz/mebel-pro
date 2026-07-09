@@ -497,8 +497,10 @@ function onEdgePickerApply(payload: {
 
 // The client flow no longer offers "I'll bring it" — every material is
 // workshop-supplied. Legacy drafts saved with `own` parts/sides are coerced
-// back to `shop` on hydration so the not-carried warnings and pricing read
-// consistently; the next autosave persists the normalized snapshot.
+// back to `shop` on hydration; when that changed anything, hydration schedules
+// a save so the SERVER snapshot matches what the user sees — optimise/order
+// price the persisted snapshot, and a display-only rewrite would invisibly
+// bill legacy parts as client-supplied (no material charge).
 function normalizeSources(part: CuttingPart): CuttingPart {
   const next: CuttingPart = { ...part, material_source: 'shop' }
   for (const side of edgeFields) {
@@ -506,6 +508,17 @@ function normalizeSources(part: CuttingPart): CuttingPart {
     if (band && band.source !== 'shop') next[side] = { ...band, source: 'shop' }
   }
   return next
+}
+
+function hasLegacyOwnSources(snapshot: CuttingPart[]) {
+  return snapshot.some(
+    (part) =>
+      part.material_source !== 'shop' ||
+      edgeFields.some((side) => {
+        const band = part[side]
+        return Boolean(band && band.source !== 'shop')
+      }),
+  )
 }
 
 // Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
@@ -676,12 +689,22 @@ watch(
     // the round-trip (CB-15). Result-derived state below always tracks the
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
+      const needsNormalization = hasLegacyOwnSources(value.parts_snapshot)
       autosave.hydrate(() => {
         parts.value = value.parts_snapshot.map((part) =>
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
         )
         hydratedDraftId = value.id
       })
+      // Normalization diverged from the server copy — persist it (debounced;
+      // optimise flushes first) instead of marking the draft already-saved.
+      // schedule() itself skips read-only bound drafts. Runs a tick later so
+      // hydrate()'s watch suppression has lifted.
+      if (needsNormalization) {
+        void nextTick(() => {
+          autosave.schedule()
+        })
+      }
     }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
     const optimizedResult = value.results.find((result) => result.id === activeResultId.value)

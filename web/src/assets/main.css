@@ -176,8 +176,17 @@
       box-shadow 150ms ease;
   }
 
+  /* Values read as the user's entered data — semibold, like the admin app's
+     `.admin-field input`. Element-qualified: `textarea.mp-input` reason fields
+     stay regular (long prose in bold reads shouty), and placeholders are pinned
+     back to regular so hints never look like pre-filled values. */
+  input.mp-input {
+    font-weight: 600;
+  }
+
   .mp-input::placeholder {
     color: var(--color-ink-muted);
+    font-weight: 400;
   }
 
   .mp-input:focus {
@@ -4532,11 +4541,19 @@
     margin-top: 22px;
   }
 
+  /* List-add create buttons live at the right end of the filter row; margin-top
+     drops them to the control baseline (18px caption + 4px gap). */
   .mp-filters > .mp-button {
     min-height: 40px;
     border-radius: 8px;
     padding-block: 5px;
     margin-top: 22px;
+    margin-left: auto;
+  }
+
+  /* A lone button row (page/tab without filters) has no captions to align with. */
+  .mp-filters > .mp-button:only-child {
+    margin-top: 0;
   }
 
   /* Top-label ProjectDropdown caption when the dropdown stands alone (outside a
@@ -5331,6 +5348,14 @@
       max-width: none;
     }
 
+    /* No caption columns to align with in the single-column stack — drop the
+       22px baseline offset so the 12px grid gap stays uniform. */
+    .mp-filters > .mp-button,
+    .mp-filters > .mp-filter-chip,
+    .mp-filters > .mp-filter-reset {
+      margin-top: 0;
+    }
+
     .admin-modal {
       width: calc(100vw - 24px);
       max-width: calc(100vw - 24px);
@@ -5511,6 +5536,8 @@
     padding: 10px 0;
     color: inherit;
     font: inherit;
+    /* Entered value reads semibold like input.mp-input (the +998 prefix already is). */
+    font-weight: 600;
     line-height: 1.25;
     letter-spacing: 0.01em;
     outline: 0;
@@ -5519,6 +5546,7 @@
 
   .mp-phone .mp-phone-native::placeholder {
     color: var(--color-ink-muted);
+    font-weight: 400;
   }
 
   /* iOS Safari zooms when focusing a sub-16px control; match .mp-input (CB-68). */

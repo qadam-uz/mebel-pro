@@ -140,7 +140,14 @@ async function complete(order: OrderSummary) {
 async function confirmComplete() {
   const order = pendingComplete.value
   if (!order) return
-  if (await complete(order)) pendingComplete.value = null
+  if (await complete(order)) {
+    pendingComplete.value = null
+    return
+  }
+  // On failure the store may have refetched the order (version conflict): re-arm
+  // the dialog with the fresh row so a retry carries the current version; if the
+  // order left the queue (someone else advanced it), close the moot dialog.
+  pendingComplete.value = queueOrders.value.find((row) => row.id === order.id) ?? null
 }
 
 onMounted(refresh)
@@ -336,6 +343,9 @@ onMounted(refresh)
       :busy="orders.actionLoading"
       @cancel="pendingComplete = null"
       @confirm="confirmComplete"
-    />
+    >
+      <!-- Failures must surface above the scrim — the page banner sits under it. -->
+      <p v-if="actionError" class="text-sm font-bold text-danger">{{ actionError }}</p>
+    </ConfirmDialog>
   </section>
 </template>

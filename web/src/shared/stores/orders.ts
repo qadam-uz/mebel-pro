@@ -561,6 +561,14 @@ export const useOrdersStore = defineStore('orders', () => {
         if (orderId) {
           if (match?.[1] === 'client') await loadClientOrder(orderId)
           else await loadWorkshopOrder(orderId)
+          // Sync the refreshed order into the summary list too — a retry from a
+          // list-driven surface (queues) must carry the server's current version,
+          // not the stale row it captured before the conflict.
+          const fresh = currentOrder.value
+          if (fresh && fresh.id === orderId) {
+            if (match?.[1] === 'client') patchClientOrder(fresh)
+            else patchWorkshopOrder(fresh)
+          }
         }
       }
       captureActionError(errorValue, 'order_action_failed')

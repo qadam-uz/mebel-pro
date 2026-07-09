@@ -402,7 +402,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('heading', { name: 'Chizma', exact: true })).toBeVisible()
   await branchesLoaded
 
-  await page.getByRole('button', { name: 'Ustaxona tanlash' }).click()
+  // Two triggers open the same picker while no branch is set (header + the
+  // pick-a-workshop empty state) — take the header one.
+  await page.getByRole('button', { name: 'Ustaxona tanlash' }).first().click()
   // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
   await page.getByRole('button', { name: new RegExp(`Cutting Branch ${id}`) }).click()
   await page.getByRole('button', { name: "Qo'llash" }).click()

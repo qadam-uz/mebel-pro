@@ -123,16 +123,16 @@ watch(
       Ishlab chiqarish hisobotlariga ruxsatingiz yo'q.
     </section>
 
-    <section v-else class="mp-surface p-4">
-      <div class="mp-filters !mb-0">
-        <ProjectDropdown v-model="branchId" label="Filial" :options="branchOptions" top-label />
-        <DateRangePicker
-          v-model:preset="datePreset"
-          v-model:date-from="dateFrom"
-          v-model:date-to="dateTo"
-        />
-      </div>
-    </section>
+    <!-- Bare filter row on the page background, like every other page — this was
+         the only view wrapping its filters in a surface card. -->
+    <div v-else class="mp-filters">
+      <ProjectDropdown v-model="branchId" label="Filial" :options="branchOptions" top-label />
+      <DateRangePicker
+        v-model:preset="datePreset"
+        v-model:date-from="dateFrom"
+        v-model:date-to="dateTo"
+      />
+    </div>
 
     <section
       v-if="canViewFinance && finance.loading"

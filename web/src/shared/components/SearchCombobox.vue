@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
       <input
         :id="id"
         ref="inputRef"
-        class="w-full rounded-md border bg-elevated text-sm text-ink"
+        class="w-full rounded-md border bg-elevated text-sm font-semibold text-ink placeholder:font-normal"
         :class="[
           error ? 'border-danger' : 'border-hairline-strong',
           compact ? 'min-h-9' : 'min-h-11',

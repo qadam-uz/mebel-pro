@@ -303,16 +303,6 @@ onBeforeUnmount(() => {
       <div>
         <h1>Xodimlar</h1>
       </div>
-      <div class="tools">
-        <button
-          v-if="auth.me?.is_owner"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openCreateForm"
-        >
-          + Yangi xodim
-        </button>
-      </div>
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
@@ -510,6 +500,9 @@ onBeforeUnmount(() => {
           top-label
         />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <button type="button" class="mp-button mp-button-primary" @click="openCreateForm">
+          + Yangi xodim
+        </button>
       </div>
 
       <section v-if="workshop.loading" class="card p-5" aria-live="polite">

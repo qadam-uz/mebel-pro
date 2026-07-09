@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-07
+updated: 2026-07-09
 order: 50
 ---
 
@@ -176,7 +176,10 @@ now-redundant branch column:
   chip), on-hand, min-stock, unit; low-stock rows highlighted (chip + colour), and a
   "low-stock only" toggle chip. Two page actions each open a modal: **Record
   stock-in** (qty, supplier picker with inline add, receipt upload) and **Adjust**
-  (signed delta + mandatory reason). **Transactions** — full log: type (`stock_in` /
+  (a signed quantity with a **required leading + or −** — "-2" writes off, "+5" adds —
+  live-filtered as typed, plus the mandatory reason; this supersedes the earlier
+  direction-toggle design in favour of one explicit signed entry).
+  **Transactions** — full log: type (`stock_in` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, order link (for consume/restore), supplier (for stock_in), actor,
   note, date-time; filtered by the shared date-range picker; read-only.

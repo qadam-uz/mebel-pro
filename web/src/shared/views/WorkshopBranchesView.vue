@@ -126,16 +126,6 @@ onMounted(() => {
       <div>
         <h1>Filiallar</h1>
       </div>
-      <div class="tools">
-        <button
-          v-if="auth.me?.is_owner"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="showCreate = true"
-        >
-          + Yangi filial
-        </button>
-      </div>
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
@@ -144,6 +134,15 @@ onMounted(() => {
     </section>
 
     <template v-else>
+      <!-- No filters on this page — the create action still sits in the standard
+           filter-row slot above the table (right-aligned; :only-child drops the
+           caption baseline offset). -->
+      <div class="mp-filters">
+        <button type="button" class="mp-button mp-button-primary" @click="showCreate = true">
+          + Yangi filial
+        </button>
+      </div>
+
       <AppModal
         :open="showCreate"
         title="Yangi filial"

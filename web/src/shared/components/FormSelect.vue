@@ -168,7 +168,10 @@ onBeforeUnmount(() => {
         @click="open ? closeList() : openList()"
         @keydown="onKeydown"
       >
-        <span class="min-w-0 truncate">{{ buttonText }}</span>
+        <!-- Selected values read semibold like input values; the placeholder stays regular. -->
+        <span class="min-w-0 truncate" :class="selected ? 'font-semibold' : ''">
+          {{ buttonText }}
+        </span>
         <svg class="size-4 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
           <path
             d="M5 7.5 10 12l5-4.5"

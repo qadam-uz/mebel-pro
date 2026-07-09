@@ -419,7 +419,9 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
   await branchesLoaded;
 
-  await page.getByRole("button", { name: "Ustaxona tanlash" }).click();
+  // Two triggers open the same picker while no branch is set (header + the
+  // pick-a-workshop empty state) — take the header one.
+  await page.getByRole("button", { name: "Ustaxona tanlash" }).first().click();
   // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
   await page
     .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })

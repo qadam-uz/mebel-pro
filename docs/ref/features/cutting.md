@@ -322,9 +322,12 @@ Pressed means `follow_grain=true` and the part is rotation-locked; unpressed mea
   to a one-line summary (swatch + tape + thickness + how many sides) with a **Change**
   toggle; opening it — or arriving at a part with no banding yet — shows the full list.
   Edges with the same `decor_code` as the panel are pinned first with a **Recommended**
-  marker; same-`color` matches follow; all other active edge materials continue in the same
-  list, filtered by search + a thickness dropdown. If no panel is selected, matching appears
-  once the panel is picked but catalog search still works.
+  marker; same-`color` matches follow; the rest of the **branch's carried** edge materials
+  continue in the same list, filtered by search + a thickness dropdown — like the panel
+  picker, tapes the branch doesn't carry are not offered (a tape already applied to the
+  part stays listed so the selection can't vanish; the per-side warning flags it). If no
+  panel is selected, matching appears once the panel is picked but catalog search still
+  works.
 - **The edge picker applies to the row it was opened from.** The footer has only **Cancel**
   and **Apply**; **Apply** saves the selected side pattern and tape to the row whose
   **Edges** cell opened the picker, and never edits sibling rows from inside the picker.

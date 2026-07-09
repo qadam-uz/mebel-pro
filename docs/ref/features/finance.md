@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-07
+updated: 2026-07-09
 order: 55
 ---
 
@@ -113,7 +113,8 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   the app-wide date-range picker: one trigger opening preset shortcuts (today / last
   7 days / this month / last month / last 30 days / all) beside a calendar for custom
   spans; every filter auto-applies — there is no separate apply button.
-  Each tab carries its own create action above the list; both open modal dialogs. The
+  Each tab carries its own create action at the right end of its filter row; both open
+  modal dialogs. The
   date column pairs the business date with the entry timestamp beneath it — a backdated
   record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,

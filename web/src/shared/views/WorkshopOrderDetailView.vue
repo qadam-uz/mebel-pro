@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import {
   discountDraftFromOrder,
@@ -66,6 +67,13 @@ const actionPanel = ref<HTMLElement | null>(null)
 const discountPanel = ref<HTMLElement | null>(null)
 const discountValueInput = ref<HTMLInputElement | null>(null)
 const discountError = ref<string | null>(null)
+
+// Type-time sanitization (PhoneInput precedent) — the money charset covers both
+// discount kinds (a percent is digits with an optional decimal separator).
+watch(discountValue, (value) => {
+  const clean = sanitizeMoneyInput(value)
+  if (clean !== value) discountValue.value = clean
+})
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)

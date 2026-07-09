@@ -105,12 +105,19 @@ function firstEdgeId(edges: Record<EdgeField, CuttingEdgeBand | null>) {
   )
 }
 
+// The picker is branch-scoped like the panel picker (docs/ref/features/cutting.md):
+// only tapes the selected branch carries are offered or recommended. A tape already
+// on one of this part's sides stays visible (flagged) so the selection can't vanish.
+const carriedEdgeOptions = computed(() =>
+  cutting.edgeOptions.filter((material) => material.branch_carried),
+)
+
 function recommendedEdgeForPart() {
   const part = props.part
   if (!part) return null
   return recommendedEdge(
     materialById(part.material_id),
-    cutting.edgeOptions,
+    carriedEdgeOptions.value,
     lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
   )
@@ -136,7 +143,7 @@ function sideAria(side: EdgeField) {
 }
 
 const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
-  const values = [...new Set(cutting.edgeOptions.map((material) => material.thickness_mm))]
+  const values = [...new Set(carriedEdgeOptions.value.map((material) => material.thickness_mm))]
     .filter(Boolean)
     .sort((left, right) => Number(left) - Number(right))
   return [
@@ -148,7 +155,13 @@ const edgePickerMaterials = computed(() => {
   const part = props.part
   if (!part) return []
   const query = edgePickerSearch.value.trim().toLowerCase()
+  const selectedIds = new Set(
+    edgeFields
+      .map((side) => edgePickerState.value[side]?.material_id)
+      .filter((id): id is string => Boolean(id)),
+  )
   return rankedEdges(materialById(part.material_id), cutting.edgeOptions)
+    .filter(({ material }) => material.branch_carried || selectedIds.has(material.id))
     .filter(({ material }) =>
       edgePickerThickness.value && edgePickerThickness.value !== 'all'
         ? material.thickness_mm === edgePickerThickness.value

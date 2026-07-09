@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
+import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -69,9 +70,6 @@ const kindOptions: DropdownOption[] = [
   { value: 'panel', label: 'Panel' },
   { value: 'edge', label: 'Krom' },
 ]
-const selectedBranch = computed(
-  () => accessibleBranches.value.find((branch) => branch.id === selectedBranchId.value) ?? null,
-)
 const manufacturerOptions = computed<DropdownOption[]>(() => {
   const byId = new Map<string, string>()
   for (const row of workshop.branchMaterials) {
@@ -267,6 +265,22 @@ watch(search, () => {
   searchTimer = window.setTimeout(() => void refreshCatalog(), 250)
 })
 
+// Type-time sanitization (PhoneInput precedent) — invalid characters never stick.
+watch(
+  () => materialForm.priceTiyin,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) materialForm.priceTiyin = clean
+  },
+)
+watch(
+  () => materialForm.minStock,
+  (value) => {
+    const clean = sanitizeQuantityInput(value)
+    if (clean !== value) materialForm.minStock = clean
+  },
+)
+
 // Reset (and close) the add/edit dialog whenever the topbar switches the branch —
 // a draft priced for one branch must not silently save into another.
 watch(selectedBranchId, () => {
@@ -299,16 +313,6 @@ onBeforeUnmount(() => {
       <div>
         <h1>Material katalogi</h1>
       </div>
-      <div class="tools">
-        <button
-          v-if="selectedBranch"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openCreateMaterial"
-        >
-          + Material qo'shish
-        </button>
-      </div>
     </div>
 
     <div v-if="!canUseCatalog" class="st-empty">
@@ -335,6 +339,9 @@ onBeforeUnmount(() => {
           top-label
         />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <button type="button" class="mp-button mp-button-primary" @click="openCreateMaterial">
+          + Material qo'shish
+        </button>
       </div>
 
       <div v-if="rowActionError" class="banner danger mb-4">
@@ -349,11 +356,18 @@ onBeforeUnmount(() => {
         @close="closeMaterialModal"
       >
         <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
+          <!-- Editing: availableCatalogOptions filters out already-selected materials,
+               so the combobox has no option (and no label) for the edited row — show
+               the name in a plain disabled field instead (finance-modal precedent). -->
+          <label v-if="editingBranchMaterialId" class="field">
+            <span>Material</span>
+            <input class="mp-input" :value="editingBranchMaterial?.material.name ?? ''" disabled />
+          </label>
           <SearchCombobox
+            v-else
             v-model="materialForm.materialId"
             label="Material"
             :options="availableCatalogOptions"
-            :disabled="editingBranchMaterialId !== null"
             :error="materialFieldError"
           />
           <label class="field">

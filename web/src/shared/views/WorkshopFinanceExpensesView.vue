@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
+import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -105,6 +106,23 @@ const incomeForm = reactive({
   receiptFileId: null as string | null,
   receiptName: '',
 })
+
+// Type-time sanitization (PhoneInput precedent): an invalid character never
+// sticks; parseSomToTiyin still owns whether the kept characters make sense.
+watch(
+  () => expenseForm.amount,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) expenseForm.amount = clean
+  },
+)
+watch(
+  () => incomeForm.amount,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) incomeForm.amount = clean
+  },
+)
 
 const canManageFinance = computed(() => permissions.can(p.manageFinance))
 const financeBranches = computed(() =>
@@ -586,20 +604,6 @@ onMounted(async () => {
         :tabs="financeTabs"
       />
 
-      <div class="mb-3 flex justify-end">
-        <button
-          v-if="activeTab === 'expense'"
-          type="button"
-          class="mp-button mp-button-primary"
-          @click="openCreateExpense"
-        >
-          + Xarajat
-        </button>
-        <button v-else type="button" class="mp-button mp-button-primary" @click="openCreateIncome">
-          + Tushum
-        </button>
-      </div>
-
       <AppModal
         :open="expenseModalOpen"
         :title="editingExpenseId ? 'Xarajatni tahrirlash' : 'Xarajat yozish'"
@@ -814,6 +818,17 @@ onMounted(async () => {
           top-label
         />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
+        <button
+          v-if="activeTab === 'expense'"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="openCreateExpense"
+        >
+          + Xarajat
+        </button>
+        <button v-else type="button" class="mp-button mp-button-primary" @click="openCreateIncome">
+          + Tushum
+        </button>
       </div>
 
       <section v-if="finance.loading" class="card p-5" aria-live="polite">

@@ -310,7 +310,7 @@ watch(
 
         <RouterLink
           v-if="canFinance"
-          :to="rolePath('/workshop/finance/expenses')"
+          :to="rolePath('/workshop/finance/income')"
           class="kpi no-underline"
         >
           <div class="lbl">Tushum</div>

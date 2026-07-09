@@ -387,15 +387,17 @@ Permission names below are the per-branch grants from
 
 - **Cutter workspace** (`/workshop/cutting`, `process_production`) — tablet-optimised.
   Lists orders **assigned to this user** that are `confirmed` (assigned, awaiting cut)
-  and `cutting` (theirs, in progress). Card: order #, parts count, panels needed, age,
-  cutting plan link (SVG / PDF for the saw). One action: **Cutting done** (stamps the
-  cutter + snapshot, decrements panels, routes to `edge_banding` if any banded part else
-  `ready`). Empty: "Nothing assigned — nice."
-- **Edger workspace** (`/workshop/banding`, `process_production`) — same shape for
-  `edge_banding` orders assigned to this user. Card: order #, parts, total metres by
-  edge material (only `shop` sides counted), age. One action: **Banding done** (stamps
-  the edger + metres-by-material snapshot, decrements stock per edge material, →
-  `ready`).
+  and `cutting` (theirs, in progress); an **owner sees the whole branch queue**, with
+  each card tagged by its actual assignee. Card: order #, parts count, panels needed,
+  age, cutting plan link (SVG / PDF for the saw). One action: **Cutting done** — behind
+  a confirm dialog naming the order (completion is manager-revert-only), it stamps the
+  cutter + snapshot, decrements panels, and routes to `edge_banding` if any banded part
+  else `ready`. Empty: "Nothing assigned — nice."
+- **Edger workspace** (`/workshop/banding`, `process_production`) — same shape (and the
+  same owner-wide view + confirm gate) for `edge_banding` orders assigned to this user.
+  Card: order #, parts, total metres by edge material (only `shop` sides counted), age.
+  One action: **Banding done** (stamps the edger + metres-by-material snapshot,
+  decrements stock per edge material, → `ready`).
 
 States: list / detail each have loading / empty / error; actions show a busy state and end
 in success or a recoverable error; the optimistic-lock conflict surfaces as "this order

@@ -8,6 +8,7 @@ import {
   formatStockQuantity,
   formatStockUnit,
   formatTiyin,
+  formatTiyinParts,
   parseDisplayQuantity,
   parseSomToTiyin,
 } from '@/shared/formatters'
@@ -93,6 +94,34 @@ describe('shared formatters', () => {
     expect(parseSomToTiyin('-5')).toBeNull()
     expect(parseSomToTiyin('12.3456')).toBeNull()
     expect(parseSomToTiyin('1,23,45')).toBeNull()
+  })
+
+  it("pins the parser's deliberate policies: NBSP grouping and grouped-thousands dots", () => {
+    // NBSP is what Intl.NumberFormat('uz-UZ') itself emits as the group separator.
+    expect(parseSomToTiyin('12 500')).toBe(1_250_000)
+    // "1.234" reads as grouped thousands (1 234 so'm), NOT as a 3-decimal fraction —
+    // so'm amounts have no 3-decimal fractions, and misreading it 1000x down is the
+    // exact bug the parser exists to prevent.
+    expect(parseSomToTiyin('1.234')).toBe(123_400)
+  })
+
+  it('scales KPI money to mln/mlrd parts with the exact amount preserved in full', () => {
+    const plain = formatTiyinParts(50_000_00)
+    expect(plain.unit).toBe("so'm")
+    expect(plain.full).toBe(formatTiyin(50_000_00))
+    // amount + unit reassemble to the exact formatTiyin string (separator-proof).
+    expect(`${plain.amount} ${plain.unit}`).toBe(formatTiyin(50_000_00))
+    const millions = formatTiyinParts(12_500_000_00)
+    expect(millions.amount).toBe('12,5')
+    expect(millions.unit).toBe("mln so'm")
+    expect(millions.full).toBe(formatTiyin(12_500_000_00))
+    const billions = formatTiyinParts(2_400_000_000_00)
+    expect(billions.amount).toBe('2,4')
+    expect(billions.unit).toBe("mlrd so'm")
+    // Negative net stays scaled with its sign.
+    expect(formatTiyinParts(-12_500_000_00).unit).toBe("mln so'm")
+    // Boundary quirk (documented): just under 1 mlrd renders as "1 000 mln so'm".
+    expect(formatTiyinParts(999_999_999_00).unit).toBe("mln so'm")
   })
 
   it('parses display quantities back to storage units (mm for metres)', () => {

@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-07-07
+updated: 2026-07-08
 order: 40
 ---
 

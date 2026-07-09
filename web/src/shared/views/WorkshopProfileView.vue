@@ -18,6 +18,7 @@ const {
   sessions,
   logoutCurrentOpen,
   logoutEverywhereOpen,
+  loggingOut,
   loadSessions,
   deviceLabel,
   revokeRow,
@@ -325,7 +326,9 @@ onMounted(async () => {
       message="Ustaxona kabinetidan chiqasiz."
       confirm-label="Chiqish"
       cancel-label="Bekor qilish"
+      busy-label="Chiqilmoqda"
       danger
+      :busy="loggingOut"
       @cancel="logoutCurrentOpen = false"
       @confirm="logoutCurrent"
     />
@@ -335,7 +338,9 @@ onMounted(async () => {
       message="Barcha qurilmalardan chiqasiz."
       confirm-label="Hammasini chiqarish"
       cancel-label="Bekor qilish"
+      busy-label="Chiqilmoqda"
       danger
+      :busy="loggingOut"
       @cancel="logoutEverywhereOpen = false"
       @confirm="logoutEverywhere"
     />
