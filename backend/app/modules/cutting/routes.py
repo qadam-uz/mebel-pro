@@ -14,6 +14,7 @@ from app.modules.cutting.api import (
     choose_result,
     choose_workshop_result,
     client_catalog_materials,
+    commit_imported_map,
     create_draft,
     create_workshop_draft,
     delete_draft,
@@ -43,6 +44,7 @@ from app.modules.cutting.schemas import (
     CuttingChooseResultRequest,
     CuttingDraftPatchRequest,
     CuttingDraftResponse,
+    CuttingMapImportCommitRequest,
     WorkshopCuttingDraftCreateRequest,
 )
 
@@ -74,6 +76,15 @@ async def client_cutting_import_parse(
             status_code=exc.status_code,
             details=exc.details,
         ) from exc
+
+
+@router.post("/client/cutting/import/map/commit", response_model=CuttingDraftResponse)
+async def client_cutting_import_map_commit(
+    payload: CuttingMapImportCommitRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> CuttingDraftResponse:
+    return await commit_imported_map(db, principal=principal, payload=payload)
 
 
 @router.get("/client/cutting-drafts", response_model=list[CuttingDraftResponse])

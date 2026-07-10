@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
 import type {
+  CuttingOffcut,
   CuttingPanel,
   CuttingPart,
   CuttingPlacement,
@@ -44,10 +46,10 @@ const bandStrokeWidth = computed(() => BAND_STROKE / normScale.value)
 
 // A placement carries no edge data itself — its part (by part_ref) holds which
 // sides are banded, so map them back here.
-const partByRef = computed(
+const partRowsByRef = computed(
   () =>
-    new Map<string, CuttingPart>(
-      (props.result.parts_snapshot ?? []).map((part) => [part.part_ref, part]),
+    new Map<string, { part: CuttingPart; index: number }>(
+      (props.result.parts_snapshot ?? []).map((part, index) => [part.part_ref, { part, index }]),
     ),
 )
 
@@ -63,14 +65,8 @@ function svgY(placement: CuttingPlacement) {
   return panelWidth.value - placement.y_mm - placement.width_mm
 }
 
-// Dimension labels instead of the opaque part_ref: length runs along the top edge
-// (horizontal), width along the left edge (vertical, rotated -90°) — a dimensioned
-// drawing the cutter can read at a glance.
-function widthLabelX(placement: CuttingPlacement) {
-  return placement.x_mm + labelFontSize.value * 1.25
-}
-function widthLabelY(placement: CuttingPlacement) {
-  return svgY(placement) + placement.width_mm / 2
+function offcutY(offcut: CuttingOffcut) {
+  return panelWidth.value - offcut.y_mm - offcut.width_mm
 }
 
 function labelFits(placement: CuttingPlacement) {
@@ -80,13 +76,31 @@ function labelFits(placement: CuttingPlacement) {
   )
 }
 
+function offcutLabelFits(offcut: CuttingOffcut) {
+  return (
+    offcut.length_mm * normScale.value > LABEL_MIN_W &&
+    offcut.width_mm * normScale.value > LABEL_MIN_H
+  )
+}
+
+function placementLabel(placement: CuttingPlacement) {
+  const row = partRowsByRef.value.get(placement.part_ref)
+  const name = row ? partDisplayName(row.part, row.index) : placement.part_ref
+  return `${name} ${placement.length_mm}×${placement.width_mm}${placement.rotated ? ' ↻' : ''}`
+}
+
+function offcutLabel(offcut: CuttingOffcut) {
+  if (!offcut.usable) return 'chiqit'
+  return `Qoldiq ${offcut.length_mm}×${offcut.width_mm} — sizda qoladi`
+}
+
 // Which physical sides of the *placed* rectangle carry edge banding. Unrotated:
 // top/bottom run along the length (horizontal), left/right along the width
 // (vertical) — the optimizer's own convention (edge length = length for top/bottom,
 // width for left/right). The only rotation the optimizer applies is 90°, swapping
 // length↔width; it records no direction, so map clockwise (part top→right, …).
 function bandedSides(placement: CuttingPlacement): BandedSides | null {
-  const part = partByRef.value.get(placement.part_ref)
+  const part = partRowsByRef.value.get(placement.part_ref)?.part
   if (!part) return null
   if (!placement.rotated) {
     return {
@@ -148,6 +162,36 @@ function bandLines(placement: CuttingPlacement) {
       stroke-width="2"
     />
     <g
+      v-for="(offcut, index) in panel.offcuts"
+      :key="`offcut-${index}`"
+      class="offcut"
+      aria-hidden="true"
+    >
+      <rect
+        :x="offcut.x_mm"
+        :y="offcutY(offcut)"
+        :width="offcut.length_mm"
+        :height="offcut.width_mm"
+        fill="transparent"
+        :stroke="offcut.usable ? 'var(--color-success)' : 'var(--color-danger)'"
+        :stroke-width="1.5"
+        stroke-dasharray="12 8"
+      />
+      <text
+        v-if="offcutLabelFits(offcut)"
+        :x="offcut.x_mm + offcut.length_mm / 2"
+        :y="offcutY(offcut) + offcut.width_mm / 2"
+        :fill="offcut.usable ? 'var(--color-success)' : 'var(--color-ink-muted)'"
+        :font-size="labelFontSize"
+        font-family="sans-serif"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        aria-hidden="true"
+      >
+        {{ offcutLabel(offcut) }}
+      </text>
+    </g>
+    <g
       v-for="placement in panel.placements"
       :key="placement.id"
       class="placement"
@@ -182,26 +226,15 @@ function bandLines(placement: CuttingPlacement) {
       <template v-if="labelFits(placement)">
         <text
           :x="placement.x_mm + placement.length_mm / 2"
-          :y="svgY(placement) + labelFontSize * 1.25"
+          :y="svgY(placement) + placement.width_mm / 2"
           fill="var(--color-ink-soft)"
           :font-size="labelFontSize"
           font-family="sans-serif"
           text-anchor="middle"
+          dominant-baseline="middle"
           aria-hidden="true"
         >
-          {{ placement.length_mm }}
-        </text>
-        <text
-          :x="widthLabelX(placement)"
-          :y="widthLabelY(placement)"
-          :transform="`rotate(-90 ${widthLabelX(placement)} ${widthLabelY(placement)})`"
-          fill="var(--color-ink-soft)"
-          :font-size="labelFontSize"
-          font-family="sans-serif"
-          text-anchor="middle"
-          aria-hidden="true"
-        >
-          {{ placement.width_mm }}
+          {{ placementLabel(placement) }}
         </text>
       </template>
     </g>

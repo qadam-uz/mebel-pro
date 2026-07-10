@@ -131,6 +131,21 @@ describe('cutting store scope', () => {
     expect(vi.mocked(api.post).mock.calls[0][1]).toBeUndefined()
   })
 
+  it('commits MAP layout imports through the client endpoint', async () => {
+    const store = useCuttingStore()
+    vi.mocked(api.post).mockResolvedValue(draft('draft-map'))
+
+    const result = await store.commitMapImport({
+      preferred_branch_id: 'branch-1',
+      parts: [],
+      panel_picks: { m1: 'panel-1' },
+      map_layout: { sheets: [], part_rows: [], description: '', customer_name: '', order_type: '' },
+    })
+
+    expect(result.id).toBe('draft-map')
+    expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/client/cutting/import/map/commit')
+  })
+
   it('routes every action through /workshop/* after configureScope', async () => {
     const store = useCuttingStore()
     store.configureScope('workshop')

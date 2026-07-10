@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from app.core.security import hash_password
 from app.models.enums import (
@@ -15,10 +16,12 @@ from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.cutting.contracts import (
     CuttingDraft,
+    CuttingPanel,
 )
+from app.modules.cutting.imports.parser import parse_import_file
 from app.modules.support.contracts import ActionLog
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories import seed_workshop_with_owner
@@ -154,6 +157,7 @@ def _parts(panel_id: uuid.UUID, edge_id: uuid.UUID) -> list[dict[str, object]]:
     return [
         {
             "part_ref": "shelf",
+            "name": "  Shelf  ",
             "material_id": str(panel_id),
             "material_source": "shop",
             "length_mm": 220,
@@ -163,6 +167,89 @@ def _parts(panel_id: uuid.UUID, edge_id: uuid.UUID) -> list[dict[str, object]]:
             "edge_left": {"material_id": str(edge_id), "source": "own"},
         }
     ]
+
+
+async def _map_materials(
+    db: AsyncSession,
+    *,
+    branch_id: uuid.UUID,
+) -> tuple[Material, Material]:
+    manufacturer = Manufacturer(name=f"Map Panels {uuid.uuid4().hex[:6]}", country="UZ")
+    db.add(manufacturer)
+    await db.flush()
+    panel = Material(
+        kind=MaterialKind.PANEL,
+        manufacturer_id=manufacturer.id,
+        type=PanelMaterialType.DSP,
+        name="Map panel 2750x1830",
+        thickness_mm=Decimal("18"),
+        color="White",
+        decor_code="MAP",
+        panel_length_mm=2750,
+        panel_width_mm=1830,
+        grain_direction=False,
+    )
+    edge = Material(
+        kind=MaterialKind.EDGE,
+        manufacturer_id=manufacturer.id,
+        name="Map edge",
+        thickness_mm=Decimal("0.4"),
+        color="White",
+        decor_code="MAP",
+    )
+    db.add_all([panel, edge])
+    await db.flush()
+    db.add(
+        BranchMaterial(
+            branch_id=branch_id,
+            material_id=panel.id,
+            price_tiyin=350000,
+            min_stock=1,
+        )
+    )
+    await db.flush()
+    return panel, edge
+
+
+def _map_commit_parts(
+    parsed: dict[str, object],
+    panel_id: uuid.UUID,
+    edge_id: uuid.UUID,
+) -> list[dict[str, object]]:
+    layout = parsed["map_layout"]
+    assert isinstance(layout, dict)
+    rows = layout["part_rows"]
+    assert isinstance(rows, list)
+    parts: list[dict[str, object]] = []
+    for row in rows:
+        assert isinstance(row, dict)
+        edges = row["edges"]
+        assert isinstance(edges, dict)
+        parts.append(
+            {
+                "part_ref": row["part_ref"],
+                "name": str(row.get("name") or "").strip() or None,
+                "material_id": str(panel_id),
+                "material_source": "shop",
+                "follow_grain": True,
+                "length_mm": row["length_mm"],
+                "width_mm": row["width_mm"],
+                "quantity": row["quantity"],
+                "edge_top": {"material_id": str(edge_id), "source": "shop"}
+                if edges.get("top")
+                else None,
+                "edge_bottom": {"material_id": str(edge_id), "source": "shop"}
+                if edges.get("bottom")
+                else None,
+                "edge_left": {"material_id": str(edge_id), "source": "shop"}
+                if edges.get("left")
+                else None,
+                "edge_right": {"material_id": str(edge_id), "source": "shop"}
+                if edges.get("right")
+                else None,
+            }
+        )
+    return parts
 
 
 def _rotated_only_part(panel_id: uuid.UUID, *, follow_grain: bool) -> dict[str, object]:
@@ -215,6 +302,12 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
         f"/api/v1/client/cutting-results/{chosen_result_id}/pdf",
         headers=_auth(access),
     )
+    await db_session.execute(update(CuttingPanel).values(offcuts=None))
+    await db_session.flush()
+    loaded_old_panel = await client.get(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+    )
     deleted = await client.delete(
         f"/api/v1/client/cutting-drafts/{draft_id}",
         headers=_auth(access),
@@ -229,11 +322,14 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert created.json()["preferred_branch_id"] == str(branch_id)
     assert updated.status_code == 200
     assert updated.json()["parts_snapshot"][0]["part_ref"] == "shelf"
+    assert updated.json()["parts_snapshot"][0]["name"] == "Shelf"
     assert optimized.status_code == 200
     assert [row["algorithm_name"] for row in results] == ["cutting-engine-best"]
     assert optimized.json()["chosen_result_id"] in {row["id"] for row in results}
     first_result = results[0]
     assert first_result["parts_snapshot"][0]["quantity"] == 2
+    assert first_result["parts_snapshot"][0]["name"] == "Shelf"
+    assert first_result["panels"][0]["offcuts"]
     assert str(panel.id) in first_result["material_snapshots"]
     assert first_result["edge_length_shop_by_material"] == {str(edge.id): 440}
     assert first_result["edge_length_own_by_material"] == {str(edge.id): 240}
@@ -246,6 +342,8 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert b"<svg" in svg.content
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF")
+    assert loaded_old_panel.status_code == 200
+    assert loaded_old_panel.json()["results"][0]["panels"][0]["offcuts"] == []
     assert deleted.status_code == 204
     assert action_count == 5
 
@@ -290,6 +388,104 @@ async def test_grained_part_follow_grain_controls_rotation_validation_and_result
     assert optimized.status_code == 200
     assert result["parts_snapshot"][0]["follow_grain"] is False
     assert placements[0]["rotated"] is True
+
+
+async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge = await _map_materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(
+        db_session, phone="+998901111040", preferred_branch_id=branch_id
+    )
+    fixture = Path(__file__).parent / "fixtures" / "cutting_import" / "map" / "6.map"
+    parsed_model = parse_import_file(filename="6.map", content=fixture.read_bytes())
+    parsed = parsed_model.model_dump(mode="json")
+    parts = _map_commit_parts(parsed, panel.id, edge.id)
+    layout = parsed["map_layout"]
+    assert isinstance(layout, dict)
+    expected_cut_length = sum(
+        2 * (placement["length_mm"] + placement["width_mm"])
+        for sheet in layout["sheets"]
+        for placement in sheet["placements"]
+        if not placement["is_waste"]
+    )
+
+    committed = await client.post(
+        "/api/v1/client/cutting/import/map/commit",
+        headers=_auth(access),
+        json={
+            "preferred_branch_id": str(branch_id),
+            "parts": parts,
+            "map_layout": layout,
+            "panel_picks": {"m1": str(panel.id)},
+        },
+    )
+    draft = committed.json()
+    imported_result = draft["results"][0]
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft['id']}/optimize",
+        headers=_auth(access),
+    )
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft['id']}",
+        headers=_auth(access),
+        json={"parts_snapshot": parts},
+    )
+
+    assert committed.status_code == 200
+    assert draft["chosen_result_id"] == imported_result["id"]
+    assert imported_result["source"] == "imported_map"
+    assert imported_result["algorithm_name"] == "imported-2dplace-map"
+    assert imported_result["kerf_mm"] == 0
+    assert imported_result["edge_trim_mm"] == 0
+    assert imported_result["panels_used_by_material"] == {str(panel.id): 1}
+    assert imported_result["total_cut_length_mm"] == expected_cut_length
+    assert len(imported_result["panels"]) == 1
+    assert len(imported_result["panels"][0]["placements"]) == 6
+    assert any(offcut["usable"] for offcut in imported_result["panels"][0]["offcuts"])
+    assert imported_result["parts_snapshot"][0]["name"]
+    assert optimized.status_code == 200
+    assert optimized.json()["chosen_result_id"] == imported_result["id"]
+    assert {row["source"] for row in optimized.json()["results"]} == {
+        "imported_map",
+        "optimizer",
+    }
+    assert patched.status_code == 200
+    assert patched.json()["results"] == []
+    assert patched.json()["chosen_result_id"] is None
+
+
+async def test_client_map_import_commit_rejects_material_size_mismatch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    correct_panel, _ = await _map_materials(db_session, branch_id=branch_id)
+    wrong_panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(
+        db_session, phone="+998901111041", preferred_branch_id=branch_id
+    )
+    fixture = Path(__file__).parent / "fixtures" / "cutting_import" / "map" / "6.map"
+    parsed = parse_import_file(filename="6.map", content=fixture.read_bytes()).model_dump(
+        mode="json"
+    )
+    parts = _map_commit_parts(parsed, correct_panel.id, edge.id)
+
+    rejected = await client.post(
+        "/api/v1/client/cutting/import/map/commit",
+        headers=_auth(access),
+        json={
+            "preferred_branch_id": str(branch_id),
+            "parts": parts,
+            "map_layout": parsed["map_layout"],
+            "panel_picks": {"m1": str(wrong_panel.id)},
+        },
+    )
+
+    assert rejected.status_code == 400
+    assert rejected.json()["code"] == "map_layout_material_mismatch"
 
 
 async def test_old_cutting_part_snapshots_default_to_follow_grain_true(

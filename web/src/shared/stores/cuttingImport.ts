@@ -17,6 +17,7 @@ export type ImportRole =
   | 'edge_right'
 
 export type ImportStatus = 'needs_mapping' | 'parsed'
+export type SourceFormat = 'csv' | 'bazis_xml' | 'map_2dplace'
 export type ImportSkipReason =
   | 'non_numeric_length'
   | 'non_numeric_width'
@@ -25,7 +26,14 @@ export type ImportSkipReason =
   | 'quantity_not_positive'
   | 'dimension_not_positive'
   | 'dimension_too_large'
-export type ImportWarningCode = 'dimension_rounded' | 'quantity_defaulted' | 'grain_token_unknown'
+export type ImportWarningCode =
+  | 'dimension_rounded'
+  | 'quantity_defaulted'
+  | 'grain_token_unknown'
+  | 'non_rectangular'
+  | 'ignored_holes'
+  | 'ignored_grooves'
+  | 'edge_see_drawing'
 
 export interface ImportParseOptions {
   skip_rows?: number
@@ -34,6 +42,7 @@ export interface ImportParseOptions {
 
 export interface ImportNeedsMappingResponse {
   status: 'needs_mapping'
+  source_format: SourceFormat
   grid: (string | null)[][]
   guessed_mapping: Partial<Record<ImportRole, number>>
   guessed_skip_rows: number
@@ -78,13 +87,87 @@ export interface ImportEdgeMaterialGroup {
   side_count: number
 }
 
+export interface ImportMapMaterialGroup {
+  key: string
+  label: string
+  width_mm: number
+  height_mm: number
+  sheet_count: number
+  hint: string | null
+}
+
+export interface ImportMapPartRow {
+  row: number
+  part_ref: string
+  material_key: string
+  length_mm: number
+  width_mm: number
+  quantity: number
+  follow_grain: boolean
+  edges: {
+    top: boolean
+    bottom: boolean
+    left: boolean
+    right: boolean
+  }
+  name: string
+}
+
+export interface ImportMapPlacement {
+  sheet_index: number
+  sheet_name: string
+  material_key: string
+  x_mm: number
+  y_mm: number
+  length_mm: number
+  width_mm: number
+  name: string
+  edges: {
+    top: boolean
+    bottom: boolean
+    left: boolean
+    right: boolean
+  }
+  is_waste: boolean
+  is_remainder: boolean
+  part_ref: string | null
+  part_quantity_index: number | null
+  rotated: boolean
+}
+
+export interface ImportMapSheet {
+  sheet_index: number
+  name: string
+  material_key: string
+  width_mm: number
+  height_mm: number
+  placements: ImportMapPlacement[]
+  parts_count: number
+  waste_count: number
+  remainder_count: number
+  parts_area_mm2: number
+  fill_percentage: number
+}
+
+export interface ImportMapLayout {
+  description: string
+  customer_name: string
+  order_type: string
+  sheets: ImportMapSheet[]
+  part_rows: ImportMapPartRow[]
+}
+
 export interface ImportParsedResponse {
   status: 'parsed'
+  source_format: SourceFormat
   parts: ImportedPart[]
   panel_materials: ImportPanelMaterialGroup[]
   edge_materials: ImportEdgeMaterialGroup[]
   skipped_rows: ImportSkippedRow[]
   warnings: ImportWarning[]
+  ignored_object_count: number
+  material_groups?: ImportMapMaterialGroup[]
+  map_layout?: ImportMapLayout | null
   total_parts: number
   total_pieces: number
 }
@@ -132,6 +215,10 @@ export const IMPORT_WARNING_LABELS: Record<ImportWarningCode, string> = {
   dimension_rounded: "O'lcham mm gacha yaxlitlandi",
   quantity_defaulted: "Soni ko'rsatilmagan - 1 deb olindi",
   grain_token_unknown: 'Tekstura belgisi tushunarsiz - "bo\'ylab" deb olindi',
+  non_rectangular: "To'g'ri to'rtburchak bo'lmagan panel import qilindi",
+  ignored_holes: 'Teshiklar importda hisobga olinmadi',
+  ignored_grooves: 'Pazlar importda hisobga olinmadi',
+  edge_see_drawing: "Chizmada ko'rsatilgan kromka avtomatik tanlanmadi",
 }
 
 function cleanOptions(options: ImportParseOptions | undefined): ImportParseOptions | undefined {
@@ -196,6 +283,7 @@ export function buildImportedParts(
 ): CuttingPart[] {
   return parsed.parts.map((part) => ({
     part_ref: uuidFactory(),
+    name: null,
     material_id: picked(panelPicks, part.material_key, 'panel'),
     material_source: 'shop',
     follow_grain: part.follow_grain,
@@ -217,6 +305,45 @@ export function buildImportedParts(
   }))
 }
 
+export function buildMapImportedParts(
+  parsed: Pick<ImportParsedResponse, 'edge_materials' | 'map_layout'>,
+  panelPicks: Record<string, string | null | undefined>,
+  edgePicks: Record<string, string | null | undefined>,
+): CuttingPart[] {
+  const layout = parsed.map_layout
+  if (!layout) throw new Error('Missing MAP layout')
+  const edgeKey = parsed.edge_materials[0]?.key ?? null
+  const edgeBand = (selected: boolean) =>
+    selected && edgeKey
+      ? { material_id: picked(edgePicks, edgeKey, 'edge'), source: 'shop' as const }
+      : null
+
+  return layout.part_rows.map((part) => ({
+    part_ref: part.part_ref,
+    name: part.name.trim() || null,
+    material_id: picked(panelPicks, part.material_key, 'panel'),
+    material_source: 'shop',
+    follow_grain: part.follow_grain,
+    length_mm: part.length_mm,
+    width_mm: part.width_mm,
+    quantity: part.quantity,
+    edge_top: edgeBand(part.edges.top),
+    edge_bottom: edgeBand(part.edges.bottom),
+    edge_left: edgeBand(part.edges.left),
+    edge_right: edgeBand(part.edges.right),
+  }))
+}
+
+export function buildMapPanelPicks(
+  parsed: Pick<ImportParsedResponse, 'material_groups' | 'panel_materials'>,
+  panelPicks: Record<string, string | null | undefined>,
+): Record<string, string> {
+  const groups = parsed.material_groups?.length ? parsed.material_groups : parsed.panel_materials
+  return Object.fromEntries(
+    groups.map((group) => [group.key, picked(panelPicks, group.key, 'panel')]),
+  )
+}
+
 export function applyImportedParts(
   existing: CuttingPart[],
   imported: CuttingPart[],
@@ -234,7 +361,7 @@ export function cuttingImportErrorLabel(error: unknown): string {
       ? (error.body as { details?: { total_pieces?: unknown } }).details
       : undefined
   if (code === 'unsupported_format') {
-    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV. БАЗИС-Мебельщик'da «Спецификация в CSV» orqali, Excel'da «Сохранить как -> CSV» qilib saqlang."
+    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV, XML yoki MAP. БАЗИС-Мебельщик'da «Спецификация в CSV/XML», 2D-Place'da esa MAP orqali saqlang."
   }
   if (code === 'file_too_large') return 'Fayl 1 MB dan katta'
   if (code === 'empty_file') return "Fayl bo'sh"

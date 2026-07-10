@@ -11,6 +11,8 @@ export interface Toast {
   id: number
   message: string
   tone: ToastTone
+  actionLabel?: string
+  action?: () => void
 }
 
 const DEFAULT_DURATION_MS = 4000
@@ -28,9 +30,17 @@ function dismiss(id: number) {
   }
 }
 
-function show(message: string, tone: ToastTone = 'success', durationMs = DEFAULT_DURATION_MS) {
+function show(
+  message: string,
+  tone: ToastTone = 'success',
+  durationMs = DEFAULT_DURATION_MS,
+  action?: { label: string; run: () => void },
+) {
   const id = ++seq
-  toasts.value = [...toasts.value, { id, message, tone }]
+  toasts.value = [
+    ...toasts.value,
+    { id, message, tone, actionLabel: action?.label, action: action?.run },
+  ]
   if (durationMs > 0) {
     timers.set(
       id,
@@ -47,6 +57,13 @@ export function useToast() {
     success: (message: string, durationMs?: number) => show(message, 'success', durationMs),
     warn: (message: string, durationMs?: number) => show(message, 'warn', durationMs),
     danger: (message: string, durationMs?: number) => show(message, 'danger', durationMs),
+    action: (
+      message: string,
+      actionLabel: string,
+      action: () => void,
+      tone: ToastTone = 'success',
+      durationMs = 4000,
+    ) => show(message, tone, durationMs, { label: actionLabel, run: action }),
     dismiss,
   }
 }

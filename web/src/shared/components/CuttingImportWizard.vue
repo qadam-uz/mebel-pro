@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import { apiErrorCode } from '@/shared/api/client'
 import { MAX_PARTS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
-import type { CuttingPart } from '@/shared/stores/cutting'
+import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 import {
   IMPORT_ROLE_LABELS,
   IMPORT_ROLES,
@@ -14,6 +15,8 @@ import {
   IMPORT_WARNING_LABELS,
   MAX_IMPORT_FILE_BYTES,
   areImportMaterialPicksComplete,
+  buildMapImportedParts,
+  buildMapPanelPicks,
   buildImportedParts,
   cuttingImportErrorLabel,
   isImportMappingComplete,
@@ -36,14 +39,18 @@ const props = withDefaults(
     hasExistingParts: boolean
     currentPieces: number
     preferredBranchName?: string | null
+    preferredBranchId?: string | null
   }>(),
-  { preferredBranchName: null },
+  { preferredBranchName: null, preferredBranchId: null },
 )
 
 const emit = defineEmits<{
   close: []
   load: [payload: { mode: ImportLoadMode; parts: CuttingPart[] }]
+  committed: [draftId: string]
 }>()
+
+const cutting = useCuttingStore()
 
 const steps: { key: ImportStep; label: string }[] = [
   { key: 'file', label: 'Fayl' },
@@ -65,8 +72,30 @@ const helpOpen = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const fileInputKey = ref(0)
+const mapPartsOnlyAllowed = ref(false)
 
-const currentStepIndex = computed(() => steps.findIndex((item) => item.key === step.value))
+const isXmlImport = computed(() => parsed.value?.source_format === 'bazis_xml')
+const isMapImport = computed(() => parsed.value?.source_format === 'map_2dplace')
+const isDirectParsedImport = computed(() => isXmlImport.value || isMapImport.value)
+const canCommitMapLayout = computed(
+  () => isMapImport.value && cutting.scope === 'client' && !!parsed.value?.map_layout,
+)
+const visibleSteps = computed(() => {
+  if (isMapImport.value) {
+    return [
+      { key: 'file' as const, label: 'Fayl' },
+      { key: 'materials' as const, label: 'Materiallar' },
+      { key: 'report' as const, label: 'Tekshirish' },
+    ]
+  }
+  return isDirectParsedImport.value ? steps.filter((item) => item.key !== 'mapping') : steps
+})
+const stepGridClass = computed(() =>
+  visibleSteps.value.length === 3 ? 'grid-cols-3' : 'grid-cols-4',
+)
+const currentStepIndex = computed(() =>
+  visibleSteps.value.findIndex((item) => item.key === step.value),
+)
 const selectedFileName = computed(() => selectedFile.value?.name ?? '')
 const previewColumns = computed(() => {
   const width = Math.max(0, ...(detection.value?.grid.map((row) => row.length) ?? []))
@@ -91,7 +120,15 @@ const materialPicksComplete = computed(() =>
     ? areImportMaterialPicksComplete(parsed.value, panelPicks.value, edgePicks.value)
     : false,
 )
-const totalAfterImport = computed(() => props.currentPieces + (parsed.value?.total_pieces ?? 0))
+const mapMaterialSizesMatch = computed(() => {
+  if (!isMapImport.value || !parsed.value) return true
+  return parsed.value.panel_materials.every((group) => selectedPanelMatchesMap(group.key) !== false)
+})
+const totalAfterImport = computed(() =>
+  canCommitMapLayout.value
+    ? (parsed.value?.total_pieces ?? 0)
+    : props.currentPieces + (parsed.value?.total_pieces ?? 0),
+)
 const overCap = computed(() => totalAfterImport.value > MAX_PARTS)
 
 watch(
@@ -114,6 +151,7 @@ function resetWizard() {
   helpOpen.value = false
   loading.value = false
   error.value = null
+  mapPartsOnlyAllowed.value = false
   fileInputKey.value += 1
 }
 
@@ -124,8 +162,8 @@ function closeWizard() {
 function validateFile(file: File): string | null {
   if (file.size > MAX_IMPORT_FILE_BYTES) return 'Fayl 1 MB dan katta'
   const name = file.name.toLowerCase()
-  if (!name.endsWith('.csv')) {
-    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV. БАЗИС-Мебельщик'da «Спецификация в CSV» orqali, Excel'da «Сохранить как -> CSV» qilib saqlang."
+  if (!name.endsWith('.csv') && !name.endsWith('.xml') && !name.endsWith('.map')) {
+    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV, XML yoki MAP."
   }
   return null
 }
@@ -142,6 +180,13 @@ async function onFileChange(event: Event) {
     return
   }
   selectedFile.value = file
+  detection.value = null
+  parsed.value = null
+  skipRows.value = 0
+  columnRoles.value = {}
+  panelPicks.value = {}
+  edgePicks.value = {}
+  mapPartsOnlyAllowed.value = false
   await detectFile()
 }
 
@@ -161,8 +206,9 @@ async function detectFile() {
   error.value = null
   try {
     const response = await parseCuttingImport(selectedFile.value)
-    if (response.status !== 'needs_mapping') {
-      error.value = "Fayl ustunlarini tekshirib bo'lmadi."
+    if (response.status === 'parsed') {
+      detection.value = null
+      enterMaterials(response)
       return
     }
     detection.value = response
@@ -175,6 +221,18 @@ async function detectFile() {
   } finally {
     loading.value = false
   }
+}
+
+function enterMaterials(response: ImportParsedResponse) {
+  parsed.value = response
+  mapPartsOnlyAllowed.value = false
+  panelPicks.value = Object.fromEntries(
+    response.panel_materials.map((group) => [group.key, panelPicks.value[group.key] ?? null]),
+  )
+  edgePicks.value = Object.fromEntries(
+    response.edge_materials.map((group) => [group.key, edgePicks.value[group.key] ?? null]),
+  )
+  step.value = 'materials'
 }
 
 function setColumnRole(column: number, rawRole: string) {
@@ -216,14 +274,7 @@ async function confirmMapping() {
       error.value = "Faylni o'qib bo'lmadi."
       return
     }
-    parsed.value = response
-    panelPicks.value = Object.fromEntries(
-      response.panel_materials.map((group) => [group.key, panelPicks.value[group.key] ?? null]),
-    )
-    edgePicks.value = Object.fromEntries(
-      response.edge_materials.map((group) => [group.key, edgePicks.value[group.key] ?? null]),
-    )
-    step.value = 'materials'
+    enterMaterials(response)
   } catch (errorValue) {
     error.value = cuttingImportErrorLabel(errorValue)
   } finally {
@@ -239,10 +290,27 @@ function setEdgePick(key: string, value: string | null) {
   edgePicks.value = { ...edgePicks.value, [key]: value }
 }
 
+function pickedPanelMaterial(key: string) {
+  const id = panelPicks.value[key]
+  return id ? (cutting.panelOptions.find((material) => material.id === id) ?? null) : null
+}
+
+function mapGroupForKey(key: string) {
+  return parsed.value?.material_groups?.find((group) => group.key === key) ?? null
+}
+
+function selectedPanelMatchesMap(key: string): boolean | null {
+  if (!isMapImport.value) return null
+  const group = mapGroupForKey(key)
+  const panel = pickedPanelMaterial(key)
+  if (!group || !panel) return null
+  return panel.panel_length_mm === group.width_mm && panel.panel_width_mm === group.height_mm
+}
+
 function goBack() {
   error.value = null
   if (step.value === 'report') step.value = 'materials'
-  else if (step.value === 'materials') step.value = 'mapping'
+  else if (step.value === 'materials') step.value = isDirectParsedImport.value ? 'file' : 'mapping'
   else if (step.value === 'mapping') step.value = 'file'
 }
 
@@ -250,13 +318,50 @@ function openReport() {
   if (materialPicksComplete.value) step.value = 'report'
 }
 
-function loadParts(mode: ImportLoadMode) {
+function buildPartsFromParsed() {
   if (!parsed.value || !materialPicksComplete.value) return
+  return isMapImport.value
+    ? buildMapImportedParts(parsed.value, panelPicks.value, edgePicks.value)
+    : buildImportedParts(parsed.value, panelPicks.value, edgePicks.value)
+}
+
+async function loadParts(mode: ImportLoadMode) {
+  if (!parsed.value || !materialPicksComplete.value) return
+  if (canCommitMapLayout.value && mapMaterialSizesMatch.value && !mapPartsOnlyAllowed.value) {
+    await commitMapLayout()
+    return
+  }
   try {
-    const parts = buildImportedParts(parsed.value, panelPicks.value, edgePicks.value)
+    const parts = buildPartsFromParsed()
+    if (!parts) return
     emit('load', { mode, parts })
   } catch {
     error.value = "Material tanlovlari to'liq emas."
+  }
+}
+
+async function commitMapLayout() {
+  if (!parsed.value?.map_layout || !materialPicksComplete.value) return
+  loading.value = true
+  error.value = null
+  try {
+    const draft = await cutting.commitMapImport({
+      preferred_branch_id: props.preferredBranchId,
+      parts: buildMapImportedParts(parsed.value, panelPicks.value, edgePicks.value),
+      map_layout: parsed.value.map_layout,
+      panel_picks: buildMapPanelPicks(parsed.value, panelPicks.value),
+    })
+    emit('committed', draft.id)
+  } catch (errorValue) {
+    if (apiErrorCode(errorValue) === 'map_layout_material_mismatch') {
+      mapPartsOnlyAllowed.value = true
+      error.value =
+        "Tanlangan panel o'lchami MAP list o'lchamiga mos emas. Boshqa panel tanlang yoki faqat detallarni yuklang."
+    } else {
+      error.value = cuttingImportErrorLabel(errorValue)
+    }
+  } finally {
+    loading.value = false
   }
 }
 
@@ -268,9 +373,9 @@ function previewCell(row: (string | null)[], column: number) {
 <template>
   <AppModal :open="open" title="Fayldan import" max-width="max-w-5xl" @close="closeWizard">
     <div class="grid gap-4">
-      <ol class="grid grid-cols-4 gap-2 text-xs font-extrabold">
+      <ol class="grid gap-2 text-xs font-extrabold" :class="stepGridClass">
         <li
-          v-for="(item, index) in steps"
+          v-for="(item, index) in visibleSteps"
           :key="item.key"
           class="rounded-md border px-3 py-2 text-center"
           :class="
@@ -293,12 +398,14 @@ function previewCell(row: (string | null)[], column: number) {
           class="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-hairline-strong bg-sunk px-5 py-6 text-center transition hover:border-accent hover:bg-accent-soft/40"
         >
           <Icon name="upload" class="size-9 text-accent" />
-          <span class="text-sm font-extrabold text-ink">CSV (*.csv)</span>
+          <span class="text-sm font-extrabold text-ink"
+            >CSV, XML yoki MAP (*.csv, *.xml, *.map)</span
+          >
           <span class="text-xs font-semibold text-ink-muted">1 MB gacha</span>
           <input
             :key="fileInputKey"
             type="file"
-            accept=".csv"
+            accept=".csv,.xml,.map"
             class="sr-only"
             :disabled="loading"
             @change="onFileChange"
@@ -319,9 +426,11 @@ function previewCell(row: (string | null)[], column: number) {
             <span aria-hidden="true">{{ helpOpen ? '−' : '+' }}</span>
           </button>
           <p v-if="helpOpen" class="border-t border-hairline px-4 py-3 text-sm text-ink-soft">
-            БАЗИС-Мебельщик'da: Мебель panelidagi «Спецификация в CSV» tugmasini bosing (butun
-            loyiha uchun — «Формирование проекта» oynasidagi shu tugma). Excel'da tayyorlangan
-            ro'yxat bo'lsa: Файл -> Сохранить как -> CSV. Hosil bo'lgan faylni shu yerga yuklang.
+            БАЗИС-Мебельщик'da: Мебель panelidagi «Спецификация в CSV» yoki «Спецификация в XML»
+            tugmasini bosing (butun loyiha uchun — «Формирование проекта» oynasidagi shu tugma).
+            2D-Place'da tayyor joylashuvni saqlagan bo'lsangiz, `.map` faylni yuklang. Excel'da
+            tayyorlangan ro'yxat bo'lsa: Файл -> Сохранить как -> CSV. Hosil bo'lgan faylni shu
+            yerga yuklang.
           </p>
         </section>
       </section>
@@ -434,6 +543,14 @@ function previewCell(row: (string | null)[], column: number) {
       </section>
 
       <section v-else-if="step === 'materials' && parsed" class="grid gap-4">
+        <div v-if="isMapImport" class="client-banner info">
+          <span class="font-mono font-black">i</span>
+          <span>
+            Fayldagi joylashuv saqlanadi va birinchi variant sifatida ko'rsatiladi. Narx va
+            statistika qayta hisoblanadi.
+          </span>
+        </div>
+
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-serif text-lg font-semibold text-ink">
@@ -463,7 +580,7 @@ function previewCell(row: (string | null)[], column: number) {
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <p class="break-words text-sm font-extrabold text-ink">
-                  {{ group.label }}
+                  {{ mapGroupForKey(group.key)?.hint || group.label }}
                 </p>
                 <span
                   v-if="group.thickness_hint"
@@ -473,16 +590,35 @@ function previewCell(row: (string | null)[], column: number) {
                 </span>
               </div>
               <p class="mt-1 text-xs font-semibold text-ink-muted">
-                {{ group.part_count }} ta detal
+                <template v-if="isMapImport && mapGroupForKey(group.key)">
+                  fayl nomidan · list {{ mapGroupForKey(group.key)?.width_mm }}×{{
+                    mapGroupForKey(group.key)?.height_mm
+                  }}
+                  · {{ group.part_count }} detal
+                </template>
+                <template v-else>{{ group.part_count }} ta detal</template>
               </p>
             </div>
-            <SearchCombobox
-              :model-value="panelPicks[group.key] ?? null"
-              label="Panel materiali"
-              :options="effectivePanelChoices"
-              placeholder="Panel tanlang"
-              @update:model-value="setPanelPick(group.key, $event)"
-            />
+            <div class="grid gap-2">
+              <SearchCombobox
+                :model-value="panelPicks[group.key] ?? null"
+                label="Panel materiali"
+                :options="effectivePanelChoices"
+                placeholder="Panel tanlang"
+                @update:model-value="setPanelPick(group.key, $event)"
+              />
+              <p
+                v-if="isMapImport && selectedPanelMatchesMap(group.key) !== null"
+                class="text-xs font-bold"
+                :class="selectedPanelMatchesMap(group.key) ? 'text-success' : 'text-warning'"
+              >
+                {{
+                  selectedPanelMatchesMap(group.key)
+                    ? "List o'lchami mos — joylashuv saqlanadi"
+                    : "List o'lchami mos emas — faqat detallar import qilinadi"
+                }}
+              </p>
+            </div>
           </div>
         </section>
 
@@ -495,7 +631,10 @@ function previewCell(row: (string | null)[], column: number) {
           >
             <div class="min-w-0">
               <p class="break-words text-sm font-extrabold text-ink">
-                {{ group.label }}
+                <template v-if="isMapImport">
+                  {{ group.side_count }} tomonda krom bor · tasma faylda ko'rsatilmagan
+                </template>
+                <template v-else>{{ group.label }}</template>
               </p>
               <p class="mt-1 text-xs font-semibold text-ink-muted">
                 {{ group.side_count }} ta tomon
@@ -531,13 +670,42 @@ function previewCell(row: (string | null)[], column: number) {
       <section v-else-if="step === 'report' && parsed" class="grid gap-4">
         <div class="rounded-lg border border-hairline bg-sunk p-4">
           <h3 class="font-serif text-lg font-semibold text-ink">
-            {{ parsed.total_parts }} ta detal ({{ parsed.total_pieces }} dona) tayyor
+            <template v-if="canCommitMapLayout">MAP joylashuvi tayyor</template>
+            <template v-else
+              >{{ parsed.total_parts }} ta detal ({{ parsed.total_pieces }} dona) tayyor</template
+            >
           </h3>
+          <p v-if="canCommitMapLayout" class="mt-2 text-sm font-semibold text-ink-soft">
+            {{ parsed.total_parts }} ta detal · {{ parsed.total_pieces }} dona ·
+            {{ parsed.map_layout?.sheets.length ?? 0 }} list
+          </p>
           <p v-if="overCap" class="mt-2 text-sm font-semibold text-warning">
             Jami {{ totalAfterImport }} dona - 100 dan oshadi, optimallashtirish uchun qatorlarni
             kamaytiring.
           </p>
         </div>
+
+        <section v-if="isMapImport && parsed.map_layout" class="grid gap-2">
+          <h4 class="text-sm font-extrabold text-ink">MAP listlari</h4>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <div
+              v-for="sheet in parsed.map_layout.sheets"
+              :key="`${sheet.sheet_index}-${sheet.name}`"
+              class="rounded-md border border-hairline bg-elevated px-3 py-2 text-sm"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <b class="min-w-0 truncate text-ink">{{ sheet.name }}</b>
+                <span class="shrink-0 font-mono text-ink-muted">
+                  {{ sheet.width_mm }}×{{ sheet.height_mm }}
+                </span>
+              </div>
+              <p class="mt-1 text-xs font-semibold text-ink-muted">
+                {{ sheet.parts_count }} detal · {{ sheet.waste_count }} chiqindi ·
+                {{ sheet.remainder_count }} qoldiq · {{ sheet.fill_percentage }}%
+              </p>
+            </div>
+          </div>
+        </section>
 
         <section v-if="parsed.skipped_rows.length > 0" class="grid gap-2">
           <h4 class="text-sm font-extrabold text-ink">O'tkazib yuborilgan qatorlar</h4>
@@ -551,6 +719,14 @@ function previewCell(row: (string | null)[], column: number) {
               {{ IMPORT_SKIP_REASON_LABELS[row.reason] }} · {{ row.preview }}
             </li>
           </ul>
+        </section>
+
+        <section v-if="parsed.ignored_object_count > 0" class="grid gap-2">
+          <h4 class="text-sm font-extrabold text-ink">Import qilinmagan obyektlar</h4>
+          <p class="rounded-md border border-hairline bg-elevated px-3 py-2 text-sm text-ink-soft">
+            XML ichidagi {{ parsed.ignored_object_count }} ta panel bo'lmagan obyekt o'tkazib
+            yuborildi.
+          </p>
         </section>
 
         <section v-if="parsed.warnings.length > 0" class="grid gap-2">
@@ -567,15 +743,28 @@ function previewCell(row: (string | null)[], column: number) {
           </ul>
         </section>
 
+        <p v-if="mapPartsOnlyAllowed" class="text-sm font-semibold text-warning">
+          MAP joylashuvi saqlanmadi. Faqat detallarni oddiy chizma sifatida yuklash mumkin.
+        </p>
+
         <div class="flex flex-wrap justify-end gap-2">
           <button type="button" class="mp-button mp-button-outline" @click="goBack">Orqaga</button>
           <button
-            v-if="!hasExistingParts"
+            v-if="canCommitMapLayout && mapMaterialSizesMatch && !mapPartsOnlyAllowed"
+            type="button"
+            class="mp-button mp-button-primary"
+            :disabled="loading"
+            @click="loadParts('replace')"
+          >
+            {{ loading ? 'Yaratilmoqda' : 'Import qilish' }}
+          </button>
+          <button
+            v-else-if="!hasExistingParts"
             type="button"
             class="mp-button mp-button-primary"
             @click="loadParts('replace')"
           >
-            Yuklash
+            Import qilish
           </button>
           <template v-else>
             <button type="button" class="mp-button mp-button-primary" @click="loadParts('append')">

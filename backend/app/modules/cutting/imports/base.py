@@ -16,6 +16,7 @@ PREVIEW_ROWS = 15
 PREVIEW_COLS = 20
 MAX_IMPORT_PIECES = 100
 
+SourceFormat = Literal["csv", "bazis_xml", "map_2dplace"]
 ImportStatus = Literal["needs_mapping", "parsed"]
 ImportRole = Literal[
     "length_mm",
@@ -38,7 +39,15 @@ SkipReason = Literal[
     "dimension_not_positive",
     "dimension_too_large",
 ]
-WarningCode = Literal["dimension_rounded", "quantity_defaulted", "grain_token_unknown"]
+WarningCode = Literal[
+    "dimension_rounded",
+    "quantity_defaulted",
+    "grain_token_unknown",
+    "non_rectangular",
+    "ignored_holes",
+    "ignored_grooves",
+    "edge_see_drawing",
+]
 
 IMPORT_ROLES: tuple[ImportRole, ...] = (
     "length_mm",
@@ -109,6 +118,66 @@ class ImportedPart(APIModel):
     edges: dict[Literal["top", "bottom", "left", "right"], str | None]
 
 
+class ImportMapMaterialGroup(APIModel):
+    key: str
+    label: str
+    width_mm: int
+    height_mm: int
+    sheet_count: int
+    hint: str | None = None
+
+
+class ImportMapPartRow(APIModel):
+    row: int
+    part_ref: str
+    material_key: str
+    length_mm: int
+    width_mm: int
+    quantity: int
+    follow_grain: bool
+    edges: dict[Literal["top", "bottom", "left", "right"], bool]
+    name: str
+
+
+class ImportMapPlacement(APIModel):
+    sheet_index: int
+    sheet_name: str
+    material_key: str
+    x_mm: int
+    y_mm: int
+    length_mm: int
+    width_mm: int
+    name: str
+    edges: dict[Literal["top", "bottom", "left", "right"], bool]
+    is_waste: bool
+    is_remainder: bool
+    part_ref: str | None = None
+    part_quantity_index: int | None = None
+    rotated: bool = False
+
+
+class ImportMapSheet(APIModel):
+    sheet_index: int
+    name: str
+    material_key: str
+    width_mm: int
+    height_mm: int
+    placements: list[ImportMapPlacement]
+    parts_count: int
+    waste_count: int
+    remainder_count: int
+    parts_area_mm2: int
+    fill_percentage: float
+
+
+class ImportMapLayout(APIModel):
+    description: str = ""
+    customer_name: str = ""
+    order_type: str = ""
+    sheets: list[ImportMapSheet]
+    part_rows: list[ImportMapPartRow]
+
+
 class ImportPanelMaterialGroup(APIModel):
     key: str
     label: str
@@ -124,6 +193,7 @@ class ImportEdgeMaterialGroup(APIModel):
 
 class ImportNeedsMappingResponse(APIModel):
     status: Literal["needs_mapping"] = "needs_mapping"
+    source_format: SourceFormat = "csv"
     grid: list[list[str | None]]
     guessed_mapping: dict[ImportRole, int]
     guessed_skip_rows: int
@@ -131,11 +201,15 @@ class ImportNeedsMappingResponse(APIModel):
 
 class ImportParsedResponse(APIModel):
     status: Literal["parsed"] = "parsed"
+    source_format: SourceFormat = "csv"
     parts: list[ImportedPart]
     panel_materials: list[ImportPanelMaterialGroup]
     edge_materials: list[ImportEdgeMaterialGroup]
     skipped_rows: list[ImportSkippedRow]
     warnings: list[ImportWarning]
+    ignored_object_count: int = 0
+    material_groups: list[ImportMapMaterialGroup] = Field(default_factory=list)
+    map_layout: ImportMapLayout | None = None
     total_parts: int
     total_pieces: int
 

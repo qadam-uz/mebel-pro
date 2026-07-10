@@ -5,9 +5,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.models.enums import CuttingResultStatus, MaterialKind, MaterialSource, PanelMaterialType
+from app.models.enums import (
+    CuttingResultSource,
+    CuttingResultStatus,
+    MaterialKind,
+    MaterialSource,
+    PanelMaterialType,
+)
+from app.modules.cutting.imports.base import ImportMapLayout
 from app.schemas.common import APIModel
 
 
@@ -18,6 +25,7 @@ class CuttingEdgeBand(BaseModel):
 
 class CuttingPart(BaseModel):
     part_ref: str
+    name: str | None = Field(default=None, max_length=64)
     material_id: uuid.UUID
     material_source: MaterialSource = MaterialSource.SHOP
     follow_grain: bool = True
@@ -29,6 +37,16 @@ class CuttingPart(BaseModel):
     edge_left: CuttingEdgeBand | None = None
     edge_right: CuttingEdgeBand | None = None
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
 
 class CuttingDraftPatchRequest(BaseModel):
     preferred_branch_id: uuid.UUID | None = None
@@ -37,6 +55,13 @@ class CuttingDraftPatchRequest(BaseModel):
 
 class CuttingChooseResultRequest(BaseModel):
     result_id: uuid.UUID
+
+
+class CuttingMapImportCommitRequest(BaseModel):
+    preferred_branch_id: uuid.UUID | None = None
+    parts: list[CuttingPart]
+    map_layout: ImportMapLayout
+    panel_picks: dict[str, uuid.UUID]
 
 
 class WorkshopCuttingDraftCreateRequest(BaseModel):
@@ -58,11 +83,20 @@ class CuttingPlacementResponse(APIModel):
     rotated: bool
 
 
+class CuttingOffcutResponse(APIModel):
+    x_mm: int
+    y_mm: int
+    length_mm: int
+    width_mm: int
+    usable: bool
+
+
 class CuttingPanelResponse(APIModel):
     id: uuid.UUID
     material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
+    offcuts: list[CuttingOffcutResponse] = Field(default_factory=list)
     placements: list[CuttingPlacementResponse]
 
 
@@ -71,6 +105,7 @@ class CuttingResultResponse(APIModel):
     draft_id: uuid.UUID | None
     algorithm_name: str
     algorithm_version: str
+    source: CuttingResultSource
     status: CuttingResultStatus
     kerf_mm: int
     edge_trim_mm: int

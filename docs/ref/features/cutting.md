@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-10
 order: 80
 ---
 
@@ -23,7 +23,7 @@ backs, plywood drawer bottoms, plus a leftover panel the customer brings from a 
 and PVC edge tape in different colours and thicknesses for different visible faces. A
 single-material flow rejects half the work; forcing one cutting per material rejects the
 other half (the user has to reconcile panels and prices across runs); a flow that only
-picks edge *thickness* without naming the actual tape forces the workshop to guess which
+picks edge _thickness_ without naming the actual tape forces the workshop to guess which
 manufacturer's spool to load and surprises clients at the counter.
 
 ## Domain rules
@@ -32,10 +32,10 @@ manufacturer's spool to load and surprises clients at the counter.
 
 A **cutting draft** is the working surface a client — or, for a walk-in order, workshop staff
 on the client's behalf ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) — edits
-and re-optimises until an order is placed. It's private (see *Access*) and persists
+and re-optimises until an order is placed. It's private (see _Access_) and persists
 indefinitely (no expiry; the client's self-made drafts cap at 50). The draft becomes a server
 entity on the **first optimise** — the editor opens local and unsaved, so abandoned/empty
-editors never mint a draft (see *Lifecycle*).
+editors never mint a draft (see _Lifecycle_).
 
 A draft owns:
 
@@ -46,18 +46,19 @@ A draft owns:
   until one is set, and **Optimise** is disabled without it. The client can **change** the branch
   (there is no "clear to none" — the field is required once you're editing), and the order step
   defaults to it. Switching branches is not a data operation: parts already in the list stay
-  editable even when their materials aren't carried at the new branch (see *Recovery
-  affordances*). The column stays nullable in storage for drafts that predate this rule and for
+  editable even when their materials aren't carried at the new branch (see _Recovery
+  affordances_). The column stays nullable in storage for drafts that predate this rule and for
   the brief unsaved window before the first branch pick.
 - **Parts.** Each part picks its own **panel** material from the platform catalog,
   dimensions (length × width × quantity), and a per-side **edge** material (top, bottom,
   left, right — each `null` for no banding, or a catalog edge material). Every material is
   **workshop-supplied**: the editor offers no "I'll bring it myself" choice (the snapshot's
-  `material_source` / side `source` fields are always `shop`; see *Parts and materials*).
+  `material_source` / side `source` fields are always `shop`; see _Parts and materials_).
   Grain direction is a property of the chosen panel material, and each part stores
   `follow_grain` (default `true`) to say whether that part must respect it. The instruction
   matters only on grained panels. Edge thickness and colour are properties of the chosen edge
-  material — the user picks the tape, not a thickness.
+  material — the user picks the tape, not a thickness. A part may also carry an optional
+  display `name`; blank names stay `null` and render as `D{row}` in the editor, SVG, and PDF.
 - **Algorithm results.** Re-running the optimiser produces one result per available
   algorithm in a single call against the same input. All N results are kept on the draft until
   the next run replaces them. The client picks one as the **chosen** result; the chosen one is
@@ -86,8 +87,10 @@ stateDiagram-v2
   created and persisted on the **first optimise**, which is also when autosave begins.
 - `draft` is mutable. `confirmed` is immutable and kept forever — it is the historical
   record an order points at.
-- Re-running the optimiser on a `draft` replaces all algorithm results in-place. No
-  intermediate-run history.
+- Re-running the optimiser on a `draft` replaces only optimiser-generated candidates. A
+  2D-Place MAP import result (`source=imported_map`) is preserved and stays chosen until the
+  user explicitly picks another result or edits the parts list. Editing parts invalidates
+  every candidate, including imported MAP layouts. No intermediate-run history.
 - On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
   the draft flips to `confirmed`. Other algorithm results from the same run are discarded at
   this point.
@@ -103,7 +106,7 @@ eager creation.
 - A part's panel material is a reference to the **platform catalog** (the shared list
   curated by platform operators), but the client only ever picks from the **selected
   branch's carried materials** — a branch is required before the parts editor opens
-  (see *Branch selector*), so the picker is always branch-scoped. The branch indicator
+  (see _Branch selector_), so the picker is always branch-scoped. The branch indicator
   (below) flags any already-entered row whose material the current branch can't fulfil.
 - **All materials are workshop-supplied.** The data model keeps a per-part
   `material_source` and a per-side edge `source` (`shop` / `own` — the optimiser, pricing,
@@ -113,7 +116,7 @@ eager creation.
 - **Edge tape is a catalog material too.** Each side of a part is either `null` (no banding)
   or a catalog edge material. The picker UX pins decor-matching edges at the top of one
   material list so the common case ("match the panel decor in 0.4 mm") is a single tap
-  without hiding the rest of the catalog (see *UX*).
+  without hiding the rest of the catalog (see _UX_).
 
 ### The optimiser
 
@@ -132,12 +135,12 @@ eager creation.
   Otherwise the algorithm may rotate the part 90°. If a locked part can't fit in its forced
   orientation, the run fails with `impossible_grain`.
 
-| Material `grain_direction` | Part `follow_grain` | Rotation |
-| --- | --- | --- |
-| `true` | `true` | locked; no 90° rotation |
-| `true` | `false` | free rotation |
-| `false` | `true` | free rotation |
-| `false` | `false` | free rotation |
+| Material `grain_direction` | Part `follow_grain` | Rotation                |
+| -------------------------- | ------------------- | ----------------------- |
+| `true`                     | `true`              | locked; no 90° rotation |
+| `true`                     | `false`             | free rotation           |
+| `false`                    | `true`              | free rotation           |
+| `false`                    | `false`             | free rotation           |
 
 - **One catalog material → one standard panel size.** The same spec in another size is a
   separate catalog material (size is part of its identity and name); custom panel sizes
@@ -163,15 +166,15 @@ eager creation.
 
 ### Limits
 
-| Constraint | Value |
-|---|---|
-| Part minimum | 50 mm × 50 mm |
-| Part maximum | panel − 2× edge trim (for the part's chosen panel material) |
-| Parts per optimisation | ≤ 100 (across all materials) |
-| Import file | ≤ 1 MiB; `.csv` only |
-| Panels per material per result | ≤ 20 (a single material above this must be split into separate orders) |
-| Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see *Access*) |
-| Hard timeout per run | 5 s → `optimization_timeout` |
+| Constraint                       | Value                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| Part minimum                     | 50 mm × 50 mm                                                                                 |
+| Part maximum                     | panel − 2× edge trim (for the part's chosen panel material)                                   |
+| Parts per optimisation           | ≤ 100 (across all materials)                                                                  |
+| Import file                      | ≤ 1 MiB; `.csv`, БАЗИС-Мебельщик `Спецификация в XML` `.xml`, or 2D-Place `.map`              |
+| Panels per material per result   | ≤ 20 (a single material above this must be split into separate orders)                        |
+| Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see _Access_) |
+| Hard timeout per run             | 5 s → `optimization_timeout`                                                                  |
 
 ### Access
 
@@ -213,13 +216,43 @@ eager creation.
   browser.
 - As a workshop user (cutter), I want the confirmed layout and PDF on my tablet at the saw,
   so I can cut without translation.
+- As a client, I want to import a 2D-Place `.map` file and keep its exact sheet layout, so a
+  layout prepared outside the app can become the chosen cutting result without rerunning the
+  optimiser.
+
+## Imports
+
+The cutting import endpoint accepts three source formats:
+
+- CSV part lists. The parser detects a likely header row and asks the user to map columns
+  when needed.
+- БАЗИС-Мебельщик XML specifications. The parser imports rectangular panel details and
+  reports ignored holes, grooves, and non-panel objects as warnings.
+- 2D-Place `.map` layouts. The parser keeps the external sheet layout and returns
+  `source_format=map_2dplace`, `material_groups`, and `map_layout`.
+
+For `.map`, the wizard groups sheets by exact size and asks the user to pick one catalog panel
+material for each sheet-size group. The material step shows a live size match indicator: matching
+catalog panel dimensions keep the external placement, while mismatched dimensions degrade to a
+parts-only import. If any imported detail has banding marks, the wizard asks for one edge material
+and applies it to all marked sides. The commit endpoint validates the selected panel dimensions
+against the MAP sheet dimensions, validates that every placement matches the generated parts,
+rejects overlapping/out-of-bounds placements, then creates a new draft with an imported result
+already chosen.
+
+Imported MAP results are stamped `algorithm_name=imported-2dplace-map`,
+`algorithm_version=map-1`, `source=imported_map`, `kerf_mm=0`, and `edge_trim_mm=0`. Waste and
+cut/edge metrics are recomputed from the persisted placements; MAP waste/remainder rectangles
+are stored as panel `offcuts` and used only for preview, not pricing. The UI labels these results
+`Fayldan joylashuv`. If the user edits the parts list, the editor warns that the imported
+layout will be removed before the draft is patched.
 
 ## UX — the cutting wizard (client app)
 
 A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first optimise; no stepper
 — one editing surface above, one results panel below). Entry is the client app's home **New
 cutting** button, which opens an empty, unsaved editor; the draft is created and persisted on
-the first **Optimise** (see *Lifecycle*). A secondary **My drafts** entry lists unbound drafts.
+the first **Optimise** (see _Lifecycle_). A secondary **My drafts** entry lists unbound drafts.
 
 ### Branch selector (top of the editor)
 
@@ -228,6 +261,27 @@ A small affordance under the page header naming the active branch. Choosing one 
 shows a **"pick a workshop first"** gate (a `store`-icon empty state with a single **Pick a
 workshop** button) in place of the parts list, and a caption on the selector explains the
 list is built from the chosen workshop's catalog.
+
+### Parts editor
+
+Rows are grouped visually by panel material in first-seen order, with a leading
+`Material tanlanmagan` group for new rows before a material is picked. Each row has a `Nomi`
+input, dimensions, quantity, a grained-material-only `Tekstura` toggle, four compact edge cells,
+duplicate, and an overflow menu for material replacement and deletion. `Enter` moves through
+cells and appends a new inherited row from the last cell of the last row. Deleting a row shows an
+undo toast; clearing all rows still requires confirmation.
+
+The edge-tape registry above the rows is derived from the current part sides. Distinct
+`(edge material_id, source)` pairs get numbered chips; row edge cells show those numbers, so a
+large cutting list can be scanned without repeating long tape names in every row.
+
+### Results
+
+Results render as one active variant at a time. When an imported MAP layout and an optimiser
+layout both exist, tabs switch between `Fayldagi joylashuv` and `Optimizer varianti` without
+changing the chosen result; `Shu variantni tanlash` updates `chosen_result_id`. The results area
+shows metric cards, a sheet-thumbnail strip, one large sheet SVG, offcut/remainder overlays, and a
+sticky footer summarising the currently chosen result before checkout.
 
 - **None set** → "No workshop selected" + a **Pick a workshop** button.
 - **Set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Change** button.
@@ -242,11 +296,11 @@ doesn't carry get a per-row warning + recovery affordances (below).
 
 ### Parts editor (top)
 
-A mode switch at the top: **Manual entry** (default) · **Upload file** (`.csv` only).
+A mode switch at the top: **Manual entry** (default) · **Upload file** (`.csv` / `.xml`).
 Upload opens the import wizard; manual entry stays as the plain row editor. The expected
-source is БАЗИС-Мебельщик's **Спецификация в CSV** export; Excel-made lists must be saved
-as CSV first. The page header carries a **Clear parts list** trash icon, shown only once
-there are rows. The primary **Optimise** button lives in a
+source is БАЗИС-Мебельщик's **Спецификация в CSV** or **Спецификация в XML** export;
+Excel-made lists must be saved as CSV first. The page header carries a **Clear parts list**
+trash icon, shown only once there are rows. The primary **Optimise** button lives in a
 **sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
 reason shown inline) — so it stays reachable above a long list.
 
@@ -263,22 +317,34 @@ a labelled card.
 ### File import wizard
 
 The import wizard is stateless: it never stores the file, creates a draft, or writes to the
-database. It only parses a local `.csv` file into ordinary editor parts.
+database. It only parses a local `.csv` or БАЗИС-Мебельщик XML file into ordinary editor
+parts.
 
-1. **File.** The client picks a file; the UI pre-checks the 1 MiB size cap and extension,
-   then calls `POST /api/v1/client/cutting/import/parse` without a mapping.
-2. **Columns.** The backend always returns a preview and suggested column roles. The user
-   confirms or changes the mapping and sets how many top rows to skip. Length and width
-   must be mapped before continuing.
+1. **File.** The client picks a file; the UI pre-checks the 1 MiB size cap and `.csv`/`.xml`
+   extension, then calls `POST /api/v1/client/cutting/import/parse` without a mapping.
+2. **Columns.** CSV imports return a preview and suggested column roles. The user confirms
+   or changes the mapping and sets how many top rows to skip. Length and width must be
+   mapped before continuing. БАЗИС-Мебельщик XML imports skip this step because the source
+   already carries typed fields.
 3. **Materials.** Materials from the file become groups only. The user must pick a panel
    catalog item for every panel group and an edge catalog item for every edge group. When
-   the CSV carries a `Толщина`/thickness column, the wizard shows that value as a muted
-   hint next to the panel group. The uploaded file name is shown above the material list,
-   which helps the БАЗИС-Мебельщик "by material" export mode where the material name lives
-   in the file name. There is deliberately no automatic material matching.
+   the CSV carries a `Толщина`/thickness column, or XML material carries `Толщина`, the
+   wizard shows that value as a muted hint next to the panel group. The uploaded file name
+   is shown above the material list, which helps the БАЗИС-Мебельщик "by material" export
+   mode where the material name lives in the file name. There is deliberately no automatic
+   material matching.
 4. **Report and load.** The wizard shows total parts/pieces, skipped rows, and warnings
    before it writes anything into the editor. Empty editors get a single **Load** action;
    non-empty editors offer **Append** and a danger-confirmed **Replace**.
+
+XML support is intentionally narrow: it accepts only БАЗИС-Мебельщик's project-root
+`<Проект>` export from **Спецификация в XML**. The parser flattens every
+`Изделие/СписокЭлементов/Объект`, imports only `ТипОбъекта = Панель`, multiplies object
+quantity by product quantity, reads `Длина_детали_без_облицовки` / `Ширина_детали_без_облицовки`
+when present, and maps `Горизонтальная` / `Вертикальная` texture orientation to
+`follow_grain = true`. Non-panel objects are counted in the report, not imported. Holes,
+grooves, non-rectangular panels, and edges marked "see drawing" import the rectangular part
+but appear as warnings.
 
 Rows skipped because they cannot be represented (for example an `Итого` footer in a numeric
 column) appear in the report. Recoverable domain problems still import: a sub-50 mm part is
@@ -288,16 +354,16 @@ and the optimiser remains blocked until rows are removed.
 
 The parts table:
 
-| Column | Behaviour |
-| --- | --- |
-| **#** | row number |
-| **Panel** | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
-| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part should follow texture direction; unpressed means rotation is allowed. The setting locks rotation only when the selected panel material is grained; on non-grained panels it is visible but has no optimisation effect |
-| **L mm** | numeric; validated against the part-min / part-max bounds of the chosen panel |
-| **W mm** | same |
-| **Qty** | integer ≥ 1 |
-| **Edges** | per-side summary — a small panel diagram (line weight signals thickness) + a one-line label (e.g. `H1334 · 0.4 mm` · `T·B · H1334 2.0` · `Mixed · 2 edges` · `None`). Tap → edge picker |
-| **Delete** | a trash icon button removes the row |
+| Column       | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Panel**    | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part should follow texture direction; unpressed means rotation is allowed. The setting locks rotation only when the selected panel material is grained; on non-grained panels it is visible but has no optimisation effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Edges**    | per-side summary — a small panel diagram (line weight signals thickness) + a one-line label (e.g. `H1334 · 0.4 mm` · `T·B · H1334 2.0` · `Mixed · 2 edges` · `None`). Tap → edge picker                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Delete**   | a trash icon button removes the row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 The grain toggle (small arrow + `Tekstura`) appears on the row.
 Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
@@ -351,7 +417,7 @@ the row is **not** disabled, **not** dropped, **not** moved. It stays in place, 
 with a **per-row warning** on each affected row (there is no separate top-level roll-up
 banner — the warning lives on the row that has the issue):
 
-- The warning reads *"Not at <branch> — pick a different material or change the branch."*
+- The warning reads _"Not at <branch> — pick a different material or change the branch."_
   Recovery is a material swap: the panel is swapped on the row's panel cell (the picker is
   pre-filtered to the branch), and when an edge side is affected the warning carries an
   inline **Pick a different tape** button that opens the edge picker with the same inline
@@ -361,7 +427,7 @@ banner — the warning lives on the row that has the issue):
 ### Clearing the parts list (deliberate)
 
 A **Clear parts list** trash icon next to the page header runs a danger-styled action
-(confirmation: *"Remove all N parts? This can't be undone."*). This is the only way to wipe
+(confirmation: _"Remove all N parts? This can't be undone."_). This is the only way to wipe
 parts wholesale; changing the branch never invokes it.
 
 ### Run and the result panel
@@ -454,9 +520,10 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **`too_many_parts` / `too_many_panels_needed`** — over the caps → reject; split the job.
 - **`optimization_timeout`** — no result within 5 s → retry or simplify.
 - **`draft_limit_exceeded`** — > 50 open drafts → delete some first.
-- **Unsupported import file** — the wizard accepts only `.csv`; `.xlsx`, legacy `.xls`,
-  proprietary CAD files, PDFs, JSON/XML/text, empty files, oversized files, and binary junk
-  are rejected with a clear error before they touch the editor.
+- **Unsupported import file** — the wizard accepts `.csv` and БАЗИС-Мебельщик
+  **Спецификация в XML** `.xml`; `.xlsx`, legacy `.xls`, proprietary CAD files, PDFs,
+  arbitrary JSON/XML/text, empty files, oversized files, and binary junk are rejected with a
+  clear error before they touch the editor.
 - **Import footers / summary rows** — non-empty rows whose mapped numeric cells cannot be
   parsed, such as an `Итого` footer, are listed in the import report as skipped rows with
   the original row number and preview text.

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from decimal import Decimal
+from typing import Any, cast
 
 from fastapi import status
 from sqlalchemy import and_, delete, func, or_, select
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
+    CuttingResultSource,
     CuttingResultStatus,
     MaterialKind,
     MaterialStatus,
@@ -25,17 +27,23 @@ from app.modules.cutting.contracts import (
     CuttingPlacement,
     CuttingResult,
 )
+from app.modules.cutting.imports.base import ImportMapLayout, ImportMapPlacement
 from app.modules.cutting.optimizer import (
     EDGE_TRIM_MM,
     EdgeBandInput,
+    OffcutResult,
     OptimizerError,
+    PanelResult,
     PanelSpec,
     PartInput,
+    PlacementResult,
+    _edge_metrics,
     run_all_algorithms,
 )
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
     CuttingDraftResponse,
+    CuttingMapImportCommitRequest,
     CuttingPanelResponse,
     CuttingPart,
     CuttingPlacementResponse,
@@ -46,6 +54,8 @@ from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
 
 DRAFT_LIMIT = 50
+IMPORTED_MAP_ALGORITHM_NAME = "imported-2dplace-map"
+IMPORTED_MAP_ALGORITHM_VERSION = "map-1"
 
 
 async def create_draft(
@@ -82,6 +92,69 @@ async def create_draft(
         entity_type="cutting_draft",
         entity_id=draft.id,
         summary="Created cutting draft",
+    )
+    return await _draft_response(db, draft)
+
+
+async def commit_imported_map(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    payload: CuttingMapImportCommitRequest,
+) -> CuttingDraftResponse:
+    client = await get_client_profile(db, principal=principal)
+    count = await db.scalar(
+        select(func.count(CuttingDraft.id)).where(
+            CuttingDraft.client_id == client.id,
+            CuttingDraft.created_via_workshop_id.is_(None),
+        )
+    )
+    if count is not None and count >= DRAFT_LIMIT:
+        raise APIError(
+            "draft_limit_exceeded",
+            "Draft limit exceeded",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    preferred_branch_id = payload.preferred_branch_id
+    if preferred_branch_id is not None:
+        preferred_branch_id = (await visible_branch(db, preferred_branch_id)).id
+
+    parts, optimizer_parts, _, material_snapshots = await _validate_parts(
+        db,
+        payload.parts,
+        require_non_empty=True,
+    )
+    panel_materials = await _map_panel_materials(db, payload.panel_picks)
+    _validate_map_layout(payload.map_layout, optimizer_parts, panel_materials)
+
+    draft = CuttingDraft(
+        client_id=client.id,
+        preferred_branch_id=preferred_branch_id or client.preferred_branch_id,
+        parts_snapshot=parts,
+    )
+    db.add(draft)
+    await db.flush()
+
+    result = await _create_imported_map_result(
+        db,
+        draft=draft,
+        parts=parts,
+        optimizer_parts=optimizer_parts,
+        material_snapshots=material_snapshots,
+        panel_materials=panel_materials,
+        layout=payload.map_layout,
+    )
+    draft.chosen_result_id = result.id
+    draft.updated_at = result.created_at
+    await db.flush()
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="cutting_draft.create",
+        entity_type="cutting_draft",
+        entity_id=draft.id,
+        summary="Created cutting draft from MAP import",
+        details={"source": "map_2dplace", "result_id": str(result.id)},
     )
     return await _draft_response(db, draft)
 
@@ -244,9 +317,15 @@ async def _apply_optimize(
             details=_optimizer_error_details(exc),
         ) from exc
 
-    draft.chosen_result_id = None
+    imported_candidate_id = await _candidate_imported_result_id(db, draft.id)
+    if imported_candidate_id is None:
+        draft.chosen_result_id = None
     await db.flush()
-    await _delete_candidate_results(db, draft.id)
+    await _delete_candidate_results(
+        db,
+        draft.id,
+        sources={CuttingResultSource.OPTIMIZER},
+    )
     now = datetime.now(UTC)
     created_results: list[CuttingResult] = []
     for optimizer_result in optimizer_results:
@@ -254,6 +333,7 @@ async def _apply_optimize(
             draft_id=draft.id,
             algorithm_name=optimizer_result.algorithm_name,
             algorithm_version=optimizer_result.algorithm_version,
+            source=CuttingResultSource.OPTIMIZER,
             status=CuttingResultStatus.CANDIDATE,
             kerf_mm=optimizer_result.kerf_mm,
             edge_trim_mm=optimizer_result.edge_trim_mm,
@@ -279,6 +359,7 @@ async def _apply_optimize(
                 material_id=panel.material_id,
                 panel_index=panel.panel_index,
                 waste_area_mm2=panel.waste_area_mm2,
+                offcuts=[offcut.__dict__ for offcut in panel.offcuts],
             )
             db.add(panel_row)
             await db.flush()
@@ -296,8 +377,11 @@ async def _apply_optimize(
                     )
                 )
         created_results.append(result)
-    winner = min(created_results, key=lambda item: (item.waste_percentage, item.algorithm_name))
-    draft.chosen_result_id = winner.id
+    if imported_candidate_id is not None:
+        draft.chosen_result_id = imported_candidate_id
+    else:
+        winner = min(created_results, key=lambda item: (item.waste_percentage, item.algorithm_name))
+        draft.chosen_result_id = winner.id
     draft.updated_at = now
     await db.flush()
     await record_action(
@@ -512,6 +596,268 @@ async def _client_draft(
     return draft
 
 
+async def _map_panel_materials(
+    db: AsyncSession,
+    picks: dict[str, uuid.UUID],
+) -> dict[str, Material]:
+    rows = await _material_rows(db, set(picks.values()))
+    materials: dict[str, Material] = {}
+    for key, material_id in picks.items():
+        row = rows.get(material_id)
+        if row is None:
+            raise APIError(
+                "map_layout_material_mismatch",
+                "MAP layout material mismatch",
+                details={"material_key": key, "material_id": str(material_id)},
+            )
+        material, _ = row
+        if material.kind is not MaterialKind.PANEL:
+            raise APIError(
+                "map_layout_material_mismatch",
+                "MAP layout material mismatch",
+                details={"material_key": key, "material_id": str(material_id)},
+            )
+        materials[key] = material
+    return materials
+
+
+def _validate_map_layout(
+    layout: ImportMapLayout,
+    parts: list[PartInput],
+    panel_materials: dict[str, Material],
+) -> None:
+    parts_by_ref = {part.part_ref: part for part in parts}
+    expected_counts = {part.part_ref: part.quantity for part in parts}
+    seen_indexes: dict[str, set[int]] = {part.part_ref: set() for part in parts}
+    if not layout.sheets:
+        raise APIError("map_layout_part_mismatch", "MAP layout has no sheets")
+
+    for sheet in layout.sheets:
+        material = panel_materials.get(sheet.material_key)
+        if (
+            material is None
+            or material.panel_length_mm != sheet.width_mm
+            or material.panel_width_mm != sheet.height_mm
+        ):
+            raise APIError(
+                "map_layout_material_mismatch",
+                "MAP layout material mismatch",
+                details={
+                    "sheet": sheet.name,
+                    "material_key": sheet.material_key,
+                    "sheet_size": [sheet.width_mm, sheet.height_mm],
+                    "material_size": [
+                        material.panel_length_mm if material is not None else None,
+                        material.panel_width_mm if material is not None else None,
+                    ],
+                },
+            )
+        non_waste = [placement for placement in sheet.placements if not placement.is_waste]
+        for placement in sheet.placements:
+            if not _placement_in_sheet(placement, sheet.width_mm, sheet.height_mm):
+                raise APIError(
+                    "map_layout_part_mismatch",
+                    "MAP placement is outside the sheet",
+                    details={"sheet": sheet.name, "part_ref": placement.part_ref},
+                )
+        for index, left in enumerate(non_waste):
+            part_ref = left.part_ref
+            quantity_index = left.part_quantity_index
+            part = parts_by_ref.get(part_ref or "")
+            if part is None or quantity_index is None or quantity_index < 1:
+                raise APIError(
+                    "map_layout_part_mismatch",
+                    "MAP layout does not match parts",
+                    details={"sheet": sheet.name, "part_ref": part_ref},
+                )
+            if part.material_id != material.id:
+                raise APIError(
+                    "map_layout_material_mismatch",
+                    "MAP placement material mismatch",
+                    details={"sheet": sheet.name, "part_ref": part_ref},
+                )
+            normal = left.length_mm == part.length_mm and left.width_mm == part.width_mm
+            rotated = left.length_mm == part.width_mm and left.width_mm == part.length_mm
+            if not normal and not rotated:
+                raise APIError(
+                    "map_layout_part_mismatch",
+                    "MAP placement dimensions do not match parts",
+                    details={"sheet": sheet.name, "part_ref": part_ref},
+                )
+            seen_indexes[part.part_ref].add(quantity_index)
+            for right in non_waste[index + 1 :]:
+                if _placements_overlap(left, right):
+                    raise APIError(
+                        "map_layout_overlap",
+                        "MAP layout placements overlap",
+                        details={"sheet": sheet.name, "part_ref": part_ref},
+                    )
+
+    for part_ref, expected in expected_counts.items():
+        if seen_indexes.get(part_ref, set()) != set(range(1, expected + 1)):
+            raise APIError(
+                "map_layout_part_mismatch",
+                "MAP layout does not match part quantities",
+                details={
+                    "part_ref": part_ref,
+                    "expected": expected,
+                    "actual": sorted(seen_indexes.get(part_ref, set())),
+                },
+            )
+
+
+async def _create_imported_map_result(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    parts: list[dict[str, Any]],
+    optimizer_parts: list[PartInput],
+    material_snapshots: dict[str, dict[str, Any]],
+    panel_materials: dict[str, Material],
+    layout: ImportMapLayout,
+) -> CuttingResult:
+    now = datetime.now(UTC)
+    panels_used: dict[str, int] = {}
+    total_sheet_area = 0
+    total_part_area = 0
+    total_cut_length = 0
+    panel_results: list[PanelResult] = []
+    panel_index_by_material: dict[uuid.UUID, int] = {}
+    for sheet in layout.sheets:
+        material = panel_materials[sheet.material_key]
+        material_id = material.id
+        panel_index = panel_index_by_material.get(material_id, 0) + 1
+        panel_index_by_material[material_id] = panel_index
+        panels_used[str(material_id)] = panels_used.get(str(material_id), 0) + 1
+        sheet_area = sheet.width_mm * sheet.height_mm
+        used_area = 0
+        offcuts: list[OffcutResult] = []
+        placements: list[PlacementResult] = []
+        for placement in sheet.placements:
+            if (
+                placement.is_waste
+                or placement.part_ref is None
+                or placement.part_quantity_index is None
+            ):
+                if placement.is_waste:
+                    offcuts.append(
+                        OffcutResult(
+                            x_mm=placement.x_mm,
+                            y_mm=placement.y_mm,
+                            length_mm=placement.length_mm,
+                            width_mm=placement.width_mm,
+                            usable=placement.is_remainder,
+                        )
+                    )
+                continue
+            area = placement.length_mm * placement.width_mm
+            used_area += area
+            total_part_area += area
+            total_cut_length += 2 * (placement.length_mm + placement.width_mm)
+            placements.append(
+                PlacementResult(
+                    material_id=material_id,
+                    part_ref=placement.part_ref,
+                    part_quantity_index=placement.part_quantity_index,
+                    x_mm=placement.x_mm,
+                    y_mm=placement.y_mm,
+                    length_mm=placement.length_mm,
+                    width_mm=placement.width_mm,
+                    rotated=placement.rotated,
+                )
+            )
+        total_sheet_area += sheet_area
+        panel_results.append(
+            PanelResult(
+                material_id=material_id,
+                panel_index=panel_index,
+                waste_area_mm2=max(0, sheet_area - used_area),
+                offcuts=offcuts,
+                placements=placements,
+            )
+        )
+
+    edge_metrics = _edge_metrics(optimizer_parts)
+    waste_percentage = (
+        Decimal(total_sheet_area - total_part_area) / Decimal(total_sheet_area)
+        if total_sheet_area
+        else Decimal("0")
+    )
+    result = CuttingResult(
+        draft_id=draft.id,
+        algorithm_name=IMPORTED_MAP_ALGORITHM_NAME,
+        algorithm_version=IMPORTED_MAP_ALGORITHM_VERSION,
+        source=CuttingResultSource.IMPORTED_MAP,
+        status=CuttingResultStatus.CANDIDATE,
+        kerf_mm=0,
+        edge_trim_mm=0,
+        panels_used_by_material=panels_used,
+        waste_percentage=waste_percentage,
+        total_cut_length_mm=total_cut_length,
+        total_edge_length_mm=sum(edge_metrics.edge_length_by_material.values()),
+        edge_length_by_material=edge_metrics.edge_length_by_material,
+        parts_snapshot=parts,
+        material_snapshots=material_snapshots,
+        edge_length_shop_by_material=edge_metrics.edge_length_shop_by_material,
+        edge_length_own_by_material=edge_metrics.edge_length_own_by_material,
+        edge_consumed_shop_by_material=edge_metrics.edge_consumed_shop_by_material,
+        edge_consumed_own_by_material=edge_metrics.edge_consumed_own_by_material,
+        edge_banded_sides_by_material=edge_metrics.edge_banded_sides_by_material,
+        created_at=now,
+    )
+    db.add(result)
+    await db.flush()
+    for panel in panel_results:
+        panel_row = CuttingPanel(
+            cutting_result_id=result.id,
+            material_id=panel.material_id,
+            panel_index=panel.panel_index,
+            waste_area_mm2=panel.waste_area_mm2,
+            offcuts=[offcut.__dict__ for offcut in panel.offcuts],
+        )
+        db.add(panel_row)
+        await db.flush()
+        for panel_placement in panel.placements:
+            db.add(
+                CuttingPlacement(
+                    cutting_panel_id=panel_row.id,
+                    part_ref=panel_placement.part_ref,
+                    part_quantity_index=panel_placement.part_quantity_index,
+                    x_mm=panel_placement.x_mm,
+                    y_mm=panel_placement.y_mm,
+                    length_mm=panel_placement.length_mm,
+                    width_mm=panel_placement.width_mm,
+                    rotated=panel_placement.rotated,
+                )
+            )
+    return result
+
+
+def _placement_in_sheet(placement: ImportMapPlacement, sheet_width: int, sheet_height: int) -> bool:
+    return (
+        placement.x_mm >= 0
+        and placement.y_mm >= 0
+        and placement.length_mm > 0
+        and placement.width_mm > 0
+        and placement.x_mm <= sheet_width
+        and placement.y_mm <= sheet_height
+        and placement.x_mm + placement.length_mm <= sheet_width + 5
+        and placement.y_mm + placement.width_mm <= sheet_height + 5
+    )
+
+
+def _placements_overlap(left: ImportMapPlacement, right: ImportMapPlacement) -> bool:
+    overlap_x = min(left.x_mm + left.length_mm, right.x_mm + right.length_mm) - max(
+        left.x_mm,
+        right.x_mm,
+    )
+    overlap_y = min(left.y_mm + left.width_mm, right.y_mm + right.width_mm) - max(
+        left.y_mm,
+        right.y_mm,
+    )
+    return overlap_x > 1 and overlap_y > 1
+
+
 async def _validate_parts(
     db: AsyncSession,
     parts: list[CuttingPart],
@@ -706,19 +1052,32 @@ def _material_snapshot(material: Material, manufacturer: Manufacturer) -> dict[s
     }
 
 
-async def _delete_candidate_results(db: AsyncSession, draft_id: uuid.UUID) -> None:
-    result_ids = (
-        (
-            await db.execute(
-                select(CuttingResult.id).where(
-                    CuttingResult.draft_id == draft_id,
-                    CuttingResult.status == CuttingResultStatus.CANDIDATE,
-                )
+async def _candidate_imported_result_id(db: AsyncSession, draft_id: uuid.UUID) -> uuid.UUID | None:
+    return cast(
+        uuid.UUID | None,
+        await db.scalar(
+            select(CuttingResult.id).where(
+                CuttingResult.draft_id == draft_id,
+                CuttingResult.status == CuttingResultStatus.CANDIDATE,
+                CuttingResult.source == CuttingResultSource.IMPORTED_MAP,
             )
-        )
-        .scalars()
-        .all()
+        ),
     )
+
+
+async def _delete_candidate_results(
+    db: AsyncSession,
+    draft_id: uuid.UUID,
+    *,
+    sources: set[CuttingResultSource] | None = None,
+) -> None:
+    query = select(CuttingResult.id).where(
+        CuttingResult.draft_id == draft_id,
+        CuttingResult.status == CuttingResultStatus.CANDIDATE,
+    )
+    if sources is not None:
+        query = query.where(CuttingResult.source.in_(sources))
+    result_ids = (await db.execute(query)).scalars().all()
     if not result_ids:
         return
     panel_ids = (
@@ -808,6 +1167,7 @@ async def _result_response(
                 material_id=panel.material_id,
                 panel_index=panel.panel_index,
                 waste_area_mm2=panel.waste_area_mm2,
+                offcuts=panel.offcuts or [],
                 placements=[
                     CuttingPlacementResponse.model_validate(placement)
                     for placement in placements_by_panel[panel.id]
@@ -820,6 +1180,7 @@ async def _result_response(
         draft_id=result.draft_id,
         algorithm_name=result.algorithm_name,
         algorithm_version=result.algorithm_version,
+        source=result.source,
         status=result.status,
         kerf_mm=result.kerf_mm,
         edge_trim_mm=result.edge_trim_mm,

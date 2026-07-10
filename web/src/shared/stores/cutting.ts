@@ -5,9 +5,11 @@ import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client
 import { authInit } from '@/shared/app/authInit'
 import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
+import type { ImportMapLayout } from '@/shared/stores/cuttingImport'
 
 export type MaterialSource = 'shop' | 'own'
 export type CuttingResultStatus = 'candidate' | 'confirmed' | 'invalidated'
+export type CuttingResultSource = 'optimizer' | 'imported_map'
 
 // Which API surface the store talks to: the client SPA uses `/client/*`, the
 // workshop SPA the mirrored `/workshop/*` staff endpoints. Each SPA has its own
@@ -29,6 +31,7 @@ export interface CuttingEdgeBand {
 
 export interface CuttingPart {
   part_ref: string
+  name: string | null
   material_id: string
   material_source: MaterialSource
   follow_grain: boolean
@@ -39,6 +42,14 @@ export interface CuttingPart {
   edge_bottom: CuttingEdgeBand | null
   edge_left: CuttingEdgeBand | null
   edge_right: CuttingEdgeBand | null
+}
+
+export interface CuttingOffcut {
+  x_mm: number
+  y_mm: number
+  length_mm: number
+  width_mm: number
+  usable: boolean
 }
 
 export interface CuttingPlacement {
@@ -57,6 +68,7 @@ export interface CuttingPanel {
   material_id: string
   panel_index: number
   waste_area_mm2: number
+  offcuts: CuttingOffcut[]
   placements: CuttingPlacement[]
 }
 
@@ -65,6 +77,7 @@ export interface CuttingResult {
   draft_id: string | null
   algorithm_name: string
   algorithm_version: string
+  source: CuttingResultSource
   status: CuttingResultStatus
   kerf_mm: number
   edge_trim_mm: number
@@ -96,6 +109,13 @@ export interface CuttingDraft {
   created_at: string
   updated_at: string
   results: CuttingResult[]
+}
+
+export interface CuttingMapImportCommitPayload {
+  preferred_branch_id?: string | null
+  parts: CuttingPart[]
+  map_layout: ImportMapLayout
+  panel_picks: Record<string, string>
 }
 
 export interface ClientCatalogMaterialOption {
@@ -351,6 +371,25 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
+  async function commitMapImport(payload: CuttingMapImportCommitPayload) {
+    if (scope.value !== 'client') {
+      throw new Error('MAP layout import commit is available only on the client cutting surface')
+    }
+    saving.value = true
+    try {
+      const draft = await api.post<CuttingDraft>(
+        '/client/cutting/import/map/commit',
+        payload,
+        authInit(),
+      )
+      drafts.value = [draft, ...drafts.value.filter((item) => item.id !== draft.id)]
+      currentDraft.value = draft
+      return draft
+    } finally {
+      saving.value = false
+    }
+  }
+
   async function deleteDraft(id: string) {
     await api.del(scopedPath(`/cutting-drafts/${id}`), authInit())
     drafts.value = drafts.value.filter((draft) => draft.id !== id)
@@ -530,6 +569,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     createDraft,
     loadDraft,
     updateDraft,
+    commitMapImport,
     deleteDraft,
     optimizeDraft,
     chooseResult,

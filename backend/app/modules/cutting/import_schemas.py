@@ -3,16 +3,27 @@
 from app.modules.cutting.imports.base import (
     ImportEdgeMaterialGroup,
     ImportedPart,
+    ImportMapLayout,
+    ImportMapMaterialGroup,
+    ImportMapPartRow,
+    ImportMapPlacement,
+    ImportMapSheet,
     ImportNeedsMappingResponse,
     ImportPanelMaterialGroup,
     ImportParsedResponse,
     ImportParseResponse,
     ImportSkippedRow,
     ImportWarning,
+    SourceFormat,
 )
 
 __all__ = [
     "ImportEdgeMaterialGroup",
+    "ImportMapLayout",
+    "ImportMapMaterialGroup",
+    "ImportMapPartRow",
+    "ImportMapPlacement",
+    "ImportMapSheet",
     "ImportNeedsMappingResponse",
     "ImportPanelMaterialGroup",
     "ImportParseResponse",
@@ -20,4 +31,5 @@ __all__ = [
     "ImportSkippedRow",
     "ImportWarning",
     "ImportedPart",
+    "SourceFormat",
 ]

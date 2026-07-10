@@ -85,6 +85,11 @@ class CuttingResultStatus(StrEnum):
     INVALIDATED = "invalidated"
 
 
+class CuttingResultSource(StrEnum):
+    OPTIMIZER = "optimizer"
+    IMPORTED_MAP = "imported_map"
+
+
 class OrderStatus(StrEnum):
     NEW = "new"
     CONFIRMED = "confirmed"

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from app.modules.cutting.imports.base import ImportParseError, ImportParseOptions
-from app.modules.cutting.imports.detect import decode_csv_text, sniff_csv_delimiter
+from app.modules.cutting.imports.detect import decode_csv_text, sniff_csv_delimiter, sniff_format
 from app.modules.cutting.imports.parser import guess_header, parse_import_file
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.test_cutting_api import _auth, _client_access
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cutting_import"
+MAP_FIXTURES = FIXTURES / "map"
 
 
 def _csv_bytes(text: str, *, encoding: str = "utf-8") -> bytes:
@@ -19,6 +20,10 @@ def _csv_bytes(text: str, *, encoding: str = "utf-8") -> bytes:
 
 def _fixture(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
+
+
+def _map_fixture(name: str) -> bytes:
+    return (MAP_FIXTURES / name).read_bytes()
 
 
 def test_detection_call_always_returns_mapping_preview_for_csv() -> None:
@@ -119,6 +124,154 @@ def test_full_mebelshik_project_csv_parse_reports_repeated_header_and_thickness_
     assert {warning.code: warning.rows for warning in response.warnings} == {
         "dimension_rounded": [2, 4],
     }
+
+
+def test_bazis_xml_parse_returns_parsed_ir_without_mapping() -> None:
+    response = parse_import_file(
+        filename="bazis_mebelshik_spec.xml",
+        content=_fixture("bazis_mebelshik_spec.xml"),
+    )
+
+    assert response.status == "parsed"
+    assert response.source_format == "bazis_xml"
+    assert response.total_parts == 3
+    assert response.total_pieces == 7
+    assert response.ignored_object_count == 1
+    assert [part.model_dump() for part in response.parts] == [
+        {
+            "row": 1,
+            "length_mm": 721,
+            "width_mm": 450,
+            "quantity": 4,
+            "material_key": "m1",
+            "follow_grain": True,
+            "edges": {"top": "e1", "bottom": "e1", "left": "e1", "right": "e1"},
+        },
+        {
+            "row": 2,
+            "length_mm": 600,
+            "width_mm": 300,
+            "quantity": 2,
+            "material_key": "m2",
+            "follow_grain": True,
+            "edges": {"top": "e2", "bottom": "e2", "left": None, "right": None},
+        },
+        {
+            "row": 4,
+            "length_mm": 800,
+            "width_mm": 90,
+            "quantity": 1,
+            "material_key": "m1",
+            "follow_grain": False,
+            "edges": {"top": None, "bottom": None, "left": None, "right": None},
+        },
+    ]
+    assert [group.model_dump() for group in response.panel_materials] == [
+        {"key": "m1", "label": "ЛДСП EGGER H1334", "part_count": 2, "thickness_hint": "18"},
+        {"key": "m2", "label": "МДФ Белый W980", "part_count": 1, "thickness_hint": "16"},
+    ]
+    assert [group.model_dump() for group in response.edge_materials] == [
+        {"key": "e1", "label": "ABS H1334 0.4", "side_count": 4},
+        {"key": "e2", "label": "ABS White", "side_count": 2},
+    ]
+    assert [row.model_dump() for row in response.skipped_rows] == [
+        {"row": 3, "reason": "non_numeric_width", "preview": "Ошибка ширины"}
+    ]
+    assert {warning.code: warning.rows for warning in response.warnings} == {
+        "dimension_rounded": [1],
+        "edge_see_drawing": [2],
+        "ignored_grooves": [2],
+        "ignored_holes": [2],
+        "non_rectangular": [2],
+        "quantity_defaulted": [2],
+    }
+
+
+def test_bazis_xml_accepts_cp1251_declared_encoding() -> None:
+    content = """<?xml version="1.0" encoding="windows-1251"?>
+<Проект>
+  <Изделие>
+    <СписокЭлементов>
+      <Объект>
+        <ТипОбъекта>Панель</ТипОбъекта>
+        <Длина>500</Длина>
+        <Ширина>300</Ширина>
+        <Количество>1</Количество>
+      </Объект>
+    </СписокЭлементов>
+  </Изделие>
+</Проект>
+""".encode("cp1251")
+
+    response = parse_import_file(filename="spec.xml", content=content)
+
+    assert response.status == "parsed"
+    assert response.source_format == "bazis_xml"
+    assert response.parts[0].length_mm == 500
+
+
+def test_xml_detection_rejects_non_project_and_entity_payloads() -> None:
+    assert sniff_format(_fixture("bazis_mebelshik_spec.xml"), "spec.xml") == "bazis_xml"
+
+    with pytest.raises(ImportParseError) as unsupported:
+        parse_import_file(filename="objtree.xml", content=b"<?xml version='1.0'?><ObjTree />")
+    assert unsupported.value.code == "unsupported_format"
+
+    entity_payload = "<!DOCTYPE x [<!ENTITY boom 'boom'>]><Проект>&boom;</Проект>"
+    with pytest.raises(ImportParseError) as unsafe_xml:
+        parse_import_file(
+            filename="entity.xml",
+            content=entity_payload.encode(),
+        )
+    assert unsafe_xml.value.code == "invalid_file"
+
+
+def test_map_parser_regression_and_range_expansion() -> None:
+    from app.modules.cutting.imports.map_parser import parse_map_file
+
+    single = parse_map_file(_map_fixture("6.map"), "6.map")
+    repeated = parse_map_file(_map_fixture("9.map"), "9.map")
+
+    assert len(single.sheets) == 1
+    assert single.sheets[0].width_mm == 2750
+    assert single.sheets[0].height_mm == 1830
+    assert sum(not record.is_waste for record in single.sheets[0].records) == 6
+    assert sum(record.is_remainder for record in single.sheets[0].records) == 1
+    first = next(record for record in single.sheets[0].records if not record.is_waste)
+    assert (first.x, first.y, first.width, first.height) == (5, 5, 2170, 330)
+    assert first.edges == (True, False, True, True)
+    assert [sheet.name for sheet in repeated.sheets] == ["1: Лист 1", "2: Лист 2", "3: Лист 3"]
+    assert all(
+        sum(not record.is_waste for record in sheet.records) == 3 for sheet in repeated.sheets
+    )
+
+
+def test_map_import_parse_returns_layout_and_material_groups() -> None:
+    response = parse_import_file(filename="6.map", content=_map_fixture("6.map"))
+
+    assert response.status == "parsed"
+    assert response.source_format == "map_2dplace"
+    assert response.total_parts == 3
+    assert response.total_pieces == 6
+    assert response.panel_materials[0].model_dump() == {
+        "key": "m1",
+        "label": "2750x1830 mm list",
+        "part_count": 3,
+        "thickness_hint": None,
+    }
+    assert response.material_groups[0].model_dump() == {
+        "key": "m1",
+        "label": "2750x1830 mm list",
+        "width_mm": 2750,
+        "height_mm": 1830,
+        "sheet_count": 1,
+        "hint": None,
+    }
+    assert response.edge_materials[0].side_count == 22
+    assert response.map_layout is not None
+    assert response.map_layout.sheets[0].parts_count == 6
+    assert response.map_layout.sheets[0].remainder_count == 1
+    assert response.map_layout.part_rows[0].part_ref == "map-1"
 
 
 def test_mebelshik_spec_csv_without_material_column_uses_all_group_and_silent_blank_line() -> None:
@@ -248,10 +401,25 @@ def test_invalid_mapping_and_too_many_parts_raise_422_codes() -> None:
         )
     assert too_many.value.code == "too_many_parts"
 
+    panel = (
+        "<Объект><ТипОбъекта>Панель</ТипОбъекта><Длина>100</Длина><Ширина>100</Ширина>"
+        "<Количество>101</Количество></Объект>"
+    )
+    too_many_xml_content = (
+        f"<Проект><Изделие><СписокЭлементов>{panel}</СписокЭлементов></Изделие></Проект>"
+    )
+    with pytest.raises(ImportParseError) as too_many_xml_error:
+        parse_import_file(
+            filename="too_many.xml",
+            content=too_many_xml_content.encode(),
+        )
+    assert too_many_xml_error.value.code == "too_many_parts"
+
 
 def test_encoding_fallback_and_delimiter_tie_rule() -> None:
     assert decode_csv_text("Длина".encode("cp1251")) == "Длина"
     assert sniff_csv_delimiter("A;B,C\n1;2,3\n") == ";"
+    assert sniff_format(_map_fixture("6.map"), "6.map") == "map_2dplace"
 
 
 async def test_client_cutting_import_parse_endpoint(
@@ -282,7 +450,7 @@ async def test_client_cutting_import_parse_endpoint(
     assert unauthenticated.status_code == 401
     assert detected.status_code == 200
     assert detected.json()["status"] == "needs_mapping"
-    assert "source_format" not in detected.json()
+    assert detected.json()["source_format"] == "csv"
     assert parsed.status_code == 200
     assert parsed.json()["status"] == "parsed"
     assert parsed.json()["parts"][0] == {
@@ -294,3 +462,31 @@ async def test_client_cutting_import_parse_endpoint(
         "follow_grain": True,
         "edges": {"top": None, "bottom": None, "left": None, "right": None},
     }
+
+    xml = await client.post(
+        "/api/v1/client/cutting/import/parse",
+        headers=_auth(access),
+        files={
+            "file": (
+                "spec.xml",
+                _fixture("bazis_mebelshik_spec.xml"),
+                "application/xml",
+            )
+        },
+    )
+
+    assert xml.status_code == 200
+    assert xml.json()["status"] == "parsed"
+    assert xml.json()["source_format"] == "bazis_xml"
+    assert xml.json()["ignored_object_count"] == 1
+
+    map_response = await client.post(
+        "/api/v1/client/cutting/import/parse",
+        headers=_auth(access),
+        files={"file": ("6.map", _map_fixture("6.map"), "application/octet-stream")},
+    )
+
+    assert map_response.status_code == 200
+    assert map_response.json()["status"] == "parsed"
+    assert map_response.json()["source_format"] == "map_2dplace"
+    assert map_response.json()["map_layout"]["sheets"][0]["width_mm"] == 2750

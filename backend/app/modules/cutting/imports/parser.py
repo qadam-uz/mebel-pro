@@ -4,10 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import math
-import re
-from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
 from app.modules.cutting.imports.base import (
@@ -32,17 +28,23 @@ from app.modules.cutting.imports.base import (
     SkipReason,
     WarningCode,
 )
+from app.modules.cutting.imports.common import (
+    GroupRegistry,
+    add_warning,
+    cell_text,
+    format_thickness_hint,
+    parse_dimension,
+    parse_number,
+    parse_quantity,
+)
 from app.modules.cutting.imports.detect import (
     decode_csv_text,
-    ensure_csv,
     sniff_csv_delimiter,
+    sniff_format,
 )
 
 Grid = list[list[Any]]
 EdgeSide = Literal["top", "bottom", "left", "right"]
-DimensionError = Literal["non_numeric", "dimension_not_positive", "dimension_too_large"]
-
-_SPACE_RE = re.compile(r"[\s\u00a0\u2009]+")
 
 _HEADER_TOKENS: dict[ImportRole, tuple[str, ...]] = {
     "length_mm": ("длина", "length", "l", "uzunlik", "bo'y", "boy"),
@@ -62,39 +64,6 @@ _FALSY_GRAIN = {"нет", "-", "0", "false", "yo'q", "yoq"}
 _FALSY_EDGE = {"", "-", "0", "нет", "yo'q", "yoq"}
 
 
-@dataclass
-class _GroupRegistry:
-    prefix: str
-    special_labels: dict[str, str]
-    counts: dict[str, int]
-    labels: dict[str, str]
-    keys_by_distinct: dict[str, str]
-
-    def key_for(self, value: Any) -> str:
-        text = _cell_text(value)
-        if not text:
-            key = "__unspecified__"
-            self.counts[key] = self.counts.get(key, 0) + 1
-            self.labels[key] = self.special_labels[key]
-            return key
-        distinct = _distinct_key(text)
-        existing_key = self.keys_by_distinct.get(distinct)
-        if existing_key is None:
-            new_key = f"{self.prefix}{len(self.keys_by_distinct) + 1}"
-            self.keys_by_distinct[distinct] = new_key
-            self.labels[new_key] = text
-            key = new_key
-        else:
-            key = existing_key
-        self.counts[key] = self.counts.get(key, 0) + 1
-        return key
-
-    def count_special(self, key: str) -> str:
-        self.counts[key] = self.counts.get(key, 0) + 1
-        self.labels[key] = self.special_labels[key]
-        return key
-
-
 def parse_import_file(
     *,
     filename: str | None,
@@ -103,7 +72,15 @@ def parse_import_file(
 ) -> ImportParseResponse:
     _ensure_file_size(content)
     parse_options = options or ImportParseOptions()
-    ensure_csv(content, filename)
+    source_format = sniff_format(content, filename)
+    if source_format == "map_2dplace":
+        from app.modules.cutting.imports.map_2dplace import parse_map_2dplace
+
+        return parse_map_2dplace(content, filename)
+    if source_format == "bazis_xml":
+        from app.modules.cutting.imports.bazis_xml import parse_bazis_xml
+
+        return parse_bazis_xml(content)
     grid = _read_csv(content)
     if parse_options.mapping is None:
         guessed_mapping, guessed_skip_rows = guess_header(grid)
@@ -152,7 +129,7 @@ def _read_csv(content: bytes) -> Grid:
 def _preview_grid(grid: Grid) -> list[list[str | None]]:
     preview: list[list[str | None]] = []
     for row in grid[:PREVIEW_ROWS]:
-        preview.append([_cell_text(value) or None for value in row[:PREVIEW_COLS]])
+        preview.append([cell_text(value) or None for value in row[:PREVIEW_COLS]])
     return preview
 
 
@@ -187,14 +164,14 @@ def _parse_grid(
     mapping: dict[ImportRole, int],
     skip_rows: int,
 ) -> ImportParsedResponse:
-    panel_groups = _GroupRegistry(
+    panel_groups = GroupRegistry(
         "m",
         {"__all__": "Butun fayl uchun material", "__unspecified__": "Material ko'rsatilmagan"},
         {},
         {},
         {},
     )
-    edge_groups = _GroupRegistry("e", {}, {}, {}, {})
+    edge_groups = GroupRegistry("e", {}, {}, {}, {})
     warnings: dict[WarningCode, set[int]] = {}
     skipped_rows: list[ImportSkippedRow] = []
     parts: list[ImportedPart] = []
@@ -236,7 +213,7 @@ def _parse_grid(
                 key=key,
                 label=panel_groups.labels[key],
                 part_count=count,
-                thickness_hint=_format_thickness_hint(panel_thicknesses.get(key, set())),
+                thickness_hint=format_thickness_hint(panel_thicknesses.get(key, set())),
             )
             for key, count in panel_groups.counts.items()
         ],
@@ -258,25 +235,25 @@ def _parse_row(
     row: list[Any],
     row_number: int,
     mapping: dict[ImportRole, int],
-    panel_groups: _GroupRegistry,
-    edge_groups: _GroupRegistry,
+    panel_groups: GroupRegistry,
+    edge_groups: GroupRegistry,
     warnings: dict[WarningCode, set[int]],
 ) -> tuple[ImportedPart | None, SkipReason | None, float | None]:
-    length, length_error = _parse_dimension(
+    length, length_error = parse_dimension(
         _mapped_value(row, mapping["length_mm"]),
         row_number,
         warnings,
     )
     if length_error is not None:
         return None, "non_numeric_length" if length_error == "non_numeric" else length_error, None
-    width, width_error = _parse_dimension(
+    width, width_error = parse_dimension(
         _mapped_value(row, mapping["width_mm"]),
         row_number,
         warnings,
     )
     if width_error is not None:
         return None, "non_numeric_width" if width_error == "non_numeric" else width_error, None
-    quantity, quantity_error = _parse_quantity(
+    quantity, quantity_error = parse_quantity(
         _mapped_value(row, mapping.get("quantity")),
         row_number,
         "quantity" in mapping,
@@ -315,113 +292,41 @@ def _parse_row(
     )
 
 
-def _parse_dimension(
-    value: Any,
-    row_number: int,
-    warnings: dict[WarningCode, set[int]],
-) -> tuple[int | None, DimensionError | None]:
-    numeric = _parse_number(value)
-    if numeric is None:
-        return None, "non_numeric"
-    if numeric <= 0:
-        return None, "dimension_not_positive"
-    if numeric > 10_000:
-        return None, "dimension_too_large"
-    rounded = int(Decimal(str(numeric)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    if not math.isclose(float(rounded), numeric):
-        _add_warning(warnings, "dimension_rounded", row_number)
-    return rounded, None
-
-
-def _parse_quantity(
-    value: Any,
-    row_number: int,
-    mapped: bool,
-    warnings: dict[WarningCode, set[int]],
-) -> tuple[int | None, SkipReason | None]:
-    if not mapped:
-        return 1, None
-    if not _cell_text(value):
-        _add_warning(warnings, "quantity_defaulted", row_number)
-        return 1, None
-    numeric = _parse_number(value)
-    if numeric is None:
-        return None, "non_numeric_quantity"
-    if not numeric.is_integer():
-        return None, "quantity_not_integer"
-    quantity = int(numeric)
-    if quantity < 1:
-        return None, "quantity_not_positive"
-    return quantity, None
-
-
 def _parse_follow_grain(
     value: Any,
     row_number: int,
     warnings: dict[WarningCode, set[int]],
 ) -> bool:
-    text = _cell_text(value).casefold()
+    text = cell_text(value).casefold()
     if not text:
         return True
     if text in _TRUTHY_GRAIN:
         return True
     if text in _FALSY_GRAIN:
         return False
-    _add_warning(warnings, "grain_token_unknown", row_number)
+    add_warning(warnings, "grain_token_unknown", row_number)
     return True
 
 
 def _parse_thickness_hint(value: Any) -> float | None:
-    numeric = _parse_number(value)
+    numeric = parse_number(value)
     if numeric is None or numeric <= 0:
         return None
     return numeric
 
 
-def _format_thickness_hint(values: set[float]) -> str | None:
-    if not values:
-        return None
-    return " / ".join(_format_thickness_value(value) for value in sorted(values))
-
-
-def _format_thickness_value(value: float) -> str:
-    if value.is_integer():
-        return str(int(value))
-    return format(Decimal(str(value)).normalize(), "f").rstrip("0").rstrip(".")
-
-
-def _edge_key(row: list[Any], column: int | None, edge_groups: _GroupRegistry) -> str | None:
+def _edge_key(row: list[Any], column: int | None, edge_groups: GroupRegistry) -> str | None:
     if column is None:
         return None
     value = _mapped_value(row, column)
-    text = _cell_text(value)
+    text = cell_text(value)
     if text.casefold() in _FALSY_EDGE:
         return None
     return edge_groups.key_for(value)
 
 
-def _parse_number(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        numeric = float(value)
-    elif isinstance(value, str):
-        text = _SPACE_RE.sub("", value.strip()).replace(",", ".")
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-        except ValueError:
-            return None
-    else:
-        return None
-    if math.isnan(numeric) or math.isinf(numeric):
-        return None
-    return numeric
-
-
 def _mapped_cells_empty(row: list[Any], mapping: dict[ImportRole, int]) -> bool:
-    return all(not _cell_text(_mapped_value(row, column)) for column in mapping.values())
+    return all(not cell_text(_mapped_value(row, column)) for column in mapping.values())
 
 
 def _mapped_value(row: list[Any], column: int | None) -> Any:
@@ -432,28 +337,18 @@ def _mapped_value(row: list[Any], column: int | None) -> Any:
 
 def _row_preview(row: list[Any]) -> str:
     for value in row:
-        text = _cell_text(value)
+        text = cell_text(value)
         if text:
             return text[:40]
     return ""
 
 
 def _has_non_empty_cell(grid: Grid) -> bool:
-    return any(_cell_text(value) for row in grid for value in row)
-
-
-def _cell_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return _SPACE_RE.sub(" ", str(value).strip())
-
-
-def _distinct_key(value: str) -> str:
-    return _SPACE_RE.sub(" ", value.strip()).casefold()
+    return any(cell_text(value) for row in grid for value in row)
 
 
 def _match_header_role(value: Any) -> ImportRole | None:
-    text = _cell_text(value).casefold()
+    text = cell_text(value).casefold()
     if not text:
         return None
     for role, tokens in _HEADER_TOKENS.items():
@@ -466,7 +361,3 @@ def _match_header_role(value: Any) -> ImportRole | None:
             if matched:
                 return role
     return None
-
-
-def _add_warning(warnings: dict[WarningCode, set[int]], code: WarningCode, row: int) -> None:
-    warnings.setdefault(code, set()).add(row)

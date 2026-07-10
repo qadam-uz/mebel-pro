@@ -8,6 +8,7 @@ import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
     part_ref: 'part-1',
+    name: null,
     material_id: 'panel-1',
     material_source: 'shop',
     follow_grain: true,
@@ -58,6 +59,7 @@ function mountRow(rowPart: CuttingPart) {
       optimizeError: null,
       notCarried: [],
       preferredBranchName: 'Yunusobod',
+      edgeRegistry: [],
       selected: false,
     },
     global: {
@@ -76,17 +78,12 @@ describe('CuttingPartRow grain toggle', () => {
     setActivePinia(createPinia())
   })
 
-  it('renders the follow-grain toggle even for non-grained material', async () => {
+  it('hides the follow-grain toggle for non-grained material', () => {
     seedPanel(false)
 
     const wrapper = mountRow(part())
 
-    const toggle = wrapper.get('[data-test="follow-grain-desktop"][aria-pressed="true"]')
-    expect(toggle.text()).toContain('Tekstura')
-
-    await toggle.trigger('click')
-
-    expect(wrapper.emitted('update:follow-grain')).toEqual([[false]])
+    expect(wrapper.find('[data-test="follow-grain-desktop"]').exists()).toBe(false)
   })
 
   it('emits false when active desktop follow-grain toggle is clicked', async () => {

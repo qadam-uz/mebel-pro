@@ -70,6 +70,10 @@ def test_cutting_engine_places_every_instance_without_overlap() -> None:
             ("b", 1),
         ]
         for panel_result in result.panels:
+            assert panel_result.offcuts
+            assert all(
+                offcut.length_mm > 0 and offcut.width_mm > 0 for offcut in panel_result.offcuts
+            )
             for placement in panel_result.placements:
                 assert placement.x_mm >= EDGE_TRIM_MM
                 assert placement.y_mm >= EDGE_TRIM_MM
