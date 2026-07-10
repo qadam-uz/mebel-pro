@@ -4,7 +4,18 @@ test('landing surface loads', async ({ page }) => {
   await page.goto('/landing/')
 
   await expect(page.getByRole('heading', { name: 'Mebel Pro' })).toBeVisible()
-  await expect(page.getByText('Tez orada')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ustaxona uchun' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Mijozlar uchun' })).toBeVisible()
+
+  // The two product CTAs must point at their role apps (they were swapped once).
+  await expect(page.getByRole('link', { name: 'Portalga kirish' })).toHaveAttribute(
+    'href',
+    'https://workshop.mebel-pro.uz',
+  )
+  await expect(page.getByRole('link', { name: 'Buyurtma berish' }).first()).toHaveAttribute(
+    'href',
+    'https://app.mebel-pro.uz',
+  )
 })
 
 test('role login routes load', async ({ page }) => {
