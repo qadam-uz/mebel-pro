@@ -1,59 +1,260 @@
-# DESIGN SYSTEM
+---
+version: alpha
+name: Mebel Pro
+description: >-
+  Design system for the three Vue SPAs (client, workshop, superadmin) — a dense,
+  utilitarian back-office language on a cool light canvas with a teal accent.
+  Realized as @theme tokens in src/assets/main.css and shared primitives under
+  src/shared/components/.
+colors:
+  bg: "#f4f6f8"
+  elevated: "#ffffff"
+  sunk: "#ebeff3"
+  deep: "#14323a"
+  ink: "#0f1b2a"
+  ink-strong: "#27384a"
+  ink-soft: "#475569"
+  ink-muted: "#5b6675"
+  hairline: "#e5e9ef"
+  hairline-strong: "#d2dae3"
+  accent: "#0f766e"
+  accent-hover: "#0f8078"
+  accent-soft: "#e9f6f4"
+  accent-tint: "#c8e8e3"
+  success: "#15803d"
+  success-soft: "#ecf7f0"
+  warning: "#b45309"
+  warning-soft: "#fbf3e5"
+  danger: "#be3a2b"
+  danger-soft: "#fcedea"
+  info: "#1d62d8"
+  info-soft: "#edf2fc"
+typography:
+  headline-lg:
+    fontFamily: "'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif"
+    fontSize: 32px
+    fontWeight: 600
+  brand:
+    fontFamily: "'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif"
+    fontSize: 19px
+    fontWeight: 600
+  body-md:
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontSize: 14px
+    lineHeight: 1.5
+  label-md:
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontSize: 13px
+  label-sm:
+    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+    fontSize: 11px
+  numeric-md:
+    fontFamily: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+    fontSize: 13px
+rounded:
+  sm: 6px
+  md: 8px
+  lg: 12px
+  xl: 16px
+  full: 999px
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  2xl: 32px
+components:
+  button:
+    minHeight: 40px
+    radius: "{rounded.sm}"
+    fontWeight: 700
+    padding: 10px 16px
+    background: "{colors.accent}"
+  input:
+    height: 40px
+    valueWeight: 600
+    labelPosition: outside-persistent
+  popover:
+    surface: "{colors.elevated}"
+    zIndex: 50
+  modal:
+    surface: "{colors.elevated}"
+    zIndex: 80
+  status-pill:
+    radius: "{rounded.full}"
+---
 
-This file is the deterministic design system contract — tokens, primitives, density, and
-interaction behavior — for the three Vue SPAs. Realize it in shared code: `@theme` tokens in
-`src/assets/main.css`, primitives and composed components under `src/shared/`.
+# Mebel Pro — design system
 
-## Primitives
+This file is the deterministic design contract for the three Vue SPAs. The frontmatter tokens
+are the machine-readable source; they mirror `@theme` in `src/assets/main.css` one-to-one
+(`colors.accent` → `--color-accent`). Change a value there and here together. Shared
+primitives live under `src/shared/components/`. The static landing (`web/landing/`) styles
+itself and is out of scope.
 
-- **Dropdowns** use the project dropdown primitive (a shared Vue component). Do not use
-  browser-native `<select>` as visible UI in
-  filters, forms, modals, tables, or settings. The primitive must match the app surface:
-  crisp radius, elevated popover, visible focus ring, selected check mark, hover/active
-  states, and keyboard operation (`Enter` / `Space`, arrows, `Esc`, `Tab` close).
-- Native controls remain acceptable for text inputs, textareas, checkboxes, radios, and
-  file inputs until a project primitive exists for a specific case.
-- Image uploads use the shared preview primitive: a framed preview, native file input triggered
-  by labelled buttons, upload/error state in the field, and a remove action when an image is set.
-  Data tables show images in fixed-size framed thumbnails with a non-empty fallback.
-- Forms mark required fields with a compact `*` beside the persistent label, backed by
-  `required` / `aria-required` semantics and inline errors; unmarked fields are optional.
-- Filter rows use shared `mp-*` filter classes with persistent labels outside the input value,
-  and controls in one filter row align to the same height. Workshop filter controls are
-  compact: 40px tall, sized to their content (not stretched across the row), and filter
-  selects show the plain value only — no secondary description text. Colored dot prefixes
-  are reserved for status filters, mapped from the matching status-pill palette. Date
-  ranges use the shared date-range picker primitive: one trigger opening a popover with
-  preset shortcuts and a calendar; selections auto-apply (no apply button). Role-prefixed
-  classes such as `admin-*` stay inside that role's app (the admin app keeps its older
-  48px stretched filter look).
-- Create/edit forms open in `AppModal` dialogs, never as inline on-page cards; reason-gated
-  confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use the
-  inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
+## Overview
+
+A working tool for furniture workshops in Uzbekistan — operators, workshop staff, and clients
+who cut panels, move stock, and track money all day. The language is **dense, calm, and
+utilitarian**: data-first tables, compact 40px controls, one clear action per screen. Serif
+display type gives the brand a human voice; everything operational is a plain sans. Uzbek is
+the only shipped locale — copy is concise and specific, never vague. Nothing decorates:
+every color, weight, and elevation step encodes state or hierarchy.
+
+## Colors
+
+One light theme; there is no dark mode. Never hardcode hex in components — always the
+semantic `--color-*` tokens.
+
+- **Canvas & surfaces** — `bg` is the cool gray page canvas; `elevated` (white) is cards,
+  popovers, modals; `sunk` is inset wells (table headers, disabled fields); `deep` is the
+  dark brand surface (shell chrome).
+- **Text** — `ink` for body, `ink-strong` for emphasis, `ink-soft`/`ink-muted` for secondary
+  and captions. `::selection` inverts to accent/white.
+- **Borders** — `hairline` for resting dividers, `hairline-strong` where separation must
+  survive on `sunk` surfaces.
+- **Accent** — teal `accent` is the single brand/action color: primary buttons, focus rings,
+  active nav, links. `accent-hover` on hover, `accent-soft`/`accent-tint` for selected and
+  tinted fills. Use it sparingly — one primary action per screen.
+- **Status** — `success` / `warning` / `danger` / `info`, each with a `-soft` fill for pills
+  and banners. Status color is never the only signal: pair it with the state's word or an
+  icon. Colored dot prefixes are reserved for status filters, mapped from the status-pill
+  palette.
+
+## Typography
+
+- **Sans (Hanken Grotesk)** is the workhorse. Base body is **14px / 1.5** — this is a dense
+  back-office, not a marketing site. Table and control text runs 12–13.5px; micro-captions
+  bottom out at 10.5–11px, never smaller.
+- **Serif (Source Serif 4)** is reserved for identity: the brand wordmark (19px/600) and
+  page-head display (`headline-lg`, 32px/600 in the client app). Don't use serif for
+  controls, tables, or labels.
+- **Mono (JetBrains Mono)** for numeric table columns — money and quantities right-aligned
+  so digits line up for comparison, with the unit on a small muted second line.
+- **Weight carries meaning**: form input *values* render semibold (600) with placeholders
+  pinned to regular — a filled field must read as data, a hint must not. This spans all
+  three apps and the composed controls (PhoneInput, FormSelect, SearchCombobox selected
+  values); `textarea.mp-input` reason fields stay regular. Buttons are 700.
+
+## Layout
+
+- **Spacing is a 4px scale** (4 / 8 / 12 / 16 / 24 / 32). Arbitrary values are the visible
+  symptom of an absent system.
+- **Filter rows** are the standard list-page header: shared `mp-*` filter classes,
+  persistent labels outside the input value, all controls in one row aligned to the same
+  **40px** height, compact and sized to their content (not stretched). Filter selects show
+  the plain value only — no secondary description text. Role-prefixed classes such as
+  `admin-*` stay inside that role's app (the admin app keeps its older 48px stretched
+  filter look).
+- **Create buttons**: every list-add button uses a visible `+` prefix in the label (all
+  apps). In the workshop app it sits at the **right end of the filter row**
+  (`.mp-filters > .mp-button`, baseline-aligned with the 40px controls); a page or tab
+  without filters renders it as a lone right-aligned `.mp-filters` row directly above the
+  table. Page heads are title-only. The one exception is a pair of primary operations
+  (Ombor's Kirim + Tuzatish), which spans the full row as a two-column grid.
+- **Tables** are the primary data surface: numeric columns right-aligned in mono; event
+  timestamps as `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted
+  "Kiritildi:" entry-timestamp line beneath; images in fixed-size framed thumbnails with a
+  non-empty fallback.
+
+## Elevation & Depth
+
+Depth comes from **surface steps, not heavy shadows**: `sunk` → `bg` → `elevated`, separated
+by hairlines. Shadows are reserved for true overlays (dropdown popovers, modals, toasts).
+Interactive lift is subtle — buttons raise 1px on hover (`translateY(-1px)`), settle on
+press, and lose all elevation when disabled.
+
+Two overlay layers, and the order matters: dropdown/popover panels teleport at **z-50**;
+the modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS
+Safari can't scroll behind).
+
+## Shapes
+
+Radius scale: **6px** for buttons and inputs, **8px** for cards and popover items, **12px**
+for modals and larger cards, **16px** for hero surfaces, **999px** for pills and status
+badges. Legacy one-off radii (5/7/9/10px) exist in older CSS — converge on the scale when
+touching them; don't add new off-scale values.
+
+## Components
+
+- **Buttons** (`.mp-button`) — 40px min-height, 700 weight, `{rounded.sm}`, 10×16px padding.
+  Primary = accent fill; disabled = 50% opacity, no elevation, `not-allowed` cursor. Submit
+  buttons disable + show progress during async work and end in explicit success or a
+  re-enabled error state — never a silent reset.
+- **Dropdowns** — use the project dropdown primitive (`ProjectDropdown`); never
+  browser-native `<select>` as visible UI in filters, forms, modals, tables, or settings.
+  The primitive matches the app surface: crisp radius, elevated popover, visible focus
+  ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
+  arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
+  textareas, checkboxes, radios, and file inputs until a project primitive exists.
+- **Modals** — create/edit forms open in `AppModal` dialogs, never as inline on-page cards;
+  reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
+  the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
   `ProjectDropdown` teleports its panel at z-50 and would render behind the modal layer
   (z-80).
-- Object-creation buttons use a visible `+` prefix in the label (all apps). In the
-  workshop app every list-add create button sits at the **right end of the filter row**
-  (`.mp-filters > .mp-button`, baseline-aligned with the 40px controls); a page or tab
-  without filters renders the button as a lone right-aligned `.mp-filters` row directly
-  above the table. Page heads are title-only. The one exception is a pair of primary
-  operations (Ombor's Kirim + Tuzatish), which spans the full row as a two-column grid.
-- Form input **values** render semibold (600) with placeholders pinned to regular — a
-  filled field must read as data, a hint must not. This spans all three apps
-  (`input.mp-input` for workshop/client, `.admin-field input` was already 600) and the
-  composed controls (PhoneInput, FormSelect and SearchCombobox selected values);
-  `textarea.mp-input` reason fields stay regular.
-- Numeric fields sanitize **as you type** (the PhoneInput pattern — an invalid character
-  never sticks, paste included) via `src/shared/app/inputSanitizers.ts`: money fields
-  keep digits/grouping/one decimal mark, quantities keep digits + one separator, and the
-  inventory adjustment takes a **signed quantity with a required leading + or −**
-  ("-2" decreases, "+5" increases; inputmode stays text so mobile keyboards carry the
-  signs) — structural validation stays with the submit-path parsers.
-- Table cells: numeric columns (money, quantities) right-align in mono with the unit on a
-  small muted second line so digits align for comparison. Event timestamps render as
-  `DD.MM.YYYY HH:mm`; ledger rows show the business date with a muted "Kiritildi:"
-  entry-timestamp line beneath. In-place status toggles are `role="switch"` buttons —
-  track + thumb plus the current state's word as a visible text label (never color
-  alone), disabled while the row saves.
-- Pointer cursor and row hover belong only on clickable controls or clickable rows. Static table
-  rows stay visually still and use the default cursor.
+- **Forms** — required fields get a compact `*` beside the persistent label, backed by
+  `required`/`aria-required` semantics and inline errors; unmarked fields are optional.
+- **Numeric input** sanitizes **as you type** (the PhoneInput pattern — an invalid character
+  never sticks, paste included) via `src/shared/app/inputSanitizers.ts`: money keeps
+  digits/grouping/one decimal mark; quantities keep digits + one separator; the inventory
+  adjustment takes a **signed quantity with a required leading + or −** ("-2" decreases,
+  "+5" increases; inputmode stays text so mobile keyboards carry the signs). Structural
+  validation stays with the submit-path parsers.
+- **Image upload** — the shared preview primitive: framed preview, native file input
+  triggered by labelled buttons, upload/error state in the field, a remove action when an
+  image is set.
+- **Date ranges** — the shared date-range picker: one trigger opening a popover with preset
+  shortcuts and a calendar; selections auto-apply (no apply button).
+- **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
+  current state's word as a visible text label (never color alone), disabled while the row
+  saves.
+- **Icons** — `AppIcon` (one SVG set); icon-only buttons always carry an accessible name.
+- **Cursor honesty** — pointer cursor and row hover belong only on clickable controls or
+  clickable rows; static table rows stay visually still with the default cursor.
+
+## Do's and Don'ts
+
+**Do**
+
+- Use semantic tokens for every color, radius, and spacing value.
+- Keep one primary (accent) action per screen, visually dominant.
+- Pair every status color with a word or icon.
+- Open create/edit in `AppModal`; seed inline-listbox selects inside it.
+- Right-align money/quantities in mono with the unit beneath.
+- Focus ring on everything interactive: 3px accent outline, 2px offset (`:focus-visible`).
+
+**Don't**
+
+- Don't hardcode hex — no raw colors outside `@theme`.
+- Don't use native `<select>` as visible UI, or `ProjectDropdown` inside a modal.
+- Don't use placeholders as labels, or clear a form on a validation error.
+- Don't put hover/pointer affordances on non-clickable rows.
+- Don't use serif for operational UI, or add font sizes below 10.5px.
+- Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.
+
+## UX bar — every screen clears these
+
+Structure before skin: know the user's job, the screen's states, and the keyboard path before
+choosing components or colors. Never polish a screen whose structure is wrong.
+
+- **Every state is designed, not just the populated one**: empty (first-run), empty (no
+  results), loading (skeletons sized like the real content — reserve space so nothing jumps),
+  error (named cause + retry), success. Every load that can hang gets a timeout → error path;
+  no infinite spinners.
+- **The keyboard reaches and operates everything** a mouse can, in an order matching the
+  layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
+  nothing in its place. Modals trap focus and return it to the trigger on close.
+- **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
+  Errors sit next to their field, name the fix in plain language, and never clear the form.
+  Validate on blur or submit, not per keystroke.
+- **Every action gives visible feedback within ~100ms**; submit buttons disable + show
+  progress during async work so they can't double-fire. Destructive actions name their
+  consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.
+- **Color is never the only signal** (pair with text/icon/position); text contrast ≥ 4.5:1
+  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area.
+- **One primary action per screen**, visually dominant. Body text stays at the 14px base
+  (dense back-office by design); captions never below 10.5px. No horizontal page scroll on
+  any viewport (self-contained scrollable tables excepted).
+- **Motion is cause-and-effect, not decoration**: ~150–300ms, `transform`/`opacity` only,
+  gone under `prefers-reduced-motion` (the global CSS already honors it).

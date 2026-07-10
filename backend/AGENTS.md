@@ -30,11 +30,8 @@ uv sync --upgrade                         # bump within constraints, update lock
 uv add <pkg>            / uv add --dev <pkg>
 
 uv run fastapi dev app/main.py            # dev server, autoreload, :8000
-uv run uvicorn app.main:app --reload      # equivalent
 
 uv run pytest                             # full suite + coverage
-uv run pytest tests/test_health.py -q     # one file
-uv run pytest -k readyz                    # by name
 
 uv run ruff check . --fix                 # lint (autofix)
 uv run ruff format .                       # format
@@ -42,8 +39,6 @@ uv run mypy app                            # type check
 
 uv run alembic revision --autogenerate -m "add products"
 uv run alembic upgrade head
-uv run alembic downgrade -1
-uv run alembic history
 ```
 
 Pre-commit equivalent (run before pushing): `uv run ruff check . && uv run ruff format --check . && uv run mypy app && uv run pytest`.
@@ -127,7 +122,7 @@ backend/
 
 - Postgres is expected on `localhost:5432` (db `mebel`, user/pass `mebel/mebel`) and MinIO on `localhost:9000` (key/secret `mebel/mebel`, bucket `mebel`) — `cd deploy && docker compose up -d postgres minio createbuckets` brings up both (the `createbuckets` one-shot creates the bucket and exits).
 - Then `uv run alembic upgrade head` and `uv run fastapi dev app/main.py`. The MinIO endpoint / access key / bucket come from `MINIO_*` in `.env` (defaults already point at the local MinIO).
-- Tests need **no** database and **no** object store — they use in-memory SQLite and should stub/fake S3. Point `DATABASE_URL` at a real Postgres to run the suite against it.
+- Tests need **no** database and **no** object store — they use in-memory SQLite and should stub/fake S3. Point `DATABASE_URL` at a real Postgres to run the suite against it. Two infra-gated suites are skipped by default and run in CI against the Compose data services: `POSTGRES_CONCURRENCY=1` (+ a throwaway Postgres `DATABASE_URL` — the test drops/recreates all tables) and `MINIO_CONTRACT=1` (needs the local MinIO). A gated test must keep an executing home in CI — see the **testing-practices** skill.
 
 ## Adding a feature (typical flow)
 

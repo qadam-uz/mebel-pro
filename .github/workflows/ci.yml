@@ -3,7 +3,9 @@
 # Three layers:
 #
 #   1. Verify (PR + push to main)
-#        - verify-backend : ruff check · ruff format --check · mypy · pytest
+#        - verify-backend : ruff check · ruff format --check · mypy · pytest,
+#                           then the infra-gated suites (Postgres locking +
+#                           MinIO contract) against Compose data services
 #        - verify-web     : pnpm lint:check · format:check · typecheck · test · build
 #        - verify-e2e     : pnpm typecheck · Playwright browser tests
 #      These mirror the per-directory check gates documented in the repo
@@ -76,6 +78,33 @@ jobs:
 
       - name: Pytest
         run: uv run pytest
+
+      # The main suite is hermetic (in-memory SQLite, stubbed S3). The two
+      # infra-gated suites assert what SQLite/stubs can't: stock-adjustment
+      # row locking on real Postgres and the S3FileStorage round-trip against
+      # real MinIO. Without this step they are skipped everywhere — a test
+      # that never runs is documentation, not a test.
+      - name: Start data services (Postgres + MinIO)
+        working-directory: deploy
+        run: |
+          docker compose --env-file .env.dev.example -f compose.yaml up -d --wait postgres minio
+          docker compose --env-file .env.dev.example -f compose.yaml run --rm createbuckets
+          docker compose --env-file .env.dev.example -f compose.yaml exec -T postgres \
+            psql -U mebel -d postgres -v ON_ERROR_STOP=1 \
+            -c "DROP DATABASE IF EXISTS mebel_ci WITH (FORCE);" \
+            -c "CREATE DATABASE mebel_ci;"
+
+      - name: Infra-gated tests (Postgres locking + MinIO contract)
+        env:
+          POSTGRES_CONCURRENCY: "1"
+          MINIO_CONTRACT: "1"
+          DATABASE_URL: postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_ci
+        run: uv run pytest tests/test_inventory_postgres_concurrency.py tests/test_files_minio_contract.py -q --no-cov
+
+      - name: Stop data services
+        if: always()
+        working-directory: deploy
+        run: docker compose --env-file .env.dev.example -f compose.yaml down -v --remove-orphans
 
   # ---------------------------------------------------------------------------
   # 2. Web gate — eslint, prettier --check, vue-tsc, vitest, vite build.

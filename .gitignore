@@ -2,12 +2,8 @@
 workfile.*
 tmp/
 
-# Dev workflow — gitignored per-run scratch + worktrees.
-# The playbooks under .workflows/playbooks/ stay committed (canon).
+# Agent worktrees
 .worktrees/
-.workflows/plan.md
-.workflows/progress.md
-.workflows/triage.json
 
 # Claude machine-local files
 # ...
@@ -81,5 +77,3 @@ e2e/playwright-report/
 e2e/playwright/.cache/
 e2e/cypress/videos/
 e2e/cypress/screenshots/
-.workflows/backend-plan.json
-.workflows/backend-plan-clean.json

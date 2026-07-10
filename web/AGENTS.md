@@ -42,11 +42,8 @@ E2E tests live in the sibling `e2e/` package (Playwright), not here.
 pnpm install                 # install (use --frozen-lockfile in CI)
 pnpm dev                     # Vite dev server, :5173, /api proxied → :8000
 pnpm build                   # vue-tsc --build && vite build  → dist/
-pnpm preview                 # serve the production build locally
 
-pnpm test                    # run unit tests once
-pnpm test:watch              # watch mode
-pnpm test:coverage           # with v8 coverage
+pnpm test                    # run unit tests once (test:watch / test:coverage exist)
 
 pnpm typecheck               # vue-tsc --build --force (no emit)
 pnpm lint                    # eslint . --fix
@@ -117,8 +114,7 @@ The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`
 
 ## Design system
 
-[`DESIGN.md`](./DESIGN.md) is the deterministic design system contract.
-
-## Related skills
-
-When designing screens, flows, components, or reviewing UI: use the **ui-ux-mastery** skill. For frontend implementation polish, the **frontend-design** skill. For test strategy decisions, **testing-practices**.
+[`DESIGN.md`](./DESIGN.md) is the deterministic design system contract — tokens, primitives,
+and the UX bar every screen must clear. Read it before designing or reviewing UI. For frontend
+implementation polish use the **frontend-design** skill (when your harness provides it); for
+where a test belongs, **testing-practices**.
