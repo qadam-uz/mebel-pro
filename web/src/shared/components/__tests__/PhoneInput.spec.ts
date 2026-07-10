@@ -43,9 +43,31 @@ describe('PhoneInput', () => {
     ['0901234567', '+998901234567'],
     ['8 998 90 123 45 67', '+998901234567'],
     ['901234567', '+998901234567'],
+    ['+998 99 870 20 20', '+998998702020'],
+    ['998998702020', '+998998702020'],
   ])('normalizes pasted %s to %s', async (paste, expected) => {
     const { emitted } = await typeAndEmit(paste)
     expect(emitted).toBe(expected)
+  })
+
+  describe('national numbers starting with 99 8 (CB-132)', () => {
+    it('does not eat the digits as a country code mid-typing', async () => {
+      // Typing 99 870 20 20 — at "998" the old sanitizer stripped it as +998.
+      const { input, emitted } = await typeAndEmit('998')
+      expect(input.element.value).toBe('99 8')
+      expect(emitted).toBe('+998998')
+    })
+
+    it('keeps the full typed number intact', async () => {
+      const { input, emitted } = await typeAndEmit('998702020')
+      expect(input.element.value).toBe('99 870 20 20')
+      expect(emitted).toBe('+998998702020')
+    })
+
+    it('renders an existing +998998… model value without re-stripping', () => {
+      const wrapper = mount(PhoneInput, { props: { modelValue: '+998998702020' } })
+      expect(wrapper.get('input').element.value).toBe('99 870 20 20')
+    })
   })
 
   it('emits empty string when cleared (optional fields stay empty)', async () => {

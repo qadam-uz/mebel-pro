@@ -29,13 +29,17 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 
-/** Extract the ≤9 national digits from any raw string, stripping the country
- *  code (+998 / 998), a trunk-8-before-998, and a leading national-trunk 0. */
+/** Extract the ≤9 national digits from any raw string, stripping a leading
+ *  national-trunk 0 ("0 90 …"), a trunk-8 before the country code ("8 998 …"),
+ *  and the 998 country code itself. A leading 998 counts as the country code
+ *  only when the value is explicitly international ("+…") or carries the
+ *  digits of a full country-coded number — otherwise it's a national number
+ *  that legitimately starts with "99 8…" mid-typing (CB-132). */
 function nationalDigits(raw: string): string {
-  let digits = raw.replace(/\D/g, '')
-  if (digits.startsWith('8998')) digits = digits.slice(1)
-  if (digits.startsWith('998')) digits = digits.slice(3)
-  else if (digits.startsWith('0')) digits = digits.replace(/^0+/, '')
+  let digits = raw.replace(/\D/g, '').replace(/^0+/, '')
+  const international = /^\s*\+/.test(raw)
+  if (digits.startsWith('8998') && digits.length >= 13) digits = digits.slice(1)
+  if (digits.startsWith('998') && (international || digits.length >= 12)) digits = digits.slice(3)
   return digits.slice(0, 9)
 }
 
