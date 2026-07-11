@@ -84,6 +84,12 @@ const reasonDraft = ref('')
 const workerOptionsByBranch = ref<Record<string, WorkshopWorkerOption[]>>({})
 const workerOptionLoadingBranches = new Set<string>()
 let timer: number | undefined
+// The onMounted branch/route resolution mutates `branchId`, which the filter
+// watcher below would treat as a user edit and schedule a *second* debounced
+// refresh right after the initial one — flashing the skeleton twice. Stay
+// unhydrated until the first explicit load lands so that mount-time mutation
+// doesn't double-fetch.
+const hydrated = ref(false)
 
 // Dots mirror the order-status pill palette (orderPillClass).
 const statusOptions: DropdownOption[] = [
@@ -592,6 +598,7 @@ watch(branchId, (value) => {
 })
 
 watch([branchId, status, search, dateFrom, dateTo], () => {
+  if (!hydrated.value) return
   window.clearTimeout(timer)
   timer = window.setTimeout(() => void refresh(), 250)
 })
@@ -606,6 +613,8 @@ onMounted(async () => {
   if (!applyRouteBranch()) applyContextBranch()
   window.clearTimeout(timer)
   await refresh()
+  // Now that the first load has landed, let user-driven filter edits refresh.
+  hydrated.value = true
 })
 
 onBeforeUnmount(() => {
