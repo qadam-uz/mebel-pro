@@ -469,9 +469,12 @@ On success, the panel scrolls into view with three regions:
      `MDF Qum 16mm · 2800×2070 · 1 panel`). Within a material, panel tabs
      (`Panel 1 / 2 / 3`).
    - The active panel renders as an interactive SVG (pan / zoom on mobile); each placed
-     part is labelled with its **dimensions** — length along the top edge, width down the
-     left edge — rather than an opaque part id. Selecting a placement highlights it in the
-     side legend, which leads with the dimensions (+ quantity index, rotation indicator).
+     part carries one centred label — display name + dimensions + a `↻` marker when the
+     placement is rotated (e.g. `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
+     hide on placements too small to carry them. Offcut rectangles overlay as dashed
+     outlines: green with a `Qoldiq …×… — sizda qoladi` label when usable, red `chiqit`
+     when waste. Selecting a placement highlights it in the side legend, which leads with
+     the dimensions (+ quantity index, rotation indicator).
    - **Banded sides** are flagged by a short, centred accent tick set just inside the
      placed rectangle, on each banded side only (not a full-length frame) — so the cutter
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
@@ -481,8 +484,12 @@ On success, the panel scrolls into view with three regions:
 3. **Actions.**
    - **Place order with this cutting** → routes into the order wizard
      (see [`orders.md`](orders.md)).
-   - **Download PDF** — the print-ready cutting map for the saw operator (one page per
-     panel, header with material + panel index + waste, footer with the algorithm stamp).
+   - **Download PDF** — the print-ready cutting map for the saw operator: one page per
+     panel, page oriented to the sheet (landscape for wide sheets), with the visualiser's
+     exact geometry, labels, banding ticks and offcut overlays; header with material +
+     sheet size + fill (`List N · … · KIM %`), footer with the algorithm stamp + waste.
+     Text is rendered with an embedded Unicode font, so Cyrillic material and part names
+     print correctly.
    - **Edit parts** scrolls back to the editor; any row change marks the result stale; the
      next **Optimise** replaces it.
 

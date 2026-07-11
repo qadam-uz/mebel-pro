@@ -294,10 +294,6 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
         headers=_auth(access),
         json={"result_id": chosen_result_id},
     )
-    svg = await client.get(
-        f"/api/v1/client/cutting-results/{chosen_result_id}/svg",
-        headers=_auth(access),
-    )
     pdf = await client.get(
         f"/api/v1/client/cutting-results/{chosen_result_id}/pdf",
         headers=_auth(access),
@@ -337,9 +333,6 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert first_result["edge_banded_sides_by_material"] == {str(edge.id): {"shop": 2, "own": 2}}
     assert chosen.status_code == 200
     assert chosen.json()["chosen_result_id"] == chosen_result_id
-    assert svg.status_code == 200
-    assert svg.headers["content-type"].startswith("image/svg+xml")
-    assert b"<svg" in svg.content
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF")
     assert loaded_old_panel.status_code == 200
@@ -467,6 +460,10 @@ async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
     )
     draft = committed.json()
     imported_result = draft["results"][0]
+    pdf = await client.get(
+        f"/api/v1/client/cutting-results/{imported_result['id']}/pdf",
+        headers=_auth(access),
+    )
     optimized = await client.post(
         f"/api/v1/client/cutting-drafts/{draft['id']}/optimize",
         headers=_auth(access),
@@ -489,6 +486,8 @@ async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
     assert len(imported_result["panels"][0]["placements"]) == 6
     assert any(offcut["usable"] for offcut in imported_result["panels"][0]["offcuts"])
     assert imported_result["parts_snapshot"][0]["name"]
+    assert pdf.status_code == 200
+    assert pdf.content.startswith(b"%PDF")
     assert optimized.status_code == 200
     assert optimized.json()["chosen_result_id"] == imported_result["id"]
     assert {row["source"] for row in optimized.json()["results"]} == {

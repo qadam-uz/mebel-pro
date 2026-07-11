@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.core.trace import get_trace_id
-from app.modules.cutting.api import cutting_result_response, render_cutting_pdf, render_cutting_svg
+from app.modules.cutting.api import cutting_result_response, render_cutting_pdf
 from app.modules.sales.api import (
     apply_discount,
     approve_order,
@@ -145,17 +145,6 @@ async def client_orders_cancel(
     db: Session,
 ) -> OrderDetailResponse:
     return await cancel_client_order(db, principal=principal, order_id=order_id, payload=payload)
-
-
-@router.get("/client/orders/{order_id}/cutting/svg")
-async def client_order_cutting_svg(
-    order_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> Response:
-    result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
-    rendered = render_cutting_svg(await cutting_result_response(db, result))
-    return Response(rendered, media_type="image/svg+xml")
 
 
 @router.get("/client/orders/{order_id}/cutting/pdf")
@@ -394,17 +383,6 @@ async def workshop_orders_note(
     db: Session,
 ) -> OrderDetailResponse:
     return await update_workshop_note(db, principal=principal, order_id=order_id, payload=payload)
-
-
-@router.get("/workshop/orders/{order_id}/cutting/svg")
-async def workshop_order_cutting_svg(
-    order_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> Response:
-    result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
-    rendered = render_cutting_svg(await cutting_result_response(db, result))
-    return Response(rendered, media_type="image/svg+xml")
 
 
 @router.get("/workshop/orders/{order_id}/cutting/pdf")

@@ -28,7 +28,6 @@ from app.modules.cutting.api import (
     optimize_workshop_draft,
     parse_import_file,
     render_cutting_pdf,
-    render_cutting_svg,
     update_draft,
     update_workshop_draft,
     workshop_catalog_materials,
@@ -165,16 +164,6 @@ async def client_cutting_drafts_choose_result(
         draft_id=draft_id,
         result_id=payload.result_id,
     )
-
-
-@router.get("/client/cutting-results/{result_id}/svg")
-async def client_cutting_results_svg(
-    result_id: uuid.UUID,
-    principal: AccountReadyPrincipal,
-    db: Session,
-) -> Response:
-    result = await get_client_result(db, principal=principal, result_id=result_id)
-    return Response(render_cutting_svg(result), media_type="image/svg+xml")
 
 
 @router.get("/client/cutting-results/{result_id}/pdf")

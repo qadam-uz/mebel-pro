@@ -19,7 +19,7 @@ from app.modules.cutting.optimizer import (
     PlacementResult,
     run_all_algorithms,
 )
-from app.modules.cutting.rendering import render_cutting_pdf, render_cutting_svg
+from app.modules.cutting.rendering import render_cutting_pdf
 from app.modules.cutting.service import (
     choose_result,
     client_catalog_materials,
@@ -78,7 +78,6 @@ __all__ = [
     "optimize_workshop_draft",
     "parse_import_file",
     "render_cutting_pdf",
-    "render_cutting_svg",
     "run_all_algorithms",
     "update_draft",
     "update_workshop_draft",
