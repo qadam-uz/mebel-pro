@@ -10,7 +10,15 @@ import {
   cuttingEditorAdapterKey,
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
-import { edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
+import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
+import {
+  EDGE_REGISTRY_COLORS,
+  deriveEdgeRegistry,
+  groupCuttingParts,
+  partDisplayName,
+  shortMaterialName,
+  type EdgeRegistryEntry,
+} from '@/shared/app/cuttingEditorDerived'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -18,6 +26,7 @@ import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
 import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.vue'
+import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
@@ -87,10 +96,20 @@ const clearPartsConfirmOpen = ref(false)
 const importWizardOpen = ref(false)
 const importReplaceConfirmOpen = ref(false)
 const pendingImportedParts = ref<CuttingPart[] | null>(null)
+const importedLayoutWarningOpen = ref(false)
+const importedLayoutWarningAccepted = ref(false)
+const collapsedGroupKeys = ref<Set<string>>(new Set())
+const errorFilterEnabled = ref(false)
+const registryPickerOpen = ref(false)
+const registryPickerMode = ref<'replace' | 'add'>('add')
+const registryReplaceEntry = ref<EdgeRegistryEntry | null>(null)
+const registryPickedEdgeId = ref<string | null>(null)
+const manualRegistryEdgeIds = ref<string[]>([])
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
 const edgePickerPart = ref<CuttingPart | null>(null)
+const edgePickerInitialSide = ref<EdgeField | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
@@ -108,6 +127,12 @@ const boundOrderId = computed(
   () => draft.value?.results.find((result) => result.order_id)?.order_id ?? null,
 )
 const isReadOnly = computed(() => boundOrderId.value !== null)
+const hasImportedMapResult = computed(
+  () =>
+    draft.value?.results.some(
+      (result) => result.source === 'imported_map' && result.status === 'candidate',
+    ) ?? false,
+)
 // The active branch pre-filter: the local pick while unsaved, the draft's saved
 // preference otherwise. Every branch-dependent read routes through this.
 const activeBranchId = computed(() => {
@@ -202,22 +227,38 @@ const optimizeDisabledHint = computed(() => {
 const totalQuantity = computed(() =>
   parts.value.reduce((sum, part) => sum + Math.max(0, Number(part.quantity) || 0), 0),
 )
-function blankPart(): CuttingPart {
+const totalAreaM2 = computed(() =>
+  parts.value.reduce(
+    (sum, part) =>
+      sum +
+      (Math.max(0, Number(part.length_mm) || 0) *
+        Math.max(0, Number(part.width_mm) || 0) *
+        Math.max(0, Number(part.quantity) || 0)) /
+        1_000_000,
+    0,
+  ),
+)
+const materialCount = computed(
+  () => new Set(parts.value.map((part) => part.material_id).filter(Boolean)).size,
+)
+
+function blankPart(previous?: CuttingPart | null): CuttingPart {
   return {
     part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}`,
+    name: null,
     // Start with no material: the panel is a deliberate catalog choice, so the
     // row shows "Panel tanlang" / "Material tanlang" until the user picks one —
     // auto-selecting the first catalog panel silently risked the wrong material.
-    material_id: '',
+    material_id: previous?.material_id ?? '',
     material_source: 'shop',
-    follow_grain: true,
-    length_mm: 100,
-    width_mm: 100,
+    follow_grain: previous?.follow_grain ?? true,
+    length_mm: 0,
+    width_mm: 0,
     quantity: 1,
-    edge_top: null,
-    edge_bottom: null,
-    edge_left: null,
-    edge_right: null,
+    edge_top: previous?.edge_top ? { ...previous.edge_top } : null,
+    edge_bottom: previous?.edge_bottom ? { ...previous.edge_bottom } : null,
+    edge_left: previous?.edge_left ? { ...previous.edge_left } : null,
+    edge_right: previous?.edge_right ? { ...previous.edge_right } : null,
   }
 }
 
@@ -228,6 +269,60 @@ function materialById(id: string | null | undefined) {
 function edgeById(id: string | null | undefined) {
   return cutting.edgeOptions.find((material) => material.id === id) ?? null
 }
+
+const edgeRegistry = computed(() => {
+  const entries = deriveEdgeRegistry(parts.value)
+  const seen = new Set(entries.map((entry) => entry.key))
+  for (const materialId of manualRegistryEdgeIds.value) {
+    const key = `${materialId}:shop`
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push({
+      key,
+      materialId,
+      source: 'shop',
+      number: entries.length + 1,
+      colorClass: EDGE_REGISTRY_COLORS[entries.length % EDGE_REGISTRY_COLORS.length],
+    })
+  }
+  return entries
+})
+const groupedParts = computed(() =>
+  groupCuttingParts(parts.value, (materialId) => materialLabel(materialById(materialId))),
+)
+const errorCount = computed(
+  () => parts.value.filter((part, index) => rowHasError(part, index)).length,
+)
+const visibleGroups = computed(() =>
+  groupedParts.value
+    .map((group) => ({
+      ...group,
+      parts: errorFilterEnabled.value
+        ? group.parts.filter(({ part, index }) => rowHasError(part, index))
+        : group.parts,
+    }))
+    .filter((group) => group.parts.length > 0),
+)
+
+function edgeRegistryLabel(materialId: string) {
+  return shortMaterialName(edgeById(materialId))
+}
+
+function groupErrorCount(groupKey: string) {
+  const group = groupedParts.value.find((item) => item.key === groupKey)
+  return group?.parts.filter(({ part, index }) => rowHasError(part, index)).length ?? 0
+}
+
+function toggleGroup(groupKey: string) {
+  const next = new Set(collapsedGroupKeys.value)
+  if (next.has(groupKey)) next.delete(groupKey)
+  else next.add(groupKey)
+  collapsedGroupKeys.value = next
+}
+
+watch(errorCount, (count) => {
+  if (count === 0) errorFilterEnabled.value = false
+})
 
 function rowNotCarried(part: CuttingPart) {
   return partNotCarried(part, activeBranchId.value, materialById, edgeById)
@@ -319,7 +414,23 @@ function saveLabel() {
 }
 
 function addRow() {
-  parts.value = [...parts.value, blankPart()]
+  parts.value = [...parts.value, blankPart(parts.value[parts.value.length - 1] ?? null)]
+  void nextTick(() => focusCell(parts.value.length - 1, 'length'))
+}
+
+function duplicateRow(index: number) {
+  const source = parts.value[index]
+  if (!source) return
+  const copy: CuttingPart = {
+    ...source,
+    part_ref: crypto.randomUUID?.() ?? `part-${Date.now()}`,
+    edge_top: source.edge_top ? { ...source.edge_top } : null,
+    edge_bottom: source.edge_bottom ? { ...source.edge_bottom } : null,
+    edge_left: source.edge_left ? { ...source.edge_left } : null,
+    edge_right: source.edge_right ? { ...source.edge_right } : null,
+  }
+  parts.value = [...parts.value.slice(0, index + 1), copy, ...parts.value.slice(index + 1)]
+  void nextTick(() => focusCell(index + 1, 'length'))
 }
 
 function deleteRow(index: number) {
@@ -334,7 +445,43 @@ function deleteRow(index: number) {
       nextSel.delete(removed.part_ref)
       selectedRefs.value = nextSel
     }
+    const label = partDisplayName(removed, index)
+    toast.action(
+      `«${label}» o'chirildi`,
+      'Qaytarish',
+      () => {
+        parts.value = [...parts.value.slice(0, index), removed, ...parts.value.slice(index)]
+      },
+      'warn',
+      6000,
+    )
   }
+}
+
+function setPartName(part: CuttingPart, value: string | null) {
+  part.name = value
+}
+
+type CellName = 'name' | 'length' | 'width' | 'quantity' | 'edge'
+const cellOrder: CellName[] = ['name', 'length', 'width', 'quantity', 'edge']
+
+function focusCell(index: number, cell: CellName) {
+  const selector = `[data-part-index="${index}"][data-cell="${cell}"]`
+  const target = document.querySelector<HTMLElement>(selector)
+  target?.focus()
+}
+
+function onCellEnter(index: number, cell: CellName) {
+  const currentCell = cellOrder.indexOf(cell)
+  if (currentCell < cellOrder.length - 1) {
+    focusCell(index, cellOrder[currentCell + 1])
+    return
+  }
+  if (index >= parts.value.length - 1) {
+    addRow()
+    return
+  }
+  focusCell(index + 1, 'name')
 }
 
 function requestClearParts() {
@@ -344,6 +491,7 @@ function requestClearParts() {
 function clearParts() {
   parts.value = []
   preferredEdgeByPart.value = {}
+  manualRegistryEdgeIds.value = []
   clearPartsConfirmOpen.value = false
   clearSelection()
 }
@@ -388,6 +536,14 @@ function cancelImportReplace() {
   importReplaceConfirmOpen.value = false
 }
 
+function onImportCommitted(nextDraftId: string) {
+  importWizardOpen.value = false
+  importReplaceConfirmOpen.value = false
+  pendingImportedParts.value = null
+  leavingAfterCreate.value = true
+  void router.replace(rolePath(adapter.paths.editor(nextDraftId)))
+}
+
 // --- Bulk selection (desktop power-feature) --------------------------------
 // Select rows, then apply edges / change material / delete in one action so
 // banding or re-materialing many identical parts isn't N modal round-trips.
@@ -399,8 +555,11 @@ const allSelected = computed(
   () => parts.value.length > 0 && selectedParts.value.length === parts.value.length,
 )
 const bulkEdgeMode = ref(false)
-const bulkMaterialOpen = ref(false)
-const bulkMaterialId = ref<string | null>(null)
+type MaterialPickerTarget =
+  | { type: 'part'; partRef: string }
+  | { type: 'group'; key: string }
+  | { type: 'bulk' }
+const materialPickerTarget = ref<MaterialPickerTarget | null>(null)
 
 function toggleSelect(partRef: string) {
   const next = new Set(selectedRefs.value)
@@ -430,22 +589,142 @@ function openBulkEdge() {
   // write the applied result to every selected part on apply (bulkEdgeMode).
   bulkEdgeMode.value = true
   edgePickerPart.value = { ...selectedParts.value[0], part_ref: '__bulk__' }
+  edgePickerInitialSide.value = null
   edgeReturnFocus = null
 }
 function openBulkMaterial() {
   if (selectedParts.value.length === 0) return
-  bulkMaterialId.value = selectedParts.value[0]?.material_id || null
-  bulkMaterialOpen.value = true
-}
-function applyBulkMaterial() {
-  if (bulkMaterialId.value) {
-    for (const part of selectedParts.value) part.material_id = bulkMaterialId.value
-  }
-  bulkMaterialOpen.value = false
+  materialPickerTarget.value = { type: 'bulk' }
 }
 
-function setPanel(part: CuttingPart, value: string | null) {
-  part.material_id = value ?? ''
+function openGroupMaterial(group: { key: string }) {
+  materialPickerTarget.value = { type: 'group', key: group.key }
+}
+
+function openPartMaterial(part: CuttingPart) {
+  materialPickerTarget.value = { type: 'part', partRef: part.part_ref }
+}
+
+function closeMaterialPicker() {
+  materialPickerTarget.value = null
+}
+
+const materialPickerMaterials = computed(() => {
+  const seen = new Set<string>()
+  return panelChoices.value
+    .map((choice) => cutting.panelOptions.find((material) => material.id === choice.value))
+    .filter((material): material is ClientCatalogMaterialOption => {
+      if (!material || seen.has(material.id)) return false
+      seen.add(material.id)
+      return true
+    })
+})
+
+const materialPickerCurrentId = computed(() => {
+  const target = materialPickerTarget.value
+  if (!target) return null
+  if (target.type === 'part') {
+    return parts.value.find((part) => part.part_ref === target.partRef)?.material_id ?? null
+  }
+  if (target.type === 'group') {
+    const group = groupedParts.value.find((item) => item.key === target.key)
+    return group?.materialId ?? null
+  }
+  return selectedParts.value[0]?.material_id ?? null
+})
+
+const materialPickerSubtitle = computed(() => {
+  const target = materialPickerTarget.value
+  if (!target) return ''
+  if (target.type === 'part') {
+    const index = parts.value.findIndex((part) => part.part_ref === target.partRef)
+    const part = parts.value[index]
+    return part ? `«${partDisplayName(part, index)}» detali uchun` : 'Detal uchun'
+  }
+  if (target.type === 'group') {
+    const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
+    return `Ushbu guruhdagi ${count} detal uchun`
+  }
+  return `Tanlangan ${selectedParts.value.length} ta detal uchun`
+})
+
+function applyMaterialPicker(materialId: string) {
+  const target = materialPickerTarget.value
+  if (!target) return
+  if (target.type === 'part') {
+    const part = parts.value.find((item) => item.part_ref === target.partRef)
+    if (part) part.material_id = materialId
+  } else if (target.type === 'group') {
+    const group = groupedParts.value.find((item) => item.key === target.key)
+    if (!group) return
+    for (const { part } of group.parts) {
+      part.material_id = materialId
+    }
+  } else {
+    for (const part of selectedParts.value) {
+      part.material_id = materialId
+    }
+  }
+  closeMaterialPicker()
+}
+
+function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
+  return material.grain_direction ? 'Teksturali material' : 'Teksturasiz material'
+}
+
+function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
+  return {
+    background: colorForMaterial(material.color ?? material.name ?? material.id),
+  }
+}
+
+function openRegistryReplace(entry: EdgeRegistryEntry) {
+  registryPickerMode.value = 'replace'
+  registryReplaceEntry.value = entry
+  registryPickedEdgeId.value = entry.materialId
+  registryPickerOpen.value = true
+}
+
+function openRegistryAdd() {
+  registryPickerMode.value = 'add'
+  registryReplaceEntry.value = null
+  registryPickedEdgeId.value = null
+  registryPickerOpen.value = true
+}
+
+function closeRegistryPicker() {
+  registryPickerOpen.value = false
+  registryReplaceEntry.value = null
+  registryPickedEdgeId.value = null
+}
+
+function applyRegistryPicker() {
+  const materialId = registryPickedEdgeId.value
+  if (!materialId) return
+  if (registryPickerMode.value === 'replace' && registryReplaceEntry.value) {
+    const entry = registryReplaceEntry.value
+    for (const part of parts.value) {
+      for (const side of edgeFields) {
+        const band = part[side]
+        if (band?.material_id === entry.materialId && band.source === entry.source) {
+          part[side] = { ...band, material_id: materialId }
+        }
+      }
+    }
+  } else if (selectedParts.value.length > 0) {
+    for (const part of selectedParts.value) {
+      part.edge_top = { material_id: materialId, source: 'shop' }
+      part.edge_bottom = { material_id: materialId, source: 'shop' }
+      part.edge_left = { material_id: materialId, source: 'shop' }
+      part.edge_right = { material_id: materialId, source: 'shop' }
+    }
+  } else {
+    if (!manualRegistryEdgeIds.value.includes(materialId)) {
+      manualRegistryEdgeIds.value = [...manualRegistryEdgeIds.value, materialId]
+    }
+    toast.success("Kromka tanlandi. Uni qator kromida qo'llang.")
+  }
+  closeRegistryPicker()
 }
 
 function setFollowGrain(part: CuttingPart, value: boolean) {
@@ -463,15 +742,17 @@ function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
   preferredEdgeByPart.value = next
 }
 
-function openEdgePicker(part: CuttingPart, event?: Event) {
+function openEdgePicker(part: CuttingPart, event?: Event, side?: EdgeField) {
   // The modal seeds its own working selection from `part`; the editor only records
   // which part is open and the element to restore focus to on close.
   edgePickerPart.value = part
+  edgePickerInitialSide.value = side ?? null
   edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
 }
 
 function closeEdgePicker() {
   edgePickerPart.value = null
+  edgePickerInitialSide.value = null
   bulkEdgeMode.value = false
   edgeReturnFocus?.focus()
   edgeReturnFocus = null
@@ -521,13 +802,44 @@ function hasLegacyOwnSources(snapshot: CuttingPart[]) {
   )
 }
 
+let importedLayoutWarningResolve: ((allow: boolean) => void) | null = null
+
+function resolveImportedLayoutWarning(allow: boolean) {
+  importedLayoutWarningOpen.value = false
+  if (allow) importedLayoutWarningAccepted.value = true
+  importedLayoutWarningResolve?.(allow)
+  importedLayoutWarningResolve = null
+}
+
+function confirmImportedLayoutMutation() {
+  if (!hasImportedMapResult.value || importedLayoutWarningAccepted.value) {
+    return Promise.resolve(true)
+  }
+  importedLayoutWarningOpen.value = true
+  return new Promise<boolean>((resolve) => {
+    importedLayoutWarningResolve = resolve
+  })
+}
+
 // Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
 // the deep `parts` watch, and the CB-15 hydration guard all live in the
 // `useDraftAutosave` composable (CB-93 seam). The gate skips incomplete/out-of-bounds
 // rows (they show their own inline validation) and a read-only bound draft.
 const autosave = useDraftAutosave({
   parts,
-  persist: () => cutting.updateDraft(draftId.value, { parts_snapshot: parts.value }).then(),
+  persist: async () => {
+    const allowMutation = await confirmImportedLayoutMutation()
+    if (!allowMutation) {
+      const snapshot = draft.value?.parts_snapshot ?? []
+      autosave.hydrate(() => {
+        parts.value = snapshot.map((part) =>
+          normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
+        )
+      })
+      return
+    }
+    await cutting.updateDraft(draftId.value, { parts_snapshot: parts.value })
+  },
   canPersist: () => hasPersistableParts.value,
   isReadOnly: () => isReadOnly.value,
   // Suspended while unsaved — there's no draft id to PATCH until the first
@@ -690,6 +1002,7 @@ watch(
     // latest payload so fresh optimize results show immediately.
     if (value.id !== hydratedDraftId) {
       const needsNormalization = hasLegacyOwnSources(value.parts_snapshot)
+      importedLayoutWarningAccepted.value = false
       autosave.hydrate(() => {
         parts.value = value.parts_snapshot.map((part) =>
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
@@ -706,10 +1019,16 @@ watch(
         })
       }
     }
+    if (!value.results.some((result) => result.source === 'imported_map')) {
+      importedLayoutWarningAccepted.value = false
+    }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
-    const optimizedResult = value.results.find((result) => result.id === activeResultId.value)
-    lastOptimizedSignature.value = optimizedResult
-      ? partsSignature(optimizedResult.parts_snapshot)
+    // Only an OPTIMIZER-sourced result counts as "already optimized for these
+    // parts" — an imported_map result (the map-import flow's kept layout) must
+    // never block running our optimizer for the first time on the same parts.
+    const optimizerResult = value.results.find((result) => result.source === 'optimizer')
+    lastOptimizedSignature.value = optimizerResult
+      ? partsSignature(optimizerResult.parts_snapshot)
       : null
     activePanelId.value =
       value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
@@ -759,6 +1078,7 @@ onBeforeUnmount(() => {
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
+  if (hasImportedMapResult.value && !importedLayoutWarningAccepted.value) return
   void autosave.flush()
 })
 
@@ -950,12 +1270,24 @@ onBeforeRouteLeave(() => {
         <section class="client-card">
           <div class="client-card-h">
             <div>
-              <h2>Qismlar ro'yxati</h2>
+              <h2>Detallar</h2>
               <p class="mt-1 text-sm text-ink-muted">
-                {{ parts.length }} qator · {{ totalQuantity }} dona
+                {{ totalQuantity }} detal · {{ materialCount }} material · ~{{
+                  totalAreaM2.toFixed(1)
+                }}
+                m²
               </p>
             </div>
             <div v-if="!isReadOnly && activeBranchId" class="flex flex-wrap items-center gap-2">
+              <button
+                v-if="errorCount > 0"
+                type="button"
+                class="mp-chip bg-danger-soft text-danger"
+                :aria-pressed="errorFilterEnabled"
+                @click="errorFilterEnabled = !errorFilterEnabled"
+              >
+                {{ errorCount }} xato
+              </button>
               <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
                 <button
                   type="button"
@@ -981,10 +1313,19 @@ onBeforeRouteLeave(() => {
                   :aria-pressed="importWizardOpen"
                   @click="openImportWizard"
                 >
-                  Fayldan yuklash
+                  Fayldan import
                 </button>
               </div>
             </div>
+          </div>
+
+          <div v-if="activeBranchId && parts.length > 0" class="border-b border-hairline px-5 py-3">
+            <CuttingEdgeTapeRegistry
+              :entries="edgeRegistry"
+              :label-for-material="edgeRegistryLabel"
+              @replace="openRegistryReplace"
+              @add="openRegistryAdd"
+            />
           </div>
 
           <!-- Bulk bar: actions only — the row checkboxes already show what's
@@ -1050,7 +1391,7 @@ onBeforeRouteLeave(() => {
                  real select-all checkbox; the rest are decorative labels. -->
             <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
               <div
-                class="grid grid-cols-[30px_30px_minmax(200px,1.4fr)_74px_82px_82px_66px_minmax(150px,1fr)_44px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
                 <input
                   type="checkbox"
@@ -1061,37 +1402,90 @@ onBeforeRouteLeave(() => {
                   @change="toggleSelectAll"
                 />
                 <span aria-hidden="true">#</span>
-                <span aria-hidden="true">Panel materiali</span>
-                <span aria-hidden="true">Tekstura</span>
-                <span aria-hidden="true">Uzunlik</span>
+                <span aria-hidden="true">Nomi</span>
+                <span aria-hidden="true">Bo'y</span>
                 <span aria-hidden="true">Eni</span>
                 <span aria-hidden="true">Soni</span>
-                <span aria-hidden="true">Krom</span>
-                <span aria-hidden="true">Amallar</span>
+                <span aria-hidden="true">Tekstura</span>
+                <span aria-hidden="true">Krom · Д1 Д2 Ш1 Ш2</span>
               </div>
             </div>
-            <CuttingPartRow
-              v-for="(part, index) in parts"
-              :key="part.part_ref"
-              :part="part"
-              :index="index"
-              :panel-choices="panelChoices"
-              :has-error="rowHasError(part, index)"
-              :size-error="partSizeError(part)"
-              :material-missing="rowMaterialMissing(part)"
-              :optimize-error="rowOptimizeError(part, index)"
-              :not-carried="rowNotCarried(part)"
-              :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
-              :selected="selectedRefs.has(part.part_ref)"
-              @toggle-select="toggleSelect(part.part_ref)"
-              @update:length="part.length_mm = $event"
-              @update:width="part.width_mm = $event"
-              @update:quantity="part.quantity = $event"
-              @update:material="setPanel(part, $event)"
-              @update:follow-grain="setFollowGrain(part, $event)"
-              @delete="deleteRow(index)"
-              @open-edge-picker="openEdgePicker(part, $event)"
-            />
+            <section
+              v-for="group in visibleGroups"
+              :key="group.key"
+              class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
+            >
+              <div class="flex flex-wrap items-center gap-2 px-3 py-2">
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
+                  @click="toggleGroup(group.key)"
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="size-3 shrink-0 rounded-full"
+                      :style="{
+                        background: group.materialId
+                          ? colorForMaterial(group.label)
+                          : 'var(--color-ink-muted)',
+                      }"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="min-w-0 truncate text-sm font-extrabold text-ink">
+                      {{ group.label }}
+                    </span>
+                  </span>
+                  <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
+                    <span>{{ group.quantity }} detal · {{ group.areaM2.toFixed(1) }} m²</span>
+                    <span
+                      v-if="groupErrorCount(group.key) > 0"
+                      class="rounded-md bg-danger-soft px-2 py-1 text-danger"
+                    >
+                      {{ groupErrorCount(group.key) }} xato
+                    </span>
+                    <span aria-hidden="true">{{
+                      collapsedGroupKeys.has(group.key) ? '+' : '−'
+                    }}</span>
+                  </span>
+                </button>
+                <button
+                  v-if="!isReadOnly"
+                  type="button"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline bg-elevated px-3 text-xs font-bold text-ink-muted transition hover:border-accent-tint hover:text-accent"
+                  @click="openGroupMaterial(group)"
+                >
+                  <Icon name="swap" class="size-3.5" />
+                  Materialni almashtirish
+                </button>
+              </div>
+              <div v-if="!collapsedGroupKeys.has(group.key)" class="grid gap-2 p-2 pt-0">
+                <CuttingPartRow
+                  v-for="{ part, index } in group.parts"
+                  :key="part.part_ref"
+                  :part="part"
+                  :index="index"
+                  :has-error="rowHasError(part, index)"
+                  :size-error="partSizeError(part)"
+                  :material-missing="rowMaterialMissing(part)"
+                  :optimize-error="rowOptimizeError(part, index)"
+                  :not-carried="rowNotCarried(part)"
+                  :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
+                  :edge-registry="edgeRegistry"
+                  :selected="selectedRefs.has(part.part_ref)"
+                  @toggle-select="toggleSelect(part.part_ref)"
+                  @update:name="setPartName(part, $event)"
+                  @update:length="part.length_mm = $event"
+                  @update:width="part.width_mm = $event"
+                  @update:quantity="part.quantity = $event"
+                  @update:follow-grain="setFollowGrain(part, $event)"
+                  @duplicate="duplicateRow(index)"
+                  @cell-enter="onCellEnter(index, $event)"
+                  @delete="deleteRow(index)"
+                  @open-edge-picker="(event, side) => openEdgePicker(part, event, side)"
+                  @open-material-picker="openPartMaterial(part)"
+                />
+              </div>
+            </section>
             <!-- Add the next row where it appears: a dashed tile under the last
                  row, echoing the empty-state CTA. Replaces the header button so
                  the add affordance follows the content. -->
@@ -1163,6 +1557,8 @@ onBeforeRouteLeave(() => {
         :draft="draft"
         :optimize-error="optimizeError"
         :checkout-path="adapter.paths.checkout(draft.id)"
+        :branch-id="activeBranchId"
+        :quote-for-draft="adapter.quoteForDraft"
         v-model:active-result-id="activeResultId"
         v-model:active-panel-id="activePanelId"
       />
@@ -1188,8 +1584,10 @@ onBeforeRouteLeave(() => {
       :has-existing-parts="parts.length > 0"
       :current-pieces="totalQuantity"
       :preferred-branch-name="preferredBranch?.branch_name ?? null"
+      :preferred-branch-id="activeBranchId"
       @close="closeImportWizard"
       @load="onImportLoad"
+      @committed="onImportCommitted"
     />
 
     <ConfirmDialog
@@ -1201,6 +1599,17 @@ onBeforeRouteLeave(() => {
       danger
       @cancel="cancelImportReplace"
       @confirm="confirmImportReplace"
+    />
+
+    <ConfirmDialog
+      :open="importedLayoutWarningOpen"
+      title="Import qilingan joylashuv bekor bo'ladi"
+      message="Detallar o'zgartirilsa, fayldan olingan joylashuv o'chiriladi. Yangi joylashuv olish uchun qayta optimallashtiring."
+      confirm-label="O'zgartirish"
+      cancel-label="Bekor qilish"
+      danger
+      @cancel="resolveImportedLayoutWarning(false)"
+      @confirm="resolveImportedLayoutWarning(true)"
     />
 
     <ConfirmDialog
@@ -1216,6 +1625,7 @@ onBeforeRouteLeave(() => {
 
     <CuttingEdgePickerModal
       :part="edgePickerPart"
+      :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
       :title-suffix="bulkEdgeMode ? `${selectedParts.length} qismga` : undefined"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
@@ -1225,61 +1635,133 @@ onBeforeRouteLeave(() => {
       @close="closeEdgePicker"
     />
 
-    <!-- Bulk material picker. A custom card (NOT .client-edge-modal, which has
-         overflow:hidden) so the SearchCombobox dropdown isn't clipped. -->
     <div
-      v-if="bulkMaterialOpen"
+      v-if="registryPickerOpen"
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Material almashtirish"
-      @keydown.esc="bulkMaterialOpen = false"
+      aria-label="Kromka tanlash"
+      @keydown.esc="closeRegistryPicker"
     >
       <div
         class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
-        @click="bulkMaterialOpen = false"
+        @click="closeRegistryPicker"
       ></div>
       <div
         class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
       >
         <div class="mb-3 flex items-start justify-between gap-3">
-          <h3 class="font-serif text-lg font-semibold text-ink">
-            Material almashtirish — {{ selectedParts.length }} qismga
-          </h3>
+          <div>
+            <h3 class="font-serif text-lg font-semibold text-ink">
+              {{ registryPickerMode === 'replace' ? 'Kromka almashtirish' : "Kromka qo'shish" }}
+            </h3>
+            <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
+              {{ edgeRegistryLabel(registryReplaceEntry.materialId) }} ishlatilgan tomonlar
+              almashtiriladi.
+            </p>
+          </div>
           <button
             type="button"
             class="client-edge-close"
             aria-label="Yopish"
-            @click="bulkMaterialOpen = false"
+            @click="closeRegistryPicker"
           >
             ×
           </button>
         </div>
         <SearchCombobox
-          :model-value="bulkMaterialId"
-          label="Panel materiali"
-          :options="panelChoices"
-          placeholder="Panel tanlang"
-          @update:model-value="bulkMaterialId = $event"
+          :model-value="registryPickedEdgeId"
+          label="Kromka"
+          :options="allEdgeChoices"
+          placeholder="Kromka tanlang"
+          @update:model-value="registryPickedEdgeId = $event"
         />
-        <p class="mt-2 text-sm text-ink-muted">
-          Tanlangan material {{ selectedParts.length }} ta qatorga qo'llanadi.
-        </p>
         <div class="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            class="mp-button mp-button-outline"
-            @click="bulkMaterialOpen = false"
-          >
+          <button type="button" class="mp-button mp-button-outline" @click="closeRegistryPicker">
             Bekor qilish
           </button>
           <button
             type="button"
             class="mp-button mp-button-primary"
-            :disabled="!bulkMaterialId"
-            @click="applyBulkMaterial"
+            :disabled="!registryPickedEdgeId"
+            @click="applyRegistryPicker"
           >
             Qo'llash
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="materialPickerTarget"
+      class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Materialni almashtirish"
+      @keydown.esc="closeMaterialPicker"
+    >
+      <div
+        class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
+        @click="closeMaterialPicker"
+      ></div>
+      <div
+        class="relative z-10 w-[min(460px,100%)] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
+      >
+        <div class="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div>
+            <h3 class="text-base font-extrabold text-ink">Materialni almashtirish</h3>
+            <p class="mt-1 text-sm text-ink-muted">{{ materialPickerSubtitle }}</p>
+          </div>
+          <button
+            type="button"
+            class="client-edge-close"
+            aria-label="Yopish"
+            @click="closeMaterialPicker"
+          >
+            ×
+          </button>
+        </div>
+        <div class="grid max-h-[52vh] gap-2 overflow-auto p-3">
+          <button
+            v-for="material in materialPickerMaterials"
+            :key="material.id"
+            type="button"
+            class="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+            :class="
+              material.id === materialPickerCurrentId
+                ? 'border-accent bg-accent-soft/30'
+                : 'border-hairline'
+            "
+            @click="applyMaterialPicker(material.id)"
+          >
+            <span
+              class="size-[18px] rounded-[5px] shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+              :style="materialPickerSwatchStyle(material)"
+              aria-hidden="true"
+            ></span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-bold text-ink">
+                {{ materialLabel(material) }}
+              </span>
+              <span class="mt-0.5 block text-xs font-semibold text-ink-muted">
+                {{ materialPickerGrainLabel(material) }}
+              </span>
+            </span>
+            <span
+              v-if="material.id === materialPickerCurrentId"
+              class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
+              aria-label="Tanlangan"
+            >
+              <Icon name="check" class="size-3.5" />
+            </span>
+          </button>
+          <p v-if="materialPickerMaterials.length === 0" class="p-4 text-sm text-ink-muted">
+            Bu filialda panel materiali topilmadi.
+          </p>
+        </div>
+        <div class="flex justify-end border-t border-hairline px-5 py-3">
+          <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
+            Bekor qilish
           </button>
         </div>
       </div>

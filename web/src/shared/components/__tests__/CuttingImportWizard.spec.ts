@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import { parseCuttingImport } from '@/shared/stores/cuttingImport'
@@ -35,7 +36,8 @@ function mountWizard() {
         Icon: true,
         SearchCombobox: {
           props: ['modelValue', 'label', 'options', 'placeholder'],
-          template: '<div data-test="combobox">{{ label }}</div>',
+          template:
+            '<button type="button" data-test="combobox" @click="$emit(\'update:modelValue\', options[0]?.value ?? null)">{{ label }}</button>',
         },
       },
     },
@@ -58,30 +60,34 @@ function continueButton(wrapper: ReturnType<typeof mountWizard>) {
 
 describe('CuttingImportWizard', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     parseMock.mockReset()
   })
 
-  it('rejects non-csv files before calling the parser', async () => {
+  it('rejects non-csv/xml/map files before calling the parser', async () => {
     const wrapper = mountWizard()
 
     await chooseFile(wrapper, new File(['x'], 'parts.xlsx'))
 
     expect(parseMock).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('faqat CSV')
+    expect(wrapper.text()).toContain('faqat CSV, XML yoki MAP')
   })
 
   it('shows uploaded file name and panel thickness hint on material mapping', async () => {
     parseMock
       .mockResolvedValueOnce({
         status: 'needs_mapping',
+        source_format: 'csv',
         grid: [['Длина', 'Ширина', 'Толщина']],
         guessed_mapping: { length_mm: 0, width_mm: 1, thickness_mm: 2 },
         guessed_skip_rows: 1,
       })
       .mockResolvedValueOnce({
         status: 'parsed',
+        source_format: 'csv',
         total_parts: 1,
         total_pieces: 1,
+        ignored_object_count: 0,
         panel_materials: [
           { key: 'm1', label: 'ЛДСП EGGER H1334', part_count: 1, thickness_hint: '18' },
         ],
@@ -108,5 +114,46 @@ describe('CuttingImportWizard', () => {
 
     expect(wrapper.text()).toContain('Fayl: kitchen-material.csv')
     expect(wrapper.text()).toContain('18 mm')
+  })
+
+  it('skips column mapping for Bazis XML imports and shows XML report notes', async () => {
+    parseMock.mockResolvedValueOnce({
+      status: 'parsed',
+      source_format: 'bazis_xml',
+      total_parts: 1,
+      total_pieces: 1,
+      ignored_object_count: 1,
+      panel_materials: [
+        { key: 'm1', label: 'ЛДСП EGGER H1334', part_count: 1, thickness_hint: '18' },
+      ],
+      edge_materials: [],
+      skipped_rows: [],
+      warnings: [{ code: 'non_rectangular', rows: [1] }],
+      parts: [
+        {
+          row: 1,
+          length_mm: 720,
+          width_mm: 450,
+          quantity: 1,
+          material_key: 'm1',
+          follow_grain: true,
+          edges: { top: null, bottom: null, left: null, right: null },
+        },
+      ],
+    })
+    const wrapper = mountWizard()
+
+    await chooseFile(wrapper, new File(['xml'], 'kitchen.xml', { type: 'application/xml' }))
+
+    expect(wrapper.text()).toContain('Materiallar')
+    expect(wrapper.text()).not.toContain('Qaysi ustun nimani bildiradi?')
+    expect(wrapper.text()).not.toContain('Ustunlar')
+
+    await wrapper.get('[data-test="combobox"]').trigger('click')
+    await continueButton(wrapper)?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("panel bo'lmagan obyekt")
+    expect(wrapper.text()).toContain("To'g'ri to'rtburchak bo'lmagan panel import qilindi")
   })
 })

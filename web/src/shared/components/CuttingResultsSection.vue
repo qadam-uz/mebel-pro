@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { formatPercent } from '@/shared/app/clientUi'
+import { apiErrorCode } from '@/shared/api/client'
+import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { formatTiyinParts } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
+import CuttingSheetThumbnails from '@/shared/components/CuttingSheetThumbnails.vue'
+import CuttingVariantTabs from '@/shared/components/CuttingVariantTabs.vue'
 import {
   metres,
   useCuttingStore,
@@ -15,6 +19,7 @@ import {
   type CuttingPlacement,
   type CuttingResult,
 } from '@/shared/stores/cutting'
+import type { OrderQuote } from '@/shared/stores/orders'
 
 // CB-93 seam: the optimizer-results surface — KPI tiles, algorithm comparison,
 // the per-material panel strip + SVG visualiser, the krom/placement aside, and
@@ -30,6 +35,12 @@ const props = defineProps<{
   // Role-specific "place order" target (client vs workshop checkout), injected
   // by the editor from its adapter so this presentational component stays dumb.
   checkoutPath: string
+  // The active branch pre-filter (null until one is picked) — drives the price
+  // quote below; not the same as `draft.preferred_branch_id` while unsaved.
+  branchId: string | null
+  // Role-scoped quote call (client vs workshop endpoint), injected by the
+  // editor from its adapter — same "stays dumb" reasoning as checkoutPath.
+  quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
 }>()
 const emit = defineEmits<{
   'update:activeResultId': [string | null]
@@ -41,8 +52,7 @@ const rolePath = useRolePath()
 const toast = useToast()
 
 const activePlacementId = ref<string | null>(null)
-const algorithmsOpen = ref(false)
-const canCompareAlgorithms = computed(() => props.draft.results.length > 1)
+const hasVariantTabs = computed(() => props.draft.results.length > 1)
 
 const chosenResult = computed(() => {
   const draft = props.draft
@@ -53,6 +63,11 @@ const chosenResult = computed(() => {
     null
   )
 })
+const footerResult = computed(
+  () =>
+    props.draft.results.find((result) => result.id === props.draft.chosen_result_id) ??
+    chosenResult.value,
+)
 const activePanel = computed(() => {
   const result = chosenResult.value
   if (!result) return null
@@ -69,6 +84,10 @@ const totalPanels = computed(() =>
 const consumedShop = computed(() => sumRecord(chosenResult.value?.edge_consumed_shop_by_material))
 const consumedOwn = computed(() => sumRecord(chosenResult.value?.edge_consumed_own_by_material))
 const resultWaste = computed(() => formatPercent(chosenResult.value?.waste_percentage))
+const activeResultIsChosen = computed(() => chosenResult.value?.id === props.draft.chosen_result_id)
+const viewingNonChosen = computed(
+  () => Boolean(chosenResult.value && footerResult.value) && !activeResultIsChosen.value,
+)
 const placedCount = computed(() =>
   chosenResult.value
     ? chosenResult.value.panels.reduce((sum, panel) => sum + panel.placements.length, 0)
@@ -98,6 +117,56 @@ const edgeByMaterial = computed(() => {
     .filter((row) => row.total > 0)
     .sort((left, right) => right.total - left.total)
 })
+const materialBreakdown = computed(() => {
+  const result = chosenResult.value
+  if (!result) return []
+  return Object.entries(result.panels_used_by_material).map(([materialId, count]) => ({
+    materialId,
+    count,
+    name: panelMaterialName(result, materialId),
+    dims: snapshotDims(result.material_snapshots[materialId]),
+  }))
+})
+const savingsBanner = computed<string | null>(() => null)
+
+// The price always reflects the officially CHOSEN result (what ordering right
+// now would actually cost) — not whichever tab is being viewed — because the
+// backend quote endpoint only ever prices `draft.chosen_result_id` (there is
+// no per-variant preview quote). `viewingNonChosen` below annotates the card
+// when the viewed tab differs, so the number never reads as "this variant".
+const quote = ref<OrderQuote | null>(null)
+const quoteLoading = ref(false)
+const quoteError = ref<string | null>(null)
+const priceParts = computed(() => (quote.value ? formatTiyinParts(quote.value.total_tiyin) : null))
+
+watch(
+  [
+    () => props.draft.id,
+    () => props.branchId,
+    () => props.draft.chosen_result_id,
+    () => footerResult.value?.status,
+  ],
+  async () => {
+    const branchId = props.branchId
+    const resultId = props.draft.chosen_result_id
+    if (!branchId || !resultId || footerResult.value?.status === 'invalidated') {
+      quote.value = null
+      quoteError.value = null
+      return
+    }
+    quoteLoading.value = true
+    quoteError.value = null
+    try {
+      quote.value = await props.quoteForDraft(props.draft.id, branchId)
+    } catch (errorValue) {
+      quote.value = null
+      quoteError.value = clientErrorLabel(apiErrorCode(errorValue), "Narxni hisoblab bo'lmadi")
+    } finally {
+      quoteLoading.value = false
+    }
+  },
+  { immediate: true },
+)
 
 function sumRecord(record: Record<string, number> | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
@@ -110,29 +179,41 @@ function snapshotDims(snapshot: Record<string, unknown> | undefined): string {
     ? `${length}×${width}`
     : ''
 }
-// Group the result's panels by material so multi-material jobs read as
-// "Material · LxW · N panel" tabs instead of an undifferentiated chip row (CB-87).
-const panelGroups = computed(() => {
-  const result = chosenResult.value
-  if (!result) return []
-  const byMaterial = new Map<string, CuttingPanel[]>()
-  for (const panel of result.panels) {
-    byMaterial.set(panel.material_id, [...(byMaterial.get(panel.material_id) ?? []), panel])
-  }
-  return [...byMaterial.entries()].map(([materialId, panels]) => {
-    const snapshot = result.material_snapshots[materialId]
-    return {
-      materialId,
-      name: String(snapshot?.name ?? 'Panel'),
-      dims: snapshotDims(snapshot),
-      count: panels.length,
-      panels,
-    }
-  })
-})
+
+function panelMaterialName(result: CuttingResult, materialId: string) {
+  const snapshot = result.material_snapshots[materialId]
+  const decor = typeof snapshot?.decor_code === 'string' ? snapshot.decor_code : ''
+  const name = typeof snapshot?.name === 'string' ? snapshot.name : ''
+  return decor || name || materialId.slice(0, 8)
+}
+
+function panelDims(result: CuttingResult, panel: CuttingPanel) {
+  return snapshotDims(result.material_snapshots[panel.material_id])
+}
+
+function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
+  const snapshot = result.material_snapshots[panel.material_id]
+  const length = Number(snapshot?.panel_length_mm)
+  const width = Number(snapshot?.panel_width_mm)
+  if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return '-'
+  return `${Math.max(0, 100 - (panel.waste_area_mm2 / (length * width)) * 100).toFixed(1)}%`
+}
+
+function panelCaption(result: CuttingResult, panel: CuttingPanel) {
+  const material = panelMaterialName(result, panel.material_id)
+  const dims = panelDims(result, panel)
+  return `List ${panel.panel_index} · ${material}${dims ? ` · ${dims}` : ''} · KIM ${panelFillPercent(result, panel)}`
+}
 
 function resultPanelCount(result: CuttingResult) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
+}
+
+function selectResult(resultId: string) {
+  const result = props.draft.results.find((item) => item.id === resultId)
+  emit('update:activeResultId', resultId)
+  emit('update:activePanelId', result?.panels[0]?.id ?? null)
+  activePlacementId.value = null
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -157,16 +238,20 @@ async function choose(result: CuttingResult) {
   <section id="cutting-results" class="client-card mt-6 scroll-mt-28 min-[860px]:scroll-mt-20">
     <div class="client-card-h">
       <div>
-        <h2>Natija</h2>
+        <h2>Kesish natijasi</h2>
         <p class="mt-1 text-sm text-ink-muted">PDF yuklab oling yoki natijadan buyurtma bering.</p>
       </div>
-      <span
-        v-if="chosenResult"
-        class="client-pill"
-        :class="allPlaced ? 'client-pill-done' : 'client-pill-danger'"
-      >
-        Joylashtirildi {{ placedCount }}/{{ requestedCount }}
-      </span>
+      <div v-if="chosenResult" class="flex flex-wrap items-center gap-2">
+        <span
+          v-if="chosenResult.source === 'imported_map'"
+          class="client-pill bg-info-soft text-info"
+        >
+          Fayldan joylashuv
+        </span>
+        <span class="client-pill" :class="allPlaced ? 'client-pill-done' : 'client-pill-danger'">
+          Joylashtirildi {{ placedCount }}/{{ requestedCount }}
+        </span>
+      </div>
       <span v-if="chosenResult?.status === 'invalidated'" class="client-pill client-pill-danger">
         eskirgan
       </span>
@@ -192,191 +277,196 @@ async function choose(result: CuttingResult) {
       </div>
     </div>
 
-    <div v-if="chosenResult" class="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <div class="min-w-0 space-y-4">
-        <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
-          <span class="font-mono font-black">!</span>
-          <span
-            >Qismlar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
-            tushiring.</span
-          >
-        </div>
+    <div v-if="chosenResult" class="grid gap-5 p-5">
+      <div v-if="savingsBanner" class="client-banner success">
+        <span class="font-mono font-black">✓</span>
+        <span>{{ savingsBanner }}</span>
+      </div>
 
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="rounded-md border border-hairline bg-elevated p-4">
-            <div class="text-xs font-bold uppercase text-ink-muted">Chiqim</div>
-            <div class="mt-1 font-serif text-2xl font-semibold text-success">
-              {{ resultWaste }}
-            </div>
-          </div>
-          <div class="rounded-md border border-hairline bg-elevated p-4">
-            <div class="text-xs font-bold uppercase text-ink-muted">Panellar</div>
-            <div class="mt-1 font-serif text-2xl font-semibold text-ink">{{ totalPanels }}</div>
-          </div>
-          <div class="rounded-md border border-hairline bg-elevated p-4">
-            <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
-            <div class="mt-1 font-serif text-2xl font-semibold text-ink">
-              {{ metres(consumedShop + consumedOwn) }}
-            </div>
-          </div>
-          <div class="rounded-md border border-hairline bg-elevated p-4">
-            <div class="text-xs font-bold uppercase text-ink-muted">Kesish yo'li</div>
-            <div class="mt-1 font-serif text-2xl font-semibold text-ink">
-              {{ metres(chosenResult.total_cut_length_mm) }}
-            </div>
-          </div>
-        </div>
+      <CuttingVariantTabs
+        v-if="hasVariantTabs"
+        :results="draft.results"
+        :active-result-id="chosenResult.id"
+        :chosen-result-id="draft.chosen_result_id"
+        @select="selectResult"
+      />
 
-        <div v-if="!allPlaced" class="client-banner danger" role="alert">
-          <span class="font-mono font-black">!</span>
-          <span>
-            {{ requestedCount - placedCount }} ta qism panelga joylashmadi — qism o'lchamini
-            kichraytiring yoki boshqa panel tanlang.
-          </span>
-        </div>
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div class="min-w-0 space-y-4">
+          <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
+            <span class="font-mono font-black">!</span>
+            <span
+              >Qismlar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
+              tushiring.</span
+            >
+          </div>
 
-        <section class="rounded-lg border border-hairline bg-elevated">
-          <div
-            class="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4"
-          >
-            <div class="text-sm font-bold text-ink">
-              Algoritm: <span class="text-accent">{{ chosenResult.algorithm_name }}</span>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm font-bold text-ink-muted">
+              {{ chosenResult.algorithm_name }}
             </div>
             <button
-              v-if="canCompareAlgorithms"
+              v-if="!activeResultIsChosen"
               type="button"
-              class="-mr-2 inline-flex min-h-11 items-center px-3 text-sm font-bold text-accent"
-              @click="algorithmsOpen = !algorithmsOpen"
+              class="mp-button mp-button-outline"
+              @click="choose(chosenResult)"
             >
-              {{ algorithmsOpen ? 'Yopish' : 'Algoritmlarni solishtirish' }}
+              Shu variantni tanlash
             </button>
+            <span v-else class="mp-chip bg-success-soft text-success">Tanlangan ✓</span>
           </div>
-          <div v-if="canCompareAlgorithms && algorithmsOpen" class="overflow-x-auto">
-            <table class="w-full min-w-[560px] text-sm">
-              <thead class="bg-sunk text-left text-xs uppercase text-ink-muted">
-                <tr>
-                  <th class="px-4 py-3">Algoritm</th>
-                  <th class="px-4 py-3">Chiqim</th>
-                  <th class="px-4 py-3">Panel</th>
-                  <th class="px-4 py-3">Kesish yo'li</th>
-                  <th class="px-4 py-3">Holat</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-hairline">
-                <tr
-                  v-for="result in draft.results"
-                  :key="result.id"
-                  :class="result.id === draft.chosen_result_id ? 'bg-accent-soft/40' : ''"
-                >
-                  <td class="px-4 py-3 font-bold text-ink">{{ result.algorithm_name }}</td>
-                  <td class="px-4 py-3 font-mono">
-                    {{ formatPercent(result.waste_percentage) }}
-                  </td>
-                  <td class="px-4 py-3 font-mono">{{ resultPanelCount(result) }}</td>
-                  <td class="px-4 py-3 font-mono">{{ metres(result.total_cut_length_mm) }}</td>
-                  <td class="px-4 py-3">
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline"
-                      @click="choose(result)"
-                    >
-                      {{ result.id === draft.chosen_result_id ? 'Tanlangan' : 'Shuni tanlash' }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
 
-        <section class="rounded-lg border border-hairline bg-elevated p-4">
-          <div class="mb-3 grid gap-3">
-            <div v-for="group in panelGroups" :key="group.materialId">
-              <p class="mb-1.5 text-xs font-bold text-ink-soft">
-                {{ group.name }}<span v-if="group.dims"> · {{ group.dims }}</span> ·
-                {{ group.count }} panel
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-md border border-hairline bg-elevated p-4">
+              <div class="text-xs font-bold uppercase text-ink-muted">Taxminiy narx</div>
+              <div v-if="!branchId" class="mt-1 text-lg font-extrabold text-ink">
+                Filial tanlang
+              </div>
+              <div v-else-if="quoteLoading" class="mt-1 text-lg font-extrabold text-ink-muted">
+                Hisoblanmoqda…
+              </div>
+              <div v-else-if="quoteError" class="mt-1 text-sm font-bold text-danger">
+                {{ quoteError }}
+              </div>
+              <div v-else-if="priceParts" class="mt-1 flex items-baseline gap-1">
+                <span class="font-serif text-2xl font-semibold text-ink">{{
+                  priceParts.amount
+                }}</span>
+                <span class="text-xs font-bold text-ink-muted">{{ priceParts.unit }}</span>
+              </div>
+              <div v-else class="mt-1 text-lg font-extrabold text-ink">—</div>
+              <p v-if="priceParts && viewingNonChosen" class="mt-1 text-xs text-ink-muted">
+                tanlangan variant narxi
               </p>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="panel in group.panels"
-                  :key="panel.id"
-                  type="button"
-                  class="mp-chip"
-                  :class="panel.id === activePanel?.id ? 'bg-accent text-white' : ''"
-                  @click="emit('update:activePanelId', panel.id)"
-                >
-                  Panel {{ panel.panel_index }}
-                </button>
+            </div>
+            <div class="rounded-md border border-hairline bg-elevated p-4">
+              <div class="text-xs font-bold uppercase text-ink-muted">Listlar</div>
+              <div class="mt-1 font-serif text-2xl font-semibold text-ink">{{ totalPanels }}</div>
+              <p v-if="materialBreakdown.length" class="mt-1 truncate text-xs text-ink-muted">
+                {{
+                  materialBreakdown
+                    .map((row) => `${row.name}${row.dims ? ` ${row.dims}` : ''}: ${row.count}`)
+                    .join(' · ')
+                }}
+              </p>
+            </div>
+            <div class="rounded-md border border-hairline bg-elevated p-4">
+              <div class="text-xs font-bold uppercase text-ink-muted">Chiqit</div>
+              <div class="mt-1 font-serif text-2xl font-semibold text-success">
+                {{ resultWaste }}
+              </div>
+            </div>
+            <div class="rounded-md border border-hairline bg-elevated p-4">
+              <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
+              <div class="mt-1 font-serif text-2xl font-semibold text-ink">
+                {{ metres(consumedShop + consumedOwn) }}
               </div>
             </div>
           </div>
 
-          <CuttingPanelSvg
-            v-if="activePanel"
-            :result="chosenResult"
-            :panel="activePanel"
-            :active-placement-id="activePlacementId"
-            @select-placement="selectPlacement"
-          />
-        </section>
+          <div v-if="!allPlaced" class="client-banner danger" role="alert">
+            <span class="font-mono font-black">!</span>
+            <span>
+              {{ requestedCount - placedCount }} ta qism panelga joylashmadi — qism o'lchamini
+              kichraytiring yoki boshqa panel tanlang.
+            </span>
+          </div>
+
+          <section class="rounded-lg border border-hairline bg-elevated p-4">
+            <CuttingSheetThumbnails
+              :result="chosenResult"
+              :active-panel-id="activePanel?.id ?? null"
+              @select="emit('update:activePanelId', $event)"
+            />
+          </section>
+
+          <section class="rounded-lg border border-hairline bg-elevated p-4">
+            <p v-if="activePanel" class="mb-3 text-sm font-extrabold text-ink">
+              {{ panelCaption(chosenResult, activePanel) }}
+            </p>
+            <CuttingPanelSvg
+              v-if="activePanel"
+              :result="chosenResult"
+              :panel="activePanel"
+              :active-placement-id="activePlacementId"
+              @select-placement="selectPlacement"
+            />
+          </section>
+        </div>
+
+        <aside class="space-y-4">
+          <button
+            type="button"
+            class="mp-button mp-button-outline w-full"
+            :disabled="cutting.downloadingId === chosenResult.id"
+            @click="cutting.downloadClientPdf(chosenResult.id)"
+          >
+            {{ cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish' }}
+          </button>
+          <p
+            v-if="cutting.downloadError"
+            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+            role="alert"
+          >
+            {{ cutting.downloadError }}
+            <span v-if="cutting.downloadTraceId" class="block text-xs font-normal opacity-80">
+              trace {{ cutting.downloadTraceId }}
+            </span>
+          </p>
+          <div class="rounded-lg border border-hairline bg-sunk p-4">
+            <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
+            <template v-if="edgeByMaterial.length">
+              <ul class="mt-2 space-y-1.5 text-sm">
+                <li v-for="row in edgeByMaterial" :key="row.id" class="flex justify-between gap-3">
+                  <span class="min-w-0 truncate text-ink-soft">{{ row.name }}</span>
+                  <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
+                </li>
+              </ul>
+            </template>
+            <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
+          </div>
+          <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
+            <h3 class="text-sm font-extrabold text-ink">Joylashuvlar</h3>
+            <div class="mt-3 grid gap-2">
+              <button
+                v-for="placement in activePanel.placements"
+                :key="placement.id"
+                type="button"
+                class="rounded-md border border-hairline bg-elevated px-3 py-2 text-left text-sm"
+                :class="
+                  placement.id === activePlacementId ? 'border-accent text-accent' : 'text-ink'
+                "
+                @click="selectPlacement(placement)"
+              >
+                <b class="font-semibold">{{ placement.length_mm }}×{{ placement.width_mm }} mm</b>
+                <span class="text-ink-muted">#{{ placement.part_quantity_index }}</span>
+                <span v-if="placement.rotated" class="font-bold text-accent">↻</span>
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      <aside class="space-y-4">
+      <div
+        v-if="footerResult"
+        class="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_rgb(15_27_45_/_30%)] backdrop-blur"
+      >
+        <div class="text-sm">
+          <span class="font-mono font-bold text-ink">
+            {{ resultPanelCount(footerResult) }} list ·
+            {{ formatPercent(footerResult.waste_percentage) }} chiqit ·
+            {{ !branchId ? 'Filial tanlang' : priceParts ? priceParts.full : '—' }}
+          </span>
+          <span v-if="viewingNonChosen" class="ml-2 text-ink-muted">Boshqa variant tanlangan</span>
+        </div>
         <RouterLink
           v-if="draft.chosen_result_id"
           :to="rolePath(props.checkoutPath)"
-          class="mp-button mp-button-primary w-full"
+          class="mp-button mp-button-primary"
         >
           Buyurtma berish
         </RouterLink>
-        <button
-          type="button"
-          class="mp-button mp-button-outline w-full"
-          :disabled="cutting.downloadingId === chosenResult.id"
-          @click="cutting.downloadClientPdf(chosenResult.id)"
-        >
-          {{ cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish' }}
-        </button>
-        <p
-          v-if="cutting.downloadError"
-          class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-          role="alert"
-        >
-          {{ cutting.downloadError }}
-          <span v-if="cutting.downloadTraceId" class="block text-xs font-normal opacity-80">
-            trace {{ cutting.downloadTraceId }}
-          </span>
-        </p>
-        <div class="rounded-lg border border-hairline bg-sunk p-4">
-          <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
-          <template v-if="edgeByMaterial.length">
-            <ul class="mt-2 space-y-1.5 text-sm">
-              <li v-for="row in edgeByMaterial" :key="row.id" class="flex justify-between gap-3">
-                <span class="min-w-0 truncate text-ink-soft">{{ row.name }}</span>
-                <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
-              </li>
-            </ul>
-          </template>
-          <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
-        </div>
-        <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
-          <h3 class="text-sm font-extrabold text-ink">Joylashuvlar</h3>
-          <div class="mt-3 grid gap-2">
-            <button
-              v-for="placement in activePanel.placements"
-              :key="placement.id"
-              type="button"
-              class="rounded-md border border-hairline bg-elevated px-3 py-2 text-left text-sm"
-              :class="placement.id === activePlacementId ? 'border-accent text-accent' : 'text-ink'"
-              @click="selectPlacement(placement)"
-            >
-              <b class="font-semibold">{{ placement.length_mm }}×{{ placement.width_mm }} mm</b>
-              <span class="text-ink-muted">#{{ placement.part_quantity_index }}</span>
-              <span v-if="placement.rotated" class="font-bold text-accent">R</span>
-            </button>
-          </div>
-        </div>
-      </aside>
+      </div>
     </div>
   </section>
 </template>

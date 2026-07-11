@@ -11,7 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
 from app.models.base import Base, Timestamped, UUIDPrimaryKey
-from app.models.enums import CuttingResultStatus, enum_type
+from app.models.enums import CuttingResultSource, CuttingResultStatus, enum_type
 
 
 class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
@@ -53,6 +53,12 @@ class CuttingResult(UUIDPrimaryKey, Base):
     draft_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cutting_drafts.id"))
     algorithm_name: Mapped[str] = mapped_column(nullable=False)
     algorithm_version: Mapped[str] = mapped_column(nullable=False)
+    source: Mapped[CuttingResultSource] = mapped_column(
+        enum_type(CuttingResultSource, "cutting_result_source"),
+        default=CuttingResultSource.OPTIMIZER,
+        server_default=CuttingResultSource.OPTIMIZER.value,
+        nullable=False,
+    )
     status: Mapped[CuttingResultStatus] = mapped_column(
         enum_type(CuttingResultStatus, "cutting_result_status"),
         default=CuttingResultStatus.CANDIDATE,
@@ -141,6 +147,10 @@ class CuttingPanel(UUIDPrimaryKey, Base):
     material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
     panel_index: Mapped[int] = mapped_column(nullable=False)
     waste_area_mm2: Mapped[int] = mapped_column(nullable=False)
+    offcuts: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+    )
 
 
 class CuttingPlacement(UUIDPrimaryKey, Base):

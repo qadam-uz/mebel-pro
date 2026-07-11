@@ -4,18 +4,51 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from typing import Literal
+from xml.etree.ElementTree import ParseError
 
-from app.modules.cutting.imports.base import ImportParseError
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
+
+from app.modules.cutting.imports.base import ImportParseError, SourceFormat
 
 XLSX_ZIP_MAGIC = b"PK\x03\x04"
 OLE2_MAGIC = b"\xd0\xcf\x11\xe0"
+MAP_MAGIC = b"\x06KV_MAP"
+XML_UNSUPPORTED_MESSAGE = (
+    "Bu XML «Спецификация в XML» formati emas. БАЗИС-Мебельщик'dan "
+    "Формирование проекта → «Спецификация в XML» orqali saqlang."
+)
 
 
 def unsupported_format_message() -> str:
     return (
-        "Bu fayl turi qo'llab-quvvatlanmaydi — faqat CSV. БАЗИС-Мебельщик'da "
-        "«Спецификация в CSV» orqali, Excel'da «Сохранить как → CSV» qilib saqlang."
+        "Bu fayl turi qo'llab-quvvatlanmaydi — faqat CSV, XML yoki 2D-Place MAP. "
+        "БАЗИС-Мебельщик'da «Спецификация в CSV»/«Спецификация в XML» orqali yoki "
+        "2D-Place'dan .map qilib saqlang."
     )
+
+
+def sniff_format(content: bytes, filename: str | None = None) -> SourceFormat:
+    if content.startswith(XLSX_ZIP_MAGIC) or content.startswith(OLE2_MAGIC):
+        raise ImportParseError(
+            "unsupported_format",
+            unsupported_format_message(),
+        )
+    if content.startswith(MAP_MAGIC):
+        return "map_2dplace"
+    if _looks_like_xml(content):
+        try:
+            root = ElementTree.fromstring(content)
+        except DefusedXmlException as exc:
+            raise ImportParseError("invalid_file", "XML faylni o'qib bo'lmadi") from exc
+        except ParseError as exc:
+            raise ImportParseError("invalid_file", "XML faylni o'qib bo'lmadi") from exc
+        if _local_name(root.tag) != "Проект":
+            raise ImportParseError("unsupported_format", XML_UNSUPPORTED_MESSAGE)
+        return "bazis_xml"
+    ensure_csv(content, filename)
+    return "csv"
 
 
 def ensure_csv(content: bytes, filename: str | None = None) -> None:
@@ -66,3 +99,25 @@ def sniff_csv_delimiter(text: str) -> str:
 
 def _extension(filename: str | None) -> str:
     return Path(filename or "").suffix.casefold()
+
+
+def _looks_like_xml(content: bytes) -> bool:
+    leading = _leading_text(content).lstrip()
+    return leading.startswith("<?xml") or leading.startswith("<Проект") or leading.startswith("<")
+
+
+def _leading_text(content: bytes) -> str:
+    sample = content[:256]
+    for encoding in ("utf-8-sig", "cp1251"):
+        try:
+            return sample.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            continue
+    return ""
+
+
+def _local_name(tag: str | Literal[""]) -> str:
+    text = str(tag)
+    if "}" in text:
+        return text.rsplit("}", 1)[1]
+    return text

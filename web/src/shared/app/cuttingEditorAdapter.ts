@@ -1,5 +1,7 @@
 import type { InjectionKey } from 'vue'
 
+import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
+
 /**
  * Role adapter for the shared cutting editor (`CuttingEditorView.vue`).
  *
@@ -36,6 +38,8 @@ export interface CuttingEditorAdapter {
   branch: { fixed?: { id: string; name: string } }
   /** Seed the unsaved editor's branch pre-filter from the client profile default. */
   useProfileDefaultBranch: boolean
+  /** Role-scoped price quote for the draft's chosen result (client vs workshop endpoint). */
+  quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
 }
 
 export type CuttingEditorAdapterFactory = () => CuttingEditorAdapter
@@ -49,6 +53,7 @@ export const cuttingEditorAdapterKey: InjectionKey<CuttingEditorAdapter> =
  * scope: the client app needs zero configuration).
  */
 export function clientCuttingEditorAdapter(): CuttingEditorAdapter {
+  const orders = useOrdersStore()
   return {
     newRouteName: 'client-cutting-new',
     paths: {
@@ -59,5 +64,6 @@ export function clientCuttingEditorAdapter(): CuttingEditorAdapter {
     },
     branch: {},
     useProfileDefaultBranch: true,
+    quoteForDraft: (draftId, branchId) => orders.quoteForDraft(draftId, branchId),
   }
 }

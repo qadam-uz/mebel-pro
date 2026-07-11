@@ -5,14 +5,18 @@ import {
   applyImportedParts,
   areImportMaterialPicksComplete,
   buildImportedParts,
+  buildMapImportedParts,
+  buildMapPanelPicks,
   isImportMappingComplete,
   type ImportParsedResponse,
 } from '@/shared/stores/cuttingImport'
 
 const parsed: ImportParsedResponse = {
   status: 'parsed',
+  source_format: 'csv',
   total_parts: 2,
   total_pieces: 3,
+  ignored_object_count: 0,
   panel_materials: [{ key: 'm1', label: 'EGGER H1334', part_count: 2, thickness_hint: '18' }],
   edge_materials: [{ key: 'e1', label: 'H1334 0.4', side_count: 2 }],
   skipped_rows: [],
@@ -42,6 +46,7 @@ const parsed: ImportParsedResponse = {
 function existingPart(): CuttingPart {
   return {
     part_ref: 'existing',
+    name: null,
     material_id: 'panel-old',
     material_source: 'shop',
     follow_grain: true,
@@ -69,6 +74,7 @@ describe('cutting import helpers', () => {
     expect(parts).toHaveLength(2)
     expect(parts[0]).toMatchObject({
       part_ref: 'import-1',
+      name: null,
       material_id: 'panel-1',
       material_source: 'shop',
       follow_grain: false,
@@ -111,5 +117,59 @@ describe('cutting import helpers', () => {
       'new',
     ])
     expect(applyImportedParts(existing, imported, 'replace')).toEqual(imported)
+  })
+
+  it('builds MAP import rows with stable part refs and panel picks', () => {
+    const mapParsed: ImportParsedResponse = {
+      ...parsed,
+      source_format: 'map_2dplace',
+      material_groups: [
+        {
+          key: 'm1',
+          label: '2750x1830 mm list',
+          width_mm: 2750,
+          height_mm: 1830,
+          sheet_count: 1,
+          hint: null,
+        },
+      ],
+      map_layout: {
+        description: '',
+        customer_name: '',
+        order_type: '',
+        sheets: [],
+        part_rows: [
+          {
+            row: 1,
+            part_ref: 'map-1',
+            material_key: 'm1',
+            length_mm: 720,
+            width_mm: 450,
+            quantity: 2,
+            follow_grain: true,
+            edges: { top: true, bottom: false, left: false, right: true },
+            name: 'Side',
+          },
+        ],
+      },
+    }
+
+    expect(buildMapPanelPicks(mapParsed, { m1: 'panel-1' })).toEqual({ m1: 'panel-1' })
+    expect(buildMapImportedParts(mapParsed, { m1: 'panel-1' }, { e1: 'edge-1' })).toEqual([
+      {
+        part_ref: 'map-1',
+        name: 'Side',
+        material_id: 'panel-1',
+        material_source: 'shop',
+        follow_grain: true,
+        length_mm: 720,
+        width_mm: 450,
+        quantity: 2,
+        edge_top: { material_id: 'edge-1', source: 'shop' },
+        edge_bottom: null,
+        edge_left: null,
+        edge_right: { material_id: 'edge-1', source: 'shop' },
+      },
+    ])
   })
 })

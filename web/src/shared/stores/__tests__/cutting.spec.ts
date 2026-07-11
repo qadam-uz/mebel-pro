@@ -131,6 +131,21 @@ describe('cutting store scope', () => {
     expect(vi.mocked(api.post).mock.calls[0][1]).toBeUndefined()
   })
 
+  it('commits MAP layout imports through the client endpoint', async () => {
+    const store = useCuttingStore()
+    vi.mocked(api.post).mockResolvedValue(draft('draft-map'))
+
+    const result = await store.commitMapImport({
+      preferred_branch_id: 'branch-1',
+      parts: [],
+      panel_picks: { m1: 'panel-1' },
+      map_layout: { sheets: [], part_rows: [], description: '', customer_name: '', order_type: '' },
+    })
+
+    expect(result.id).toBe('draft-map')
+    expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/client/cutting/import/map/commit')
+  })
+
   it('routes every action through /workshop/* after configureScope', async () => {
     const store = useCuttingStore()
     store.configureScope('workshop')
@@ -231,10 +246,10 @@ describe('partFitError', () => {
   it.each([
     [true, true, 'impossible_grain'],
     [true, false, null],
-    [false, true, null],
+    [false, true, 'impossible_grain'],
     [false, false, null],
   ] as const)(
-    'locks rotation only when material grain is %s and follow_grain is %s',
+    'uses follow_grain as the rotation lock for material_grain=%s and follow_grain=%s',
     (materialGrain, followGrain, expected) => {
       const panel = { ...basePanel, grain_direction: materialGrain }
 

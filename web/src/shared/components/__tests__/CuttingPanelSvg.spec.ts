@@ -15,6 +15,7 @@ const panel: CuttingPanel = {
   material_id: 'mat-1',
   panel_index: 1,
   waste_area_mm2: 0,
+  offcuts: [],
   placements: [
     {
       id: 'placement-1',
@@ -70,6 +71,7 @@ const BAND: CuttingEdgeBand = { material_id: 'edge-1', source: 'shop' }
 function makePart(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
     part_ref: 'A',
+    name: null,
     material_id: 'mat-1',
     material_source: 'shop',
     follow_grain: true,
@@ -151,5 +153,25 @@ describe('CuttingPanelSvg edge banding', () => {
       props: { result, panel, activePlacementId: null },
     })
     expect(wrapper.findAll('.placement line')).toHaveLength(0)
+  })
+
+  it('labels placements with part names and renders usable offcuts', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          parts_snapshot: [makePart({ name: 'Shelf' })],
+        } as unknown as CuttingResult,
+        panel: {
+          ...panel,
+          offcuts: [{ x_mm: 320, y_mm: 0, length_mm: 400, width_mm: 120, usable: true }],
+        },
+        activePlacementId: null,
+      },
+    })
+
+    expect(wrapper.text()).toContain('Shelf 300×200')
+    expect(wrapper.text()).toContain('Qoldiq 400×120')
+    expect(wrapper.find('.offcut rect').attributes('stroke-dasharray')).toBe('12 8')
   })
 })

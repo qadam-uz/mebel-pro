@@ -16,7 +16,8 @@ dependencies = [
     "boto3>=1.43.6",
     "argon2-cffi>=25.1.0",
     "reportlab>=4.5.1",
-    "cutting-engine==0.1.0",
+    "defusedxml>=0.7.1",
+    "cutting-engine==0.2.0",
 ]
 
 [dependency-groups]
@@ -62,7 +63,7 @@ module = ["reportlab.*"]  # no stubs bundled; used only for cutting PDF byte gen
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["cutting_engine.*"]  # 0.1.0 ships without py.typed; drop once >=0.1.1 is pinned
+module = ["defusedxml.*"]  # no bundled py.typed marker; used only for safe XML parsing
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

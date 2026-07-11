@@ -24,6 +24,7 @@ import { useCuttingStore, type CuttingEdgeBand, type CuttingPart } from '@/share
 // focuses the dialog on open.
 const props = defineProps<{
   part: CuttingPart | null
+  initialSide: EdgeField | null
   partNumber: number
   preferredEdgeId: string | null
   preferredBranchId: string | null
@@ -46,10 +47,11 @@ const edgeDialogRef = ref<HTMLElement | null>(null)
 // part has no banding yet (the first-time pick); when editing a part that already
 // has a tape, collapse to the compact summary + an "O'zgartirish" toggle.
 const showTapeList = ref(false)
-// The last tape the user picked from the list. Applied to the currently banded
-// sides; when none are banded it's only remembered, so the next side toggled on
-// (or a pattern) uses it — picking a tape must not auto-band every side.
+// The tape currently used by side cards and preset chips. Picking a tape never
+// auto-bands a side; side cards paint with this active tape.
 const lastPickedEdgeId = ref<string | null>(null)
+const activeEdgeId = ref<string | null>(null)
+const catalogReplaceEdgeId = ref<string | null>(null)
 
 const sideNames: Record<EdgeField, string> = {
   edge_top: 'Yuqori',
@@ -59,16 +61,30 @@ const sideNames: Record<EdgeField, string> = {
 }
 
 const edgePatterns: Array<{ key: string; label: string; hint: string; sides: EdgeField[] }> = [
-  { key: 'none', label: 'Hech qaysi', hint: 'Krom olib tashlanadi', sides: [] },
-  { key: 'all', label: 'Hamma tomon', hint: "Ko'p ishlatiladi", sides: [...edgeFields] },
+  { key: 'none', label: 'Hech qaysi', hint: '— joriy tasma bilan', sides: [] },
+  { key: 'all', label: 'Hamma tomon', hint: '— joriy tasma bilan', sides: [...edgeFields] },
   {
     key: 'tb',
     label: 'Yuqori + pastki',
-    hint: 'Uzun tomonlar',
+    hint: '— joriy tasma bilan',
     sides: ['edge_top', 'edge_bottom'],
   },
-  { key: 'lr', label: "Chap + o'ng", hint: 'Yon tomonlar', sides: ['edge_left', 'edge_right'] },
+  {
+    key: 'lr',
+    label: "Chap + o'ng",
+    hint: '— joriy tasma bilan',
+    sides: ['edge_left', 'edge_right'],
+  },
 ]
+
+const tapeRegistryColors = [
+  { bg: '#0f766e', fg: '#ffffff', soft: '#d8f3ea' },
+  { bg: '#D85A30', fg: '#ffffff', soft: '#fde2d6' },
+  { bg: '#2563eb', fg: '#ffffff', soft: '#dbeafe' },
+  { bg: '#7c3aed', fg: '#ffffff', soft: '#ede9fe' },
+  { bg: '#ca8a04', fg: '#111827', soft: '#fef3c7' },
+  { bg: '#475569', fg: '#ffffff', soft: '#e2e8f0' },
+] as const
 
 function blankEdgeState(): Record<EdgeField, CuttingEdgeBand | null> {
   return { edge_top: null, edge_bottom: null, edge_left: null, edge_right: null }
@@ -112,6 +128,15 @@ const carriedEdgeOptions = computed(() =>
   cutting.edgeOptions.filter((material) => material.branch_carried),
 )
 
+function mostUsedEdgeId(edges: Record<EdgeField, CuttingEdgeBand | null>) {
+  const counts = new Map<string, number>()
+  for (const side of edgeFields) {
+    const id = edges[side]?.material_id
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+}
+
 function recommendedEdgeForPart() {
   const part = props.part
   if (!part) return null
@@ -123,23 +148,85 @@ function recommendedEdgeForPart() {
   )
 }
 
-function pickerSideThickness(side: EdgeField) {
-  const material = edgeById(edgePickerState.value[side]?.material_id)
+function materialThicknessLabel(materialId: string | null | undefined) {
+  const material = edgeById(materialId)
   return material?.thickness_mm ? `${material.thickness_mm}mm` : ''
 }
 
-// Tailwind classes for a side strip in the diagram: filled when banded,
-// dashed/muted when empty.
 function sideClass(side: EdgeField) {
   const edge = edgePickerState.value[side]
   if (!edge) {
     return 'border border-dashed border-hairline-strong bg-sunk text-ink-muted hover:border-ink-soft'
   }
-  return 'bg-accent text-white'
+  return 'border text-ink hover:border-ink-soft'
+}
+
+function tapeNumberLabel(index: number) {
+  const labels = ['①', '②', '③', '④', '⑤', '⑥']
+  return labels[index] ?? String(index + 1)
+}
+
+function tapeColor(index: number) {
+  return tapeRegistryColors[index % tapeRegistryColors.length]
+}
+
+const tapeEntries = computed(() => {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  const add = (id: string | null | undefined) => {
+    if (!id || seen.has(id) || !edgeById(id)) return
+    seen.add(id)
+    ids.push(id)
+  }
+  for (const side of edgeFields) add(edgePickerState.value[side]?.material_id)
+  add(lastPickedEdgeId.value)
+  add(activeEdgeId.value)
+  add(recommendedEdgeForPart()?.id)
+  return ids.map((materialId, index) => {
+    const material = edgeById(materialId)
+    const count = edgeFields.filter(
+      (side) => edgePickerState.value[side]?.material_id === materialId,
+    ).length
+    return {
+      materialId,
+      material,
+      count,
+      number: tapeNumberLabel(index),
+      color: tapeColor(index),
+    }
+  })
+})
+
+function tapeEntryForMaterial(materialId: string | null | undefined) {
+  if (!materialId) return null
+  return tapeEntries.value.find((entry) => entry.materialId === materialId) ?? null
+}
+
+function sideStyle(side: EdgeField) {
+  const entry = tapeEntryForMaterial(edgePickerState.value[side]?.material_id)
+  if (!entry) return {}
+  return {
+    background: entry.color.soft,
+    borderColor: entry.color.bg,
+    color: entry.color.bg,
+  }
+}
+
+function badgeStyle(entry: { color: (typeof tapeRegistryColors)[number] }) {
+  return {
+    background: entry.color.bg,
+    color: entry.color.fg,
+  }
 }
 
 function sideAria(side: EdgeField) {
-  return `${sideNames[side]} tomon — ${edgePickerState.value[side] ? 'krom bor, bosib olib tashlang' : "krom qo'shing"}`
+  const edge = edgePickerState.value[side]
+  const active = activeEdgeId.value
+  if (edge?.material_id && edge.material_id === active)
+    return `${sideNames[side]} tomon — joriy krom bor, bosib olib tashlang`
+  if (edge?.material_id)
+    return `${sideNames[side]} tomon — boshqa krom bor, bosib joriy kromga almashtiring`
+  return `${sideNames[side]} tomon — joriy kromni qo'shing`
 }
 
 const edgeThicknessOptions = computed<ChoiceOption[]>(() => {
@@ -189,11 +276,7 @@ const edgePickerSelectedMaterialId = computed(() => {
     .find(Boolean)
   return first ?? null
 })
-const selectedEdgeMaterial = computed(() => edgeById(edgePickerSelectedMaterialId.value))
-// The tape highlighted in the list: what's banded, or the user's pending pick.
-const highlightedEdgeId = computed(
-  () => edgePickerSelectedMaterialId.value ?? lastPickedEdgeId.value,
-)
+const highlightedEdgeId = computed(() => activeEdgeId.value)
 const edgePickerBranchNote = computed(() => {
   if (!props.preferredBranchId) return null
   const missing = new Map<string, string>()
@@ -217,39 +300,66 @@ function applyEdgePattern(key: string) {
     edgePickerState.value = blankEdgeState()
     return
   }
-  const fallback = recommendedEdgeForPart()
-  if (!fallback) return
+  const materialId = activeEdgeId.value ?? recommendedEdgeForPart()?.id
+  if (!materialId) return
+  activeEdgeId.value = materialId
+  lastPickedEdgeId.value = materialId
   const next = blankEdgeState()
   for (const side of pattern.sides) {
-    next[side] = { material_id: fallback.id, source: 'shop' }
+    next[side] = { material_id: materialId, source: 'shop' }
   }
   edgePickerState.value = next
 }
 
 function togglePickerSide(side: EdgeField) {
   if (!props.part) return
+  const materialId = activeEdgeId.value ?? recommendedEdgeForPart()?.id
+  if (!materialId) return
+  activeEdgeId.value = materialId
+  lastPickedEdgeId.value = materialId
   const next = { ...edgePickerState.value }
-  if (next[side]) {
+  if (next[side]?.material_id === materialId) {
     next[side] = null
   } else {
-    const fallback = recommendedEdgeForPart()
-    if (!fallback) return
-    next[side] = { material_id: fallback.id, source: 'shop' }
+    next[side] = { material_id: materialId, source: 'shop' }
   }
   edgePickerState.value = next
 }
 
 function selectPickerMaterial(materialId: string) {
-  // Remember the pick either way; with banded sides, re-tape them. With NO sides
-  // banded (e.g. after "Hech qaysi") only remember it — never auto-band all four.
   lastPickedEdgeId.value = materialId
-  const active = edgePickerActiveSides.value
-  if (active.length === 0) return
-  const next = { ...edgePickerState.value }
-  for (const side of active) {
-    next[side] = { material_id: materialId, source: 'shop' }
+  activeEdgeId.value = materialId
+  if (catalogReplaceEdgeId.value && catalogReplaceEdgeId.value !== materialId) {
+    const next = { ...edgePickerState.value }
+    for (const side of edgeFields) {
+      if (next[side]?.material_id === catalogReplaceEdgeId.value) {
+        next[side] = { material_id: materialId, source: 'shop' }
+      }
+    }
+    edgePickerState.value = next
   }
-  edgePickerState.value = next
+  catalogReplaceEdgeId.value = null
+  showTapeList.value = false
+}
+
+function setActiveTape(materialId: string) {
+  activeEdgeId.value = materialId
+  lastPickedEdgeId.value = materialId
+}
+
+function openCatalogForAdd() {
+  catalogReplaceEdgeId.value = null
+  edgePickerSearch.value = ''
+  edgePickerThickness.value = 'all'
+  showTapeList.value = true
+}
+
+function openCatalogForReplace(materialId: string) {
+  setActiveTape(materialId)
+  catalogReplaceEdgeId.value = materialId
+  edgePickerSearch.value = ''
+  edgePickerThickness.value = 'all'
+  showTapeList.value = true
 }
 
 function applyEdgePicker() {
@@ -261,7 +371,7 @@ function applyEdgePicker() {
     edge_left: edgePickerState.value.edge_left ? { ...edgePickerState.value.edge_left } : null,
     edge_right: edgePickerState.value.edge_right ? { ...edgePickerState.value.edge_right } : null,
   }
-  emit('apply', { edges, rememberedMaterialId: firstEdgeId(edges) })
+  emit('apply', { edges, rememberedMaterialId: activeEdgeId.value ?? firstEdgeId(edges) })
 }
 
 const EDGE_FOCUSABLE =
@@ -311,11 +421,19 @@ watch(
   (part, previous) => {
     if (part && !previous) {
       edgePickerState.value = cloneEdgeStateFromPart(part)
-      const active = bandedEdgeFields(edgePickerState.value)
-      // First-time pick (no banding yet) opens the tape list; editing an existing
-      // banded part starts collapsed to the compact summary.
-      showTapeList.value = active.length === 0
-      lastPickedEdgeId.value = firstEdgeId(edgePickerState.value)
+      const clickedEdgeId = props.initialSide
+        ? edgePickerState.value[props.initialSide]?.material_id
+        : null
+      const initialActiveId =
+        clickedEdgeId ??
+        mostUsedEdgeId(edgePickerState.value) ??
+        props.preferredEdgeId ??
+        recommendedEdgeForPart()?.id ??
+        null
+      showTapeList.value = false
+      catalogReplaceEdgeId.value = null
+      activeEdgeId.value = initialActiveId
+      lastPickedEdgeId.value = initialActiveId
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
       lockBodyScroll()
@@ -328,6 +446,8 @@ watch(
       edgePickerSearch.value = ''
       edgePickerThickness.value = 'all'
       lastPickedEdgeId.value = null
+      activeEdgeId.value = null
+      catalogReplaceEdgeId.value = null
     }
   },
 )
@@ -401,6 +521,7 @@ onBeforeUnmount(() => {
               />
             </svg>
             {{ pattern.label }}
+            <span class="text-[10px] font-semibold opacity-70">{{ pattern.hint }}</span>
           </button>
         </div>
 
@@ -413,27 +534,48 @@ onBeforeUnmount(() => {
             type="button"
             class="flex items-center justify-center gap-1.5 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
             :class="sideClass('edge_top')"
+            :style="sideStyle('edge_top')"
             :aria-pressed="Boolean(edgePickerState.edge_top)"
             :aria-label="sideAria('edge_top')"
             @click="togglePickerSide('edge_top')"
           >
             <span>{{ sideNames.edge_top }}</span>
-            <span v-if="edgePickerState.edge_top" class="font-mono text-[10px] opacity-90">{{
-              pickerSideThickness('edge_top')
-            }}</span>
+            <template v-if="edgePickerState.edge_top">
+              <span
+                v-if="tapeEntryForMaterial(edgePickerState.edge_top.material_id)"
+                class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+                :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_top.material_id)!)"
+              >
+                {{ tapeEntryForMaterial(edgePickerState.edge_top.material_id)?.number }}
+              </span>
+              <span class="font-mono text-[10px] opacity-90">{{
+                materialThicknessLabel(edgePickerState.edge_top.material_id)
+              }}</span>
+            </template>
             <span v-else class="text-sm leading-none opacity-70">+</span>
           </button>
           <span></span>
 
           <button
             type="button"
-            class="flex items-center justify-center rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            class="flex items-center justify-center gap-1 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
             :class="sideClass('edge_left')"
+            :style="sideStyle('edge_left')"
             :aria-pressed="Boolean(edgePickerState.edge_left)"
             :aria-label="sideAria('edge_left')"
             @click="togglePickerSide('edge_left')"
           >
-            {{ sideNames.edge_left }}
+            <span>{{ sideNames.edge_left }}</span>
+            <span
+              v-if="
+                edgePickerState.edge_left &&
+                tapeEntryForMaterial(edgePickerState.edge_left.material_id)
+              "
+              class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+              :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_left.material_id)!)"
+            >
+              {{ tapeEntryForMaterial(edgePickerState.edge_left.material_id)?.number }}
+            </span>
           </button>
           <div
             class="flex flex-col items-center justify-center gap-1 rounded-md border border-hairline text-ink-muted"
@@ -454,13 +596,24 @@ onBeforeUnmount(() => {
           </div>
           <button
             type="button"
-            class="flex items-center justify-center rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
+            class="flex items-center justify-center gap-1 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
             :class="sideClass('edge_right')"
+            :style="sideStyle('edge_right')"
             :aria-pressed="Boolean(edgePickerState.edge_right)"
             :aria-label="sideAria('edge_right')"
             @click="togglePickerSide('edge_right')"
           >
-            {{ sideNames.edge_right }}
+            <span>{{ sideNames.edge_right }}</span>
+            <span
+              v-if="
+                edgePickerState.edge_right &&
+                tapeEntryForMaterial(edgePickerState.edge_right.material_id)
+              "
+              class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+              :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_right.material_id)!)"
+            >
+              {{ tapeEntryForMaterial(edgePickerState.edge_right.material_id)?.number }}
+            </span>
           </button>
 
           <span></span>
@@ -468,41 +621,86 @@ onBeforeUnmount(() => {
             type="button"
             class="flex items-center justify-center gap-1.5 rounded-md px-1 text-center text-[11px] font-bold leading-tight transition"
             :class="sideClass('edge_bottom')"
+            :style="sideStyle('edge_bottom')"
             :aria-pressed="Boolean(edgePickerState.edge_bottom)"
             :aria-label="sideAria('edge_bottom')"
             @click="togglePickerSide('edge_bottom')"
           >
             <span>{{ sideNames.edge_bottom }}</span>
-            <span v-if="edgePickerState.edge_bottom" class="font-mono text-[10px] opacity-90">{{
-              pickerSideThickness('edge_bottom')
-            }}</span>
+            <template v-if="edgePickerState.edge_bottom">
+              <span
+                v-if="tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)"
+                class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+                :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)!)"
+              >
+                {{ tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)?.number }}
+              </span>
+              <span class="font-mono text-[10px] opacity-90">{{
+                materialThicknessLabel(edgePickerState.edge_bottom.material_id)
+              }}</span>
+            </template>
             <span v-else class="text-sm leading-none opacity-70">+</span>
           </button>
           <span></span>
         </div>
 
-        <div
-          v-if="selectedEdgeMaterial && !showTapeList"
-          class="flex items-center gap-3 rounded-xl border border-hairline bg-elevated p-3"
-        >
-          <span
-            class="size-9 shrink-0 rounded-lg border border-hairline"
-            :style="{ background: colorForMaterial(selectedEdgeMaterial.color) }"
-          ></span>
-          <div class="min-w-0">
-            <div class="truncate text-sm font-bold text-ink">
-              {{ edgeShortLabel(selectedEdgeMaterial) }}
-            </div>
-            <div class="font-mono text-[11.5px] text-ink-muted">
-              {{ selectedEdgeMaterial.name }} · {{ edgePickerActiveSides.length }} tomonga
-            </div>
+        <div class="grid gap-2" aria-label="Kromkalar">
+          <div
+            v-for="entry in tapeEntries"
+            :key="entry.materialId"
+            class="flex items-center gap-3 rounded-xl border bg-elevated p-3 text-left transition hover:border-ink-soft"
+            :class="
+              activeEdgeId === entry.materialId
+                ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
+                : 'border-hairline'
+            "
+          >
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-center gap-3 text-left"
+              @click="setActiveTape(entry.materialId)"
+            >
+              <span
+                class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-black"
+                :style="badgeStyle(entry)"
+              >
+                {{ entry.number }}
+              </span>
+              <span
+                class="size-8 shrink-0 rounded-lg border border-hairline"
+                :style="{ background: colorForMaterial(entry.material?.color) }"
+              ></span>
+              <span class="min-w-0 flex-1">
+                <span class="flex min-w-0 items-center gap-2">
+                  <span class="truncate text-sm font-bold text-ink">{{
+                    edgeShortLabel(entry.material)
+                  }}</span>
+                  <span
+                    v-if="activeEdgeId === entry.materialId"
+                    class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
+                  >
+                    Joriy
+                  </span>
+                </span>
+                <span class="font-mono text-[11.5px] text-ink-muted">
+                  {{ entry.count }} tomonga
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="shrink-0 text-sm font-bold text-accent"
+              @click="openCatalogForReplace(entry.materialId)"
+            >
+              O'zgartirish →
+            </button>
           </div>
           <button
             type="button"
-            class="ml-auto shrink-0 text-sm font-bold text-accent"
-            @click="showTapeList = true"
+            class="rounded-xl border border-dashed border-hairline-strong bg-sunk px-3 py-2 text-sm font-bold text-accent transition hover:border-accent"
+            @click="openCatalogForAdd"
           >
-            O'zgartirish →
+            + Yana tasma qo'shish
           </button>
         </div>
 

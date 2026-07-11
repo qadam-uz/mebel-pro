@@ -6,6 +6,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
+from importlib.metadata import version
 
 from cutting_engine import (
     CuttingEngineError,
@@ -29,7 +30,7 @@ EDGE_OVERHANG_MM = 30
 MAX_PARTS_PER_RUN = 100
 MAX_PANELS_PER_MATERIAL = 20
 OPTIMIZATION_TIMEOUT_SECONDS = 5.0
-ALGORITHM_VERSION = "cutting-engine-0.1.0"
+ALGORITHM_VERSION = f"cutting-engine-{version('cutting-engine')}"
 ALGORITHM_NAME = "cutting-engine-best"
 
 EDGE_SIDES = ("top", "bottom", "left", "right")
@@ -114,10 +115,20 @@ class PlacementResult:
 
 
 @dataclass(frozen=True)
+class OffcutResult:
+    x_mm: int
+    y_mm: int
+    length_mm: int
+    width_mm: int
+    usable: bool
+
+
+@dataclass(frozen=True)
 class PanelResult:
     material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
+    offcuts: list[OffcutResult]
     placements: list[PlacementResult]
 
 
@@ -234,6 +245,16 @@ def _run_best_engine_result(
                     material_id=material_id,
                     panel_index=sheet_result.index,
                     waste_area_mm2=material.usable_area_mm2 - used_area,
+                    offcuts=[
+                        OffcutResult(
+                            x_mm=offcut.x,
+                            y_mm=offcut.y,
+                            length_mm=offcut.width,
+                            width_mm=offcut.height,
+                            usable=offcut.usable,
+                        )
+                        for offcut in sheet_result.offcuts
+                    ],
                     placements=placements,
                 )
             )
@@ -347,8 +368,8 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
         )
 
 
-def _rotation_locked(material: PanelSpec, part: PartInput) -> bool:
-    return material.grain_direction and part.follow_grain
+def _rotation_locked(_material: PanelSpec, part: PartInput) -> bool:
+    return part.follow_grain
 
 
 def _build_result(
