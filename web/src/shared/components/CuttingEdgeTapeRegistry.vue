@@ -14,7 +14,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2" aria-label="Krom tasmalari">
+  <div class="flex flex-wrap items-center gap-2" aria-label="Kromkalar">
     <button
       v-for="entry in entries"
       :key="entry.key"
@@ -36,7 +36,7 @@ const emit = defineEmits<{
       @click="emit('add')"
     >
       <Icon name="plus" class="size-3.5" />
-      Tasma
+      Kromka
     </button>
   </div>
 </template>

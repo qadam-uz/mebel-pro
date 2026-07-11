@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-10
+updated: 2026-07-11
 order: 80
 ---
 
@@ -129,17 +129,17 @@ eager creation.
   cut topology.
 - **Guillotine cuts only.** A cut runs edge-to-edge; the algorithm recursively splits the
   panel into smaller rectangles. Non-guillotine, L-shaped, and CNC paths are out of scope.
-- **Grain lock = material grain × part instruction.** Each catalog `panel` material declares
-  whether it has a visible grain direction. Each part also carries `follow_grain` (default
-  `true`). Rotation is locked only when `material.grain_direction && part.follow_grain`.
-  Otherwise the algorithm may rotate the part 90°. If a locked part can't fit in its forced
-  orientation, the run fails with `impossible_grain`.
+- **Tekstura lock = part instruction.** Each part carries `follow_grain` (default `true`).
+  When it is true the part is rotation-locked; when false the algorithm may rotate the part
+  90°. If a locked part can't fit in its forced orientation, the run fails with
+  `impossible_grain`. The catalog `panel.grain_direction` flag remains metadata for
+  materials, but it no longer gates this per-part instruction.
 
 | Material `grain_direction` | Part `follow_grain` | Rotation                |
 | -------------------------- | ------------------- | ----------------------- |
 | `true`                     | `true`              | locked; no 90° rotation |
 | `true`                     | `false`             | free rotation           |
-| `false`                    | `true`              | free rotation           |
+| `false`                    | `true`              | locked; no 90° rotation |
 | `false`                    | `false`             | free rotation           |
 
 - **One catalog material → one standard panel size.** The same spec in another size is a
@@ -358,7 +358,7 @@ The parts table:
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Panel**    | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
-| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part should follow texture direction; unpressed means rotation is allowed. The setting locks rotation only when the selected panel material is grained; on non-grained panels it is visible but has no optimisation effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the selected panel's catalog `grain_direction` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -515,8 +515,8 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
   editor flags the row; the optimiser refuses to run.
 - **`part_too_large` / `part_too_small`** — outside the bounds for the chosen panel
   material → the wizard names the offending part and the max size.
-- **`impossible_grain`** — a locked part (`material.grain_direction && part.follow_grain`)
-  can't fit in its forced orientation → the row is flagged.
+- **`impossible_grain`** — a locked part (`follow_grain=true`) can't fit in its forced
+  orientation → the row is flagged.
 - **`too_many_parts` / `too_many_panels_needed`** — over the caps → reject; split the job.
 - **`optimization_timeout`** — no result within 5 s → retry or simplify.
 - **`draft_limit_exceeded`** — > 50 open drafts → delete some first.

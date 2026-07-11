@@ -165,8 +165,8 @@ export const EDGE_TRIM_MM = 10
 
 /**
  * Pure check of whether a part fits its chosen panel, mirroring the backend
- * validation (panel usable area = panel − 2×edge-trim; rotation is locked only
- * when the panel has grain and this part follows it). Returns the matching
+ * validation (panel usable area = panel − 2×edge-trim; rotation is locked when
+ * this part follows texture). Returns the matching
  * backend error code, or null when the part fits (or the panel size is unknown).
  */
 export function partFitError(
@@ -187,7 +187,7 @@ export function partFitError(
   const usableWidth = panel.panel_width_mm - 2 * trimMm
   const fitsNormal = length <= usableLength && width <= usableWidth
   const fitsRotated = width <= usableLength && length <= usableWidth
-  const locked = Boolean(panel.grain_direction && followGrain)
+  const locked = followGrain
   if (locked) return fitsNormal ? null : 'impossible_grain'
   return fitsNormal || fitsRotated ? null : 'part_too_large'
 }

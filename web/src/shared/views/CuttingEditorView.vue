@@ -109,6 +109,7 @@ const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
 const edgePickerPart = ref<CuttingPart | null>(null)
+const edgePickerInitialSide = ref<EdgeField | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
 // The draft whose parts are currently mirrored into `parts.value`. We only
 // re-hydrate from a server snapshot when this changes — saves/optimizes return
@@ -554,8 +555,11 @@ const allSelected = computed(
   () => parts.value.length > 0 && selectedParts.value.length === parts.value.length,
 )
 const bulkEdgeMode = ref(false)
-const bulkMaterialOpen = ref(false)
-const bulkMaterialId = ref<string | null>(null)
+type MaterialPickerTarget =
+  | { type: 'part'; partRef: string }
+  | { type: 'group'; key: string }
+  | { type: 'bulk' }
+const materialPickerTarget = ref<MaterialPickerTarget | null>(null)
 
 function toggleSelect(partRef: string) {
   const next = new Set(selectedRefs.value)
@@ -585,18 +589,93 @@ function openBulkEdge() {
   // write the applied result to every selected part on apply (bulkEdgeMode).
   bulkEdgeMode.value = true
   edgePickerPart.value = { ...selectedParts.value[0], part_ref: '__bulk__' }
+  edgePickerInitialSide.value = null
   edgeReturnFocus = null
 }
 function openBulkMaterial() {
   if (selectedParts.value.length === 0) return
-  bulkMaterialId.value = selectedParts.value[0]?.material_id || null
-  bulkMaterialOpen.value = true
+  materialPickerTarget.value = { type: 'bulk' }
 }
-function applyBulkMaterial() {
-  if (bulkMaterialId.value) {
-    for (const part of selectedParts.value) part.material_id = bulkMaterialId.value
+
+function openGroupMaterial(group: { key: string }) {
+  materialPickerTarget.value = { type: 'group', key: group.key }
+}
+
+function openPartMaterial(part: CuttingPart) {
+  materialPickerTarget.value = { type: 'part', partRef: part.part_ref }
+}
+
+function closeMaterialPicker() {
+  materialPickerTarget.value = null
+}
+
+const materialPickerMaterials = computed(() => {
+  const seen = new Set<string>()
+  return panelChoices.value
+    .map((choice) => cutting.panelOptions.find((material) => material.id === choice.value))
+    .filter((material): material is ClientCatalogMaterialOption => {
+      if (!material || seen.has(material.id)) return false
+      seen.add(material.id)
+      return true
+    })
+})
+
+const materialPickerCurrentId = computed(() => {
+  const target = materialPickerTarget.value
+  if (!target) return null
+  if (target.type === 'part') {
+    return parts.value.find((part) => part.part_ref === target.partRef)?.material_id ?? null
   }
-  bulkMaterialOpen.value = false
+  if (target.type === 'group') {
+    const group = groupedParts.value.find((item) => item.key === target.key)
+    return group?.materialId ?? null
+  }
+  return selectedParts.value[0]?.material_id ?? null
+})
+
+const materialPickerSubtitle = computed(() => {
+  const target = materialPickerTarget.value
+  if (!target) return ''
+  if (target.type === 'part') {
+    const index = parts.value.findIndex((part) => part.part_ref === target.partRef)
+    const part = parts.value[index]
+    return part ? `«${partDisplayName(part, index)}» detali uchun` : 'Detal uchun'
+  }
+  if (target.type === 'group') {
+    const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
+    return `Ushbu guruhdagi ${count} detal uchun`
+  }
+  return `Tanlangan ${selectedParts.value.length} ta detal uchun`
+})
+
+function applyMaterialPicker(materialId: string) {
+  const target = materialPickerTarget.value
+  if (!target) return
+  if (target.type === 'part') {
+    const part = parts.value.find((item) => item.part_ref === target.partRef)
+    if (part) part.material_id = materialId
+  } else if (target.type === 'group') {
+    const group = groupedParts.value.find((item) => item.key === target.key)
+    if (!group) return
+    for (const { part } of group.parts) {
+      part.material_id = materialId
+    }
+  } else {
+    for (const part of selectedParts.value) {
+      part.material_id = materialId
+    }
+  }
+  closeMaterialPicker()
+}
+
+function materialPickerGrainLabel(material: ClientCatalogMaterialOption) {
+  return material.grain_direction ? 'Teksturali material' : 'Teksturasiz material'
+}
+
+function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
+  return {
+    background: colorForMaterial(material.color ?? material.name ?? material.id),
+  }
 }
 
 function openRegistryReplace(entry: EdgeRegistryEntry) {
@@ -643,13 +722,9 @@ function applyRegistryPicker() {
     if (!manualRegistryEdgeIds.value.includes(materialId)) {
       manualRegistryEdgeIds.value = [...manualRegistryEdgeIds.value, materialId]
     }
-    toast.success("Tasma tanlandi. Uni qator kromida qo'llang.")
+    toast.success("Kromka tanlandi. Uni qator kromida qo'llang.")
   }
   closeRegistryPicker()
-}
-
-function setPanel(part: CuttingPart, value: string | null) {
-  part.material_id = value ?? ''
 }
 
 function setFollowGrain(part: CuttingPart, value: boolean) {
@@ -667,15 +742,17 @@ function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
   preferredEdgeByPart.value = next
 }
 
-function openEdgePicker(part: CuttingPart, event?: Event) {
+function openEdgePicker(part: CuttingPart, event?: Event, side?: EdgeField) {
   // The modal seeds its own working selection from `part`; the editor only records
   // which part is open and the element to restore focus to on close.
   edgePickerPart.value = part
+  edgePickerInitialSide.value = side ?? null
   edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
 }
 
 function closeEdgePicker() {
   edgePickerPart.value = null
+  edgePickerInitialSide.value = null
   bulkEdgeMode.value = false
   edgeReturnFocus?.focus()
   edgeReturnFocus = null
@@ -923,9 +1000,12 @@ watch(
       importedLayoutWarningAccepted.value = false
     }
     activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
-    const optimizedResult = value.results.find((result) => result.id === activeResultId.value)
-    lastOptimizedSignature.value = optimizedResult
-      ? partsSignature(optimizedResult.parts_snapshot)
+    // Only an OPTIMIZER-sourced result counts as "already optimized for these
+    // parts" — an imported_map result (the map-import flow's kept layout) must
+    // never block running our optimizer for the first time on the same parts.
+    const optimizerResult = value.results.find((result) => result.source === 'optimizer')
+    lastOptimizedSignature.value = optimizerResult
+      ? partsSignature(optimizerResult.parts_snapshot)
       : null
     activePanelId.value =
       value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
@@ -1166,7 +1246,7 @@ onBeforeRouteLeave(() => {
         <section class="client-card">
           <div class="client-card-h">
             <div>
-              <h2>Qismlar ro'yxati</h2>
+              <h2>Detallar</h2>
               <p class="mt-1 text-sm text-ink-muted">
                 {{ totalQuantity }} detal · {{ materialCount }} material · ~{{
                   totalAreaM2.toFixed(1)
@@ -1287,7 +1367,7 @@ onBeforeRouteLeave(() => {
                  real select-all checkbox; the rest are decorative labels. -->
             <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
               <div
-                class="grid grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
                 <input
                   type="checkbox"
@@ -1303,9 +1383,7 @@ onBeforeRouteLeave(() => {
                 <span aria-hidden="true">Eni</span>
                 <span aria-hidden="true">Soni</span>
                 <span aria-hidden="true">Tekstura</span>
-                <span aria-hidden="true">Krom</span>
-                <span aria-hidden="true">Nusxa</span>
-                <span aria-hidden="true">⋯</span>
+                <span aria-hidden="true">Krom · Д1 Д2 Ш1 Ш2</span>
               </div>
             </div>
             <section
@@ -1313,45 +1391,55 @@ onBeforeRouteLeave(() => {
               :key="group.key"
               class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
             >
-              <button
-                type="button"
-                class="flex w-full flex-wrap items-center justify-between gap-3 px-3 py-2 text-left"
-                @click="toggleGroup(group.key)"
-              >
-                <span class="flex min-w-0 items-center gap-2">
-                  <span
-                    class="size-3 shrink-0 rounded-full"
-                    :style="{
-                      background: group.materialId
-                        ? colorForMaterial(group.label)
-                        : 'var(--color-ink-muted)',
-                    }"
-                    aria-hidden="true"
-                  ></span>
-                  <span class="min-w-0 truncate text-sm font-extrabold text-ink">
-                    {{ group.label }}
+              <div class="flex flex-wrap items-center gap-2 px-3 py-2">
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
+                  @click="toggleGroup(group.key)"
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="size-3 shrink-0 rounded-full"
+                      :style="{
+                        background: group.materialId
+                          ? colorForMaterial(group.label)
+                          : 'var(--color-ink-muted)',
+                      }"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="min-w-0 truncate text-sm font-extrabold text-ink">
+                      {{ group.label }}
+                    </span>
                   </span>
-                </span>
-                <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
-                  <span>{{ group.quantity }} detal · {{ group.areaM2.toFixed(1) }} m²</span>
-                  <span
-                    v-if="groupErrorCount(group.key) > 0"
-                    class="rounded-md bg-danger-soft px-2 py-1 text-danger"
-                  >
-                    {{ groupErrorCount(group.key) }} xato
+                  <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
+                    <span>{{ group.quantity }} detal · {{ group.areaM2.toFixed(1) }} m²</span>
+                    <span
+                      v-if="groupErrorCount(group.key) > 0"
+                      class="rounded-md bg-danger-soft px-2 py-1 text-danger"
+                    >
+                      {{ groupErrorCount(group.key) }} xato
+                    </span>
+                    <span aria-hidden="true">{{
+                      collapsedGroupKeys.has(group.key) ? '+' : '−'
+                    }}</span>
                   </span>
-                  <span aria-hidden="true">{{
-                    collapsedGroupKeys.has(group.key) ? '+' : '−'
-                  }}</span>
-                </span>
-              </button>
+                </button>
+                <button
+                  v-if="!isReadOnly"
+                  type="button"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline bg-elevated px-3 text-xs font-bold text-ink-muted transition hover:border-accent-tint hover:text-accent"
+                  @click="openGroupMaterial(group)"
+                >
+                  <Icon name="swap" class="size-3.5" />
+                  Materialni almashtirish
+                </button>
+              </div>
               <div v-if="!collapsedGroupKeys.has(group.key)" class="grid gap-2 p-2 pt-0">
                 <CuttingPartRow
                   v-for="{ part, index } in group.parts"
                   :key="part.part_ref"
                   :part="part"
                   :index="index"
-                  :panel-choices="panelChoices"
                   :has-error="rowHasError(part, index)"
                   :size-error="partSizeError(part)"
                   :material-missing="rowMaterialMissing(part)"
@@ -1365,12 +1453,12 @@ onBeforeRouteLeave(() => {
                   @update:length="part.length_mm = $event"
                   @update:width="part.width_mm = $event"
                   @update:quantity="part.quantity = $event"
-                  @update:material="setPanel(part, $event)"
                   @update:follow-grain="setFollowGrain(part, $event)"
                   @duplicate="duplicateRow(index)"
                   @cell-enter="onCellEnter(index, $event)"
                   @delete="deleteRow(index)"
-                  @open-edge-picker="openEdgePicker(part, $event)"
+                  @open-edge-picker="(event, side) => openEdgePicker(part, event, side)"
+                  @open-material-picker="openPartMaterial(part)"
                 />
               </div>
             </section>
@@ -1445,6 +1533,8 @@ onBeforeRouteLeave(() => {
         :draft="draft"
         :optimize-error="optimizeError"
         :checkout-path="adapter.paths.checkout(draft.id)"
+        :branch-id="activeBranchId"
+        :quote-for-draft="adapter.quoteForDraft"
         v-model:active-result-id="activeResultId"
         v-model:active-panel-id="activePanelId"
       />
@@ -1511,6 +1601,7 @@ onBeforeRouteLeave(() => {
 
     <CuttingEdgePickerModal
       :part="edgePickerPart"
+      :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
       :title-suffix="bulkEdgeMode ? `${selectedParts.length} qismga` : undefined"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
@@ -1525,7 +1616,7 @@ onBeforeRouteLeave(() => {
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Tasma tanlash"
+      aria-label="Kromka tanlash"
       @keydown.esc="closeRegistryPicker"
     >
       <div
@@ -1538,7 +1629,7 @@ onBeforeRouteLeave(() => {
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
             <h3 class="font-serif text-lg font-semibold text-ink">
-              {{ registryPickerMode === 'replace' ? 'Tasma almashtirish' : "Tasma qo'shish" }}
+              {{ registryPickerMode === 'replace' ? 'Kromka almashtirish' : "Kromka qo'shish" }}
             </h3>
             <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
               {{ edgeRegistryLabel(registryReplaceEntry.materialId) }} ishlatilgan tomonlar
@@ -1556,9 +1647,9 @@ onBeforeRouteLeave(() => {
         </div>
         <SearchCombobox
           :model-value="registryPickedEdgeId"
-          label="Tasma"
+          label="Kromka"
           :options="allEdgeChoices"
-          placeholder="Tasma tanlang"
+          placeholder="Kromka tanlang"
           @update:model-value="registryPickedEdgeId = $event"
         />
         <div class="mt-4 flex flex-wrap justify-end gap-2">
@@ -1577,61 +1668,76 @@ onBeforeRouteLeave(() => {
       </div>
     </div>
 
-    <!-- Bulk material picker. A custom card (NOT .client-edge-modal, which has
-         overflow:hidden) so the SearchCombobox dropdown isn't clipped. -->
     <div
-      v-if="bulkMaterialOpen"
+      v-if="materialPickerTarget"
       class="fixed inset-0 z-[70] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Material almashtirish"
-      @keydown.esc="bulkMaterialOpen = false"
+      aria-label="Materialni almashtirish"
+      @keydown.esc="closeMaterialPicker"
     >
       <div
         class="absolute inset-0 bg-[rgb(15_27_45_/_45%)] backdrop-blur-[2px]"
-        @click="bulkMaterialOpen = false"
+        @click="closeMaterialPicker"
       ></div>
       <div
-        class="relative z-10 w-[min(420px,100%)] rounded-2xl border border-hairline bg-elevated p-5 shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
+        class="relative z-10 w-[min(460px,100%)] overflow-hidden rounded-2xl border border-hairline bg-elevated shadow-[0_28px_60px_-14px_rgb(15_27_45_/_30%)]"
       >
-        <div class="mb-3 flex items-start justify-between gap-3">
-          <h3 class="font-serif text-lg font-semibold text-ink">
-            Material almashtirish — {{ selectedParts.length }} qismga
-          </h3>
+        <div class="flex items-start justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div>
+            <h3 class="text-base font-extrabold text-ink">Materialni almashtirish</h3>
+            <p class="mt-1 text-sm text-ink-muted">{{ materialPickerSubtitle }}</p>
+          </div>
           <button
             type="button"
             class="client-edge-close"
             aria-label="Yopish"
-            @click="bulkMaterialOpen = false"
+            @click="closeMaterialPicker"
           >
             ×
           </button>
         </div>
-        <SearchCombobox
-          :model-value="bulkMaterialId"
-          label="Panel materiali"
-          :options="panelChoices"
-          placeholder="Panel tanlang"
-          @update:model-value="bulkMaterialId = $event"
-        />
-        <p class="mt-2 text-sm text-ink-muted">
-          Tanlangan material {{ selectedParts.length }} ta qatorga qo'llanadi.
-        </p>
-        <div class="mt-4 flex flex-wrap justify-end gap-2">
+        <div class="grid max-h-[52vh] gap-2 overflow-auto p-3">
           <button
+            v-for="material in materialPickerMaterials"
+            :key="material.id"
             type="button"
-            class="mp-button mp-button-outline"
-            @click="bulkMaterialOpen = false"
+            class="grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition hover:border-accent-tint hover:bg-accent-soft/20"
+            :class="
+              material.id === materialPickerCurrentId
+                ? 'border-accent bg-accent-soft/30'
+                : 'border-hairline'
+            "
+            @click="applyMaterialPicker(material.id)"
           >
-            Bekor qilish
+            <span
+              class="size-[18px] rounded-[5px] shadow-[inset_0_0_0_1px_rgb(15_27_45_/_12%)]"
+              :style="materialPickerSwatchStyle(material)"
+              aria-hidden="true"
+            ></span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-bold text-ink">
+                {{ materialLabel(material) }}
+              </span>
+              <span class="mt-0.5 block text-xs font-semibold text-ink-muted">
+                {{ materialPickerGrainLabel(material) }}
+              </span>
+            </span>
+            <span
+              v-if="material.id === materialPickerCurrentId"
+              class="grid size-6 place-items-center rounded-full bg-accent-soft text-accent"
+              aria-label="Tanlangan"
+            >
+              <Icon name="check" class="size-3.5" />
+            </span>
           </button>
-          <button
-            type="button"
-            class="mp-button mp-button-primary"
-            :disabled="!bulkMaterialId"
-            @click="applyBulkMaterial"
-          >
-            Qo'llash
+          <p v-if="materialPickerMaterials.length === 0" class="p-4 text-sm text-ink-muted">
+            Bu filialda panel materiali topilmadi.
+          </p>
+        </div>
+        <div class="flex justify-end border-t border-hairline px-5 py-3">
+          <button type="button" class="mp-button mp-button-outline" @click="closeMaterialPicker">
+            Bekor qilish
           </button>
         </div>
       </div>

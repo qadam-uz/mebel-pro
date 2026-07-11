@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
+import type { EdgeRegistryEntry } from '@/shared/app/cuttingEditorDerived'
 
 function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
   return {
@@ -47,19 +48,18 @@ function seedPanel(grain_direction: boolean) {
   ]
 }
 
-function mountRow(rowPart: CuttingPart) {
+function mountRow(rowPart: CuttingPart, edgeRegistry: EdgeRegistryEntry[] = []) {
   return mount(CuttingPartRow, {
     props: {
       part: rowPart,
       index: 0,
-      panelChoices: [],
       hasError: false,
       sizeError: null,
       materialMissing: false,
       optimizeError: null,
       notCarried: [],
       preferredBranchName: 'Yunusobod',
-      edgeRegistry: [],
+      edgeRegistry,
       selected: false,
     },
     global: {
@@ -78,29 +78,59 @@ describe('CuttingPartRow grain toggle', () => {
     setActivePinia(createPinia())
   })
 
-  it('hides the follow-grain toggle for non-grained material', () => {
+  it('keeps the texture checkbox visible for non-grained material', () => {
     seedPanel(false)
 
     const wrapper = mountRow(part())
 
-    expect(wrapper.find('[data-test="follow-grain-desktop"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="follow-grain-desktop"][type="checkbox"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="follow-grain-desktop"]').text()).toBe('')
   })
 
-  it('emits false when active desktop follow-grain toggle is clicked', async () => {
+  it('emits false when active desktop texture checkbox is unchecked', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: true }))
 
-    await wrapper.get('[data-test="follow-grain-desktop"][aria-pressed="true"]').trigger('click')
+    await wrapper.get('[data-test="follow-grain-desktop"][type="checkbox"]').setValue(false)
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[false]])
   })
 
-  it('emits true when inactive desktop follow-grain toggle is clicked', async () => {
+  it('emits true when inactive desktop texture checkbox is checked', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: false }))
 
-    await wrapper.get('[data-test="follow-grain-desktop"][aria-pressed="false"]').trigger('click')
+    await wrapper.get('[data-test="follow-grain-desktop"][type="checkbox"]').setValue(true)
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[true]])
+  })
+
+  it('renders edge cells and opens the shared edge dialog from any cell', async () => {
+    seedPanel(true)
+    const wrapper = mountRow(part({ edge_left: { material_id: 'edge-1', source: 'shop' } }), [
+      {
+        key: 'edge-1:shop',
+        materialId: 'edge-1',
+        source: 'shop',
+        number: 1,
+        colorClass: 'bg-info-soft text-info',
+      },
+    ])
+
+    expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(4)
+
+    await wrapper.findAll('[data-cell="edge"]')[2].trigger('click')
+
+    expect(wrapper.emitted('open-edge-picker')).toHaveLength(1)
+    expect(wrapper.emitted('open-edge-picker')?.[0]?.[1]).toBe('edge_left')
+  })
+
+  it('opens the shared material picker from the material action', async () => {
+    seedPanel(true)
+    const wrapper = mountRow(part())
+
+    await wrapper.get('[title="Materialni almashtirish"]').trigger('click')
+
+    expect(wrapper.emitted('open-material-picker')).toHaveLength(1)
   })
 })

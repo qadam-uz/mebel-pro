@@ -2,21 +2,13 @@
 import { computed } from 'vue'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
-import {
-  colorForMaterial,
-  edgeShortLabel,
-  edgeFields,
-  sideLabels,
-  type EdgeField,
-} from '@/shared/app/cuttingDisplay'
+import { edgeShortLabel, type EdgeField } from '@/shared/app/cuttingDisplay'
 import {
   partDisplayName,
   registryEntryForBand,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import Icon from '@/shared/components/AppIcon.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: one parts-table row. Purely presentational — the editor stays the
@@ -28,7 +20,6 @@ import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 const props = defineProps<{
   part: CuttingPart
   index: number
-  panelChoices: ChoiceOption[]
   hasError: boolean
   sizeError: string | null
   materialMissing: boolean
@@ -43,12 +34,12 @@ const emit = defineEmits<{
   'update:length': [number]
   'update:width': [number]
   'update:quantity': [number]
-  'update:material': [string | null]
   'update:follow-grain': [boolean]
   delete: []
   duplicate: []
   'cell-enter': [cell: 'name' | 'length' | 'width' | 'quantity' | 'edge']
-  'open-edge-picker': [Event | undefined]
+  'open-edge-picker': [Event | undefined, side?: EdgeField]
+  'open-material-picker': []
   'toggle-select': []
 }>()
 
@@ -60,9 +51,6 @@ const edgeSideCells: Array<{ field: EdgeField; label: string }> = [
   { field: 'edge_right', label: "O'" },
 ]
 
-function materialById(id: string | null | undefined) {
-  return cutting.panelOptions.find((material) => material.id === id) ?? null
-}
 function edgeById(id: string | null | undefined) {
   return cutting.edgeOptions.find((material) => material.id === id) ?? null
 }
@@ -89,48 +77,30 @@ const nameModel = computed({
   },
 })
 
-const grain = computed(() => materialById(props.part.material_id)?.grain_direction ?? false)
 const followsGrain = computed(() => props.part.follow_grain !== false)
 const grainTitle = computed(() =>
-  !grain.value
-    ? "Tekstura yo'nalishi bu materialda yo'q — sozlama saqlanadi, lekin natijaga ta'sir qilmaydi"
-    : followsGrain.value
-      ? "Tekstura yo'nalishi bo'yicha — burilmaydi"
-      : 'Tekstura hisobga olinmaydi — burilishi mumkin',
+  followsGrain.value
+    ? "Tekstura yo'nalishi bo'yicha — burilmaydi"
+    : 'Tekstura hisobga olinmaydi — burilishi mumkin',
 )
-const grainToggleClass = computed(() =>
-  !grain.value
-    ? 'border border-hairline-strong bg-elevated text-ink-muted'
-    : followsGrain.value
-      ? 'bg-info-soft text-info'
-      : 'border border-hairline-strong bg-sunk text-ink-muted opacity-80',
-)
-const grainLabelClass = computed(() =>
-  followsGrain.value ? (grain.value ? '' : 'opacity-70') : 'line-through opacity-70',
-)
-
-const swatchStyle = computed(() => {
-  const material = materialById(props.part.material_id)
-  return {
-    background: colorForMaterial(material?.color ?? material?.name ?? props.part.material_id),
-  }
-})
 
 const notCarriedNonPanel = computed(() => props.notCarried.some((issue) => issue !== 'panel'))
-
-function edgeCellTitle() {
-  const part = props.part
-  const lines = edgeFields.map((side) => {
-    const edge = part[side]
-    const material = edgeById(edge?.material_id)
-    return `${sideLabels[side]}: ${edge ? edgeShortLabel(material, true) : '-'}`
-  })
-  return `Krom yopishtirish - tahrirlash uchun bosing\n${lines.join(' · ')}`
-}
 
 function edgeRegistryEntry(side: EdgeField) {
   const band = props.part[side]
   return registryEntryForBand(props.edgeRegistry, band?.material_id, band?.source)
+}
+
+function edgeCellTitle(side: EdgeField, label: string) {
+  const band = props.part[side]
+  const material = edgeById(band?.material_id)
+  return band ? `${label}: ${edgeShortLabel(material, true)}` : `${label}: kromsiz`
+}
+
+function updateFollowGrain(event: Event) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement)) return
+  emit('update:follow-grain', input.checked)
 }
 </script>
 
@@ -147,7 +117,7 @@ function edgeRegistryEntry(side: EdgeField) {
     "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px] lg:items-start lg:gap-2"
+      class="grid gap-3 lg:grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_38px_140px_38px_38px_38px] lg:items-start lg:gap-2"
     >
       <div class="hidden lg:flex lg:justify-center">
         <input
@@ -174,38 +144,16 @@ function edgeRegistryEntry(side: EdgeField) {
           />
         </label>
         <div class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
-          <button
-            v-if="grain"
-            type="button"
+          <input
             data-test="follow-grain-mobile"
-            class="mp-chip"
-            :class="grainToggleClass"
+            type="checkbox"
+            class="size-4"
+            :checked="followsGrain"
             :title="grainTitle"
             :aria-label="grainTitle"
-            :aria-pressed="followsGrain"
-            @click="emit('update:follow-grain', !followsGrain)"
-          >
-            <span aria-hidden="true">↕</span>
-            <span :class="grainLabelClass">Tekstura</span>
-          </button>
+            @change="updateFollowGrain"
+          />
         </div>
-      </div>
-
-      <div class="hidden lg:flex lg:justify-center">
-        <button
-          v-if="grain"
-          type="button"
-          data-test="follow-grain-desktop"
-          class="inline-flex h-9 w-full items-center justify-center gap-1 rounded-md px-2 text-xs font-bold"
-          :class="grainToggleClass"
-          :title="grainTitle"
-          :aria-label="grainTitle"
-          :aria-pressed="followsGrain"
-          @click="emit('update:follow-grain', !followsGrain)"
-        >
-          <span aria-hidden="true">↕</span>
-          <span :class="grainLabelClass">Tekstura</span>
-        </button>
       </div>
 
       <!-- Sub-lg: the three dimensions share one row; lg:contents
@@ -264,6 +212,18 @@ function edgeRegistryEntry(side: EdgeField) {
         </label>
       </div>
 
+      <div class="hidden lg:flex lg:justify-center">
+        <input
+          data-test="follow-grain-desktop"
+          type="checkbox"
+          class="mt-2 size-4"
+          :checked="followsGrain"
+          :title="grainTitle"
+          :aria-label="grainTitle"
+          @change="updateFollowGrain"
+        />
+      </div>
+
       <div class="min-w-0">
         <span class="mb-1 block text-sm font-bold text-ink lg:hidden">Krom</span>
         <div class="grid grid-cols-4 gap-1">
@@ -273,10 +233,10 @@ function edgeRegistryEntry(side: EdgeField) {
             type="button"
             :data-part-index="index"
             data-cell="edge"
-            class="grid h-9 place-items-center rounded-md border border-hairline-strong bg-elevated text-xs font-black hover:border-accent"
-            :title="edgeCellTitle()"
+            class="grid h-9 place-items-center rounded-md border border-hairline-strong bg-elevated text-xs font-black transition hover:border-accent"
+            :title="edgeCellTitle(cell.field, cell.label)"
             :aria-label="`${cell.label} kromini tahrirlash`"
-            @click="emit('open-edge-picker', $event)"
+            @click="emit('open-edge-picker', $event, cell.field)"
             @keydown.enter.prevent="emit('cell-enter', 'edge')"
           >
             <span
@@ -300,37 +260,25 @@ function edgeRegistryEntry(side: EdgeField) {
         ⧉
       </button>
 
-      <details class="relative justify-self-end">
-        <summary
-          class="mp-action-icon-button list-none"
-          :aria-label="`Qism #${index + 1} amallari`"
-        >
-          ⋯
-        </summary>
-        <div
-          class="absolute right-0 z-30 mt-1 grid w-72 gap-3 rounded-md border border-hairline-strong bg-elevated p-3 shadow-[0_18px_40px_-24px_rgb(15_27_45_/_55%)]"
-        >
-          <SearchCombobox
-            label="Materialni almashtirish"
-            compact
-            clearable
-            :swatch-color="part.material_id ? swatchStyle.background : null"
-            :model-value="part.material_id"
-            :options="panelChoices"
-            placeholder="Panel tanlang"
-            :error="!part.material_id ? 'Material tanlang' : null"
-            @update:model-value="emit('update:material', $event)"
-          />
-          <button
-            type="button"
-            class="mp-button mp-button-outline justify-start text-danger"
-            :aria-label="`Qism #${index + 1} ni o'chirish`"
-            @click="emit('delete')"
-          >
-            <Icon name="trash" class="size-[18px]" /> O'chirish
-          </button>
-        </div>
-      </details>
+      <button
+        type="button"
+        class="mp-action-icon-button justify-self-end"
+        :aria-label="`Qism #${index + 1} materialini almashtirish`"
+        title="Materialni almashtirish"
+        @click="emit('open-material-picker')"
+      >
+        <Icon name="swap" class="size-[18px]" />
+      </button>
+
+      <button
+        type="button"
+        class="mp-action-icon-button justify-self-end text-danger"
+        :aria-label="`Qism #${index + 1} ni o'chirish`"
+        title="O'chirish"
+        @click="emit('delete')"
+      >
+        <Icon name="trash" class="size-[18px]" />
+      </button>
     </div>
 
     <p

@@ -82,9 +82,20 @@ def test_cutting_engine_places_every_instance_without_overlap() -> None:
             _assert_no_overlap(panel_result.placements)
 
 
-def test_non_grained_material_allows_rotation_when_it_is_the_only_fit() -> None:
+def test_follow_grain_rejects_rotation_even_on_non_grained_material() -> None:
     panel = _panel(length=300, width=200, grain=False)
     part = _part(material_id=panel.material_id, length=170, width=260)
+
+    with pytest.raises(OptimizerError) as exc:
+        run_all_algorithms([part], {panel.material_id: panel})
+
+    assert exc.value.code == "impossible_grain"
+    assert exc.value.part_ref == "part-1"
+
+
+def test_rotation_allowed_when_part_does_not_follow_grain() -> None:
+    panel = _panel(length=300, width=200, grain=False)
+    part = _part(material_id=panel.material_id, length=170, width=260, follow_grain=False)
 
     results = run_all_algorithms([part], {panel.material_id: panel})
 
@@ -111,11 +122,11 @@ def test_grained_material_rejects_rotation_locked_impossible_part() -> None:
     [
         (True, True, False, GrainDirection.VERTICAL),
         (True, False, True, GrainDirection.NONE),
-        (False, True, True, GrainDirection.NONE),
+        (False, True, False, GrainDirection.VERTICAL),
         (False, False, True, GrainDirection.NONE),
     ],
 )
-def test_engine_part_rotation_lock_follows_material_and_part_grain_matrix(
+def test_engine_part_rotation_lock_follows_part_grain_matrix(
     material_grain: bool,
     follow_grain: bool,
     expected_can_rotate: bool,

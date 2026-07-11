@@ -914,7 +914,7 @@ async def _validate_parts(
         usable_width = panel.panel_width_mm - 2 * EDGE_TRIM_MM
         fits_normal = part.length_mm <= usable_length and part.width_mm <= usable_width
         fits_rotated = part.width_mm <= usable_length and part.length_mm <= usable_width
-        locked = bool(panel.grain_direction) and part.follow_grain
+        locked = part.follow_grain
         if locked and not fits_normal:
             errors.append(_row_error(part, row_index, "impossible_grain", panel.id))
         elif not locked and not (fits_normal or fits_rotated):

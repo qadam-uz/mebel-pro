@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { formatPercent } from '@/shared/app/clientUi'
+import { apiErrorCode } from '@/shared/api/client'
+import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { formatTiyinParts } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
@@ -17,6 +19,7 @@ import {
   type CuttingPlacement,
   type CuttingResult,
 } from '@/shared/stores/cutting'
+import type { OrderQuote } from '@/shared/stores/orders'
 
 // CB-93 seam: the optimizer-results surface — KPI tiles, algorithm comparison,
 // the per-material panel strip + SVG visualiser, the krom/placement aside, and
@@ -32,6 +35,12 @@ const props = defineProps<{
   // Role-specific "place order" target (client vs workshop checkout), injected
   // by the editor from its adapter so this presentational component stays dumb.
   checkoutPath: string
+  // The active branch pre-filter (null until one is picked) — drives the price
+  // quote below; not the same as `draft.preferred_branch_id` while unsaved.
+  branchId: string | null
+  // Role-scoped quote call (client vs workshop endpoint), injected by the
+  // editor from its adapter — same "stays dumb" reasoning as checkoutPath.
+  quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
 }>()
 const emit = defineEmits<{
   'update:activeResultId': [string | null]
@@ -120,6 +129,45 @@ const materialBreakdown = computed(() => {
 })
 const savingsBanner = computed<string | null>(() => null)
 
+// The price always reflects the officially CHOSEN result (what ordering right
+// now would actually cost) — not whichever tab is being viewed — because the
+// backend quote endpoint only ever prices `draft.chosen_result_id` (there is
+// no per-variant preview quote). `viewingNonChosen` below annotates the card
+// when the viewed tab differs, so the number never reads as "this variant".
+const quote = ref<OrderQuote | null>(null)
+const quoteLoading = ref(false)
+const quoteError = ref<string | null>(null)
+const priceParts = computed(() => (quote.value ? formatTiyinParts(quote.value.total_tiyin) : null))
+
+watch(
+  [
+    () => props.draft.id,
+    () => props.branchId,
+    () => props.draft.chosen_result_id,
+    () => footerResult.value?.status,
+  ],
+  async () => {
+    const branchId = props.branchId
+    const resultId = props.draft.chosen_result_id
+    if (!branchId || !resultId || footerResult.value?.status === 'invalidated') {
+      quote.value = null
+      quoteError.value = null
+      return
+    }
+    quoteLoading.value = true
+    quoteError.value = null
+    try {
+      quote.value = await props.quoteForDraft(props.draft.id, branchId)
+    } catch (errorValue) {
+      quote.value = null
+      quoteError.value = clientErrorLabel(apiErrorCode(errorValue), "Narxni hisoblab bo'lmadi")
+    } finally {
+      quoteLoading.value = false
+    }
+  },
+  { immediate: true },
+)
+
 function sumRecord(record: Record<string, number> | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
 }
@@ -190,7 +238,7 @@ async function choose(result: CuttingResult) {
   <section id="cutting-results" class="client-card mt-6 scroll-mt-28 min-[860px]:scroll-mt-20">
     <div class="client-card-h">
       <div>
-        <h2>Natija</h2>
+        <h2>Kesish natijasi</h2>
         <p class="mt-1 text-sm text-ink-muted">PDF yuklab oling yoki natijadan buyurtma bering.</p>
       </div>
       <div v-if="chosenResult" class="flex flex-wrap items-center gap-2">
@@ -271,7 +319,25 @@ async function choose(result: CuttingResult) {
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-md border border-hairline bg-elevated p-4">
               <div class="text-xs font-bold uppercase text-ink-muted">Taxminiy narx</div>
-              <div class="mt-1 text-lg font-extrabold text-ink">Filial tanlang</div>
+              <div v-if="!branchId" class="mt-1 text-lg font-extrabold text-ink">
+                Filial tanlang
+              </div>
+              <div v-else-if="quoteLoading" class="mt-1 text-lg font-extrabold text-ink-muted">
+                Hisoblanmoqda…
+              </div>
+              <div v-else-if="quoteError" class="mt-1 text-sm font-bold text-danger">
+                {{ quoteError }}
+              </div>
+              <div v-else-if="priceParts" class="mt-1 flex items-baseline gap-1">
+                <span class="font-serif text-2xl font-semibold text-ink">{{
+                  priceParts.amount
+                }}</span>
+                <span class="text-xs font-bold text-ink-muted">{{ priceParts.unit }}</span>
+              </div>
+              <div v-else class="mt-1 text-lg font-extrabold text-ink">—</div>
+              <p v-if="priceParts && viewingNonChosen" class="mt-1 text-xs text-ink-muted">
+                tanlangan variant narxi
+              </p>
             </div>
             <div class="rounded-md border border-hairline bg-elevated p-4">
               <div class="text-xs font-bold uppercase text-ink-muted">Listlar</div>
@@ -388,7 +454,8 @@ async function choose(result: CuttingResult) {
         <div class="text-sm">
           <span class="font-mono font-bold text-ink">
             {{ resultPanelCount(footerResult) }} list ·
-            {{ formatPercent(footerResult.waste_percentage) }} chiqit · Filial tanlang
+            {{ formatPercent(footerResult.waste_percentage) }} chiqit ·
+            {{ !branchId ? 'Filial tanlang' : priceParts ? priceParts.full : '—' }}
           </span>
           <span v-if="viewingNonChosen" class="ml-2 text-ink-muted">Boshqa variant tanlangan</span>
         </div>

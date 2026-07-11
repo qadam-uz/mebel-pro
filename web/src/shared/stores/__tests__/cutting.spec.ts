@@ -246,10 +246,10 @@ describe('partFitError', () => {
   it.each([
     [true, true, 'impossible_grain'],
     [true, false, null],
-    [false, true, null],
+    [false, true, 'impossible_grain'],
     [false, false, null],
   ] as const)(
-    'locks rotation only when material grain is %s and follow_grain is %s',
+    'uses follow_grain as the rotation lock for material_grain=%s and follow_grain=%s',
     (materialGrain, followGrain, expected) => {
       const panel = { ...basePanel, grain_direction: materialGrain }
 

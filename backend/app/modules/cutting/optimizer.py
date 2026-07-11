@@ -368,8 +368,8 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
         )
 
 
-def _rotation_locked(material: PanelSpec, part: PartInput) -> bool:
-    return material.grain_direction and part.follow_grain
+def _rotation_locked(_material: PanelSpec, part: PartInput) -> bool:
+    return part.follow_grain
 
 
 def _build_result(

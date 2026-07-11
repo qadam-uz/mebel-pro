@@ -1,4 +1,5 @@
 import type { CuttingEditorAdapter } from '@/shared/app/cuttingEditorAdapter'
+import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 /**
@@ -10,6 +11,7 @@ import { useWorkshopStore } from '@/shared/stores/workshop'
  */
 export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
   const workshop = useWorkshopStore()
+  const orders = useOrdersStore()
   const branchId = workshop.selectedBranchContext
   const branch = workshop.branches.find((item) => item.id === branchId)
   return {
@@ -22,5 +24,6 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
     },
     branch: branch ? { fixed: { id: branch.id, name: branch.name } } : {},
     useProfileDefaultBranch: false,
+    quoteForDraft: (draftId, quoteBranchId) => orders.quoteWorkshopBranch(draftId, quoteBranchId),
   }
 }

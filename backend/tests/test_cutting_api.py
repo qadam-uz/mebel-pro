@@ -390,6 +390,49 @@ async def test_grained_part_follow_grain_controls_rotation_validation_and_result
     assert placements[0]["rotated"] is True
 
 
+async def test_follow_grain_locks_rotation_on_non_grained_material(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    panel, _, _ = await _materials(db_session)
+    access, client_row = await _client_access(db_session, phone="+998901111021")
+
+    locked_draft = CuttingDraft(
+        client_id=client_row.id,
+        parts_snapshot=[_rotated_only_part(panel.id, follow_grain=True)],
+    )
+    db_session.add(locked_draft)
+    await db_session.flush()
+    locked = await client.post(
+        f"/api/v1/client/cutting-drafts/{locked_draft.id}/optimize",
+        headers=_auth(access),
+    )
+
+    unlocked = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    unlocked_draft_id = unlocked.json()["id"]
+    updated = await client.patch(
+        f"/api/v1/client/cutting-drafts/{unlocked_draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": [_rotated_only_part(panel.id, follow_grain=False)]},
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{unlocked_draft_id}/optimize",
+        headers=_auth(access),
+    )
+    placements = [
+        placement
+        for result_panel in optimized.json()["results"][0]["panels"]
+        for placement in result_panel["placements"]
+    ]
+
+    assert locked.status_code == 400
+    assert locked.json()["details"]["errors"][0]["code"] == "impossible_grain"
+    assert updated.status_code == 200
+    assert updated.json()["parts_snapshot"][0]["follow_grain"] is False
+    assert optimized.status_code == 200
+    assert placements[0]["rotated"] is True
+
+
 async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -574,6 +617,8 @@ async def test_cutting_draft_rejects_duplicate_part_refs(
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_cutting_parts"
     assert response.json()["details"]["errors"][0]["code"] == "duplicate_part_ref"
+
+
 async def test_client_surface_hides_staff_minted_drafts(
     client: AsyncClient,
     db_session: AsyncSession,

@@ -632,7 +632,7 @@ function previewCell(row: (string | null)[], column: number) {
             <div class="min-w-0">
               <p class="break-words text-sm font-extrabold text-ink">
                 <template v-if="isMapImport">
-                  {{ group.side_count }} tomonda krom bor · tasma faylda ko'rsatilmagan
+                  {{ group.side_count }} tomonda krom bor · kromka faylda ko'rsatilmagan
                 </template>
                 <template v-else>{{ group.label }}</template>
               </p>
