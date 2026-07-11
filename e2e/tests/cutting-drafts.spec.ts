@@ -355,11 +355,15 @@ async function loginWorkshop(page: Page, login: string, password: string) {
 }
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
-  await page.getByRole('button', { name: /Qism #1 kromini tahrirlash/ }).click()
+  // The redesigned row exposes one krom cell per side (U/P/CH/O'); any of them
+  // opens the picker modal for that part.
+  await page.getByRole('button', { name: 'U kromini tahrirlash', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /Krom yopishtirish/ })
-  await dialog.getByRole('button', { name: 'Yuqori + pastki' }).click()
+  // Pick the tape from the catalog list first, then band top+bottom with it.
+  await dialog.getByRole('button', { name: "Yana tasma qo'shish" }).click()
   await dialog.getByLabel('Krom qidirish').fill(edgeName)
   await dialog.getByRole('button', { name: new RegExp(edgeName) }).click()
+  await dialog.getByRole('button', { name: 'Yuqori + pastki' }).click()
   await dialog.getByRole('button', { name: "Qo'llash" }).click()
 }
 
@@ -411,10 +415,15 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
   await page.getByRole('button', { name: "Qism qo'shish" }).first().click()
-  await page.getByRole('combobox', { name: 'Panel materiali' }).fill(panel.name)
-  await page.getByRole('option', { name: new RegExp(panel.name) }).click()
-  await page.getByRole('combobox', { name: 'Panel materiali' }).press('Escape')
-  await page.getByLabel('Uzunlik millimetr').fill('260')
+  // The redesigned editor has no per-row material combobox: a fresh first row
+  // lands in the "Materialsiz" group and the material is a deliberate pick via
+  // the row's swap action → "Materialni almashtirish" dialog.
+  await page.getByRole('button', { name: 'Qism #1 materialini almashtirish' }).click()
+  await page
+    .getByRole('dialog', { name: 'Materialni almashtirish' })
+    .getByRole('button', { name: new RegExp(panel.name) })
+    .click()
+  await page.getByLabel("Bo'y millimetr").fill('260')
   await page.getByLabel('Eni millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
   await chooseEdgeBanding(page, edge.name)
@@ -423,14 +432,14 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // The first optimise creates + persists + optimises the draft, then routes to
   // the real draft id (no longer /new).
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
-  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
   await expect(page.getByText('cutting-engine-best')).toBeVisible()
-  // CB-87: panels are grouped under a material heading; the chip is "Panel N".
   await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
+  // The sheet strip shows one thumbnail per panel, captioned "{decor} · {index}".
+  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
   await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
   await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
-  await expect(page.getByRole('button', { name: /Shuni tanlash|Tanlangan/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 
   const download = page.waitForEvent('download')
@@ -478,28 +487,30 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
 
   await page.getByRole('button', { name: "Qism qo'shish" }).first().click()
-  await page.getByRole('combobox', { name: 'Panel materiali' }).fill(panel.name)
-  await page.getByRole('option', { name: new RegExp(panel.name) }).click()
-  await page.getByRole('combobox', { name: 'Panel materiali' }).press('Escape')
-  await page.getByLabel('Uzunlik millimetr').fill('260')
+  await page.getByRole('button', { name: 'Qism #1 materialini almashtirish' }).click()
+  await page
+    .getByRole('dialog', { name: 'Materialni almashtirish' })
+    .getByRole('button', { name: new RegExp(panel.name) })
+    .click()
+  await page.getByLabel("Bo'y millimetr").fill('260')
   await page.getByLabel('Eni millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
   await page.getByRole('button', { name: 'Optimallashtirish' }).click()
 
   // The first optimise persists the draft and hands off to its real id route.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
-  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
   const editorUrl = page.url()
 
   // Resume path #1 — reload on /cutting/:id: the part rows, the selected
   // branch, and the optimiser results must all re-hydrate from the server.
   await page.reload()
-  await expect(page.getByLabel('Uzunlik millimetr')).toHaveValue('260')
+  await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
   await expect(page.getByLabel('Eni millimetr')).toHaveValue('180')
   await expect(page.getByLabel('Soni')).toHaveValue('2')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 
   // Resume path #2 — drafts list → open: the saved draft is listed and
@@ -508,10 +519,10 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByRole('heading', { name: 'Saqlangan chizmalar' })).toBeVisible()
   await page.getByRole('button', { name: 'Ochish →' }).click()
   await expect(page).toHaveURL(editorUrl)
-  await expect(page.getByLabel('Uzunlik millimetr')).toHaveValue('260')
+  await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Natija', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Panel 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
+  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
 })
 
 test('workshop opens a confirmed order cutting plan and downloads PDF', async ({

@@ -362,11 +362,17 @@ async function chooseOption(
 }
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
-  await page.getByRole("button", { name: /Qism #1 kromini tahrirlash/ }).click();
+  // The redesigned row exposes one krom cell per side (U/P/CH/O'); any of them
+  // opens the picker modal for that part.
+  await page
+    .getByRole("button", { name: "U kromini tahrirlash", exact: true })
+    .click();
   const dialog = page.getByRole("dialog", { name: /Krom yopishtirish/ });
-  await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
+  // Pick the tape from the catalog list first, then band top+bottom with it.
+  await dialog.getByRole("button", { name: "Yana tasma qo'shish" }).click();
   await dialog.getByLabel("Krom qidirish").fill(edgeName);
   await dialog.getByRole("button", { name: new RegExp(edgeName) }).click();
+  await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
   await dialog.getByRole("button", { name: "Qo'llash" }).click();
 }
 
@@ -432,10 +438,17 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Qism qo'shish" }).first().click();
-  await page.getByRole("combobox", { name: "Panel materiali" }).fill(panel.name);
-  await page.getByRole("option", { name: new RegExp(panel.name) }).click();
-  await page.getByRole("combobox", { name: "Panel materiali" }).press("Escape");
-  await page.getByLabel("Uzunlik millimetr").fill("260");
+  // The redesigned editor has no per-row material combobox: a fresh first row
+  // lands in the "Materialsiz" group and the material is picked via the row's
+  // swap action → "Materialni almashtirish" dialog.
+  await page
+    .getByRole("button", { name: "Qism #1 materialini almashtirish" })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Materialni almashtirish" })
+    .getByRole("button", { name: new RegExp(panel.name) })
+    .click();
+  await page.getByLabel("Bo'y millimetr").fill("260");
   await page.getByLabel("Eni millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
   await chooseEdgeBanding(page, edge.name);
@@ -443,7 +456,7 @@ test("client places an order and workshop completes it through production queues
 
   // First optimise persists the draft and hands off from `/new` to the real id.
   await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
-  await expect(page.getByRole("heading", { name: "Natija", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Kesish natijasi" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
   await page.getByRole("link", { name: "Buyurtma berish" }).click();
 
@@ -514,8 +527,11 @@ test("client places an order and workshop completes it through production queues
     .getByRole("link", { name: "Kesish navbati" })
     .first()
     .click();
+  // exact: the empty-state h3 ("Kesish navbati bo'sh") can flash on mount
+  // before the queue fetch lands; the order-number assertion below retries
+  // through it.
   await expect(
-    workshopPage.getByRole("heading", { name: "Kesish navbati" }),
+    workshopPage.getByRole("heading", { name: "Kesish navbati", exact: true }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),

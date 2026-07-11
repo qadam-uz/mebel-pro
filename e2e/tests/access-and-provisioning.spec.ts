@@ -276,9 +276,17 @@ test("staff sees granted branch context after password change", async ({
   await page.getByRole("button", { name: continueButton }).click();
   await changeRequiredPassword(page, "StaffTemp123", staffReadyPassword);
 
+  // A single granted branch auto-pins the workshop context: the topbar
+  // switcher is hidden on purpose (it only appears with >1 branch to choose
+  // from), and the granted context shows as the working surface itself —
+  // the manage_orders staff can open the orders board of their branch.
+  await page.goto("/workshop/orders");
+  await expect(
+    page.getByRole("heading", { name: "Buyurtmalar" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: new RegExp(`Branch ${id}`) }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 
 test("owner manages branches from a simple system table and detail view", async ({
