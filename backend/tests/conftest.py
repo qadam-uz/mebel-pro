@@ -7,6 +7,8 @@ the same suite against Postgres.
 
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -44,3 +46,45 @@ async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@dataclass(frozen=True)
+class BoundaryHarness:
+    """HTTP client with production transaction semantics + a sessionmaker for DB inspection."""
+
+    http: AsyncClient
+    sessions: async_sessionmaker[AsyncSession]
+
+
+@pytest.fixture
+async def boundary_client(tmp_path: Path) -> AsyncIterator[BoundaryHarness]:
+    """Client whose requests cross the real commit/rollback boundary.
+
+    Unlike ``client`` (one shared session, no commit, no rollback), each request
+    gets a fresh session and the override mirrors ``app/core/db.py::get_session``
+    verbatim: commit on success, rollback on any exception. State a request
+    mutates before raising an APIError is only visible afterwards if the service
+    persisted it deliberately — exactly the production behavior (CB-133).
+    The database is file-backed so separate connections see one schema.
+    """
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'boundary.db'}", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    # Mirror SessionLocal's configuration (app/core/db.py).
+    maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+
+    async def _override() -> AsyncIterator[AsyncSession]:
+        async with maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_session] = _override
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield BoundaryHarness(http=ac, sessions=maker)
+    app.dependency_overrides.clear()
+    await engine.dispose()

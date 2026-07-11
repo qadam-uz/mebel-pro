@@ -26,6 +26,7 @@ from app.models.enums import (
 )
 from app.modules.access.api import (
     normalize_uz_phone,
+    prune_expired_otp_challenges,
     prune_expired_sessions,
     revoke_for_principal,
     revoke_for_workshop,
@@ -102,7 +103,8 @@ class WorkshopDetailRow:
 
 async def _cleanup_expired_sessions_job(db: AsyncSession) -> str:
     count = await prune_expired_sessions(db)
-    return f"Pruned {count} expired sessions"
+    challenge_count = await prune_expired_otp_challenges(db)
+    return f"Pruned {count} expired sessions, {challenge_count} OTP challenges"
 
 
 DEFAULT_JOBS = (

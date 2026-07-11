@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     OTP_DEV_CODES: list[str] = []
     ALLOW_PROD_OTP_DEV_CODES: bool = False
     OTP_RATE_LIMITS_ENABLED: bool = True
+    # OTP send budgets (each Telegram Gateway message costs money). Env-tunable
+    # so an ongoing abuse incident can be throttled with an env edit + restart.
+    # The global daily cap is the hard ceiling on the worst-case Telegram bill.
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_PHONE_SENDS_PER_HOUR: int = 5
+    OTP_PHONE_SENDS_PER_DAY: int = 10
+    OTP_IP_SENDS_PER_HOUR: int = 30
+    OTP_IP_SENDS_PER_DAY: int = 50
+    OTP_GLOBAL_SENDS_PER_HOUR: int = 150
+    OTP_GLOBAL_SENDS_PER_DAY: int = 1000
     OTP_CODE_PEPPER: str = "{{change-me}}"
     TELEGRAM_GATEWAY_ACCESS_TOKEN: str = "{{change-me}}"  # noqa: S105 - secret placeholder.
     TELEGRAM_GATEWAY_API_BASE_URL: str = "https://gatewayapi.telegram.org"

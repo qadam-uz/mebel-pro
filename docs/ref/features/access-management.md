@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-11
 order: 20
 ---
 
@@ -90,12 +90,22 @@ that branches to registration only when the number is new. Three steps:
    [verification challenge](../entities/identity.md#phone-verification-challenge) and sends a
    6-digit code to that number **over Telegram** (via the Telegram Gateway). A malformed number
    is `invalid_phone`; a number not reachable on Telegram is `phone_unreachable_on_telegram`
-   (there is **no SMS fallback** in v1 — the client must have Telegram on that number); exceeding
-   the resend cooldown (60 s), per-phone rate limit (5 sends / hour), or per-IP rate limit
-   (30 sends / hour) is `code_send_rate_limited`.
+   (there is **no SMS fallback** in v1 — the client must have Telegram on that number).
+   Exceeding any send budget is `code_send_rate_limited` with a `retry_after_seconds`. Every
+   Gateway message costs money, so sends are budgeted at three scopes — per phone, per client
+   IP, and platform-wide — each with an hourly and a daily cap (defaults: 60 s resend cooldown;
+   phone 5 / hour, 10 / day; IP 30 / hour, 50 / day; global 150 / hour, 1000 / day — the global
+   daily cap is the hard ceiling on the worst-case Telegram bill). The caps are env-tunable
+   (`OTP_*` settings) so an abuse incident can be throttled without a deploy. **Failed
+   deliveries count toward every budget and start the cooldown** — an unreachable number can't
+   be probed for free. Per-IP budgets require the deploy's trusted-proxy config
+   (`TRUSTED_PROXY_CIDRS` matching the edge network) — without it all traffic shares one bucket.
 2. **Verify the code.** Client submits the phone + code. A wrong code is `invalid_code` (the
    challenge survives, attempt counter bumped); the 5th wrong attempt burns the challenge
    (`too_many_attempts`, must request a new code); a code past its 5-minute TTL is `code_expired`.
+   The attempt counter and burns are committed even though the request itself fails — a rejected
+   guess must consume an attempt (CB-133) — and concurrent guesses serialize on the challenge
+   row, so a brute-forcer gets at most 5 guesses per challenge.
 3. **Log in or register.** On a correct code:
    - **Phone found, `active`** → log in.
    - **Phone found, `blocked`** → `account_blocked`.
@@ -153,9 +163,11 @@ testing before the Telegram Gateway account is funded and configured; remove it,
 `OTP_DEV_CODES=[]`, and configure `TELEGRAM_GATEWAY_ACCESS_TOKEN` before onboarding real users or
 real workshop data.
 
-Send-rate enforcement is controlled separately by **`OTP_RATE_LIMITS_ENABLED`**. It defaults
-to `true` and must stay enabled outside automated test runs; local E2E sets it to `false` so
-repeated parallel browser tests from one localhost IP do not exhaust the per-IP OTP bucket.
+Send-rate enforcement is controlled separately by **`OTP_RATE_LIMITS_ENABLED`** — the master
+switch for the cooldown and all six send budgets (per-phone, per-IP, and global; hourly and
+daily). It defaults to `true` and must stay enabled outside automated test runs; local E2E sets
+it to `false` so repeated parallel browser tests from one localhost IP do not exhaust the
+per-IP OTP bucket.
 
 ### UX
 
@@ -357,12 +369,19 @@ grants at least one active branch permission.
   picker; reactivating makes the grant live again.
 - **Owner blocks themselves** — disallowed (a workshop must have an active owner).
 - **Client's number isn't on Telegram** — `phone_unreachable_on_telegram`; the sign-in card
-  explains sign-in needs Telegram on that number (no SMS fallback in v1).
+  explains sign-in needs Telegram on that number (no SMS fallback in v1). The failed delivery
+  still consumes a challenge: it counts toward every send budget and starts the 60 s cooldown,
+  so reachability can't be probed for free.
 - **Client mistypes the code** — `invalid_code` with attempts remaining; the 5th wrong attempt
   burns the challenge (`too_many_attempts`) and a code past its 5-minute TTL is `code_expired` —
   both send the client back to request a fresh code.
 - **Code requested too often** — `code_send_rate_limited`; the resend control stays disabled
   with a countdown until the 60 s cooldown elapses.
+- **Platform-wide send budget exhausted** — the same `code_send_rate_limited`, with a longer
+  `retry_after_seconds`; sign-in is unavailable until the window rolls over. Deliberate
+  trade-off: the global cap is the ceiling on the worst-case Telegram bill, so a distributed
+  attack can exhaust it and deny OTP sign-in platform-wide — the caps are generous (~10×
+  expected legit traffic), the trip is logged loudly, and raising a cap is an env edit away.
 
 ## Next
 

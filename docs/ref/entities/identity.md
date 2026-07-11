@@ -2,7 +2,7 @@
 title: Identity
 status: draft
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-11
 order: 10
 ---
 
@@ -136,16 +136,22 @@ returning and brand-new numbers.
 | `request_ip` | text | normalized client IP used for per-IP send limiting |
 | `code_hash` | text | HMAC-SHA-256 of the 6-digit code using `OTP_CODE_PEPPER`; plaintext never stored |
 | `expires_at` | timestamp | now + 5 min at issue |
-| `attempt_count` | int | wrong-code counter; burned at 5 |
-| `consumed_at` | timestamp? | set when a correct code is accepted; single-use |
+| `attempt_count` | int | wrong-code counter; burned at 5. Committed even when the request fails (CB-133) — a rejected guess must consume an attempt |
+| `consumed_at` | timestamp? | set when a correct code is accepted **or** when Telegram delivery fails (a code nobody received must never be guessable); single-use |
 | `created_at` | timestamp | |
 
 Invariants: code is 6 digits, HMAC-hashed at rest with a server-side pepper, single-use,
-5-minute TTL; ≤ 5 verify attempts before the challenge is burned; per-phone resend cooldown
-(60 s), per-phone send limit (5 / hour), and per-IP send limit (30 / hour). `request_ip` is the
-socket peer in direct/dev traffic, or the trusted Caddy `X-Forwarded-For` client IP when the
-immediate peer is trusted; untrusted forwarded headers are ignored. The row is short-lived and
-pruned by the periodic session/expiry job. Delivery is **Telegram-only** — a number not reachable
+5-minute TTL; ≤ 5 verify attempts before the challenge is burned (concurrent guesses serialize
+on the row, so the cap can't be raced past). Every row — delivered or not — counts toward the
+send budgets: per-phone resend cooldown (60 s), per-phone (5 / hour, 10 / day), per-IP
+(30 / hour, 50 / day), and platform-wide (150 / hour, 1000 / day) caps, all env-tunable
+(`OTP_*` settings; rules in
+[`access-management.md`](../features/access-management.md#client-sign-in-phone--telegram-otp)).
+`request_ip` is the socket peer in direct/dev traffic; when the immediate peer is a trusted
+proxy (`TRUSTED_PROXY_CIDRS`), it is the right-most `X-Forwarded-For` hop outside the trusted
+CIDRs — the address a trusted proxy actually vouches for; untrusted or malformed headers are
+ignored. Rows are pruned by the periodic session/expiry job after 7 days — retention must
+exceed the longest (24 h) budget window. Delivery is **Telegram-only** — a number not reachable
 on Telegram cannot sign in (no SMS fallback in v1).
 
 ## Session

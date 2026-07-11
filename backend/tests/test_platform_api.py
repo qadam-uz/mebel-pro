@@ -476,7 +476,7 @@ async def test_platform_jobs_errors_and_audit_surfaces(
     assert await db_session.scalar(select(func.count()).select_from(JobDefinition)) == 1
     assert run.status_code == 200
     assert run.json()["status"] == "ok"
-    assert run.json()["brief_log"] == "Pruned 0 expired sessions"
+    assert run.json()["brief_log"] == "Pruned 0 expired sessions, 0 OTP challenges"
     assert errors.status_code == 200
     assert [row["code"] for row in errors.json()] == ["platform.test_error"]
     assert detail.status_code == 200
