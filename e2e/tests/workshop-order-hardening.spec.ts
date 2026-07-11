@@ -43,7 +43,9 @@ async function assignForCutting(
   version: number,
   workerId: string,
 ) {
-  const response = await request.post(`/api/v1/workshop/orders/${orderId}/assign`, {
+  // Assignment is metadata (the order stays confirmed); starting the job is
+  // the confirmed → cutting trigger.
+  const assigned = await request.post(`/api/v1/workshop/orders/${orderId}/assign`, {
     headers: { Authorization: `Bearer ${ownerAccess}` },
     data: {
       version,
@@ -51,8 +53,14 @@ async function assignForCutting(
       edger_user_id: workerId,
     },
   })
-  expect(response.ok()).toBe(true)
-  return (await response.json()) as { version: number; status: string }
+  expect(assigned.ok()).toBe(true)
+  const assignedBody = (await assigned.json()) as { version: number; status: string }
+  const started = await request.post(`/api/v1/workshop/orders/${orderId}/start-cutting`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+    data: { version: assignedBody.version },
+  })
+  expect(started.ok()).toBe(true)
+  return (await started.json()) as { version: number; status: string }
 }
 
 test('owner applies a discount and it persists after reload', async ({ page, request }, testInfo) => {
