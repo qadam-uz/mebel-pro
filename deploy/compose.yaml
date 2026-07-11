@@ -72,8 +72,10 @@ services:
       "
     restart: "no"
 
-  # Backend, source-mounted, autoreload. The image's venv is kept on the
-  # `backend-venv` named volume so the bind-mount doesn't shadow it.
+  # Backend, source-mounted, autoreload. Python deps live in the image's
+  # system interpreter (see ../backend/Dockerfile), outside /app, so the
+  # source bind-mount can't shadow them. A pyproject/uv.lock change reaches
+  # the container via `up --build` — no volume to go stale.
   backend:
     build:
       context: ../backend
@@ -118,7 +120,6 @@ services:
     command: ["sh", "-c", "alembic upgrade head && fastapi dev app/main.py --host 0.0.0.0 --port 8000"]
     volumes:
       - ../backend:/app
-      - backend-venv:/app/.venv
       - ../docs:/docs:ro
     ports:
       - "8000:8000"
@@ -151,5 +152,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
-  backend-venv:
   web-node-modules:

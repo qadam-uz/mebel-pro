@@ -72,7 +72,7 @@ backend/
   tests/
     conftest.py           # db_session (in-memory sqlite, schema via metadata.create_all) + httpx client w/ get_session override
     test_*.py
-  Dockerfile              # multi-stage, uv in builder, non-root runtime; CMD runs `alembic upgrade head` then uvicorn
+  Dockerfile              # multi-stage; uv installs deps into the system interpreter (no venv in the image); non-root runtime; CMD runs `alembic upgrade head` then uvicorn
   .env.dev.example        # local non-Docker env, dev defaults (Compose uses deploy/.env)
   .env.prod.example       # same shape, secrets as {{change-me}}
 ```
