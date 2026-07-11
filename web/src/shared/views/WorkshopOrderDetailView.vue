@@ -102,10 +102,17 @@ const canCompleteBanding = computed(() => {
 const canViewSettlement = computed(() =>
   permissions.canAnyOnBranch([p.manageFinance, p.viewFinanceReports], order.value?.branch_id),
 )
+// Start is gated like completion: the assigned master, or the office on-behalf.
+const canStartCutting = computed(() => {
+  const current = order.value
+  if (!current || current.status !== 'confirmed') return false
+  return Boolean(current.assigned_cutter_user_id) && canCompleteCutting.value
+})
 const hasLifecycleAction = computed(() => {
   const current = order.value
   if (!current) return false
-  if (['new', 'confirmed', 'ready'].includes(current.status)) return canManageOrders.value
+  if (['new', 'ready'].includes(current.status)) return canManageOrders.value
+  if (current.status === 'confirmed') return canManageOrders.value || canStartCutting.value
   if (current.status === 'cutting') return canManageOrders.value || canCompleteCutting.value
   if (current.status === 'edge_banding') return canManageOrders.value || canCompleteBanding.value
   return false
@@ -376,6 +383,26 @@ async function assignEdgerOnly() {
   )
 }
 
+async function startCutting() {
+  const current = order.value
+  if (!current || !canStartCutting.value) return
+  await run(
+    () => orders.startCutting(current.id, current.version),
+    'Kesish boshlandi.',
+    'startCutting',
+  )
+}
+
+async function startBanding() {
+  const current = order.value
+  if (!current || !canCompleteBanding.value || current.banding_started_at) return
+  await run(
+    () => orders.startBanding(current.id, current.version),
+    'Krom boshlandi.',
+    'startBanding',
+  )
+}
+
 async function completeCutting() {
   const current = order.value
   if (!current || !canCompleteCutting.value) return
@@ -623,18 +650,13 @@ onMounted(loadDetail)
 
           <div v-if="order.status === 'cutting' || order.status === 'edge_banding'" class="actions">
             <RouterLink
-              v-if="order.status === 'cutting'"
-              :to="rolePath('/workshop/cutting')"
+              :to="{
+                path: rolePath('/workshop/production'),
+                query: { station: order.status === 'edge_banding' ? 'banding' : 'cutting' },
+              }"
               class="mp-button mp-button-outline min-h-11 px-3 text-xs"
             >
-              Kesish navbati
-            </RouterLink>
-            <RouterLink
-              v-if="order.status === 'edge_banding'"
-              :to="rolePath('/workshop/banding')"
-              class="mp-button mp-button-outline min-h-11 px-3 text-xs"
-            >
-              Krom navbati
+              Ishlarim
             </RouterLink>
           </div>
         </div>
@@ -1099,39 +1121,55 @@ onMounted(loadDetail)
                 {{ pendingAction === 'approve' ? 'Tasdiqlanmoqda…' : 'Tasdiqlash' }}
               </button>
 
-              <template v-else-if="order.status === 'confirmed' && canManageOrders">
-                <FormSelect
-                  v-model="cutterId"
-                  label="Kesuvchi"
-                  :options="workerOptions"
-                  :disabled="workerOptions.length === 0"
-                />
-                <FormSelect
-                  v-if="order.has_banding"
-                  v-model="edgerId"
-                  label="Krom yopishtiruvchi"
-                  :options="workerOptions"
-                  :disabled="workerOptions.length === 0"
-                />
-                <button
-                  v-if="order.has_banding"
-                  type="button"
-                  class="mp-button mp-button-outline w-full"
-                  :disabled="orders.actionLoading || !edgerId"
-                  @click="assignEdgerOnly"
-                >
-                  {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
-                </button>
-                <!-- Partial saves sit under their own dropdown; the combined start action
-                     stays separated below so it can't be mistaken for a per-worker save. -->
-                <div :class="{ 'border-t border-hairline pt-3': order.has_banding }">
+              <template
+                v-else-if="order.status === 'confirmed' && (canManageOrders || canStartCutting)"
+              >
+                <template v-if="canManageOrders">
+                  <FormSelect
+                    v-model="cutterId"
+                    label="Kesuvchi"
+                    :options="workerOptions"
+                    :disabled="workerOptions.length === 0"
+                  />
+                  <FormSelect
+                    v-if="order.has_banding"
+                    v-model="edgerId"
+                    label="Krom yopishtiruvchi"
+                    :options="workerOptions"
+                    :disabled="workerOptions.length === 0"
+                  />
+                  <button
+                    v-if="order.has_banding"
+                    type="button"
+                    class="mp-button mp-button-outline w-full"
+                    :disabled="orders.actionLoading || !edgerId"
+                    @click="assignEdgerOnly"
+                  >
+                    {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
+                  </button>
+                  <!-- Assignment is metadata now: it queues the job for the master
+                       without starting it, so the button stops promising "boshlash". -->
                   <button
                     type="button"
-                    class="mp-button mp-button-primary w-full"
+                    class="mp-button w-full"
+                    :class="canStartCutting ? 'mp-button-outline' : 'mp-button-primary'"
                     :disabled="orders.actionLoading || !cutterId || (order.has_banding && !edgerId)"
                     @click="assignWorkers"
                   >
-                    {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash va boshlash' }}
+                    {{ pendingAction === 'assign' ? 'Saqlanmoqda…' : 'Tayinlash' }}
+                  </button>
+                </template>
+                <div
+                  v-if="canStartCutting"
+                  :class="{ 'border-t border-hairline pt-3': canManageOrders }"
+                >
+                  <button
+                    type="button"
+                    class="mp-button mp-button-primary w-full"
+                    :disabled="orders.actionLoading"
+                    @click="startCutting"
+                  >
+                    {{ pendingAction === 'startCutting' ? 'Boshlanmoqda…' : 'Kesishni boshlash' }}
                   </button>
                 </div>
               </template>
@@ -1194,6 +1232,15 @@ onMounted(loadDetail)
                   :options="workerOptions"
                   :disabled="workerOptions.length === 0"
                 />
+                <button
+                  v-if="!order.banding_started_at"
+                  type="button"
+                  class="mp-button mp-button-outline w-full"
+                  :disabled="orders.actionLoading"
+                  @click="startBanding"
+                >
+                  {{ pendingAction === 'startBanding' ? 'Boshlanmoqda…' : 'Krom boshlash' }}
+                </button>
                 <button
                   type="button"
                   class="mp-button mp-button-primary w-full"

@@ -16,8 +16,7 @@ describe('workshop navigation permissions', () => {
     ).toEqual([
       'Asosiy',
       'Buyurtmalar',
-      'Kesish navbati',
-      'Krom navbati',
+      'Ishlarim',
       'Ombor',
       'Material katalogi',
       'Tushum va xarajat',
@@ -72,7 +71,7 @@ describe('workshop navigation permissions', () => {
     ).toEqual(['Asosiy', 'Buyurtmalar'])
   })
 
-  it('shows production queues only to staff with production grants', () => {
+  it('shows the production workspace only to staff with production grants', () => {
     expect(
       workshopNavItems({
         isOwner: false,
@@ -80,7 +79,7 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Asosiy', 'Kesish navbati', 'Krom navbati'])
+    ).toEqual(['Asosiy', 'Ishlarim'])
   })
 
   it('shows only worker production to reports-only finance staff', () => {
