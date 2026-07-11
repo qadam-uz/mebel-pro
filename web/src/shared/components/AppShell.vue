@@ -113,6 +113,12 @@ const visibleNav = computed<NavItem[]>(() => {
 const selectedWorkshopBranch = computed(() =>
   workshop.branches.find((branch) => branch.id === selectedContext.value),
 )
+// The topbar branch switcher only earns its space when there's a real choice.
+// With a single branch (or none) the context auto-pins to it, so hide the
+// selector on every screen and let the pages use that one branch silently.
+const showBranchSwitcher = computed(
+  () => config.role === 'workshop' && workshop.branches.length > 1,
+)
 const normalizedSearchBranchId = computed(() => selectedWorkshopBranch.value?.id ?? null)
 const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.permissions ?? []))
 const canSearchOrders = computed(
@@ -585,6 +591,7 @@ onBeforeUnmount(() => {
         </button>
 
         <ProjectDropdown
+          v-if="showBranchSwitcher"
           v-model="selectedContext"
           class="workshop-branch-dd"
           :label="config.dropdownLabel"
