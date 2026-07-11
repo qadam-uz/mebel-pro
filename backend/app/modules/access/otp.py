@@ -12,12 +12,13 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import Any, NoReturn, Protocol
 
 import anyio
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog import get_logger
 
 from app.core.config import settings
 from app.core.errors import APIError
@@ -27,12 +28,17 @@ from app.modules.access.clients import find_or_create_client, normalize_uz_phone
 from app.modules.access.contracts import PhoneVerificationChallenge, Session
 from app.modules.access.sessions import PlainSessionTokens, create_session, principal_from_session
 
+logger = get_logger(__name__)
+
 CODE_RE = re.compile(r"^\d{6}$")
 OTP_TTL = timedelta(minutes=5)
-RESEND_COOLDOWN = timedelta(seconds=60)
-PHONE_SENDS_PER_HOUR = 5
-IP_SENDS_PER_HOUR = 30
+# Pinned by the DB check constraint on attempt_count (0..5) — not env-tunable.
 MAX_VERIFY_ATTEMPTS = 5
+# Send budgets (cooldown, per-phone/IP/global hourly + daily caps) live in
+# Settings so they can be tightened mid-incident without a deploy.
+# Challenge rows feed the send-limit counters, so retention must exceed the
+# longest limit window (24 h) — pruning earlier would refill send budgets.
+CHALLENGE_RETENTION = timedelta(days=7)
 
 
 class OtpSender(Protocol):
@@ -128,9 +134,22 @@ def resolve_client_ip(
     if peer is None:
         return peer_host
     if x_forwarded_for and _is_trusted_proxy(peer, trusted_proxy_cidrs):
-        forwarded = _parse_ip(x_forwarded_for.split(",", maxsplit=1)[0].strip())
-        if forwarded is not None:
-            return str(forwarded)
+        hops: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for part in x_forwarded_for.split(","):
+            hop = _parse_ip(part.strip())
+            if hop is None:
+                # Malformed entry — distrust the whole header.
+                return str(peer)
+            hops.append(hop)
+        # Walk right→left: the right-most hop outside the trusted CIDRs is the
+        # closest address a trusted proxy actually vouches for. Left-most
+        # entries are client-supplied and forgeable.
+        for hop in reversed(hops):
+            if not _is_trusted_proxy(hop, trusted_proxy_cidrs):
+                return str(hop)
+        if hops:
+            # Every hop is a trusted proxy — the chain origin is the client.
+            return str(hops[0])
     return str(peer)
 
 
@@ -146,19 +165,9 @@ async def request_otp_code(
     current = _current_time(now)
     await _enforce_send_limits(db, phone=normalized_phone, request_ip=request_ip, now=current)
     code = _generate_code()
-    if not settings.OTP_DEV_CODES:
-        try:
-            await sender.send_code(
-                phone=normalized_phone,
-                code=code,
-                ttl_seconds=int(OTP_TTL.total_seconds()),
-            )
-        except TelegramDeliveryError as exc:
-            raise APIError(
-                "phone_unreachable_on_telegram",
-                "Phone is not reachable on Telegram",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            ) from exc
+    # The row is written before the delivery attempt so that failed sends also
+    # count toward the cooldown and send caps — otherwise unreachable numbers
+    # could be probed for free, without limit.
     challenge = PhoneVerificationChallenge(
         phone=normalized_phone,
         code_hash=hash_otp_code(code),
@@ -169,10 +178,33 @@ async def request_otp_code(
     )
     db.add(challenge)
     await db.flush()
+    if not settings.OTP_DEV_CODES:
+        try:
+            await sender.send_code(
+                phone=normalized_phone,
+                code=code,
+                ttl_seconds=int(OTP_TTL.total_seconds()),
+            )
+        except TelegramDeliveryError as exc:
+            # Burn the undelivered challenge: nobody received the code, so
+            # nothing may remain guessable — but the row keeps counting.
+            challenge.consumed_at = current
+            await db.commit()
+            logger.warning(
+                "otp_delivery_failed",
+                phone_suffix=normalized_phone[-4:],
+                request_ip=request_ip,
+                error=str(exc),
+            )
+            raise APIError(
+                "phone_unreachable_on_telegram",
+                "Phone is not reachable on Telegram",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ) from exc
     return OtpRequestResult(
         phone=normalized_phone,
         expires_at=challenge.expires_at,
-        resend_after_seconds=int(RESEND_COOLDOWN.total_seconds()),
+        resend_after_seconds=settings.OTP_RESEND_COOLDOWN_SECONDS,
     )
 
 
@@ -195,28 +227,45 @@ async def verify_otp_code(
         raise APIError("invalid_code", "Invalid code", status_code=status.HTTP_400_BAD_REQUEST)
     if _coerce_utc(challenge.expires_at) <= current:
         challenge.consumed_at = current
-        raise APIError("code_expired", "Code expired", status_code=status.HTTP_400_BAD_REQUEST)
+        await _commit_and_raise(
+            db,
+            APIError("code_expired", "Code expired", status_code=status.HTTP_400_BAD_REQUEST),
+        )
     if challenge.attempt_count >= MAX_VERIFY_ATTEMPTS:
         challenge.consumed_at = current
-        raise APIError(
-            "too_many_attempts",
-            "Too many verification attempts",
-            status_code=status.HTTP_400_BAD_REQUEST,
+        await _commit_and_raise(
+            db,
+            APIError(
+                "too_many_attempts",
+                "Too many verification attempts",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            ),
         )
     if not _code_matches(code.strip(), challenge.code_hash):
         challenge.attempt_count += 1
         if challenge.attempt_count >= MAX_VERIFY_ATTEMPTS:
             challenge.consumed_at = current
-            raise APIError(
-                "too_many_attempts",
-                "Too many verification attempts",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            logger.warning(
+                "otp_challenge_burned_too_many_attempts",
+                phone_suffix=normalized_phone[-4:],
+                request_ip=challenge.request_ip,
             )
-        raise APIError(
-            "invalid_code",
-            "Invalid code",
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details={"attempts_remaining": MAX_VERIFY_ATTEMPTS - challenge.attempt_count},
+            await _commit_and_raise(
+                db,
+                APIError(
+                    "too_many_attempts",
+                    "Too many verification attempts",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                ),
+            )
+        await _commit_and_raise(
+            db,
+            APIError(
+                "invalid_code",
+                "Invalid code",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                details={"attempts_remaining": MAX_VERIFY_ATTEMPTS - challenge.attempt_count},
+            ),
         )
 
     try:
@@ -224,6 +273,7 @@ async def verify_otp_code(
     except APIError as exc:
         if exc.code == "account_blocked":
             challenge.consumed_at = current
+            await db.commit()
         raise
     if resolution is None:
         if name is None:
@@ -259,6 +309,33 @@ async def verify_otp_code(
     )
 
 
+async def prune_expired_otp_challenges(db: AsyncSession, *, now: datetime | None = None) -> int:
+    current = _current_time(now)
+    stale_ids = (
+        await db.scalars(
+            select(PhoneVerificationChallenge.id).where(
+                PhoneVerificationChallenge.created_at < current - CHALLENGE_RETENTION
+            )
+        )
+    ).all()
+    if stale_ids:
+        await db.execute(
+            delete(PhoneVerificationChallenge).where(PhoneVerificationChallenge.id.in_(stale_ids))
+        )
+    return len(stale_ids)
+
+
+async def _commit_and_raise(db: AsyncSession, error: APIError) -> NoReturn:
+    """Persist anti-abuse state, then reject the request.
+
+    ``get_session`` rolls the transaction back on any exception, which would
+    silently discard attempt counters and challenge burns (CB-133) — commit
+    them explicitly before the error propagates.
+    """
+    await db.commit()
+    raise error
+
+
 def hash_otp_code(code: str) -> str:
     return hmac.new(
         settings.OTP_CODE_PEPPER.encode("utf-8"),
@@ -290,44 +367,71 @@ async def _enforce_send_limits(
         .limit(1)
     )
     if cooldown_row is not None:
-        retry_at = _coerce_utc(cooldown_row.created_at) + RESEND_COOLDOWN
+        retry_at = _coerce_utc(cooldown_row.created_at) + timedelta(
+            seconds=settings.OTP_RESEND_COOLDOWN_SECONDS
+        )
         if retry_at > now:
             _raise_rate_limited(retry_at, now)
 
-    window_start = now - timedelta(hours=1)
-    phone_count = await db.scalar(
-        select(func.count())
-        .select_from(PhoneVerificationChallenge)
-        .where(
-            PhoneVerificationChallenge.phone == phone,
-            PhoneVerificationChallenge.created_at >= window_start,
-        )
+    hour = timedelta(hours=1)
+    day = timedelta(hours=24)
+    # (name, phone filter, ip filter, window, cap) — the global rows have no
+    # filters and cap the platform-wide Telegram spend regardless of how an
+    # attack is distributed across phones and IPs.
+    budgets: tuple[tuple[str, str | None, str | None, timedelta, int], ...] = (
+        ("phone_hourly", phone, None, hour, settings.OTP_PHONE_SENDS_PER_HOUR),
+        ("phone_daily", phone, None, day, settings.OTP_PHONE_SENDS_PER_DAY),
+        ("ip_hourly", None, request_ip, hour, settings.OTP_IP_SENDS_PER_HOUR),
+        ("ip_daily", None, request_ip, day, settings.OTP_IP_SENDS_PER_DAY),
+        ("global_hourly", None, None, hour, settings.OTP_GLOBAL_SENDS_PER_HOUR),
+        ("global_daily", None, None, day, settings.OTP_GLOBAL_SENDS_PER_DAY),
     )
-    if (phone_count or 0) >= PHONE_SENDS_PER_HOUR:
-        oldest = await _oldest_in_window(
+    for name, phone_filter, ip_filter, window, cap in budgets:
+        await _enforce_window_limit(
             db,
-            phone=phone,
-            request_ip=None,
-            window_start=window_start,
+            name=name,
+            phone=phone_filter,
+            request_ip=ip_filter,
+            window=window,
+            cap=cap,
+            now=now,
         )
-        _raise_rate_limited(_coerce_utc(oldest.created_at) + timedelta(hours=1), now)
 
-    ip_count = await db.scalar(
+
+async def _enforce_window_limit(
+    db: AsyncSession,
+    *,
+    name: str,
+    phone: str | None,
+    request_ip: str | None,
+    window: timedelta,
+    cap: int,
+    now: datetime,
+) -> None:
+    window_start = now - window
+    query = (
         select(func.count())
         .select_from(PhoneVerificationChallenge)
-        .where(
-            PhoneVerificationChallenge.request_ip == request_ip,
-            PhoneVerificationChallenge.created_at >= window_start,
-        )
+        .where(PhoneVerificationChallenge.created_at >= window_start)
     )
-    if (ip_count or 0) >= IP_SENDS_PER_HOUR:
-        oldest = await _oldest_in_window(
-            db,
-            phone=None,
-            request_ip=request_ip,
-            window_start=window_start,
-        )
-        _raise_rate_limited(_coerce_utc(oldest.created_at) + timedelta(hours=1), now)
+    if phone is not None:
+        query = query.where(PhoneVerificationChallenge.phone == phone)
+    if request_ip is not None:
+        query = query.where(PhoneVerificationChallenge.request_ip == request_ip)
+    count = await db.scalar(query)
+    if (count or 0) < cap:
+        return
+    if phone is None and request_ip is None:
+        # Platform-wide budget exhausted — either legit growth or an active
+        # cost attack. Surfaced loudly so the operator looks before the bill.
+        logger.warning("otp_global_send_cap_reached", limit=name, cap=cap)
+    oldest = await _oldest_in_window(
+        db,
+        phone=phone,
+        request_ip=request_ip,
+        window_start=window_start,
+    )
+    _raise_rate_limited(_coerce_utc(oldest.created_at) + window, now)
 
 
 async def _oldest_in_window(
@@ -355,6 +459,8 @@ async def _latest_open_challenge(
     *,
     phone: str,
 ) -> PhoneVerificationChallenge | None:
+    # FOR UPDATE serializes concurrent guesses on the same challenge so no
+    # attempt increment is lost to a read-modify-write race (no-op on SQLite).
     row = await db.scalar(
         select(PhoneVerificationChallenge)
         .where(
@@ -363,6 +469,7 @@ async def _latest_open_challenge(
         )
         .order_by(PhoneVerificationChallenge.created_at.desc())
         .limit(1)
+        .with_for_update()
     )
     return row
 
