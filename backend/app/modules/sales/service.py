@@ -61,6 +61,12 @@ from app.modules.sales.schemas import (
     OrderStatusEventResponse,
     OrderStockWarning,
     OrderSummaryResponse,
+    ProductionEdgeSide,
+    ProductionJobCard,
+    ProductionJobDetail,
+    ProductionJobItem,
+    ProductionQueueResponse,
+    ProductionWorkerRef,
     ReasonedVersionedRequest,
     VersionedRequest,
     WorkshopOrderAssignRequest,
@@ -924,6 +930,8 @@ async def assign_order_workers(
             branch_id=order.branch_id,
             user_id=payload.cutter_user_id,
         )
+        if order.assigned_cutter_user_id != payload.cutter_user_id:
+            order.cutter_assigned_at = datetime.now(UTC)
         order.assigned_cutter_user_id = payload.cutter_user_id
     if payload.edger_user_id is not None:
         if not await _order_has_banding(db, order.id):
@@ -936,45 +944,318 @@ async def assign_order_workers(
             branch_id=order.branch_id,
             user_id=payload.edger_user_id,
         )
+        if order.assigned_edger_user_id != payload.edger_user_id:
+            order.edger_assigned_at = datetime.now(UTC)
         order.assigned_edger_user_id = payload.edger_user_id
 
-    if order.status is OrderStatus.CONFIRMED and payload.cutter_user_id is not None:
-        if await _order_has_banding(db, order.id) and order.assigned_edger_user_id is None:
-            raise APIError("edger_required", "Choose an edge bander for this order")
-        await _transition(
-            db,
-            principal=principal,
-            order=order,
-            to_status=OrderStatus.CUTTING,
-            reason=None,
-            metadata={
-                "assigned_cutter_user_id": str(order.assigned_cutter_user_id),
-                "assigned_edger_user_id": str(order.assigned_edger_user_id)
-                if order.assigned_edger_user_id
-                else None,
-            },
-        )
+    # Assignment is pure metadata — the status moves when the assigned cutter starts.
+    _bump_order(order)
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.assign",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Assigned workers for {order.order_number}",
+        details={
+            "assigned_cutter_user_id": str(order.assigned_cutter_user_id)
+            if order.assigned_cutter_user_id
+            else None,
+            "assigned_edger_user_id": str(order.assigned_edger_user_id)
+            if order.assigned_edger_user_id
+            else None,
+        },
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def start_cutting(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: VersionedRequest,
+) -> OrderDetailResponse:
+    order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    _expect_version(order, payload.version)
+    _expect_status(order, {OrderStatus.CONFIRMED})
+    if order.assigned_cutter_user_id is None:
+        raise APIError("cutter_required", "Assign a cutter first")
+    if await _order_has_banding(db, order.id) and order.assigned_edger_user_id is None:
+        raise APIError("edger_required", "Choose an edge bander for this order")
+    _require_production_actor(
+        principal, order, assigned_user_id=order.assigned_cutter_user_id, job="cutting"
+    )
+    order.cutting_started_at = datetime.now(UTC)
+    await _transition(
+        db,
+        principal=principal,
+        order=order,
+        to_status=OrderStatus.CUTTING,
+        reason=None,
+        metadata={
+            "assigned_cutter_user_id": str(order.assigned_cutter_user_id),
+            "assigned_edger_user_id": str(order.assigned_edger_user_id)
+            if order.assigned_edger_user_id
+            else None,
+        },
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def start_banding(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: VersionedRequest,
+) -> OrderDetailResponse:
+    order = await _locked_workshop_order_visible(db, principal=principal, order_id=order_id)
+    _expect_version(order, payload.version)
+    _expect_status(order, {OrderStatus.EDGE_BANDING})
+    if order.banding_started_at is not None:
+        raise APIError("banding_already_started", "Banding is already started")
+    _require_production_actor(
+        principal, order, assigned_user_id=order.assigned_edger_user_id, job="banding"
+    )
+    order.banding_started_at = datetime.now(UTC)
+    _bump_order(order)
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.start_banding",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Started banding for {order.order_number}",
+        details={},
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def list_production_queue(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    station: str,
+    branch_id: uuid.UUID | None = None,
+) -> ProductionQueueResponse:
+    _require_workshop(principal)
+    if station not in {"cutting", "banding"}:
+        raise APIError("invalid_station", "Invalid station")
+    if station == "cutting":
+        assigned_column = Order.assigned_cutter_user_id
+        credited_column = Order.cutter_user_id
+        completed_column = Order.cut_completed_at
+        active_statuses = [OrderStatus.CONFIRMED, OrderStatus.CUTTING]
     else:
-        _bump_order(order)
-        await record_action(
-            db,
-            actor=actor_from_principal(principal),
-            action="orders.assign",
-            entity_type="order",
-            entity_id=order.id,
-            workshop_id=order.workshop_id,
-            branch_id=order.branch_id,
-            summary=f"Assigned workers for {order.order_number}",
-            details={
-                "assigned_cutter_user_id": str(order.assigned_cutter_user_id)
+        assigned_column = Order.assigned_edger_user_id
+        credited_column = Order.edger_user_id
+        completed_column = Order.edge_completed_at
+        active_statuses = [OrderStatus.EDGE_BANDING]
+
+    base_query = select(Order).where(Order.workshop_id == principal.workshop_id)
+    if branch_id is not None:
+        base_query = base_query.where(Order.branch_id == branch_id)
+    active_query = base_query.where(
+        assigned_column.is_not(None),
+        Order.status.in_(active_statuses),
+    )
+    completed_since = datetime.now(UTC) - timedelta(hours=24)
+    completed_query = base_query.where(completed_column >= completed_since)
+    if not principal.is_owner:
+        active_scope = _production_visibility(principal, worker_column=assigned_column)
+        completed_scope = _production_visibility(principal, worker_column=credited_column)
+        active_query = active_query.where(active_scope)
+        completed_query = completed_query.where(completed_scope)
+
+    active_orders = list((await db.scalars(active_query)).all())
+    completed_orders = list((await db.scalars(completed_query)).all())
+    if station == "cutting":
+        active_orders.sort(key=lambda o: (o.cutter_assigned_at or o.created_at, o.created_at))
+        completed_orders.sort(key=lambda o: o.cut_completed_at or o.created_at, reverse=True)
+    else:
+        active_orders.sort(key=lambda o: (o.edger_assigned_at or o.created_at, o.created_at))
+        completed_orders.sort(key=lambda o: o.edge_completed_at or o.created_at, reverse=True)
+
+    cards = await _production_job_cards(db, [*active_orders, *completed_orders])
+    return ProductionQueueResponse(
+        station=station,
+        jobs=cards[: len(active_orders)],
+        completed_today=cards[len(active_orders) :],
+    )
+
+
+async def get_production_job(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+) -> ProductionJobDetail:
+    order = await _workshop_order_in_scope(db, principal=principal, order_id=order_id)
+    if not (
+        _has_order_permission(principal, order, Permission.MANAGE_ORDERS)
+        or _can_view_assigned_production_order(principal, order)
+    ):
+        raise APIError("order_not_found", "Order not found", status_code=404)
+    cards = await _production_job_cards(db, [order])
+    items = (
+        await db.scalars(
+            select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.id)
+        )
+    ).all()
+    result = await db.get(CuttingResult, order.cutting_result_id)
+    return ProductionJobDetail(
+        **cards[0].model_dump(),
+        items=[_production_job_item(item) for item in items],
+        cutting_result=await cutting_result_response(db, result) if result is not None else None,
+    )
+
+
+def _production_visibility(
+    principal: AuthenticatedPrincipal,
+    *,
+    worker_column: Any,
+) -> ColumnElement[bool]:
+    """Station visibility for non-owners: whole branch where the principal can
+    manage orders, own jobs only where they merely process production."""
+    manage_branch_ids = {
+        grant.branch_id
+        for grant in principal.grants
+        if grant.permission is Permission.MANAGE_ORDERS
+    }
+    process_branch_ids = _production_branch_ids(principal) - manage_branch_ids
+    conditions: list[ColumnElement[bool]] = []
+    if manage_branch_ids:
+        conditions.append(Order.branch_id.in_(manage_branch_ids))
+    if process_branch_ids:
+        conditions.append(
+            and_(
+                Order.branch_id.in_(process_branch_ids),
+                worker_column == principal.principal_id,
+            )
+        )
+    if not conditions:
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    return or_(*conditions)
+
+
+async def _production_job_cards(
+    db: AsyncSession, orders: Sequence[Order]
+) -> list[ProductionJobCard]:
+    if not orders:
+        return []
+    branch_ids = {order.branch_id for order in orders}
+    result_ids = {order.cutting_result_id for order in orders}
+    order_ids = [order.id for order in orders]
+    worker_ids = {
+        user_id
+        for order in orders
+        for user_id in (order.assigned_cutter_user_id, order.assigned_edger_user_id)
+        if user_id is not None
+    }
+    branches = {
+        row.id: row
+        for row in (await db.scalars(select(Branch).where(Branch.id.in_(branch_ids)))).all()
+    }
+    results = {
+        row.id: row
+        for row in (
+            await db.scalars(select(CuttingResult).where(CuttingResult.id.in_(result_ids)))
+        ).all()
+    }
+    workers: dict[uuid.UUID, ProductionWorkerRef] = {}
+    if worker_ids:
+        workers = {
+            row.id: ProductionWorkerRef(id=row.id, full_name=row.full_name)
+            for row in (
+                await db.scalars(select(WorkshopUser).where(WorkshopUser.id.in_(worker_ids)))
+            ).all()
+        }
+    items_by_order: dict[uuid.UUID, list[OrderItem]] = defaultdict(list)
+    item_rows = (
+        await db.scalars(
+            select(OrderItem).where(OrderItem.order_id.in_(order_ids)).order_by(OrderItem.id)
+        )
+    ).all()
+    for item in item_rows:
+        items_by_order[item.order_id].append(item)
+
+    cards: list[ProductionJobCard] = []
+    for order in orders:
+        branch = branches.get(order.branch_id)
+        items = items_by_order.get(order.id, [])
+        result = results.get(order.cutting_result_id)
+        cards.append(
+            ProductionJobCard(
+                id=order.id,
+                order_number=order.order_number,
+                status=order.status,
+                version=order.version,
+                client_first_name=_first_name(order.contact_name),
+                branch_id=order.branch_id,
+                branch_name=branch.name if branch is not None else "",
+                item_count=sum(item.quantity for item in items),
+                has_banding=_items_have_banding(items),
+                planned_panels=_planned_panels(result),
+                planned_edge_lines=_planned_edge_lines(result),
+                material_labels=_panel_material_labels(items),
+                assigned_cutter=workers.get(order.assigned_cutter_user_id)
                 if order.assigned_cutter_user_id
                 else None,
-                "assigned_edger_user_id": str(order.assigned_edger_user_id)
+                assigned_edger=workers.get(order.assigned_edger_user_id)
                 if order.assigned_edger_user_id
                 else None,
-            },
+                cutter_assigned_at=order.cutter_assigned_at,
+                edger_assigned_at=order.edger_assigned_at,
+                cutting_started_at=order.cutting_started_at,
+                banding_started_at=order.banding_started_at,
+                cut_completed_at=order.cut_completed_at,
+                edge_completed_at=order.edge_completed_at,
+                created_at=order.created_at,
+            )
         )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    return cards
+
+
+def _first_name(value: str) -> str:
+    stripped = value.strip()
+    return stripped.split()[0] if stripped else stripped
+
+
+def _panel_material_labels(items: Sequence[OrderItem]) -> list[str]:
+    labels = [_material_label(item.material_snapshot) for item in items]
+    return list(dict.fromkeys(labels))
+
+
+def _production_job_item(item: OrderItem) -> ProductionJobItem:
+    return ProductionJobItem(
+        id=item.id,
+        part_ref=item.part_ref,
+        length_mm=item.length_mm,
+        width_mm=item.width_mm,
+        quantity=item.quantity,
+        material_label=_material_label(item.material_snapshot),
+        edge_top=_production_edge_side(item.edge_top),
+        edge_bottom=_production_edge_side(item.edge_bottom),
+        edge_left=_production_edge_side(item.edge_left),
+        edge_right=_production_edge_side(item.edge_right),
+    )
+
+
+def _production_edge_side(edge: dict[str, Any] | None) -> ProductionEdgeSide | None:
+    if edge is None:
+        return None
+    snapshot = edge.get("snapshot") or {}
+    return ProductionEdgeSide(
+        material_label=_material_label(snapshot, fallback="Edge"),
+        thickness_mm=_snapshot_decimal(snapshot.get("thickness_mm")),
+        color=_snapshot_text(snapshot.get("color")),
+        source=MaterialSource(str(edge["source"])),
+    )
 
 
 async def complete_cutting(
@@ -1119,11 +1400,13 @@ async def revert_order(
     reason = _required_reason(payload.reason)
     metadata: dict[str, Any] = {}
     if order.status is OrderStatus.CUTTING:
-        order.assigned_cutter_user_id = None
+        # Assignment persists — the order returns to the cutter's queue, unstarted.
+        order.cutting_started_at = None
         to_status = OrderStatus.CONFIRMED
     elif order.status is OrderStatus.EDGE_BANDING:
         restored = await _restore_cutting_step(db, order)
         metadata["restored_panels"] = {str(key): value for key, value in restored.items()}
+        order.banding_started_at = None
         to_status = OrderStatus.CUTTING
     elif order.status is OrderStatus.READY:
         if await _order_has_banding(db, order.id):
@@ -1585,6 +1868,10 @@ def _order_summary_base(
         "currency": order.currency,
         "assigned_cutter_user_id": order.assigned_cutter_user_id,
         "assigned_edger_user_id": order.assigned_edger_user_id,
+        "cutter_assigned_at": order.cutter_assigned_at,
+        "edger_assigned_at": order.edger_assigned_at,
+        "cutting_started_at": order.cutting_started_at,
+        "banding_started_at": order.banding_started_at,
         "cutter_user_id": order.cutter_user_id,
         "cut_completed_at": order.cut_completed_at,
         "panels_used_snapshot": order.panels_used_snapshot,
@@ -2294,6 +2581,25 @@ def _can_view_assigned_production_order(
     }:
         return False
     return _has_order_permission(principal, order, Permission.PROCESS_PRODUCTION)
+
+
+def _require_production_actor(
+    principal: AuthenticatedPrincipal,
+    order: Order,
+    *,
+    assigned_user_id: uuid.UUID | None,
+    job: str,
+) -> None:
+    if _has_order_permission(principal, order, Permission.MANAGE_ORDERS):
+        return
+    if not _has_order_permission(principal, order, Permission.PROCESS_PRODUCTION):
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    if assigned_user_id != principal.principal_id:
+        raise APIError(
+            "not_assigned",
+            f"This {job} job is assigned to another worker",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
 
 
 async def _credited_worker(

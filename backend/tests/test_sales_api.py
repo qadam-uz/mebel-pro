@@ -335,10 +335,15 @@ async def test_client_order_detail_gates_settlement_until_ready(
         f"/api/v1/workshop/orders?status=active&assigned_cutter_user_id={uuid.uuid4()}",
         headers=_auth(owner_access),
     )
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
     cut_done = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(owner_access),
-        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
     )
     edger_queue = await client.get(
         f"/api/v1/workshop/orders?status=edge_banding&assigned_edger_user_id={worker.id}",
@@ -471,15 +476,25 @@ async def test_production_staff_sees_and_updates_only_assigned_orders(
         f"/api/v1/workshop/orders/{order_id}",
         headers=_auth(other_access),
     )
+    other_start = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(other_access),
+        json={"version": assigned.json()["version"]},
+    )
+    worker_start = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(worker_access),
+        json={"version": assigned.json()["version"]},
+    )
     other_cut = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(other_access),
-        json={"version": assigned.json()["version"]},
+        json={"version": worker_start.json()["version"]},
     )
     worker_cut = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(worker_access),
-        json={"version": assigned.json()["version"]},
+        json={"version": worker_start.json()["version"]},
     )
 
     assert before_assignment.status_code == 200
@@ -492,6 +507,10 @@ async def test_production_staff_sees_and_updates_only_assigned_orders(
     assert other_list.status_code == 200
     assert other_list.json() == []
     assert other_detail.status_code == 404
+    assert other_start.status_code == 404
+    assert worker_start.status_code == 200
+    assert worker_start.json()["status"] == "cutting"
+    assert worker_start.json()["cutting_started_at"] is not None
     assert other_cut.status_code == 404
     assert worker_cut.status_code == 200
     assert worker_cut.json()["status"] == "edge_banding"
@@ -525,7 +544,10 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
         },
     )
     assert assigned.status_code == 200
-    assert assigned.json()["status"] == "cutting"
+    # Assignment is metadata: the order stays confirmed until the cutter starts.
+    assert assigned.json()["status"] == "confirmed"
+    assert assigned.json()["cutter_assigned_at"] is not None
+    assert assigned.json()["edger_assigned_at"] is not None
 
     stale = await client.post(
         f"/api/v1/workshop/orders/{order_id}/assign",
@@ -535,10 +557,19 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     assert stale.status_code == 409
     assert stale.json()["code"] == "order_version_conflict"
 
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    assert started.status_code == 200
+    assert started.json()["status"] == "cutting"
+    assert started.json()["cutting_started_at"] is not None
+
     cut_done = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(owner_access),
-        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
     )
     assert cut_done.status_code == 200
     assert cut_done.json()["status"] == "edge_banding"
@@ -817,10 +848,18 @@ async def test_workshop_status_changes_notify_the_client(
             "edger_user_id": str(worker.id),
         },
     )
+    # Assignment is metadata — it emits no status change and no client notification.
+    after_assign = await _client_order_notifications(db_session, order_id)
+    assert [n.event_code for n in after_assign] == ["order.confirmed"]
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
     cut_done = await client.post(
         f"/api/v1/workshop/orders/{order_id}/cutting-done",
         headers=_auth(owner_access),
-        json={"version": assigned.json()["version"], "completed_by_user_id": str(worker.id)},
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
     )
     band_done = await client.post(
         f"/api/v1/workshop/orders/{order_id}/banding-done",
@@ -832,7 +871,7 @@ async def test_workshop_status_changes_notify_the_client(
     codes = [n.event_code for n in await _client_order_notifications(db_session, order_id)]
     assert codes == [
         "order.confirmed",  # approve
-        "order.status_changed",  # assign → cutting
+        "order.status_changed",  # start-cutting → cutting (assignment itself emits nothing)
         "order.status_changed",  # cutting-done → edge_banding
         "order.ready",  # banding-done → ready
     ]

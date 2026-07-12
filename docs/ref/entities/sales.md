@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-11
 order: 50
 ---
 
@@ -56,8 +56,11 @@ the only input to the worker-production reports in [`finance.md`](../features/fi
 
 | Field | Type | Set at | Notes |
 |---|---|---|---|
-| `assigned_cutter_user_id` | UUID? | operator assigns | setting it is the `confirmed → cutting` trigger; holds `process_production` on the branch |
+| `assigned_cutter_user_id` | UUID? | operator assigns | pure metadata — assignment does **not** change status; holds `process_production` on the branch |
 | `assigned_edger_user_id` | UUID? | operator assigns | set when the order has banded parts; holds `process_production` on the branch |
+| `cutter_assigned_at` / `edger_assigned_at` | timestamp? | operator assigns | restamped on re-assignment; station-queue FIFO key; persists across reverts |
+| `cutting_started_at` | timestamp? | **Start cutting** (`confirmed → cutting`) | cleared by revert `cutting → confirmed` |
+| `banding_started_at` | timestamp? | **Start banding** (within `edge_banding`) | cleared by revert `edge_banding → cutting`; survives `ready → edge_banding` |
 | `cutter_user_id` | UUID? | `cutting → next` | the user credited (assignee, or the on-behalf "who did this work?" pick) |
 | `cut_completed_at` | timestamp? | `cutting → next` | |
 | `panels_used_snapshot` / `cut_count_snapshot` | int? | `cutting → next` | from the cutting result; production-report inputs |

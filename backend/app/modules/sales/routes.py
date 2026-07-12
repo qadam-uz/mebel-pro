@@ -21,9 +21,11 @@ from app.modules.sales.api import (
     complete_cutting,
     get_client_order,
     get_client_order_cutting_result,
+    get_production_job,
     get_workshop_order,
     get_workshop_order_cutting_result,
     list_client_orders,
+    list_production_queue,
     list_worker_options,
     list_workshop_orders,
     mark_collected,
@@ -33,6 +35,8 @@ from app.modules.sales.api import (
     quote_client_order_batch,
     quote_workshop_order,
     revert_order,
+    start_banding,
+    start_cutting,
     update_workshop_note,
 )
 from app.modules.sales.schemas import (
@@ -42,6 +46,8 @@ from app.modules.sales.schemas import (
     OrderDetailResponse,
     OrderQuoteResponse,
     OrderSummaryResponse,
+    ProductionJobDetail,
+    ProductionQueueResponse,
     ReasonedVersionedRequest,
     VersionedRequest,
     WorkshopOrderAssignRequest,
@@ -321,6 +327,47 @@ async def workshop_orders_assign(
     db: Session,
 ) -> OrderDetailResponse:
     return await assign_order_workers(db, principal=principal, order_id=order_id, payload=payload)
+
+
+@router.post("/workshop/orders/{order_id}/start-cutting", response_model=OrderDetailResponse)
+async def workshop_orders_start_cutting(
+    order_id: uuid.UUID,
+    payload: VersionedRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await start_cutting(db, principal=principal, order_id=order_id, payload=payload)
+
+
+@router.post("/workshop/orders/{order_id}/start-banding", response_model=OrderDetailResponse)
+async def workshop_orders_start_banding(
+    order_id: uuid.UUID,
+    payload: VersionedRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await start_banding(db, principal=principal, order_id=order_id, payload=payload)
+
+
+@router.get("/workshop/production/queue", response_model=ProductionQueueResponse)
+async def workshop_production_queue(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    station: str,
+    branch_id: uuid.UUID | None = None,
+) -> ProductionQueueResponse:
+    return await list_production_queue(
+        db, principal=principal, station=station, branch_id=branch_id
+    )
+
+
+@router.get("/workshop/production/jobs/{order_id}", response_model=ProductionJobDetail)
+async def workshop_production_job(
+    order_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> ProductionJobDetail:
+    return await get_production_job(db, principal=principal, order_id=order_id)
 
 
 @router.post("/workshop/orders/{order_id}/cutting-done", response_model=OrderDetailResponse)

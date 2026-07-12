@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 
 import {
   continueButton,
+  expectOk,
   ownerReadyPassword,
   passwordLabel,
   phoneFor,
@@ -32,7 +33,7 @@ async function orderDetail(
   const response = await request.get(`/api/v1/workshop/orders/${orderId}`, {
     headers: { Authorization: `Bearer ${ownerAccess}` },
   })
-  expect(response.ok()).toBe(true)
+  await expectOk(response)
   return (await response.json()) as { version: number; status: string }
 }
 
@@ -43,7 +44,9 @@ async function assignForCutting(
   version: number,
   workerId: string,
 ) {
-  const response = await request.post(`/api/v1/workshop/orders/${orderId}/assign`, {
+  // Assignment is metadata (the order stays confirmed); starting the job is
+  // the confirmed → cutting trigger.
+  const assigned = await request.post(`/api/v1/workshop/orders/${orderId}/assign`, {
     headers: { Authorization: `Bearer ${ownerAccess}` },
     data: {
       version,
@@ -51,8 +54,14 @@ async function assignForCutting(
       edger_user_id: workerId,
     },
   })
-  expect(response.ok()).toBe(true)
-  return (await response.json()) as { version: number; status: string }
+  await expectOk(assigned)
+  const assignedBody = (await assigned.json()) as { version: number; status: string }
+  const started = await request.post(`/api/v1/workshop/orders/${orderId}/start-cutting`, {
+    headers: { Authorization: `Bearer ${ownerAccess}` },
+    data: { version: assignedBody.version },
+  })
+  await expectOk(started)
+  return (await started.json()) as { version: number; status: string }
 }
 
 test('owner applies a discount and it persists after reload', async ({ page, request }, testInfo) => {
@@ -139,7 +148,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
     headers: { Authorization: `Bearer ${seeded.ownerAccess}` },
     data: { version: placed.order.version },
   })
-  expect(approved.ok()).toBe(true)
+  await expectOk(approved)
   const cutting = await assignForCutting(
     request,
     seeded.ownerAccess,
@@ -163,7 +172,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
     headers: { Authorization: `Bearer ${seeded.ownerAccess}` },
     data: { note_workshop: `external update ${freshBeforeConflict.version}` },
   })
-  expect(note.ok()).toBe(true)
+  await expectOk(note)
 
   await page.getByRole('button', { name: 'Buyurtmani bekor qilish' }).click()
   const cancelDialog = page.getByRole('dialog', { name: 'Buyurtmani bekor qilish' })

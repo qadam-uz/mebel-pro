@@ -171,6 +171,10 @@ export interface OrderSummary {
   currency: 'UZS'
   assigned_cutter_user_id: string | null
   assigned_edger_user_id: string | null
+  cutter_assigned_at: string | null
+  edger_assigned_at: string | null
+  cutting_started_at: string | null
+  banding_started_at: string | null
   cutter_user_id: string | null
   cut_completed_at: string | null
   panels_used_snapshot: number | null
@@ -474,6 +478,16 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/assign`, payload)
   }
 
+  // The worker-owned production loop: assignment is metadata, start is the
+  // status trigger. Both go through mutate() so a 409 refetches the fresh row.
+  async function startCutting(id: string, version: number) {
+    return await mutate(`/workshop/orders/${id}/start-cutting`, { version })
+  }
+
+  async function startBanding(id: string, version: number) {
+    return await mutate(`/workshop/orders/${id}/start-banding`, { version })
+  }
+
   async function cuttingDone(id: string, payload: unknown) {
     return await mutate(`/workshop/orders/${id}/cutting-done`, payload)
   }
@@ -659,6 +673,8 @@ export const useOrdersStore = defineStore('orders', () => {
     loadWorkers,
     approve,
     assign,
+    startCutting,
+    startBanding,
     cuttingDone,
     bandingDone,
     markCollected,

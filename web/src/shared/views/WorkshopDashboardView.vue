@@ -381,7 +381,7 @@ watch(
             class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline md:grid-cols-2"
           >
             <RouterLink
-              :to="rolePath('/workshop/cutting')"
+              :to="{ path: rolePath('/workshop/production'), query: { station: 'cutting' } }"
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
@@ -396,7 +396,7 @@ watch(
               </p>
             </RouterLink>
             <RouterLink
-              :to="rolePath('/workshop/banding')"
+              :to="{ path: rolePath('/workshop/production'), query: { station: 'banding' } }"
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">

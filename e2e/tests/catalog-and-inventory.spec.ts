@@ -4,6 +4,8 @@ import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { expectOk } from './helpers'
+
 const execFileAsync = promisify(execFile)
 const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
@@ -80,7 +82,7 @@ async function platformToken(request: APIRequestContext, login: string) {
   const response = await request.post('/api/v1/auth/platform/login', {
     data: { login, password: adminPassword },
   })
-  expect(response.ok()).toBe(true)
+  await expectOk(response)
   return (await response.json()).access_token as string
 }
 
@@ -105,7 +107,7 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
       temp_password: ownerPassword,
     },
   })
-  expect(response.ok()).toBe(true)
+  await expectOk(response)
   return { ...(await response.json()), ownerLogin, ownerPassword }
 }
 
@@ -119,13 +121,13 @@ async function readyOwnerToken(
       password: setup.ownerPassword,
     },
   })
-  expect(login.ok()).toBe(true)
+  await expectOk(login)
   const access = (await login.json()).access_token as string
   const changed = await request.post('/api/v1/auth/password/change', {
     headers: { Authorization: `Bearer ${access}` },
     data: { current_password: setup.ownerPassword, new_password: ownerReadyPassword },
   })
-  expect(changed.ok()).toBe(true)
+  await expectOk(changed)
   return access
 }
 
@@ -139,7 +141,7 @@ async function createCatalogMaterial(
     headers: { Authorization: `Bearer ${token}` },
     data: { name: `Catalog Maker ${id}`, country: 'UZ' },
   })
-  expect(manufacturer.ok()).toBe(true)
+  await expectOk(manufacturer)
   const manufacturerId = (await manufacturer.json()).id as string
   const material = await request.post('/api/v1/platform/catalog/materials', {
     headers: { Authorization: `Bearer ${token}` },
@@ -157,7 +159,7 @@ async function createCatalogMaterial(
       image_file_id: imageFileId,
     },
   })
-  expect(material.ok()).toBe(true)
+  await expectOk(material)
   return (await material.json()) as { id: string; name: string }
 }
 
@@ -319,7 +321,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
       },
     },
   })
-  expect(image.ok()).toBe(true)
+  await expectOk(image)
   const material = await createCatalogMaterial(request, adminAccess, id, (await image.json()).id)
   const branchId = setup.branch.id as string
   const staffLogin = `inv-${id}`
@@ -327,7 +329,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
     headers: { Authorization: `Bearer ${ownerAccess}` },
     data: { material_id: material.id, price_tiyin: 250000, min_stock: 1 },
   })
-  expect(materialSelection.ok()).toBe(true)
+  await expectOk(materialSelection)
   const staff = await request.post('/api/v1/workshop/users', {
     headers: { Authorization: `Bearer ${ownerAccess}` },
     data: {
@@ -339,7 +341,7 @@ test('inventory-only staff sees inventory controls but not catalog controls', as
       grants: [{ permission: 'manage_inventory', branch_id: branchId }],
     },
   })
-  expect(staff.ok()).toBe(true)
+  await expectOk(staff)
 
   await loginWorkshop(page, staffLogin, 'StaffTemp123')
   await changeRequiredPassword(page, 'StaffTemp123', staffReadyPassword)
@@ -372,14 +374,14 @@ test('client browses the workshop directory without catalog or stock details', a
       },
     },
   })
-  expect(image.ok()).toBe(true)
+  await expectOk(image)
   const material = await createCatalogMaterial(request, adminAccess, id, (await image.json()).id)
   const branchId = setup.branch.id as string
   const selected = await request.post(`/api/v1/workshop/branches/${branchId}/materials`, {
     headers: { Authorization: `Bearer ${ownerAccess}` },
     data: { material_id: material.id, price_tiyin: 250000, min_stock: 1 },
   })
-  expect(selected.ok()).toBe(true)
+  await expectOk(selected)
 
   await page.goto('/client/auth/login')
   await page.getByLabel('Telefon raqami').fill(phoneFor(id, 60))

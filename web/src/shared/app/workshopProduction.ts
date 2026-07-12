@@ -61,3 +61,80 @@ export function resolveProductionCreditUser(
 ) {
   return (canChooseWorker ? selectedUserId || assignedUserId : assignedUserId) ?? null
 }
+
+// --- Station workspace (Ishlarim) -------------------------------------------
+
+export type ProductionStationKey = 'cutting' | 'banding'
+
+export interface ProductionStationJob {
+  status: string
+  cutting_started_at: string | null
+  banding_started_at: string | null
+  assigned_cutter: { id: string; full_name: string } | null
+  assigned_edger: { id: string; full_name: string } | null
+  material_labels: string[]
+  item_count: number
+  planned_panels: number
+  planned_edge_lines: WorkshopEdgeMaterialDemand[]
+}
+
+// A cutting job is "running" once its status is `cutting` (legacy in-flight
+// orders may predate the start stamp, so the status is the truth there); a
+// banding job runs only once the edger's start stamp is set — `edge_banding`
+// itself just means "arrived at the station".
+export function isProductionJobStarted(job: ProductionStationJob, station: ProductionStationKey) {
+  if (station === 'cutting') return job.status === 'cutting'
+  return job.status === 'edge_banding' && job.banding_started_at !== null
+}
+
+export function partitionProductionJobs<T extends ProductionStationJob>(
+  jobs: T[],
+  station: ProductionStationKey,
+) {
+  const current: T[] = []
+  const queued: T[] = []
+  for (const job of jobs) {
+    if (isProductionJobStarted(job, station)) current.push(job)
+    else queued.push(job)
+  }
+  return { current, queued }
+}
+
+export function productionJobAssignee(job: ProductionStationJob, station: ProductionStationKey) {
+  return station === 'cutting' ? job.assigned_cutter : job.assigned_edger
+}
+
+// Owner view: the branch queue grouped by master, insertion-ordered so groups
+// follow the queue's FIFO order. Jobs missing an assignee (shouldn't happen —
+// the backend only returns assigned jobs) fall into a trailing group.
+export function groupProductionJobsByAssignee<T extends ProductionStationJob>(
+  jobs: T[],
+  station: ProductionStationKey,
+) {
+  const groups = new Map<string, { worker: { id: string; full_name: string } | null; jobs: T[] }>()
+  for (const job of jobs) {
+    const worker = productionJobAssignee(job, station)
+    const key = worker?.id ?? 'unassigned'
+    const group = groups.get(key) ?? { worker, jobs: [] }
+    group.jobs.push(job)
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+}
+
+// One line of card meta: what the master needs to size the job at a glance —
+// panel material + counts for the saw; metres by edge material for the bander
+// (the edge line already names the tape, so the panel material would be noise).
+export function productionJobMetaLine(job: ProductionStationJob, station: ProductionStationKey) {
+  if (station === 'banding') {
+    if (job.planned_edge_lines.length > 0) return workshopQueueEdgeLine(job.planned_edge_lines)
+    return job.material_labels.join(', ')
+  }
+  const material = job.material_labels.join(', ')
+  const counts = workshopQueuePartsLine({
+    item_count: job.item_count,
+    planned_panels: job.planned_panels,
+    panels_used_snapshot: null,
+  })
+  return [material, counts].filter(Boolean).join(' · ')
+}

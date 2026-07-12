@@ -237,6 +237,8 @@ describe('role route matrix', () => {
       '/workshop/orders/cutting/:id',
       '/workshop/orders/new/:draft_id/checkout',
       '/workshop/orders/:order_id',
+      '/workshop/production',
+      '/workshop/production/:order_id',
       '/workshop/cutting',
       '/workshop/banding',
       '/workshop/inventory',
@@ -394,16 +396,25 @@ describe('role route matrix', () => {
     expect(clientEditor.default).toBe(workshopEditor.default)
   })
 
-  it('keeps the workshop editor routes out of the cutter-queue namespace', () => {
-    // /workshop/cutting is the process_production cutter queue; the manage_orders
-    // editor lives under /workshop/orders/* so the two never collide.
+  it('keeps the workshop editor routes out of the production namespace', () => {
+    // /workshop/production is the process_production station workspace; the
+    // manage_orders editor lives under /workshop/orders/* so the two never
+    // collide, and the retired queue URLs stay alive as redirects into it.
     const editorPaths = workshopRoutes
       .map((route) => route.path)
       .filter((path) => path.includes('cutting') && path.includes('orders'))
     expect(editorPaths).toContain('/workshop/orders/new/cutting')
     expect(editorPaths).toContain('/workshop/orders/cutting/:id')
-    expect(workshopRoutes.find((r) => r.path === '/workshop/cutting')?.name).toBe(
-      'workshop-cutting-queue',
+    expect(workshopRoutes.find((r) => r.path === '/workshop/production')?.name).toBe(
+      'workshop-production',
     )
+    expect(workshopRoutes.find((r) => r.path === '/workshop/cutting')?.redirect).toEqual({
+      path: '/workshop/production',
+      query: { station: 'cutting' },
+    })
+    expect(workshopRoutes.find((r) => r.path === '/workshop/banding')?.redirect).toEqual({
+      path: '/workshop/production',
+      query: { station: 'banding' },
+    })
   })
 })

@@ -292,7 +292,9 @@ const dragOverState = ref<OrderStatus | null>(null)
 
 const FORWARD_ACTION_KIND: Record<string, WorkshopOrderListAction['kind']> = {
   new: 'approve',
-  confirmed: 'assign',
+  // Assignment no longer starts the job — the forward move out of `confirmed`
+  // is start_cutting; an unassigned order falls back to the assign→detail path.
+  confirmed: 'start_cutting',
   cutting: 'complete_cutting',
   edge_banding: 'complete_banding',
 }
@@ -376,6 +378,20 @@ function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
       confirmLabel: 'Tasdiqlash',
     }
   }
+  if (action.kind === 'start_cutting') {
+    return {
+      title: 'Kesish boshlansinmi?',
+      message: `${order.order_number} kesish bosqichiga o'tadi — usta ishni boshlagan bo'lishi kerak.`,
+      confirmLabel: 'Boshlash',
+    }
+  }
+  if (action.kind === 'start_banding') {
+    return {
+      title: 'Krom boshlansinmi?',
+      message: `${order.order_number} uchun krom ishi boshlanganini belgilaysiz.`,
+      confirmLabel: 'Boshlash',
+    }
+  }
   if (action.kind === 'complete_cutting') {
     return {
       title: 'Kesish tugadimi?',
@@ -423,6 +439,8 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
 
 function listActionSuccessMessage(action: WorkshopOrderListAction) {
   if (action.kind === 'approve') return 'Buyurtma tasdiqlandi.'
+  if (action.kind === 'start_cutting') return 'Kesish boshlandi.'
+  if (action.kind === 'start_banding') return 'Krom boshlandi.'
   if (action.kind === 'complete_cutting') return 'Kesish yakunlandi.'
   if (action.kind === 'complete_banding') return 'Krom yakunlandi.'
   if (action.kind === 'mark_collected') return 'Buyurtma topshirildi.'
@@ -471,6 +489,10 @@ async function confirmListAction() {
   let ok = false
   if (action.kind === 'approve') {
     ok = await runListMutation(order, () => orders.approve(order.id, order.version))
+  } else if (action.kind === 'start_cutting') {
+    ok = await runListMutation(order, () => orders.startCutting(order.id, order.version))
+  } else if (action.kind === 'start_banding') {
+    ok = await runListMutation(order, () => orders.startBanding(order.id, order.version))
   } else if (action.kind === 'complete_cutting') {
     const completedBy = order.assigned_cutter_user_id
     if (!completedBy) {

@@ -87,6 +87,10 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
     assigned_edger_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workshop_users.id")
     )
+    cutter_assigned_at: Mapped[datetime | None]
+    edger_assigned_at: Mapped[datetime | None]
+    cutting_started_at: Mapped[datetime | None]
+    banding_started_at: Mapped[datetime | None]
     cutter_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshop_users.id"))
     cut_completed_at: Mapped[datetime | None]
     panels_used_snapshot: Mapped[int | None]

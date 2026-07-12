@@ -8,6 +8,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { expectOk } from "./helpers";
+
 const execFileAsync = promisify(execFile);
 const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
@@ -30,8 +32,8 @@ interface CuttingDraftResponse {
 }
 
 // The full client-places → workshop-completes lifecycle (cutting editor +
-// optimise, then every production queue) is the heaviest flow in the suite and
-// sits right on the old 90s budget; give it headroom for slower CI runners.
+// optimise, then the Ishlarim station terminal) is the heaviest flow in the
+// suite and sits right on the old 90s budget; give it headroom for slower CI.
 test.setTimeout(150_000);
 
 function runId(testInfo: { workerIndex: number }) {
@@ -95,7 +97,7 @@ async function platformToken(request: APIRequestContext, login: string) {
   const response = await request.post("/api/v1/auth/platform/login", {
     data: { login, password: adminPassword },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return (await response.json()).access_token as string;
 }
 
@@ -124,7 +126,7 @@ async function provisionWorkshop(
       temp_password: ownerPassword,
     },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return { ...(await response.json()), ownerLogin, ownerPassword };
 }
 
@@ -138,7 +140,7 @@ async function readyOwnerToken(
       password: setup.ownerPassword,
     },
   });
-  expect(login.ok()).toBe(true);
+  await expectOk(login);
   const access = (await login.json()).access_token as string;
   const changed = await request.post("/api/v1/auth/password/change", {
     headers: { Authorization: `Bearer ${access}` },
@@ -147,7 +149,7 @@ async function readyOwnerToken(
       new_password: ownerReadyPassword,
     },
   });
-  expect(changed.ok()).toBe(true);
+  await expectOk(changed);
   return access;
 }
 
@@ -163,7 +165,7 @@ async function createCatalogMaterials(
       data: { name: `Order Maker ${id}`, country: "UZ" },
     },
   );
-  expect(manufacturer.ok()).toBe(true);
+  await expectOk(manufacturer);
   const manufacturerId = (await manufacturer.json()).id as string;
 
   const panel = await request.post("/api/v1/platform/catalog/materials", {
@@ -181,7 +183,7 @@ async function createCatalogMaterials(
       grain_direction: false,
     },
   });
-  expect(panel.ok()).toBe(true);
+  await expectOk(panel);
 
   const edge = await request.post("/api/v1/platform/catalog/materials", {
     headers: { Authorization: `Bearer ${token}` },
@@ -194,7 +196,7 @@ async function createCatalogMaterials(
       decor_code: `P5-E-${id}`,
     },
   });
-  expect(edge.ok()).toBe(true);
+  await expectOk(edge);
 
   return {
     panel: (await panel.json()) as MaterialResponse,
@@ -221,7 +223,7 @@ async function addBranchMaterial(
       },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function updateBranchPricing(
@@ -236,7 +238,7 @@ async function updateBranchPricing(
       data: { cutting_rate_tiyin: 50_000, edge_banding_rate_tiyin: 20_000 },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function stockIn(
@@ -258,18 +260,18 @@ async function stockIn(
       },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
   const requested = await request.post("/api/v1/auth/client/otp/request", {
     data: { phone },
   });
-  expect(requested.ok()).toBe(true);
+  await expectOk(requested);
   const verified = await request.post("/api/v1/auth/client/otp/verify", {
     data: { phone, code: "000000", name },
   });
-  expect(verified.ok()).toBe(true);
+  await expectOk(verified);
   return (await verified.json()) as TokenResponse;
 }
 
@@ -282,7 +284,7 @@ async function optimizedDraftWithoutPricing(
   const created = await request.post("/api/v1/client/cutting-drafts", {
     headers: { Authorization: `Bearer ${token}` },
   });
-  expect(created.ok()).toBe(true);
+  await expectOk(created);
   const draft = (await created.json()) as CuttingDraftResponse;
 
   const patched = await request.patch(
@@ -308,13 +310,13 @@ async function optimizedDraftWithoutPricing(
       },
     },
   );
-  expect(patched.ok()).toBe(true);
+  await expectOk(patched);
 
   const optimized = await request.post(
     `/api/v1/client/cutting-drafts/${draft.id}/optimize`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
-  expect(optimized.ok()).toBe(true);
+  await expectOk(optimized);
   const result = (await optimized.json()) as CuttingDraftResponse;
   expect(result.chosen_result_id).not.toBeNull();
   return result;
@@ -518,20 +520,25 @@ test("client places an order and workshop completes it through production queues
     /Krom yopishtiruvchi/,
     new RegExp(setup.ownerLogin),
   );
-  await workshopPage.getByRole("button", { name: "Tayinlash va boshlash" }).click();
+  // Assignment is metadata now — the order stays confirmed (queued in the
+  // master's station) until the job is actually started.
+  await workshopPage.getByRole("button", { name: "Tayinlash", exact: true }).click();
+  await expect(
+    workshopPage.getByRole("button", { name: "Kesishni boshlash" }),
+  ).toBeVisible();
+  await expect(
+    workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
+  ).toBeVisible();
+  await workshopPage.getByRole("button", { name: "Kesishni boshlash" }).click();
   await expect(
     workshopPage.getByText("Kesilmoqda", { exact: true }).first(),
   ).toBeVisible();
 
-  await workshopPage
-    .getByRole("link", { name: "Kesish navbati" })
-    .first()
-    .click();
-  // exact: the empty-state h3 ("Kesish navbati bo'sh") can flash on mount
-  // before the queue fetch lands; the order-number assertion below retries
-  // through it.
+  // The station terminal: the started job sits pinned as "Hozirgi ish" with
+  // the worker's Tugatdim action behind a success confirm.
+  await workshopPage.getByRole("link", { name: "Ishlarim" }).first().click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Kesish navbati", exact: true }),
+    workshopPage.getByRole("heading", { name: "Ishlarim", exact: true }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
@@ -539,29 +546,28 @@ test("client places an order and workshop completes it through production queues
   const cuttingDone = workshopPage.waitForResponse(
     (response) => response.url().includes("/cutting-done") && response.ok(),
   );
-  await workshopPage.getByRole("button", { name: "Kesish tugadi" }).click();
-  // Completing cutting is irreversible, so it goes through a confirmation
-  // dialog — confirm it to fire the request.
-  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
+  await workshopPage.getByRole("button", { name: /Tugatdim$/ }).click();
+  await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await cuttingDone;
 
-  await workshopPage
-    .getByRole("link", { name: "Krom navbati" })
-    .first()
-    .click();
-  await expect(
-    workshopPage.getByRole("heading", { name: "Krom yopishtirish navbati" }),
-  ).toBeVisible();
+  // The job hands off to the Krom station queued-but-not-started: the edger
+  // (here: the owner on-behalf) taps Boshlash, then finishes it.
+  await workshopPage.getByRole("tab", { name: /^Krom/ }).click();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
+  const bandingStarted = workshopPage.waitForResponse(
+    (response) => response.url().includes("/start-banding") && response.ok(),
+  );
+  await workshopPage
+    .getByRole("button", { name: "Boshlash", exact: true })
+    .click();
+  await bandingStarted;
   const bandingDone = workshopPage.waitForResponse(
     (response) => response.url().includes("/banding-done") && response.ok(),
   );
-  await workshopPage.getByRole("button", { name: "Krom tugadi" }).click();
-  // Completing banding is irreversible, so it goes through a confirmation
-  // dialog — confirm it to fire the request.
-  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
+  await workshopPage.getByRole("button", { name: /Tugatdim$/ }).click();
+  await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await bandingDone;
 
   await workshopPage.goto(workshopOrderUrl);
