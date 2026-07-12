@@ -198,6 +198,10 @@ class OrderSummaryResponse(APIModel):
     currency: Currency
     assigned_cutter_user_id: uuid.UUID | None
     assigned_edger_user_id: uuid.UUID | None
+    cutter_assigned_at: datetime | None
+    edger_assigned_at: datetime | None
+    cutting_started_at: datetime | None
+    banding_started_at: datetime | None
     cutter_user_id: uuid.UUID | None
     cut_completed_at: datetime | None
     panels_used_snapshot: int | None
@@ -223,3 +227,70 @@ class OrderDetailResponse(OrderSummaryResponse):
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
     cutting_result: CuttingResultResponse | None = None
     settlement: OrderSettlementResponse | None = None
+
+
+# --- Production terminal (worker-scoped, money-free) -------------------------
+#
+# The station workspace and job sheet payloads. Deliberately separate from the
+# order schemas: no price/discount/settlement fields, no client phone, first
+# name only — the boundary is enforced by construction, not by trimming.
+
+
+class ProductionWorkerRef(APIModel):
+    id: uuid.UUID
+    full_name: str
+
+
+class ProductionEdgeSide(APIModel):
+    material_label: str
+    thickness_mm: Decimal | None = None
+    color: str | None = None
+    source: MaterialSource
+
+
+class ProductionJobItem(APIModel):
+    id: uuid.UUID
+    part_ref: str
+    length_mm: int
+    width_mm: int
+    quantity: int
+    material_label: str
+    edge_top: ProductionEdgeSide | None = None
+    edge_bottom: ProductionEdgeSide | None = None
+    edge_left: ProductionEdgeSide | None = None
+    edge_right: ProductionEdgeSide | None = None
+
+
+class ProductionJobCard(APIModel):
+    id: uuid.UUID
+    order_number: str
+    status: OrderStatus
+    version: int
+    client_first_name: str
+    branch_id: uuid.UUID
+    branch_name: str
+    item_count: int
+    has_banding: bool
+    planned_panels: int = 0
+    planned_edge_lines: list[OrderEdgeMaterialDemand] = Field(default_factory=list)
+    material_labels: list[str] = Field(default_factory=list)
+    assigned_cutter: ProductionWorkerRef | None = None
+    assigned_edger: ProductionWorkerRef | None = None
+    cutter_assigned_at: datetime | None = None
+    edger_assigned_at: datetime | None = None
+    cutting_started_at: datetime | None = None
+    banding_started_at: datetime | None = None
+    cut_completed_at: datetime | None = None
+    edge_completed_at: datetime | None = None
+    created_at: datetime
+
+
+class ProductionQueueResponse(APIModel):
+    station: Literal["cutting", "banding"]
+    jobs: list[ProductionJobCard] = Field(default_factory=list)
+    completed_today: list[ProductionJobCard] = Field(default_factory=list)
+
+
+class ProductionJobDetail(ProductionJobCard):
+    items: list[ProductionJobItem] = Field(default_factory=list)
+    cutting_result: CuttingResultResponse | None = None

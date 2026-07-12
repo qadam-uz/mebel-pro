@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  groupProductionJobsByAssignee,
+  isProductionJobStarted,
+  partitionProductionJobs,
+  productionJobMetaLine,
   resolveProductionCreditUser,
   workshopEdgeMaterialLabel,
   workshopProductionQueueCounts,
   workshopQueueEdgeLine,
   workshopQueuePartsLine,
+  type ProductionStationJob,
 } from '@/shared/app/workshopProduction'
 
 describe('workshop production display helpers', () => {
@@ -86,5 +91,66 @@ describe('workshop production display helpers', () => {
     expect(resolveProductionCreditUser('assigned', 'selected', false)).toBe('assigned')
     expect(resolveProductionCreditUser('assigned', null, true)).toBe('assigned')
     expect(resolveProductionCreditUser(null, null, true)).toBeNull()
+  })
+})
+
+function stationJob(overrides: Partial<ProductionStationJob> = {}): ProductionStationJob {
+  return {
+    status: 'confirmed',
+    cutting_started_at: null,
+    banding_started_at: null,
+    assigned_cutter: { id: 'worker-1', full_name: 'Sardor' },
+    assigned_edger: { id: 'worker-2', full_name: 'Jamshid' },
+    material_labels: ['Premium Oq'],
+    item_count: 6,
+    planned_panels: 1,
+    planned_edge_lines: [
+      { material_label: 'PVX Oq', thickness_mm: '2', color: 'oq', consumed_mm: 3900 },
+    ],
+    ...overrides,
+  }
+}
+
+describe('station workspace partitioning', () => {
+  it('treats a cutting-status job as running even without a start stamp (legacy rows)', () => {
+    expect(isProductionJobStarted(stationJob({ status: 'cutting' }), 'cutting')).toBe(true)
+    expect(isProductionJobStarted(stationJob({ status: 'confirmed' }), 'cutting')).toBe(false)
+  })
+
+  it('treats a banding job as running only once the start stamp is set', () => {
+    expect(isProductionJobStarted(stationJob({ status: 'edge_banding' }), 'banding')).toBe(false)
+    expect(
+      isProductionJobStarted(
+        stationJob({ status: 'edge_banding', banding_started_at: '2026-07-11T09:00:00Z' }),
+        'banding',
+      ),
+    ).toBe(true)
+  })
+
+  it('splits the queue into the running job and the waiting stack', () => {
+    const running = stationJob({ status: 'cutting' })
+    const queued = stationJob({ status: 'confirmed' })
+    expect(partitionProductionJobs([queued, running], 'cutting')).toEqual({
+      current: [running],
+      queued: [queued],
+    })
+  })
+
+  it('groups the manager view by assignee in queue order', () => {
+    const a1 = stationJob()
+    const b = stationJob({ assigned_cutter: { id: 'worker-9', full_name: 'Bek' } })
+    const a2 = stationJob()
+    const groups = groupProductionJobsByAssignee([a1, b, a2], 'cutting')
+    expect(groups.map((group) => group.worker?.full_name)).toEqual(['Sardor', 'Bek'])
+    expect(groups[0]?.jobs).toEqual([a1, a2])
+  })
+
+  it('sizes the job for the saw and for the edge bander differently', () => {
+    expect(productionJobMetaLine(stationJob(), 'cutting')).toBe('Premium Oq · 6 qism · 1 panel')
+    // The edge line already names the tape — no panel-material prefix.
+    expect(productionJobMetaLine(stationJob(), 'banding')).toBe('PVX Oq · 2 mm · oq: 3.9 m')
+    expect(productionJobMetaLine(stationJob({ planned_edge_lines: [] }), 'banding')).toBe(
+      'Premium Oq',
+    )
   })
 })

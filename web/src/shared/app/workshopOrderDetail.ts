@@ -52,6 +52,8 @@ export function parseDiscountDraft(
 export type WorkshopOrderListActionKind =
   | 'approve'
   | 'assign'
+  | 'start_cutting'
+  | 'start_banding'
   | 'complete_cutting'
   | 'complete_banding'
   | 'mark_collected'
@@ -70,6 +72,7 @@ export interface WorkshopOrderActionOrder {
   has_banding: boolean
   assigned_cutter_user_id: string | null
   assigned_edger_user_id: string | null
+  banding_started_at: string | null
 }
 
 export interface WorkshopOrderActionAccess {
@@ -100,12 +103,19 @@ export function workshopOrderListActions(
 ): WorkshopOrderListAction[] {
   const actions: WorkshopOrderListAction[] = []
 
+  // Assignment is metadata; the status moves when the assigned cutter starts.
+  // The start action is the queued order's primary forward action for whoever
+  // may perform it (the assigned master, or the office on-behalf).
+  if (order.status === 'confirmed' && access.canCompleteCutting && order.assigned_cutter_user_id) {
+    actions.push({ kind: 'start_cutting', label: 'Kesishni boshlash' })
+  }
+
   if (access.canManageOrders) {
     if (order.status === 'new') {
       actions.push({ kind: 'approve', label: 'Tasdiqlash' })
       actions.push({ kind: 'cancel', label: 'Bekor qilish', danger: true })
     } else if (order.status === 'confirmed') {
-      actions.push({ kind: 'assign', label: 'Tayinlash va boshlash' })
+      actions.push({ kind: 'assign', label: 'Tayinlash' })
       actions.push({ kind: 'cancel', label: 'Bekor qilish', danger: true })
     }
   }
@@ -128,6 +138,9 @@ export function workshopOrderListActions(
 
   if (order.status === 'edge_banding') {
     if (access.canCompleteBanding && order.assigned_edger_user_id) {
+      if (!order.banding_started_at) {
+        actions.push({ kind: 'start_banding', label: 'Krom boshlash' })
+      }
       actions.push({ kind: 'complete_banding', label: 'Krom tugadi' })
     }
     if (access.canManageOrders) {

@@ -515,11 +515,15 @@ advance_to() { # order_id target cutter_id edger_id
   local oid="$1" target="$2" cut="$3" edg="$4"
   [ "$target" = new ] && return 0
   ws_step "$oid" approve
-  [ "$target" = confirmed ] && return 0
+  # Assignment is metadata (no status change): a `confirmed` demo order is left
+  # assigned-but-unstarted, so it sits queued in the master's Ishlarim station.
   ws_step "$oid" assign "\"cutter_user_id\":\"$cut\",\"edger_user_id\":\"$edg\""
+  [ "$target" = confirmed ] && return 0
+  ws_step "$oid" start-cutting    # confirmed → cutting (the worker's Boshlash)
   [ "$target" = cutting ] && return 0
   ws_step "$oid" cutting-done
-  [ "$target" = edge_banding ] && return 0
+  # The edge_banding demo order shows a started krom job (the edger's hero card).
+  [ "$target" = edge_banding ] && { ws_step "$oid" start-banding; return 0; }
   ws_step "$oid" banding-done
   [ "$target" = ready ] && return 0
   ws_step "$oid" mark-collected   # ready → completed

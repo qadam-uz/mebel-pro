@@ -30,8 +30,8 @@ interface CuttingDraftResponse {
 }
 
 // The full client-places → workshop-completes lifecycle (cutting editor +
-// optimise, then every production queue) is the heaviest flow in the suite and
-// sits right on the old 90s budget; give it headroom for slower CI runners.
+// optimise, then the Ishlarim station terminal) is the heaviest flow in the
+// suite and sits right on the old 90s budget; give it headroom for slower CI.
 test.setTimeout(150_000);
 
 function runId(testInfo: { workerIndex: number }) {
@@ -518,20 +518,25 @@ test("client places an order and workshop completes it through production queues
     /Krom yopishtiruvchi/,
     new RegExp(setup.ownerLogin),
   );
-  await workshopPage.getByRole("button", { name: "Tayinlash va boshlash" }).click();
+  // Assignment is metadata now — the order stays confirmed (queued in the
+  // master's station) until the job is actually started.
+  await workshopPage.getByRole("button", { name: "Tayinlash", exact: true }).click();
+  await expect(
+    workshopPage.getByRole("button", { name: "Kesishni boshlash" }),
+  ).toBeVisible();
+  await expect(
+    workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
+  ).toBeVisible();
+  await workshopPage.getByRole("button", { name: "Kesishni boshlash" }).click();
   await expect(
     workshopPage.getByText("Kesilmoqda", { exact: true }).first(),
   ).toBeVisible();
 
-  await workshopPage
-    .getByRole("link", { name: "Kesish navbati" })
-    .first()
-    .click();
-  // exact: the empty-state h3 ("Kesish navbati bo'sh") can flash on mount
-  // before the queue fetch lands; the order-number assertion below retries
-  // through it.
+  // The station terminal: the started job sits pinned as "Hozirgi ish" with
+  // the worker's Tugatdim action behind a success confirm.
+  await workshopPage.getByRole("link", { name: "Ishlarim" }).first().click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Kesish navbati", exact: true }),
+    workshopPage.getByRole("heading", { name: "Ishlarim", exact: true }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
@@ -539,29 +544,28 @@ test("client places an order and workshop completes it through production queues
   const cuttingDone = workshopPage.waitForResponse(
     (response) => response.url().includes("/cutting-done") && response.ok(),
   );
-  await workshopPage.getByRole("button", { name: "Kesish tugadi" }).click();
-  // Completing cutting is irreversible, so it goes through a confirmation
-  // dialog — confirm it to fire the request.
-  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
+  await workshopPage.getByRole("button", { name: /Tugatdim$/ }).click();
+  await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await cuttingDone;
 
-  await workshopPage
-    .getByRole("link", { name: "Krom navbati" })
-    .first()
-    .click();
-  await expect(
-    workshopPage.getByRole("heading", { name: "Krom yopishtirish navbati" }),
-  ).toBeVisible();
+  // The job hands off to the Krom station queued-but-not-started: the edger
+  // (here: the owner on-behalf) taps Boshlash, then finishes it.
+  await workshopPage.getByRole("tab", { name: /^Krom/ }).click();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
+  const bandingStarted = workshopPage.waitForResponse(
+    (response) => response.url().includes("/start-banding") && response.ok(),
+  );
+  await workshopPage
+    .getByRole("button", { name: "Boshlash", exact: true })
+    .click();
+  await bandingStarted;
   const bandingDone = workshopPage.waitForResponse(
     (response) => response.url().includes("/banding-done") && response.ok(),
   );
-  await workshopPage.getByRole("button", { name: "Krom tugadi" }).click();
-  // Completing banding is irreversible, so it goes through a confirmation
-  // dialog — confirm it to fire the request.
-  await workshopPage.getByRole("button", { name: "Ha, tugadi" }).click();
+  await workshopPage.getByRole("button", { name: /Tugatdim$/ }).click();
+  await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await bandingDone;
 
   await workshopPage.goto(workshopOrderUrl);

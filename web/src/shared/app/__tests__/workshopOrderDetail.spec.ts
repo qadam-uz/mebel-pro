@@ -27,6 +27,7 @@ describe('workshop order detail helpers', () => {
     has_banding: true,
     assigned_cutter_user_id: null,
     assigned_edger_user_id: null,
+    banding_started_at: null,
   }
 
   it('does not prefill a discount form from the computed discount amount', () => {
@@ -98,6 +99,58 @@ describe('workshop order detail helpers', () => {
         { canManageOrders: false, canCompleteCutting: true, canCompleteBanding: false },
       ).map((action) => action.kind),
     ).toEqual(['complete_cutting', 'detail'])
+  })
+
+  it("offers start-cutting as the queued order's forward action, not assignment", () => {
+    // Assignment is metadata: a confirmed+assigned order starts via the worker
+    // (or on-behalf), and assignment alone must not promise "boshlash".
+    const assigned = workshopOrderListActions(
+      { ...baseOrder, status: 'confirmed', assigned_cutter_user_id: 'worker-1' },
+      manager,
+    )
+    expect(assigned.map((action) => action.kind)).toEqual([
+      'start_cutting',
+      'assign',
+      'cancel',
+      'detail',
+    ])
+    expect(assigned.find((action) => action.kind === 'assign')?.label).toBe('Tayinlash')
+
+    // Unassigned: nothing to start yet — assign leads.
+    expect(
+      workshopOrderListActions({ ...baseOrder, status: 'confirmed' }, manager).map(
+        (action) => action.kind,
+      ),
+    ).toEqual(['assign', 'cancel', 'detail'])
+
+    // A worker assigned to the job can start it without manage_orders.
+    expect(
+      workshopOrderListActions(
+        { ...baseOrder, status: 'confirmed', assigned_cutter_user_id: 'worker-1' },
+        { canManageOrders: false, canCompleteCutting: true, canCompleteBanding: false },
+      ).map((action) => action.kind),
+    ).toEqual(['start_cutting', 'detail'])
+  })
+
+  it('offers start-banding once and only until the stamp is set', () => {
+    const access = { canManageOrders: false, canCompleteCutting: false, canCompleteBanding: true }
+    expect(
+      workshopOrderListActions(
+        { ...baseOrder, status: 'edge_banding', assigned_edger_user_id: 'worker-2' },
+        access,
+      ).map((action) => action.kind),
+    ).toEqual(['start_banding', 'complete_banding', 'detail'])
+    expect(
+      workshopOrderListActions(
+        {
+          ...baseOrder,
+          status: 'edge_banding',
+          assigned_edger_user_id: 'worker-2',
+          banding_started_at: '2026-07-11T09:00:00Z',
+        },
+        access,
+      ).map((action) => action.kind),
+    ).toEqual(['complete_banding', 'detail'])
   })
 
   it('falls back to assignment/detail when a manager cannot safely complete without a worker', () => {
