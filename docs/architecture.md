@@ -2,7 +2,7 @@
 title: Architecture
 status: stable
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-12
 order: 70
 ---
 
@@ -138,7 +138,7 @@ Design system: web/DESIGN.md
 
 ## Data-model invariants
 
-Two rules every module respects.
+Three rules every module respects.
 
 - **Integer-tiyin money.** Every currency value — DB column, API field, intermediate computation
   — is integer tiyin (1 UZS = 100 tiyin). The frontend converts for display only. Money is the
@@ -147,6 +147,12 @@ Two rules every module respects.
   platform users go to an `inactive` / `blocked` status — there is no `DELETE` path, and no
   `deleted_at` / `is_deleted` flag; the active state is the status enum. History (orders, audit,
   status events, cutting results) is kept forever; deletion would orphan it.
+- **A 2xx response means the write is committed.** The request transaction commits before the
+  response is sent (the DB session dependency is `scope="function"`); a client may act on a
+  success response immediately — its next request must see the write. The default FastAPI
+  dependency scope commits *after* the response, which loses this guarantee: a success could
+  reach the client while its write still fails to commit, and an immediate follow-up request
+  (verify after OTP send, an authed call after login) races the commit.
 
 ## Quality requirements
 
