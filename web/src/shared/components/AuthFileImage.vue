@@ -20,6 +20,9 @@ const props = withDefaults(
 const files = useFilesStore()
 const src = ref<string | null>(null)
 const failed = ref(false)
+// A saved image is fetched (authenticated) into an object URL before it can
+// render; without a placeholder the box sits blank and reads as "no image".
+const loading = ref(false)
 // We own the object URL's lifetime via the handle's revoke (CB-131).
 let revokeCurrent: (() => void) | null = null
 let loadSeq = 0
@@ -36,7 +39,11 @@ watch(
     const seq = ++loadSeq
     revoke()
     failed.value = false
-    if (!fileId) return
+    if (!fileId) {
+      loading.value = false
+      return
+    }
+    loading.value = true
     try {
       const handle = await files.loadObjectUrl(fileId)
       if (seq !== loadSeq || props.fileId !== fileId) {
@@ -48,6 +55,9 @@ watch(
       src.value = handle.url
     } catch {
       if (seq === loadSeq) failed.value = true
+    } finally {
+      // Only the freshest load owns the flag; a superseded run must not clear it.
+      if (seq === loadSeq) loading.value = false
     }
   },
   { immediate: true },
@@ -61,6 +71,14 @@ onBeforeUnmount(() => {
 
 <template>
   <img v-if="src" :src="src" :alt="alt" :class="props.class" />
+  <span
+    v-else-if="loading"
+    :class="props.class"
+    class="sk block"
+    role="img"
+    :aria-label="alt ? `${alt} — yuklanmoqda` : 'Rasm yuklanmoqda'"
+    aria-busy="true"
+  />
   <span
     v-else-if="failed"
     :class="props.class"

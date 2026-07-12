@@ -429,7 +429,10 @@ onBeforeUnmount(() => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>Material</th>
+                <!-- Let the descriptive name column absorb the table's slack so the
+                     narrow type/price/stock/status columns hug their content on the
+                     right instead of drifting apart across the full width. -->
+                <th class="w-full">Material</th>
                 <th>Tur</th>
                 <th class="right">Narx</th>
                 <th class="right">Min zaxira</th>
