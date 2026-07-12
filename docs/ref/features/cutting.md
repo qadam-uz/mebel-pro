@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-07-12
 order: 80
 ---
 
@@ -115,8 +115,9 @@ eager creation.
   legacy draft saved with `own` parts or sides is normalized back to `shop` when it loads.
 - **Edge tape is a catalog material too.** Each side of a part is either `null` (no banding)
   or a catalog edge material. The picker UX pins decor-matching edges at the top of one
-  material list so the common case ("match the panel decor in 0.4 mm") is a single tap
-  without hiding the rest of the catalog (see _UX_).
+  material list, then prefers tape widths that cover the selected panel thickness with the
+  closest fit. Narrow tapes sink to the bottom and show a warning, but stay selectable
+  (see _UX_).
 
 ### The optimiser
 
@@ -271,9 +272,12 @@ duplicate, and an overflow menu for material replacement and deletion. `Enter` m
 cells and appends a new inherited row from the last cell of the last row. Deleting a row shows an
 undo toast; clearing all rows still requires confirmation.
 
-The edge-tape registry above the rows is derived from the current part sides. Distinct
-`(edge material_id, source)` pairs get numbered chips; row edge cells show those numbers, so a
-large cutting list can be scanned without repeating long tape names in every row.
+Each material group shows its own edge-tape registry under the material name. Distinct
+`(edge material_id, source)` pairs get one number and colour per draft session; row edge cells,
+group registries, and the edge picker all render that same identity. Numbers are assigned on
+first use and stay stable while the draft is open, even if rows are reordered or a tape is
+temporarily removed. The visible group registry lists only tapes currently used in that group,
+sorted by the drawing-wide number, so gaps can appear after removals.
 
 ### Results
 
@@ -358,7 +362,7 @@ The parts table:
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **#**        | row number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Panel**    | searchable dropdown of the platform catalog (`panel` kind); each result shows manufacturer + decor / colour + thickness + size. The picker's own type-to-filter search is the only narrowing inside the parts editor — there is no separate manufacturer / type / thickness / sort bar (it duplicated the search and added clutter). The picker is always filtered to the selected branch's carried materials — a branch is required before the editor opens, and materials the branch doesn't carry are not offered (there is no widen-to-full-catalog toggle; a row that already references a not-carried material after a branch switch keeps it, flagged by the per-row warning). Selected row shows the picked panel's short label (e.g. `Egger DSP H1334 18 mm · 2750×1830`). A trailing **✕** clears the pick and reopens the list (showing the full set) for a fresh search — re-picking otherwise means manually clearing the typed label first |
-| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the selected panel's catalog `grain_direction` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Tekstura** | per-part `follow_grain` toggle. Pressed means the part is rotation-locked; unpressed means rotation is allowed. This instruction is honoured directly for the part, regardless of the selected panel's catalog `grain_direction` flag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **L mm**     | numeric; validated against the part-min / part-max bounds of the chosen panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **W mm**     | same                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Qty**      | integer ≥ 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -387,13 +391,23 @@ Pressed means `follow_grain=true` and the part is rotation-locked; unpressed mea
 - **The ranked tape list is revealed on demand.** Once a tape is chosen the list collapses
   to a one-line summary (swatch + tape + thickness + how many sides) with a **Change**
   toggle; opening it — or arriving at a part with no banding yet — shows the full list.
-  Edges with the same `decor_code` as the panel are pinned first with a **Recommended**
-  marker; same-`color` matches follow; the rest of the **branch's carried** edge materials
-  continue in the same list, filtered by search + a thickness dropdown — like the panel
-  picker, tapes the branch doesn't carry are not offered (a tape already applied to the
-  part stays listed so the selection can't vanish; the per-side warning flags it). If no
-  panel is selected, matching appears once the panel is picked but catalog search still
-  works.
+  The chip stack starts with tapes already on this part's sides, then tapes used in the same
+  material group, then matching tapes used elsewhere in the drawing, then the best catalog
+  recommendation. A tape that already exists in the drawing keeps its real number and colour;
+  a never-used tape shows a dashed `Yangi` preview badge with the next tentative number, which
+  becomes solid after **Apply**. Catalog ranking still uses decor and colour: edges with the
+  same `decor_code` as the panel are preferred first, same-`color` matches follow; within each
+  match rank, tape width is guidance: covering tapes sort by closest width to the panel
+  thickness, while narrower tapes sort last and show `Qirradan tor` with the tooltip
+  `Lenta eni ({w} mm) panel qalinligidan ({t} mm) tor — qirrani to'liq yopmaydi.`
+  Selection is never blocked. This preserves the legitimate thickened-edge flow: model
+  the glued strip as its own part, leave mating sides untaped, then choose a wider tape
+  (for example 42 mm on an 18 mm panel whose visible edge has been thickened). The rest
+  of the **branch's carried** edge materials continue in the same list, filtered by search
+  and a thickness dropdown — like the panel picker, tapes the branch doesn't carry are not
+  offered (a tape already applied to the part stays listed so the selection can't vanish;
+  the per-side warning flags it). If no panel is selected, matching appears once the panel
+  is picked but catalog search still works.
 - **The edge picker applies to the row it was opened from.** The footer has only **Cancel**
   and **Apply**; **Apply** saves the selected side pattern and tape to the row whose
   **Edges** cell opened the picker, and never edits sibling rows from inside the picker.
@@ -448,53 +462,74 @@ Optimise button are all there is to see.
 On success, the panel scrolls into view with three regions:
 
 1. **Headline metrics.**
-   - Weighted **waste %** (across all panel materials).
-   - **Panels used** total and per-material breakdown.
+   - The chosen-result quote for the active branch; when the user is viewing a different
+     variant, the tile says the price belongs to the chosen variant.
+   - Weighted **waste %** (across all panel materials), tinted as a signal: ≤15% success,
+     > 30% warning, otherwise neutral.
+   - **Panels used** total only; per-material grouping lives in the sheet thumbnails below.
+   - If multiple variants use different sheet counts, the fewer-sheet active variant shows
+     a sheets-only savings line: `«{variant}» varianti {d} list kam ishlatadi`.
    - **Edge tape** total length — the **consumed** metres (geometric banding + the fixed
      30 mm trim overhang per banded side), with a breakdown listing each edge material
-     that has metres (e.g. `Rehau H1334 0.4 — 8.4 m · Rehau H1334 2.0 — 3.2 m`). When some
-     sides are `own`, the breakdown splits shop and own metres per material. The metric
-     carries a compact split such as `edge sides 12.8 m + trim overhang 0.6 m`; no long
-     explanatory message is shown in the flow. Because the trim overhang is a fixed system constant,
-     this is the real figure from the cutting result onward; only price waits on the
-     branch's rates ([`orders.md`](orders.md#pricing)).
-   - **Cut length total** (m), informational.
+     that has metres in the side panel. The tile subline shows how many distinct tapes are
+     used, e.g. `3 xil tasma`.
    - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
-   - The chosen **algorithm** name plus a **Compare algorithms** link → expander with one
-     row per algorithm (name, waste %, panels, cut length) and a **Use this one** button
-     per row to swap the visualisation.
+   - Result tabs switch between imported MAP layout and optimizer variants. Choosing a tab
+     changes the visualised result; **Shu variantni tanlash** makes it the orderable result.
 
 2. **Panel layout visualiser.**
-   - A material tab strip (`DSP H1334 18mm · 2750×1830 · 3 panels` ·
-     `MDF Qum 16mm · 2800×2070 · 1 panel`). Within a material, panel tabs
-     (`Panel 1 / 2 / 3`).
+   - A sheet thumbnail strip grouped by panel material. Each group header shows the material
+     type, fuller material label, and that material's sheet count; compact thumbnails below
+     it show drawing-wide `List N` numbering and a bottom-right fill badge.
    - The active panel renders as an interactive SVG (pan / zoom on mobile); each placed
      part carries one centred label — display name + dimensions + a `↻` marker when the
      placement is rotated (e.g. `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
      hide on placements too small to carry them. Offcut rectangles overlay as dashed
-     outlines: green with a `Qoldiq …×… — sizda qoladi` label when usable, red `chiqit`
-     when waste. Selecting a placement highlights it in the side legend, which leads with
-     the dimensions (+ quantity index, rotation indicator).
+     outlines: green with a `Qoldiq …×…` label when usable, red `chiqit` when waste.
+     Offcut labels use the same fitting ladder in SVG and PDF: horizontal label, rotated
+     label for tall narrow remnants, dimensions-only fallback, then no label if nothing
+     fits.
+   - Selecting a details row highlights all matching placements on the sheet and dims the
+     rest. Clicking one SVG placement selects its part group, bolds that instance label,
+     and scrolls the matching row into view. Clicking the sheet background clears selection.
    - **Banded sides** are flagged by a short, centred accent tick set just inside the
      placed rectangle, on each banded side only (not a full-length frame) — so the cutter
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
      a rotated placement maps them 90° clockwise. Tick inset, length and weight are
      normalised, so banding reads the same on a large and a small panel.
+   - The side panel is grouped by part for the active sheet (`Detallar — List N`), showing
+     name, dimensions, quantity, rotated count, and edge-registry badges. Result registry
+     numbers are derived from that result's frozen `parts_snapshot`, so they are
+     self-contained and match the result details even after later editor changes.
+   - The side panel's Krom block sorts tapes by those registry numbers and shows badge,
+     fuller material label such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed
+     metres.
 
 3. **Actions.**
    - **Place order with this cutting** → routes into the order wizard
      (see [`orders.md`](orders.md)).
-   - **Download PDF** — the print-ready cutting map for the saw operator: one page per
-     panel, page oriented to the sheet (landscape for wide sheets), with the visualiser's
-     exact geometry, labels, banding ticks and offcut overlays; header with material +
-     sheet size + fill (`List N · … · KIM %`), footer with the algorithm stamp + waste.
+   - **Download PDF** — the print-ready cutting document for the saw operator. It is fixed
+     A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
+     edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
+     identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
+     include every physical sheet.
+   - The PDF carries two area-derived KIM figures. `KIM` is parts area divided by sheet
+     area; `KIM (qoldiq bilan)` adds usable offcut area before dividing. The sheet stat
+     line shows `To'ldirish`, detail area, usable offcut area, and waste area.
+   - Each sheet page has the map panel plus a parts table for that layout:
+     `# · Nomi · O'lcham (mm) · Dona · Д1 · Д2 · Ш1 · Ш2 · Tekstura`. The `#` matches
+     the map label (`#3 Polka 1500×800`) and the row number in `parts_snapshot`; edge
+     columns use the same registry numbers as the editor/result side panel.
+   - The PDF parity contract is intentionally narrow: the **map panel inside the PDF**
+     mirrors the web sheet visualiser's geometry, label fitting, offcut overlays, and
+     banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.
      Text is rendered with an embedded Unicode font, so Cyrillic material and part names
      print correctly.
    - **Edit parts** scrolls back to the editor; any row change marks the result stale; the
      next **Optimise** replaces it.
 
-Pricing is **not** shown on this screen — totals depend on the branch and surface at the
-order step.
+Pricing shown here is a branch quote for the currently chosen result only; per-variant price
+deltas are deliberately not shown because the backend does not quote non-chosen variants.
 
 ### My drafts (`/c/cutting/drafts`)
 

@@ -152,6 +152,7 @@ class ClientCatalogMaterialOption(APIModel):
     panel_length_mm: int | None
     panel_width_mm: int | None
     grain_direction: bool | None
+    edge_width_mm: int | None
     image_file_id: uuid.UUID | None
     branch_carried: bool
     price_tiyin: int | None

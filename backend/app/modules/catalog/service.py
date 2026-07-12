@@ -37,6 +37,15 @@ from app.modules.support.api import (
     replace_attached_file,
 )
 
+_TYPE_LABELS: dict[PanelMaterialType, str] = {
+    PanelMaterialType.DSP: "LDSP",
+    PanelMaterialType.MDF: "MDF",
+    PanelMaterialType.PLYWOOD: "Fanera",
+    PanelMaterialType.NATURAL_WOOD: "Yog'och",
+    PanelMaterialType.OTHER: "Panel",
+}
+_DIMENSION_SEPARATOR = "\N{MULTIPLICATION SIGN}"
+
 
 @dataclass(frozen=True)
 class MaterialRecord:
@@ -57,6 +66,40 @@ class BranchCatalogOption:
     material: Material
     manufacturer: Manufacturer
     already_selected: bool
+
+
+def compose_material_name(
+    *,
+    kind: MaterialKind,
+    manufacturer_name: str,
+    type_value: PanelMaterialType | None,
+    color: str,
+    decor_code: str | None,
+    thickness_mm: Decimal,
+    panel_length_mm: int | None,
+    panel_width_mm: int | None,
+    edge_width_mm: int | None,
+) -> str:
+    """Compose the stored material identity from structured catalog fields."""
+
+    decor = _optional_text(decor_code)
+    first_segment_parts: list[str]
+    if kind is MaterialKind.PANEL:
+        type_label = _TYPE_LABELS[type_value or PanelMaterialType.OTHER]
+        first_segment_parts = [type_label, manufacturer_name]
+        if decor:
+            first_segment_parts.append(decor)
+        dimensions = (
+            f"{panel_length_mm or 0}{_DIMENSION_SEPARATOR}"
+            f"{panel_width_mm or 0}{_DIMENSION_SEPARATOR}{_fmt_mm(thickness_mm)} mm"
+        )
+    else:
+        first_segment_parts = ["Kromka", manufacturer_name]
+        if decor:
+            first_segment_parts.append(decor)
+        dimensions = f"{_fmt_mm(thickness_mm)}{_DIMENSION_SEPARATOR}{edge_width_mm or 0} mm"
+    color_text = _required_text(color, "material_color_required")
+    return f"{' '.join(first_segment_parts)} · {color_text} · {dimensions}"
 
 
 async def list_manufacturers(
@@ -235,18 +278,31 @@ async def create_material(
         panel_length_mm=payload.panel_length_mm,
         panel_width_mm=payload.panel_width_mm,
         grain_direction=payload.grain_direction,
+        edge_width_mm=payload.edge_width_mm,
     )
+    color = _required_text(payload.color, "material_color_required")
     row = Material(
         kind=payload.kind,
         manufacturer_id=manufacturer.id,
         type=payload.type,
-        name=_required_text(payload.name, "material_name_required"),
+        name=compose_material_name(
+            kind=payload.kind,
+            manufacturer_name=manufacturer.name,
+            type_value=payload.type,
+            color=color,
+            decor_code=payload.decor_code,
+            thickness_mm=payload.thickness_mm,
+            panel_length_mm=payload.panel_length_mm,
+            panel_width_mm=payload.panel_width_mm,
+            edge_width_mm=payload.edge_width_mm,
+        ),
         thickness_mm=payload.thickness_mm,
-        color=_required_text(payload.color, "material_color_required"),
+        color=color,
         decor_code=_optional_text(payload.decor_code),
         panel_length_mm=payload.panel_length_mm,
         panel_width_mm=payload.panel_width_mm,
         grain_direction=payload.grain_direction,
+        edge_width_mm=payload.edge_width_mm,
         status=MaterialStatus.ACTIVE,
     )
     db.add(row)
@@ -302,8 +358,6 @@ async def update_material(
     if "manufacturer_id" in payload.model_fields_set and payload.manufacturer_id is not None:
         manufacturer = await _active_manufacturer(db, payload.manufacturer_id)
         row.manufacturer_id = manufacturer.id
-    if "name" in payload.model_fields_set and payload.name is not None:
-        row.name = _required_text(payload.name, "material_name_required")
     if "thickness_mm" in payload.model_fields_set and payload.thickness_mm is not None:
         row.thickness_mm = payload.thickness_mm
     if "color" in payload.model_fields_set and payload.color is not None:
@@ -319,6 +373,13 @@ async def update_material(
             row.panel_width_mm = payload.panel_width_mm
         if "grain_direction" in payload.model_fields_set:
             row.grain_direction = payload.grain_direction
+        if "edge_width_mm" in payload.model_fields_set and payload.edge_width_mm is not None:
+            raise APIError(
+                "invalid_panel_material",
+                "Panel material cannot have edge width",
+                status_code=400,
+            )
+        row.edge_width_mm = None
     elif any(
         field in payload.model_fields_set
         for field in ("type", "panel_length_mm", "panel_width_mm", "grain_direction")
@@ -328,6 +389,8 @@ async def update_material(
             "Edge material cannot have panel fields",
             status_code=400,
         )
+    elif "edge_width_mm" in payload.model_fields_set:
+        row.edge_width_mm = payload.edge_width_mm
     if "image_file_id" in payload.model_fields_set:
         row.image_file_id = await replace_attached_file(
             db,
@@ -345,6 +408,18 @@ async def update_material(
         panel_length_mm=row.panel_length_mm,
         panel_width_mm=row.panel_width_mm,
         grain_direction=row.grain_direction,
+        edge_width_mm=row.edge_width_mm,
+    )
+    row.name = compose_material_name(
+        kind=row.kind,
+        manufacturer_name=manufacturer.name,
+        type_value=row.type,
+        color=row.color,
+        decor_code=row.decor_code,
+        thickness_mm=row.thickness_mm,
+        panel_length_mm=row.panel_length_mm,
+        panel_width_mm=row.panel_width_mm,
+        edge_width_mm=row.edge_width_mm,
     )
     await record_action(
         db,
@@ -777,10 +852,17 @@ def _validate_material_shape(
     panel_length_mm: int | None,
     panel_width_mm: int | None,
     grain_direction: bool | None,
+    edge_width_mm: int | None,
 ) -> None:
     if thickness_mm <= 0:
         raise APIError("invalid_thickness", "Thickness must be positive", status_code=400)
     if kind is MaterialKind.PANEL:
+        if edge_width_mm is not None:
+            raise APIError(
+                "invalid_panel_material",
+                "Panel material cannot have edge width",
+                status_code=400,
+            )
         if type_value is None or panel_length_mm is None or panel_width_mm is None:
             raise APIError(
                 "invalid_panel_material",
@@ -800,6 +882,10 @@ def _validate_material_shape(
         )
     if grain_direction is not None:
         raise APIError("invalid_edge_material", "Edge material cannot have grain", status_code=400)
+    if edge_width_mm is None:
+        raise APIError("invalid_edge_width", "Edge width is required", status_code=400)
+    if edge_width_mm <= 0:
+        raise APIError("invalid_edge_width", "Edge width must be positive", status_code=400)
 
 
 def _validate_branch_material_numbers(price_tiyin: int, min_stock: int) -> None:
@@ -829,3 +915,7 @@ def _optional_text(value: str | None) -> str | None:
         return None
     normalized = " ".join(value.strip().split())
     return normalized or None
+
+
+def _fmt_mm(value: Decimal) -> str:
+    return format(value.normalize(), "f")

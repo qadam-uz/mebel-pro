@@ -30,12 +30,17 @@ class Material(UUIDPrimaryKey, Timestamped, Base):
     __table_args__ = (
         CheckConstraint("thickness_mm > 0", name="ck_materials_thickness_positive"),
         CheckConstraint(
+            "edge_width_mm IS NULL OR edge_width_mm > 0",
+            name="ck_materials_edge_width_positive",
+        ),
+        CheckConstraint(
             "(kind = 'panel' AND type IS NOT NULL "
             "AND panel_length_mm IS NOT NULL AND panel_width_mm IS NOT NULL "
-            "AND panel_length_mm >= panel_width_mm AND grain_direction IS NOT NULL) "
+            "AND panel_length_mm >= panel_width_mm AND grain_direction IS NOT NULL "
+            "AND edge_width_mm IS NULL) "
             "OR (kind = 'edge' AND type IS NULL "
             "AND panel_length_mm IS NULL AND panel_width_mm IS NULL "
-            "AND grain_direction IS NULL)",
+            "AND grain_direction IS NULL AND edge_width_mm IS NOT NULL)",
             name="ck_materials_kind_shape",
         ),
     )
@@ -56,6 +61,7 @@ class Material(UUIDPrimaryKey, Timestamped, Base):
     panel_length_mm: Mapped[int | None]
     panel_width_mm: Mapped[int | None]
     grain_direction: Mapped[bool | None]
+    edge_width_mm: Mapped[int | None]
     image_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     status: Mapped[MaterialStatus] = mapped_column(
         enum_type(MaterialStatus, "material_status"),

@@ -40,6 +40,7 @@ function seedPanel(grain_direction: boolean) {
       panel_length_mm: 600,
       panel_width_mm: 400,
       grain_direction,
+      edge_width_mm: null,
       image_file_id: null,
       branch_carried: true,
       price_tiyin: null,
@@ -83,15 +84,15 @@ describe('CuttingPartRow grain toggle', () => {
 
     const wrapper = mountRow(part())
 
-    expect(wrapper.find('[data-test="follow-grain-desktop"][type="checkbox"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="follow-grain-desktop"]').text()).toBe('')
+    expect(wrapper.find('[data-test="follow-grain"][type="checkbox"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Tekstura')
   })
 
   it('emits false when active desktop texture checkbox is unchecked', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: true }))
 
-    await wrapper.get('[data-test="follow-grain-desktop"][type="checkbox"]').setValue(false)
+    await wrapper.get('[data-test="follow-grain"][type="checkbox"]').setValue(false)
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[false]])
   })
@@ -100,7 +101,7 @@ describe('CuttingPartRow grain toggle', () => {
     seedPanel(true)
     const wrapper = mountRow(part({ follow_grain: false }))
 
-    await wrapper.get('[data-test="follow-grain-desktop"][type="checkbox"]').setValue(true)
+    await wrapper.get('[data-test="follow-grain"][type="checkbox"]').setValue(true)
 
     expect(wrapper.emitted('update:follow-grain')).toEqual([[true]])
   })
@@ -113,16 +114,27 @@ describe('CuttingPartRow grain toggle', () => {
         materialId: 'edge-1',
         source: 'shop',
         number: 1,
-        colorClass: 'bg-info-soft text-info',
+        colorStyle: { bg: '#D85A30', fg: '#ffffff', soft: '#fde2d6' },
       },
     ])
 
     expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(4)
 
     await wrapper.findAll('[data-cell="edge"]')[2].trigger('click')
+    await wrapper.findAll('[data-cell="edge"]')[0].trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('open-edge-picker')).toHaveLength(1)
     expect(wrapper.emitted('open-edge-picker')?.[0]?.[1]).toBe('edge_left')
+    expect(wrapper.emitted('cell-enter')).toEqual([['edge', 'edge_top']])
+  })
+
+  it('emits an edge-number shortcut from a focused edge cell', async () => {
+    seedPanel(true)
+    const wrapper = mountRow(part())
+
+    await wrapper.findAll('[data-cell="edge"]')[0].trigger('keydown', { key: '1' })
+
+    expect(wrapper.emitted('apply-edge-number')).toEqual([['edge_top', 1]])
   })
 
   it('opens the shared material picker from the material action', async () => {

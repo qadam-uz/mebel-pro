@@ -1,11 +1,11 @@
-"""PDF rendering for immutable cutting results.
+"""Map drawing primitives for immutable cutting result PDFs.
 
-The PDF is the print companion of the web panel visualiser
-(web/src/shared/components/CuttingPanelSvg.vue): same geometry, same centred
-part labels, same banding ticks and offcut overlays, one page per panel. All
-helper geometry is expressed in sheet millimetres with the y axis growing up —
-the optimizer's own convention, which is also reportlab's page convention. The
-visualiser's SVG formulas (y down) are transposed once, inside the helpers.
+The detailed PDF document is a production report, not a bare visualiser mirror.
+The parity contract is now scoped to the map panel only: placements, offcut
+overlays, label fitting and edge-banding ticks mirror
+web/src/shared/components/CuttingPanelSvg.vue. All helper geometry is expressed
+in sheet millimetres with the y axis growing up — the optimizer's own convention,
+which is also reportlab's page convention.
 """
 
 # ruff: noqa: RUF001 -- labels reuse the visualiser's exact copy (multiplication
@@ -13,13 +13,10 @@ visualiser's SVG formulas (y down) are transposed once, inside the helpers.
 
 from __future__ import annotations
 
-from io import BytesIO
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from reportlab.lib.colors import HexColor
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
@@ -42,141 +39,25 @@ _BAND_STROKE = 3.0
 _BAND_INSET = 3.0
 _BAND_MARK = 30.0
 
-# Page bands (points): side margins plus room for the two header lines above
-# the drawing and the algorithm stamp below it.
-_MARGIN_X = 18 * mm
-_HEADER_H = 30 * mm
-_FOOTER_H = 20 * mm
-
 # Print equivalents of the web tokens the visualiser uses. Structure stays
 # grayscale for print; colour is reserved for the offcut semantics.
 _SUCCESS = HexColor("#15803d")  # --color-success: usable offcut
 _DANGER = HexColor("#be3a2b")  # --color-danger: waste offcut
 _INK_MUTED = HexColor("#5b6675")  # --color-ink-muted: waste offcut label, footer
 _INK_SOFT = HexColor("#475569")  # --color-ink-soft: placement labels
+_PANEL_TYPE_LABELS = {
+    "dsp": "LDSP",
+    "mdf": "MDF",
+    "plywood": "Fanera",
+    "natural_wood": "Yog'och",
+    "other": "Panel",
+}
 
 # DejaVu Sans is vendored because the built-in PDF fonts are latin-1 only:
 # material and part names can be Cyrillic, and the rotation marker is U+21BB.
 _FONTS_DIR = Path(__file__).parent / "fonts"
 _FONT_REGULAR = "DejaVuSans"
 _FONT_BOLD = "DejaVuSans-Bold"
-
-
-def render_cutting_pdf(result: CuttingResultResponse) -> bytes:
-    _register_fonts()
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    parts_by_ref = _parts_by_ref(result)
-
-    for panel in result.panels:
-        snapshot = _material_snapshot(result, panel.material_id)
-        panel_length = _panel_length(result, panel)
-        panel_width = _panel_width(result, panel)
-        page_width, page_height = _page_size_for_panel(panel_length, panel_width)
-        pdf.setPageSize((page_width, page_height))
-        origin_x, origin_y, scale = _sheet_transform(
-            panel_length, panel_width, page_width, page_height
-        )
-        norm_scale = _NORM_WIDTH / panel_length
-        label_font_pt = (_LABEL_FONT / norm_scale) * scale
-
-        title = f"{snapshot.get('manufacturer_name', '')} {snapshot.get('name', panel.material_id)}"
-        pdf.setFillColorRGB(0, 0, 0)
-        pdf.setFont(_FONT_BOLD, 13)
-        pdf.drawString(_MARGIN_X, page_height - 18 * mm, title.strip())
-        caption = (
-            f"List {panel.panel_index} · {_material_label(snapshot, panel.material_id)} · "
-            f"{panel_length}×{panel_width} · "
-            f"KIM {_panel_fill_percent(panel, panel_length, panel_width)}"
-        )
-        pdf.setFont(_FONT_REGULAR, 9)
-        pdf.drawString(_MARGIN_X, page_height - 24 * mm, caption)
-
-        pdf.setLineWidth(2 * scale)
-        pdf.setStrokeGray(0.2)
-        pdf.rect(origin_x, origin_y, panel_length * scale, panel_width * scale)
-
-        for offcut in panel.offcuts:
-            x, y, w, h = _rect_points(
-                offcut.x_mm,
-                offcut.y_mm,
-                offcut.length_mm,
-                offcut.width_mm,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                scale=scale,
-            )
-            pdf.saveState()
-            pdf.setLineWidth(1.5 * scale)
-            pdf.setDash([12 * scale, 8 * scale])
-            pdf.setStrokeColor(_SUCCESS if offcut.usable else _DANGER)
-            pdf.rect(x, y, w, h)
-            pdf.restoreState()
-            if _label_fits(offcut.length_mm, offcut.width_mm, norm_scale):
-                pdf.setFillColor(_SUCCESS if offcut.usable else _INK_MUTED)
-                pdf.setFont(_FONT_REGULAR, label_font_pt)
-                pdf.drawCentredString(
-                    x + w / 2, y + h / 2 - 0.36 * label_font_pt, _offcut_label(offcut)
-                )
-
-        for placement in panel.placements:
-            x, y, w, h = _rect_points(
-                placement.x_mm,
-                placement.y_mm,
-                placement.length_mm,
-                placement.width_mm,
-                origin_x=origin_x,
-                origin_y=origin_y,
-                scale=scale,
-            )
-            pdf.setLineWidth(1.5 * scale)
-            pdf.setStrokeGray(0.25)
-            pdf.setFillGray(0.93)
-            pdf.rect(x, y, w, h, stroke=1, fill=1)
-
-            row = parts_by_ref.get(placement.part_ref)
-            sides = _banded_sides(row[0] if row else None, rotated=placement.rotated)
-            if sides is not None:
-                ticks = _band_tick_lines(placement, sides, norm_scale)
-                if ticks:
-                    pdf.saveState()
-                    pdf.setLineCap(1)
-                    pdf.setLineWidth((_BAND_STROKE / norm_scale) * scale)
-                    pdf.setStrokeGray(0.15)
-                    for x1, y1, x2, y2 in ticks:
-                        pdf.line(
-                            origin_x + x1 * scale,
-                            origin_y + y1 * scale,
-                            origin_x + x2 * scale,
-                            origin_y + y2 * scale,
-                        )
-                    pdf.restoreState()
-
-            if _label_fits(placement.length_mm, placement.width_mm, norm_scale):
-                pdf.setFillColor(_INK_SOFT)
-                pdf.setFont(_FONT_REGULAR, label_font_pt)
-                pdf.drawCentredString(
-                    x + w / 2,
-                    y + h / 2 - 0.36 * label_font_pt,
-                    _placement_label(placement, parts_by_ref),
-                )
-
-        pdf.setFillColor(_INK_MUTED)
-        pdf.setFont(_FONT_REGULAR, 7)
-        pdf.drawString(
-            _MARGIN_X,
-            12 * mm,
-            f"{result.algorithm_name} {result.algorithm_version} · "
-            f"waste {float(result.waste_percentage) * 100:.2f}%",
-        )
-        pdf.showPage()
-
-    if not result.panels:
-        pdf.setFont(_FONT_REGULAR, 12)
-        pdf.drawString(_MARGIN_X, A4[1] - 18 * mm, "No panels")
-        pdf.showPage()
-    pdf.save()
-    return buffer.getvalue()
 
 
 def _register_fonts() -> None:
@@ -194,21 +75,136 @@ class _BandedSides(NamedTuple):
     left: bool
 
 
-def _page_size_for_panel(panel_length: int, panel_width: int) -> tuple[float, float]:
-    return landscape(A4) if panel_length > panel_width else A4  # type: ignore[no-any-return]
+class _OffcutLabelMode(NamedTuple):
+    text: str
+    orientation: str
+
+
+class _Frame(NamedTuple):
+    x: float
+    y: float
+    width: float
+    height: float
 
 
 def _sheet_transform(
-    panel_length: int, panel_width: int, page_width: float, page_height: float
+    panel_length: int,
+    panel_width: int,
+    frame_width: float,
+    frame_height: float,
+    *,
+    origin_x: float = 0,
+    origin_y: float = 0,
 ) -> tuple[float, float, float]:
-    """(origin_x, origin_y, scale): sheet mm → page points, sheet centred in the
-    band between the header and the footer."""
-    max_w = page_width - 2 * _MARGIN_X
-    max_h = page_height - _HEADER_H - _FOOTER_H
-    scale = min(max_w / panel_length, max_h / panel_width)
-    origin_x = _MARGIN_X + (max_w - panel_length * scale) / 2
-    origin_y = _FOOTER_H + (max_h - panel_width * scale) / 2
-    return origin_x, origin_y, scale
+    """(origin_x, origin_y, scale): sheet mm → page points, centred in frame."""
+    scale = min(frame_width / panel_length, frame_height / panel_width)
+    sheet_x = origin_x + (frame_width - panel_length * scale) / 2
+    sheet_y = origin_y + (frame_height - panel_width * scale) / 2
+    return sheet_x, sheet_y, scale
+
+
+def draw_sheet_map(
+    pdf: canvas.Canvas,
+    frame: tuple[float, float, float, float],
+    result: CuttingResultResponse,
+    panel: CuttingPanelResponse,
+    parts_by_ref: dict[str, tuple[dict[str, Any], int]] | None = None,
+) -> None:
+    """Draw only the sheet map into `(x, y, width, height)` PDF points."""
+    _register_fonts()
+    parts = parts_by_ref or _parts_by_ref(result)
+    panel_length = _panel_length(result, panel)
+    panel_width = _panel_width(result, panel)
+    box = _Frame(*frame)
+    origin_x, origin_y, scale = _sheet_transform(
+        panel_length,
+        panel_width,
+        box.width,
+        box.height,
+        origin_x=box.x,
+        origin_y=box.y,
+    )
+    norm_scale = _NORM_WIDTH / panel_length
+    label_font_pt = (_LABEL_FONT / norm_scale) * scale
+
+    pdf.setLineWidth(2 * scale)
+    pdf.setStrokeGray(0.2)
+    pdf.rect(origin_x, origin_y, panel_length * scale, panel_width * scale)
+
+    for offcut in panel.offcuts:
+        x, y, w, h = _rect_points(
+            offcut.x_mm,
+            offcut.y_mm,
+            offcut.length_mm,
+            offcut.width_mm,
+            origin_x=origin_x,
+            origin_y=origin_y,
+            scale=scale,
+        )
+        pdf.saveState()
+        pdf.setLineWidth(1.5 * scale)
+        pdf.setDash([12 * scale, 8 * scale])
+        pdf.setStrokeColor(_SUCCESS if offcut.usable else _DANGER)
+        pdf.rect(x, y, w, h)
+        pdf.restoreState()
+        offcut_label = _offcut_label_mode(offcut, norm_scale)
+        if offcut_label is not None:
+            pdf.setFillColor(_SUCCESS if offcut.usable else _INK_MUTED)
+            pdf.setFont(_FONT_REGULAR, label_font_pt)
+            if offcut_label.orientation == "vertical":
+                pdf.saveState()
+                pdf.translate(x + w / 2, y + h / 2)
+                pdf.rotate(90)
+                pdf.drawCentredString(0, -0.36 * label_font_pt, offcut_label.text)
+                pdf.restoreState()
+            else:
+                pdf.drawCentredString(
+                    x + w / 2,
+                    y + h / 2 - 0.36 * label_font_pt,
+                    offcut_label.text,
+                )
+
+    for placement in panel.placements:
+        x, y, w, h = _rect_points(
+            placement.x_mm,
+            placement.y_mm,
+            placement.length_mm,
+            placement.width_mm,
+            origin_x=origin_x,
+            origin_y=origin_y,
+            scale=scale,
+        )
+        pdf.setLineWidth(1.5 * scale)
+        pdf.setStrokeGray(0.25)
+        pdf.setFillGray(0.93)
+        pdf.rect(x, y, w, h, stroke=1, fill=1)
+
+        row = parts.get(placement.part_ref)
+        sides = _banded_sides(row[0] if row else None, rotated=placement.rotated)
+        if sides is not None:
+            ticks = _band_tick_lines(placement, sides, norm_scale)
+            if ticks:
+                pdf.saveState()
+                pdf.setLineCap(1)
+                pdf.setLineWidth((_BAND_STROKE / norm_scale) * scale)
+                pdf.setStrokeGray(0.15)
+                for x1, y1, x2, y2 in ticks:
+                    pdf.line(
+                        origin_x + x1 * scale,
+                        origin_y + y1 * scale,
+                        origin_x + x2 * scale,
+                        origin_y + y2 * scale,
+                    )
+                pdf.restoreState()
+
+        if _label_fits(placement.length_mm, placement.width_mm, norm_scale):
+            pdf.setFillColor(_INK_SOFT)
+            pdf.setFont(_FONT_REGULAR, label_font_pt)
+            pdf.drawCentredString(
+                x + w / 2,
+                y + h / 2 - 0.36 * label_font_pt,
+                _placement_label(placement, parts),
+            )
 
 
 def _rect_points(
@@ -237,6 +233,13 @@ def _label_fits(length_mm: int, width_mm: int, norm_scale: float) -> bool:
     return length_mm * norm_scale > _LABEL_MIN_W and width_mm * norm_scale > _LABEL_MIN_H
 
 
+def _text_label_fits(text: str, length_mm: int, width_mm: int, norm_scale: float) -> bool:
+    return (
+        length_mm * norm_scale > max(_LABEL_MIN_W, len(text) * 6)
+        and width_mm * norm_scale > _LABEL_MIN_H
+    )
+
+
 def _parts_by_ref(result: CuttingResultResponse) -> dict[str, tuple[dict[str, Any], int]]:
     return {
         str(part.get("part_ref")): (part, index) for index, part in enumerate(result.parts_snapshot)
@@ -256,13 +259,27 @@ def _placement_label(
         stripped = raw_name.strip() if isinstance(raw_name, str) else ""
         name = stripped or f"D{index + 1}"
     rotated = " ↻" if placement.rotated else ""
-    return f"{name} {placement.length_mm}×{placement.width_mm}{rotated}"
+    number = f"#{index + 1} " if row is not None else ""
+    return f"{number}{name} {placement.length_mm}×{placement.width_mm}{rotated}"
 
 
-def _offcut_label(offcut: CuttingOffcutResponse) -> str:
+def _offcut_label_mode(offcut: CuttingOffcutResponse, norm_scale: float) -> _OffcutLabelMode | None:
+    dims = f"{offcut.length_mm}×{offcut.width_mm}"
+    labels = [f"Qoldiq {dims}"]
     if not offcut.usable:
-        return "chiqit"
-    return f"Qoldiq {offcut.length_mm}×{offcut.width_mm} — sizda qoladi"
+        labels = ["chiqit"]
+    for text in labels:
+        if _text_label_fits(text, offcut.length_mm, offcut.width_mm, norm_scale):
+            return _OffcutLabelMode(text=text, orientation="horizontal")
+    for text in labels:
+        if _text_label_fits(text, offcut.width_mm, offcut.length_mm, norm_scale):
+            return _OffcutLabelMode(text=text, orientation="vertical")
+    if offcut.usable:
+        if _text_label_fits(dims, offcut.length_mm, offcut.width_mm, norm_scale):
+            return _OffcutLabelMode(text=dims, orientation="horizontal")
+        if _text_label_fits(dims, offcut.width_mm, offcut.length_mm, norm_scale):
+            return _OffcutLabelMode(text=dims, orientation="vertical")
+    return None
 
 
 def _banded_sides(part: dict[str, Any] | None, *, rotated: bool) -> _BandedSides | None:
@@ -308,13 +325,47 @@ def _band_tick_lines(
 
 
 def _material_label(snapshot: dict[str, Any], material_id: object) -> str:
-    decor = snapshot.get("decor_code")
-    if isinstance(decor, str) and decor:
-        return decor
-    name = snapshot.get("name")
-    if isinstance(name, str) and name:
-        return name
-    return str(material_id)[:8]
+    raw_type = _snapshot_text(snapshot, "type")
+    type_label = _PANEL_TYPE_LABELS.get(raw_type, raw_type)
+    manufacturer = _snapshot_text(snapshot, "manufacturer_name")
+    decor = _snapshot_text(snapshot, "decor_code")
+    name = _snapshot_text(snapshot, "name")
+    color = _snapshot_text(snapshot, "color")
+    thickness = _snapshot_text(snapshot, "thickness_mm")
+    length = _int_snapshot(snapshot.get("panel_length_mm"), fallback=0)
+    width = _int_snapshot(snapshot.get("panel_width_mm"), fallback=0)
+
+    base = " ".join(part for part in [type_label, manufacturer, decor or name] if part)
+    if not base:
+        return str(material_id)[:8]
+
+    details: list[str] = []
+    if color and color.lower() not in base.lower():
+        details.append(color)
+    if length > 0 and width > 0:
+        dims = f"{length}×{width}"
+        if thickness:
+            dims = f"{dims}×{_format_mm(thickness)}"
+        details.append(f"{dims} mm")
+    elif thickness:
+        details.append(f"{_format_mm(thickness)} mm")
+    return " · ".join([base, *details])
+
+
+def _snapshot_text(snapshot: dict[str, Any], key: str) -> str:
+    value = snapshot.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _format_mm(value: object) -> str:
+    text = str(value).strip()
+    try:
+        parsed = float(text)
+    except ValueError:
+        return text
+    if parsed.is_integer():
+        return str(int(parsed))
+    return text.rstrip("0").rstrip(".")
 
 
 def _panel_fill_percent(panel: CuttingPanelResponse, panel_length: int, panel_width: int) -> str:

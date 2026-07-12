@@ -11,12 +11,13 @@ import {
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
 import { colorForMaterial, edgeFields, type EdgeField } from '@/shared/app/cuttingDisplay'
+import { edgeTooNarrow } from '@/shared/app/cuttingEdgeDisplay'
 import {
-  EDGE_REGISTRY_COLORS,
   deriveEdgeRegistry,
+  edgeRegistryKey,
   groupCuttingParts,
   partDisplayName,
-  shortMaterialName,
+  syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
@@ -101,13 +102,12 @@ const importedLayoutWarningAccepted = ref(false)
 const collapsedGroupKeys = ref<Set<string>>(new Set())
 const errorFilterEnabled = ref(false)
 const registryPickerOpen = ref(false)
-const registryPickerMode = ref<'replace' | 'add'>('add')
 const registryReplaceEntry = ref<EdgeRegistryEntry | null>(null)
 const registryPickedEdgeId = ref<string | null>(null)
-const manualRegistryEdgeIds = ref<string[]>([])
 const activeResultId = ref<string | null>(null)
 const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
+const edgeAssignments = ref(new Map<string, number>())
 const edgePickerPart = ref<CuttingPart | null>(null)
 const edgePickerInitialSide = ref<EdgeField | null>(null)
 let edgeReturnFocus: HTMLElement | null = null
@@ -270,23 +270,8 @@ function edgeById(id: string | null | undefined) {
   return cutting.edgeOptions.find((material) => material.id === id) ?? null
 }
 
-const edgeRegistry = computed(() => {
-  const entries = deriveEdgeRegistry(parts.value)
-  const seen = new Set(entries.map((entry) => entry.key))
-  for (const materialId of manualRegistryEdgeIds.value) {
-    const key = `${materialId}:shop`
-    if (seen.has(key)) continue
-    seen.add(key)
-    entries.push({
-      key,
-      materialId,
-      source: 'shop',
-      number: entries.length + 1,
-      colorClass: EDGE_REGISTRY_COLORS[entries.length % EDGE_REGISTRY_COLORS.length],
-    })
-  }
-  return entries
-})
+const edgeRegistry = computed(() => deriveEdgeRegistry(parts.value, edgeAssignments.value))
+const edgeAssignmentEntries = computed(() => [...edgeAssignments.value.entries()])
 const groupedParts = computed(() =>
   groupCuttingParts(parts.value, (materialId) => materialLabel(materialById(materialId))),
 )
@@ -305,7 +290,79 @@ const visibleGroups = computed(() =>
 )
 
 function edgeRegistryLabel(materialId: string) {
-  return shortMaterialName(edgeById(materialId))
+  return edgeById(materialId)?.name ?? materialId
+}
+
+function groupEdgeRegistryEntries(group: { parts: Array<{ part: CuttingPart }> }) {
+  const keys = new Set<string>()
+  for (const { part } of group.parts) {
+    for (const side of edgeFields) {
+      const band = part[side]
+      if (band?.material_id) keys.add(edgeRegistryKey(band.material_id, band.source))
+    }
+  }
+  return edgeRegistry.value.filter((entry) => keys.has(entry.key))
+}
+
+function edgeIdsForParts(rows: CuttingPart[]) {
+  const counts = new Map<string, { count: number; firstSeen: number }>()
+  let order = 0
+  for (const row of rows) {
+    for (const side of edgeFields) {
+      const materialId = row[side]?.material_id
+      if (!materialId) continue
+      const existing = counts.get(materialId)
+      if (existing) existing.count += 1
+      else {
+        counts.set(materialId, { count: 1, firstSeen: order })
+        order += 1
+      }
+    }
+  }
+  return [...counts.entries()]
+    .sort((left, right) => right[1].count - left[1].count || left[1].firstSeen - right[1].firstSeen)
+    .map(([materialId]) => materialId)
+}
+
+function groupEdgeIds(part: CuttingPart | null) {
+  if (!part?.material_id) return []
+  return edgeIdsForParts(parts.value.filter((row) => row.material_id === part.material_id))
+}
+
+function otherGroupEdgeIds(part: CuttingPart | null) {
+  if (!part?.material_id) return []
+  return edgeIdsForParts(parts.value.filter((row) => row.material_id !== part.material_id))
+}
+
+function edgeRegistryEntryForPartNumber(part: CuttingPart, number: number) {
+  const groupRows = parts.value
+    .filter((row) => row.material_id === part.material_id)
+    .map((row) => ({ part: row }))
+  return groupEdgeRegistryEntries({ parts: groupRows }).find((entry) => entry.number === number)
+}
+
+function applyEdgeNumberToPartSide(part: CuttingPart, side: EdgeField, number: number) {
+  const entry = edgeRegistryEntryForPartNumber(part, number)
+  if (!entry) return
+  part[side] = { material_id: entry.materialId, source: entry.source }
+  rememberEdgeMaterial(part, entry.materialId)
+}
+
+function edgeRegistryNarrowWarning(entry: EdgeRegistryEntry) {
+  const edge = edgeById(entry.materialId)
+  if (!edge) return null
+  for (const part of parts.value) {
+    const usesEdge = edgeFields.some(
+      (side) => part[side]?.material_id === entry.materialId && part[side]?.source === entry.source,
+    )
+    if (!usesEdge) continue
+    const panel = materialById(part.material_id)
+    const panelThickness = Number(panel?.thickness_mm)
+    if (Number.isFinite(panelThickness) && edgeTooNarrow(panelThickness, edge)) {
+      return `Lenta eni (${edge.edge_width_mm} mm) panel qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
+    }
+  }
+  return null
 }
 
 function groupErrorCount(groupKey: string) {
@@ -323,6 +380,15 @@ function toggleGroup(groupKey: string) {
 watch(errorCount, (count) => {
   if (count === 0) errorFilterEnabled.value = false
 })
+
+watch(
+  parts,
+  (rows) => {
+    syncEdgeAssignments(edgeAssignments.value, rows)
+    edgeAssignments.value = new Map(edgeAssignments.value)
+  },
+  { deep: true, immediate: true },
+)
 
 function rowNotCarried(part: CuttingPart) {
   return partNotCarried(part, activeBranchId.value, materialById, edgeById)
@@ -464,14 +530,25 @@ function setPartName(part: CuttingPart, value: string | null) {
 
 type CellName = 'name' | 'length' | 'width' | 'quantity' | 'edge'
 const cellOrder: CellName[] = ['name', 'length', 'width', 'quantity', 'edge']
+const edgeCellOrder: EdgeField[] = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right']
 
-function focusCell(index: number, cell: CellName) {
-  const selector = `[data-part-index="${index}"][data-cell="${cell}"]`
+function focusCell(index: number, cell: CellName, side?: EdgeField) {
+  const selector =
+    cell === 'edge' && side
+      ? `[data-part-index="${index}"][data-cell="edge"][data-edge-side="${side}"]`
+      : `[data-part-index="${index}"][data-cell="${cell}"]`
   const target = document.querySelector<HTMLElement>(selector)
   target?.focus()
 }
 
-function onCellEnter(index: number, cell: CellName) {
+function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
+  if (cell === 'edge' && side) {
+    const currentSide = edgeCellOrder.indexOf(side)
+    if (currentSide >= 0 && currentSide < edgeCellOrder.length - 1) {
+      focusCell(index, 'edge', edgeCellOrder[currentSide + 1])
+      return
+    }
+  }
   const currentCell = cellOrder.indexOf(cell)
   if (currentCell < cellOrder.length - 1) {
     focusCell(index, cellOrder[currentCell + 1])
@@ -491,7 +568,6 @@ function requestClearParts() {
 function clearParts() {
   parts.value = []
   preferredEdgeByPart.value = {}
-  manualRegistryEdgeIds.value = []
   clearPartsConfirmOpen.value = false
   clearSelection()
 }
@@ -679,16 +755,8 @@ function materialPickerSwatchStyle(material: ClientCatalogMaterialOption) {
 }
 
 function openRegistryReplace(entry: EdgeRegistryEntry) {
-  registryPickerMode.value = 'replace'
   registryReplaceEntry.value = entry
   registryPickedEdgeId.value = entry.materialId
-  registryPickerOpen.value = true
-}
-
-function openRegistryAdd() {
-  registryPickerMode.value = 'add'
-  registryReplaceEntry.value = null
-  registryPickedEdgeId.value = null
   registryPickerOpen.value = true
 }
 
@@ -700,29 +768,15 @@ function closeRegistryPicker() {
 
 function applyRegistryPicker() {
   const materialId = registryPickedEdgeId.value
-  if (!materialId) return
-  if (registryPickerMode.value === 'replace' && registryReplaceEntry.value) {
-    const entry = registryReplaceEntry.value
-    for (const part of parts.value) {
-      for (const side of edgeFields) {
-        const band = part[side]
-        if (band?.material_id === entry.materialId && band.source === entry.source) {
-          part[side] = { ...band, material_id: materialId }
-        }
+  const entry = registryReplaceEntry.value
+  if (!materialId || !entry) return
+  for (const part of parts.value) {
+    for (const side of edgeFields) {
+      const band = part[side]
+      if (band?.material_id === entry.materialId && band.source === entry.source) {
+        part[side] = { ...band, material_id: materialId }
       }
     }
-  } else if (selectedParts.value.length > 0) {
-    for (const part of selectedParts.value) {
-      part.edge_top = { material_id: materialId, source: 'shop' }
-      part.edge_bottom = { material_id: materialId, source: 'shop' }
-      part.edge_left = { material_id: materialId, source: 'shop' }
-      part.edge_right = { material_id: materialId, source: 'shop' }
-    }
-  } else {
-    if (!manualRegistryEdgeIds.value.includes(materialId)) {
-      manualRegistryEdgeIds.value = [...manualRegistryEdgeIds.value, materialId]
-    }
-    toast.success("Kromka tanlandi. Uni qator kromida qo'llang.")
   }
   closeRegistryPicker()
 }
@@ -1004,6 +1058,7 @@ watch(
       const needsNormalization = hasLegacyOwnSources(value.parts_snapshot)
       importedLayoutWarningAccepted.value = false
       autosave.hydrate(() => {
+        edgeAssignments.value = new Map()
         parts.value = value.parts_snapshot.map((part) =>
           normalizeSources({ ...part, follow_grain: part.follow_grain !== false }),
         )
@@ -1319,15 +1374,6 @@ onBeforeRouteLeave(() => {
             </div>
           </div>
 
-          <div v-if="activeBranchId && parts.length > 0" class="border-b border-hairline px-5 py-3">
-            <CuttingEdgeTapeRegistry
-              :entries="edgeRegistry"
-              :label-for-material="edgeRegistryLabel"
-              @replace="openRegistryReplace"
-              @add="openRegistryAdd"
-            />
-          </div>
-
           <!-- Bulk bar: actions only — the row checkboxes already show what's
                selected, so a "N selected" counter would repeat them; the count
                still reads out via the group label and the bulk-dialog titles. -->
@@ -1384,12 +1430,16 @@ onBeforeRouteLeave(() => {
             </div>
           </div>
 
-          <div v-else class="grid gap-3 p-4">
+          <div v-else class="@container grid gap-3 p-4">
             <!-- Desktop column header: same border + p-3 + grid template as a
-                 CuttingPartRow card, so the columns line up; hidden on mobile,
-                 where each row keeps its own field labels. The leading cell is a
-                 real select-all checkbox; the rest are decorative labels. -->
-            <div class="hidden rounded-lg border border-hairline bg-sunk p-3 lg:block">
+                 CuttingPartRow card, so the columns line up; hidden below the
+                 single-row fit width, where each row keeps its own field labels.
+                 The leading cell is a real select-all checkbox; the rest are
+                 decorative labels. A container query (not a viewport breakpoint)
+                 because this view is embedded both full-width (client) and next
+                 to a persistent workshop sidebar — the same viewport width maps
+                 to different available row widths in each shell. -->
+            <div class="hidden rounded-lg border border-hairline bg-sunk p-3 @min-[920px]:block">
               <div
                 class="grid grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
               >
@@ -1458,6 +1508,17 @@ onBeforeRouteLeave(() => {
                   Materialni almashtirish
                 </button>
               </div>
+              <div
+                v-if="groupEdgeRegistryEntries(group).length > 0"
+                class="border-t border-hairline px-3 pb-2 pt-1.5"
+              >
+                <CuttingEdgeTapeRegistry
+                  :entries="groupEdgeRegistryEntries(group)"
+                  :label-for-material="edgeRegistryLabel"
+                  :narrow-warning-for-entry="edgeRegistryNarrowWarning"
+                  @replace="openRegistryReplace"
+                />
+              </div>
               <div v-if="!collapsedGroupKeys.has(group.key)" class="grid gap-2 p-2 pt-0">
                 <CuttingPartRow
                   v-for="{ part, index } in group.parts"
@@ -1479,9 +1540,12 @@ onBeforeRouteLeave(() => {
                   @update:quantity="part.quantity = $event"
                   @update:follow-grain="setFollowGrain(part, $event)"
                   @duplicate="duplicateRow(index)"
-                  @cell-enter="onCellEnter(index, $event)"
+                  @cell-enter="(cell, side) => onCellEnter(index, cell, side)"
                   @delete="deleteRow(index)"
                   @open-edge-picker="(event, side) => openEdgePicker(part, event, side)"
+                  @apply-edge-number="
+                    (side, number) => applyEdgeNumberToPartSide(part, side, number)
+                  "
                   @open-material-picker="openPartMaterial(part)"
                 />
               </div>
@@ -1629,6 +1693,10 @@ onBeforeRouteLeave(() => {
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
       :title-suffix="bulkEdgeMode ? `${selectedParts.length} qismga` : undefined"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
+      :edge-registry="edgeRegistry"
+      :edge-assignment-entries="edgeAssignmentEntries"
+      :group-edge-ids="groupEdgeIds(edgePickerPart)"
+      :other-group-edge-ids="otherGroupEdgeIds(edgePickerPart)"
       :preferred-branch-id="activeBranchId"
       :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
       @apply="onEdgePickerApply"
@@ -1652,9 +1720,7 @@ onBeforeRouteLeave(() => {
       >
         <div class="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h3 class="font-serif text-lg font-semibold text-ink">
-              {{ registryPickerMode === 'replace' ? 'Kromka almashtirish' : "Kromka qo'shish" }}
-            </h3>
+            <h3 class="font-serif text-lg font-semibold text-ink">Kromka almashtirish</h3>
             <p v-if="registryReplaceEntry" class="mt-1 text-sm text-ink-muted">
               {{ edgeRegistryLabel(registryReplaceEntry.materialId) }} ishlatilgan tomonlar
               almashtiriladi.

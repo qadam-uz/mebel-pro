@@ -118,6 +118,7 @@ async def _materials(db: AsyncSession, *, branch_id: uuid.UUID) -> tuple[Materia
         thickness_mm=Decimal("2"),
         color="White",
         decor_code=f"W-E-{uuid.uuid4().hex[:4]}",
+        edge_width_mm=19,
     )
     db.add_all([panel, edge])
     await db.flush()

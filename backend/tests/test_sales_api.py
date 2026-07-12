@@ -128,6 +128,7 @@ async def _materials(
         thickness_mm=Decimal("2"),
         color="White",
         decor_code="P5-E",
+        edge_width_mm=19,
     )
     db.add_all([panel, edge])
     await db.flush()

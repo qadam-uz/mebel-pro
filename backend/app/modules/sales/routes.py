@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.core.trace import get_trace_id
-from app.modules.cutting.api import cutting_result_response, render_cutting_pdf
+from app.modules.cutting.api import PdfContext, cutting_result_response, render_cutting_pdf
 from app.modules.sales.api import (
     apply_discount,
     approve_order,
@@ -153,10 +153,18 @@ async def client_order_cutting_pdf(
     principal: AccountReadyPrincipal,
     db: Session,
 ) -> Response:
+    order = await get_client_order(db, principal=principal, order_id=order_id)
     result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
     headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(await cutting_result_response(db, result)),
+        render_cutting_pdf(
+            await cutting_result_response(db, result),
+            PdfContext(
+                order_number=order.order_number,
+                client_name=order.client_name,
+                branch_name=order.branch_name,
+            ),
+        ),
         media_type="application/pdf",
         headers=headers,
     )
@@ -391,10 +399,18 @@ async def workshop_order_cutting_pdf(
     principal: AccountReadyPrincipal,
     db: Session,
 ) -> Response:
+    order = await get_workshop_order(db, principal=principal, order_id=order_id)
     result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
     headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
     return Response(
-        render_cutting_pdf(await cutting_result_response(db, result)),
+        render_cutting_pdf(
+            await cutting_result_response(db, result),
+            PdfContext(
+                order_number=order.order_number,
+                client_name=order.client_name,
+                branch_name=order.branch_name,
+            ),
+        ),
         media_type="application/pdf",
         headers=headers,
     )

@@ -19,7 +19,7 @@ from app.modules.cutting.optimizer import (
     PlacementResult,
     run_all_algorithms,
 )
-from app.modules.cutting.rendering import render_cutting_pdf
+from app.modules.cutting.pdf_document import PdfContext, render_cutting_pdf
 from app.modules.cutting.service import (
     choose_result,
     client_catalog_materials,
@@ -59,6 +59,7 @@ __all__ = [
     "PanelResult",
     "PanelSpec",
     "PartInput",
+    "PdfContext",
     "PlacementResult",
     "choose_result",
     "choose_workshop_result",

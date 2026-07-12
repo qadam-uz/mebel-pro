@@ -44,6 +44,7 @@ def material_response_from_models(
         panel_length_mm=material.panel_length_mm,
         panel_width_mm=material.panel_width_mm,
         grain_direction=material.grain_direction,
+        edge_width_mm=material.edge_width_mm,
         image_file_id=material.image_file_id,
         status=material.status,
         branch_usage_count=branch_usage_count,

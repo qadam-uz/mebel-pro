@@ -211,58 +211,58 @@ mat_id() { # decor kind -> first matching material id
   done
 }
 
-# Panels:  decor|name|manufacturer|type|length|width|thickness|grain|color|image
+# Panels:  decor|manufacturer|type|length|width|thickness|grain|color|image
 PANELS='
-h1145|Sonoma Eman|egger|dsp|2800|2070|18|true|Sonoma eman|h1145_panel.jpg
-h3734|Toshkent Yong'\''oq|egger|dsp|2800|2070|18|true|Yong'\''oq|h3734_panel.jpg
-h1180|Oq Bardolino Eman|egger|dsp|2750|1830|16|true|Oq eman|h1180_panel.jpg
-h1137|Kulrang Bardolino Eman|egger|dsp|2800|2070|18|true|Kulrang eman|h1137_panel.jpg
-h3303|Tamaki Yong'\''oq|swisskrono|mdf|2800|2070|18|true|To'\''q yong'\''oq|h3303_panel.jpg
-h3702|Ellmau Buk|swisskrono|dsp|2750|1830|16|true|Buk|h3702_panel.jpg
-h1615|Tabiiy Qarag'\''ay|swisskrono|dsp|2800|2070|25|true|Qarag'\''ay|h1615_panel.jpg
-h3170|Charm Eman|swisskrono|dsp|2800|2070|18|true|Charm eman|h3170_panel.jpg
-w980|Premium Oq|kronospan|dsp|2800|2070|18|false|Oq|w980_panel.jpg
-w1100|Alebastr Oq|kronospan|dsp|2750|1830|16|false|Alebastr oq|w1100_panel.jpg
-u999|Qora|kronospan|dsp|2800|2070|18|false|Qora|u999_panel.jpg
-u963|Antrasit|kronospan|dsp|2750|1830|18|false|Antrasit|u963_panel.jpg
-u708|Kashmir Kulrang|toshkent|dsp|2800|2070|18|false|Kashmir|u708_panel.jpg
-u732|Chang Kulrang|toshkent|mdf|2800|2070|25|false|Chang kulrang|u732_panel.jpg
-u636|Vanil|toshkent|dsp|2800|2070|16|false|Vanil|u636_panel.jpg
-u560|Fjord Ko'\''k|toshkent|mdf|2800|2070|18|false|Ko'\''k|u560_panel.jpg
+h1145|egger|dsp|2800|2070|18|true|Sonoma eman|h1145_panel.jpg
+h3734|egger|dsp|2800|2070|18|true|Yong'\''oq|h3734_panel.jpg
+h1180|egger|dsp|2750|1830|16|true|Oq eman|h1180_panel.jpg
+h1137|egger|dsp|2800|2070|18|true|Kulrang eman|h1137_panel.jpg
+h3303|swisskrono|mdf|2800|2070|18|true|To'\''q yong'\''oq|h3303_panel.jpg
+h3702|swisskrono|dsp|2750|1830|16|true|Buk|h3702_panel.jpg
+h1615|swisskrono|dsp|2800|2070|25|true|Qarag'\''ay|h1615_panel.jpg
+h3170|swisskrono|dsp|2800|2070|18|true|Charm eman|h3170_panel.jpg
+w980|kronospan|dsp|2800|2070|18|false|Oq|w980_panel.jpg
+w1100|kronospan|dsp|2750|1830|16|false|Alebastr oq|w1100_panel.jpg
+u999|kronospan|dsp|2800|2070|18|false|Qora|u999_panel.jpg
+u963|kronospan|dsp|2750|1830|18|false|Antrasit|u963_panel.jpg
+u708|toshkent|dsp|2800|2070|18|false|Kashmir|u708_panel.jpg
+u732|toshkent|mdf|2800|2070|25|false|Chang kulrang|u732_panel.jpg
+u636|toshkent|dsp|2800|2070|16|false|Vanil|u636_panel.jpg
+u560|toshkent|mdf|2800|2070|18|false|Ko'\''k|u560_panel.jpg
 '
 
-# Edges:  decor|name|manufacturer|thickness|color|image
+# Edges:  decor|manufacturer|thickness|edge_width|color|image
 EDGES='
-h1145|Sonoma Eman kromka 2mm|egger|2|Sonoma eman|h1145_edge.jpg
-h3734|Toshkent Yong'\''oq kromka 2mm|egger|2|Yong'\''oq|h3734_edge.jpg
-h1180|Oq Bardolino kromka 1mm|egger|1|Oq eman|h1180_edge.jpg
-h1137|Kulrang Bardolino kromka 2mm|egger|2|Kulrang eman|h1137_edge.jpg
-h3303|Tamaki Yong'\''oq kromka 2mm|swisskrono|2|To'\''q yong'\''oq|h3303_edge.jpg
-h3702|Ellmau Buk kromka 1mm|swisskrono|1|Buk|h3702_edge.jpg
-h1615|Qarag'\''ay kromka 2mm|swisskrono|2|Qarag'\''ay|h1615_edge.jpg
-h3170|Charm Eman kromka 2mm|swisskrono|2|Charm eman|h3170_edge.jpg
-w980|Oq kromka 2mm|kronospan|2|Oq|w980_edge.jpg
-w1100|Alebastr Oq kromka 1mm|kronospan|1|Alebastr oq|w1100_edge.jpg
-u999|Qora kromka 2mm|kronospan|2|Qora|u999_edge.jpg
-u963|Antrasit kromka 2mm|kronospan|2|Antrasit|u963_edge.jpg
-u708|Kashmir kromka 1mm|toshkent|1|Kashmir|u708_edge.jpg
-u732|Chang Kulrang kromka 2mm|toshkent|2|Chang kulrang|u732_edge.jpg
-w980|Oq kromka 0.4mm|kronospan|0.4|Oq|w980_edge_thin.jpg
-h1145|Sonoma kromka 0.4mm|egger|0.4|Sonoma eman|h1145_edge_thin.jpg
+h1145|egger|2|19|Sonoma eman|h1145_edge.jpg
+h3734|egger|2|19|Yong'\''oq|h3734_edge.jpg
+h1180|egger|1|19|Oq eman|h1180_edge.jpg
+h1137|egger|2|19|Kulrang eman|h1137_edge.jpg
+h3303|swisskrono|2|19|To'\''q yong'\''oq|h3303_edge.jpg
+h3702|swisskrono|1|19|Buk|h3702_edge.jpg
+h1615|swisskrono|2|42|Qarag'\''ay|h1615_edge.jpg
+h3170|swisskrono|2|22|Charm eman|h3170_edge.jpg
+w980|kronospan|2|19|Oq|w980_edge.jpg
+w1100|kronospan|1|19|Alebastr oq|w1100_edge.jpg
+u999|kronospan|2|19|Qora|u999_edge.jpg
+u963|kronospan|2|19|Antrasit|u963_edge.jpg
+u708|toshkent|1|19|Kashmir|u708_edge.jpg
+u732|toshkent|2|19|Chang kulrang|u732_edge.jpg
+w980|kronospan|0.4|19|Oq|w980_edge_thin.jpg
+h1145|egger|0.4|19|Sonoma eman|h1145_edge_thin.jpg
 '
 
 json_escape() { printf '%s' "$1" | jq -Rrs @json | sed 's/^"//; s/"$//'; }
 
 n_panels=0
-while IFS='|' read -r decor name man type len wid thick grain color img; do
+while IFS='|' read -r decor man type len wid thick grain color img; do
   [ -n "$decor" ] || continue
   fid="$(upload_image "$img")"
   body="$(jq -nc \
-    --arg mid "$(man_for "$man")" --arg type "$type" --arg name "$name" \
+    --arg mid "$(man_for "$man")" --arg type "$type" \
     --arg thick "$thick" --arg color "$color" --arg decor "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" \
     --argjson len "$len" --argjson wid "$wid" --argjson grain "$grain" \
     --arg fid "$fid" \
-    '{kind:"panel",manufacturer_id:$mid,type:$type,name:$name,thickness_mm:$thick,
+    '{kind:"panel",manufacturer_id:$mid,type:$type,thickness_mm:$thick,
       color:$color,decor_code:$decor,panel_length_mm:$len,panel_width_mm:$wid,
       grain_direction:$grain} + (if $fid=="" then {} else {image_file_id:$fid} end)')"
   id="$(jcall POST "$API/platform/catalog/materials" "$TOKEN" "$body" | jq -r .id)"
@@ -272,14 +272,14 @@ done <<< "$PANELS"
 ok "$n_panels panels created"
 
 n_edges=0
-while IFS='|' read -r decor name man thick color img; do
+while IFS='|' read -r decor man thick edge_width color img; do
   [ -n "$decor" ] || continue
   fid="$(upload_image "$img")"
   body="$(jq -nc \
-    --arg mid "$(man_for "$man")" --arg name "$name" --arg thick "$thick" \
+    --arg mid "$(man_for "$man")" --arg thick "$thick" --argjson edge_width "$edge_width" \
     --arg color "$color" --arg decor "$(printf '%s' "$decor" | tr '[:lower:]' '[:upper:]')" --arg fid "$fid" \
-    '{kind:"edge",manufacturer_id:$mid,name:$name,thickness_mm:$thick,
-      color:$color,decor_code:$decor} + (if $fid=="" then {} else {image_file_id:$fid} end)')"
+    '{kind:"edge",manufacturer_id:$mid,thickness_mm:$thick,
+      color:$color,decor_code:$decor,edge_width_mm:$edge_width} + (if $fid=="" then {} else {image_file_id:$fid} end)')"
   id="$(jcall POST "$API/platform/catalog/materials" "$TOKEN" "$body" | jq -r .id)"
   MAT_DECOR+=("$decor"); MAT_KIND+=("edge"); MAT_ID+=("$id")
   n_edges=$((n_edges+1))

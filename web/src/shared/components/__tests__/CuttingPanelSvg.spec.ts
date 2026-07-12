@@ -57,12 +57,29 @@ describe('CuttingPanelSvg', () => {
     })
 
     expect(wrapper.find('[role="button"]').exists()).toBe(false)
+    expect(wrapper.get('svg').attributes('aria-label')).toBe('List 1 joylashuvi')
     const placement = wrapper.get('.placement')
     expect(placement.attributes('tabindex')).toBeUndefined()
     expect(placement.attributes('aria-hidden')).toBe('true')
 
     await placement.trigger('click')
     expect(wrapper.emitted('select-placement')?.[0]).toEqual([panel.placements[0]])
+  })
+
+  it('makes active placement feedback visible with thicker stroke and bold label', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          parts_snapshot: [makePart({ name: 'Shelf' })],
+        } as unknown as CuttingResult,
+        panel,
+        activePlacementId: 'placement-1',
+      },
+    })
+
+    expect(wrapper.get('.placement rect').attributes('stroke-width')).toBe('3')
+    expect(wrapper.get('.placement text').attributes('font-weight')).toBe('700')
   })
 })
 
@@ -128,6 +145,7 @@ describe('CuttingPanelSvg edge banding', () => {
     const lines = lineOrientations(wrapper)
     expect(lines).toHaveLength(2)
     expect(lines.every((line) => line.horizontal)).toBe(true)
+    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#0f766e')
   })
 
   it('draws one vertical band line per banded short side (left/right)', () => {
@@ -172,6 +190,31 @@ describe('CuttingPanelSvg edge banding', () => {
 
     expect(wrapper.text()).toContain('Shelf 300×200')
     expect(wrapper.text()).toContain('Qoldiq 400×120')
+    expect(wrapper.text()).not.toContain('sizda qoladi')
     expect(wrapper.find('.offcut rect').attributes('stroke-dasharray')).toBe('12 8')
+  })
+
+  it('rotates labels for tall narrow offcuts', () => {
+    const wrapper = mount(CuttingPanelSvg, {
+      props: {
+        result: {
+          ...result,
+          material_snapshots: {
+            'mat-1': {
+              name: 'Panel',
+              panel_length_mm: 2963,
+              panel_width_mm: 1830,
+            },
+          },
+        } as unknown as CuttingResult,
+        panel: {
+          ...panel,
+          offcuts: [{ x_mm: 320, y_mm: 0, length_mm: 322, width_mm: 1820, usable: true }],
+        },
+        activePlacementId: null,
+      },
+    })
+
+    expect(wrapper.get('.offcut text').attributes('transform')).toContain('rotate(-90')
   })
 })

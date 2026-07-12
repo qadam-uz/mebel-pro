@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
-import { rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
+import { edgeTooNarrow, rankedEdges, recommendedEdge } from '@/shared/app/cuttingEdgeDisplay'
 import {
   colorForMaterial,
   edgeFields,
@@ -9,6 +9,13 @@ import {
   edgeShortLabel,
   type EdgeField,
 } from '@/shared/app/cuttingDisplay'
+import {
+  edgeRegistryKey,
+  previewEdgeAssignments,
+  registryColorStyle,
+  type EdgeRegistryColorStyle,
+  type EdgeRegistryEntry,
+} from '@/shared/app/cuttingEditorDerived'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -31,6 +38,10 @@ const props = defineProps<{
   preferredBranchName: string
   // Overrides the "qism #N" part of the title — used for bulk apply ("N qismga").
   titleSuffix?: string
+  edgeRegistry: EdgeRegistryEntry[]
+  edgeAssignmentEntries: Array<[string, number]>
+  groupEdgeIds: string[]
+  otherGroupEdgeIds: string[]
 }>()
 const emit = defineEmits<{
   apply: [{ edges: Record<EdgeField, CuttingEdgeBand | null>; rememberedMaterialId: string | null }]
@@ -76,15 +87,6 @@ const edgePatterns: Array<{ key: string; label: string; hint: string; sides: Edg
     sides: ['edge_left', 'edge_right'],
   },
 ]
-
-const tapeRegistryColors = [
-  { bg: '#0f766e', fg: '#ffffff', soft: '#d8f3ea' },
-  { bg: '#D85A30', fg: '#ffffff', soft: '#fde2d6' },
-  { bg: '#2563eb', fg: '#ffffff', soft: '#dbeafe' },
-  { bg: '#7c3aed', fg: '#ffffff', soft: '#ede9fe' },
-  { bg: '#ca8a04', fg: '#111827', soft: '#fef3c7' },
-  { bg: '#475569', fg: '#ffffff', soft: '#e2e8f0' },
-] as const
 
 function blankEdgeState(): Record<EdgeField, CuttingEdgeBand | null> {
   return { edge_top: null, edge_bottom: null, edge_left: null, edge_right: null }
@@ -145,12 +147,27 @@ function recommendedEdgeForPart() {
     carriedEdgeOptions.value,
     lastPickedEdgeId.value ?? edgePickerSelectedMaterialId.value,
     props.preferredEdgeId,
+    props.groupEdgeIds,
+    props.otherGroupEdgeIds,
   )
 }
 
 function materialThicknessLabel(materialId: string | null | undefined) {
   const material = edgeById(materialId)
   return material?.thickness_mm ? `${material.thickness_mm}mm` : ''
+}
+
+function panelThicknessForPart() {
+  if (!props.part) return null
+  const panel = materialById(props.part.material_id)
+  const thickness = Number(panel?.thickness_mm)
+  return Number.isFinite(thickness) ? thickness : null
+}
+
+function narrowWarning(material: { edge_width_mm: number | null } | null | undefined) {
+  const panelThickness = panelThicknessForPart()
+  if (!material || panelThickness == null || !edgeTooNarrow(panelThickness, material)) return null
+  return `Lenta eni (${material.edge_width_mm} mm) panel qalinligidan (${panelThickness} mm) tor — qirrani to'liq yopmaydi.`
 }
 
 function sideClass(side: EdgeField) {
@@ -161,38 +178,75 @@ function sideClass(side: EdgeField) {
   return 'border text-ink hover:border-ink-soft'
 }
 
-function tapeNumberLabel(index: number) {
-  const labels = ['①', '②', '③', '④', '⑤', '⑥']
-  return labels[index] ?? String(index + 1)
+function sideEdgeCounts() {
+  const counts = new Map<string, number>()
+  for (const side of edgeFields) {
+    const materialId = edgePickerState.value[side]?.material_id
+    if (!materialId) continue
+    counts.set(materialId, (counts.get(materialId) ?? 0) + 1)
+  }
+  return counts
 }
 
-function tapeColor(index: number) {
-  return tapeRegistryColors[index % tapeRegistryColors.length]
-}
+const registryAssignments = computed(() => new Map(props.edgeAssignmentEntries))
+const visibleRegistryAssignments = computed(
+  () => new Set(props.edgeRegistry.map((entry) => entry.key)),
+)
 
-const tapeEntries = computed(() => {
+function orderedTapeIds() {
   const ids: string[] = []
   const seen = new Set<string>()
-  const add = (id: string | null | undefined) => {
-    if (!id || seen.has(id) || !edgeById(id)) return
+  const required = new Set<string>()
+  const add = (id: string | null | undefined, requiredSide = false) => {
+    if (!id || !edgeById(id)) return
+    if (requiredSide) required.add(id)
+    if (seen.has(id)) return
     seen.add(id)
     ids.push(id)
   }
-  for (const side of edgeFields) add(edgePickerState.value[side]?.material_id)
-  add(lastPickedEdgeId.value)
-  add(activeEdgeId.value)
-  add(recommendedEdgeForPart()?.id)
-  return ids.map((materialId, index) => {
+  for (const side of edgeFields) add(edgePickerState.value[side]?.material_id, true)
+  for (const materialId of props.groupEdgeIds) add(materialId)
+  for (const materialId of props.otherGroupEdgeIds) add(materialId)
+  const recommendedId = recommendedEdgeForPart()?.id
+  add(recommendedId, Boolean(recommendedId && recommendedId === activeEdgeId.value))
+  if (ids.length <= 6) return ids
+  const limited: string[] = []
+  for (const id of ids) {
+    if (limited.length < 6 || required.has(id)) limited.push(id)
+  }
+  return limited
+}
+
+function originMeta(materialId: string, count: number) {
+  if (count > 0) return `Shu qismda ${count} tomonga`
+  if (props.groupEdgeIds.includes(materialId)) return 'Shu guruhda ishlatilgan'
+  if (props.otherGroupEdgeIds.includes(materialId)) return 'Chizmaning boshqa guruhida'
+  if (recommendedEdgeForPart()?.id === materialId) return 'Tavsiya - dekor mos'
+  return 'Yangi'
+}
+
+const tapeEntries = computed(() => {
+  const ids = orderedTapeIds()
+  const keys = ids.map((materialId) => edgeRegistryKey(materialId, 'shop'))
+  const preview = previewEdgeAssignments(registryAssignments.value, keys)
+  const counts = sideEdgeCounts()
+  return ids.map((materialId) => {
     const material = edgeById(materialId)
-    const count = edgeFields.filter(
-      (side) => edgePickerState.value[side]?.material_id === materialId,
-    ).length
+    const key = edgeRegistryKey(materialId, 'shop')
+    const number = preview.get(key) ?? registryAssignments.value.get(key) ?? 1
+    const count = counts.get(materialId) ?? 0
+    const tentative = !visibleRegistryAssignments.value.has(key)
+    const meta = [originMeta(materialId, count)]
+    if (tentative && meta[0] !== 'Yangi') meta.push('Yangi')
     return {
+      key,
       materialId,
       material,
       count,
-      number: tapeNumberLabel(index),
-      color: tapeColor(index),
+      number,
+      color: registryColorStyle(number),
+      tentative,
+      meta,
     }
   })
 })
@@ -212,11 +266,17 @@ function sideStyle(side: EdgeField) {
   }
 }
 
-function badgeStyle(entry: { color: (typeof tapeRegistryColors)[number] }) {
+function badgeStyle(entry: { color: EdgeRegistryColorStyle }) {
   return {
     background: entry.color.bg,
     color: entry.color.fg,
   }
+}
+
+function tentativeTitle(entry: { tentative: boolean } | null | undefined) {
+  return entry?.tentative
+    ? "Bu tasma chizmada hali ishlatilmagan — qo'llangach shu raqam va rangni oladi."
+    : undefined
 }
 
 function sideAria(side: EdgeField) {
@@ -544,7 +604,13 @@ onBeforeUnmount(() => {
               <span
                 v-if="tapeEntryForMaterial(edgePickerState.edge_top.material_id)"
                 class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+                :class="{
+                  'border border-dashed border-current': tapeEntryForMaterial(
+                    edgePickerState.edge_top.material_id,
+                  )?.tentative,
+                }"
                 :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_top.material_id)!)"
+                :title="tentativeTitle(tapeEntryForMaterial(edgePickerState.edge_top.material_id))"
               >
                 {{ tapeEntryForMaterial(edgePickerState.edge_top.material_id)?.number }}
               </span>
@@ -572,7 +638,13 @@ onBeforeUnmount(() => {
                 tapeEntryForMaterial(edgePickerState.edge_left.material_id)
               "
               class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+              :class="{
+                'border border-dashed border-current': tapeEntryForMaterial(
+                  edgePickerState.edge_left.material_id,
+                )?.tentative,
+              }"
               :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_left.material_id)!)"
+              :title="tentativeTitle(tapeEntryForMaterial(edgePickerState.edge_left.material_id))"
             >
               {{ tapeEntryForMaterial(edgePickerState.edge_left.material_id)?.number }}
             </span>
@@ -610,7 +682,13 @@ onBeforeUnmount(() => {
                 tapeEntryForMaterial(edgePickerState.edge_right.material_id)
               "
               class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+              :class="{
+                'border border-dashed border-current': tapeEntryForMaterial(
+                  edgePickerState.edge_right.material_id,
+                )?.tentative,
+              }"
               :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_right.material_id)!)"
+              :title="tentativeTitle(tapeEntryForMaterial(edgePickerState.edge_right.material_id))"
             >
               {{ tapeEntryForMaterial(edgePickerState.edge_right.material_id)?.number }}
             </span>
@@ -631,7 +709,15 @@ onBeforeUnmount(() => {
               <span
                 v-if="tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)"
                 class="grid size-4 place-items-center rounded-full text-[10px] leading-none"
+                :class="{
+                  'border border-dashed border-current': tapeEntryForMaterial(
+                    edgePickerState.edge_bottom.material_id,
+                  )?.tentative,
+                }"
                 :style="badgeStyle(tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)!)"
+                :title="
+                  tentativeTitle(tapeEntryForMaterial(edgePickerState.edge_bottom.material_id))
+                "
               >
                 {{ tapeEntryForMaterial(edgePickerState.edge_bottom.material_id)?.number }}
               </span>
@@ -662,7 +748,9 @@ onBeforeUnmount(() => {
             >
               <span
                 class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-black"
+                :class="{ 'border border-dashed border-current': entry.tentative }"
                 :style="badgeStyle(entry)"
+                :title="tentativeTitle(entry)"
               >
                 {{ entry.number }}
               </span>
@@ -681,9 +769,16 @@ onBeforeUnmount(() => {
                   >
                     Joriy
                   </span>
+                  <span
+                    v-if="narrowWarning(entry.material)"
+                    class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
+                    :title="narrowWarning(entry.material) ?? undefined"
+                  >
+                    Qirradan tor
+                  </span>
                 </span>
                 <span class="font-mono text-[11.5px] text-ink-muted">
-                  {{ entry.count }} tomonga
+                  {{ entry.meta.join(' · ') }}
                 </span>
               </span>
             </button>
@@ -733,6 +828,13 @@ onBeforeUnmount(() => {
                 <span class="nm">
                   {{ edgeShortLabel(material) }}
                   <span v-if="rank < 2" class="fav">Mos</span>
+                  <span
+                    v-if="narrowWarning(material)"
+                    class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
+                    :title="narrowWarning(material) ?? undefined"
+                  >
+                    Qirradan tor
+                  </span>
                 </span>
                 <span class="meta">{{ material.name }}</span>
               </span>

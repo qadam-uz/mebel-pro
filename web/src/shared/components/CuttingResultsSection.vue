@@ -1,9 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
 import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { snapshotEdgeLabel, snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
+import {
+  deriveSnapshotEdgeRegistry,
+  edgeRegistryEntryByMaterial,
+  groupPanelPlacements,
+  panelDisplayIndex,
+  panelFillPercent,
+  resultPanelCount,
+  sheetsSavingsBanner,
+  wasteToneClass,
+} from '@/shared/app/cuttingResultsDisplay'
 import { formatTiyinParts } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
@@ -51,6 +62,7 @@ const cutting = useCuttingStore()
 const rolePath = useRolePath()
 const toast = useToast()
 
+const activePartRef = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
 const hasVariantTabs = computed(() => props.draft.results.length > 1)
 
@@ -102,6 +114,7 @@ const allPlaced = computed(() => placedCount.value >= requestedCount.value)
 const edgeByMaterial = computed(() => {
   const result = chosenResult.value
   if (!result) return []
+  const registry = snapshotEdgeRegistry.value
   const ids = new Set([
     ...Object.keys(result.edge_consumed_shop_by_material),
     ...Object.keys(result.edge_consumed_own_by_material),
@@ -111,23 +124,31 @@ const edgeByMaterial = computed(() => {
       const shop = result.edge_consumed_shop_by_material[id] ?? 0
       const own = result.edge_consumed_own_by_material[id] ?? 0
       const snapshot = result.material_snapshots[id]
-      const name = typeof snapshot?.name === 'string' ? snapshot.name : id.slice(0, 8)
-      return { id, name, total: shop + own }
+      const label = snapshotEdgeLabel(snapshot, id.slice(0, 8))
+      const entry =
+        edgeRegistryEntryByMaterial(registry, id, 'shop') ??
+        edgeRegistryEntryByMaterial(registry, id, 'own')
+      return {
+        id,
+        label,
+        total: shop + own,
+        entry,
+      }
     })
     .filter((row) => row.total > 0)
-    .sort((left, right) => right.total - left.total)
+    .sort((left, right) => (left.entry?.number ?? 999) - (right.entry?.number ?? 999))
 })
-const materialBreakdown = computed(() => {
-  const result = chosenResult.value
-  if (!result) return []
-  return Object.entries(result.panels_used_by_material).map(([materialId, count]) => ({
-    materialId,
-    count,
-    name: panelMaterialName(result, materialId),
-    dims: snapshotDims(result.material_snapshots[materialId]),
-  }))
-})
-const savingsBanner = computed<string | null>(() => null)
+const savingsBanner = computed<string | null>(() =>
+  sheetsSavingsBanner(props.draft.results, chosenResult.value),
+)
+const snapshotEdgeRegistry = computed(() =>
+  chosenResult.value ? deriveSnapshotEdgeRegistry(chosenResult.value.parts_snapshot ?? []) : [],
+)
+const activePanelGroups = computed(() =>
+  chosenResult.value && activePanel.value
+    ? groupPanelPlacements(chosenResult.value, activePanel.value, snapshotEdgeRegistry.value)
+    : [],
+)
 
 // The price always reflects the officially CHOSEN result (what ordering right
 // now would actually cost) — not whichever tab is being viewed — because the
@@ -168,45 +189,23 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => activePanel.value?.id,
+  () => {
+    clearSelection()
+  },
+)
+
 function sumRecord(record: Record<string, number> | undefined) {
   return Object.values(record ?? {}).reduce((sum, value) => sum + value, 0)
 }
 
-function snapshotDims(snapshot: Record<string, unknown> | undefined): string {
-  const length = Number(snapshot?.panel_length_mm)
-  const width = Number(snapshot?.panel_width_mm)
-  return Number.isFinite(length) && Number.isFinite(width) && length > 0 && width > 0
-    ? `${length}×${width}`
-    : ''
-}
-
-function panelMaterialName(result: CuttingResult, materialId: string) {
-  const snapshot = result.material_snapshots[materialId]
-  const decor = typeof snapshot?.decor_code === 'string' ? snapshot.decor_code : ''
-  const name = typeof snapshot?.name === 'string' ? snapshot.name : ''
-  return decor || name || materialId.slice(0, 8)
-}
-
-function panelDims(result: CuttingResult, panel: CuttingPanel) {
-  return snapshotDims(result.material_snapshots[panel.material_id])
-}
-
-function panelFillPercent(result: CuttingResult, panel: CuttingPanel) {
-  const snapshot = result.material_snapshots[panel.material_id]
-  const length = Number(snapshot?.panel_length_mm)
-  const width = Number(snapshot?.panel_width_mm)
-  if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return '-'
-  return `${Math.max(0, 100 - (panel.waste_area_mm2 / (length * width)) * 100).toFixed(1)}%`
-}
-
 function panelCaption(result: CuttingResult, panel: CuttingPanel) {
-  const material = panelMaterialName(result, panel.material_id)
-  const dims = panelDims(result, panel)
-  return `List ${panel.panel_index} · ${material}${dims ? ` · ${dims}` : ''} · KIM ${panelFillPercent(result, panel)}`
-}
-
-function resultPanelCount(result: CuttingResult) {
-  return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
+  const material = snapshotMaterialLabel(
+    result.material_snapshots[panel.material_id],
+    panel.material_id.slice(0, 8),
+  )
+  return `List ${panelDisplayIndex(result, panel)} · ${material} · KIM ${panelFillPercent(result, panel)}`
 }
 
 function selectResult(resultId: string) {
@@ -214,10 +213,40 @@ function selectResult(resultId: string) {
   emit('update:activeResultId', resultId)
   emit('update:activePanelId', result?.panels[0]?.id ?? null)
   activePlacementId.value = null
+  activePartRef.value = null
 }
 
 function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
+  activePartRef.value = placement.part_ref
+  void nextTick(() => {
+    document
+      .querySelector<HTMLElement>(`[data-panel-part-ref="${placement.part_ref}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+function selectPartGroup(partRef: string) {
+  if (activePartRef.value === partRef && activePlacementId.value === null) {
+    clearSelection()
+    return
+  }
+  activePartRef.value = partRef
+  activePlacementId.value = null
+}
+
+function clearSelection() {
+  activePartRef.value = null
+  activePlacementId.value = null
+}
+
+function tapeBadgeStyle(number: number) {
+  const entry = snapshotEdgeRegistry.value.find((item) => item.number === number)
+  if (!entry) return {}
+  return {
+    background: entry.colorStyle.bg,
+    color: entry.colorStyle.fg,
+  }
 }
 
 async function choose(result: CuttingResult) {
@@ -342,17 +371,13 @@ async function choose(result: CuttingResult) {
             <div class="rounded-md border border-hairline bg-elevated p-4">
               <div class="text-xs font-bold uppercase text-ink-muted">Listlar</div>
               <div class="mt-1 font-serif text-2xl font-semibold text-ink">{{ totalPanels }}</div>
-              <p v-if="materialBreakdown.length" class="mt-1 truncate text-xs text-ink-muted">
-                {{
-                  materialBreakdown
-                    .map((row) => `${row.name}${row.dims ? ` ${row.dims}` : ''}: ${row.count}`)
-                    .join(' · ')
-                }}
-              </p>
             </div>
             <div class="rounded-md border border-hairline bg-elevated p-4">
               <div class="text-xs font-bold uppercase text-ink-muted">Chiqit</div>
-              <div class="mt-1 font-serif text-2xl font-semibold text-success">
+              <div
+                class="mt-1 font-serif text-2xl font-semibold"
+                :class="wasteToneClass(chosenResult.waste_percentage)"
+              >
                 {{ resultWaste }}
               </div>
             </div>
@@ -361,6 +386,9 @@ async function choose(result: CuttingResult) {
               <div class="mt-1 font-serif text-2xl font-semibold text-ink">
                 {{ metres(consumedShop + consumedOwn) }}
               </div>
+              <p v-if="edgeByMaterial.length" class="mt-1 text-xs text-ink-muted">
+                {{ edgeByMaterial.length }} xil tasma
+              </p>
             </div>
           </div>
 
@@ -388,8 +416,10 @@ async function choose(result: CuttingResult) {
               v-if="activePanel"
               :result="chosenResult"
               :panel="activePanel"
+              :active-part-ref="activePartRef"
               :active-placement-id="activePlacementId"
               @select-placement="selectPlacement"
+              @clear-selection="clearSelection"
             />
           </section>
         </div>
@@ -417,8 +447,30 @@ async function choose(result: CuttingResult) {
             <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
             <template v-if="edgeByMaterial.length">
               <ul class="mt-2 space-y-1.5 text-sm">
-                <li v-for="row in edgeByMaterial" :key="row.id" class="flex justify-between gap-3">
-                  <span class="min-w-0 truncate text-ink-soft">{{ row.name }}</span>
+                <li
+                  v-for="row in edgeByMaterial"
+                  :key="row.id"
+                  class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+                  :title="row.label"
+                >
+                  <span
+                    v-if="row.entry"
+                    class="grid size-6 place-items-center rounded-full text-[11px] font-black"
+                    :style="{
+                      background: row.entry.colorStyle.bg,
+                      color: row.entry.colorStyle.fg,
+                    }"
+                  >
+                    {{ row.entry.number }}
+                  </span>
+                  <span v-else class="size-6"></span>
+                  <span class="min-w-0">
+                    <span
+                      class="block whitespace-normal text-sm font-bold leading-tight text-ink-soft"
+                    >
+                      {{ row.label }}
+                    </span>
+                  </span>
                   <span class="shrink-0 font-mono text-ink">{{ metres(row.total) }}</span>
                 </li>
               </ul>
@@ -426,21 +478,47 @@ async function choose(result: CuttingResult) {
             <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
           </div>
           <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
-            <h3 class="text-sm font-extrabold text-ink">Joylashuvlar</h3>
+            <h3 class="text-sm font-extrabold text-ink">
+              Detallar — List {{ panelDisplayIndex(chosenResult, activePanel) }}
+            </h3>
             <div class="mt-3 grid gap-2">
               <button
-                v-for="placement in activePanel.placements"
-                :key="placement.id"
+                v-for="group in activePanelGroups"
+                :key="group.partRef"
                 type="button"
-                class="rounded-md border border-hairline bg-elevated px-3 py-2 text-left text-sm"
+                :data-panel-part-ref="group.partRef"
+                class="rounded-md border px-3 py-2 text-left text-sm transition"
                 :class="
-                  placement.id === activePlacementId ? 'border-accent text-accent' : 'text-ink'
+                  group.partRef === activePartRef
+                    ? 'border-accent bg-accent-soft text-accent'
+                    : 'border-hairline bg-elevated text-ink hover:border-accent-tint'
                 "
-                @click="selectPlacement(placement)"
+                @click="selectPartGroup(group.partRef)"
               >
-                <b class="font-semibold">{{ placement.length_mm }}×{{ placement.width_mm }} mm</b>
-                <span class="text-ink-muted">#{{ placement.part_quantity_index }}</span>
-                <span v-if="placement.rotated" class="font-bold text-accent">↻</span>
+                <span class="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <b class="min-w-0 truncate font-semibold"
+                    >{{ group.name }} · {{ group.length_mm }}×{{ group.width_mm }}</b
+                  >
+                  <span
+                    class="rounded bg-sunk px-1.5 py-0.5 font-mono text-[11px] font-bold text-ink-muted"
+                  >
+                    × {{ group.count }}
+                  </span>
+                  <span
+                    v-if="group.rotatedCount > 0"
+                    class="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent"
+                  >
+                    ↻ {{ group.rotatedCount }}
+                  </span>
+                  <span
+                    v-for="number in group.tapeNumbers"
+                    :key="number"
+                    class="grid size-5 place-items-center rounded-full text-[10px] font-black"
+                    :style="tapeBadgeStyle(number)"
+                  >
+                    {{ number }}
+                  </span>
+                </span>
               </button>
             </div>
           </div>

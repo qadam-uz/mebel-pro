@@ -131,6 +131,7 @@ export interface ClientCatalogMaterialOption {
   panel_length_mm: number | null
   panel_width_mm: number | null
   grain_direction: boolean | null
+  edge_width_mm: number | null
   image_file_id: string | null
   branch_carried: boolean
   price_tiyin: number | null
@@ -149,11 +150,7 @@ export interface ClientBranchOption {
 
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
   if (!material) return "Material yo'q"
-  const size =
-    material.kind === 'panel'
-      ? `${material.panel_length_mm ?? '-'}x${material.panel_width_mm ?? '-'}`
-      : `${material.thickness_mm} mm krom`
-  return `${material.manufacturer_name} ${material.name} · ${size}`
+  return material.name
 }
 
 export function metres(mm: number) {

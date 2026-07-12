@@ -36,26 +36,26 @@ class MaterialCreateRequest(BaseModel):
     kind: MaterialKind
     manufacturer_id: uuid.UUID
     type: PanelMaterialType | None = None
-    name: str
     thickness_mm: Decimal
     color: str
     decor_code: str | None = None
     panel_length_mm: int | None = None
     panel_width_mm: int | None = None
     grain_direction: bool | None = None
+    edge_width_mm: int | None = None
     image_file_id: uuid.UUID | None = None
 
 
 class MaterialPatchRequest(BaseModel):
     manufacturer_id: uuid.UUID | None = None
     type: PanelMaterialType | None = None
-    name: str | None = None
     thickness_mm: Decimal | None = None
     color: str | None = None
     decor_code: str | None = None
     panel_length_mm: int | None = None
     panel_width_mm: int | None = None
     grain_direction: bool | None = None
+    edge_width_mm: int | None = None
     image_file_id: uuid.UUID | None = None
 
 
@@ -72,6 +72,7 @@ class MaterialResponse(APIModel):
     panel_length_mm: int | None
     panel_width_mm: int | None
     grain_direction: bool | None
+    edge_width_mm: int | None
     image_file_id: uuid.UUID | None
     status: MaterialStatus
     # AB-22: how many distinct branches carry this platform material. Populated on

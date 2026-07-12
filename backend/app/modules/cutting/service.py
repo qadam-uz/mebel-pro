@@ -561,6 +561,7 @@ async def _catalog_materials(
             panel_length_mm=material.panel_length_mm,
             panel_width_mm=material.panel_width_mm,
             grain_direction=material.grain_direction,
+            edge_width_mm=material.edge_width_mm,
             image_file_id=material.image_file_id,
             branch_carried=branch_material is not None,
             price_tiyin=branch_material.price_tiyin if branch_material is not None else None,
@@ -1048,6 +1049,7 @@ def _material_snapshot(material: Material, manufacturer: Manufacturer) -> dict[s
         "panel_length_mm": material.panel_length_mm,
         "panel_width_mm": material.panel_width_mm,
         "grain_direction": material.grain_direction,
+        "edge_width_mm": material.edge_width_mm,
         "image_file_id": str(material.image_file_id) if material.image_file_id else None,
     }
 

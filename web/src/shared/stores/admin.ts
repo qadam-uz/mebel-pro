@@ -80,6 +80,7 @@ export interface Material {
   panel_length_mm: number | null
   panel_width_mm: number | null
   grain_direction: boolean | null
+  edge_width_mm: number | null
   image_file_id: string | null
   status: MaterialStatus
   // AB-22: how many distinct branches carry this material (list responses only).
@@ -225,7 +226,6 @@ export interface ManufacturerWriteRequest {
 
 interface MaterialWriteBase {
   manufacturer_id: string
-  name: string
   thickness_mm: string
   color: string
   decor_code: string | null
@@ -242,6 +242,7 @@ export type MaterialWriteRequest =
     })
   | (MaterialWriteBase & {
       kind: 'edge'
+      edge_width_mm: number
     })
 
 export interface PlatformUserCreateRequest {

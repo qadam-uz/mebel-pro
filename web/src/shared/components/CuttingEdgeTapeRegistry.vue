@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import Icon from '@/shared/components/AppIcon.vue'
 import type { EdgeRegistryEntry } from '@/shared/app/cuttingEditorDerived'
 
 defineProps<{
   entries: EdgeRegistryEntry[]
   labelForMaterial: (materialId: string) => string
+  narrowWarningForEntry?: (entry: EdgeRegistryEntry) => string | null
 }>()
 
 const emit = defineEmits<{
   replace: [entry: EdgeRegistryEntry]
-  add: []
 }>()
+
+function entryStyle(entry: EdgeRegistryEntry) {
+  return {
+    background: entry.colorStyle.soft,
+    borderColor: entry.colorStyle.bg,
+    color: entry.colorStyle.bg,
+  }
+}
 </script>
 
 <template>
@@ -19,24 +26,25 @@ const emit = defineEmits<{
       v-for="entry in entries"
       :key="entry.key"
       type="button"
-      class="mp-chip border border-hairline-strong bg-elevated"
+      class="mp-chip border border-hairline-strong"
+      :style="entryStyle(entry)"
       @click="emit('replace', entry)"
     >
       <span
-        class="grid size-5 place-items-center rounded-full text-xs font-black"
-        :class="entry.colorClass"
+        class="grid size-5 place-items-center rounded-full border border-current bg-elevated text-xs font-black text-current"
       >
         {{ entry.number }}
       </span>
-      <span class="max-w-44 truncate">{{ labelForMaterial(entry.materialId) }}</span>
-    </button>
-    <button
-      type="button"
-      class="mp-chip border border-dashed border-hairline-strong"
-      @click="emit('add')"
-    >
-      <Icon name="plus" class="size-3.5" />
-      Kromka
+      <span class="whitespace-normal text-left text-xs font-semibold leading-tight">
+        {{ labelForMaterial(entry.materialId) }}
+      </span>
+      <span
+        v-if="narrowWarningForEntry?.(entry)"
+        class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
+        :title="narrowWarningForEntry?.(entry) ?? undefined"
+      >
+        Qirradan tor
+      </span>
     </button>
   </div>
 </template>

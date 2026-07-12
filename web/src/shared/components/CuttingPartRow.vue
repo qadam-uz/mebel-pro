@@ -37,18 +37,19 @@ const emit = defineEmits<{
   'update:follow-grain': [boolean]
   delete: []
   duplicate: []
-  'cell-enter': [cell: 'name' | 'length' | 'width' | 'quantity' | 'edge']
+  'cell-enter': [cell: 'name' | 'length' | 'width' | 'quantity' | 'edge', side?: EdgeField]
   'open-edge-picker': [Event | undefined, side?: EdgeField]
+  'apply-edge-number': [side: EdgeField, number: number]
   'open-material-picker': []
   'toggle-select': []
 }>()
 
 const cutting = useCuttingStore()
 const edgeSideCells: Array<{ field: EdgeField; label: string }> = [
-  { field: 'edge_top', label: 'U' },
-  { field: 'edge_bottom', label: 'P' },
-  { field: 'edge_left', label: 'CH' },
-  { field: 'edge_right', label: "O'" },
+  { field: 'edge_top', label: 'Д1' },
+  { field: 'edge_bottom', label: 'Д2' },
+  { field: 'edge_left', label: 'Ш1' },
+  { field: 'edge_right', label: 'Ш2' },
 ]
 
 function edgeById(id: string | null | undefined) {
@@ -91,6 +92,16 @@ function edgeRegistryEntry(side: EdgeField) {
   return registryEntryForBand(props.edgeRegistry, band?.material_id, band?.source)
 }
 
+function edgeCellStyle(side: EdgeField) {
+  const entry = edgeRegistryEntry(side)
+  if (!entry) return {}
+  return {
+    background: entry.colorStyle.soft,
+    borderColor: entry.colorStyle.bg,
+    color: entry.colorStyle.bg,
+  }
+}
+
 function edgeCellTitle(side: EdgeField, label: string) {
   const band = props.part[side]
   const material = edgeById(band?.material_id)
@@ -101,6 +112,13 @@ function updateFollowGrain(event: Event) {
   const input = event.target
   if (!(input instanceof HTMLInputElement)) return
   emit('update:follow-grain', input.checked)
+}
+
+function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
+  if (/^[1-9]$/.test(event.key)) {
+    event.preventDefault()
+    emit('apply-edge-number', side, Number(event.key))
+  }
 }
 </script>
 
@@ -117,9 +135,11 @@ function updateFollowGrain(event: Event) {
     "
   >
     <div
-      class="grid gap-3 lg:grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_38px_140px_38px_38px_38px] lg:items-start lg:gap-2"
+      class="grid gap-3 @min-[920px]:grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] @min-[920px]:items-center @min-[920px]:gap-2"
     >
-      <div class="hidden lg:flex lg:justify-center">
+      <div
+        class="hidden @min-[920px]:col-start-1 @min-[920px]:row-start-1 @min-[920px]:flex @min-[920px]:justify-center"
+      >
         <input
           type="checkbox"
           class="size-4"
@@ -128,24 +148,35 @@ function updateFollowGrain(event: Event) {
           @change="emit('toggle-select')"
         />
       </div>
-      <div class="font-mono text-xs font-extrabold text-ink-muted">#{{ index + 1 }}</div>
+      <div
+        class="font-mono text-xs font-extrabold text-ink-muted @min-[920px]:col-start-2 @min-[920px]:row-start-1"
+      >
+        #{{ index + 1 }}
+      </div>
 
-      <div class="min-w-0">
-        <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          <span class="lg:hidden">Nomi</span>
+      <div
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[920px]:contents"
+      >
+        <label
+          class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-3 @min-[920px]:row-start-1"
+        >
+          <span class="@min-[920px]:hidden">Nomi</span>
           <input
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input lg:min-h-9 lg:px-2"
+            class="mp-input @min-[920px]:min-h-9 @min-[920px]:px-2"
             :placeholder="partDisplayName(part, index)"
             aria-label="Nomi"
             @keydown.enter.prevent="emit('cell-enter', 'name')"
           />
         </label>
-        <div class="mt-2 flex flex-wrap items-center gap-2 lg:hidden">
+        <label
+          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[920px]:col-start-7 @min-[920px]:row-start-1"
+        >
+          <span class="@min-[920px]:hidden">Tekstura</span>
           <input
-            data-test="follow-grain-mobile"
+            data-test="follow-grain"
             type="checkbox"
             class="size-4"
             :checked="followsGrain"
@@ -153,15 +184,17 @@ function updateFollowGrain(event: Event) {
             :aria-label="grainTitle"
             @change="updateFollowGrain"
           />
-        </div>
+        </label>
       </div>
 
-      <!-- Sub-lg: the three dimensions share one row; lg:contents
-           dissolves this wrapper so each input is a column of the
-           parent grid again (desktop layout unchanged) — CB-60. -->
-      <div class="grid grid-cols-3 gap-2 lg:contents">
-        <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          <span class="lg:hidden">Bo'y</span>
+      <!-- Below the single-row fit width: the three dimensions share one row;
+           @min-[920px]:contents dissolves this wrapper so each input is a
+           column of the parent grid again (single-row layout unchanged) — CB-60. -->
+      <div class="grid grid-cols-3 gap-2 @min-[920px]:contents">
+        <label
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-4 @min-[920px]:row-start-1"
+        >
+          <span class="@min-[920px]:hidden">Bo'y</span>
           <input
             v-model.number="lengthModel"
             :data-part-index="index"
@@ -170,15 +203,17 @@ function updateFollowGrain(event: Event) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono lg:min-h-9 lg:px-2"
+            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Bo'y millimetr"
             @keydown.enter.prevent="emit('cell-enter', 'length')"
           />
         </label>
 
-        <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          <span class="lg:hidden">Eni</span>
+        <label
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-5 @min-[920px]:row-start-1"
+        >
+          <span class="@min-[920px]:hidden">Eni</span>
           <input
             v-model.number="widthModel"
             :data-part-index="index"
@@ -187,15 +222,17 @@ function updateFollowGrain(event: Event) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono lg:min-h-9 lg:px-2"
+            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Eni millimetr"
             @keydown.enter.prevent="emit('cell-enter', 'width')"
           />
         </label>
 
-        <label class="grid gap-1 text-xs font-bold text-ink-muted">
-          <span class="lg:hidden">Soni</span>
+        <label
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-6 @min-[920px]:row-start-1"
+        >
+          <span class="@min-[920px]:hidden">Soni</span>
           <input
             v-model.number="quantityModel"
             :data-part-index="index"
@@ -204,7 +241,7 @@ function updateFollowGrain(event: Event) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input font-mono lg:min-h-9 lg:px-2"
+            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             aria-label="Soni"
             @keydown.enter.prevent="emit('cell-enter', 'quantity')"
@@ -212,73 +249,75 @@ function updateFollowGrain(event: Event) {
         </label>
       </div>
 
-      <div class="hidden lg:flex lg:justify-center">
-        <input
-          data-test="follow-grain-desktop"
-          type="checkbox"
-          class="mt-2 size-4"
-          :checked="followsGrain"
-          :title="grainTitle"
-          :aria-label="grainTitle"
-          @change="updateFollowGrain"
-        />
-      </div>
-
-      <div class="min-w-0">
-        <span class="mb-1 block text-sm font-bold text-ink lg:hidden">Krom</span>
-        <div class="grid grid-cols-4 gap-1">
-          <button
-            v-for="cell in edgeSideCells"
-            :key="cell.field"
-            type="button"
-            :data-part-index="index"
-            data-cell="edge"
-            class="grid h-9 place-items-center rounded-md border border-hairline-strong bg-elevated text-xs font-black transition hover:border-accent"
-            :title="edgeCellTitle(cell.field, cell.label)"
-            :aria-label="`${cell.label} kromini tahrirlash`"
-            @click="emit('open-edge-picker', $event, cell.field)"
-            @keydown.enter.prevent="emit('cell-enter', 'edge')"
+      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[920px]:contents">
+        <div class="min-w-0 @min-[920px]:col-start-8 @min-[920px]:row-start-1">
+          <span class="sr-only">Krom</span>
+          <div
+            class="mb-1 grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-ink-muted @min-[920px]:hidden"
           >
-            <span
-              v-if="edgeRegistryEntry(cell.field)"
-              class="grid size-5 place-items-center rounded-full"
-              :class="edgeRegistryEntry(cell.field)?.colorClass"
-            >
-              {{ edgeRegistryEntry(cell.field)?.number }}
+            <span v-for="cell in edgeSideCells" :key="`${cell.field}-label`">
+              {{ cell.label }}
             </span>
-            <span v-else class="text-ink-muted">·</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1">
+            <button
+              v-for="cell in edgeSideCells"
+              :key="cell.field"
+              type="button"
+              :data-part-index="index"
+              data-cell="edge"
+              :data-edge-side="cell.field"
+              class="grid h-9 place-items-center rounded-md border border-hairline-strong text-xs font-black transition hover:border-accent"
+              :class="edgeRegistryEntry(cell.field) ? '' : 'bg-elevated text-ink'"
+              :style="edgeCellStyle(cell.field)"
+              :title="edgeCellTitle(cell.field, cell.label)"
+              :aria-label="`${cell.label} kromini tahrirlash`"
+              @click="emit('open-edge-picker', $event, cell.field)"
+              @keydown.enter.prevent="emit('cell-enter', 'edge', cell.field)"
+              @keydown="onEdgeCellKeydown($event, cell.field)"
+            >
+              <span
+                v-if="edgeRegistryEntry(cell.field)"
+                class="grid size-5 place-items-center rounded-full border border-current bg-elevated text-current"
+              >
+                {{ edgeRegistryEntry(cell.field)?.number }}
+              </span>
+              <span v-else class="text-ink-muted">·</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-1 @min-[920px]:contents">
+          <button
+            type="button"
+            class="mp-action-icon-button justify-self-end self-end @min-[920px]:col-start-9 @min-[920px]:row-start-1"
+            :aria-label="`Qism #${index + 1} ni nusxalash`"
+            @click="emit('duplicate')"
+          >
+            ⧉
+          </button>
+
+          <button
+            type="button"
+            class="mp-action-icon-button justify-self-end self-end @min-[920px]:col-start-10 @min-[920px]:row-start-1"
+            :aria-label="`Qism #${index + 1} materialini almashtirish`"
+            title="Materialni almashtirish"
+            @click="emit('open-material-picker')"
+          >
+            <Icon name="swap" class="size-[18px]" />
+          </button>
+
+          <button
+            type="button"
+            class="mp-action-icon-button justify-self-end self-end text-danger @min-[920px]:col-start-11 @min-[920px]:row-start-1"
+            :aria-label="`Qism #${index + 1} ni o'chirish`"
+            title="O'chirish"
+            @click="emit('delete')"
+          >
+            <Icon name="trash" class="size-[18px]" />
           </button>
         </div>
       </div>
-
-      <button
-        type="button"
-        class="mp-action-icon-button justify-self-end"
-        :aria-label="`Qism #${index + 1} ni nusxalash`"
-        @click="emit('duplicate')"
-      >
-        ⧉
-      </button>
-
-      <button
-        type="button"
-        class="mp-action-icon-button justify-self-end"
-        :aria-label="`Qism #${index + 1} materialini almashtirish`"
-        title="Materialni almashtirish"
-        @click="emit('open-material-picker')"
-      >
-        <Icon name="swap" class="size-[18px]" />
-      </button>
-
-      <button
-        type="button"
-        class="mp-action-icon-button justify-self-end text-danger"
-        :aria-label="`Qism #${index + 1} ni o'chirish`"
-        title="O'chirish"
-        @click="emit('delete')"
-      >
-        <Icon name="trash" class="size-[18px]" />
-      </button>
     </div>
 
     <p

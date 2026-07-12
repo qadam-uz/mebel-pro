@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import { buildAdminMaterialWriteRequest } from '@/shared/app/adminMaterials'
+import { buildAdminMaterialWriteRequest, composeMaterialName } from '@/shared/app/adminMaterials'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import {
   clearFieldErrors,
@@ -73,12 +73,12 @@ const form = reactive({
   kind: 'panel' as MaterialKind,
   manufacturerId: '',
   type: 'dsp' as PanelMaterialType,
-  name: '',
   thicknessMm: '18',
   color: '',
   decorCode: '',
   panelLengthMm: '2800',
   panelWidthMm: '2070',
+  edgeWidthMm: '19',
   grainDirection: true,
   imageFileId: null as string | null,
 })
@@ -89,50 +89,50 @@ const manufacturerForm = reactive({
 })
 type MaterialField =
   | 'manufacturerId'
-  | 'name'
   | 'thicknessMm'
   | 'color'
   | 'type'
   | 'panelLengthMm'
   | 'panelWidthMm'
+  | 'edgeWidthMm'
 type InlineManufacturerField = 'name'
 const materialFieldErrors = reactive<FieldErrors<MaterialField>>({})
 const inlineManufacturerFieldErrors = reactive<FieldErrors<InlineManufacturerField>>({})
 const materialFieldIds: Record<MaterialField, string> = {
   manufacturerId: 'mat-manufacturer',
-  name: 'mat-name',
   thicknessMm: 'mat-thick',
   color: 'mat-color',
   type: 'mat-type',
   panelLengthMm: 'mat-len',
   panelWidthMm: 'mat-wid',
+  edgeWidthMm: 'mat-edge-width',
 }
 const materialFieldOrder: MaterialField[] = [
   'manufacturerId',
-  'name',
   'thicknessMm',
   'color',
   'type',
   'panelLengthMm',
   'panelWidthMm',
+  'edgeWidthMm',
 ]
 const materialApiFieldMap: Partial<Record<string, MaterialField>> = {
   manufacturer_not_found: 'manufacturerId',
-  material_name_required: 'name',
   material_color_required: 'color',
   invalid_thickness: 'thicknessMm',
+  invalid_edge_width: 'edgeWidthMm',
   invalid_panel_material: 'type',
   invalid_panel_size: 'panelLengthMm',
   invalid_grain: 'type',
 }
 const materialApiLocMap: Partial<Record<string, MaterialField>> = {
   'body.manufacturer_id': 'manufacturerId',
-  'body.name': 'name',
   'body.thickness_mm': 'thicknessMm',
   'body.color': 'color',
   'body.type': 'type',
   'body.panel_length_mm': 'panelLengthMm',
   'body.panel_width_mm': 'panelWidthMm',
+  'body.edge_width_mm': 'edgeWidthMm',
 }
 
 const kindOptions = [
@@ -225,11 +225,17 @@ const dimensionError = computed(
     Number(form.panelWidthMm) > 0 &&
     Number(form.panelLengthMm) < Number(form.panelWidthMm),
 )
-const materialImageTitle = computed(() => form.name.trim() || 'Material rasmi')
+const selectedManufacturerName = computed(
+  () => admin.manufacturers.find((manufacturer) => manufacturer.id === form.manufacturerId)?.name,
+)
+const materialNamePreview = computed(() =>
+  composeMaterialName(form, selectedManufacturerName.value),
+)
+const materialImageTitle = computed(() => materialNamePreview.value || 'Material rasmi')
 const materialImageMeta = computed(() =>
   [
     materialKindLabel(form.kind),
-    admin.manufacturers.find((manufacturer) => manufacturer.id === form.manufacturerId)?.name,
+    selectedManufacturerName.value,
     form.thicknessMm ? `${form.thicknessMm} mm` : null,
   ]
     .filter(Boolean)
@@ -250,12 +256,12 @@ function openCreate() {
   form.kind = 'panel'
   form.manufacturerId = admin.manufacturers.find((row) => row.status === 'active')?.id ?? ''
   form.type = 'dsp'
-  form.name = ''
   form.thicknessMm = '18'
   form.color = ''
   form.decorCode = ''
   form.panelLengthMm = '2800'
   form.panelWidthMm = '2070'
+  form.edgeWidthMm = '19'
   form.grainDirection = true
   form.imageFileId = null
   saveError.value = null
@@ -270,12 +276,12 @@ function openEdit(material: Material) {
   form.kind = material.kind
   form.manufacturerId = material.manufacturer_id
   form.type = material.type ?? 'dsp'
-  form.name = material.name
   form.thicknessMm = material.thickness_mm
   form.color = material.color
   form.decorCode = material.decor_code ?? ''
   form.panelLengthMm = String(material.panel_length_mm ?? 2800)
   form.panelWidthMm = String(material.panel_width_mm ?? 2070)
+  form.edgeWidthMm = String(material.edge_width_mm ?? 19)
   form.grainDirection = material.grain_direction ?? false
   form.imageFileId = material.image_file_id
   saveError.value = null
@@ -295,7 +301,7 @@ function materialSpec(material: Material) {
   if (material.kind === 'panel') {
     return `${materialTypeLabel(material.type)} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
   }
-  return 'krom · metr'
+  return `krom · ${material.thickness_mm} x ${material.edge_width_mm ?? '-'} mm`
 }
 
 function materialTypeLabel(type: PanelMaterialType | null | undefined) {
@@ -327,7 +333,6 @@ function validateMaterialForm() {
     if (error) materialFieldErrors[field] = error
   }
   set('manufacturerId', requiredText(form.manufacturerId, 'Ishlab chiqaruvchini tanlang.'))
-  set('name', requiredText(form.name))
   set('thicknessMm', requiredText(form.thicknessMm) ?? positiveDecimal(form.thicknessMm))
   set('color', requiredText(form.color))
   if (form.kind === 'panel') {
@@ -337,6 +342,8 @@ function validateMaterialForm() {
     if (!materialFieldErrors.panelLengthMm && dimensionError.value) {
       materialFieldErrors.panelLengthMm = "Uzunlik enidan kichik bo'lmasligi kerak."
     }
+  } else {
+    set('edgeWidthMm', requiredText(form.edgeWidthMm) ?? positiveInteger(form.edgeWidthMm))
   }
   const hasErrors = materialFieldOrder.some((field) => Boolean(materialFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(materialFieldErrors, materialFieldOrder, materialFieldIds)
@@ -671,25 +678,14 @@ onMounted(async () => {
                   + Yangi ishlab chiqaruvchi
                 </button>
               </div>
-              <label class="admin-field admin-full" for="mat-name">
-                <span>Material nomi</span>
-                <input
-                  id="mat-name"
-                  v-model="form.name"
-                  placeholder="LDSP H1334 ST9 . Dub Sonoma"
-                  required
-                  :aria-invalid="!!materialFieldErrors.name"
-                  aria-describedby="mat-name-error"
-                />
-                <span
-                  v-if="materialFieldErrors.name"
-                  id="mat-name-error"
-                  class="admin-field-error"
-                  role="alert"
+              <div class="admin-field admin-full">
+                <span>Nomi (avtomatik)</span>
+                <div
+                  class="rounded-md border border-hairline bg-sunk px-3 py-2 text-sm font-bold text-ink"
                 >
-                  {{ materialFieldErrors.name }}
-                </span>
-              </label>
+                  {{ materialNamePreview }}
+                </div>
+              </div>
               <FormSelect
                 v-if="form.kind === 'panel'"
                 id="mat-type"
@@ -716,6 +712,25 @@ onMounted(async () => {
                   role="alert"
                 >
                   {{ materialFieldErrors.thicknessMm }}
+                </span>
+              </label>
+              <label v-if="form.kind === 'edge'" class="admin-field" for="mat-edge-width">
+                <span>Eni (mm)</span>
+                <input
+                  id="mat-edge-width"
+                  v-model="form.edgeWidthMm"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!materialFieldErrors.edgeWidthMm"
+                  aria-describedby="mat-edge-width-error"
+                />
+                <span
+                  v-if="materialFieldErrors.edgeWidthMm"
+                  id="mat-edge-width-error"
+                  class="admin-field-error"
+                  role="alert"
+                >
+                  {{ materialFieldErrors.edgeWidthMm }}
                 </span>
               </label>
               <label class="admin-field" for="mat-color">

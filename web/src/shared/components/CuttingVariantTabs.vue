@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { variantLabel } from '@/shared/app/cuttingResultsDisplay'
 import type { CuttingResult } from '@/shared/stores/cutting'
 
 const props = defineProps<{
@@ -10,10 +11,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [resultId: string]
 }>()
-
-function tabLabel(result: CuttingResult) {
-  return result.source === 'imported_map' ? 'Fayldagi joylashuv' : 'Optimizer varianti'
-}
 
 function selectByOffset(current: CuttingResult, offset: number) {
   const index = props.results.findIndex((result) => result.id === current.id)
@@ -44,7 +41,7 @@ function selectByOffset(current: CuttingResult, offset: number) {
       @keydown.right.prevent="selectByOffset(result, 1)"
     >
       <span v-if="result.id === chosenResultId" aria-hidden="true">✓</span>
-      <span>{{ tabLabel(result) }}</span>
+      <span>{{ variantLabel(result) }}</span>
       <span
         v-if="result.source === 'imported_map'"
         class="rounded bg-info-soft px-1.5 py-0.5 text-[11px] text-info"

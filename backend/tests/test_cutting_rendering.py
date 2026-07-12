@@ -15,7 +15,6 @@ from typing import Any
 import pytest
 from app.modules.cutting import rendering
 from app.modules.cutting.schemas import CuttingOffcutResponse, CuttingPlacementResponse
-from reportlab.lib.pagesizes import A4, landscape
 
 
 def _placement(**overrides: Any) -> CuttingPlacementResponse:
@@ -51,8 +50,7 @@ def test_placement_y_maps_straight_through_without_svg_flip() -> None:
     of reportlab's bottom-left origin, vertically mirroring every layout
     against the on-screen plan. Optimizer y_mm is bottom-left-origin already —
     it must map straight through."""
-    page_width, page_height = landscape(A4)
-    origin_x, origin_y, scale = rendering._sheet_transform(2800, 2070, page_width, page_height)
+    origin_x, origin_y, scale = rendering._sheet_transform(2800, 2070, 500, 300)
 
     x, y, _w, _h = rendering._rect_points(
         0, 0, 600, 400, origin_x=origin_x, origin_y=origin_y, scale=scale
@@ -67,22 +65,16 @@ def test_placement_y_maps_straight_through_without_svg_flip() -> None:
 
 
 def test_sheet_transform_fits_and_centres_the_sheet() -> None:
-    page_width, page_height = landscape(A4)
-    origin_x, origin_y, scale = rendering._sheet_transform(2800, 2070, page_width, page_height)
-    max_w = page_width - 2 * rendering._MARGIN_X
-    max_h = page_height - rendering._HEADER_H - rendering._FOOTER_H
+    frame_width, frame_height = 500, 300
+    origin_x, origin_y, scale = rendering._sheet_transform(
+        2800, 2070, frame_width, frame_height, origin_x=10, origin_y=20
+    )
 
-    assert scale == pytest.approx(min(max_w / 2800, max_h / 2070))
-    assert origin_x == pytest.approx(rendering._MARGIN_X + (max_w - 2800 * scale) / 2)
-    assert origin_y == pytest.approx(rendering._FOOTER_H + (max_h - 2070 * scale) / 2)
-    assert origin_x + 2800 * scale <= page_width - rendering._MARGIN_X + 1e-6
-    assert origin_y + 2070 * scale <= page_height - rendering._HEADER_H + 1e-6
-
-
-def test_page_orientation_follows_sheet_aspect() -> None:
-    assert rendering._page_size_for_panel(2800, 2070) == landscape(A4)
-    assert rendering._page_size_for_panel(1830, 2750) == A4
-    assert rendering._page_size_for_panel(1000, 1000) == A4
+    assert scale == pytest.approx(min(frame_width / 2800, frame_height / 2070))
+    assert origin_x == pytest.approx(10 + (frame_width - 2800 * scale) / 2)
+    assert origin_y == pytest.approx(20 + (frame_height - 2070 * scale) / 2)
+    assert origin_x + 2800 * scale <= 10 + frame_width + 1e-6
+    assert origin_y + 2070 * scale <= 20 + frame_height + 1e-6
 
 
 # --- labels ---------------------------------------------------------------
@@ -98,7 +90,7 @@ def test_label_gate_matches_the_visualiser_thresholds() -> None:
 def test_placement_label_uses_part_name() -> None:
     parts = _parts_by_ref([{"part_ref": "a", "name": "Polka"}])
     label = rendering._placement_label(_placement(part_ref="a"), parts)
-    assert label == "Polka 600×400"
+    assert label == "#1 Polka 600×400"
 
 
 def test_placement_label_falls_back_to_row_number_for_blank_names() -> None:
@@ -109,14 +101,14 @@ def test_placement_label_falls_back_to_row_number_for_blank_names() -> None:
             {"part_ref": "c"},
         ]
     )
-    assert rendering._placement_label(_placement(part_ref="b"), parts) == "D2 600×400"
-    assert rendering._placement_label(_placement(part_ref="c"), parts) == "D3 600×400"
+    assert rendering._placement_label(_placement(part_ref="b"), parts) == "#2 D2 600×400"
+    assert rendering._placement_label(_placement(part_ref="c"), parts) == "#3 D3 600×400"
 
 
 def test_placement_label_marks_rotated_placements() -> None:
     parts = _parts_by_ref([{"part_ref": "a", "name": "Polka"}])
     label = rendering._placement_label(_placement(part_ref="a", rotated=True), parts)
-    assert label == "Polka 600×400 ↻"
+    assert label == "#1 Polka 600×400 ↻"
 
 
 def test_placement_label_falls_back_to_ref_for_unknown_parts() -> None:
@@ -124,9 +116,20 @@ def test_placement_label_falls_back_to_ref_for_unknown_parts() -> None:
     assert label == "ghost 600×400"
 
 
-def test_offcut_labels() -> None:
-    assert rendering._offcut_label(_offcut(usable=True)) == "Qoldiq 500×300 — sizda qoladi"
-    assert rendering._offcut_label(_offcut(usable=False)) == "chiqit"
+def test_offcut_label_mode_ladder() -> None:
+    full = rendering._offcut_label_mode(_offcut(usable=True, length_mm=900, width_mm=160), 0.4)
+    assert full == rendering._OffcutLabelMode(text="Qoldiq 900×160", orientation="horizontal")
+
+    rotated = rendering._offcut_label_mode(_offcut(usable=True, length_mm=322, width_mm=1820), 0.27)
+    assert rotated is not None
+    assert rotated.orientation == "vertical"
+
+    assert (
+        rendering._offcut_label_mode(_offcut(usable=True, length_mm=30, width_mm=30), 0.4) is None
+    )
+    assert rendering._offcut_label_mode(
+        _offcut(usable=False, length_mm=500, width_mm=300), 0.4
+    ) == (rendering._OffcutLabelMode(text="chiqit", orientation="horizontal"))
 
 
 # --- edge banding ---------------------------------------------------------
@@ -186,7 +189,22 @@ def test_panel_fill_percent() -> None:
     assert rendering._panel_fill_percent(panel, 0, 2070) == "-"  # type: ignore[arg-type]
 
 
-def test_material_label_prefers_decor_code() -> None:
-    assert rendering._material_label({"decor_code": "H1334", "name": "Dub"}, "id") == "H1334"
+def test_material_label_uses_catalog_identity_format() -> None:
+    assert (
+        rendering._material_label(
+            {
+                "type": "dsp",
+                "manufacturer_name": "Egger",
+                "decor_code": "H1334 ST9",
+                "name": "Dub",
+                "color": "Sanoma",
+                "thickness_mm": "18.0",
+                "panel_length_mm": 2750,
+                "panel_width_mm": 1830,
+            },
+            "id",
+        )
+        == "LDSP Egger H1334 ST9 · Sanoma · 2750×1830×18 mm"
+    )
     assert rendering._material_label({"name": "Dub"}, "id") == "Dub"
     assert rendering._material_label({}, "0123456789abcdef") == "01234567"

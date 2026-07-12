@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { panelDisplayIndex, panelFillPercent } from '@/shared/app/cuttingResultsDisplay'
+import { snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import type { CuttingPanel, CuttingResult } from '@/shared/stores/cutting'
 
 defineProps<{
@@ -36,56 +38,89 @@ function placementY(result: CuttingResult, panel: CuttingPanel, y: number, width
   return panelWidth(result, panel) - y - width
 }
 
-function materialShortName(result: CuttingResult, panel: CuttingPanel) {
-  const row = snapshot(result, panel)
-  const decor = typeof row.decor_code === 'string' ? row.decor_code : ''
-  const name = typeof row.name === 'string' ? row.name : ''
-  return decor || name || panel.material_id.slice(0, 8)
+function panelGroups(result: CuttingResult) {
+  const groups: Array<{ materialId: string; label: string; panels: CuttingPanel[] }> = []
+  const indexByMaterial = new Map<string, number>()
+  for (const panel of result.panels) {
+    let group = groups[indexByMaterial.get(panel.material_id) ?? -1]
+    if (!group) {
+      group = {
+        materialId: panel.material_id,
+        label: snapshotMaterialLabel(snapshot(result, panel), panel.material_id.slice(0, 8)),
+        panels: [],
+      }
+      indexByMaterial.set(panel.material_id, groups.length)
+      groups.push(group)
+    }
+    group.panels.push(panel)
+  }
+  return groups
 }
 </script>
 
 <template>
-  <div class="flex gap-3 overflow-x-auto pb-1" aria-label="Listlar">
-    <button
-      v-for="panel in result.panels"
-      :key="panel.id"
-      type="button"
-      class="grid w-32 shrink-0 gap-1 rounded-md border p-2 text-left transition hover:border-accent"
-      :class="
-        panel.id === activePanelId ? 'border-accent bg-accent-soft' : 'border-hairline bg-elevated'
-      "
-      :aria-pressed="panel.id === activePanelId"
-      @click="emit('select', panel.id)"
-    >
-      <svg
-        class="h-20 w-full rounded border border-hairline bg-sunk"
-        :viewBox="viewBox(result, panel)"
-        aria-hidden="true"
-      >
-        <rect
-          x="0"
-          y="0"
-          :width="panelLength(result, panel)"
-          :height="panelWidth(result, panel)"
-          fill="var(--color-elevated)"
-          stroke="var(--color-accent)"
-          stroke-width="10"
-        />
-        <rect
-          v-for="placement in panel.placements"
-          :key="placement.id"
-          :x="placement.x_mm"
-          :y="placementY(result, panel, placement.y_mm, placement.width_mm)"
-          :width="placement.length_mm"
-          :height="placement.width_mm"
-          fill="var(--color-accent-soft)"
-          stroke="var(--color-accent)"
-          stroke-width="5"
-        />
-      </svg>
-      <span class="truncate text-xs font-extrabold text-ink">
-        {{ materialShortName(result, panel) }} · {{ panel.panel_index }}
-      </span>
-    </button>
+  <div class="grid gap-3" aria-label="Listlar">
+    <section v-for="group in panelGroups(result)" :key="group.materialId" class="grid gap-1.5">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 class="min-w-0 flex-1 text-sm font-extrabold leading-tight text-ink">
+          {{ group.label }}
+        </h4>
+        <span class="font-mono text-xs font-bold text-ink-muted"
+          >{{ group.panels.length }} list</span
+        >
+      </div>
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button
+          v-for="panel in group.panels"
+          :key="panel.id"
+          type="button"
+          class="grid w-24 shrink-0 gap-1 rounded-md border p-1.5 text-left transition hover:border-accent"
+          :class="
+            panel.id === activePanelId
+              ? 'border-accent bg-accent-soft'
+              : 'border-hairline bg-elevated'
+          "
+          :aria-pressed="panel.id === activePanelId"
+          @click="emit('select', panel.id)"
+        >
+          <span class="relative block">
+            <svg
+              class="h-14 w-full rounded border border-hairline bg-sunk"
+              :viewBox="viewBox(result, panel)"
+              aria-hidden="true"
+            >
+              <rect
+                x="0"
+                y="0"
+                :width="panelLength(result, panel)"
+                :height="panelWidth(result, panel)"
+                fill="var(--color-elevated)"
+                stroke="var(--color-accent)"
+                stroke-width="10"
+              />
+              <rect
+                v-for="placement in panel.placements"
+                :key="placement.id"
+                :x="placement.x_mm"
+                :y="placementY(result, panel, placement.y_mm, placement.width_mm)"
+                :width="placement.length_mm"
+                :height="placement.width_mm"
+                fill="var(--color-accent-soft)"
+                stroke="var(--color-accent)"
+                stroke-width="5"
+              />
+            </svg>
+            <span
+              class="absolute bottom-1 right-1 rounded bg-elevated/95 px-1 py-0.5 font-mono text-[9px] font-black text-ink shadow-sm"
+            >
+              {{ panelFillPercent(result, panel) }}
+            </span>
+          </span>
+          <span class="truncate text-[11px] font-extrabold text-ink">
+            List {{ panelDisplayIndex(result, panel) }}
+          </span>
+        </button>
+      </div>
+    </section>
   </div>
 </template>

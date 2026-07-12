@@ -137,6 +137,7 @@ async def _materials(
         thickness_mm=Decimal("0.4"),
         color="Oak",
         decor_code="H1334",
+        edge_width_mm=19,
     )
     db.add_all([panel, other_panel, edge])
     await db.flush()
@@ -196,6 +197,7 @@ async def _map_materials(
         thickness_mm=Decimal("0.4"),
         color="White",
         decor_code="MAP",
+        edge_width_mm=19,
     )
     db.add_all([panel, edge])
     await db.flush()

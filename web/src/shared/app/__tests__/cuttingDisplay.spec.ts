@@ -7,6 +7,9 @@ import {
   edgeShortLabel,
   edgeTinyLabel,
   sideLabels,
+  snapshotEdgeLabel,
+  snapshotMaterialLabel,
+  snapshotShortLabel,
 } from '@/shared/app/cuttingDisplay'
 import type { ClientCatalogMaterialOption } from '@/shared/stores/cutting'
 
@@ -26,6 +29,7 @@ function material(
     panel_length_mm: null,
     panel_width_mm: null,
     grain_direction: null,
+    edge_width_mm: 19,
     image_file_id: null,
     branch_carried: true,
     price_tiyin: null,
@@ -59,13 +63,12 @@ describe('colorForMaterial', () => {
 })
 
 describe('edgeShortLabel', () => {
-  it('formats manufacturer · decor + colour, optionally with thickness', () => {
-    expect(edgeShortLabel(material())).toBe('Egger Group · H1334 White')
-    expect(edgeShortLabel(material(), true)).toBe('Egger Group · H1334 White · 0.4 mm')
+  it('uses the generated material name without adding duplicate suffixes', () => {
+    expect(edgeShortLabel(material())).toBe('ABS H1334')
+    expect(edgeShortLabel(material(), true)).toBe('ABS H1334')
   })
 
-  it('drops the decor prefix when absent and renders "-" for no material', () => {
-    expect(edgeShortLabel(material({ decor_code: null }))).toBe('Egger Group · White')
+  it('renders "-" for no material', () => {
     expect(edgeShortLabel(null)).toBe('-')
   })
 })
@@ -79,7 +82,51 @@ describe('edgeTinyLabel', () => {
 
 describe('edgeSearchText', () => {
   it('lower-cases a searchable blob of the material fields', () => {
-    expect(edgeSearchText(material())).toBe('egger group abs h1334 white h1334 0.4')
-    expect(edgeSearchText(material({ decor_code: null }))).toBe('egger group abs h1334 white  0.4')
+    expect(edgeSearchText(material())).toBe('egger group abs h1334 white h1334 0.4 19')
+    expect(edgeSearchText(material({ decor_code: null }))).toBe(
+      'egger group abs h1334 white  0.4 19',
+    )
+  })
+})
+
+describe('snapshotShortLabel', () => {
+  it('uses decor, then colour, then a name prefix', () => {
+    expect(snapshotShortLabel({ decor_code: 'H1334', color: 'Oak', name: 'Panel' })).toBe('H1334')
+    expect(snapshotShortLabel({ decor_code: null, color: 'Oak', name: 'Panel' })).toBe('Oak')
+    expect(snapshotShortLabel({ name: 'Generated material label' })).toBe('Generated material')
+  })
+
+  it('builds fuller result labels for panel and edge snapshots', () => {
+    expect(
+      snapshotMaterialLabel({
+        manufacturer_name: 'Egger',
+        type: 'dsp',
+        decor_code: 'H1334 ST9',
+        color: 'Sanoma',
+        thickness_mm: '18',
+        panel_length_mm: 2800,
+        panel_width_mm: 2070,
+      }),
+    ).toBe('LDSP Egger H1334 ST9 · Sanoma · 2800×2070×18 mm')
+    expect(
+      snapshotMaterialLabel({
+        manufacturer_name: 'Kronospan',
+        type: 'dsp',
+        decor_code: 'TD-W18',
+        color: 'White',
+        thickness_mm: '18.0',
+        panel_length_mm: 2800,
+        panel_width_mm: 2070,
+      }),
+    ).toBe('LDSP Kronospan TD-W18 · White · 2800×2070×18 mm')
+    expect(
+      snapshotEdgeLabel({
+        manufacturer_name: 'Egger',
+        decor_code: 'H1334 ST9',
+        color: 'Sanoma',
+        thickness_mm: '0.4',
+        edge_width_mm: 20,
+      }),
+    ).toBe('Egger H1334 ST9 · Sanoma · 0.4×20 mm')
   })
 })
