@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { expectOk } from './helpers'
+
 test('landing surface loads', async ({ page }) => {
   await page.goto('/landing/')
 
@@ -39,7 +41,7 @@ test('protected role homes redirect to sign-in', async ({ page }) => {
 test('web host proxies API health same-origin', async ({ request }) => {
   const response = await request.get('/api/v1/healthz')
 
-  expect(response.ok()).toBe(true)
+  await expectOk(response)
   expect(response.headers()['x-trace-id']).toBeTruthy()
   expect(response.headers()['content-type']).toContain('application/json')
 })

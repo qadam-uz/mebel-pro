@@ -8,6 +8,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { expectOk } from "./helpers";
+
 const execFileAsync = promisify(execFile);
 const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
@@ -95,7 +97,7 @@ async function platformToken(request: APIRequestContext, login: string) {
   const response = await request.post("/api/v1/auth/platform/login", {
     data: { login, password: adminPassword },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return (await response.json()).access_token as string;
 }
 
@@ -124,7 +126,7 @@ async function provisionWorkshop(
       temp_password: ownerPassword,
     },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return { ...(await response.json()), ownerLogin, ownerPassword };
 }
 
@@ -138,7 +140,7 @@ async function readyOwnerToken(
       password: setup.ownerPassword,
     },
   });
-  expect(login.ok()).toBe(true);
+  await expectOk(login);
   const access = (await login.json()).access_token as string;
   const changed = await request.post("/api/v1/auth/password/change", {
     headers: { Authorization: `Bearer ${access}` },
@@ -147,7 +149,7 @@ async function readyOwnerToken(
       new_password: ownerReadyPassword,
     },
   });
-  expect(changed.ok()).toBe(true);
+  await expectOk(changed);
   return access;
 }
 
@@ -163,7 +165,7 @@ async function createCatalogMaterials(
       data: { name: `Order Maker ${id}`, country: "UZ" },
     },
   );
-  expect(manufacturer.ok()).toBe(true);
+  await expectOk(manufacturer);
   const manufacturerId = (await manufacturer.json()).id as string;
 
   const panel = await request.post("/api/v1/platform/catalog/materials", {
@@ -181,7 +183,7 @@ async function createCatalogMaterials(
       grain_direction: false,
     },
   });
-  expect(panel.ok()).toBe(true);
+  await expectOk(panel);
 
   const edge = await request.post("/api/v1/platform/catalog/materials", {
     headers: { Authorization: `Bearer ${token}` },
@@ -194,7 +196,7 @@ async function createCatalogMaterials(
       decor_code: `P5-E-${id}`,
     },
   });
-  expect(edge.ok()).toBe(true);
+  await expectOk(edge);
 
   return {
     panel: (await panel.json()) as MaterialResponse,
@@ -221,7 +223,7 @@ async function addBranchMaterial(
       },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function updateBranchPricing(
@@ -236,7 +238,7 @@ async function updateBranchPricing(
       data: { cutting_rate_tiyin: 50_000, edge_banding_rate_tiyin: 20_000 },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function stockIn(
@@ -258,18 +260,18 @@ async function stockIn(
       },
     },
   );
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
 }
 
 async function clientToken(request: APIRequestContext, phone: string, name: string) {
   const requested = await request.post("/api/v1/auth/client/otp/request", {
     data: { phone },
   });
-  expect(requested.ok()).toBe(true);
+  await expectOk(requested);
   const verified = await request.post("/api/v1/auth/client/otp/verify", {
     data: { phone, code: "000000", name },
   });
-  expect(verified.ok()).toBe(true);
+  await expectOk(verified);
   return (await verified.json()) as TokenResponse;
 }
 
@@ -282,7 +284,7 @@ async function optimizedDraftWithoutPricing(
   const created = await request.post("/api/v1/client/cutting-drafts", {
     headers: { Authorization: `Bearer ${token}` },
   });
-  expect(created.ok()).toBe(true);
+  await expectOk(created);
   const draft = (await created.json()) as CuttingDraftResponse;
 
   const patched = await request.patch(
@@ -308,13 +310,13 @@ async function optimizedDraftWithoutPricing(
       },
     },
   );
-  expect(patched.ok()).toBe(true);
+  await expectOk(patched);
 
   const optimized = await request.post(
     `/api/v1/client/cutting-drafts/${draft.id}/optimize`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
-  expect(optimized.ok()).toBe(true);
+  await expectOk(optimized);
   const result = (await optimized.json()) as CuttingDraftResponse;
   expect(result.chosen_result_id).not.toBeNull();
   return result;

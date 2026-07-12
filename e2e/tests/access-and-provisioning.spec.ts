@@ -8,6 +8,8 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { expectOk } from "./helpers";
+
 const execFileAsync = promisify(execFile);
 const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
@@ -80,7 +82,7 @@ async function platformToken(request: APIRequestContext, login: string) {
   const response = await request.post("/api/v1/auth/platform/login", {
     data: { login, password: adminPassword },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return (await response.json()).access_token as string;
 }
 
@@ -109,7 +111,7 @@ async function provisionWorkshop(
       temp_password: ownerPassword,
     },
   });
-  expect(response.ok()).toBe(true);
+  await expectOk(response);
   return { ...(await response.json()), ownerLogin, ownerPassword };
 }
 
@@ -123,7 +125,7 @@ async function readyOwnerToken(
       password: setup.ownerPassword,
     },
   });
-  expect(login.ok()).toBe(true);
+  await expectOk(login);
   const access = (await login.json()).access_token as string;
   const changed = await request.post("/api/v1/auth/password/change", {
     headers: { Authorization: `Bearer ${access}` },
@@ -132,7 +134,7 @@ async function readyOwnerToken(
       new_password: ownerReadyPassword,
     },
   });
-  expect(changed.ok()).toBe(true);
+  await expectOk(changed);
   return access;
 }
 
@@ -268,7 +270,7 @@ test("staff sees granted branch context after password change", async ({
       grants: [{ permission: "manage_orders", branch_id: setup.branch.id }],
     },
   });
-  expect(created.ok()).toBe(true);
+  await expectOk(created);
 
   await page.goto("/workshop/");
   await page.getByLabel("Login").fill(staffLogin);
@@ -369,7 +371,7 @@ test("workshop staff direct URLs respect branch-scoped grants", async ({
       grants: [{ permission: "manage_inventory", branch_id: setup.branch.id }],
     },
   });
-  expect(created.ok()).toBe(true);
+  await expectOk(created);
 
   await page.goto("/workshop/");
   await page.getByLabel("Login").fill(staffLogin);
