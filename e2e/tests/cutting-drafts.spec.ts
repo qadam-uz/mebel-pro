@@ -153,7 +153,6 @@ async function createCatalogMaterials(request: APIRequestContext, token: string,
       kind: 'panel',
       manufacturer_id: manufacturerId,
       type: 'dsp',
-      name: `Cutting Panel ${id}`,
       thickness_mm: '18',
       color: 'White',
       decor_code: `P4-P-${id}`,
@@ -169,8 +168,8 @@ async function createCatalogMaterials(request: APIRequestContext, token: string,
     data: {
       kind: 'edge',
       manufacturer_id: manufacturerId,
-      name: `Cutting Edge ${id}`,
       thickness_mm: '2',
+      edge_width_mm: 19,
       color: 'White',
       decor_code: `P4-E-${id}`,
     },
@@ -357,14 +356,16 @@ async function loginWorkshop(page: Page, login: string, password: string) {
 }
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
-  // The redesigned row exposes one krom cell per side (U/P/CH/O'); any of them
+  // The redesigned row exposes one krom cell per side (Д1/Д2/Ш1/Ш2); any of them
   // opens the picker modal for that part.
-  await page.getByRole('button', { name: 'U kromini tahrirlash', exact: true }).click()
+  await page.getByRole('button', { name: 'Д1 kromini tahrirlash', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /Krom yopishtirish/ })
-  // Pick the tape from the catalog list first, then band top+bottom with it.
-  await dialog.getByRole('button', { name: "Yana tasma qo'shish" }).click()
-  await dialog.getByLabel('Krom qidirish').fill(edgeName)
-  await dialog.getByRole('button', { name: new RegExp(edgeName) }).click()
+  // The branch's only carried tape is auto-offered as the current tape (the
+  // "Tavsiya - dekor mos" badge) — assert it's the seeded one, then band
+  // top+bottom with the side pattern.
+  await expect(
+    dialog.getByRole('button', { name: new RegExp(`${edgeName}.*Tavsiya`) }),
+  ).toBeVisible()
   await dialog.getByRole('button', { name: 'Yuqori + pastki' }).click()
   await dialog.getByRole('button', { name: "Qo'llash" }).click()
 }
@@ -437,9 +438,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
   await expect(page.getByText('cutting-engine-best')).toBeVisible()
   await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
-  // The sheet strip shows one thumbnail per panel, captioned "{decor} · {index}".
-  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
-  await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
+  // The sheet strip groups thumbnails per material, captioned "List {index}".
+  await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
   await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
@@ -512,7 +513,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByLabel('Soni')).toHaveValue('2')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
+  await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 
   // Resume path #2 — drafts list → open: the saved draft is listed and
@@ -524,7 +525,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  await expect(page.getByRole('button', { name: `P4-P-${id} · 1` })).toBeVisible()
+  await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
 })
 
 test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
@@ -567,7 +568,7 @@ test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   await page.getByRole('tab', { name: 'Chizma' }).click()
   await expect(page.getByRole('heading', { name: 'Chizma rejasi' })).toBeVisible()
   await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
-  await expect(page.getByRole('img', { name: /Panel 1 layout/ })).toBeVisible()
+  await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
 
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Chizma (PDF)' }).click()

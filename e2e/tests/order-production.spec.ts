@@ -174,7 +174,6 @@ async function createCatalogMaterials(
       kind: "panel",
       manufacturer_id: manufacturerId,
       type: "dsp",
-      name: `Order Panel ${id}`,
       thickness_mm: "18",
       color: "White",
       decor_code: `P5-P-${id}`,
@@ -190,8 +189,8 @@ async function createCatalogMaterials(
     data: {
       kind: "edge",
       manufacturer_id: manufacturerId,
-      name: `Order Edge ${id}`,
       thickness_mm: "2",
+      edge_width_mm: 19,
       color: "White",
       decor_code: `P5-E-${id}`,
     },
@@ -364,16 +363,18 @@ async function chooseOption(
 }
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
-  // The redesigned row exposes one krom cell per side (U/P/CH/O'); any of them
+  // The redesigned row exposes one krom cell per side (Д1/Д2/Ш1/Ш2); any of them
   // opens the picker modal for that part.
   await page
-    .getByRole("button", { name: "U kromini tahrirlash", exact: true })
+    .getByRole("button", { name: "Д1 kromini tahrirlash", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: /Krom yopishtirish/ });
-  // Pick the tape from the catalog list first, then band top+bottom with it.
-  await dialog.getByRole("button", { name: "Yana tasma qo'shish" }).click();
-  await dialog.getByLabel("Krom qidirish").fill(edgeName);
-  await dialog.getByRole("button", { name: new RegExp(edgeName) }).click();
+  // The branch's only carried tape is auto-offered as the current tape (the
+  // "Tavsiya - dekor mos" badge) — assert it's the seeded one, then band
+  // top+bottom with the side pattern.
+  await expect(
+    dialog.getByRole("button", { name: new RegExp(`${edgeName}.*Tavsiya`) }),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
   await dialog.getByRole("button", { name: "Qo'llash" }).click();
 }

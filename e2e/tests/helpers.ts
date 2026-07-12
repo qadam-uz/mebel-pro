@@ -181,7 +181,6 @@ export async function createCatalogMaterials(
       kind: "panel",
       manufacturer_id: manufacturerId,
       type: "dsp",
-      name: `Order Panel ${id}`,
       thickness_mm: "18",
       color: "White",
       decor_code: `P5-P-${id}`,
@@ -197,8 +196,8 @@ export async function createCatalogMaterials(
     data: {
       kind: "edge",
       manufacturer_id: manufacturerId,
-      name: `Order Edge ${id}`,
       thickness_mm: "2",
+      edge_width_mm: 19,
       color: "White",
       decor_code: `P5-E-${id}`,
     },
