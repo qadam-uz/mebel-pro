@@ -311,7 +311,7 @@ def _draw_sheet_title_block(
     _draw_text(pdf, _MARGIN + 8, y - 46, f"{count} dona list", 9)
     _draw_text(pdf, _MARGIN + _CONTENT_W / 2, y - 31, f"Buyurtma: {order}", 9)
     _draw_text(pdf, _MARGIN + _CONTENT_W / 2, y - 46, f"Sana: {date_text}", 9)
-    return y - box_h
+    return float(y - box_h)
 
 
 def _draw_sheet_stats(
