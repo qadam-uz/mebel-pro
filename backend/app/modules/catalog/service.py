@@ -233,7 +233,11 @@ async def list_materials(
     search: str | None = None,
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
+    manufacturer_ids: list[uuid.UUID] | None = None,
+    material_types: list[PanelMaterialType] | None = None,
     status_filter: MaterialStatus | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[MaterialRecord]:
     require_platform_operator(principal)
     # AB-22: aggregate a distinct-branch usage count per material via a LEFT JOIN
@@ -249,10 +253,15 @@ async def list_materials(
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
+        manufacturer_ids=manufacturer_ids,
         material_type=None,
+        material_types=material_types,
         status_filter=status_filter,
     )
-    query = query.group_by(Material.id, Manufacturer.id).order_by(Manufacturer.name, Material.name)
+    query = query.group_by(Material.id, Manufacturer.id).order_by(
+        Manufacturer.name, Material.name, Material.id
+    )
+    query = _paginate(query, limit=limit, offset=offset)
     return [
         MaterialRecord(
             material=material,
@@ -476,6 +485,8 @@ async def list_branch_catalog_options(
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[BranchCatalogOption]:
     _require_workshop_user(principal)
     scope = await resolve_branch_scope(
@@ -500,7 +511,7 @@ async def list_branch_catalog_options(
             Material.status == MaterialStatus.ACTIVE,
             Manufacturer.status == MaterialStatus.ACTIVE,
         )
-        .order_by(Manufacturer.name, Material.name)
+        .order_by(Manufacturer.name, Material.name, Material.id)
     )
     query = _material_filters(
         query,
@@ -510,6 +521,7 @@ async def list_branch_catalog_options(
         material_type=material_type,
         status_filter=None,
     )
+    query = _paginate(query, limit=limit, offset=offset)
     return [
         BranchCatalogOption(
             material=material,
@@ -530,6 +542,8 @@ async def list_branch_materials(
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
     status_filter: MaterialStatus | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[BranchMaterialRecord]:
     _require_workshop_user(principal)
     scope = await resolve_branch_scope(
@@ -543,7 +557,7 @@ async def list_branch_materials(
         .join(Material, Material.id == BranchMaterial.material_id)
         .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
         .where(BranchMaterial.branch_id == scope.branch_id)
-        .order_by(Manufacturer.name, Material.name)
+        .order_by(Manufacturer.name, Material.name, Material.id)
     )
     if status_filter is not None:
         query = query.where(BranchMaterial.status == status_filter)
@@ -555,6 +569,7 @@ async def list_branch_materials(
         material_type=material_type,
         status_filter=None,
     )
+    query = _paginate(query, limit=limit, offset=offset)
     return [
         BranchMaterialRecord(branch_material=bm, material=material, manufacturer=manufacturer)
         for bm, material, manufacturer in (await db.execute(query)).all()
@@ -813,6 +828,28 @@ async def _branch_material_exists(
     return existing is not None
 
 
+# Catalog list endpoints paginate with the house limit/offset convention
+# (sales, inventory, audit): the caller opts in by passing a limit, the response
+# stays a bare list, and the client infers "has more" from a full page. A None
+# limit means unbounded — preserving the pre-pagination behavior for callers (and
+# tests) that don't ask for a page. Ordering carries a Material.id tiebreaker so
+# offset paging is deterministic across requests.
+MATERIALS_MAX_LIMIT = 200
+
+
+def _bounded_limit(limit: int | None) -> int | None:
+    if limit is None:
+        return None
+    return max(1, min(limit, MATERIALS_MAX_LIMIT))
+
+
+def _paginate(query: Any, *, limit: int | None, offset: int) -> Any:
+    bounded = _bounded_limit(limit)
+    if bounded is None:
+        return query
+    return query.limit(bounded).offset(max(0, offset))
+
+
 def _material_filters(
     query: Any,
     *,
@@ -821,13 +858,19 @@ def _material_filters(
     manufacturer_id: uuid.UUID | None,
     material_type: PanelMaterialType | None,
     status_filter: MaterialStatus | None,
+    manufacturer_ids: list[uuid.UUID] | None = None,
+    material_types: list[PanelMaterialType] | None = None,
 ) -> Any:
     if kind is not None:
         query = query.where(Material.kind == kind)
     if manufacturer_id is not None:
         query = query.where(Material.manufacturer_id == manufacturer_id)
+    if manufacturer_ids:
+        query = query.where(Material.manufacturer_id.in_(manufacturer_ids))
     if material_type is not None:
         query = query.where(Material.type == material_type)
+    if material_types:
+        query = query.where(Material.type.in_(material_types))
     if status_filter is not None:
         query = query.where(Material.status == status_filter)
     normalized = _optional_text(search)

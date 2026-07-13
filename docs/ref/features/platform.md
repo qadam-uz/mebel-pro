@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-06-26
+updated: 2026-07-13
 order: 70
 ---
 
@@ -38,9 +38,10 @@ Operators do not edit per-branch prices or stock — that's workshop territory.
   adding materials."
 - **Materials** (`/admin/catalog/materials`) — table: image, kind, manufacturer chip,
   type/thickness, colour/decor, panel size (for panels), status, **branch-usage count**
-  (how many distinct branches carry the material), action menu. Filters:
-  kind dropdown (`panel` / `edge`), manufacturer multi-select, panel-type multi-select,
-  thickness multi-select, status dropdown. A per-material "which branches carry this?"
+  (how many distinct branches carry the material), action menu. Filters run **server-side**
+  and the table pages with a *load-more* control (the catalog runs to hundreds of rows):
+  search, kind dropdown (`panel` / `edge`), manufacturer multi-select, panel-type
+  multi-select, status dropdown. A per-material "which branches carry this?"
   drill-down is a planned follow-up — it needs a cross-module branch lookup, so v1 ships
   only the count.
   **+ Yangi material** -> kind-specific form (manufacturer picker with inline-add -> opens the

@@ -3,7 +3,11 @@ import { defineStore } from 'pinia'
 
 import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
-import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
+import {
+  CATALOG_PICKER_LIMIT,
+  INVENTORY_TX_PAGE_LIMIT,
+  MATERIALS_PAGE_LIMIT,
+} from '@/shared/app/constants'
 import type {
   Material,
   MaterialKind,
@@ -155,6 +159,7 @@ export interface BranchMaterialFilters {
   status?: MaterialStatus | null
   manufacturer_id?: string | null
   material_type?: PanelMaterialType | null
+  offset?: number
 }
 
 export const permissionCatalog = [
@@ -176,6 +181,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const selectedBranchPricing = ref<BranchPricing | null>(null)
   const catalogOptions = ref<BranchCatalogOption[]>([])
   const branchMaterials = ref<BranchMaterial[]>([])
+  const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
   const stockItems = ref<StockItem[]>([])
   const lowStockItems = ref<StockItem[]>([])
@@ -331,6 +337,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     return selectedBranchPricing.value
   }
 
+  // The add-material picker is server-searched and capped — never the whole
+  // catalog — so opening the modal on the full material set doesn't freeze.
   async function loadCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
     catalogOptions.value = await api.get<BranchCatalogOption[]>(
       withQuery(`/workshop/branches/${id}/catalog/materials`, {
@@ -338,12 +346,17 @@ export const useWorkshopStore = defineStore('workshop', () => {
         kind: filters.kind,
         manufacturer_id: filters.manufacturer_id,
         material_type: filters.material_type,
+        limit: CATALOG_PICKER_LIMIT,
       }),
       authInit(),
     )
   }
 
+  // Paginated with append (offset 0 replaces, higher offset appends the next
+  // page); branchMaterialsHasMore is inferred from a full page. The requestId
+  // guard drops stale responses when filters change mid-flight.
   async function loadBranchMaterials(id: string, filters: BranchMaterialFilters = {}) {
+    const offset = filters.offset ?? 0
     const requestId = ++catalogLoadRequestId
     catalogLoading.value = true
     catalogError.value = null
@@ -356,10 +369,15 @@ export const useWorkshopStore = defineStore('workshop', () => {
           manufacturer_id: filters.manufacturer_id,
           material_type: filters.material_type,
           status: filters.status,
+          limit: MATERIALS_PAGE_LIMIT,
+          offset,
         }),
         authInit(),
       )
-      if (requestId === catalogLoadRequestId) branchMaterials.value = rows
+      if (requestId === catalogLoadRequestId) {
+        branchMaterials.value = offset === 0 ? rows : [...branchMaterials.value, ...rows]
+        branchMaterialsHasMore.value = rows.length === MATERIALS_PAGE_LIMIT
+      }
     } catch (errorValue) {
       if (requestId === catalogLoadRequestId) {
         catalogError.value = 'catalog_load_failed'
@@ -810,6 +828,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranchPricing,
     catalogOptions,
     branchMaterials,
+    branchMaterialsHasMore,
     suppliers,
     stockItems,
     lowStockItems,

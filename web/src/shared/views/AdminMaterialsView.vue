@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { buildAdminMaterialWriteRequest, composeMaterialName } from '@/shared/app/adminMaterials'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import {
   clearFieldErrors,
@@ -33,6 +34,7 @@ import { useToast } from '@/shared/composables/useToast'
 import {
   useAdminStore,
   type Material,
+  type MaterialFilters,
   type MaterialKind,
   type MaterialStatus,
   type PanelMaterialType,
@@ -67,7 +69,6 @@ const statusFilter = ref('all')
 const kindFilter = ref('all')
 const manufacturerFilter = ref<string[]>([])
 const typeFilter = ref<string[]>([])
-const thicknessFilter = ref<string[]>([])
 
 const form = reactive({
   kind: 'panel' as MaterialKind,
@@ -169,53 +170,47 @@ const materialTypeOptions: ChoiceOption[] = [
   { value: 'other', label: 'Boshqa' },
 ]
 const materialTypeFilterOptions = computed<ChoiceOption[]>(() => materialTypeOptions)
-const thicknessFilterOptions = computed<ChoiceOption[]>(() =>
-  Array.from(new Set(admin.materials.map((material) => material.thickness_mm)))
-    .sort((left, right) => Number(left) - Number(right))
-    .map((thickness) => ({ value: thickness, label: `${thickness} mm` })),
-)
 const materialKindOptions: ChoiceOption[] = [
   { value: 'panel', label: 'Panel', meta: 'plita materiali' },
   { value: 'edge', label: 'Krom', meta: 'krom lenta' },
 ]
 
-const filtered = computed(() => {
-  const needle = search.value.trim().toLowerCase()
-  return admin.materials.filter((material) => {
-    if (statusFilter.value !== 'all' && material.status !== statusFilter.value) return false
-    if (kindFilter.value !== 'all' && material.kind !== kindFilter.value) return false
-    if (
-      manufacturerFilter.value.length > 0 &&
-      !manufacturerFilter.value.includes(material.manufacturer_id)
-    ) {
-      return false
-    }
-    if (
-      typeFilter.value.length > 0 &&
-      (!material.type || !typeFilter.value.includes(material.type))
-    ) {
-      return false
-    }
-    if (
-      thicknessFilter.value.length > 0 &&
-      !thicknessFilter.value.includes(material.thickness_mm)
-    ) {
-      return false
-    }
-    if (!needle) return true
-    return [
-      material.name,
-      material.manufacturer_name,
-      material.type ?? '',
-      material.color,
-      material.decor_code ?? '',
-      material.thickness_mm,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(needle)
-  })
+// Filtering + paging are server-side (the catalog holds hundreds of rows). Every
+// filter change reloads from offset 0; "load more" appends the next page. Search
+// is debounced so we don't round-trip per keystroke.
+const hasActiveFilters = computed(
+  () =>
+    search.value.trim() !== '' ||
+    kindFilter.value !== 'all' ||
+    statusFilter.value !== 'all' ||
+    manufacturerFilter.value.length > 0 ||
+    typeFilter.value.length > 0,
+)
+
+function currentFilters(): MaterialFilters {
+  return {
+    search: search.value.trim() || undefined,
+    kind: kindFilter.value === 'all' ? undefined : (kindFilter.value as MaterialKind),
+    status: statusFilter.value === 'all' ? undefined : (statusFilter.value as MaterialStatus),
+    manufacturerIds: manufacturerFilter.value.length ? manufacturerFilter.value : undefined,
+    materialTypes: typeFilter.value.length ? (typeFilter.value as PanelMaterialType[]) : undefined,
+  }
+}
+
+function reloadMaterials() {
+  void admin.loadMaterials(currentFilters())
+}
+
+function loadMoreMaterials() {
+  void admin.loadMaterials({ ...currentFilters(), offset: admin.materials.length })
+}
+
+let searchTimer: number | undefined
+watch(search, () => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(reloadMaterials, SEARCH_DEBOUNCE_MS)
 })
+watch([kindFilter, statusFilter, manufacturerFilter, typeFilter], reloadMaterials)
 
 // AB-22: panels must have length >= width (the cut grain/orientation assumption).
 const dimensionError = computed(
@@ -248,7 +243,6 @@ function clearFilters() {
   kindFilter.value = 'all'
   manufacturerFilter.value = []
   typeFilter.value = []
-  thicknessFilter.value = []
 }
 
 function openCreate() {
@@ -473,13 +467,6 @@ onMounted(async () => {
         empty-label="Hammasi"
         selected-label="tanlangan"
       />
-      <MultiSelectFilter
-        v-model="thicknessFilter"
-        label="Qalinliklar"
-        :options="thicknessFilterOptions"
-        empty-label="Hammasi"
-        selected-label="tanlangan"
-      />
       <FormSelect
         v-model="statusFilter"
         class="admin-filter-select"
@@ -488,7 +475,11 @@ onMounted(async () => {
       />
     </div>
 
-    <section v-if="admin.materialsLoading" class="admin-card p-5" aria-live="polite">
+    <section
+      v-if="admin.materialsLoading && admin.materials.length === 0"
+      class="admin-card p-5"
+      aria-live="polite"
+    >
       <div class="admin-skeleton-line w-3/5"></div>
       <div class="admin-skeleton-line w-4/5"></div>
       <div class="admin-skeleton-line w-2/5"></div>
@@ -499,11 +490,11 @@ onMounted(async () => {
       :code="admin.materialsError"
       :trace-id="admin.materialsTraceId"
       title="Materiallar yuklanmadi"
-      @retry="admin.loadMaterials()"
+      @retry="reloadMaterials()"
     />
 
-    <section v-else-if="filtered.length === 0" class="admin-empty">
-      <template v-if="admin.materials.length === 0">
+    <section v-else-if="admin.materials.length === 0" class="admin-empty">
+      <template v-if="!hasActiveFilters">
         <h3>Material yo'q</h3>
         <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki krom material yarating.</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2">
@@ -546,7 +537,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="material in filtered" :key="material.id">
+            <tr v-for="material in admin.materials" :key="material.id">
               <td>
                 <div class="admin-material-thumb">
                   <span
@@ -625,6 +616,17 @@ onMounted(async () => {
         </table>
       </div>
     </section>
+
+    <div v-if="admin.materialsHasMore" class="mt-4 flex justify-center">
+      <button
+        type="button"
+        class="mp-button mp-button-outline"
+        :disabled="admin.materialsLoading"
+        @click="loadMoreMaterials"
+      >
+        {{ admin.materialsLoading ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
+      </button>
+    </div>
 
     <template v-if="modalOpen">
       <div class="admin-modal-scrim" aria-hidden="true" @click="modalOpen = false"></div>
