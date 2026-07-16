@@ -682,3 +682,88 @@ async def test_platform_materials_list_reports_branch_usage_count(
     after = await client.get("/api/v1/platform/catalog/materials", headers=_auth(platform_access))
     row_after = next(m for m in after.json() if m["id"] == material_id)
     assert row_after["branch_usage_count"] == 1
+
+
+async def test_platform_materials_list_paginates_with_limit_offset(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # The platform catalog freezes the admin table once it holds hundreds of rows,
+    # so the list opts into the house limit/offset paging: a bare-list page whose
+    # slices line up with the full ordered list, and the client stops when a page
+    # comes back short. Omitting limit still returns the whole list (unchanged).
+    platform_access = await _platform_access(db_session)
+    headers = _auth(platform_access)
+    for _ in range(5):
+        await _create_catalog_material(client, platform_access)
+
+    full = await client.get("/api/v1/platform/catalog/materials", headers=headers)
+    assert full.status_code == 200
+    all_ids = [row["id"] for row in full.json()]
+    assert len(all_ids) == 5
+
+    first = await client.get("/api/v1/platform/catalog/materials?limit=2", headers=headers)
+    assert first.status_code == 200
+    assert [row["id"] for row in first.json()] == all_ids[:2]
+
+    second = await client.get(
+        "/api/v1/platform/catalog/materials?limit=2&offset=2", headers=headers
+    )
+    assert [row["id"] for row in second.json()] == all_ids[2:4]
+
+    last = await client.get("/api/v1/platform/catalog/materials?limit=2&offset=4", headers=headers)
+    assert [row["id"] for row in last.json()] == all_ids[4:]
+    assert len(last.json()) == 1  # short page → the client knows there is no more
+
+    # Bounds are enforced by the query params (ge=1, le=200).
+    too_small = await client.get("/api/v1/platform/catalog/materials?limit=0", headers=headers)
+    assert too_small.status_code == 422
+    too_large = await client.get("/api/v1/platform/catalog/materials?limit=201", headers=headers)
+    assert too_large.status_code == 422
+
+
+async def test_workshop_material_lists_paginate(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Both workshop material lists page the same way: the add-material picker caps
+    # how many catalog options it returns, and a branch's carried-materials list
+    # slices deterministically so its "load more" button can append.
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    owner_headers = _auth(owner_access)
+    material_ids: list[str] = []
+    for _ in range(3):
+        _, material_id = await _create_catalog_material(client, platform_access)
+        material_ids.append(material_id)
+
+    picker_page = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/catalog/materials?limit=2",
+        headers=owner_headers,
+    )
+    assert picker_page.status_code == 200
+    assert len(picker_page.json()) == 2
+
+    for material_id in material_ids:
+        carried = await client.post(
+            f"/api/v1/workshop/branches/{branch_id}/materials",
+            headers=owner_headers,
+            json={"material_id": material_id, "price_tiyin": 1_000_000, "min_stock": 1},
+        )
+        assert carried.status_code == 201
+
+    full = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials", headers=owner_headers
+    )
+    assert full.status_code == 200
+    carried_ids = [row["material"]["id"] for row in full.json()]
+    assert len(carried_ids) == 3
+
+    first = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials?limit=2", headers=owner_headers
+    )
+    assert [row["material"]["id"] for row in first.json()] == carried_ids[:2]
+    second = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials?limit=2&offset=2", headers=owner_headers
+    )
+    assert [row["material"]["id"] for row in second.json()] == carried_ids[2:]

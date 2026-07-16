@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { MATERIALS_PAGE_LIMIT } from '@/shared/app/constants'
 import { useAuthStore } from '@/shared/stores/auth'
 
 export type MaterialStatus = 'active' | 'inactive'
@@ -87,6 +88,17 @@ export interface Material {
   branch_usage_count: number
   created_at: string
   updated_at: string
+}
+
+// Server-side material filters for the paginated platform catalog list. Omitted
+// fields mean "no filter"; multi-selects go over as repeated query params.
+export interface MaterialFilters {
+  search?: string
+  kind?: MaterialKind
+  status?: MaterialStatus
+  manufacturerIds?: string[]
+  materialTypes?: PanelMaterialType[]
+  offset?: number
 }
 
 export type PlatformUserStatus = 'active' | 'blocked'
@@ -312,6 +324,7 @@ export const useAdminStore = defineStore('admin', () => {
   const loading = ref(false)
   const manufacturersLoading = ref(false)
   const materialsLoading = ref(false)
+  const materialsHasMore = ref(false)
   const catalogLoading = computed(() => manufacturersLoading.value || materialsLoading.value)
   const opsLoading = ref(false)
   const error = ref<string | null>(null)
@@ -439,11 +452,10 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  // AB-45: the platform catalog is operator-curated and bounded for this
-  // envelope, so the views filter the full list client-side (instant, no
-  // per-keystroke round-trips). The previously-plumbed-but-never-passed
-  // server-side filter params were dead/misleading and have been removed; if the
-  // catalog ever grows to thousands, reintroduce server-side paging.
+  // The manufacturer list stays small and operator-curated, so it loads in full
+  // for the filter dropdown. Materials, by contrast, now number in the hundreds
+  // (real catalog import), so `loadMaterials` filters and pages server-side —
+  // see the note there.
   async function loadManufacturers() {
     manufacturersLoading.value = true
     manufacturersError.value = null
@@ -465,12 +477,30 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function loadMaterials() {
+  // Paginated with append (matches the orders/notifications convention): offset 0
+  // replaces the list, a higher offset appends the next page, and materialsHasMore
+  // is inferred from a full page so the "load more" button hides on the last one.
+  // Filtering is server-side — the caller passes the active filters on every call.
+  async function loadMaterials(filters: MaterialFilters = {}) {
+    const offset = filters.offset ?? 0
     materialsLoading.value = true
     materialsError.value = null
     materialsTraceId.value = null
     try {
-      materials.value = await api.get<Material[]>('/platform/catalog/materials', authInit())
+      const page = await api.get<Material[]>(
+        withQuery('/platform/catalog/materials', {
+          search: filters.search,
+          kind: filters.kind,
+          status: filters.status,
+          manufacturer_ids: filters.manufacturerIds,
+          material_types: filters.materialTypes,
+          limit: MATERIALS_PAGE_LIMIT,
+          offset,
+        }),
+        authInit(),
+      )
+      materials.value = offset === 0 ? page : [...materials.value, ...page]
+      materialsHasMore.value = page.length === MATERIALS_PAGE_LIMIT
     } catch (errorValue) {
       const captured = captureApiError(errorValue, 'materials_load_failed')
       materialsError.value = captured.code
@@ -785,6 +815,7 @@ export const useAdminStore = defineStore('admin', () => {
     loading,
     manufacturersLoading,
     materialsLoading,
+    materialsHasMore,
     catalogLoading,
     opsLoading,
     error,

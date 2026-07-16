@@ -53,14 +53,20 @@ export function captureApiError(
 // Build a query string, dropping only null/undefined/empty-string — `false` and
 // `0` ARE sent (e.g. `carried_only=false`). One shared copy replaces six
 // store-local `withQuery`s, three of which used a truthy check that silently
-// dropped `false`/`0` (CB-98).
+// dropped `false`/`0` (CB-98). Array values become repeated params
+// (`?id=a&id=b`, which FastAPI reads as a `list[...]`); an empty array adds none.
 export function withQuery(
   path: string,
-  params: Record<string, string | number | boolean | null | undefined>,
+  params: Record<string, string | number | boolean | readonly string[] | null | undefined>,
 ): string {
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== '') search.set(key, String(value))
+    if (value === null || value === undefined || value === '') continue
+    if (Array.isArray(value)) {
+      for (const item of value) search.append(key, String(item))
+    } else {
+      search.set(key, String(value as string | number | boolean))
+    }
   }
   const query = search.toString()
   return query ? `${path}?${query}` : path

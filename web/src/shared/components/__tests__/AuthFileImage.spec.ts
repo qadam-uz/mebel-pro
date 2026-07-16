@@ -33,6 +33,28 @@ describe('AuthFileImage', () => {
     })
   })
 
+  it('shows a loading skeleton while the saved image is being fetched', async () => {
+    const pending = deferred<Blob>()
+    vi.mocked(api.blob).mockReturnValueOnce(pending.promise as never)
+
+    const wrapper = mount(AuthFileImage, {
+      props: { fileId: 'file-a', alt: 'Logo' },
+    })
+
+    // Before the fetch resolves: skeleton visible, no <img>, not the empty state.
+    const skeleton = wrapper.find('[aria-busy="true"]')
+    expect(skeleton.exists()).toBe(true)
+    expect(skeleton.classes()).toContain('sk')
+    expect(wrapper.find('img').exists()).toBe(false)
+
+    pending.resolve(new Blob(['a']))
+    await flushPromises()
+
+    // Once loaded: image shown, skeleton gone.
+    expect(wrapper.find('img').attributes('src')).toBe('blob:test-1')
+    expect(wrapper.find('[aria-busy="true"]').exists()).toBe(false)
+  })
+
   it('revokes a stale object URL when an older file load resolves late', async () => {
     const first = deferred<Blob>()
     const second = deferred<Blob>()

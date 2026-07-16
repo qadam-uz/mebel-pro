@@ -149,7 +149,6 @@ async function createCatalogMaterial(
       kind: 'panel',
       manufacturer_id: manufacturerId,
       type: 'dsp',
-      name: `Catalog Panel ${id}`,
       thickness_mm: '18',
       color: 'White',
       decor_code: `P3-${id}`,
@@ -190,7 +189,6 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   const id = runId(testInfo)
   const login = `p3-admin-${id}`
   const makerName = `UI Maker ${id}`
-  const materialName = `UI Panel ${id}`
   await seedPlatform(login)
   await loginAdmin(page, login)
 
@@ -210,13 +208,16 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   await expect(manufacturerDialog).toBeHidden()
   await expect(materialDialog.getByRole('combobox', { name: new RegExp(makerName) })).toBeVisible()
 
-  await materialDialog.getByLabel('Material nomi').fill(materialName)
+  // The material name is composed server-side from type/manufacturer/decor/size —
+  // the form only takes the pieces (panel defaults: DSP 2800×2070×18) and shows a
+  // read-only "Nomi (avtomatik)" preview, so there is no name field to fill.
   await materialDialog.getByLabel('Rang / decor').fill('White')
   await materialDialog.getByLabel('Decor kodi').fill(`UI-${id}`)
   await materialDialog.getByRole('button', { name: 'Saqlash' }).click()
 
+  // The decor code is unique per run and part of the composed name shown in the row.
   await expect(
-    page.getByRole('row', { name: new RegExp(escapeRegExp(materialName)) }),
+    page.getByRole('row', { name: new RegExp(escapeRegExp(`UI-${id}`)) }),
   ).toBeVisible()
 })
 

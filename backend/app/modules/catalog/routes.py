@@ -42,6 +42,14 @@ from app.modules.catalog.schemas import (
 
 router = APIRouter(tags=["catalog"])
 MATERIAL_STATUS_QUERY = Query(default=None, alias="status")
+# Opt-in limit/offset paging (house convention: bare-list response, client infers
+# "has more" from a full page). Omitting limit returns the full list unchanged.
+LIMIT_QUERY = Query(default=None, ge=1, le=200)
+OFFSET_QUERY = Query(default=0, ge=0)
+# Repeated query params (?manufacturer_ids=a&manufacturer_ids=b) → multi-select
+# filters. Module-level singletons so the defaults aren't Query() calls (ruff B008).
+MANUFACTURER_IDS_QUERY = Query(default=None)
+MATERIAL_TYPES_QUERY = Query(default=None)
 
 
 @router.get("/platform/catalog/manufacturers", response_model=list[ManufacturerResponse])
@@ -149,7 +157,11 @@ async def platform_materials_index(
     search: str | None = None,
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
+    manufacturer_ids: list[uuid.UUID] | None = MANUFACTURER_IDS_QUERY,
+    material_types: list[PanelMaterialType] | None = MATERIAL_TYPES_QUERY,
     status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
+    limit: int | None = LIMIT_QUERY,
+    offset: int = OFFSET_QUERY,
 ) -> list[MaterialResponse]:
     rows = await list_materials(
         db,
@@ -157,7 +169,11 @@ async def platform_materials_index(
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
+        manufacturer_ids=manufacturer_ids,
+        material_types=material_types,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
     return [_material_response(row) for row in rows]
 
@@ -245,6 +261,8 @@ async def workshop_catalog_options_index(
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
+    limit: int | None = LIMIT_QUERY,
+    offset: int = OFFSET_QUERY,
 ) -> list[BranchCatalogMaterialOption]:
     rows = await list_branch_catalog_options(
         db,
@@ -254,6 +272,8 @@ async def workshop_catalog_options_index(
         kind=kind,
         manufacturer_id=manufacturer_id,
         material_type=material_type,
+        limit=limit,
+        offset=offset,
     )
     return [_branch_catalog_option_response(row) for row in rows]
 
@@ -271,6 +291,8 @@ async def workshop_branch_materials_index(
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
     status_filter: MaterialStatus | None = MATERIAL_STATUS_QUERY,
+    limit: int | None = LIMIT_QUERY,
+    offset: int = OFFSET_QUERY,
 ) -> list[BranchMaterialResponse]:
     rows = await list_branch_materials(
         db,
@@ -281,6 +303,8 @@ async def workshop_branch_materials_index(
         manufacturer_id=manufacturer_id,
         material_type=material_type,
         status_filter=status_filter,
+        limit=limit,
+        offset=offset,
     )
     return [_branch_material_response(row) for row in rows]
 

@@ -20,6 +20,12 @@ export const ORDERS_PAGE_LIMIT = 30
 /** Page size for stock transaction ledgers. */
 export const INVENTORY_TX_PAGE_LIMIT = 50
 
+/** Page size for the admin + workshop material catalog tables (load-more). */
+export const MATERIALS_PAGE_LIMIT = 50
+
+/** Cap on catalog options returned to the "add material" picker (server-searched). */
+export const CATALOG_PICKER_LIMIT = 50
+
 /** Minimum part length/width in mm (matches the backend part-min). */
 export const MIN_PART_MM = 10
 

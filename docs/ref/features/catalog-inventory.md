@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-12
+updated: 2026-07-13
 order: 50
 ---
 
@@ -61,7 +61,13 @@ this catalog. Two **kinds** in v1:
   selections and to clients; existing branch selections keep referencing the master
   (history preserved). No delete.
 - **List / get** — operators see all; workshop users see the active subset via the
-  "add to branch selection" picker; clients see only what their branch carries.
+  "add to branch selection" picker; clients see only what their branch carries. The
+  catalog runs to hundreds of rows, so every material list — the platform table, a
+  branch's carried-materials table, and the add-to-branch picker — **pages
+  server-side**: filtering and search run on the backend and the list grows by a
+  *load-more* control, never a whole-table load. The backend search matches name,
+  colour, decor, and manufacturer, so it stands in for a manufacturer filter where a
+  full-catalog dropdown can't be built.
 
 A platform-level edit never touches existing orders (snapshots —
 [`architecture.md`](../../architecture.md#data-model-invariants)).
@@ -75,8 +81,8 @@ creates the branch's stock item for it (zero on hand).
 
 **Operations (owner, or `manage_catalog` on the branch):**
 
-- **Add a material** — pick a platform-`active` material (manufacturer + kind filter +
-  search); set the per-unit price and `min_stock` (≥ 0).
+- **Add a material** — pick a platform-`active` material (a server-side searchable
+  picker over the whole active catalog); set the per-unit price and `min_stock` (≥ 0).
 - **Edit price or min-stock** — never touches existing orders (snapshots).
 - **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
   not selectable in a new cutting; stock and history stay. No delete.
@@ -165,7 +171,8 @@ now-redundant branch column:
 
 - **Materials** (`manage_catalog`) — table from the master (image, kind, manufacturer,
   type/thickness, colour/decor, panel size for panels, the branch's unit price,
-  status). Filters: search, kind, manufacturer, status. **+ Material** → modal: searchable
+  status). Filters: search, kind, status (search also matches manufacturer, colour, and
+  decor); the table pages with a *load-more* control. **+ Material** → modal: searchable
   catalog picker + the branch's price and min-stock. Row: Edit (modal) · client visibility
   toggled by a status switch in the row itself. No Delete.
 - **Settings** (owner only) — the branch's settings in one place. Today it holds **Prices**

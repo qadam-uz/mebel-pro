@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
+import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -19,7 +20,11 @@ import {
   parseSomToTiyin,
 } from '@/shared/formatters'
 import type { MaterialKind, MaterialStatus } from '@/shared/stores/admin'
-import { useWorkshopStore, type BranchMaterial } from '@/shared/stores/workshop'
+import {
+  useWorkshopStore,
+  type BranchMaterial,
+  type BranchMaterialFilters,
+} from '@/shared/stores/workshop'
 
 const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
@@ -27,7 +32,6 @@ const toast = useToast()
 const route = useRoute()
 const statusFilter = ref<'all' | MaterialStatus>('all')
 const kindFilter = ref<'all' | MaterialKind>('all')
-const manufacturerFilter = ref('all')
 const search = ref('')
 const rowActionId = ref<string | null>(null)
 const rowActionError = ref<string | null>(null)
@@ -70,18 +74,6 @@ const kindOptions: DropdownOption[] = [
   { value: 'panel', label: 'Panel' },
   { value: 'edge', label: 'Krom' },
 ]
-const manufacturerOptions = computed<DropdownOption[]>(() => {
-  const byId = new Map<string, string>()
-  for (const row of workshop.branchMaterials) {
-    byId.set(row.material.manufacturer_id, row.material.manufacturer_name)
-  }
-  return [
-    { value: 'all', label: 'Barcha ishlab chiqaruvchilar' },
-    ...[...byId.entries()]
-      .sort((left, right) => left[1].localeCompare(right[1]))
-      .map(([value, label]) => ({ value, label })),
-  ]
-})
 const availableCatalogOptions = computed(() =>
   workshop.catalogOptions
     .filter((option) => !option.already_selected)
@@ -135,20 +127,48 @@ function minStockParts(row: BranchMaterial) {
   return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
 }
 
-async function refreshCatalog() {
+function tableFilters(offset = 0): BranchMaterialFilters {
+  return {
+    status: statusFilter.value === 'all' ? null : statusFilter.value,
+    kind: kindFilter.value === 'all' ? null : kindFilter.value,
+    search: search.value,
+    offset,
+  }
+}
+
+async function loadBranchTable(offset = 0) {
   if (!selectedBranchId.value) return
   rowActionError.value = null
   rowActionTraceId.value = null
-  const filters = {
-    status: statusFilter.value === 'all' ? null : statusFilter.value,
-    kind: kindFilter.value === 'all' ? null : kindFilter.value,
-    manufacturer_id: manufacturerFilter.value === 'all' ? null : manufacturerFilter.value,
-    search: search.value,
-  }
-  await Promise.all([
-    workshop.loadBranchMaterials(selectedBranchId.value, filters).catch(() => undefined),
-    workshop.loadCatalogOptions(selectedBranchId.value, filters).catch(() => undefined),
-  ])
+  await workshop
+    .loadBranchMaterials(selectedBranchId.value, tableFilters(offset))
+    .catch(() => undefined)
+}
+
+// The picker searches the whole platform catalog server-side (capped), decoupled
+// from the table's filters — the owner adds any active material regardless of how
+// the table is filtered.
+async function loadPickerOptions(query = '') {
+  if (!selectedBranchId.value) return
+  await workshop
+    .loadCatalogOptions(selectedBranchId.value, { search: query })
+    .catch(() => undefined)
+}
+
+// Full refresh (mount, branch switch, after save): reset the table to page one and
+// refresh the picker, whose already_selected flags change when a material is added.
+function refreshCatalog() {
+  return Promise.all([loadBranchTable(0), loadPickerOptions()])
+}
+
+function loadMoreBranchMaterials() {
+  void loadBranchTable(workshop.branchMaterials.length)
+}
+
+let pickerSearchTimer: number | undefined
+function onPickerSearch(query: string) {
+  window.clearTimeout(pickerSearchTimer)
+  pickerSearchTimer = window.setTimeout(() => void loadPickerOptions(query), SEARCH_DEBOUNCE_MS)
 }
 
 async function saveBranchMaterial() {
@@ -256,13 +276,14 @@ async function toggleVisibility(row: (typeof workshop.branchMaterials)[number]) 
   }
 }
 
-watch([selectedBranchId, statusFilter, kindFilter, manufacturerFilter], () => {
-  void refreshCatalog()
+// Table filters reload just the table (offset 0); the picker is independent.
+watch([statusFilter, kindFilter], () => {
+  void loadBranchTable(0)
 })
 
 watch(search, () => {
   window.clearTimeout(searchTimer)
-  searchTimer = window.setTimeout(() => void refreshCatalog(), 250)
+  searchTimer = window.setTimeout(() => void loadBranchTable(0), SEARCH_DEBOUNCE_MS)
 })
 
 // Type-time sanitization (PhoneInput precedent) — invalid characters never stick.
@@ -282,10 +303,12 @@ watch(
 )
 
 // Reset (and close) the add/edit dialog whenever the topbar switches the branch —
-// a draft priced for one branch must not silently save into another.
+// a draft priced for one branch must not silently save into another — and reload
+// the table + picker for the new branch.
 watch(selectedBranchId, () => {
   materialModalOpen.value = false
   resetMaterialForm()
+  void refreshCatalog()
 })
 
 watch(
@@ -304,6 +327,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(searchTimer)
+  window.clearTimeout(pickerSearchTimer)
 })
 </script>
 
@@ -332,12 +356,6 @@ onBeforeUnmount(() => {
           <input v-model="search" placeholder="Material qidirish..." />
         </label>
         <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" top-label />
-        <ProjectDropdown
-          v-model="manufacturerFilter"
-          label="Ishlab chiqaruvchi"
-          :options="manufacturerOptions"
-          top-label
-        />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
         <button type="button" class="mp-button mp-button-primary" @click="openCreateMaterial">
           + Material qo'shish
@@ -369,6 +387,8 @@ onBeforeUnmount(() => {
             label="Material"
             :options="availableCatalogOptions"
             :error="materialFieldError"
+            no-results-text="Qidiruvni aniqlashtiring"
+            @search="onPickerSearch"
           />
           <label class="field">
             <span>Narx (so'm)</span>
@@ -411,7 +431,11 @@ onBeforeUnmount(() => {
         </form>
       </AppModal>
 
-      <section v-if="workshop.catalogLoading" class="card p-5" aria-live="polite">
+      <section
+        v-if="workshop.catalogLoading && workshop.branchMaterials.length === 0"
+        class="card p-5"
+        aria-live="polite"
+      >
         <div class="grid gap-3">
           <span class="sk-line"></span>
           <span class="sk-line"></span>
@@ -429,7 +453,10 @@ onBeforeUnmount(() => {
           <table class="tbl">
             <thead>
               <tr>
-                <th>Material</th>
+                <!-- Let the descriptive name column absorb the table's slack so the
+                     narrow type/price/stock/status columns hug their content on the
+                     right instead of drifting apart across the full width. -->
+                <th class="w-full">Material</th>
                 <th>Tur</th>
                 <th class="right">Narx</th>
                 <th class="right">Min zaxira</th>
@@ -522,6 +549,17 @@ onBeforeUnmount(() => {
           </table>
         </div>
       </section>
+
+      <div v-if="workshop.branchMaterialsHasMore" class="mt-4 flex justify-center">
+        <button
+          type="button"
+          class="mp-button mp-button-outline"
+          :disabled="workshop.catalogLoading"
+          @click="loadMoreBranchMaterials"
+        >
+          {{ workshop.catalogLoading ? 'Yuklanmoqda' : "Ko'proq yuklash" }}
+        </button>
+      </div>
     </template>
   </section>
 </template>
