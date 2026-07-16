@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
   clientErrorLabel,
+  draftDisplayName,
   formatPercent,
   formatPhone,
   formatTodayHours,
@@ -661,7 +662,7 @@ onMounted(async () => {
           <div class="grid gap-2 text-sm">
             <div class="flex justify-between gap-4">
               <span class="text-ink-soft">Chizma</span>
-              <span class="font-mono text-xs font-bold text-ink">{{ draft.id.slice(0, 8) }}</span>
+              <span class="text-xs font-bold text-ink">{{ draftDisplayName(draft) }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="text-ink-soft">Qismlar</span>

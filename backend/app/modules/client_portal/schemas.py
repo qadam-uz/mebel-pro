@@ -27,6 +27,7 @@ class ClientBranchOption(APIModel):
     workshop_id: uuid.UUID
     workshop_name: str
     branch_name: str
+    address: str
     status: BranchStatus
     closed_reason: str | None
     today_hours: dict[str, str | None]

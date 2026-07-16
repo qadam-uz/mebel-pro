@@ -18,6 +18,7 @@ class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "cutting_drafts"
 
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    name: Mapped[str | None] = mapped_column(nullable=True)
     preferred_branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
     # Set when workshop staff minted this draft for a walk-in client; such
     # drafts are hidden from the client's own draft surface until ordered and

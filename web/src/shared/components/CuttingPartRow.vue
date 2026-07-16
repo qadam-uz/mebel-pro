@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
 import { edgeShortLabel, type EdgeField } from '@/shared/app/cuttingDisplay'
@@ -20,6 +20,7 @@ import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
 const props = defineProps<{
   part: CuttingPart
   index: number
+  displayIndex?: number
   hasError: boolean
   sizeError: string | null
   materialMissing: boolean
@@ -27,7 +28,6 @@ const props = defineProps<{
   notCarried: string[]
   preferredBranchName: string
   edgeRegistry: EdgeRegistryEntry[]
-  selected?: boolean
 }>()
 const emit = defineEmits<{
   'update:name': [string | null]
@@ -45,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const cutting = useCuttingStore()
+const actionsOpen = ref(false)
 const edgeSideCells: Array<{ field: EdgeField; label: string }> = [
   { field: 'edge_top', label: 'Д1' },
   { field: 'edge_bottom', label: 'Д2' },
@@ -92,21 +93,33 @@ function edgeRegistryEntry(side: EdgeField) {
   return registryEntryForBand(props.edgeRegistry, band?.material_id, band?.source)
 }
 
-function edgeCellStyle(side: EdgeField) {
-  const entry = edgeRegistryEntry(side)
-  if (!entry) return {}
-  return {
-    background: entry.colorStyle.soft,
-    borderColor: entry.colorStyle.bg,
-    color: entry.colorStyle.bg,
-  }
-}
-
 function edgeCellTitle(side: EdgeField, label: string) {
   const band = props.part[side]
   const material = edgeById(band?.material_id)
   return band ? `${label}: ${edgeShortLabel(material, true)}` : `${label}: kromsiz`
 }
+
+function edgeGlyphStyle() {
+  const sideStyles = {
+    edge_top: 'borderTop',
+    edge_bottom: 'borderBottom',
+    edge_left: 'borderLeft',
+    edge_right: 'borderRight',
+  } as const
+  return Object.fromEntries(
+    Object.entries(sideStyles).map(([side, property]) => {
+      const entry = edgeRegistryEntry(side as EdgeField)
+      return [
+        property,
+        entry ? `3px solid ${entry.colorStyle.bg}` : '1px dashed var(--color-hairline-strong)',
+      ]
+    }),
+  )
+}
+
+const edgeGlyphTitle = computed(() =>
+  edgeSideCells.map((cell) => edgeCellTitle(cell.field, cell.label)).join(' · '),
+)
 
 function updateFollowGrain(event: Event) {
   const input = event.target
@@ -114,65 +127,81 @@ function updateFollowGrain(event: Event) {
   emit('update:follow-grain', input.checked)
 }
 
-function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
-  if (/^[1-9]$/.test(event.key)) {
-    event.preventDefault()
-    emit('apply-edge-number', side, Number(event.key))
+function duplicateFromMenu() {
+  actionsOpen.value = false
+  emit('duplicate')
+}
+
+function moveFromMenu() {
+  actionsOpen.value = false
+  emit('open-material-picker')
+}
+
+function deleteFromMenu() {
+  actionsOpen.value = false
+  emit('delete')
+}
+
+function onRapidEntryKeydown(event: KeyboardEvent, cell: 'name' | 'length' | 'width' | 'quantity') {
+  if (event.key !== 'Enter' && (event.key !== 'Tab' || event.shiftKey)) return
+  event.preventDefault()
+  emit('cell-enter', cell)
+}
+
+function placeNumericCaretAtEnd(event: FocusEvent) {
+  const input = event.target
+  if (input instanceof HTMLInputElement) {
+    const end = input.value.length
+    input.setSelectionRange(end, end)
   }
+}
+
+function focusNumericFromPointer(event: MouseEvent) {
+  const input = event.currentTarget
+  if (!(input instanceof HTMLInputElement) || document.activeElement === input) return
+  // A native click positions the caret after `focus`, overriding the focus
+  // handler. Own the initial pointer focus; subsequent clicks stay native.
+  event.preventDefault()
+  input.focus()
+  const end = input.value.length
+  input.setSelectionRange(end, end)
 }
 </script>
 
 <template>
   <article
     :id="`part-row-${part.part_ref}`"
-    class="rounded-md border p-2 transition hover:border-ink-soft"
-    :class="
-      hasError
-        ? 'border-danger-soft bg-danger-soft/30'
-        : selected
-          ? 'border-accent-tint bg-accent-soft/40'
-          : 'border-hairline bg-elevated'
-    "
+    class="border-b border-hairline px-2 py-1.5 transition last:border-b-0 focus-within:bg-accent-soft/40"
+    :class="hasError ? 'border-danger-soft bg-danger-soft/60' : 'border-hairline bg-elevated'"
   >
     <div
-      class="grid gap-3 @min-[920px]:grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] @min-[920px]:items-center @min-[920px]:gap-2"
+      class="grid gap-2 @min-[680px]:grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] @min-[680px]:items-center @min-[680px]:gap-1.5"
     >
       <div
-        class="hidden @min-[920px]:col-start-1 @min-[920px]:row-start-1 @min-[920px]:flex @min-[920px]:justify-center"
+        class="font-mono text-xs font-extrabold text-ink-muted @min-[680px]:col-start-1 @min-[680px]:row-start-1"
       >
-        <input
-          type="checkbox"
-          class="size-4"
-          :checked="selected"
-          :aria-label="`Qism #${index + 1} ni tanlash`"
-          @change="emit('toggle-select')"
-        />
-      </div>
-      <div
-        class="font-mono text-xs font-extrabold text-ink-muted @min-[920px]:col-start-2 @min-[920px]:row-start-1"
-      >
-        #{{ index + 1 }}
+        #{{ (displayIndex ?? index) + 1 }}
       </div>
 
       <div
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[920px]:contents"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[680px]:contents"
       >
         <label
-          class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-3 @min-[920px]:row-start-1"
+          class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-2 @min-[680px]:row-start-1"
         >
           <span class="@min-[920px]:hidden">Nomi</span>
           <input
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input @min-[920px]:min-h-9 @min-[920px]:px-2"
+            class="mp-input border-transparent bg-transparent @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
             :placeholder="partDisplayName(part, index)"
             aria-label="Nomi"
-            @keydown.enter.prevent="emit('cell-enter', 'name')"
+            @keydown="onRapidEntryKeydown($event, 'name')"
           />
         </label>
         <label
-          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[920px]:col-start-7 @min-[920px]:row-start-1"
+          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-6 @min-[680px]:row-start-1"
         >
           <span class="@min-[920px]:hidden">Tekstura</span>
           <input
@@ -190,9 +219,9 @@ function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
       <!-- Below the single-row fit width: the three dimensions share one row;
            @min-[920px]:contents dissolves this wrapper so each input is a
            column of the parent grid again (single-row layout unchanged) — CB-60. -->
-      <div class="grid grid-cols-3 gap-2 @min-[920px]:contents">
+      <div class="grid grid-cols-3 gap-2 @min-[680px]:contents">
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-4 @min-[920px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-3 @min-[680px]:row-start-1"
         >
           <span class="@min-[920px]:hidden">Bo'y</span>
           <input
@@ -203,15 +232,17 @@ function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
+            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Bo'y millimetr"
-            @keydown.enter.prevent="emit('cell-enter', 'length')"
+            @mousedown="focusNumericFromPointer"
+            @focus="placeNumericCaretAtEnd"
+            @keydown="onRapidEntryKeydown($event, 'length')"
           />
         </label>
 
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-5 @min-[920px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-4 @min-[680px]:row-start-1"
         >
           <span class="@min-[920px]:hidden">Eni</span>
           <input
@@ -222,15 +253,17 @@ function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
+            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Eni millimetr"
-            @keydown.enter.prevent="emit('cell-enter', 'width')"
+            @mousedown="focusNumericFromPointer"
+            @focus="placeNumericCaretAtEnd"
+            @keydown="onRapidEntryKeydown($event, 'width')"
           />
         </label>
 
         <label
-          class="grid gap-1 text-xs font-bold text-ink-muted @min-[920px]:col-start-6 @min-[920px]:row-start-1"
+          class="grid gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-5 @min-[680px]:row-start-1"
         >
           <span class="@min-[920px]:hidden">Soni</span>
           <input
@@ -241,80 +274,71 @@ function onEdgeCellKeydown(event: KeyboardEvent, side: EdgeField) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input font-mono @min-[920px]:min-h-9 @min-[920px]:px-2"
+            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             aria-label="Soni"
-            @keydown.enter.prevent="emit('cell-enter', 'quantity')"
+            @mousedown="focusNumericFromPointer"
+            @focus="placeNumericCaretAtEnd"
+            @keydown="onRapidEntryKeydown($event, 'quantity')"
           />
         </label>
       </div>
 
-      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[920px]:contents">
-        <div class="min-w-0 @min-[920px]:col-start-8 @min-[920px]:row-start-1">
-          <span class="sr-only">Krom</span>
-          <div
-            class="mb-1 grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-ink-muted @min-[920px]:hidden"
-          >
-            <span v-for="cell in edgeSideCells" :key="`${cell.field}-label`">
-              {{ cell.label }}
-            </span>
-          </div>
-          <div class="grid grid-cols-4 gap-1">
-            <button
-              v-for="cell in edgeSideCells"
-              :key="cell.field"
-              type="button"
-              :data-part-index="index"
-              data-cell="edge"
-              :data-edge-side="cell.field"
-              class="grid h-9 place-items-center rounded-md border border-hairline-strong text-xs font-black transition hover:border-accent"
-              :class="edgeRegistryEntry(cell.field) ? '' : 'bg-elevated text-ink'"
-              :style="edgeCellStyle(cell.field)"
-              :title="edgeCellTitle(cell.field, cell.label)"
-              :aria-label="`${cell.label} kromini tahrirlash`"
-              @click="emit('open-edge-picker', $event, cell.field)"
-              @keydown.enter.prevent="emit('cell-enter', 'edge', cell.field)"
-              @keydown="onEdgeCellKeydown($event, cell.field)"
-            >
-              <span
-                v-if="edgeRegistryEntry(cell.field)"
-                class="grid size-5 place-items-center rounded-full border border-current bg-elevated text-current"
-              >
-                {{ edgeRegistryEntry(cell.field)?.number }}
-              </span>
-              <span v-else class="text-ink-muted">·</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="flex shrink-0 items-center gap-1 @min-[920px]:contents">
+      <button
+        type="button"
+        :data-part-index="index"
+        data-cell="edge"
+        class="mx-auto size-7 rounded-md bg-sunk/30 transition hover:bg-sunk @min-[680px]:col-start-7 @min-[680px]:row-start-1"
+        :style="edgeGlyphStyle()"
+        :title="edgeGlyphTitle"
+        aria-label="Krom tomonlari"
+        aria-haspopup="dialog"
+        @click="emit('open-edge-picker', $event)"
+      ></button>
+      <div class="relative flex justify-end @min-[680px]:col-start-8 @min-[680px]:row-start-1">
+        <button
+          v-if="actionsOpen"
+          type="button"
+          class="fixed inset-0 z-20 cursor-default"
+          aria-label="Amallar menyusini yopish"
+          @click="actionsOpen = false"
+        ></button>
+        <button
+          type="button"
+          class="mp-action-icon-button"
+          :aria-label="`Qism #${index + 1} amallari`"
+          title="Amallar"
+          @click="actionsOpen = !actionsOpen"
+        >
+          ⋯
+        </button>
+        <div
+          v-if="actionsOpen"
+          class="absolute bottom-9 right-0 z-30 grid min-w-48 overflow-hidden rounded-md border border-hairline-strong bg-elevated py-1 shadow-lg"
+        >
           <button
             type="button"
-            class="mp-action-icon-button justify-self-end self-end @min-[920px]:col-start-9 @min-[920px]:row-start-1"
-            :aria-label="`Qism #${index + 1} ni nusxalash`"
-            @click="emit('duplicate')"
+            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
+            @click="duplicateFromMenu"
           >
-            ⧉
+            <Icon name="layers" class="size-4 text-ink-muted" />
+            Nusxalash
           </button>
-
           <button
             type="button"
-            class="mp-action-icon-button justify-self-end self-end @min-[920px]:col-start-10 @min-[920px]:row-start-1"
-            :aria-label="`Qism #${index + 1} materialini almashtirish`"
-            title="Materialni almashtirish"
-            @click="emit('open-material-picker')"
+            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
+            @click="moveFromMenu"
           >
-            <Icon name="swap" class="size-[18px]" />
+            <Icon name="swap" class="size-4 text-ink-muted" />
+            Boshqa materialga ko'chirish
           </button>
-
           <button
             type="button"
-            class="mp-action-icon-button justify-self-end self-end text-danger @min-[920px]:col-start-11 @min-[920px]:row-start-1"
-            :aria-label="`Qism #${index + 1} ni o'chirish`"
-            title="O'chirish"
-            @click="emit('delete')"
+            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft"
+            @click="deleteFromMenu"
           >
-            <Icon name="trash" class="size-[18px]" />
+            <Icon name="trash" class="size-4" />
+            O'chirish
           </button>
         </div>
       </div>

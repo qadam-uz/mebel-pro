@@ -103,6 +103,7 @@ export interface CuttingResult {
 export interface CuttingDraft {
   id: string
   client_id: string
+  name: string | null
   preferred_branch_id: string | null
   parts_snapshot: CuttingPart[]
   chosen_result_id: string | null
@@ -143,6 +144,7 @@ export interface ClientBranchOption {
   workshop_id: string
   workshop_name: string
   branch_name: string
+  address: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
   today_hours: { open: string | null; close: string | null }
@@ -351,7 +353,11 @@ export const useCuttingStore = defineStore('cutting', () => {
 
   async function updateDraft(
     id: string,
-    payload: { preferred_branch_id?: string | null; parts_snapshot?: CuttingPart[] },
+    payload: {
+      name?: string | null
+      preferred_branch_id?: string | null
+      parts_snapshot?: CuttingPart[]
+    },
   ) {
     saving.value = true
     try {

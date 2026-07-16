@@ -103,7 +103,13 @@ async def branch_options(
     normalized = search.strip() if search else ""
     if normalized:
         pattern = f"%{normalized.lower()}%"
-        query = query.where(or_(Workshop.name.ilike(pattern), Branch.name.ilike(pattern)))
+        query = query.where(
+            or_(
+                Workshop.name.ilike(pattern),
+                Branch.name.ilike(pattern),
+                Branch.address.ilike(pattern),
+            )
+        )
     rows = (await db.execute(query)).all()
     return [
         ClientBranchOption(
@@ -111,6 +117,7 @@ async def branch_options(
             workshop_id=workshop.id,
             workshop_name=workshop.name,
             branch_name=branch.name,
+            address=branch.address,
             status=branch.status,
             closed_reason=branch.closed_reason,
             today_hours=branch.today_hours(),

@@ -1,6 +1,7 @@
 """Client identity helpers shared by OTP login and staff walk-in resolve."""
 
 import re
+import uuid
 from dataclasses import dataclass
 
 from fastapi import status
@@ -70,3 +71,11 @@ async def find_or_create_client(
     db.add(client)
     await db.flush()
     return ClientResolution(client=client, created=True)
+
+
+async def seed_preferred_branch_if_missing(
+    db: AsyncSession, *, client: Client, branch_id: uuid.UUID
+) -> None:
+    """Persist the first self-serve order's branch without replacing a choice."""
+    if client.preferred_branch_id is None:
+        client.preferred_branch_id = branch_id

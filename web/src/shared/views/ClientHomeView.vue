@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import {
   activeClientStatuses,
   clientGreetingName,
+  draftDisplayName,
   clientHomeSubtitle,
   clientNextPhaseLabel,
   clientPhaseProgress,
@@ -94,24 +95,7 @@ function draftPanels(draft: CuttingDraft) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
 }
 
-function draftTitle(draft: CuttingDraft) {
-  const materials = [
-    ...new Set(
-      draft.parts_snapshot
-        .map((part) => resultMaterialName(draft, part.material_id))
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ]
-  const label =
-    materials.slice(0, 2).join(' + ') + (materials.length > 2 ? ` +${materials.length - 2}` : '')
-  return `${draft.id.slice(0, 8)} · ${label || 'Material tanlanmagan'}`
-}
-
-function resultMaterialName(draft: CuttingDraft, materialId: string) {
-  const result = chosenResult(draft)
-  const snapshot = result?.material_snapshots[materialId]
-  return typeof snapshot?.name === 'string' ? snapshot.name.split('·')[0].trim() : null
-}
+const draftTitle = draftDisplayName
 
 function currentAction(order: OrderSummary) {
   if (order.status === 'new') return 'Tafsilot'

@@ -18,6 +18,15 @@ from app.modules.cutting.imports.base import ImportMapLayout
 from app.schemas.common import APIModel
 
 
+def normalize_name(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return value
+
+
 class CuttingEdgeBand(BaseModel):
     material_id: uuid.UUID
     source: MaterialSource = MaterialSource.SHOP
@@ -40,17 +49,18 @@ class CuttingPart(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value: object) -> object:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            stripped = value.strip()
-            return stripped or None
-        return value
+        return normalize_name(value)
 
 
 class CuttingDraftPatchRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=64)
     preferred_branch_id: uuid.UUID | None = None
     parts_snapshot: list[CuttingPart] | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_draft_name(cls, value: object) -> object:
+        return normalize_name(value)
 
 
 class CuttingChooseResultRequest(BaseModel):
@@ -131,6 +141,7 @@ class CuttingResultResponse(APIModel):
 class CuttingDraftResponse(APIModel):
     id: uuid.UUID
     client_id: uuid.UUID
+    name: str | None
     preferred_branch_id: uuid.UUID | None
     parts_snapshot: list[dict[str, Any]]
     chosen_result_id: uuid.UUID | None

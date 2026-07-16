@@ -34,7 +34,7 @@ from app.models.enums import (
     UserStatus,
     WorkshopStatus,
 )
-from app.modules.access.api import can_access_branch
+from app.modules.access.api import can_access_branch, seed_preferred_branch_if_missing
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
 from app.modules.cutting.api import cutting_result_response
@@ -189,6 +189,8 @@ async def place_client_order(
     )
     db.add(order)
     await db.flush()
+
+    await seed_preferred_branch_if_missing(db, client=client, branch_id=branch.id)
 
     _add_order_items(db, order=order, pricing=pricing)
 

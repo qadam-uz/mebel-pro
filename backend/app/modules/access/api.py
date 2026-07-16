@@ -18,6 +18,7 @@ from app.modules.access.clients import (
     ClientResolution,
     find_or_create_client,
     normalize_uz_phone,
+    seed_preferred_branch_if_missing,
 )
 from app.modules.access.otp import (
     ClientOtpLoginResult,
@@ -85,6 +86,7 @@ __all__ = [
     "revoke_for_workshop",
     "revoke_other_sessions",
     "revoke_session",
+    "seed_preferred_branch_if_missing",
     "verify_otp_code",
     "visible_branch_ids",
     "visible_workshop_ids",

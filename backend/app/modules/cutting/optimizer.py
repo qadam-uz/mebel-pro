@@ -335,7 +335,7 @@ def _ensure_inputs(parts: list[PartInput], materials: dict[uuid.UUID, PanelSpec]
 
 
 def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
-    if part.length_mm < 50 or part.width_mm < 50:
+    if part.length_mm < 10 or part.width_mm < 10:
         raise OptimizerError(
             "part_too_small",
             "Part is smaller than the minimum allowed size",

@@ -197,6 +197,8 @@ async def update_draft(
     *,
     principal: AuthenticatedPrincipal,
     draft_id: uuid.UUID,
+    name_set: bool,
+    name: str | None,
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
     parts_snapshot: list[CuttingPart] | None,
@@ -211,6 +213,8 @@ async def update_draft(
         db,
         draft=draft,
         principal=principal,
+        name_set=name_set,
+        name=name,
         preferred_branch_id_set=preferred_branch_id_set,
         preferred_branch_id=resolved_branch_id,
         parts_snapshot=parts_snapshot,
@@ -222,12 +226,16 @@ async def _apply_update(
     *,
     draft: CuttingDraft,
     principal: AuthenticatedPrincipal,
+    name_set: bool,
+    name: str | None,
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
     parts_snapshot: list[CuttingPart] | None,
 ) -> CuttingDraftResponse:
     """Shared update body: branch id is already resolved/authorized by the caller."""
     parts_changed = parts_snapshot is not None
+    if name_set:
+        draft.name = name
     if preferred_branch_id_set:
         draft.preferred_branch_id = preferred_branch_id
     if parts_changed:
@@ -906,7 +914,7 @@ async def _validate_parts(
             continue
         if part.quantity < 1:
             errors.append(_row_error(part, row_index, "invalid_quantity", panel.id))
-        if part.length_mm < 50 or part.width_mm < 50:
+        if part.length_mm < 10 or part.width_mm < 10:
             errors.append(_row_error(part, row_index, "part_too_small", panel.id))
         if panel.panel_length_mm is None or panel.panel_width_mm is None:
             errors.append(_row_error(part, row_index, "invalid_panel_material", panel.id))
@@ -1115,6 +1123,7 @@ async def _draft_response(
     return CuttingDraftResponse(
         id=draft.id,
         client_id=draft.client_id,
+        name=draft.name,
         preferred_branch_id=draft.preferred_branch_id,
         parts_snapshot=_parts_snapshot_response(draft.parts_snapshot),
         chosen_result_id=draft.chosen_result_id,

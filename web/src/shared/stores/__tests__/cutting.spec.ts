@@ -53,6 +53,7 @@ function draft(id = 'draft-1'): CuttingDraft {
   return {
     id,
     client_id: 'client-1',
+    name: null,
     preferred_branch_id: null,
     parts_snapshot: [],
     chosen_result_id: null,

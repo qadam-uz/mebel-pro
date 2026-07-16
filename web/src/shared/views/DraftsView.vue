@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import {
   clientErrorLabel,
+  draftDisplayName,
   formatPercent,
   formatRelativeDate,
   pluralUz,
@@ -49,23 +50,7 @@ function draftPanels(draft: CuttingDraft) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
 }
 
-function materialName(draft: CuttingDraft, materialId: string) {
-  const snapshot = chosenResult(draft)?.material_snapshots[materialId]
-  return typeof snapshot?.name === 'string' ? snapshot.name.split('·')[0].trim() : null
-}
-
-function draftTitle(draft: CuttingDraft) {
-  const materials = [
-    ...new Set(
-      draft.parts_snapshot
-        .map((part) => materialName(draft, part.material_id))
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ]
-  const label =
-    materials.slice(0, 2).join(' + ') + (materials.length > 2 ? ` +${materials.length - 2}` : '')
-  return `${draft.id.slice(0, 8)} · ${label || 'Material tanlanmagan'}`
-}
+const draftTitle = draftDisplayName
 
 function newCutting() {
   // Open the editor unsaved — the draft is created on the first optimise
@@ -175,7 +160,12 @@ onMounted(() => {
         class="client-card grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 p-4 client-card-link"
       >
         <button type="button" class="min-w-0 text-left" @click="openDraft(draft)">
-          <span class="block truncate text-sm font-bold text-ink">{{ draftTitle(draft) }}</span>
+          <span
+            class="block truncate text-sm font-bold"
+            :class="draft.name ? 'text-ink' : 'text-ink-soft'"
+            >{{ draftTitle(draft)
+            }}<small v-if="!draft.name" class="ml-1 text-ink-muted">(nomsiz)</small></span
+          >
           <span v-if="branchName(draft)" class="client-pill client-pill-info mt-1 inline-block">
             {{ branchName(draft) }}
           </span>

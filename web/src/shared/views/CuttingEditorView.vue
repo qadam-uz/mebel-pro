@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } f
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { ApiError, apiErrorCode } from '@/shared/api/client'
-import { clientErrorLabel } from '@/shared/app/clientUi'
+import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import {
   clientCuttingEditorAdapter,
@@ -23,6 +23,7 @@ import {
 import { useDraftAutosave } from '@/shared/composables/useDraftAutosave'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
+import AppModal from '@/shared/components/AppModal.vue'
 import { useRolePath } from '@/shared/app/paths'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingBranchPicker from '@/shared/components/CuttingBranchPicker.vue'
@@ -73,6 +74,9 @@ const isNewDraft = computed(() => route.name === adapter.newRouteName)
 // Branch pre-filter while unsaved — held locally (no draft to PATCH); seeded from
 // the client profile default for parity with a server-created draft.
 const localBranchId = ref<string | null>(null)
+const localDraftName = ref<string | null>(null)
+const draftNameEditing = ref(false)
+const draftNameValue = ref('')
 const branchTouched = ref(false)
 // A draft created by a previous failed optimise attempt — reused on retry so a
 // transient failure doesn't orphan a second empty draft.
@@ -219,7 +223,7 @@ const canOptimize = computed(
 const optimizeDisabledHint = computed(() => {
   if (!activeBranchId.value) return 'Avval ustaxona tanlang'
   if (parts.value.length === 0) return "Avval qism qo'shing"
-  if (!hasPersistableParts.value) return "Qatorlardagi xatolarni to'g'rilang"
+  if (!hasPersistableParts.value) return "To'ldirilmagan qatorlarni to'ldiring"
   if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
   if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
   return ''
@@ -254,7 +258,7 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
     follow_grain: previous?.follow_grain ?? true,
     length_mm: 0,
     width_mm: 0,
-    quantity: 1,
+    quantity: 0,
     edge_top: previous?.edge_top ? { ...previous.edge_top } : null,
     edge_bottom: previous?.edge_bottom ? { ...previous.edge_bottom } : null,
     edge_left: previous?.edge_left ? { ...previous.edge_left } : null,
@@ -288,6 +292,14 @@ const visibleGroups = computed(() =>
     }))
     .filter((group) => group.parts.length > 0),
 )
+const displayPartIndex = computed(() => {
+  const positions = new Map<string, number>()
+  let position = 0
+  for (const group of groupedParts.value) {
+    for (const { part } of group.parts) positions.set(part.part_ref, position++)
+  }
+  return positions
+})
 
 function edgeRegistryLabel(materialId: string) {
   return edgeById(materialId)?.name ?? materialId
@@ -479,9 +491,16 @@ function saveLabel() {
   return "Saqlash xatosi — qayta urinib ko'ring"
 }
 
-function addRow() {
-  parts.value = [...parts.value, blankPart(parts.value[parts.value.length - 1] ?? null)]
-  void nextTick(() => focusCell(parts.value.length - 1, 'length'))
+function addRow(
+  materialId?: string,
+  previous?: CuttingPart | null,
+  afterIndex = parts.value.length - 1,
+) {
+  const row = blankPart(previous ?? parts.value[parts.value.length - 1] ?? null)
+  if (materialId) row.material_id = materialId
+  const insertionIndex = Math.max(-1, Math.min(afterIndex, parts.value.length - 1)) + 1
+  parts.value = [...parts.value.slice(0, insertionIndex), row, ...parts.value.slice(insertionIndex)]
+  void nextTick(() => focusCell(insertionIndex, 'name'))
 }
 
 function duplicateRow(index: number) {
@@ -529,7 +548,7 @@ function setPartName(part: CuttingPart, value: string | null) {
 }
 
 type CellName = 'name' | 'length' | 'width' | 'quantity' | 'edge'
-const cellOrder: CellName[] = ['name', 'length', 'width', 'quantity', 'edge']
+const cellOrder: CellName[] = ['name', 'length', 'width', 'quantity']
 const edgeCellOrder: EdgeField[] = ['edge_top', 'edge_bottom', 'edge_left', 'edge_right']
 
 function focusCell(index: number, cell: CellName, side?: EdgeField) {
@@ -539,6 +558,10 @@ function focusCell(index: number, cell: CellName, side?: EdgeField) {
       : `[data-part-index="${index}"][data-cell="${cell}"]`
   const target = document.querySelector<HTMLElement>(selector)
   target?.focus()
+  if (target instanceof HTMLInputElement && cell !== 'name') {
+    const end = target.value.length
+    target.setSelectionRange(end, end)
+  }
 }
 
 function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
@@ -554,8 +577,12 @@ function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
     focusCell(index, cellOrder[currentCell + 1])
     return
   }
-  if (index >= parts.value.length - 1) {
-    addRow()
+  const current = parts.value[index]
+  const next = parts.value[index + 1]
+  // A quantity finishes its material block. Keep rapid entry within that
+  // material even when another material block follows it in the full draft.
+  if (!current || !next || next.material_id !== current.material_id) {
+    addRow(current?.material_id, current, index)
     return
   }
   focusCell(index + 1, 'name')
@@ -627,14 +654,12 @@ const selectedRefs = ref<Set<string>>(new Set())
 const selectedParts = computed(() =>
   parts.value.filter((part) => selectedRefs.value.has(part.part_ref)),
 )
-const allSelected = computed(
-  () => parts.value.length > 0 && selectedParts.value.length === parts.value.length,
-)
 const bulkEdgeMode = ref(false)
 type MaterialPickerTarget =
   | { type: 'part'; partRef: string }
   | { type: 'group'; key: string }
   | { type: 'bulk' }
+  | { type: 'new' }
 const materialPickerTarget = ref<MaterialPickerTarget | null>(null)
 
 function toggleSelect(partRef: string) {
@@ -642,11 +667,6 @@ function toggleSelect(partRef: string) {
   if (next.has(partRef)) next.delete(partRef)
   else next.add(partRef)
   selectedRefs.value = next
-}
-function toggleSelectAll() {
-  selectedRefs.value = allSelected.value
-    ? new Set()
-    : new Set(parts.value.map((part) => part.part_ref))
 }
 function clearSelection() {
   selectedRefs.value = new Set()
@@ -673,8 +693,19 @@ function openBulkMaterial() {
   materialPickerTarget.value = { type: 'bulk' }
 }
 
+function openNewMaterial() {
+  materialPickerTarget.value = { type: 'new' }
+}
+
 function openGroupMaterial(group: { key: string }) {
   materialPickerTarget.value = { type: 'group', key: group.key }
+}
+
+function addGroupRow(group: { materialId: string | null; parts: Array<{ part: CuttingPart }> }) {
+  if (!group.materialId) return openNewMaterial()
+  const last = group.parts[group.parts.length - 1]?.part ?? null
+  const lastIndex = last ? parts.value.findIndex((part) => part.part_ref === last.part_ref) : -1
+  addRow(group.materialId, last, lastIndex)
 }
 
 function openPartMaterial(part: CuttingPart) {
@@ -706,6 +737,7 @@ const materialPickerCurrentId = computed(() => {
     const group = groupedParts.value.find((item) => item.key === target.key)
     return group?.materialId ?? null
   }
+  if (target.type === 'new') return null
   return selectedParts.value[0]?.material_id ?? null
 })
 
@@ -721,13 +753,18 @@ const materialPickerSubtitle = computed(() => {
     const count = groupedParts.value.find((item) => item.key === target.key)?.parts.length ?? 0
     return `Ushbu guruhdagi ${count} detal uchun`
   }
+  if (target.type === 'new') return 'Material tanlang'
   return `Tanlangan ${selectedParts.value.length} ta detal uchun`
 })
 
 function applyMaterialPicker(materialId: string) {
   const target = materialPickerTarget.value
   if (!target) return
-  if (target.type === 'part') {
+  if (target.type === 'new') {
+    const existing = groupedParts.value.find((group) => group.materialId === materialId)
+    if (existing) addGroupRow(existing)
+    else addRow(materialId, null)
+  } else if (target.type === 'part') {
     const part = parts.value.find((item) => item.part_ref === target.partRef)
     if (part) part.material_id = materialId
   } else if (target.type === 'group') {
@@ -931,6 +968,27 @@ async function setPreferredBranch(branchId: string | null) {
   await loadMaterials()
 }
 
+function beginDraftNameEdit() {
+  if (isReadOnly.value) return
+  draftNameValue.value = isNewDraft.value ? (localDraftName.value ?? '') : (draft.value?.name ?? '')
+  draftNameEditing.value = true
+}
+
+async function commitDraftName() {
+  if (!draftNameEditing.value) return
+  draftNameEditing.value = false
+  const name = draftNameValue.value.trim() || null
+  if (isNewDraft.value) {
+    localDraftName.value = name
+    return
+  }
+  if (name !== draft.value?.name) await cutting.updateDraft(draftId.value, { name })
+}
+
+function cancelDraftNameEdit() {
+  draftNameEditing.value = false
+}
+
 // Close the picker without applying — drop the pending pick back to the active
 // preference so a re-open highlights what's actually active, not an abandoned choice.
 function closeBranchPicker() {
@@ -1001,6 +1059,7 @@ async function optimizeNewDraft() {
     const id = pendingDraftId.value
     await cutting.updateDraft(id, {
       parts_snapshot: parts.value,
+      ...(localDraftName.value !== null ? { name: localDraftName.value } : {}),
       // Only send the branch when the user changed it — otherwise let the
       // backend's seed stand (profile default on the client path, the fixed
       // context branch on the workshop path).
@@ -1115,6 +1174,7 @@ onMounted(async () => {
       localBranchId.value = profile?.preferred_branch_id ?? null
     }
     selectedBranchId.value = localBranchId.value
+    if (!localBranchId.value) branchPickerOpen.value = true
     await loadMaterials()
     return
   }
@@ -1125,6 +1185,7 @@ onMounted(async () => {
   // no workshop branch-options endpoint, so skip the load.
   if (!fixedBranch.value) await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+  if (!selectedBranchId.value) branchPickerOpen.value = true
   await loadMaterials()
 })
 
@@ -1272,7 +1333,41 @@ onBeforeRouteLeave(() => {
         </section>
 
         <template v-else>
+          <section class="mb-3 flex items-center gap-2">
+            <input
+              v-if="draftNameEditing"
+              v-model="draftNameValue"
+              class="mp-input max-w-sm"
+              maxlength="64"
+              placeholder="Chizmaga nom bering"
+              autofocus
+              @keydown.enter.prevent="commitDraftName"
+              @keydown.esc.prevent="cancelDraftNameEdit"
+              @blur="commitDraftName"
+            />
+            <button
+              v-else-if="!isReadOnly"
+              type="button"
+              class="border-b border-dashed border-ink-muted text-left text-lg font-bold text-ink"
+              @click="beginDraftNameEdit"
+              @keydown.enter.prevent="beginDraftNameEdit"
+              @keydown.space.prevent="beginDraftNameEdit"
+            >
+              <span>{{
+                isNewDraft
+                  ? localDraftName || 'Nomsiz chizma'
+                  : draft
+                    ? draftDisplayName(draft)
+                    : 'Nomsiz chizma'
+              }}</span>
+              <Icon name="pencil" class="inline size-4 text-ink-muted" />
+            </button>
+            <span v-else class="text-lg font-bold text-ink">{{
+              draft ? draftDisplayName(draft) : 'Nomsiz chizma'
+            }}</span>
+          </section>
           <section
+            v-if="preferredBranch && !branchPickerOpen"
             class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
           >
             <span
@@ -1283,11 +1378,7 @@ onBeforeRouteLeave(() => {
             </span>
             <div class="min-w-0 flex-1">
               <b class="text-ink">
-                {{
-                  preferredBranch
-                    ? `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}`
-                    : 'Ustaxona tanlanmagan'
-                }}
+                {{ `${preferredBranch.branch_name} · ${preferredBranch.workshop_name}` }}
               </b>
             </div>
             <button
@@ -1298,27 +1389,6 @@ onBeforeRouteLeave(() => {
             >
               O'zgartirish
             </button>
-            <p v-if="!preferredBranch" class="basis-full text-xs text-ink-muted">
-              Kesish ro'yxati tanlangan ustaxona katalogi asosida tuziladi — davom etish uchun
-              ustaxona tanlang.
-            </p>
-          </section>
-
-          <section v-if="branchPickerOpen" class="client-card mb-4 grid gap-3 p-4">
-            <CuttingBranchPicker v-model="selectedBranchId" :options="cutting.branchOptions" />
-            <div class="flex flex-wrap justify-end gap-2">
-              <button type="button" class="mp-button mp-button-outline" @click="closeBranchPicker">
-                Bekor qilish
-              </button>
-              <button
-                type="button"
-                class="mp-button mp-button-primary"
-                :disabled="!selectedBranchId"
-                @click="setPreferredBranch(selectedBranchId)"
-              >
-                Qo'llash
-              </button>
-            </div>
           </section>
         </template>
 
@@ -1341,7 +1411,7 @@ onBeforeRouteLeave(() => {
                 :aria-pressed="errorFilterEnabled"
                 @click="errorFilterEnabled = !errorFilterEnabled"
               >
-                {{ errorCount }} xato
+                {{ errorCount }} to'ldirilmagan
               </button>
               <div class="inline-flex rounded-lg border border-hairline bg-sunk p-1">
                 <button
@@ -1404,17 +1474,14 @@ onBeforeRouteLeave(() => {
           <div v-if="!activeBranchId" class="client-card-b">
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="store" /></div>
-              <h3>Avval ustaxona tanlang</h3>
-              <p>
-                Qism qo'shish uchun kesish qaysi ustaxonada bajarilishini tanlang — katalog o'sha
-                ustaxona materiallaridan tuziladi.
-              </p>
+              <h3>Avval filial tanlang</h3>
+              <p>Materiallar va narxlar filialga qarab farq qiladi — avval filialni tanlang.</p>
               <button
                 type="button"
                 class="mp-button mp-button-primary mt-4"
                 @click="branchPickerOpen = true"
               >
-                Ustaxona tanlash
+                Filial tanlash
               </button>
             </div>
           </div>
@@ -1423,9 +1490,13 @@ onBeforeRouteLeave(() => {
             <div class="client-empty">
               <div class="client-empty-icon"><Icon name="plus" /></div>
               <h3>Bu chizmada qism yo'q</h3>
-              <p>Kesish ro'yxatini boshlash uchun birinchi qatorni qo'shing.</p>
-              <button type="button" class="mp-button mp-button-primary mt-4" @click="addRow">
-                Qism qo'shish
+              <p>Kesish ro'yxatini boshlash uchun avval materialni tanlang.</p>
+              <button
+                type="button"
+                class="mp-button mp-button-primary mt-4"
+                @click="openNewMaterial"
+              >
+                + Material tanlash
               </button>
             </div>
           </div>
@@ -1439,25 +1510,18 @@ onBeforeRouteLeave(() => {
                  because this view is embedded both full-width (client) and next
                  to a persistent workshop sidebar — the same viewport width maps
                  to different available row widths in each shell. -->
-            <div class="hidden rounded-lg border border-hairline bg-sunk p-3 @min-[920px]:block">
+            <div class="hidden border-b border-hairline bg-sunk px-3 py-2 @min-[680px]:block">
               <div
-                class="grid grid-cols-[30px_34px_minmax(150px,1.2fr)_82px_82px_66px_72px_140px_38px_38px_38px] items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-muted"
+                class="grid grid-cols-[28px_minmax(150px,50%)_repeat(6,minmax(32px,1fr))] items-center gap-1.5 text-[11px] font-extrabold text-ink-muted"
               >
-                <input
-                  type="checkbox"
-                  class="size-4 justify-self-center"
-                  :checked="allSelected"
-                  :indeterminate.prop="selectedParts.length > 0 && !allSelected"
-                  aria-label="Hamma qatorni tanlash"
-                  @change="toggleSelectAll"
-                />
-                <span aria-hidden="true">#</span>
-                <span aria-hidden="true">Nomi</span>
-                <span aria-hidden="true">Bo'y</span>
-                <span aria-hidden="true">Eni</span>
-                <span aria-hidden="true">Soni</span>
-                <span aria-hidden="true">Tekstura</span>
-                <span aria-hidden="true">Krom · Д1 Д2 Ш1 Ш2</span>
+                <span aria-hidden="true" class="text-center">#</span>
+                <span aria-hidden="true" class="text-center">Nomi</span>
+                <span aria-hidden="true" class="text-center">Bo'y</span>
+                <span aria-hidden="true" class="text-center">Eni</span>
+                <span aria-hidden="true" class="text-center">Soni</span>
+                <span aria-hidden="true" class="text-center">Tola</span>
+                <span aria-hidden="true" class="text-center">Krom</span>
+                <span aria-hidden="true"></span>
               </div>
             </div>
             <section
@@ -1465,13 +1529,20 @@ onBeforeRouteLeave(() => {
               :key="group.key"
               class="overflow-visible rounded-lg border border-hairline bg-sunk/40"
             >
-              <div class="flex flex-wrap items-center gap-2 px-3 py-2">
+              <div
+                class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-hairline bg-elevated px-3 py-2"
+              >
                 <button
                   type="button"
                   class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3 text-left"
                   @click="toggleGroup(group.key)"
                 >
-                  <span class="flex min-w-0 items-center gap-2">
+                  <span class="flex min-w-0 items-center gap-3">
+                    <Icon
+                      :name="collapsedGroupKeys.has(group.key) ? 'chevron-right' : 'chevron-down'"
+                      class="size-4 shrink-0 text-ink-muted"
+                      aria-hidden="true"
+                    />
                     <span
                       class="size-3 shrink-0 rounded-full"
                       :style="{
@@ -1481,9 +1552,17 @@ onBeforeRouteLeave(() => {
                       }"
                       aria-hidden="true"
                     ></span>
-                    <span class="min-w-0 truncate text-sm font-extrabold text-ink">
+                    <button
+                      v-if="!isReadOnly && group.materialId"
+                      type="button"
+                      class="min-w-0 truncate border-b border-dashed border-ink-muted text-left text-sm font-extrabold text-ink hover:border-accent hover:text-accent"
+                      @click.stop="openGroupMaterial(group)"
+                    >
                       {{ group.label }}
-                    </span>
+                    </button>
+                    <span v-else class="min-w-0 truncate text-sm font-extrabold text-ink">{{
+                      group.label
+                    }}</span>
                   </span>
                   <span class="flex items-center gap-2 text-xs font-bold text-ink-muted">
                     <span>{{ group.quantity }} detal · {{ group.areaM2.toFixed(1) }} m²</span>
@@ -1491,21 +1570,18 @@ onBeforeRouteLeave(() => {
                       v-if="groupErrorCount(group.key) > 0"
                       class="rounded-md bg-danger-soft px-2 py-1 text-danger"
                     >
-                      {{ groupErrorCount(group.key) }} xato
+                      {{ groupErrorCount(group.key) }} to'ldirilmagan
                     </span>
-                    <span aria-hidden="true">{{
-                      collapsedGroupKeys.has(group.key) ? '+' : '−'
-                    }}</span>
                   </span>
                 </button>
                 <button
                   v-if="!isReadOnly"
                   type="button"
                   class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline bg-elevated px-3 text-xs font-bold text-ink-muted transition hover:border-accent-tint hover:text-accent"
-                  @click="openGroupMaterial(group)"
+                  @click="addGroupRow(group)"
                 >
-                  <Icon name="swap" class="size-3.5" />
-                  Materialni almashtirish
+                  <Icon name="plus" class="size-3.5" />
+                  Detal
                 </button>
               </div>
               <div
@@ -1519,12 +1595,13 @@ onBeforeRouteLeave(() => {
                   @replace="openRegistryReplace"
                 />
               </div>
-              <div v-if="!collapsedGroupKeys.has(group.key)" class="grid gap-2 p-2 pt-0">
+              <div v-if="!collapsedGroupKeys.has(group.key)" class="overflow-visible bg-elevated">
                 <CuttingPartRow
                   v-for="{ part, index } in group.parts"
                   :key="part.part_ref"
                   :part="part"
                   :index="index"
+                  :display-index="displayPartIndex.get(part.part_ref)"
                   :has-error="rowHasError(part, index)"
                   :size-error="partSizeError(part)"
                   :material-missing="rowMaterialMissing(part)"
@@ -1532,7 +1609,6 @@ onBeforeRouteLeave(() => {
                   :not-carried="rowNotCarried(part)"
                   :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
                   :edge-registry="edgeRegistry"
-                  :selected="selectedRefs.has(part.part_ref)"
                   @toggle-select="toggleSelect(part.part_ref)"
                   @update:name="setPartName(part, $event)"
                   @update:length="part.length_mm = $event"
@@ -1556,10 +1632,10 @@ onBeforeRouteLeave(() => {
             <button
               type="button"
               class="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline-strong text-sm font-bold text-ink-muted transition hover:border-accent hover:bg-accent-soft/40 hover:text-accent"
-              @click="addRow"
+              @click="openNewMaterial"
             >
               <Icon name="plus" class="size-4" />
-              Qism qo'shish
+              Boshqa material
             </button>
           </div>
 
@@ -1653,6 +1729,18 @@ onBeforeRouteLeave(() => {
       @load="onImportLoad"
       @committed="onImportCommitted"
     />
+    <AppModal
+      :open="branchPickerOpen"
+      title="Filialni tanlang"
+      max-width="max-w-2xl"
+      @close="closeBranchPicker"
+    >
+      <CuttingBranchPicker
+        :model-value="selectedBranchId"
+        :options="cutting.branchOptions"
+        @update:model-value="setPreferredBranch"
+      />
+    </AppModal>
 
     <ConfirmDialog
       :open="importReplaceConfirmOpen"
