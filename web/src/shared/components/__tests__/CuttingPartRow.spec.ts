@@ -61,7 +61,6 @@ function mountRow(rowPart: CuttingPart, edgeRegistry: EdgeRegistryEntry[] = []) 
       notCarried: [],
       preferredBranchName: 'Yunusobod',
       edgeRegistry,
-      selected: false,
     },
     global: {
       stubs: {
@@ -106,7 +105,7 @@ describe('CuttingPartRow grain toggle', () => {
     expect(wrapper.emitted('update:follow-grain')).toEqual([[true]])
   })
 
-  it('renders edge cells and opens the shared edge dialog from any cell', async () => {
+  it('renders one edge glyph and opens the shared edge dialog', async () => {
     seedPanel(true)
     const wrapper = mountRow(part({ edge_left: { material_id: 'edge-1', source: 'shop' } }), [
       {
@@ -118,30 +117,34 @@ describe('CuttingPartRow grain toggle', () => {
       },
     ])
 
-    expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(4)
+    const glyph = wrapper.get('[data-cell="edge"]')
+    expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(1)
+    expect(glyph.attributes('aria-label')).toBe('Krom tomonlari')
+    expect(glyph.attributes('style')).toContain('border-left: 3px solid')
 
-    await wrapper.findAll('[data-cell="edge"]')[2].trigger('click')
-    await wrapper.findAll('[data-cell="edge"]')[0].trigger('keydown', { key: 'Enter' })
+    await glyph.trigger('click')
 
     expect(wrapper.emitted('open-edge-picker')).toHaveLength(1)
-    expect(wrapper.emitted('open-edge-picker')?.[0]?.[1]).toBe('edge_left')
-    expect(wrapper.emitted('cell-enter')).toEqual([['edge', 'edge_top']])
+    expect(wrapper.emitted('open-edge-picker')?.[0]).toHaveLength(1)
   })
 
-  it('emits an edge-number shortcut from a focused edge cell', async () => {
+  it('shows the edge glyph with dashed borders when no edge is selected', () => {
     seedPanel(true)
     const wrapper = mountRow(part())
 
-    await wrapper.findAll('[data-cell="edge"]')[0].trigger('keydown', { key: '1' })
-
-    expect(wrapper.emitted('apply-edge-number')).toEqual([['edge_top', 1]])
+    expect(wrapper.get('[data-cell="edge"]').attributes('style')).toContain('1px dashed')
   })
 
-  it('opens the shared material picker from the material action', async () => {
+  it('opens the material picker from the actions menu', async () => {
     seedPanel(true)
     const wrapper = mountRow(part())
 
-    await wrapper.get('[title="Materialni almashtirish"]').trigger('click')
+    await wrapper.get('[title="Amallar"]').trigger('click')
+    const moveButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes("ko'chirish"))
+    expect(moveButton).toBeDefined()
+    await moveButton!.trigger('click')
 
     expect(wrapper.emitted('open-material-picker')).toHaveLength(1)
   })
