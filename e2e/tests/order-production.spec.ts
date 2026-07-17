@@ -363,18 +363,12 @@ async function chooseOption(
 }
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
-  // The redesigned row exposes one krom cell per side (Д1/Д2/Ш1/Ш2); any of them
-  // opens the picker modal for that part.
-  await page
-    .getByRole("button", { name: "Д1 kromini tahrirlash", exact: true })
-    .click();
+  // The compact row exposes one rectangular edge diagram that opens the picker.
+  await page.getByRole("button", { name: "Krom tomonlari", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /Krom yopishtirish/ });
-  // The branch's only carried tape is auto-offered as the current tape (the
-  // "Tavsiya - dekor mos" badge) — assert it's the seeded one, then band
-  // top+bottom with the side pattern.
-  await expect(
-    dialog.getByRole("button", { name: new RegExp(`${edgeName}.*Tavsiya`) }),
-  ).toBeVisible();
+  // The branch's only carried tape is auto-offered as the current tape; band
+  // top and bottom with that selected tape.
+  await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible();
   await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
   await dialog.getByRole("button", { name: "Qo'llash" }).click();
 }
@@ -428,25 +422,18 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
   await branchesLoaded;
 
-  // Two triggers open the same picker while no branch is set (header + the
-  // pick-a-workshop empty state) — take the header one.
-  await page.getByRole("button", { name: "Ustaxona tanlash" }).first().click();
+  // The first editor visit opens the required branch picker automatically.
   // CB-51: the preferred-branch picker is a single flat branch list — one tap selects.
   await page
     .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
     .click();
-  await page.getByRole("button", { name: "Qo'llash" }).click();
   await expect(
     page.getByText(`Order Branch ${id} · Order Workshop ${id}`),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Qism qo'shish" }).first().click();
-  // The redesigned editor has no per-row material combobox: a fresh first row
-  // lands in the "Materialsiz" group and the material is picked via the row's
-  // swap action → "Materialni almashtirish" dialog.
-  await page
-    .getByRole("button", { name: "Qism #1 materialini almashtirish" })
-    .click();
+  // A new compact entry starts by selecting its material; that selection creates
+  // the first editable row in the material group.
+  await page.getByRole("button", { name: "+ Material tanlash" }).click();
   await page
     .getByRole("dialog", { name: "Materialni almashtirish" })
     .getByRole("button", { name: new RegExp(panel.name) })
