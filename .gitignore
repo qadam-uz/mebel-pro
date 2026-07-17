@@ -7,6 +7,8 @@ tmp/
 
 # Claude machine-local files
 # ...
+impl_specs/
+backend/tests/fixtures/cutting_import/
 
 # OS / Editor
 .DS_Store
