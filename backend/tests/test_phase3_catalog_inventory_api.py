@@ -358,14 +358,10 @@ async def test_owner_branch_setup_pricing_status_and_logo_upload(
     assert status_change.json()["closed_reason"] == "Renovation"
 
 
-async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
+async def test_inventory_stock_in_adjustment_notifications_and_pricing(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    storage = InMemoryFileStorage()
-    from app.main import app
-
-    app.dependency_overrides[file_storage] = lambda: storage
     platform_access = await _platform_access(db_session)
     owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
     _, material_id = await _create_catalog_material(client, platform_access)
@@ -374,19 +370,14 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
         headers=_auth(owner_access),
         json={"material_id": material_id, "price_tiyin": 100000, "min_stock": 2},
     )
-    receipt = await client.post(
-        "/api/v1/files",
-        headers=_auth(owner_access),
-        files={"upload": ("receipt.pdf", b"receipt", "application/pdf")},
-    )
     stock_in = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(owner_access),
         json={
             "material_id": material_id,
             "quantity": 3,
+            "unit_price_tiyin": 51500000,
             "supplier": {"name": "Wood Supplier"},
-            "receipt_file_id": receipt.json()["id"],
         },
     )
     adjustment = await client.post(
@@ -420,22 +411,6 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
         f"/api/v1/workshop/branches/{branch_id}/stock-transactions?date_to={yesterday}",
         headers=_auth(owner_access),
     )
-    owner_receipt = await client.get(
-        f"/api/v1/files/{receipt.json()['id']}",
-        headers=_auth(owner_access),
-    )
-    client_row = Client(phone="+998909999999", name="Client")
-    db_session.add(client_row)
-    await db_session.flush()
-    client_tokens = await create_session(
-        db_session,
-        principal_type=AuthenticatedPrincipalType.CLIENT,
-        principal_id=client_row.id,
-    )
-    leaked_receipt = await client.get(
-        f"/api/v1/files/{receipt.json()['id']}",
-        headers=_auth(client_tokens.access_token),
-    )
     notification_count = await db_session.scalar(select(func.count()).select_from(Notification))
     supplier_count = await db_session.scalar(select(func.count()).select_from(Supplier))
     transaction_count = await db_session.scalar(select(func.count()).select_from(StockTransaction))
@@ -444,8 +419,11 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
     )
 
     assert stock_in.status_code == 201
-    assert stock_in.json()["receipt_file_id"] == receipt.json()["id"]
+    assert stock_in.json()["unit_price_tiyin"] == 51500000
+    assert stock_in.json()["total_price_tiyin"] == 154500000
     assert adjustment.status_code == 201
+    assert adjustment.json()["unit_price_tiyin"] is None
+    assert adjustment.json()["total_price_tiyin"] is None
     assert adjustment.json()["balance_after"] == 2
     assert stock.status_code == 200
     assert stock.json()[0]["on_hand"] == 2
@@ -463,9 +441,6 @@ async def test_inventory_stock_in_adjustment_notifications_and_receipt_access(
     assert [row["type"] for row in transactions_today.json()] == ["adjust", "stock_in"]
     assert transactions_before_today.status_code == 200
     assert transactions_before_today.json() == []
-    assert owner_receipt.status_code == 200
-    assert owner_receipt.content == b"receipt"
-    assert leaked_receipt.status_code == 403
     assert notification_count == 1
     assert supplier_count == 1
     assert transaction_count == 2
@@ -500,7 +475,12 @@ async def test_branch_scoped_staff_authorization(
     catalog_stock_in = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(catalog_staff),
-        json={"material_id": material_id, "quantity": 1, "supplier": {"name": "Nope"}},
+        json={
+            "material_id": material_id,
+            "quantity": 1,
+            "unit_price_tiyin": 100000,
+            "supplier": {"name": "Nope"},
+        },
     )
     inventory_edit_catalog = await client.patch(
         f"/api/v1/workshop/branches/{branch_id}/materials/{add_material.json()['id']}",
@@ -510,7 +490,12 @@ async def test_branch_scoped_staff_authorization(
     inventory_stock_in = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(inventory_staff),
-        json={"material_id": material_id, "quantity": 2, "supplier": {"name": "Allowed"}},
+        json={
+            "material_id": material_id,
+            "quantity": 2,
+            "unit_price_tiyin": 100000,
+            "supplier": {"name": "Allowed"},
+        },
     )
     duplicate_owner_add = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/materials",
@@ -524,7 +509,12 @@ async def test_branch_scoped_staff_authorization(
     stock_in_after_deactivate = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/stock-in",
         headers=_auth(inventory_staff),
-        json={"material_id": material_id, "quantity": 1, "supplier": {"name": "After deactivate"}},
+        json={
+            "material_id": material_id,
+            "quantity": 1,
+            "unit_price_tiyin": 100000,
+            "supplier": {"name": "After deactivate"},
+        },
     )
 
     assert add_material.status_code == 201
@@ -534,6 +524,148 @@ async def test_branch_scoped_staff_authorization(
     assert duplicate_owner_add.status_code == 409
     assert deactivated.status_code == 200
     assert stock_in_after_deactivate.status_code == 201
+
+
+async def test_stock_in_pricing_math_last_price_and_validation(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    platform_access = await _platform_access(db_session)
+    owner_access, _, branch_id, _ = await _owner_fixture(db_session)
+    manufacturer_id, panel_id = await _create_catalog_material(client, platform_access)
+    edge = await client.post(
+        "/api/v1/platform/catalog/materials",
+        headers=_auth(platform_access),
+        json={
+            "kind": "edge",
+            "manufacturer_id": manufacturer_id,
+            "thickness_mm": "2",
+            "color": "Light oak",
+            "decor_code": "H1334",
+            "edge_width_mm": 19,
+        },
+    )
+    assert edge.status_code == 201
+    edge_id = edge.json()["id"]
+    unpriced = await client.post(
+        "/api/v1/platform/catalog/materials",
+        headers=_auth(platform_access),
+        json={
+            "kind": "edge",
+            "manufacturer_id": manufacturer_id,
+            "thickness_mm": "0.4",
+            "color": "White",
+            "edge_width_mm": 19,
+        },
+    )
+    unpriced_id = unpriced.json()["id"]
+    for material_id in (panel_id, edge_id, unpriced_id):
+        added = await client.post(
+            f"/api/v1/workshop/branches/{branch_id}/materials",
+            headers=_auth(owner_access),
+            json={"material_id": material_id, "price_tiyin": 100000, "min_stock": 0},
+        )
+        assert added.status_code == 201
+
+    first = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": panel_id,
+            "quantity": 20,
+            "unit_price_tiyin": 51500000,
+            "supplier": {"name": "Panel Trade"},
+        },
+    )
+    assert first.status_code == 201
+    first_supplier_id = first.json()["supplier_id"]
+    second = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": panel_id,
+            "quantity": 5,
+            "unit_price_tiyin": 52000000,
+            "supplier": {"name": "Boshqa Trade"},
+        },
+    )
+    assert second.status_code == 201
+    edge_in = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": edge_id,
+            "quantity": 1234,
+            "unit_price_tiyin": 55,
+            "supplier_id": first_supplier_id,
+        },
+    )
+    last_overall = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials/{panel_id}/last-price",
+        headers=_auth(owner_access),
+    )
+    last_for_first_supplier = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials/{panel_id}/last-price"
+        f"?supplier_id={first_supplier_id}",
+        headers=_auth(owner_access),
+    )
+    last_unknown_supplier_falls_back = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials/{panel_id}/last-price"
+        f"?supplier_id={uuid.uuid4()}",
+        headers=_auth(owner_access),
+    )
+    last_never_priced = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/materials/{unpriced_id}/last-price",
+        headers=_auth(owner_access),
+    )
+    missing_price = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={"material_id": panel_id, "quantity": 1, "supplier_id": first_supplier_id},
+    )
+    negative_price = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": panel_id,
+            "quantity": 1,
+            "unit_price_tiyin": -1,
+            "supplier_id": first_supplier_id,
+        },
+    )
+
+    # Panel: total = quantity x unit price.
+    assert first.json()["total_price_tiyin"] == 20 * 51500000
+    # Edge: quantity is millimetres, price is per metre — floor division, sale-side mirror.
+    assert edge_in.status_code == 201
+    assert edge_in.json()["unit_price_tiyin"] == 55
+    assert edge_in.json()["total_price_tiyin"] == 1234 * 55 // 1000
+    assert last_overall.status_code == 200
+    assert last_overall.json()["unit_price_tiyin"] == 52000000
+    assert last_overall.json()["supplier_name"] == "Boshqa Trade"
+    assert last_overall.json()["recorded_at"] is not None
+    assert last_for_first_supplier.json()["unit_price_tiyin"] == 51500000
+    assert last_for_first_supplier.json()["supplier_id"] == first_supplier_id
+    assert last_unknown_supplier_falls_back.json()["unit_price_tiyin"] == 52000000
+    assert last_never_priced.status_code == 200
+    assert last_never_priced.json() == {
+        "unit_price_tiyin": None,
+        "recorded_at": None,
+        "supplier_id": None,
+        "supplier_name": None,
+    }
+    assert missing_price.status_code == 422
+    assert negative_price.status_code == 400
+    assert negative_price.json()["code"] == "invalid_price"
+
+    # Inventory value: on-hand at the LATEST purchase price, derived at read
+    # time — 25 panels at the newer 52M price plus the edge mm at per-metre.
+    value = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-value",
+        headers=_auth(owner_access),
+    )
+    assert value.status_code == 200
+    assert value.json()["value_tiyin"] == 25 * 52000000 + 1234 * 55 // 1000
 
 
 async def test_client_catalog_is_public_shape_and_visibility_filtered(

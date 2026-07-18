@@ -43,9 +43,9 @@ class InlineSupplierInput(BaseModel):
 class StockInRequest(BaseModel):
     material_id: uuid.UUID
     quantity: int
+    unit_price_tiyin: int
     supplier_id: uuid.UUID | None = None
     supplier: InlineSupplierInput | None = None
-    receipt_file_id: uuid.UUID | None = None
     note: str | None = None
 
 
@@ -77,11 +77,27 @@ class StockTransactionResponse(APIModel):
     type: StockTransactionType
     quantity: int
     balance_after: int
+    unit_price_tiyin: int | None
+    total_price_tiyin: int | None
     order_id: uuid.UUID | None
     supplier_id: uuid.UUID | None
     supplier_name: str | None
-    receipt_file_id: uuid.UUID | None
     actor_user_id: uuid.UUID | None
     actor_name: str | None
     note: str | None
     created_at: datetime
+
+
+class StockValueResponse(APIModel):
+    """On-hand quantity valued at the latest purchase price — derived, never stored."""
+
+    value_tiyin: int
+
+
+class StockLastPriceResponse(APIModel):
+    """Latest purchase price for a material in a branch — all fields null when never priced."""
+
+    unit_price_tiyin: int | None
+    recorded_at: datetime | None
+    supplier_id: uuid.UUID | None
+    supplier_name: str | None

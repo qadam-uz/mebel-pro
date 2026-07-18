@@ -388,9 +388,9 @@ carry() { # branch_id material_id price_tiyin min_stock
   jcall POST "$API/workshop/branches/$1/materials" "$OWNER_TOKEN" \
     "{\"material_id\":\"$2\",\"price_tiyin\":$3,\"min_stock\":$4}" >/dev/null
 }
-stockin() { # branch_id material_id quantity supplier_id
+stockin() { # branch_id material_id quantity supplier_id unit_price_tiyin
   jcall POST "$API/workshop/branches/$1/stock-in" "$OWNER_TOKEN" \
-    "{\"material_id\":\"$2\",\"quantity\":$3,\"supplier_id\":\"$4\",\"note\":\"Demo boshlang'ich zaxira\"}" >/dev/null
+    "{\"material_id\":\"$2\",\"quantity\":$3,\"unit_price_tiyin\":$5,\"supplier_id\":\"$4\",\"note\":\"Demo boshlang'ich zaxira\"}" >/dev/null
 }
 
 # Two materials that no order touches, planted below min_stock for the low-stock UI.
@@ -403,19 +403,22 @@ for i in "${!MAT_ID[@]}"; do
   sup="${SUPPLIERS[$((idx % 4))]}"
   if [ "$kind" = panel ]; then
     p1=$(( 30000000 + idx*400000 )); p2=$(( p1 + 1500000 ))   # even → safe for qty-2 parts
+    # Purchase (kirim) price ≈ 85% of the branch's sale price — realistic margin.
+    b1=$(( p1 * 85 / 100 )); b2=$(( p2 * 85 / 100 ))
     if is_lowstock "$decor"; then
-      carry "$BRANCH1_ID" "$mid" "$p1" 60; stockin "$BRANCH1_ID" "$mid" 8 "$sup"
-      carry "$BRANCH2_ID" "$mid" "$p2" 60; stockin "$BRANCH2_ID" "$mid" 6 "$sup"
+      carry "$BRANCH1_ID" "$mid" "$p1" 60; stockin "$BRANCH1_ID" "$mid" 8 "$sup" "$b1"
+      carry "$BRANCH2_ID" "$mid" "$p2" 60; stockin "$BRANCH2_ID" "$mid" 6 "$sup" "$b2"
     else
       q=$(( 45 + idx*4 ))
-      carry "$BRANCH1_ID" "$mid" "$p1" 5; stockin "$BRANCH1_ID" "$mid" "$q" "$sup"
-      carry "$BRANCH2_ID" "$mid" "$p2" 5; stockin "$BRANCH2_ID" "$mid" $(( q + 12 )) "$sup"
+      carry "$BRANCH1_ID" "$mid" "$p1" 5; stockin "$BRANCH1_ID" "$mid" "$q" "$sup" "$b1"
+      carry "$BRANCH2_ID" "$mid" "$p2" 5; stockin "$BRANCH2_ID" "$mid" $(( q + 12 )) "$sup" "$b2"
     fi
   else
     e1=$(( 900 + idx*40 )); e2=$(( e1 + 120 ))   # tiyin per mm
+    be1=$(( e1 * 85 / 100 )); be2=$(( e2 * 85 / 100 ))        # kirim per metre
     q=$(( 180000 + idx*8000 ))
-    carry "$BRANCH1_ID" "$mid" "$e1" 20000; stockin "$BRANCH1_ID" "$mid" "$q" "$sup"
-    carry "$BRANCH2_ID" "$mid" "$e2" 20000; stockin "$BRANCH2_ID" "$mid" $(( q + 40000 )) "$sup"
+    carry "$BRANCH1_ID" "$mid" "$e1" 20000; stockin "$BRANCH1_ID" "$mid" "$q" "$sup" "$be1"
+    carry "$BRANCH2_ID" "$mid" "$e2" 20000; stockin "$BRANCH2_ID" "$mid" $(( q + 40000 )) "$sup" "$be2"
   fi
   idx=$((idx+1))
 done

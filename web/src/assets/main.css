@@ -5685,3 +5685,34 @@
     }
   }
 }
+
+/* ── Print: an akt sverka statement prints as a clean paper document.
+   The app chrome, filters, and row actions disappear; only the page's card
+   content (statement header + table) reaches the paper. ── */
+@media print {
+  .workshop-sidebar,
+  .workshop-topbar,
+  .workshop-drawer,
+  .page-head,
+  .tabs,
+  .mp-filters,
+  .kpis,
+  .card .mp-button {
+    display: none !important;
+  }
+  .workshop-app {
+    display: block;
+  }
+  .workshop-main,
+  .workshop-page {
+    padding: 0;
+    max-width: none;
+  }
+  .card {
+    border: 0;
+    box-shadow: none;
+  }
+  .table-wrap {
+    overflow: visible;
+  }
+}

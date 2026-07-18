@@ -1,5 +1,4 @@
 import { execFile } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
@@ -221,7 +220,7 @@ test('admin creates platform catalog material through the UI', async ({ page }, 
   ).toBeVisible()
 })
 
-test('owner adds a branch material and records stock movement with a receipt', async ({
+test('owner adds a branch material and records priced stock movement with prefill', async ({
   page,
   request,
 }, testInfo) => {
@@ -271,13 +270,14 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
   await stockIn.getByLabel(/Miqdor/).fill('3')
+  // First-ever stock-in: no price history, so the field is empty with the hint.
+  await expect(stockIn.getByText('Birinchi kirim', { exact: false })).toBeVisible()
+  await stockIn.getByLabel(/Kirim narxi/).fill('2000')
+  // The live total mirrors the server math: 3 x 2 000 so'm.
+  await expect(stockIn.getByText('Jami:')).toBeVisible()
   await stockIn.getByRole('combobox', { name: /Yetkazib beruvchi/ }).click()
   await page.getByRole('option', { name: 'Yangi yetkazib beruvchi' }).click()
   await stockIn.getByLabel('Yangi yetkazib beruvchi nomi').fill(`Supplier ${id}`)
-  const receiptPath = testInfo.outputPath('receipt.pdf')
-  writeFileSync(receiptPath, '%PDF-1.4\n% receipt\n')
-  await stockIn.getByLabel('Chek').setInputFiles(receiptPath)
-  await expect(stockIn.getByText('receipt.pdf')).toBeVisible()
   await stockIn.getByRole('button', { name: 'Saqlash' }).click()
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
@@ -285,6 +285,16 @@ test('owner adds a branch material and records stock movement with a receipt', a
   await expect(
     stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.name)}.*3 panel`) }),
   ).toBeVisible()
+
+  // Reopen: the last price paid prefills the field with provenance underneath.
+  await page.getByRole('button', { name: 'Kirim', exact: true }).click()
+  const stockInAgain = page.getByRole('dialog', { name: 'Kirim' })
+  await stockInAgain.getByRole('combobox', { name: 'Material' }).fill(material.name)
+  await page.getByRole('option', { name: new RegExp(material.name) }).click()
+  await expect(stockInAgain.getByLabel(/Kirim narxi/)).toHaveValue('2000')
+  await expect(stockInAgain.getByText('Oxirgi narx', { exact: false })).toBeVisible()
+  await expect(stockInAgain.getByText(`Supplier ${id}`, { exact: false })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Tuzatish', exact: true }).click()
   const adjustment = page.getByRole('dialog', { name: 'Tuzatish' })

@@ -2,15 +2,16 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-05-19
+updated: 2026-07-18
 order: 55
 ---
 
 # Finance
 
-The workshop's money ledger: **income** received and **expenses** incurred. Rules — the
-income types, the order link, what the client sees, the worker-production reports the
-accountant uses to compute salary by hand — live in
+The workshop's money ledger — **income** received, **expenses** incurred — and the
+**counterparty adjustment**, the signed debt correction behind the derived debt balances.
+Rules — the income types, the order link, what the client sees, the debt folds and the
+worker-production reports the accountant uses to compute salary by hand — live in
 [`finance.md`](../features/finance.md). There is no payroll engine and no compensation
 policy in v1; salary is just an expense the accountant records.
 
@@ -62,6 +63,7 @@ performs no salary calculation).
 | `incurred_on` | date | required; not in the future |
 | `description` | text | required; short human description |
 | `vendor` | text? | who was paid (optional free text) |
+| `supplier_id` | UUID? | → [supplier](inventory.md#supplier) — optional; a linked expense counts as a **payment to that supplier** in the debt fold, whatever its category. When set and `vendor` is blank, the supplier's name fills `vendor` |
 | `receipt_file_id` | UUID? | → [file](support.md#file) — optional scan |
 | `status` | enum | `recorded` / `voided` |
 | `voided_reason` | text? | required when `status = voided` |
@@ -73,8 +75,43 @@ Lifecycle: `recorded` → `voided` (mandatory reason); a voided expense is exclu
 reports. No delete; the row is kept for audit.
 
 Invariants: `amount_tiyin > 0`; `branch_id` belongs to the same workshop when set;
-`incurred_on` not in the future; recorded / voided only by users with `manage_finance` on
-the relevant branch (or workshop-wide); voiding requires a reason and a user; never deleted.
+`supplier_id` (when set) is a supplier of the same workshop — inactive suppliers stay
+linkable (debt to a deactivated supplier must remain payable); `incurred_on` not in the
+future; recorded / voided only by users with `manage_finance` on the relevant branch (or
+workshop-wide); voiding requires a reason and a user; never deleted.
+
+## Counterparty adjustment
+
+A **signed debt correction** against exactly one supplier or one client — the pressure
+valve of the derived debt balances ([`finance.md`](../features/finance.md) → *Debts*).
+It exists for opening balances (pre-system debt history) and real-world events that are
+neither a delivery nor a payment (a discount, a return, a mutual offset). It never moves
+stock or cash: no stock quantity changes, nothing enters the cash-basis summary — the
+amount lives only in the debt fold.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID | PK |
+| `workshop_id` | UUID | required |
+| `supplier_id` | UUID? | → [supplier](inventory.md#supplier); exactly one of the two party fields is set (DB CHECK) |
+| `client_id` | UUID? | → client ([identity](identity.md)); the other party option |
+| `amount_tiyin` | bigint | signed, non-zero. Sign convention everywhere: **positive = they owe us more, negative = we owe them more** |
+| `adjusted_on` | date | business date; not in the future (backdating allowed — opening balances are historical) |
+| `note` | text | **required** — the adjustment's document is its explanation |
+| `status` | enum | `recorded` / `voided` |
+| `voided_reason` | text? | required when `status = voided` |
+| `recorded_by_user_id` | UUID | the `manage_finance` user (or owner) who recorded it |
+| `voided_by_user_id` / `voided_at` | UUID? / timestamp? | required when voided |
+| `created_at` / `updated_at` | timestamp | |
+
+Lifecycle: `recorded` → `voided` (mandatory reason) — the Income/Expense discipline
+exactly. Voiding removes it from the fold, so the affected balance self-corrects. Never
+edited, never deleted.
+
+Invariants: exactly one of `supplier_id` / `client_id` (DB CHECK); `amount_tiyin ≠ 0`
+(DB CHECK); a linked supplier belongs to the same workshop; `note` non-blank; recorded /
+voided only by the owner or a `manage_finance` grantee; never deleted. The UI never asks
+for a sign — the form asks the direction in words and derives it.
 
 ## Next
 

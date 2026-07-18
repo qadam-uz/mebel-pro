@@ -37,6 +37,7 @@ class ExpenseCreateRequest(BaseModel):
     incurred_on: date
     description: str
     vendor: str | None = None
+    supplier_id: uuid.UUID | None = None
     receipt_file_id: uuid.UUID | None = None
 
 
@@ -47,6 +48,7 @@ class ExpensePatchRequest(BaseModel):
     incurred_on: date | None = None
     description: str | None = None
     vendor: str | None = None
+    supplier_id: uuid.UUID | None = None
     receipt_file_id: uuid.UUID | None = None
 
 
@@ -83,6 +85,7 @@ class ExpenseResponse(APIModel):
     incurred_on: date
     description: str
     vendor: str | None
+    supplier_id: uuid.UUID | None
     receipt_file_id: uuid.UUID | None
     status: LedgerStatus
     voided_reason: str | None
@@ -116,6 +119,87 @@ class FinanceSummaryResponse(APIModel):
     salary_expense_tiyin: int
     branches: list[FinanceBranchSummary]
     daily_income: list[FinanceDailyIncome]
+
+
+class AdjustmentCreateRequest(BaseModel):
+    """A signed debt correction against exactly one counterparty.
+
+    Sign convention: positive = they owe us more, negative = we owe them more.
+    """
+
+    supplier_id: uuid.UUID | None = None
+    client_id: uuid.UUID | None = None
+    amount_tiyin: int
+    adjusted_on: date
+    note: str
+
+
+class CounterpartyAdjustmentResponse(APIModel):
+    id: uuid.UUID
+    workshop_id: uuid.UUID
+    supplier_id: uuid.UUID | None
+    client_id: uuid.UUID | None
+    amount_tiyin: int
+    adjusted_on: date
+    note: str
+    status: LedgerStatus
+    voided_reason: str | None
+    recorded_by_user_id: uuid.UUID
+    voided_by_user_id: uuid.UUID | None
+    voided_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DebtRow(APIModel):
+    """One counterparty's derived balance. Positive = they owe us."""
+
+    counterparty_id: uuid.UUID
+    name: str
+    phone: str | None
+    inactive: bool
+    balance_tiyin: int
+
+
+class DebtListResponse(APIModel):
+    rows: list[DebtRow]
+    we_owe_total_tiyin: int
+    they_owe_total_tiyin: int
+
+
+class DebtStatementRow(APIModel):
+    """One dated statement line with the running balance after it.
+
+    `amount_tiyin` is the signed fold term (positive = their debt grew).
+    Optional detail fields depend on `kind`: deliveries carry material info,
+    payments carry the money detail, orders carry the order number.
+    """
+
+    kind: str
+    on: date
+    at: datetime
+    reference_id: uuid.UUID
+    amount_tiyin: int
+    balance_after_tiyin: int
+    note: str | None = None
+    material_name: str | None = None
+    quantity: int | None = None
+    display_unit: str | None = None
+    category: ExpenseCategory | None = None
+    method: MoneyMethod | None = None
+    order_number: str | None = None
+
+
+class DebtStatementResponse(APIModel):
+    counterparty_id: uuid.UUID
+    name: str
+    phone: str | None
+    date_from: date | None
+    date_to: date | None
+    opening_balance_tiyin: int
+    closing_balance_tiyin: int
+    current_balance_tiyin: int
+    rows: list[DebtStatementRow]
 
 
 class WorkerProductionEdgeLine(APIModel):

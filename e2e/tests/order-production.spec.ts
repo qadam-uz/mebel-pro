@@ -254,6 +254,7 @@ async function stockIn(
       data: {
         material_id: materialId,
         quantity,
+        unit_price_tiyin: 25_000_000,
         supplier: { name: `E2E Supplier ${branchId.slice(0, 6)}` },
         note: "Order E2E stock",
       },

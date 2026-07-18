@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, Timestamped, UUIDPrimaryKey
@@ -30,6 +30,15 @@ class StockTransaction(UUIDPrimaryKey, Base):
     __table_args__ = (
         CheckConstraint("quantity <> 0", name="ck_stock_transactions_quantity_nonzero"),
         CheckConstraint("balance_after >= 0", name="ck_stock_transactions_balance_nonnegative"),
+        CheckConstraint(
+            "type = 'stock_in' OR (unit_price_tiyin IS NULL AND total_price_tiyin IS NULL)",
+            name="ck_stock_transactions_price_stock_in_only",
+        ),
+        CheckConstraint(
+            "(unit_price_tiyin IS NULL OR unit_price_tiyin >= 0) AND "
+            "(total_price_tiyin IS NULL OR total_price_tiyin >= 0)",
+            name="ck_stock_transactions_price_nonnegative",
+        ),
     )
 
     stock_item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stock_items.id"), nullable=False)
@@ -39,9 +48,10 @@ class StockTransaction(UUIDPrimaryKey, Base):
     )
     quantity: Mapped[int] = mapped_column(nullable=False)
     balance_after: Mapped[int] = mapped_column(nullable=False)
+    unit_price_tiyin: Mapped[int | None] = mapped_column(BigInteger)
+    total_price_tiyin: Mapped[int | None] = mapped_column(BigInteger)
     order_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("orders.id"))
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
-    receipt_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshop_users.id"))
     note: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(nullable=False)

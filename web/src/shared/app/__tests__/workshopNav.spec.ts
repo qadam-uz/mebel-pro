@@ -20,6 +20,7 @@ describe('workshop navigation permissions', () => {
       'Ombor',
       'Material katalogi',
       'Tushum va xarajat',
+      'Qarzdorlik',
       'Xodimlar mehnati',
       'Filiallar',
       'Xodimlar',
@@ -101,6 +102,6 @@ describe('workshop navigation permissions', () => {
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),
-    ).toEqual(['Asosiy', 'Tushum va xarajat', 'Xodimlar mehnati'])
+    ).toEqual(['Asosiy', 'Tushum va xarajat', 'Qarzdorlik', 'Xodimlar mehnati'])
   })
 })
