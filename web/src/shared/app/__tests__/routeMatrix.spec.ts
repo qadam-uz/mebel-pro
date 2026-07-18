@@ -249,6 +249,7 @@ describe('role route matrix', () => {
       '/workshop/branches/:branch_id',
       '/workshop/finance/income',
       '/workshop/finance/expenses',
+      '/workshop/finance/debts',
       '/workshop/finance/production',
       '/workshop/settings/users/:user_id',
       '/workshop/notifications',

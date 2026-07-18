@@ -48,7 +48,67 @@ export interface Expense {
   incurred_on: string
   description: string
   vendor: string | null
+  supplier_id: string | null
   receipt_file_id: string | null
+  status: LedgerStatus
+  voided_reason: string | null
+  recorded_by_user_id: string
+  voided_by_user_id: string | null
+  voided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DebtRow {
+  counterparty_id: string
+  name: string
+  phone: string | null
+  inactive: boolean
+  balance_tiyin: number
+}
+
+export interface DebtList {
+  rows: DebtRow[]
+  we_owe_total_tiyin: number
+  they_owe_total_tiyin: number
+}
+
+export interface DebtStatementRow {
+  kind: 'delivery' | 'payment' | 'adjustment' | 'order'
+  on: string
+  at: string
+  reference_id: string
+  amount_tiyin: number
+  balance_after_tiyin: number
+  note: string | null
+  material_name: string | null
+  quantity: number | null
+  display_unit: string | null
+  category: ExpenseCategory | null
+  method: MoneyMethod | null
+  order_number: string | null
+}
+
+export interface DebtStatement {
+  counterparty_id: string
+  name: string
+  phone: string | null
+  date_from: string | null
+  date_to: string | null
+  opening_balance_tiyin: number
+  closing_balance_tiyin: number
+  current_balance_tiyin: number
+  rows: DebtStatementRow[]
+}
+
+export interface CounterpartyAdjustment {
+  id: string
+  workshop_id: string
+  supplier_id: string | null
+  client_id: string | null
+  amount_tiyin: number
+  adjusted_on: string
+  note: string
   status: LedgerStatus
   voided_reason: string | null
   recorded_by_user_id: string
@@ -113,6 +173,8 @@ export const useFinanceStore = defineStore('finance', () => {
   const incomes = ref<Income[]>([])
   const expenses = ref<Expense[]>([])
   const production = ref<WorkerProduction | null>(null)
+  const supplierDebts = ref<DebtList | null>(null)
+  const statement = ref<DebtStatement | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -289,6 +351,77 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  async function loadSupplierDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      supplierDebts.value = await api.get<DebtList>(
+        withQuery('/workshop/finance/debts/suppliers', {
+          search: filters.search || undefined,
+          only_with_debt: filters.only_with_debt,
+        }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      capture(errorValue, 'debts_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadSupplierStatement(
+    supplierId: string,
+    filters: { date_from?: string | null; date_to?: string | null } = {},
+  ) {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      statement.value = await api.get<DebtStatement>(
+        withQuery(`/workshop/finance/debts/suppliers/${supplierId}/statement`, {
+          date_from: filters.date_from || undefined,
+          date_to: filters.date_to || undefined,
+        }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      capture(errorValue, 'statement_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function createAdjustment(payload: unknown) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      return await api.post<CounterpartyAdjustment>(
+        '/workshop/finance/debts/adjustments',
+        payload,
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'adjustment_save_failed')
+      throw errorValue
+    }
+  }
+
+  async function voidAdjustment(id: string, reason: string) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      return await api.post<CounterpartyAdjustment>(
+        `/workshop/finance/debts/adjustments/${id}/void`,
+        { reason },
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'ledger_void_failed')
+      throw errorValue
+    }
+  }
+
   async function loadProduction(filters: {
     date_from?: string
     date_to?: string
@@ -314,6 +447,8 @@ export const useFinanceStore = defineStore('finance', () => {
     incomes.value = []
     expenses.value = []
     production.value = null
+    supplierDebts.value = null
+    statement.value = null
     loading.value = false
     error.value = null
     traceId.value = null
@@ -326,6 +461,8 @@ export const useFinanceStore = defineStore('finance', () => {
     incomes,
     expenses,
     production,
+    supplierDebts,
+    statement,
     loading,
     error,
     traceId,
@@ -340,6 +477,10 @@ export const useFinanceStore = defineStore('finance', () => {
     createExpense,
     updateExpense,
     voidExpense,
+    loadSupplierDebts,
+    loadSupplierStatement,
+    createAdjustment,
+    voidAdjustment,
     loadProduction,
     reset,
   }

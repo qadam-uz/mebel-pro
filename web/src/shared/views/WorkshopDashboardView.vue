@@ -63,6 +63,9 @@ const inventoryBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageInventory]),
 )
 const canFinance = computed(() => permissions.isOwner.value || financeBranches.value.length > 0)
+// Debts are the most sensitive numbers in the shop: manage_finance / owner only
+// (view_finance_reports alone does not unlock them).
+const canDebts = computed(() => permissions.isOwner.value || permissions.can(p.manageFinance))
 const canInventory = computed(() => permissions.isOwner.value || inventoryBranches.value.length > 0)
 const canOrders = computed(() => permissions.isOwner.value || orderBranches.value.length > 0)
 const canProduction = computed(
@@ -87,6 +90,9 @@ const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
 const incomeParts = computed(() => formatTiyinParts(finance.summary?.income_tiyin ?? 0))
 const expenseParts = computed(() => formatTiyinParts(finance.summary?.expense_tiyin ?? 0))
 const netParts = computed(() => formatTiyinParts(finance.summary?.net_tiyin ?? 0))
+const supplierDebtParts = computed(() =>
+  formatTiyinParts(finance.supplierDebts?.we_owe_total_tiyin ?? 0),
+)
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
@@ -220,6 +226,8 @@ async function loadDashboard() {
     }
   }
   await loadFinanceSummary()
+  // Best-effort tile: a failed debts load must not take the dashboard down.
+  if (canDebts.value) await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
   const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
   const inventoryBranchIds =
     inventoryContextBranchId !== null
@@ -352,6 +360,25 @@ watch(
           </div>
           <div class="d"><span>tushum − xarajat</span></div>
         </div>
+
+        <RouterLink
+          v-if="canDebts"
+          :to="rolePath('/workshop/finance/debts')"
+          class="kpi no-underline"
+          :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn' : ''"
+        >
+          <div class="lbl">Ta'minotchilarga qarzimiz</div>
+          <div
+            class="v num"
+            :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn-text' : ''"
+          >
+            <span v-if="dashboardReady" :title="supplierDebtParts.full"
+              >{{ supplierDebtParts.amount }} <small>{{ supplierDebtParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>yetkazmalar − to'lovlar</span></div>
+        </RouterLink>
 
         <RouterLink
           v-if="canInventory"

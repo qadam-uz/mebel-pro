@@ -170,6 +170,12 @@ export const workshopRoutes: RouteRecordRaw[] = [
     meta: { title: 'Tushum va xarajat', workshopAccess: { any: [p.manageFinance] } },
   },
   {
+    path: '/workshop/finance/debts',
+    name: 'workshop-finance-debts',
+    component: () => import('@/shared/views/WorkshopFinanceDebtsView.vue'),
+    meta: { title: 'Qarzdorlik', workshopAccess: { any: [p.manageFinance] } },
+  },
+  {
     path: '/workshop/finance/production',
     name: 'workshop-finance-production',
     component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),

@@ -116,9 +116,10 @@ Supplier ≠ manufacturer: the supplier is the workshop's buying counterparty, t
 manufacturer is who made the material — a supplier can carry many manufacturers' tape,
 and vice versa.
 
-No purchase-order or accounts-payable flow in v1 — the *money* for a purchase is a
-separate [`finance.md`](finance.md) expense the accountant records; the supplier here
-only labels where stock came from.
+No purchase-order flow in v1 — the *money* for a purchase is a separate
+[`finance.md`](finance.md) expense the accountant records. The supplier is also a **debt
+counterparty**: its priced deliveries and linked payments fold into a derived balance on
+the Qarzdorlik page ([`finance.md`](finance.md) → *Debts*).
 
 ## Inventory
 

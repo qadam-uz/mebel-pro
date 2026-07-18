@@ -23,6 +23,7 @@ import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
+import { useFinanceStore } from '@/shared/stores/finance'
 import {
   formatDate,
   formatDateTime,
@@ -42,6 +43,7 @@ import {
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
+const finance = useFinanceStore()
 const toast = useToast()
 const route = useRoute()
 const activeTab = ref<'stock' | 'tx' | 'suppliers'>('stock')
@@ -101,6 +103,22 @@ const supplierForm = reactive({
 })
 
 const canUseInventory = computed(() => permissions.can(p.manageInventory))
+// Debt balances are manage_finance/owner territory (Qarzdorlik rules) — the
+// column only renders for users who could open the Qarzdorlik page anyway.
+const canSeeDebts = computed(() => permissions.isOwner.value || permissions.can(p.manageFinance))
+const supplierBalanceById = computed(
+  () =>
+    new Map(
+      (finance.supplierDebts?.rows ?? []).map((row) => [row.counterparty_id, row.balance_tiyin]),
+    ),
+)
+
+function supplierBalanceChip(supplierId: string) {
+  const balance = supplierBalanceById.value.get(supplierId) ?? 0
+  if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
+  if (balance < 0) return { cls: 'pill p-bad', text: `Qarzimiz: ${formatTiyin(-balance)}` }
+  return { cls: '', text: '—' }
+}
 const accessibleBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageInventory]),
 )
@@ -321,6 +339,9 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
     }
     await workshop.loadSuppliers(branchId)
     suppliersLoadedBranch.value = branchId
+    if (canSeeDebts.value) {
+      await finance.loadSupplierDebts({ only_with_debt: false }).catch(() => undefined)
+    }
   } catch (errorValue) {
     workshop.inventoryError = 'inventory_load_failed'
     workshop.inventoryTraceId = apiTraceId(errorValue)
@@ -991,6 +1012,7 @@ onBeforeUnmount(() => {
                   <th>Nomi</th>
                   <th>Telefon</th>
                   <th>Izoh</th>
+                  <th v-if="canSeeDebts" class="right">Qarz</th>
                   <th>Holat</th>
                   <th></th>
                 </tr>
@@ -1000,6 +1022,15 @@ onBeforeUnmount(() => {
                   <td class="nm">{{ supplier.name }}</td>
                   <td class="num">{{ supplier.phone ?? '—' }}</td>
                   <td>{{ supplier.note ?? '—' }}</td>
+                  <td v-if="canSeeDebts" class="right">
+                    <span
+                      v-if="supplierBalanceChip(supplier.id).cls"
+                      :class="supplierBalanceChip(supplier.id).cls"
+                    >
+                      <span class="pd"></span>{{ supplierBalanceChip(supplier.id).text }}
+                    </span>
+                    <span v-else class="text-ink-muted">—</span>
+                  </td>
                   <td>
                     <span :class="supplier.status === 'active' ? 'pill p-ok' : 'pill p-dn'">
                       <span class="pd"></span
@@ -1026,7 +1057,7 @@ onBeforeUnmount(() => {
                   </td>
                 </tr>
                 <tr v-if="workshop.suppliers.length === 0">
-                  <td colspan="5">
+                  <td :colspan="canSeeDebts ? 6 : 5">
                     <div class="st-empty !border-0 !py-8"><h3>Yetkazib beruvchi yo'q</h3></div>
                   </td>
                 </tr>

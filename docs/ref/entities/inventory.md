@@ -80,12 +80,13 @@ prefill is derived from this ledger at read time
 
 ## Supplier
 
-Where a branch's stock came from — a lightweight, workshop-scoped label, created on demand
-from the stock-in form. No purchase-order or payables flow in v1; the money for a purchase
-is a separate [`finance.md`](../features/finance.md) expense. A supplier is the workshop's
-buying counterparty; the material's **manufacturer** ([`catalog.md`](catalog.md)) is who
-made it — distinct concepts (a single supplier may carry materials from several
-manufacturers, and vice versa).
+Where a branch's stock came from — a lightweight, workshop-scoped record, created on
+demand from the stock-in form. No purchase-order flow in v1, but the supplier is a **debt
+counterparty**: priced stock-ins, supplier-linked expenses, and signed adjustments fold
+into a derived balance ([`finance.md`](../features/finance.md) → *Debts*). A supplier is
+the workshop's buying counterparty; the material's **manufacturer**
+([`catalog.md`](catalog.md)) is who made it — distinct concepts (a single supplier may
+carry materials from several manufacturers, and vice versa).
 
 | Field | Type | Notes |
 |---|---|---|

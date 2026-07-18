@@ -31,6 +31,7 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     nav.push(
       item('Tushum va xarajat', input.path('/workshop/finance/expenses'), 'Moliya', 'wallet'),
     )
+    nav.push(item('Qarzdorlik', input.path('/workshop/finance/debts'), 'Moliya', 'scale'))
     nav.push(
       item('Xodimlar mehnati', input.path('/workshop/finance/production'), 'Moliya', 'users'),
     )
@@ -62,6 +63,7 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     nav.push(
       item('Tushum va xarajat', input.path('/workshop/finance/expenses'), 'Moliya', 'wallet'),
     )
+    nav.push(item('Qarzdorlik', input.path('/workshop/finance/debts'), 'Moliya', 'scale'))
   }
   if (hasAny(selectedBranch, ['manage_finance', 'view_finance_reports'])) {
     nav.push(

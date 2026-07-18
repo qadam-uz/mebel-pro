@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
@@ -40,6 +40,7 @@ import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const route = useRoute()
+const router = useRouter()
 const permissions = useWorkshopPermissions()
 const toast = useToast()
 const finance = useFinanceStore()
@@ -92,6 +93,7 @@ const expenseForm = reactive({
   amount: '',
   incurredOn: today,
   vendor: '',
+  supplierId: null as string | null,
   description: '',
   receiptFileId: null as string | null,
   receiptName: '',
@@ -151,6 +153,26 @@ const orderOptions = computed<ChoiceOption[]>(() =>
       label: `${order.order_number} · ${order.contact_name}`,
       meta: formatTiyin(order.total_tiyin),
     })),
+)
+// Optional supplier link on an expense — this is what makes it count as a
+// payment in the supplier's debt fold. Inactive suppliers stay payable.
+const supplierOptions = computed<ChoiceOption[]>(() =>
+  workshop.suppliers.map((supplier) => ({
+    value: supplier.id,
+    label: supplier.name,
+    meta: supplier.status === 'active' ? (supplier.phone ?? 'faol') : 'faol emas',
+  })),
+)
+
+// A picked supplier fills the free-text vendor with its name unless the user
+// already wrote something more specific.
+watch(
+  () => expenseForm.supplierId,
+  (supplierId) => {
+    if (!supplierId) return
+    const supplier = workshop.suppliers.find((row) => row.id === supplierId)
+    if (supplier && !expenseForm.vendor.trim()) expenseForm.vendor = supplier.name
+  },
 )
 const selectedIncomeOrderDetail = computed(() =>
   orders.currentOrder?.id === incomeForm.orderId ? orders.currentOrder : null,
@@ -304,6 +326,7 @@ function resetExpenseForm() {
   expenseForm.amount = ''
   expenseForm.incurredOn = today
   expenseForm.vendor = ''
+  expenseForm.supplierId = null
   expenseForm.description = ''
   expenseForm.receiptFileId = null
   expenseForm.receiptName = ''
@@ -352,6 +375,7 @@ function editExpense(expense: Expense) {
   expenseForm.category = expense.category
   expenseForm.amount = String(expense.amount_tiyin / 100)
   expenseForm.incurredOn = expense.incurred_on
+  expenseForm.supplierId = expense.supplier_id
   expenseForm.vendor = expense.vendor ?? ''
   expenseForm.description = expense.description
   expenseForm.receiptFileId = expense.receipt_file_id
@@ -420,6 +444,7 @@ async function saveExpense() {
       amount_tiyin: expenseAmountTiyin.value,
       incurred_on: expenseForm.incurredOn,
       vendor: expenseForm.vendor || null,
+      supplier_id: expenseForm.supplierId,
       description: expenseForm.description,
       receipt_file_id: expenseForm.receiptFileId,
     }
@@ -558,10 +583,21 @@ async function confirmVoid() {
 onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
   if (!canManageFinance.value) return
+  if (selectedBranchId.value) {
+    void workshop.loadSuppliers(selectedBranchId.value).catch(() => undefined)
+  }
   await Promise.all([
     orders.loadWorkshopOrders({ status: 'active' }).catch(() => undefined),
     refresh(),
   ])
+  // The Qarzdorlik statement's «To'lov qilish» deep-links here with the
+  // supplier pre-picked; the query is consumed once and cleared.
+  if (route.query.create === 'expense') {
+    openCreateExpense()
+    const supplierId = route.query.supplier_id
+    if (typeof supplierId === 'string') expenseForm.supplierId = supplierId
+    void router.replace({ path: route.path })
+  }
 })
 </script>
 
@@ -618,6 +654,13 @@ onMounted(async () => {
               required
             />
           </label>
+          <SearchCombobox
+            v-model="expenseForm.supplierId"
+            label="Ta'minotchi (qarz uchun)"
+            :options="supplierOptions"
+            placeholder="ixtiyoriy — qarzga bog'lash"
+            clearable
+          />
           <label class="field">
             <span>Yetkazib beruvchi</span>
             <input v-model="expenseForm.vendor" class="mp-input" placeholder="ixtiyoriy" />

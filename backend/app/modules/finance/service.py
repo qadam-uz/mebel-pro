@@ -35,6 +35,7 @@ from app.modules.finance.schemas import (
     WorkerProductionRow,
     WorkerProductionThicknessLine,
 )
+from app.modules.inventory.contracts import Supplier
 from app.modules.sales.api import get_order_finance_target, list_worker_production_records
 from app.modules.support.api import (
     RECEIPT_CONTENT_TYPES,
@@ -325,6 +326,9 @@ async def create_expense(
     _positive_amount(payload.amount_tiyin)
     _not_future(payload.incurred_on)
     scope = await _write_scope(db, principal=principal, branch_id=payload.branch_id)
+    supplier = await _supplier_in_workshop(
+        db, workshop_id=scope.workshop_id, supplier_id=payload.supplier_id
+    )
     expense = Expense(
         workshop_id=scope.workshop_id,
         branch_id=payload.branch_id,
@@ -332,7 +336,10 @@ async def create_expense(
         amount_tiyin=payload.amount_tiyin,
         incurred_on=payload.incurred_on,
         description=_required_text(payload.description, "description_required"),
-        vendor=_optional_text(payload.vendor),
+        # A supplier-linked expense keeps the supplier's name as the vendor text
+        # unless the caller wrote something more specific.
+        vendor=_optional_text(payload.vendor) or (supplier.name if supplier else None),
+        supplier_id=payload.supplier_id,
         receipt_file_id=payload.receipt_file_id,
         status=LedgerStatus.RECORDED,
         recorded_by_user_id=principal.principal_id,
@@ -386,6 +393,11 @@ async def update_expense(
         expense.description = _required_text(payload.description, "description_required")
     if "vendor" in payload.model_fields_set:
         expense.vendor = _optional_text(payload.vendor)
+    if "supplier_id" in payload.model_fields_set:
+        await _supplier_in_workshop(
+            db, workshop_id=expense.workshop_id, supplier_id=payload.supplier_id
+        )
+        expense.supplier_id = payload.supplier_id
     if "receipt_file_id" in payload.model_fields_set:
         expense.receipt_file_id = await replace_attached_file(
             db,
@@ -764,6 +776,22 @@ async def _assert_order_payment_cap(
     existing = int(await db.scalar(existing_query) or 0)
     if existing + amount_tiyin > order_total_tiyin:
         raise APIError("order_payment_exceeds_total", "Order payment exceeds order total")
+
+
+async def _supplier_in_workshop(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    supplier_id: uuid.UUID | None,
+) -> Supplier | None:
+    """Resolve an optional supplier link; inactive suppliers stay payable."""
+
+    if supplier_id is None:
+        return None
+    supplier = await db.get(Supplier, supplier_id)
+    if supplier is None or supplier.workshop_id != workshop_id:
+        raise APIError("supplier_not_found", "Supplier not found", status_code=404)
+    return supplier
 
 
 def _workshop_principal_id(principal: AuthenticatedPrincipal) -> uuid.UUID:
