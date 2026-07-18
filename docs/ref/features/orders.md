@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-07-18
 order: 30
 ---
 
@@ -405,31 +405,37 @@ Permission names below are the per-branch grants from
   **no** Payments or Refunds tab here — recording and correcting money is the finance
   module; the summary is a read-only mirror.
 
-- **Production station** (`/workshop/production`, `process_production`) — the shop-floor
-  terminal, tablet-first, replacing the former cutter/edger workspace pages. One workspace
-  with a **Kesish** and a **Krom** station tab (a tab renders only when the user's grants
-  cover that station's work). Each station is a priority stack, not columns: the started
-  job pinned on top ("Hozirgi ish"), the assigned queue below in **FIFO by assignment
+- **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
+  `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar
+  pages** (replacing the tabbed "Ishlarim" workspace, whose URL redirects to Kesish). Each
+  station is a priority stack, not columns: the started job pinned on top ("Hozirgi ish"),
+  the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at
-  the bottom. The page stays fresh on its own (~45 s poll + refresh on focus) — no manual
+  the bottom. The page stays fresh on its own (~15 s poll + refresh on focus) — no manual
   refresh button. Cards: order #, material, panel / part counts (cutting station) or
   metres by edge material (banding station), assignment age, and the client's **first
   name only** — production surfaces never show prices, discounts, or client phone
   numbers; the payload is **server-trimmed**, not hidden client-side. A non-owner sees
   only their own assignments; an **owner / `manage_orders`** user sees the whole branch
   queue grouped by assignee, with unassigned `confirmed` work surfaced as a call to
-  action into Orders, and may start / complete **on behalf**. Empty: "Nothing assigned —
+  action into Orders, and may start / complete **on behalf**. **Boshlash** on a queued
+  card starts the job and opens its Chizma sheet in one tap. Empty: "Nothing assigned —
   nice."
 - **"Chizma" job sheet** (`/workshop/production/:order_id`) — the worker-grade job view
   and the pure-`process_production` replacement for the office order detail: the cutting
-  plan SVG (zoomable) on top, the parts list under it (dimensions in large mono type, a
-  per-part edge glyph marking which sides get banding), the PDF one tap away, and a
-  sticky action bar with the single state-appropriate action (**Boshlash** /
-  **Tugatdim**).
+  plan SVG (zoomable) with a **panels rail** beside it — panels stacked vertically, each
+  with a mark toggle the worker uses as their own cut checkpoints (stored on the tablet
+  only, never synced; marking a panel advances the drawing to the next unmarked one), the
+  parts list under it (part **names**, never refs; dimensions in large mono type; a
+  per-part edge glyph marking which sides get banding), and a sticky action bar with the
+  single state-appropriate action (**Boshlash** / **Tugatdim**). The sheet stays fresh
+  like the queues and re-fetches right before start / complete so a stale version can't
+  conflict. The PDF lives on the office order page, not here.
 - **Completion** — a success-styled confirm (not danger) naming the order and what
   happens next ("moves to banding — <edger>'s queue"); the manager-revert-only caveat is
-  a quiet secondary line, and the on-behalf "who did this work?" choice lives inside this
-  dialog. After confirming, the next queued job is highlighted.
+  a quiet secondary line. The terminal credits **the assignee**; the on-behalf "who did
+  this work?" choice lives only in the office order page's completion dialog. After
+  confirming, the next queued job is highlighted.
 
 States: list / detail each have loading / empty / error; actions show a busy state and end
 in success or a recoverable error; the optimistic-lock conflict surfaces as "this order

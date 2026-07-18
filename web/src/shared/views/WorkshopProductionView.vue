@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import {
@@ -8,14 +8,10 @@ import {
   partitionProductionJobs,
   productionJobAssignee,
   productionJobMetaLine,
-  resolveProductionCreditUser,
 } from '@/shared/app/workshopProduction'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
-import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
-import FormSelect from '@/shared/components/FormSelect.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatRelativeUz } from '@/shared/formatters'
@@ -28,10 +24,13 @@ import {
 } from '@/shared/stores/production'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-const POLL_INTERVAL_MS = 45_000
+const POLL_INTERVAL_MS = 15_000
+
+// The station comes from the route (/workshop/cutting, /workshop/banding) —
+// a tablet pinned to its station page always wakes on its own queue.
+const props = defineProps<{ station: ProductionStation }>()
 
 const auth = useAuthStore()
-const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
 const orders = useOrdersStore()
@@ -43,14 +42,9 @@ const permissions = useWorkshopPermissions()
 const actionError = ref<string | null>(null)
 const pendingJobId = ref<string | null>(null)
 const pendingComplete = ref<ProductionJobCard | null>(null)
-const completedByDraft = ref<string>('')
-const workerOptionsByBranch = ref<Record<string, ChoiceOption[]>>({})
 
-// The station survives a reload via the query param — a tablet at the edge
-// bander must not wake up on the saw's queue.
-const station = computed<ProductionStation>(() =>
-  route.query.station === 'banding' ? 'banding' : 'cutting',
-)
+const station = computed(() => props.station)
+const stationTitle = computed(() => (station.value === 'cutting' ? 'Kesish' : 'Krom'))
 
 const queue = computed(() => production.queues[station.value] ?? null)
 const isManagerView = computed(
@@ -59,11 +53,6 @@ const isManagerView = computed(
 const canProcessAny = computed(() => permissions.canAny([p.processProduction, p.manageOrders]))
 const multiBranch = computed(() => workshop.branches.length > 1)
 
-const stationTabs = computed<ChoiceOption[]>(() => [
-  { value: 'cutting', label: `Kesish (${production.queues.cutting?.jobs.length ?? 0})` },
-  { value: 'banding', label: `Krom (${production.queues.banding?.jobs.length ?? 0})` },
-])
-
 const partitioned = computed(() => partitionProductionJobs(queue.value?.jobs ?? [], station.value))
 const currentJobs = computed(() => partitioned.value.current)
 const queuedJobs = computed(() => partitioned.value.queued)
@@ -71,10 +60,6 @@ const completedToday = computed(() => queue.value?.completed_today ?? [])
 const queuedGroups = computed(() =>
   isManagerView.value ? groupProductionJobsByAssignee(queuedJobs.value, station.value) : null,
 )
-
-function setStation(value: string) {
-  void router.replace({ query: { ...route.query, station: value } })
-}
 
 function jobMeta(job: ProductionJobCard) {
   return productionJobMetaLine(job, station.value)
@@ -130,6 +115,8 @@ async function startJob(job: ProductionJobCard) {
     if (station.value === 'cutting') await orders.startCutting(job.id, job.version)
     else await orders.startBanding(job.id, job.version)
     toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Krom boshlandi.')
+    // One tap: the job starts and the master lands on its drawing.
+    void router.push(rolePath(`/workshop/production/${job.id}`))
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
   } finally {
@@ -138,24 +125,9 @@ async function startJob(job: ProductionJobCard) {
   }
 }
 
-async function loadWorkerOptionsFor(branchId: string) {
-  if (!isManagerView.value || workerOptionsByBranch.value[branchId]) return
-  await orders.loadWorkers(branchId).catch(() => undefined)
-  workerOptionsByBranch.value = {
-    ...workerOptionsByBranch.value,
-    [branchId]: orders.workerOptions.map((worker) => ({
-      value: worker.id,
-      label: worker.full_name,
-      meta: worker.is_owner ? 'owner' : 'production',
-    })),
-  }
-}
-
 function requestComplete(job: ProductionJobCard) {
   if (!canActOn(job)) return
   actionError.value = null
-  completedByDraft.value = productionJobAssignee(job, station.value)?.id ?? ''
-  void loadWorkerOptionsFor(job.branch_id)
   pendingComplete.value = job
 }
 
@@ -176,13 +148,11 @@ async function confirmComplete() {
   const job = pendingComplete.value
   if (!job) return
   actionError.value = null
-  const completedBy = resolveProductionCreditUser(
-    productionJobAssignee(job, station.value)?.id,
-    completedByDraft.value,
-    isManagerView.value,
-  )
+  // Completion always credits the assignee; a manager who needs a different
+  // credit uses the office order page, which keeps its own "who did this" flow.
+  const completedBy = productionJobAssignee(job, station.value)?.id ?? null
   if (!completedBy) {
-    actionError.value = 'Ishni bajargan xodimni tanlang.'
+    actionError.value = 'Buyurtmaga usta tayinlanmagan.'
     return
   }
   try {
@@ -224,7 +194,7 @@ watch(station, () => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Ishlarim</h1>
+        <h1>{{ stationTitle }}</h1>
       </div>
       <div class="tools">
         <RouterLink
@@ -236,14 +206,6 @@ watch(station, () => {
         </RouterLink>
       </div>
     </div>
-
-    <AppTabs
-      :model-value="station"
-      :tabs="stationTabs"
-      id-prefix="production-station"
-      label="Ish stanogi"
-      @update:model-value="setStation"
-    />
 
     <section v-if="production.loading && !queue" class="card mt-4 p-5" aria-live="polite">
       <div class="grid gap-3">
@@ -428,13 +390,6 @@ watch(station, () => {
       @cancel="pendingComplete = null"
       @confirm="confirmComplete"
     >
-      <FormSelect
-        v-if="isManagerView && pendingComplete"
-        v-model="completedByDraft"
-        label="Kim bajardi"
-        :options="workerOptionsByBranch[pendingComplete.branch_id] ?? []"
-        :disabled="(workerOptionsByBranch[pendingComplete.branch_id] ?? []).length === 0"
-      />
       <p class="mt-2 text-xs text-ink-muted">
         Xatolik bo'lsa, rahbar bir qadam orqaga qaytara oladi.
       </p>

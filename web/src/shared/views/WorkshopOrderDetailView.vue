@@ -650,13 +650,14 @@ onMounted(loadDetail)
 
           <div v-if="order.status === 'cutting' || order.status === 'edge_banding'" class="actions">
             <RouterLink
-              :to="{
-                path: rolePath('/workshop/production'),
-                query: { station: order.status === 'edge_banding' ? 'banding' : 'cutting' },
-              }"
+              :to="
+                rolePath(
+                  order.status === 'edge_banding' ? '/workshop/banding' : '/workshop/cutting',
+                )
+              "
               class="mp-button mp-button-outline min-h-11 px-3 text-xs"
             >
-              Ishlarim
+              {{ order.status === 'edge_banding' ? 'Krom' : 'Kesish' }}
             </RouterLink>
           </div>
         </div>

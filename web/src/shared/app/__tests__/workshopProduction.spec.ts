@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   groupProductionJobsByAssignee,
   isProductionJobStarted,
+  nextUncutPanelId,
   partitionProductionJobs,
   productionJobMetaLine,
-  resolveProductionCreditUser,
+  productionPartNames,
   workshopEdgeMaterialLabel,
   workshopProductionQueueCounts,
   workshopQueueEdgeLine,
@@ -86,11 +87,28 @@ describe('workshop production display helpers', () => {
     ).toEqual({ cutting: 2, banding: 1, total: 3 })
   })
 
-  it('lets managers credit a selected worker while staff credit the assignee', () => {
-    expect(resolveProductionCreditUser('assigned', 'selected', true)).toBe('selected')
-    expect(resolveProductionCreditUser('assigned', 'selected', false)).toBe('assigned')
-    expect(resolveProductionCreditUser('assigned', null, true)).toBe('assigned')
-    expect(resolveProductionCreditUser(null, null, true)).toBeNull()
+  it('names job-sheet parts from detail names with the editor D-numbering fallback', () => {
+    const names = productionPartNames([
+      { part_ref: 'uuid-a', name: 'Shkaf yon devor' },
+      { part_ref: 'uuid-b', name: null },
+      { part_ref: 'uuid-c', name: '   ' },
+    ])
+    expect(names.get('uuid-a')).toBe('Shkaf yon devor')
+    expect(names.get('uuid-b')).toBe('D2')
+    expect(names.get('uuid-c')).toBe('D3')
+    expect(names.get('uuid-missing')).toBeUndefined()
+  })
+
+  it('advances the drawing to the next uncut panel, wrapping around the order', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }]
+    // Middle panel marked → the next uncut one after it.
+    expect(nextUncutPanelId(panels, new Set(['p2']), 'p2')).toBe('p3')
+    // Last panel marked → wrap to the first uncut.
+    expect(nextUncutPanelId(panels, new Set(['p1', 'p4']), 'p4')).toBe('p2')
+    // Everything marked → stay put.
+    expect(nextUncutPanelId(panels, new Set(['p1', 'p2', 'p3', 'p4']), 'p1')).toBeNull()
+    // A lone uncut panel is the target wherever the mark landed.
+    expect(nextUncutPanelId(panels, new Set(['p1', 'p2', 'p4']), 'p1')).toBe('p3')
   })
 })
 

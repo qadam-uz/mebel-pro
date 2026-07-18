@@ -3372,7 +3372,7 @@
     padding: 3px 8px;
   }
 
-  /* Production station (Ishlarim) — the shop-floor terminal. Bigger targets
+  /* Production station (Kesish / Krom) — the shop-floor terminal. Bigger targets
      and louder hierarchy than the office screens: read from a metre away. */
   .prod-hero {
     position: relative;
@@ -3499,6 +3499,95 @@
     border-top: 1px solid var(--color-hairline);
     margin-top: 16px;
     padding: 12px 0;
+  }
+
+  /* Job sheet: the drawing beside its panels rail. The rail carries the
+     worker's cut checkpoints — one 44px toggle per panel, big enough for a
+     gloved tap; the marked state pairs the ✓ glyph with a success tint. */
+  .prod-sheet {
+    display: grid;
+    gap: 16px;
+  }
+
+  @media (min-width: 900px) {
+    .prod-sheet {
+      align-items: start;
+      grid-template-columns: minmax(0, 1fr) 220px;
+    }
+  }
+
+  .prod-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .prod-rail-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    padding: 0 2px;
+    text-transform: uppercase;
+  }
+
+  .prod-rail-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    border: 1px solid var(--color-hairline);
+    border-radius: 12px;
+    background: var(--color-elevated);
+    padding: 4px;
+  }
+
+  .prod-rail-row.active {
+    border-color: var(--color-accent);
+  }
+
+  .prod-rail-row.marked {
+    border-color: var(--color-success-border);
+    background: var(--color-success-soft);
+  }
+
+  .prod-rail-select {
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-ink);
+    flex: 1;
+    font-size: 13px;
+    font-weight: 700;
+    min-height: 44px;
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  .prod-rail-row.marked .prod-rail-select {
+    color: var(--color-ink-soft);
+  }
+
+  .prod-rail-mark {
+    align-items: center;
+    border: 1.5px solid var(--color-hairline-strong);
+    border-radius: 999px;
+    background: var(--color-elevated);
+    color: #fff;
+    display: flex;
+    flex-shrink: 0;
+    font-size: 15px;
+    font-weight: 800;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+  }
+
+  .prod-rail-mark[aria-pressed='true'] {
+    border-color: var(--color-success);
+    background: var(--color-success);
   }
 
   .field {

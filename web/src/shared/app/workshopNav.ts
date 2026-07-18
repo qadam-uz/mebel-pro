@@ -25,7 +25,8 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
 
   if (input.isOwner) {
     nav.push(item('Buyurtmalar', input.path('/workshop/orders'), 'Boshqaruv', 'orders'))
-    nav.push(item('Ishlarim', input.path('/workshop/production'), 'Ishlab chiqarish', 'scissors'))
+    nav.push(item('Kesish', input.path('/workshop/cutting'), 'Ishlab chiqarish', 'scissors'))
+    nav.push(item('Krom', input.path('/workshop/banding'), 'Ishlab chiqarish', 'layers'))
     nav.push(item('Ombor', input.path('/workshop/inventory'), 'Resurslar', 'box'))
     nav.push(item('Material katalogi', input.path('/workshop/catalog'), 'Resurslar', 'grid'))
     nav.push(
@@ -51,7 +52,8 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
     nav.push(item('Buyurtmalar', input.path('/workshop/orders'), 'Boshqaruv', 'orders'))
   }
   if (hasAny(selectedBranch, ['process_production'])) {
-    nav.push(item('Ishlarim', input.path('/workshop/production'), 'Ishlab chiqarish', 'scissors'))
+    nav.push(item('Kesish', input.path('/workshop/cutting'), 'Ishlab chiqarish', 'scissors'))
+    nav.push(item('Krom', input.path('/workshop/banding'), 'Ishlab chiqarish', 'layers'))
   }
   if (hasAny(selectedBranch, ['manage_inventory'])) {
     nav.push(item('Ombor', input.path('/workshop/inventory'), 'Resurslar', 'box'))

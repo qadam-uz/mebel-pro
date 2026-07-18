@@ -2,7 +2,12 @@ import '@/assets/main.css'
 
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type RouteLocationRaw,
+  type RouteRecordRaw,
+} from 'vue-router'
 
 import { configureSession } from '@/shared/api/client'
 import RoleApp from '@/shared/components/RoleApp.vue'
@@ -33,13 +38,31 @@ export function normalizeRolePath(path: string, localBase: string, historyBase: 
   return path
 }
 
+// Redirect targets are route paths too — they need the same dev-base stripping
+// as route records, whatever shape the redirect takes (string, object with a
+// path, or a function returning either). Named-route targets pass through.
+function normalizeRedirectTarget(
+  target: RouteLocationRaw,
+  localBase: string,
+  historyBase: string,
+): RouteLocationRaw {
+  if (typeof target === 'string') return normalizeRolePath(target, localBase, historyBase)
+  if ('path' in target && typeof target.path === 'string') {
+    return { ...target, path: normalizeRolePath(target.path, localBase, historyBase) }
+  }
+  return target
+}
+
 function normalizeRedirect(
   redirect: RouteRecordRaw['redirect'],
   localBase: string,
   historyBase: string,
-) {
-  if (typeof redirect !== 'string') return redirect
-  return normalizeRolePath(redirect, localBase, historyBase)
+): RouteRecordRaw['redirect'] {
+  if (typeof redirect === 'function') {
+    return (to, from) => normalizeRedirectTarget(redirect(to, from), localBase, historyBase)
+  }
+  if (redirect) return normalizeRedirectTarget(redirect, localBase, historyBase)
+  return redirect
 }
 
 export function normalizeRoleRoutes(

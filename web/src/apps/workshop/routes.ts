@@ -96,11 +96,15 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopOrderDetailView.vue'),
     meta: { title: 'Buyurtma tafsilotlari', workshopAccess: { any: orderDetailAccess } },
   },
+  // The tabbed "Ishlarim" workspace split into the two station pages below;
+  // its URL stays alive as a redirect so old bookmarks and ?station= links
+  // land on the right station.
   {
     path: '/workshop/production',
-    name: 'workshop-production',
-    component: () => import('@/shared/views/WorkshopProductionView.vue'),
-    meta: { title: 'Ishlarim', workshopAccess: { any: productionAccess } },
+    redirect: (to) =>
+      to.query.station === 'banding'
+        ? { path: '/workshop/banding' }
+        : { path: '/workshop/cutting' },
   },
   {
     path: '/workshop/production/:order_id',
@@ -108,15 +112,19 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopProductionJobView.vue'),
     meta: { title: 'Chizma', workshopAccess: { any: productionAccess } },
   },
-  // The old per-station queue pages merged into the production workspace;
-  // keep their URLs alive for bookmarks and muscle memory.
   {
     path: '/workshop/cutting',
-    redirect: { path: '/workshop/production', query: { station: 'cutting' } },
+    name: 'workshop-cutting',
+    component: () => import('@/shared/views/WorkshopProductionView.vue'),
+    props: { station: 'cutting' },
+    meta: { title: 'Kesish', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/banding',
-    redirect: { path: '/workshop/production', query: { station: 'banding' } },
+    name: 'workshop-banding',
+    component: () => import('@/shared/views/WorkshopProductionView.vue'),
+    props: { station: 'banding' },
+    meta: { title: 'Krom', workshopAccess: { any: productionAccess } },
   },
   {
     path: '/workshop/inventory',

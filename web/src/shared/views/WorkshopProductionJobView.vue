@@ -1,25 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import {
+  clearPanelMarks,
+  loadPanelMarks,
+  prunePanelMarks,
+  savePanelMarks,
+} from '@/shared/app/productionCheckpoints'
+import {
+  nextUncutPanelId,
   productionJobMetaLine,
-  resolveProductionCreditUser,
+  productionPartNames,
   type ProductionStationKey,
 } from '@/shared/app/workshopProduction'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
-import FormSelect from '@/shared/components/FormSelect.vue'
-import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { CuttingPanel, CuttingPlacement, CuttingResult } from '@/shared/stores/cutting'
 import { useOrdersStore } from '@/shared/stores/orders'
 import { useProductionStore, type ProductionJobItem } from '@/shared/stores/production'
+
+const POLL_INTERVAL_MS = 15_000
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -36,15 +43,18 @@ const result = computed(() => job.value?.cutting_result ?? null)
 
 const activePanelId = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
+const markedPanelIds = ref<Set<string>>(new Set())
 const actionError = ref<string | null>(null)
 const actionBusy = ref(false)
 const completeOpen = ref(false)
-const completedByDraft = ref('')
-const workerOptions = ref<ChoiceOption[]>([])
 
 // Which station this sheet belongs to right now — the same order visits both.
 const station = computed<ProductionStationKey>(() =>
   job.value?.status === 'edge_banding' ? 'banding' : 'cutting',
+)
+const stationTitle = computed(() => (station.value === 'cutting' ? 'Kesish' : 'Krom'))
+const stationListPath = computed(() =>
+  rolePath(station.value === 'cutting' ? '/workshop/cutting' : '/workshop/banding'),
 )
 const assignee = computed(() =>
   station.value === 'cutting' ? job.value?.assigned_cutter : job.value?.assigned_edger,
@@ -86,13 +96,45 @@ const activePanel = computed<CuttingPanel | null>(() => {
   )
 })
 
+const markedCount = computed(() => {
+  const current = result.value
+  if (!current) return 0
+  return current.panels.filter((panel) => markedPanelIds.value.has(panel.id)).length
+})
+
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
   return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
 }
 
+function isPanelMarked(panel: CuttingPanel) {
+  return markedPanelIds.value.has(panel.id)
+}
+
+// The worker's own cut checkpoints: one tap per panel, kept on this tablet.
+// Marking the panel on screen advances the drawing to the next uncut one, so
+// a long order is a sequence of taps, not scrolling.
+function togglePanelMark(panel: CuttingPanel) {
+  const next = new Set(markedPanelIds.value)
+  if (next.has(panel.id)) next.delete(panel.id)
+  else next.add(panel.id)
+  markedPanelIds.value = next
+  savePanelMarks(orderId.value, next)
+  if (!next.has(panel.id) || panel.id !== activePanel.value?.id) return
+  const targetId = nextUncutPanelId(result.value?.panels ?? [], next, panel.id)
+  if (targetId) activePanelId.value = targetId
+}
+
 function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
+}
+
+// Part rows are named from the cutting result's detail names (the editor's
+// D-numbering as fallback) — the raw part_ref uuid never reaches the screen.
+const partNames = computed(() => productionPartNames(result.value?.parts_snapshot ?? []))
+
+function itemName(item: ProductionJobItem, index: number) {
+  return partNames.value.get(item.part_ref) ?? `D${index + 1}`
 }
 
 function bandedSides(item: ProductionJobItem) {
@@ -119,10 +161,22 @@ async function load() {
   await production.loadJob(orderId.value)
 }
 
+// The sheet stays fresh on its own, same cadence as the station queues; a
+// worker keeps it open for the whole cut.
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function onVisibilityChange() {
+  if (!document.hidden) void load()
+}
+
 async function runStart() {
+  if (primaryAction.value !== 'start') return
+  actionError.value = null
+  // Fetch the latest state before stamping the start — a stale version is a
+  // conflict, and someone may have moved the order while the sheet was open.
+  await load()
   const current = job.value
   if (!current || primaryAction.value !== 'start') return
-  actionError.value = null
   actionBusy.value = true
   try {
     if (station.value === 'cutting') await orders.startCutting(current.id, current.version)
@@ -137,18 +191,9 @@ async function runStart() {
 }
 
 async function openComplete() {
-  const current = job.value
-  if (!current) return
   actionError.value = null
-  completedByDraft.value = assignee.value?.id ?? ''
-  if (isManager.value && workerOptions.value.length === 0) {
-    await orders.loadWorkers(current.branch_id).catch(() => undefined)
-    workerOptions.value = orders.workerOptions.map((worker) => ({
-      value: worker.id,
-      label: worker.full_name,
-      meta: worker.is_owner ? 'owner' : 'production',
-    }))
-  }
+  await load()
+  if (primaryAction.value !== 'complete') return
   completeOpen.value = true
 }
 
@@ -166,13 +211,11 @@ async function confirmComplete() {
   const current = job.value
   if (!current) return
   actionError.value = null
-  const completedBy = resolveProductionCreditUser(
-    assignee.value?.id,
-    completedByDraft.value,
-    isManager.value,
-  )
+  // Completion always credits the assignee; a manager who needs a different
+  // credit uses the office order page, which keeps its own "who did this" flow.
+  const completedBy = assignee.value?.id ?? null
   if (!completedBy) {
-    actionError.value = 'Ishni bajargan xodimni tanlang.'
+    actionError.value = 'Buyurtmaga usta tayinlanmagan.'
     return
   }
   try {
@@ -180,11 +223,9 @@ async function confirmComplete() {
     if (station.value === 'cutting') await orders.cuttingDone(current.id, payload)
     else await orders.bandingDone(current.id, payload)
     completeOpen.value = false
+    clearPanelMarks(current.id)
     toast.success(`${current.order_number} yakunlandi.`)
-    void router.push({
-      path: rolePath('/workshop/production'),
-      query: { station: station.value },
-    })
+    void router.push(stationListPath.value)
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
     await load()
@@ -196,19 +237,36 @@ function onPrimary() {
   else if (primaryAction.value === 'complete') void openComplete()
 }
 
-onMounted(load)
+onMounted(async () => {
+  prunePanelMarks()
+  markedPanelIds.value = loadPanelMarks(orderId.value)
+  await load()
+  // A resuming worker lands on the first uncut panel, not on panel one.
+  const panels = result.value?.panels ?? []
+  const firstUncut = panels.find((panel) => !markedPanelIds.value.has(panel.id))
+  if (firstUncut) activePanelId.value = firstUncut.id
+  pollTimer = setInterval(() => {
+    if (!document.hidden && !orders.actionLoading && !actionBusy.value) void load()
+  }, POLL_INTERVAL_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
 
 <template>
   <section>
     <RouterLink
-      :to="{ path: rolePath('/workshop/production'), query: { station } }"
+      :to="stationListPath"
       class="mb-4 inline-flex items-center gap-1 text-sm font-bold text-accent no-underline"
     >
-      ‹ Ishlarim
+      ‹ {{ stationTitle }}
     </RouterLink>
 
-    <section v-if="production.jobLoading" class="card p-5" aria-live="polite">
+    <section v-if="production.jobLoading && !job" class="card p-5" aria-live="polite">
       <div class="grid gap-3">
         <span class="sk-line"></span>
         <span class="sk-line"></span>
@@ -249,29 +307,53 @@ onMounted(load)
         </div>
       </div>
 
-      <!-- The drawing first: it is what the master came for. -->
+      <!-- The drawing first: it is what the master came for. The rail beside
+           it holds the panels with the worker's own cut checkpoints (✓) —
+           they live on this tablet only. -->
       <section v-if="result" class="card">
-        <div class="card-b space-y-4">
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Panellar">
-            <button
-              v-for="panel in result.panels"
-              :key="panel.id"
-              type="button"
-              class="pill"
-              :class="panel.id === activePanel?.id ? 'p-cut' : 'p-dn'"
-              :aria-pressed="panel.id === activePanel?.id"
-              @click="activePanelId = panel.id"
-            >
-              {{ panelTitle(result, panel) }}
-            </button>
+        <div class="card-b">
+          <div class="prod-sheet">
+            <CuttingPanelSvg
+              v-if="activePanel"
+              :result="result"
+              :panel="activePanel"
+              :active-placement-id="activePlacementId"
+              @select-placement="selectPlacement"
+            />
+            <div class="prod-rail">
+              <div class="prod-rail-h">
+                <span>Panellar</span>
+                <span>{{ markedCount }}/{{ result.panels.length }}</span>
+              </div>
+              <div
+                v-for="panel in result.panels"
+                :key="panel.id"
+                class="prod-rail-row"
+                :class="{
+                  active: panel.id === activePanel?.id,
+                  marked: isPanelMarked(panel),
+                }"
+              >
+                <button
+                  type="button"
+                  class="prod-rail-select"
+                  :aria-pressed="panel.id === activePanel?.id"
+                  @click="activePanelId = panel.id"
+                >
+                  {{ panelTitle(result, panel) }}
+                </button>
+                <button
+                  type="button"
+                  class="prod-rail-mark"
+                  :aria-pressed="isPanelMarked(panel)"
+                  :aria-label="`${panelTitle(result, panel)} kesildi`"
+                  @click="togglePanelMark(panel)"
+                >
+                  {{ isPanelMarked(panel) ? '✓' : '' }}
+                </button>
+              </div>
+            </div>
           </div>
-          <CuttingPanelSvg
-            v-if="activePanel"
-            :result="result"
-            :panel="activePanel"
-            :active-placement-id="activePlacementId"
-            @select-placement="selectPlacement"
-          />
         </div>
       </section>
 
@@ -281,12 +363,12 @@ onMounted(load)
         <div class="card-h"><h2>Qismlar</h2></div>
         <div class="card-b !p-0">
           <div
-            v-for="item in job.items"
+            v-for="(item, index) in job.items"
             :key="item.id"
             class="flex items-center gap-3 border-t border-hairline px-4 py-3 first:border-t-0"
           >
-            <span class="w-28 truncate text-[13.5px] font-semibold text-ink-soft">
-              {{ item.part_ref }}
+            <span class="w-32 truncate text-[13.5px] font-semibold text-ink-soft">
+              {{ itemName(item, index) }}
             </span>
             <span class="grow font-mono text-[15px] font-bold text-ink">
               {{ item.length_mm }} × {{ item.width_mm }}
@@ -313,9 +395,8 @@ onMounted(load)
         {{ statusNote }}
       </p>
 
-      <div class="prod-stickybar">
+      <div v-if="primaryAction" class="prod-stickybar">
         <button
-          v-if="primaryAction"
           type="button"
           class="mp-button mp-button-primary min-h-12 grow px-5 text-[15px]"
           :disabled="actionBusy || orders.actionLoading"
@@ -323,19 +404,6 @@ onMounted(load)
         >
           {{ actionBusy ? 'Bajarilmoqda…' : primaryLabel }}
         </button>
-        <button
-          type="button"
-          class="mp-button mp-button-outline min-h-12 px-5 text-[15px]"
-          :disabled="orders.downloadingId === job.id"
-          @click="orders.downloadWorkshopPdf(job.id)"
-        >
-          {{ orders.downloadingId === job.id ? 'Yuklanmoqda…' : 'PDF' }}
-        </button>
-      </div>
-      <div v-if="orders.downloadError" class="banner danger" role="alert">
-        <div class="grow">
-          {{ orders.downloadError }} · trace_id: {{ orders.downloadTraceId ?? 'unavailable' }}
-        </div>
       </div>
     </template>
 
@@ -350,13 +418,6 @@ onMounted(load)
       @cancel="completeOpen = false"
       @confirm="confirmComplete"
     >
-      <FormSelect
-        v-if="isManager"
-        v-model="completedByDraft"
-        label="Kim bajardi"
-        :options="workerOptions"
-        :disabled="workerOptions.length === 0"
-      />
       <p class="mt-2 text-xs text-ink-muted">
         Xatolik bo'lsa, rahbar bir qadam orqaga qaytara oladi.
       </p>
