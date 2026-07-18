@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-09
+updated: 2026-07-18
 order: 55
 ---
 
@@ -109,7 +109,12 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
 (visible with `manage_finance` or `view_finance_reports`). The group's own pages:
 
 - **Income & expenses** (`/workshop/finance/expenses`, with an income deep-link at
-  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The date range is
+  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The active branch
+  comes from the topbar context picker (the app-wide convention) — there is no per-page
+  branch filter, no branch field in the forms, and no branch column in the tables. New
+  records stamp the context branch; editing preserves the record's original branch.
+  Workshop-level rows (`branch_id` null) stay visible to the owner in every branch
+  context, labelled *ustaxona-keng* — scoping must not hide HQ costs. The date range is
   the app-wide date-range picker: one trigger opening preset shortcuts (today / last
   7 days / this month / last month / last 30 days / all) beside a calendar for custom
   spans; every filter auto-applies — there is no separate apply button.
@@ -118,15 +123,17 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   date column pairs the business date with the entry timestamp beneath it — a backdated
   record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
-    status, action menu. Filters: date range, type, method, branch, status, min / max
+    status, action menu. Filters: date range, type, method, status, min / max
     amount. **+ Income** → modal form (type → if `order_payment`, a searchable order
-    picker scoped to the branch; amount; method; date; note; receipt). Row actions: Edit
+    picker scoped to the context branch; amount; method; date; note; receipt). An
+    order payment derives its branch from the picked order server-side. Row actions: Edit
     (modal) · Void (dialog with a mandatory reason). No Delete.
-  - *Expenses* — table: date, category, branch, vendor, amount, description (first 60
-    chars), receipt indicator, status, action menu. Filters: date range, category, branch,
-    status, min / max amount. **+ Expense** → modal form (category, branch, amount, date,
-    vendor, description, receipt). Row actions: Edit (modal) · Void (dialog with a
-    mandatory reason). No Delete.
+  - *Expenses* — table: date, category, vendor, amount, description (first 60
+    chars), receipt indicator, status, action menu. Filters: date range, category,
+    status, min / max amount. **+ Expense** → modal form (category, amount, date,
+    vendor, description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
+    that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
+    Edit (modal) · Void (dialog with a mandatory reason). No Delete.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per

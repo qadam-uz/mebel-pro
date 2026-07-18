@@ -135,14 +135,22 @@ export interface StockTransaction {
   type: StockTransactionType
   quantity: number
   balance_after: number
+  unit_price_tiyin: number | null
+  total_price_tiyin: number | null
   order_id: string | null
   supplier_id: string | null
   supplier_name: string | null
-  receipt_file_id: string | null
   actor_user_id: string | null
   actor_name: string | null
   note: string | null
   created_at: string
+}
+
+export interface StockLastPrice {
+  unit_price_tiyin: number | null
+  recorded_at: string | null
+  supplier_id: string | null
+  supplier_name: string | null
 }
 
 export interface StockTransactionFilters {
@@ -539,6 +547,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
     return updated
   }
 
+  // Read-only prefill helper — intentionally not stored: the latest price is
+  // always derived from transaction history, never cached as state.
+  async function fetchMaterialLastPrice(
+    id: string,
+    materialId: string,
+    supplierId?: string | null,
+  ) {
+    return api.get<StockLastPrice>(
+      withQuery(`/workshop/branches/${id}/materials/${materialId}/last-price`, {
+        supplier_id: supplierId ?? undefined,
+      }),
+      authInit(),
+    )
+  }
+
   async function recordStockIn(id: string, payload: unknown) {
     const transaction = await api.post<StockTransaction>(
       `/workshop/branches/${id}/stock-in`,
@@ -876,6 +899,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     createSupplier,
     updateSupplier,
     setSupplierStatus,
+    fetchMaterialLastPrice,
     recordStockIn,
     recordAdjustment,
     loadUsers,

@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -80,7 +80,12 @@ async def list_incomes(
         .order_by(Income.received_on.desc(), Income.created_at.desc())
     )
     if scope.branch_ids is not None:
-        query = query.where(Income.branch_id.in_(scope.branch_ids))
+        branch_filter: ColumnElement[bool] = Income.branch_id.in_(scope.branch_ids)
+        # Branch scoping must not hide workshop-level rows (branch IS NULL) from
+        # the owner — HQ costs stay visible in every branch context.
+        if principal.is_owner:
+            branch_filter = or_(branch_filter, Income.branch_id.is_(None))
+        query = query.where(branch_filter)
     if income_type is not None:
         query = query.where(Income.type == income_type)
     if method is not None:
@@ -295,7 +300,11 @@ async def list_expenses(
         .order_by(Expense.incurred_on.desc(), Expense.created_at.desc())
     )
     if scope.branch_ids is not None:
-        query = query.where(Expense.branch_id.in_(scope.branch_ids))
+        branch_filter: ColumnElement[bool] = Expense.branch_id.in_(scope.branch_ids)
+        # Same owner rule as incomes: a branch context never hides HQ costs.
+        if principal.is_owner:
+            branch_filter = or_(branch_filter, Expense.branch_id.is_(None))
+        query = query.where(branch_filter)
     if category is not None:
         query = query.where(Expense.category == category)
     if status_filter is not None:

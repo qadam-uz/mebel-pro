@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-06-03
+updated: 2026-07-18
 order: 30
 ---
 
@@ -61,16 +61,22 @@ One audit row for one change to a stock item. Append-only.
 | `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
 | `quantity` | int | signed change, non-zero, in the material's stock unit |
 | `balance_after` | int | `on_hand` after the change |
+| `unit_price_tiyin` | bigint? | purchase price per display unit (per panel / per metre), integer tiyin, ≥ 0; `stock_in` only, null otherwise |
+| `total_price_tiyin` | bigint? | authoritative purchase total for the row; panels `quantity × unit price`, edges `quantity_mm × unit price // 1000` (the sale-side per-metre mirror); `stock_in` only |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
 | `supplier_id` | UUID? | for `stock_in`; null otherwise |
-| `receipt_file_id` | UUID? | optional receipt attachment for `stock_in`; null otherwise |
 | `actor_user_id` | UUID? | for `stock_in` / `adjust`; null when the system did it (`consume` / `restore`) |
 | `note` | text? | supplier note, adjustment reason (required for `adjust`) |
 | `created_at` | timestamp | |
 
 Invariants: matches the change applied in the same atomic operation; `consume` / `restore`
-carry an `order_id` and no `actor_user_id`; `stock_in` carries a `supplier_id` and an
-`actor_user_id`; `adjust` requires a `note`; never updated or deleted.
+carry an `order_id` and no `actor_user_id`; `stock_in` carries a `supplier_id`, an
+`actor_user_id`, and a purchase price (rows recorded before pricing shipped stay unpriced —
+they are valid history, not backfilled); only `stock_in` rows ever carry a price (DB CHECK);
+`adjust` requires a `note` and never carries money — a stock-take fixes quantity, nothing else;
+never updated or deleted. There is no stored "latest price" anywhere: the stock-in form's
+prefill is derived from this ledger at read time
+([`catalog-inventory.md`](../features/catalog-inventory.md)).
 
 ## Supplier
 

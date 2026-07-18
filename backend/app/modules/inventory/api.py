@@ -1,12 +1,14 @@
 """Public inventory API used by routes and other modules."""
 
 from app.modules.inventory.service import (
+    LastPriceRecord,
     StockRecord,
     TransactionRecord,
     consume_order_stock,
     create_supplier,
     display_unit,
     ensure_stock_item_for_branch_material,
+    get_last_price,
     list_stock,
     list_suppliers,
     list_transactions,
@@ -14,18 +16,21 @@ from app.modules.inventory.service import (
     record_stock_in,
     restore_order_stock,
     set_supplier_status,
+    stock_in_total_tiyin,
     stock_unit,
     sync_stock_item_min_stock,
     update_supplier,
 )
 
 __all__ = [
+    "LastPriceRecord",
     "StockRecord",
     "TransactionRecord",
     "consume_order_stock",
     "create_supplier",
     "display_unit",
     "ensure_stock_item_for_branch_material",
+    "get_last_price",
     "list_stock",
     "list_suppliers",
     "list_transactions",
@@ -33,6 +38,7 @@ __all__ = [
     "record_stock_in",
     "restore_order_stock",
     "set_supplier_status",
+    "stock_in_total_tiyin",
     "stock_unit",
     "sync_stock_item_min_stock",
     "update_supplier",

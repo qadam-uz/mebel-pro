@@ -5,7 +5,11 @@ import { RouterLink, useRoute } from 'vue-router'
 import { apiTraceId } from '@/shared/api/client'
 import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
-import { sanitizeQuantityInput, sanitizeSignedQuantityInput } from '@/shared/app/inputSanitizers'
+import {
+  sanitizeMoneyInput,
+  sanitizeQuantityInput,
+  sanitizeSignedQuantityInput,
+} from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -13,7 +17,6 @@ import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
-import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
@@ -21,18 +24,24 @@ import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
+  formatDate,
   formatDateTime,
   formatStockQuantity,
   formatStockUnit,
+  formatTiyin,
   parseDisplayQuantity,
+  parseSomToTiyin,
 } from '@/shared/formatters'
-import { useFilesStore } from '@/shared/stores/files'
-import { useWorkshopStore, type StockItem, type Supplier } from '@/shared/stores/workshop'
+import {
+  useWorkshopStore,
+  type StockItem,
+  type StockLastPrice,
+  type Supplier,
+} from '@/shared/stores/workshop'
 
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
-const files = useFilesStore()
 const toast = useToast()
 const route = useRoute()
 const activeTab = ref<'stock' | 'tx' | 'suppliers'>('stock')
@@ -55,7 +64,7 @@ const movementError = ref<string | null>(null)
 const supplierError = ref<string | null>(null)
 const stockInMaterialError = ref<string | null>(null)
 const stockInSupplierError = ref<string | null>(null)
-const stockInReceiptError = ref<string | null>(null)
+const stockInPriceError = ref<string | null>(null)
 const adjustmentMaterialError = ref<string | null>(null)
 const editingSupplierId = ref<string | null>(null)
 const supplierModalOpen = ref(false)
@@ -67,12 +76,17 @@ let stockSearchTimer: number | undefined
 const stockInForm = reactive({
   materialId: null as string | null,
   quantity: '',
+  unitPrice: '',
   supplierId: null as string | null,
   inlineSupplierName: '',
-  receiptFileId: '',
-  receiptName: '',
   note: '',
 })
+// Prefill state: the latest fetched price (provenance for the hint line) and
+// whether the user has typed into the price field — a typed value is never
+// overwritten by a later prefill, only the hint updates.
+const lastPrice = ref<StockLastPrice | null>(null)
+const lastPriceLoaded = ref(false)
+const priceEdited = ref(false)
 const adjustmentForm = reactive({
   materialId: null as string | null,
   // A signed quantity with a REQUIRED leading + or − ("-2" decreases, "+5"
@@ -140,6 +154,100 @@ watch(
     if (clean !== value) adjustmentForm.quantity = clean
   },
 )
+watch(
+  () => stockInForm.unitPrice,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) stockInForm.unitPrice = clean
+  },
+)
+
+// The unit the price is entered per — panel piece for panels, metre for edges.
+const stockInPriceUnit = computed(() => {
+  const item = selectedStockInItem.value
+  if (!item) return null
+  return item.display_unit === 'metre' || item.display_unit === 'm' ? '1 metr' : '1 dona'
+})
+
+const lastPriceHint = computed(() => {
+  if (!stockInForm.materialId || !lastPriceLoaded.value) return null
+  const price = lastPrice.value
+  if (!price || price.unit_price_tiyin === null) return "Birinchi kirim — avvalgi narx yo'q"
+  const parts = [`Oxirgi narx: ${formatTiyin(price.unit_price_tiyin)}`]
+  if (price.recorded_at) parts.push(formatDate(price.recorded_at))
+  if (price.supplier_name) parts.push(`«${price.supplier_name}»`)
+  return parts.join(' · ')
+})
+
+// Live total mirroring the server math exactly: panels multiply, edges take
+// millimetres x per-metre price with floor division (the sale-side mirror).
+const stockInTotalTiyin = computed(() => {
+  const item = selectedStockInItem.value
+  const quantity = validStockInQuantity(item)
+  const price = parseSomToTiyin(stockInForm.unitPrice)
+  if (!item || quantity === null || price === null) return null
+  if (item.display_unit === 'metre' || item.display_unit === 'm') {
+    return Math.floor((quantity * price) / 1000)
+  }
+  return quantity * price
+})
+
+// A real (non-inline) selected supplier id, for supplier-specific prefill.
+const stockInRealSupplierId = computed(() =>
+  stockInForm.supplierId && stockInForm.supplierId !== 'inline' ? stockInForm.supplierId : null,
+)
+
+let lastPriceFetchToken = 0
+async function refreshLastPrice() {
+  const materialId = stockInForm.materialId
+  if (!selectedBranchId.value || !materialId) {
+    lastPrice.value = null
+    lastPriceLoaded.value = false
+    return
+  }
+  const token = ++lastPriceFetchToken
+  try {
+    const fetched = await workshop.fetchMaterialLastPrice(
+      selectedBranchId.value,
+      materialId,
+      stockInRealSupplierId.value,
+    )
+    if (token !== lastPriceFetchToken) return
+    lastPrice.value = fetched
+    lastPriceLoaded.value = true
+    // Prefill only while the user hasn't typed a price — a typed value wins.
+    if (!priceEdited.value) {
+      stockInForm.unitPrice =
+        fetched.unit_price_tiyin !== null && fetched.unit_price_tiyin > 0
+          ? String(Math.round(fetched.unit_price_tiyin / 100))
+          : ''
+    }
+  } catch {
+    if (token !== lastPriceFetchToken) return
+    // Prefill is best-effort UX; a failed fetch must never block manual entry.
+    lastPrice.value = null
+    lastPriceLoaded.value = false
+  }
+}
+
+function markPriceEdited() {
+  priceEdited.value = true
+}
+
+watch(
+  () => stockInForm.materialId,
+  () => {
+    // A price belongs to a material — switching materials restarts the prefill.
+    priceEdited.value = false
+    stockInForm.unitPrice = ''
+    lastPriceLoaded.value = false
+    void refreshLastPrice()
+  },
+)
+
+watch(stockInRealSupplierId, () => {
+  if (stockInForm.materialId) void refreshLastPrice()
+})
 const activeListEmpty = computed(() => {
   if (activeTab.value === 'stock') return workshop.stockItems.length === 0
   if (activeTab.value === 'tx') return workshop.stockTransactions.length === 0
@@ -259,10 +367,17 @@ async function recordStockIn() {
   movementError.value = null
   stockInMaterialError.value = null
   stockInSupplierError.value = null
+  stockInPriceError.value = null
   const item = selectedStockInItem.value
   const quantity = validStockInQuantity(item)
   if (!item || quantity === null) {
     stockInMaterialError.value = "Material va musbat miqdorni to'g'ri kiriting."
+    movementSaving.value = false
+    return
+  }
+  const unitPriceTiyin = parseSomToTiyin(stockInForm.unitPrice)
+  if (unitPriceTiyin === null) {
+    stockInPriceError.value = "Kirim narxini kiriting (so'mda)."
     movementSaving.value = false
     return
   }
@@ -275,6 +390,7 @@ async function recordStockIn() {
     await workshop.recordStockIn(selectedBranchId.value, {
       material_id: item.material_id,
       quantity,
+      unit_price_tiyin: unitPriceTiyin,
       supplier_id:
         stockInForm.supplierId && stockInForm.supplierId !== 'inline'
           ? stockInForm.supplierId
@@ -283,7 +399,6 @@ async function recordStockIn() {
         stockInForm.supplierId === 'inline'
           ? { name: stockInForm.inlineSupplierName.trim() }
           : null,
-      receipt_file_id: stockInForm.receiptFileId || null,
       note: stockInForm.note || null,
     })
     resetStockInForm()
@@ -368,27 +483,6 @@ async function toggleSupplierStatus(supplier: Supplier) {
   }
 }
 
-async function onReceiptFile(event: Event) {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement) || !target.files?.[0]) return
-  stockInReceiptError.value = null
-  try {
-    const uploaded = await files.upload(target.files[0])
-    stockInForm.receiptFileId = uploaded.id
-    stockInForm.receiptName = uploaded.original_name
-    toast.success('Chek biriktirildi.')
-  } catch {
-    stockInReceiptError.value = 'Chek yuklanmadi. Qayta urinib ko`ring.'
-  }
-  target.value = ''
-}
-
-function removeStockInReceipt() {
-  stockInForm.receiptFileId = ''
-  stockInForm.receiptName = ''
-  stockInReceiptError.value = null
-}
-
 function openCreateSupplier() {
   resetSupplierForm()
   supplierError.value = null
@@ -412,14 +506,16 @@ function closeSupplierModal() {
 function resetStockInForm() {
   stockInForm.materialId = null
   stockInForm.quantity = ''
+  stockInForm.unitPrice = ''
   stockInForm.supplierId = null
   stockInForm.inlineSupplierName = ''
-  stockInForm.receiptFileId = ''
-  stockInForm.receiptName = ''
   stockInForm.note = ''
+  lastPrice.value = null
+  lastPriceLoaded.value = false
+  priceEdited.value = false
   stockInMaterialError.value = null
   stockInSupplierError.value = null
-  stockInReceiptError.value = null
+  stockInPriceError.value = null
 }
 
 function resetAdjustmentForm() {
@@ -569,6 +665,22 @@ onBeforeUnmount(() => {
             >
             <input v-model="stockInForm.quantity" class="mp-input" inputmode="decimal" required />
           </label>
+          <label class="field">
+            <span
+              >Kirim narxi{{ stockInPriceUnit ? ` (${stockInPriceUnit}, so'm)` : " (so'm)" }}</span
+            >
+            <input
+              v-model="stockInForm.unitPrice"
+              class="mp-input"
+              inputmode="decimal"
+              required
+              @input="markPriceEdited"
+            />
+            <small v-if="lastPriceHint" class="text-ink-muted">{{ lastPriceHint }}</small>
+            <small v-if="stockInPriceError" class="font-bold text-danger">
+              {{ stockInPriceError }}
+            </small>
+          </label>
           <FormSelect
             v-model="stockInForm.supplierId"
             label="Yetkazib beruvchi"
@@ -581,23 +693,16 @@ onBeforeUnmount(() => {
             <input v-model="stockInForm.inlineSupplierName" class="mp-input" required />
           </label>
           <label class="field">
-            <span>Chek</span>
-            <FilePicker
-              accept="image/png,image/jpeg,image/webp,application/pdf"
-              :uploading="files.uploading"
-              :selected-name="stockInForm.receiptName"
-              removable
-              @change="onReceiptFile"
-              @remove="removeStockInReceipt"
-            />
-            <small v-if="stockInReceiptError" class="font-bold text-danger">
-              {{ stockInReceiptError }}
-            </small>
-          </label>
-          <label class="field">
             <span>Izoh</span>
             <input v-model="stockInForm.note" class="mp-input" />
           </label>
+          <div
+            v-if="stockInTotalTiyin !== null"
+            class="flex items-center justify-between border-t border-hairline pt-3 text-sm font-bold"
+          >
+            <span>Jami:</span>
+            <span class="num">{{ formatTiyin(stockInTotalTiyin) }}</span>
+          </div>
           <p
             v-if="movementError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
@@ -746,6 +851,8 @@ onBeforeUnmount(() => {
                 <th>Material</th>
                 <th class="right">Miqdor</th>
                 <th>Keyin</th>
+                <th class="right">Narx</th>
+                <th class="right">Summa</th>
                 <th>Buyurtma</th>
                 <th>Yetkazib beruvchi</th>
                 <th>Kim qildi</th>
@@ -779,6 +886,12 @@ onBeforeUnmount(() => {
                     formatStockQuantity(tx.balance_after, transactionDisplayUnit(tx.material_id))
                   }}
                 </td>
+                <td class="amt">
+                  {{ tx.unit_price_tiyin !== null ? formatTiyin(tx.unit_price_tiyin) : '—' }}
+                </td>
+                <td class="amt">
+                  {{ tx.total_price_tiyin !== null ? formatTiyin(tx.total_price_tiyin) : '—' }}
+                </td>
                 <td>
                   <RouterLink
                     v-if="tx.order_id"
@@ -800,7 +913,7 @@ onBeforeUnmount(() => {
                 </td>
               </tr>
               <tr v-if="workshop.stockTransactions.length === 0">
-                <td colspan="9">
+                <td colspan="11">
                   <div class="st-empty !border-0 !py-8"><h3>Tranzaksiya yo'q</h3></div>
                 </td>
               </tr>
