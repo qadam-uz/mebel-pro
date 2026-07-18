@@ -193,6 +193,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const suppliers = ref<Supplier[]>([])
   const stockItems = ref<StockItem[]>([])
   const lowStockItems = ref<StockItem[]>([])
+  const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
   const users = ref<WorkshopUser[]>([])
@@ -465,6 +466,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       ),
     )
     lowStockItems.value = pages.flat()
+  }
+
+  // Warehouse value at the latest purchase prices — derived server-side per
+  // branch and summed here across the branches in view.
+  async function loadStockValue(branchIds: string[]) {
+    if (branchIds.length === 0) {
+      stockValueTiyin.value = null
+      return
+    }
+    const values = await Promise.all(
+      [...new Set(branchIds)].map((id) =>
+        api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
+      ),
+    )
+    stockValueTiyin.value = values.reduce((sum, row) => sum + row.value_tiyin, 0)
   }
 
   async function loadStockTransactions(id: string, filters: StockTransactionFilters = {}) {
@@ -855,6 +871,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     suppliers,
     stockItems,
     lowStockItems,
+    stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
     users,
@@ -892,6 +909,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     setBranchMaterialStatus,
     loadStock,
     loadLowStock,
+    loadStockValue,
     loadStockTransactions,
     loadSuppliers,
     loadInventory,

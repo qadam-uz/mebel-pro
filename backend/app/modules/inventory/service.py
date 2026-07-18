@@ -703,6 +703,49 @@ async def _emit_low_stock_if_needed(
     await db.flush()
 
 
+async def stock_value(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> int:
+    """The branch's on-hand quantity valued at the latest purchase price.
+
+    Derived at read time like every other money number: per stock item, the most
+    recent priced stock-in's unit price times what is physically on hand (edges:
+    mm x per-metre // 1000). Items that never had a priced stock-in count zero.
+    """
+
+    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
+    latest_price = (
+        select(StockTransaction.unit_price_tiyin)
+        .where(
+            StockTransaction.stock_item_id == StockItem.id,
+            StockTransaction.type == StockTransactionType.STOCK_IN,
+            StockTransaction.unit_price_tiyin.is_not(None),
+        )
+        .order_by(StockTransaction.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    rows = (
+        await db.execute(
+            select(StockItem.on_hand, Material.kind, latest_price)
+            .join(Material, Material.id == StockItem.material_id)
+            .where(StockItem.branch_id == scope.branch_id, StockItem.on_hand > 0)
+        )
+    ).all()
+    total = 0
+    for on_hand, kind, price in rows:
+        if price is None:
+            continue
+        if kind is MaterialKind.PANEL:
+            total += on_hand * int(price)
+        else:
+            total += on_hand * int(price) // 1000
+    return total
+
+
 def stock_in_total_tiyin(kind: MaterialKind, quantity: int, unit_price_tiyin: int) -> int:
     """Total for a priced stock-in: per-panel for panels, per-metre over mm for edges.
 

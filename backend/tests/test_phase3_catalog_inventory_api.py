@@ -658,6 +658,15 @@ async def test_stock_in_pricing_math_last_price_and_validation(
     assert negative_price.status_code == 400
     assert negative_price.json()["code"] == "invalid_price"
 
+    # Inventory value: on-hand at the LATEST purchase price, derived at read
+    # time — 25 panels at the newer 52M price plus the edge mm at per-metre.
+    value = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/stock-value",
+        headers=_auth(owner_access),
+    )
+    assert value.status_code == 200
+    assert value.json()["value_tiyin"] == 25 * 52000000 + 1234 * 55 // 1000
+
 
 async def test_client_catalog_is_public_shape_and_visibility_filtered(
     client: AsyncClient,

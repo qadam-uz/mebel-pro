@@ -88,6 +88,12 @@ class StockTransactionResponse(APIModel):
     created_at: datetime
 
 
+class StockValueResponse(APIModel):
+    """On-hand quantity valued at the latest purchase price — derived, never stored."""
+
+    value_tiyin: int
+
+
 class StockLastPriceResponse(APIModel):
     """Latest purchase price for a material in a branch — all fields null when never priced."""
 

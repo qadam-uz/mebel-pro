@@ -210,7 +210,10 @@ now-redundant branch column:
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, unit price and total (stock-in rows only), order link (for
   consume/restore), supplier (for stock_in), actor, note, date-time; filtered by the
-  shared date-range picker; read-only.
+  shared date-range picker and a **material filter** — one material's stock-in rows
+  read as its purchase-price history; read-only. The dashboard shows an
+  **Ombor qiymati** tile: on-hand valued at each material's latest purchase price
+  (edges: mm × per-metre), derived at read time, summed over the branches in view.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
   add / edit in a modal dialog · block (reversible). Mostly reached inline from stock-in.
 

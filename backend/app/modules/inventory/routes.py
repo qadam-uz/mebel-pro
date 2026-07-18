@@ -21,6 +21,7 @@ from app.modules.inventory.api import (
     record_stock_in,
     set_supplier_status,
     stock_unit,
+    stock_value,
     update_supplier,
 )
 from app.modules.inventory.schemas import (
@@ -29,6 +30,7 @@ from app.modules.inventory.schemas import (
     StockItemResponse,
     StockLastPriceResponse,
     StockTransactionResponse,
+    StockValueResponse,
     SupplierCreateRequest,
     SupplierPatchRequest,
     SupplierResponse,
@@ -84,6 +86,16 @@ async def stock_adjustments_create(
 ) -> StockTransactionResponse:
     row = await record_adjustment(db, principal=principal, branch_id=branch_id, payload=payload)
     return _transaction_response(row)
+
+
+@router.get("/stock-value", response_model=StockValueResponse)
+async def stock_value_get(
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> StockValueResponse:
+    value = await stock_value(db, principal=principal, branch_id=branch_id)
+    return StockValueResponse(value_tiyin=value)
 
 
 @router.get("/materials/{material_id}/last-price", response_model=StockLastPriceResponse)

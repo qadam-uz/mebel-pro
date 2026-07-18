@@ -96,6 +96,7 @@ const supplierDebtParts = computed(() =>
 const clientDebtParts = computed(() =>
   formatTiyinParts(finance.clientDebts?.they_owe_total_tiyin ?? 0),
 )
+const stockValueParts = computed(() => formatTiyinParts(workshop.stockValueTiyin ?? 0))
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
@@ -243,6 +244,8 @@ async function loadDashboard() {
     workshop.inventoryLoading = true
     try {
       await workshop.loadLowStock(inventoryBranchIds)
+      // Best-effort tile — a failed valuation must not take the dashboard down.
+      await workshop.loadStockValue(inventoryBranchIds).catch(() => undefined)
       workshop.inventoryError = null
       workshop.inventoryTraceId = null
     } catch (errorValue) {
@@ -413,6 +416,21 @@ watch(
             <span v-else class="sk block h-7 w-12"></span>
           </div>
           <div class="d"><span>me'yordan kam</span></div>
+        </RouterLink>
+
+        <RouterLink
+          v-if="canInventory && workshop.stockValueTiyin !== null"
+          :to="rolePath('/workshop/inventory')"
+          class="kpi no-underline"
+        >
+          <div class="lbl">Ombor qiymati</div>
+          <div class="v num">
+            <span v-if="dashboardReady" :title="stockValueParts.full"
+              >{{ stockValueParts.amount }} <small>{{ stockValueParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>oxirgi kirim narxida</span></div>
         </RouterLink>
       </div>
 

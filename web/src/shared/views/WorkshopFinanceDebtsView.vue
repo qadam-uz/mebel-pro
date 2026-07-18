@@ -173,6 +173,11 @@ function payCounterparty() {
   })
 }
 
+function printStatement() {
+  // The print stylesheet strips the app chrome — only the statement card prints.
+  window.print()
+}
+
 function openAdjustment() {
   adjustmentForm.direction = 'debt_grows'
   adjustmentForm.amount = ''
@@ -424,6 +429,9 @@ onBeforeUnmount(() => {
             v-model:date-from="dateFrom"
             v-model:date-to="dateTo"
           />
+          <button type="button" class="mp-button mp-button-outline" @click="printStatement">
+            Chop etish
+          </button>
           <button type="button" class="mp-button mp-button-outline" @click="openAdjustment">
             Tuzatish kiritish
           </button>

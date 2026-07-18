@@ -220,7 +220,9 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   the ledger page — the expense modal with the supplier pre-picked, or the income modal
   on the client side) and **Tuzatish kiritish** (the adjustment form — direction in
   words per side, amount, date, mandatory note); adjustment rows carry their own void
-  action. The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
+  action, and **Chop etish** prints the statement as a clean paper akt sverka (a print
+  stylesheet strips the app chrome — the ritual ends with a document handed across the
+  table). The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
   tiles, and the Ombor suppliers tab shows each supplier's balance to users who could
   open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or

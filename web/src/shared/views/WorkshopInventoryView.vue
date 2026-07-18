@@ -12,6 +12,7 @@ import {
 } from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
+import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
@@ -19,6 +20,7 @@ import AppTabs from '@/shared/components/AppTabs.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
+import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
@@ -58,6 +60,9 @@ const txPreset = ref<DateRangePreset>('days30')
 const initialTxRange = presetRange('days30')
 const txDateFrom = ref(initialTxRange.from ?? '')
 const txDateTo = ref(initialTxRange.to ?? '')
+// Material filter doubles as the price-history view: one material's stock-in
+// rows read as its purchase-price timeline.
+const txMaterialId = ref('all')
 const stockInOpen = ref(false)
 const adjustmentOpen = ref(false)
 const movementSaving = ref(false)
@@ -139,6 +144,10 @@ const stockOptions = computed(() =>
     meta: `${formatStockQuantity(item.on_hand, item.display_unit)} mavjud`,
   })),
 )
+const txMaterialOptions = computed<DropdownOption[]>(() => [
+  { value: 'all', label: 'Hamma materiallar' },
+  ...workshop.stockItems.map((item) => ({ value: item.material_id, label: item.material.name })),
+])
 const activeSupplierOptions = computed(() => [
   { value: 'inline', label: 'Yangi yetkazib beruvchi', meta: 'kirim bilan yaratiladi' },
   ...workshop.suppliers
@@ -297,7 +306,12 @@ function transactionActorName(tx: (typeof workshop.stockTransactions)[number]) {
 }
 
 function transactionFilterKey() {
-  return [selectedBranchId.value, txDateFrom.value || 'open', txDateTo.value || 'open'].join(':')
+  return [
+    selectedBranchId.value,
+    txDateFrom.value || 'open',
+    txDateTo.value || 'open',
+    txMaterialId.value,
+  ].join(':')
 }
 
 function stockFilterKey() {
@@ -329,6 +343,7 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
     }
     if (activeTab.value === 'tx') {
       await workshop.loadStockTransactions(branchId, {
+        material_id: txMaterialId.value === 'all' ? null : txMaterialId.value,
         date_from: txDateFrom.value || null,
         date_to: txDateTo.value || null,
         limit: INVENTORY_TX_PAGE_LIMIT,
@@ -590,7 +605,7 @@ watch(
   },
 )
 
-watch([txDateFrom, txDateTo], () => {
+watch([txDateFrom, txDateTo, txMaterialId], () => {
   if (activeTab.value === 'tx') void refreshActiveInventoryTab({ force: true })
 })
 
@@ -658,6 +673,13 @@ onBeforeUnmount(() => {
           v-model:preset="txPreset"
           v-model:date-from="txDateFrom"
           v-model:date-to="txDateTo"
+        />
+        <ProjectDropdown
+          v-if="activeTab === 'tx'"
+          v-model="txMaterialId"
+          label="Material"
+          :options="txMaterialOptions"
+          top-label
         />
       </div>
 
