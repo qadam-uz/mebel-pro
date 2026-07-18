@@ -15,13 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
+    IncomeType,
     LedgerStatus,
+    OrderStatus,
     Permission,
     StockTransactionType,
 )
 from app.modules.access.contracts import Client
 from app.modules.catalog.contracts import Material
-from app.modules.finance.models import CounterpartyAdjustment, Expense
+from app.modules.finance.models import CounterpartyAdjustment, Expense, Income
 from app.modules.finance.schemas import (
     AdjustmentCreateRequest,
     DebtListResponse,
@@ -37,6 +39,7 @@ from app.modules.finance.service import (
     _workshop_principal_id,
 )
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier
+from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action, record_status_change
 
 _PANEL = "panel"
@@ -120,6 +123,69 @@ async def get_supplier_statement(
         counterparty_id=supplier.id,
         name=supplier.name,
         phone=supplier.phone,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+async def list_client_debts(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    search: str | None = None,
+    only_with_debt: bool = True,
+) -> DebtListResponse:
+    workshop_id = await debts_scope(db, principal=principal)
+    balances = await _client_balances(db, workshop_id=workshop_id)
+    if not balances:
+        return DebtListResponse(rows=[], we_owe_total_tiyin=0, they_owe_total_tiyin=0)
+
+    query = select(Client).where(Client.id.in_(balances.keys()))
+    normalized = _optional_text(search)
+    if normalized:
+        pattern = f"%{normalized}%"
+        query = query.where(Client.name.ilike(pattern) | Client.phone.ilike(pattern))
+    clients = list((await db.scalars(query)).all())
+
+    rows = [
+        DebtRow(
+            counterparty_id=client.id,
+            name=client.name,
+            phone=client.phone,
+            inactive=False,
+            balance_tiyin=balances.get(client.id, 0),
+        )
+        for client in clients
+    ]
+    if only_with_debt:
+        rows = [row for row in rows if row.balance_tiyin != 0]
+    # Most they-owe first — receivables are what the accountant chases.
+    rows.sort(key=lambda row: (-row.balance_tiyin, row.name))
+    return DebtListResponse(
+        rows=rows,
+        we_owe_total_tiyin=sum(-b for b in balances.values() if b < 0),
+        they_owe_total_tiyin=sum(b for b in balances.values() if b > 0),
+    )
+
+
+async def get_client_statement(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    client_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> DebtStatementResponse:
+    workshop_id = await debts_scope(db, principal=principal)
+    client = await db.get(Client, client_id)
+    if client is None:
+        raise APIError("client_not_found", "Client not found", status_code=404)
+    terms = await _client_terms(db, workshop_id=workshop_id, client_id=client_id)
+    return _build_statement(
+        terms,
+        counterparty_id=client.id,
+        name=client.name,
+        phone=client.phone,
         date_from=date_from,
         date_to=date_to,
     )
@@ -288,6 +354,147 @@ async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dic
             + adjustments.get(supplier_id, 0)
         )
     return balances
+
+
+# An order joins the client fold once the shop commits to it (confirmed and
+# beyond); `new` is a quote, `cancelled` leaves the fold — while any recorded
+# payment stays, so a cancelled prepaid order correctly shows as our debt.
+_CLIENT_DEBT_EXCLUDED = (OrderStatus.NEW, OrderStatus.CANCELLED)
+
+
+async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[uuid.UUID, int]:
+    """Per client: balance = sum(order totals) - sum(payments) + sum(adjustments)."""
+
+    orders = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(Order.client_id, func.coalesce(func.sum(Order.total_tiyin), 0))
+                .where(
+                    Order.workshop_id == workshop_id,
+                    Order.status.not_in(_CLIENT_DEBT_EXCLUDED),
+                )
+                .group_by(Order.client_id)
+            )
+        ).all()
+    }
+    payments = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(Order.client_id, func.coalesce(func.sum(Income.amount_tiyin), 0))
+                .join(Order, Order.id == Income.order_id)
+                .where(
+                    Income.workshop_id == workshop_id,
+                    Income.type == IncomeType.ORDER_PAYMENT,
+                    Income.status == LedgerStatus.RECORDED,
+                )
+                .group_by(Order.client_id)
+            )
+        ).all()
+    }
+    adjustments = {
+        row[0]: int(row[1])
+        for row in (
+            await db.execute(
+                select(
+                    CounterpartyAdjustment.client_id,
+                    func.coalesce(func.sum(CounterpartyAdjustment.amount_tiyin), 0),
+                )
+                .where(
+                    CounterpartyAdjustment.workshop_id == workshop_id,
+                    CounterpartyAdjustment.client_id.is_not(None),
+                    CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+                )
+                .group_by(CounterpartyAdjustment.client_id)
+            )
+        ).all()
+        if row[0] is not None
+    }
+    balances: dict[uuid.UUID, int] = {}
+    for client_id in {*orders, *payments, *adjustments}:
+        balances[client_id] = (
+            orders.get(client_id, 0) - payments.get(client_id, 0) + adjustments.get(client_id, 0)
+        )
+    return balances
+
+
+async def _client_terms(
+    db: AsyncSession, *, workshop_id: uuid.UUID, client_id: uuid.UUID
+) -> list[DebtStatementRow]:
+    """Every fold term for one client, unsorted, without running balances."""
+
+    rows: list[DebtStatementRow] = []
+    orders = (
+        await db.scalars(
+            select(Order).where(
+                Order.workshop_id == workshop_id,
+                Order.client_id == client_id,
+                Order.status.not_in(_CLIENT_DEBT_EXCLUDED),
+            )
+        )
+    ).all()
+    for order in orders:
+        confirmed = order.confirmed_at or order.created_at
+        rows.append(
+            DebtStatementRow(
+                kind="order",
+                on=confirmed.date(),
+                at=confirmed,
+                reference_id=order.id,
+                amount_tiyin=order.total_tiyin,
+                balance_after_tiyin=0,
+                order_number=order.order_number,
+            )
+        )
+    payments = (
+        await db.execute(
+            select(Income, Order.order_number)
+            .join(Order, Order.id == Income.order_id)
+            .where(
+                Income.workshop_id == workshop_id,
+                Order.client_id == client_id,
+                Income.type == IncomeType.ORDER_PAYMENT,
+                Income.status == LedgerStatus.RECORDED,
+            )
+        )
+    ).all()
+    for income, order_number in payments:
+        rows.append(
+            DebtStatementRow(
+                kind="payment",
+                on=income.received_on,
+                at=income.created_at,
+                reference_id=income.id,
+                amount_tiyin=-income.amount_tiyin,
+                balance_after_tiyin=0,
+                note=income.note,
+                method=income.method,
+                order_number=order_number,
+            )
+        )
+    adjustments = (
+        await db.scalars(
+            select(CounterpartyAdjustment).where(
+                CounterpartyAdjustment.workshop_id == workshop_id,
+                CounterpartyAdjustment.client_id == client_id,
+                CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+            )
+        )
+    ).all()
+    for adjustment in adjustments:
+        rows.append(
+            DebtStatementRow(
+                kind="adjustment",
+                on=adjustment.adjusted_on,
+                at=adjustment.created_at,
+                reference_id=adjustment.id,
+                amount_tiyin=adjustment.amount_tiyin,
+                balance_after_tiyin=0,
+                note=adjustment.note,
+            )
+        )
+    return rows
 
 
 async def _supplier_terms(

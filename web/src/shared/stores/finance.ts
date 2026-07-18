@@ -174,6 +174,7 @@ export const useFinanceStore = defineStore('finance', () => {
   const expenses = ref<Expense[]>([])
   const production = ref<WorkerProduction | null>(null)
   const supplierDebts = ref<DebtList | null>(null)
+  const clientDebts = ref<DebtList | null>(null)
   const statement = ref<DebtStatement | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -370,8 +371,28 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
-  async function loadSupplierStatement(
-    supplierId: string,
+  async function loadClientDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      clientDebts.value = await api.get<DebtList>(
+        withQuery('/workshop/finance/debts/clients', {
+          search: filters.search || undefined,
+          only_with_debt: filters.only_with_debt,
+        }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      capture(errorValue, 'debts_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadStatement(
+    side: 'suppliers' | 'clients',
+    counterpartyId: string,
     filters: { date_from?: string | null; date_to?: string | null } = {},
   ) {
     loading.value = true
@@ -379,7 +400,7 @@ export const useFinanceStore = defineStore('finance', () => {
     traceId.value = null
     try {
       statement.value = await api.get<DebtStatement>(
-        withQuery(`/workshop/finance/debts/suppliers/${supplierId}/statement`, {
+        withQuery(`/workshop/finance/debts/${side}/${counterpartyId}/statement`, {
           date_from: filters.date_from || undefined,
           date_to: filters.date_to || undefined,
         }),
@@ -448,6 +469,7 @@ export const useFinanceStore = defineStore('finance', () => {
     expenses.value = []
     production.value = null
     supplierDebts.value = null
+    clientDebts.value = null
     statement.value = null
     loading.value = false
     error.value = null
@@ -462,6 +484,7 @@ export const useFinanceStore = defineStore('finance', () => {
     expenses,
     production,
     supplierDebts,
+    clientDebts,
     statement,
     loading,
     error,
@@ -478,7 +501,8 @@ export const useFinanceStore = defineStore('finance', () => {
     updateExpense,
     voidExpense,
     loadSupplierDebts,
-    loadSupplierStatement,
+    loadClientDebts,
+    loadStatement,
     createAdjustment,
     voidAdjustment,
     loadProduction,

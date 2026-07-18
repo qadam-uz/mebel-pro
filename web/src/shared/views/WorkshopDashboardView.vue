@@ -93,6 +93,9 @@ const netParts = computed(() => formatTiyinParts(finance.summary?.net_tiyin ?? 0
 const supplierDebtParts = computed(() =>
   formatTiyinParts(finance.supplierDebts?.we_owe_total_tiyin ?? 0),
 )
+const clientDebtParts = computed(() =>
+  formatTiyinParts(finance.clientDebts?.they_owe_total_tiyin ?? 0),
+)
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
@@ -226,8 +229,11 @@ async function loadDashboard() {
     }
   }
   await loadFinanceSummary()
-  // Best-effort tile: a failed debts load must not take the dashboard down.
-  if (canDebts.value) await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
+  // Best-effort tiles: a failed debts load must not take the dashboard down.
+  if (canDebts.value) {
+    await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
+    await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
+  }
   const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
   const inventoryBranchIds =
     inventoryContextBranchId !== null
@@ -378,6 +384,21 @@ watch(
             <span v-else class="sk block h-7 w-28"></span>
           </div>
           <div class="d"><span>yetkazmalar − to'lovlar</span></div>
+        </RouterLink>
+
+        <RouterLink
+          v-if="canDebts"
+          :to="rolePath('/workshop/finance/debts')"
+          class="kpi no-underline"
+        >
+          <div class="lbl">Mijozlar qarzi</div>
+          <div class="v num">
+            <span v-if="dashboardReady" :title="clientDebtParts.full"
+              >{{ clientDebtParts.amount }} <small>{{ clientDebtParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>buyurtmalar − to'lovlar</span></div>
         </RouterLink>
 
         <RouterLink

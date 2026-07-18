@@ -1,12 +1,18 @@
-"""Supplier debt folds, statements, and signed adjustments."""
+"""Supplier and client debt folds, statements, and signed adjustments."""
 
 import uuid
 from datetime import UTC, datetime
 
 from app.core.security import hash_password
-from app.models.enums import AuthenticatedPrincipalType, Permission, UserStatus
+from app.models.enums import (
+    AuthenticatedPrincipalType,
+    OrderStatus,
+    Permission,
+    UserStatus,
+)
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
+from app.modules.sales.contracts import Order
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -257,6 +263,160 @@ async def test_supplier_debt_fold_statement_and_voids(
         json={"reason": "yana"},
     )
     assert double_void.status_code == 409
+
+
+def _order(
+    *,
+    workshop_id: uuid.UUID,
+    branch_id: uuid.UUID,
+    client_id: uuid.UUID,
+    total_tiyin: int,
+    status: OrderStatus,
+    confirmed_at: datetime | None,
+) -> Order:
+    return Order(
+        order_number=f"ORD-{uuid.uuid4().hex[:10]}",
+        client_id=client_id,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        cutting_result_id=uuid.uuid4(),
+        status=status,
+        contact_name="Debt Client",
+        contact_phone="+998909999333",
+        subtotal_materials_tiyin=total_tiyin,
+        total_tiyin=total_tiyin,
+        confirmed_at=confirmed_at,
+    )
+
+
+async def test_client_debt_fold_statement_and_cancelled_advance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, workshop_id, branch_id = await _owner_fixture(db_session)
+    aziza = Client(phone="+998909999444", name="Aziza Karimova")
+    quoted = Client(phone="+998909999445", name="Quoted Only")
+    prepaid = Client(phone="+998909999446", name="Prepaid Cancelled")
+    db_session.add_all([aziza, quoted, prepaid])
+    await db_session.flush()
+
+    confirmed_order = _order(
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=aziza.id,
+        total_tiyin=5_000_000,
+        status=OrderStatus.CONFIRMED,
+        confirmed_at=datetime(2026, 6, 10, 10, 0, tzinfo=UTC),
+    )
+    doomed_order = _order(
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=aziza.id,
+        total_tiyin=1_000_000,
+        status=OrderStatus.CONFIRMED,
+        confirmed_at=datetime(2026, 6, 12, 10, 0, tzinfo=UTC),
+    )
+    quote_only = _order(
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=quoted.id,
+        total_tiyin=9_000_000,
+        status=OrderStatus.NEW,
+        confirmed_at=None,
+    )
+    prepaid_order = _order(
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        client_id=prepaid.id,
+        total_tiyin=300_000,
+        status=OrderStatus.CONFIRMED,
+        confirmed_at=datetime(2026, 6, 15, 10, 0, tzinfo=UTC),
+    )
+    db_session.add_all([confirmed_order, doomed_order, quote_only, prepaid_order])
+    await db_session.flush()
+
+    async def pay(order_id: uuid.UUID, amount: int, on: str) -> None:
+        response = await client.post(
+            "/api/v1/workshop/finance/income",
+            headers=_auth(owner_access),
+            json={
+                "type": "order_payment",
+                "order_id": str(order_id),
+                "amount_tiyin": amount,
+                "method": "cash",
+                "received_on": on,
+            },
+        )
+        assert response.status_code == 201
+
+    await pay(confirmed_order.id, 2_000_000, "2026-06-11")
+    await pay(doomed_order.id, 1_000_000, "2026-06-12")
+    await pay(prepaid_order.id, 300_000, "2026-06-15")
+    # Both cancellations happen after money was taken: the order total leaves
+    # the fold, the payment stays — the truth is we hold their advance.
+    doomed_order.status = OrderStatus.CANCELLED
+    prepaid_order.status = OrderStatus.CANCELLED
+    await db_session.flush()
+    notebook = await client.post(
+        "/api/v1/workshop/finance/debts/adjustments",
+        headers=_auth(owner_access),
+        json={
+            "client_id": str(aziza.id),
+            "amount_tiyin": 250_000,
+            "adjusted_on": "2026-06-13",
+            "note": "daftar qarzi",
+        },
+    )
+    assert notebook.status_code == 201
+
+    debts = await client.get(
+        "/api/v1/workshop/finance/debts/clients",
+        headers=_auth(owner_access),
+    )
+    assert debts.status_code == 200
+    rows = {row["counterparty_id"]: row for row in debts.json()["rows"]}
+    # Aziza: 5M (confirmed) - 2M - 1M (payments incl. the cancelled order's) + 250k.
+    assert rows[str(aziza.id)]["balance_tiyin"] == 2_250_000
+    # The prepaid-then-cancelled client flips to our debt (we hold the advance).
+    assert rows[str(prepaid.id)]["balance_tiyin"] == -300_000
+    # A quote (status new) never joins the fold.
+    assert str(quoted.id) not in rows
+    assert debts.json()["they_owe_total_tiyin"] == 2_250_000
+    assert debts.json()["we_owe_total_tiyin"] == 300_000
+    # Receivables first: Aziza sorts above the client we owe.
+    assert [row["counterparty_id"] for row in debts.json()["rows"]] == [
+        str(aziza.id),
+        str(prepaid.id),
+    ]
+
+    statement = await client.get(
+        f"/api/v1/workshop/finance/debts/clients/{aziza.id}/statement",
+        headers=_auth(owner_access),
+    )
+    assert statement.status_code == 200
+    body = statement.json()
+    assert [row["kind"] for row in body["rows"]] == [
+        "order",
+        "payment",
+        "payment",
+        "adjustment",
+    ]
+    assert [row["balance_after_tiyin"] for row in body["rows"]] == [
+        5_000_000,
+        3_000_000,
+        2_000_000,
+        2_250_000,
+    ]
+    assert body["rows"][0]["order_number"] == confirmed_order.order_number
+    assert body["rows"][2]["order_number"] == doomed_order.order_number
+    assert body["rows"][1]["method"] == "cash"
+    assert body["current_balance_tiyin"] == 2_250_000
+
+    unknown_client = await client.get(
+        f"/api/v1/workshop/finance/debts/clients/{uuid.uuid4()}/statement",
+        headers=_auth(owner_access),
+    )
+    assert unknown_client.status_code == 404
 
 
 async def test_adjustment_validation_and_scope(

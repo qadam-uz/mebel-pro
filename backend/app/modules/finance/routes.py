@@ -13,7 +13,9 @@ from app.modules.finance.api import (
     create_expense,
     create_income,
     finance_summary,
+    get_client_statement,
     get_supplier_statement,
+    list_client_debts,
     list_expenses,
     list_incomes,
     list_supplier_debts,
@@ -210,6 +212,38 @@ async def supplier_debt_statement(
         db,
         principal=principal,
         supplier_id=supplier_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/debts/clients", response_model=DebtListResponse)
+async def client_debts_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+    only_with_debt: bool = True,
+) -> DebtListResponse:
+    return await list_client_debts(
+        db,
+        principal=principal,
+        search=search,
+        only_with_debt=only_with_debt,
+    )
+
+
+@router.get("/debts/clients/{client_id}/statement", response_model=DebtStatementResponse)
+async def client_debt_statement(
+    client_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> DebtStatementResponse:
+    return await get_client_statement(
+        db,
+        principal=principal,
+        client_id=client_id,
         date_from=date_from,
         date_to=date_to,
     )

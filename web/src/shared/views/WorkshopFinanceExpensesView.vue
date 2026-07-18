@@ -591,11 +591,14 @@ onMounted(async () => {
     refresh(),
   ])
   // The Qarzdorlik statement's «To'lov qilish» deep-links here with the
-  // supplier pre-picked; the query is consumed once and cleared.
+  // counterparty pre-picked; the query is consumed once and cleared.
   if (route.query.create === 'expense') {
     openCreateExpense()
     const supplierId = route.query.supplier_id
     if (typeof supplierId === 'string') expenseForm.supplierId = supplierId
+    void router.replace({ path: route.path })
+  } else if (route.query.create === 'income') {
+    openCreateIncome()
     void router.replace({ path: route.path })
   }
 })

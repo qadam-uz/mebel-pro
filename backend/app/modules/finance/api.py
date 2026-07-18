@@ -2,7 +2,9 @@
 
 from app.modules.finance.debts import (
     create_adjustment,
+    get_client_statement,
     get_supplier_statement,
+    list_client_debts,
     list_supplier_debts,
     void_adjustment,
 )
@@ -24,7 +26,9 @@ __all__ = [
     "create_expense",
     "create_income",
     "finance_summary",
+    "get_client_statement",
     "get_supplier_statement",
+    "list_client_debts",
     "list_expenses",
     "list_incomes",
     "list_supplier_debts",

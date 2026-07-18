@@ -115,13 +115,26 @@ Sign convention everywhere: **positive = they owe us, negative = we owe them**. 
 never shows a bare sign — it says the words (*Bizga qarzi* / *Bizning qarzimiz*), color
 paired with text.
 
-The supplier fold:
+The two folds:
 
 > supplier balance = Σ payments (recorded expenses linked to the supplier)
 > − Σ deliveries (priced stock-ins from the supplier)
 > ± Σ adjustments (recorded, signed)
+>
+> client balance = Σ order totals (status `confirmed` → `completed`, never `new` or `cancelled`)
+> − Σ payments (recorded `order_payment` incomes)
+> ± Σ adjustments (recorded, signed)
 
-Three sources feed it:
+An order joins the client fold at **confirmation** — that is when the shop commits
+materials and labour and when advances are customarily taken; a `new` order is a quote.
+A cancelled order's total leaves the fold while its recorded payments stay, so a
+prepaid-then-cancelled order truthfully shows as *our* debt (we hold the advance) until
+the accountant refunds or voids per the refund flow. The client app is unchanged: clients
+keep seeing per-order paid/balance only — no aggregate debt is exposed to clients in v1
+(a wrong debt shown to a client is a relationship-burning bug; revisit once workshops
+trust the numbers).
+
+Three sources feed the supplier side:
 
 - **Deliveries** — `stock_in` transactions carrying a purchase total
   ([`inventory.md`](../entities/inventory.md)). Pre-pricing history rows carry no price
@@ -154,7 +167,10 @@ existing report semantics.
 - **List supplier debts** — every supplier with its derived balance; search, an
   "only with debt" filter (the default), sorted most-we-owe first; totals for both
   directions.
-- **Read a statement** — the akt sverka above, for any date range.
+- **List client debts** — every client with fold activity in this workshop; same
+  filters, sorted most-they-owe first (receivables are what the accountant chases).
+- **Read a statement** — the akt sverka above, for any date range, on either side.
+  Client statements show order rows (dated by confirmation) against payment rows.
 - **Record an adjustment** — party (one supplier or one client), amount, business date
   (backdating allowed, future rejected), **mandatory note**. The form asks the direction
   in words (*Qarzimiz oshadi* / *Qarzimiz kamayadi*); the system derives the sign.
@@ -194,17 +210,19 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
     that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
     Edit (modal) · Void (dialog with a mandatory reason). No Delete.
-- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page.
-  Two summary tiles (our total debt to suppliers / theirs to us), search, the
-  "only with debt" toggle (default on), and per-row balances in words + color. A row
-  opens the **statement** (akt sverka): date range via the shared picker, columns
-  *Sana · Hujjat · Qarzimiz + · Qarzimiz − · Qoldiq* with a running balance and an
-  opening-balance row when a range is set. Statement actions: **To'lov qilish** (opens
-  the expense modal on the ledger page with the supplier pre-picked) and **Tuzatish
-  kiritish** (the adjustment form — direction in words, amount, date, mandatory note);
-  adjustment rows carry their own void action. The dashboard adds a
-  *Ta'minotchilarga qarzimiz* KPI tile, and the Ombor suppliers tab shows each
-  supplier's balance to users who could open this page anyway.
+- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page,
+  two tabs: **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
+  directions), search, the "only with debt" toggle (default on), and per-row balances in
+  words + color. A row opens the **statement** (akt sverka): date range via the shared
+  picker, chronological rows with a running balance and an opening-balance row when a
+  range is set — supplier statements show deliveries against payments, client statements
+  show order rows against payments. Statement actions: **To'lov qilish** (deep-links to
+  the ledger page — the expense modal with the supplier pre-picked, or the income modal
+  on the client side) and **Tuzatish kiritish** (the adjustment form — direction in
+  words per side, amount, date, mandatory note); adjustment rows carry their own void
+  action. The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
+  tiles, and the Ombor suppliers tab shows each supplier's balance to users who could
+  open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per
