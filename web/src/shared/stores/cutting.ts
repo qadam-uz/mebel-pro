@@ -107,6 +107,9 @@ export interface CuttingDraft {
   preferred_branch_id: string | null
   parts_snapshot: CuttingPart[]
   chosen_result_id: string | null
+  // Set only on an order's revision draft — the editor switches to revision
+  // mode (orders.md "Revising a placed order") when present.
+  revision_of_order_id: string | null
   created_at: string
   updated_at: string
   results: CuttingResult[]

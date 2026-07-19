@@ -145,6 +145,9 @@ class CuttingDraftResponse(APIModel):
     preferred_branch_id: uuid.UUID | None
     parts_snapshot: list[dict[str, Any]]
     chosen_result_id: uuid.UUID | None
+    # Set only on an order's revision draft (orders.md: "Revising a placed
+    # order") — the editor switches to revision mode when present.
+    revision_of_order_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     results: list[CuttingResultResponse] = Field(default_factory=list)

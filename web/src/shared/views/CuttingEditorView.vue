@@ -45,6 +45,7 @@ import {
   type CuttingPart,
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
+import type { OrderDetail } from '@/shared/stores/orders'
 import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
 const route = useRoute()
@@ -131,6 +132,23 @@ const boundOrderId = computed(
   () => draft.value?.results.find((result) => result.order_id)?.order_id ?? null,
 )
 const isReadOnly = computed(() => boundOrderId.value !== null)
+// Revision mode (orders.md "Revising a placed order"): the draft edits a placed
+// order — the strip and the results CTA switch to the revision flow. The order
+// context loads lazily and non-fatally; the editor works without it.
+const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null)
+const revisionOrder = ref<OrderDetail | null>(null)
+watch(
+  revisionOrderId,
+  async (value) => {
+    if (!value || !adapter.orderRevision) {
+      revisionOrder.value = null
+      return
+    }
+    if (revisionOrder.value?.id === value) return
+    revisionOrder.value = await adapter.orderRevision.loadOrder(value).catch(() => null)
+  },
+  { immediate: true },
+)
 const hasImportedMapResult = computed(
   () =>
     draft.value?.results.some(
@@ -140,9 +158,11 @@ const hasImportedMapResult = computed(
 // The active branch pre-filter: the local pick while unsaved, the draft's saved
 // preference otherwise. Every branch-dependent read routes through this.
 const activeBranchId = computed(() => {
-  // Fixed-branch mode locks every branch-dependent read to the app context.
-  if (fixedBranch.value) return fixedBranch.value.id
-  return isNewDraft.value ? localBranchId.value : (draft.value?.preferred_branch_id ?? null)
+  // Fixed-branch mode locks an UNSAVED editor to the app context; a saved
+  // workshop draft prefers its own frozen branch — a revision draft is locked
+  // to the order's branch, which may differ from the current topbar context.
+  if (isNewDraft.value) return fixedBranch.value?.id ?? localBranchId.value
+  return draft.value?.preferred_branch_id ?? fixedBranch.value?.id ?? null
 })
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
@@ -1295,10 +1315,42 @@ onBeforeRouteLeave(() => {
       </RouterLink>
 
       <fieldset :disabled="isReadOnly" class="contents">
+        <!-- Revision strip: this draft edits a placed order (orders.md
+             "Revising a placed order") — always name the order being revised. -->
+        <section
+          v-if="isWorkshopScope && revisionOrderId"
+          class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
+        >
+          <span
+            class="grid size-6 shrink-0 place-items-center rounded-md bg-accent-soft text-accent"
+            aria-hidden="true"
+          >
+            <Icon name="pencil" class="size-4" />
+          </span>
+          <div class="min-w-0 flex-1">
+            <b class="text-ink">
+              {{
+                revisionOrder
+                  ? `${revisionOrder.order_number} tahrirlanmoqda`
+                  : 'Buyurtma tahrirlanmoqda'
+              }}
+            </b>
+            <span v-if="revisionOrder" class="ml-2 text-xs text-ink-muted">{{
+              revisionOrder.contact_name
+            }}</span>
+          </div>
+          <RouterLink
+            :to="rolePath(adapter.paths.orderDetail(String(revisionOrderId)))"
+            class="text-xs font-bold text-accent"
+          >
+            Buyurtmaga qaytish →
+          </RouterLink>
+        </section>
+
         <!-- Walk-in identity strip (workshop scope only): staff always sees who
              the order is being created for. -->
         <section
-          v-if="isWorkshopScope && cutting.walkInClient"
+          v-if="isWorkshopScope && cutting.walkInClient && !revisionOrderId"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm"
         >
           <span
@@ -1328,7 +1380,11 @@ onBeforeRouteLeave(() => {
             i
           </span>
           <div class="min-w-0 flex-1">
-            <b class="text-ink">{{ fixedBranch.name }}</b>
+            <!-- A revision is locked to the ORDER's branch, which may differ
+                 from the topbar context the adapter froze at mount. -->
+            <b class="text-ink">{{
+              revisionOrder ? revisionOrder.branch_name : fixedBranch.name
+            }}</b>
           </div>
         </section>
 
@@ -1696,7 +1752,12 @@ onBeforeRouteLeave(() => {
         v-if="draft && (draft.results.length > 0 || optimizeError)"
         :draft="draft"
         :optimize-error="optimizeError"
-        :checkout-path="adapter.paths.checkout(draft.id)"
+        :checkout-path="
+          revisionOrderId && adapter.orderRevision
+            ? adapter.orderRevision.reviewPath(draft.id)
+            : adapter.paths.checkout(draft.id)
+        "
+        :checkout-label="revisionOrderId ? 'O\'zgarishlarni saqlash' : undefined"
         :branch-id="activeBranchId"
         :quote-for-draft="adapter.quoteForDraft"
         v-model:active-result-id="activeResultId"

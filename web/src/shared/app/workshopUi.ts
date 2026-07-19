@@ -89,6 +89,12 @@ export const workshopErrorMessages: Record<string, string> = {
   order_action_failed: "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",
   order_version_conflict:
     "Buyurtma boshqa joyda o'zgargan. Ma'lumot yangilandi, qayta urinib ko'ring.",
+  order_edit_not_allowed:
+    "Bu buyurtmani endi tahrirlab bo'lmaydi — ishlab chiqarish boshlangan yoki buyurtma yopilgan.",
+  order_revision_not_found: 'Bu buyurtmada ochiq tahrir topilmadi.',
+  order_revision_branch_locked:
+    "Tahrir buyurtmaning filialida qoladi — filialni o'zgartirib bo'lmaydi.",
+  order_revision_failed: "Tahrirni boshlab bo'lmadi. Qayta urinib ko'ring.",
   cutting_complete_failed: "Kesishni tugatib bo'lmadi. Qayta urinib ko'ring.",
   banding_complete_failed: "Krom ishini tugatib bo'lmadi. Qayta urinib ko'ring.",
   expense_save_failed: "Xarajatni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   discountDraftFromOrder,
+  isRevisionEvent,
   orderPhaseSteps,
   orderReworkCount,
   parseDiscountDraft,
   productionTimelineDetails,
+  revisionTimelineDetails,
   workshopOrderListActions,
   type WorkshopOrderActionAccess,
   type WorkshopOrderActionOrder,
@@ -234,5 +236,47 @@ describe('workshop order detail helpers', () => {
         (id) => id,
       ),
     ).toEqual(['Bajardi: worker-2', 'Krom sarfi: 3 m'])
+  })
+
+  it('names a same-status edited event and summarizes its metadata', () => {
+    const formatMoney = (tiyin: number) => `${tiyin / 100} so'm`
+    const edited = {
+      from_status: 'confirmed' as const,
+      to_status: 'confirmed' as const,
+      metadata: {
+        edited: true,
+        previous_total_tiyin: 300_000,
+        total_tiyin: 450_000,
+        discount_cleared_tiyin: 10_000,
+        edger_assignment_cleared: true,
+      },
+    }
+    expect(isRevisionEvent(edited)).toBe(true)
+    expect(revisionTimelineDetails(edited, formatMoney)).toEqual([
+      "Narx: 3000 so'm → 4500 so'm",
+      "Chegirma bekor qilindi: 100 so'm",
+      'Krom tayinlovi olib tashlandi',
+    ])
+
+    // A plain transition is untouched — no revision label, no details.
+    const transition = {
+      from_status: 'new' as const,
+      to_status: 'confirmed' as const,
+      metadata: null,
+    }
+    expect(isRevisionEvent(transition)).toBe(false)
+    expect(revisionTimelineDetails(transition, formatMoney)).toEqual([])
+
+    // An unchanged total renders no price line.
+    expect(
+      revisionTimelineDetails(
+        {
+          from_status: 'new',
+          to_status: 'new',
+          metadata: { edited: true, previous_total_tiyin: 300_000, total_tiyin: 300_000 },
+        },
+        formatMoney,
+      ),
+    ).toEqual([])
   })
 })

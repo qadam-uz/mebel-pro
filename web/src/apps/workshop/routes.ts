@@ -90,6 +90,14 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),
     meta: { title: 'Buyurtmani rasmiylashtirish', workshopAccess: { any: orderAccess } },
   },
+  // Revision review: current vs. new price before applying an order edit
+  // (docs/ref/features/orders.md "Revising a placed order").
+  {
+    path: '/workshop/orders/edit/:draft_id/review',
+    name: 'workshop-order-edit-review',
+    component: () => import('@/shared/views/WorkshopOrderEditReviewView.vue'),
+    meta: { title: 'Tahrirni saqlash', workshopAccess: { any: orderAccess } },
+  },
   {
     path: '/workshop/orders/:order_id',
     name: 'workshop-order-detail',

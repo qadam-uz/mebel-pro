@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 import uuid
@@ -37,13 +38,14 @@ from app.models.enums import (
 from app.modules.access.api import can_access_branch, seed_preferred_branch_if_missing
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufacturer, Material
-from app.modules.cutting.api import cutting_result_response
+from app.modules.cutting.api import cutting_result_response, get_workshop_draft
 from app.modules.cutting.contracts import (
     CuttingDraft,
     CuttingPanel,
     CuttingPlacement,
     CuttingResult,
 )
+from app.modules.cutting.schemas import CuttingDraftResponse
 from app.modules.finance.contracts import Income
 from app.modules.inventory.api import consume_order_stock, restore_order_stock
 from app.modules.inventory.contracts import StockItem
@@ -73,6 +75,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderCompleteRequest,
     WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
+    WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
     WorkshopWorkerOption,
 )
@@ -323,13 +326,19 @@ async def _workshop_orderable_draft_result(
     *,
     workshop_id: uuid.UUID,
     draft_id: uuid.UUID,
+    allow_revision: bool = False,
 ) -> tuple[CuttingDraft, CuttingResult]:
     """Draft-scope guard for the workshop path: the draft must have been minted
     via THIS workshop (created_via_workshop_id), else 404 — mirrors the client
-    path's ownership check, which lives here (not the route) for both surfaces."""
+    path's ownership check, which lives here (not the route) for both surfaces.
+    A revision draft never places a NEW order (its only exit is applying back
+    onto its order), so placement keeps `allow_revision` False; the quote path
+    allows it — the revision review screen prices through the same endpoint."""
     draft = await db.get(CuttingDraft, draft_id)
     if draft is None or draft.created_via_workshop_id != workshop_id:
         raise APIError("cutting_result_not_usable", "Cutting result is not usable", status_code=404)
+    if draft.revision_of_order_id is not None and not allow_revision:
+        raise APIError("cutting_result_not_usable", "Cutting result is not usable")
     if draft.chosen_result_id is None:
         raise APIError("cutting_result_not_usable", "Choose a cutting result first")
     result = await db.get(CuttingResult, draft.chosen_result_id)
@@ -354,6 +363,7 @@ async def quote_workshop_order(
         db,
         workshop_id=workshop.id,
         draft_id=draft_id,
+        allow_revision=True,
     )
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     return _build_quote_response(draft_id, branch, pricing)
@@ -457,6 +467,167 @@ async def place_workshop_order(
         OrderDetailResponse,
         await _order_response(db, order, include_detail=True),
     )
+
+
+async def begin_order_edit(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+) -> CuttingDraftResponse:
+    """Create — or resume — the order's revision draft (orders.md: "Revising a
+    placed order"): a staff-scoped scratchpad seeded from the confirmed result's
+    parts, branch-locked to the order's branch. Idempotent; the order itself is
+    untouched until the revision is applied."""
+    order = await _locked_workshop_order_for_action(
+        db, principal=principal, order_id=order_id, permission=Permission.MANAGE_ORDERS
+    )
+    _expect_editable_status(order)
+    existing_id = await db.scalar(
+        select(CuttingDraft.id).where(CuttingDraft.revision_of_order_id == order.id)
+    )
+    if existing_id is not None:
+        return await get_workshop_draft(db, principal=principal, draft_id=existing_id)
+    result = await _order_result(db, order)
+    draft = CuttingDraft(
+        client_id=order.client_id,
+        preferred_branch_id=order.branch_id,
+        created_via_workshop_id=order.workshop_id,
+        revision_of_order_id=order.id,
+        parts_snapshot=copy.deepcopy(result.parts_snapshot),
+    )
+    db.add(draft)
+    await db.flush()
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.edit.begin",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Started a revision of {order.order_number}",
+        details={"revision_draft_id": str(draft.id)},
+    )
+    return await get_workshop_draft(db, principal=principal, draft_id=draft.id)
+
+
+async def apply_order_edit(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderEditApplyRequest,
+) -> OrderDetailResponse:
+    """Apply the order's revision draft atomically (orders.md: "Revising a
+    placed order"): rebind the cutting result, replace the item snapshots,
+    re-freeze pricing at the branch's current rates, clear the discount, and
+    record the edit on the append-only event spine. Status never changes."""
+    order = await _locked_workshop_order_for_action(
+        db, principal=principal, order_id=order_id, permission=Permission.MANAGE_ORDERS
+    )
+    _expect_version(order, payload.version)
+    _expect_editable_status(order)
+    draft = await db.scalar(
+        select(CuttingDraft).where(CuttingDraft.revision_of_order_id == order.id)
+    )
+    if draft is None:
+        raise APIError("order_revision_not_found", "Order has no open revision", status_code=404)
+    _, result = await _workshop_orderable_draft_result(
+        db, workshop_id=order.workshop_id, draft_id=draft.id, allow_revision=True
+    )
+    pricing = await _price_result(db, branch_id=order.branch_id, result=result)
+    reason = _optional_text(payload.reason)
+    now = datetime.now(UTC)
+
+    old_result = await _order_result(db, order)
+    previous_total = order.total_tiyin
+    previous_discount = order.discount_tiyin
+    previous_result_id = str(old_result.id)
+    # The superseded result must release the unique order binding
+    # (uq_cutting_results_order is immediate) before the new one takes it.
+    old_result.order_id = None
+    await db.flush()
+
+    result.status = CuttingResultStatus.CONFIRMED
+    result.order_id = order.id
+    result.draft_id = None
+    result.confirmed_at = now
+    order.cutting_result_id = result.id
+    draft.chosen_result_id = None
+    await db.flush()
+    await _delete_other_candidate_results(db, draft_id=draft.id, keep_result_id=result.id)
+    await _delete_cutting_result(db, old_result)
+    await db.delete(draft)
+
+    await db.execute(delete(OrderItem).where(OrderItem.order_id == order.id))
+    _add_order_items(db, order=order, pricing=pricing)
+
+    discount_cleared = previous_discount > 0
+    order.discount_tiyin = 0
+    order.discount_reason = None
+    order.discount_applied_by_user_id = None
+    order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
+    order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
+    order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
+    order.total_tiyin = pricing.total_tiyin
+
+    edger_cleared = False
+    if order.assigned_edger_user_id is not None and not _parts_have_banding(result.parts_snapshot):
+        order.assigned_edger_user_id = None
+        order.edger_assigned_at = None
+        edger_cleared = True
+
+    _bump_order(order)
+    metadata: dict[str, Any] = {
+        "edited": True,
+        "previous_total_tiyin": previous_total,
+        "total_tiyin": order.total_tiyin,
+        "previous_cutting_result_id": previous_result_id,
+        "cutting_result_id": str(result.id),
+    }
+    if discount_cleared:
+        metadata["discount_cleared_tiyin"] = previous_discount
+    if edger_cleared:
+        metadata["edger_assignment_cleared"] = True
+    await _append_order_event(
+        db,
+        order=order,
+        from_status=order.status,
+        to_status=order.status,
+        actor_type=ActorType.WORKSHOP_USER,
+        actor_user_id=principal.principal_id,
+        reason=reason,
+        metadata=metadata,
+    )
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.edit",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Edited order {order.order_number}",
+        details=metadata,
+    )
+    db.add(
+        Notification(
+            recipient_type=AuthenticatedPrincipalType.CLIENT,
+            recipient_id=order.client_id,
+            event_code="order.updated",
+            entity_type="order",
+            entity_id=order.id,
+            payload={
+                "order_number": order.order_number,
+                "previous_total_tiyin": previous_total,
+                "total_tiyin": order.total_tiyin,
+            },
+            created_at=now,
+        )
+    )
+    await db.flush()
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
 
 def _build_quote_response(
@@ -832,7 +1003,10 @@ async def get_workshop_order(
     order_id: uuid.UUID,
 ) -> OrderDetailResponse:
     order = await _workshop_order_in_scope(db, principal=principal, order_id=order_id)
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    return cast(
+        OrderDetailResponse,
+        await _order_response(db, order, include_detail=True, include_revision=True),
+    )
 
 
 async def get_workshop_order_cutting_result(
@@ -1901,6 +2075,7 @@ async def _order_response(
     *,
     include_detail: bool,
     settlement_visible: bool = True,
+    include_revision: bool = False,
 ) -> OrderDetailResponse | OrderSummaryResponse:
     client = await db.get(Client, order.client_id)
     branch = await db.get(Branch, order.branch_id)
@@ -1951,6 +2126,13 @@ async def _order_response(
         ],
         cutting_result=await cutting_result_response(db, result) if result is not None else None,
         settlement=await _order_settlement(db, order) if settlement_visible else None,
+        revision_draft_id=(
+            await db.scalar(
+                select(CuttingDraft.id).where(CuttingDraft.revision_of_order_id == order.id)
+            )
+            if include_revision
+            else None
+        ),
     )
 
 
@@ -2419,6 +2601,20 @@ async def _delete_other_candidate_results(
     await db.execute(delete(CuttingResult).where(CuttingResult.id.in_(result_ids)))
 
 
+async def _delete_cutting_result(db: AsyncSession, result: CuttingResult) -> None:
+    """Delete one loaded cutting result with its panels/placements — the
+    superseded confirmed result after a revision apply."""
+    panel_ids = (
+        await db.scalars(select(CuttingPanel.id).where(CuttingPanel.cutting_result_id == result.id))
+    ).all()
+    if panel_ids:
+        await db.execute(
+            delete(CuttingPlacement).where(CuttingPlacement.cutting_panel_id.in_(panel_ids))
+        )
+        await db.execute(delete(CuttingPanel).where(CuttingPanel.id.in_(panel_ids)))
+    await db.delete(result)
+
+
 async def _locked_order(db: AsyncSession, order_id: uuid.UUID) -> Order:
     order = await db.scalar(select(Order).where(Order.id == order_id).with_for_update())
     if order is None:
@@ -2758,6 +2954,17 @@ def _expect_version(order: Order, version: int) -> None:
 def _expect_status(order: Order, allowed: set[OrderStatus]) -> None:
     if order.status not in allowed:
         raise APIError("invalid_order_status", "Order status does not allow this action")
+
+
+def _expect_editable_status(order: Order) -> None:
+    if order.status not in {OrderStatus.NEW, OrderStatus.CONFIRMED}:
+        raise APIError(
+            "order_edit_not_allowed", "Order can be edited only before production starts"
+        )
+
+
+def _parts_have_banding(parts: list[dict[str, Any]]) -> bool:
+    return any(part.get(field) is not None for part in parts for field in _edge_fields())
 
 
 def _bump_order(order: Order) -> None:

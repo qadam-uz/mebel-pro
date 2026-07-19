@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-19
 order: 30
 ---
 
@@ -49,8 +49,9 @@ Set at creation:
 - **Handover — pickup only.** The client collects at the branch. Delivery is out of v1
   ([`scope.md`](../../scope.md)).
 
-There is **no post-placement modification.** If anything is wrong, the order is cancelled
-(with a reason) and the client re-cuts and re-orders — one rule, no re-pricing machinery.
+Post-placement modification is **workshop-side only**, pre-production — a staff **revision**
+(see [Revising a placed order](#revising-a-placed-order)). The client's own path stays
+cancel-and-reorder while `new`.
 
 ## Staff-created orders (walk-in clients)
 
@@ -94,6 +95,54 @@ would break the append-only spine every timeline and report reads — so both ev
 written atomically, by the same actor. Revisit if workshops ask for a second-person review
 of staff-placed orders — then drop the auto-confirm and land staff orders at `new` like any
 other.
+
+## Revising a placed order
+
+Staff holding `manage_orders` on the order's branch may revise the order's **cutting
+content** — parts, dimensions, quantities, materials, per-side edge picks — while the order
+is `new` or `confirmed`. From `cutting` onward nothing is editable (material may already be
+cut; if the start itself was the mistake, revert first). The client has no self-serve edit —
+their path stays cancel-and-reorder while `new`; revisit if workshops field frequent
+pre-approval "change one size" calls that a phone-driven staff revision doesn't cover.
+
+The revision is a **scratchpad draft, applied atomically**:
+
+1. **Edit** on the order detail creates — or resumes — the order's **revision draft**: a
+   staff-scoped cutting draft seeded from the confirmed result's parts, branch-locked to the
+   order's branch, linked back to the order (`revision_of_order_id`,
+   [`cutting` entities](../entities/cutting.md)). One revision per order; Edit is
+   idempotent. The order itself is untouched — approving, assigning, discounting, and
+   cancelling all stay available while a revision sits open.
+2. Staff edit in the **same shared cutting editor** as the walk-in flow — parts UI,
+   optimise, result pick — with a persistent strip naming the order being revised.
+3. **Review & save** shows the current frozen price next to the new quote at the order's
+   branch. Saving atomically: rebinds the order to the new chosen result (the superseded
+   confirmed result and its panels are deleted), replaces the item snapshots, **re-freezes
+   pricing at the branch's current rates**, clears any discount, clears the edger assignment
+   when no side needs banding any more, bumps the order `version`, appends an `edited`
+   status event (same-status, staff actor, old/new totals in metadata), mirrors to the audit
+   log, and notifies the client (`order.updated`).
+4. **Discard** deletes the revision draft; the order never notices.
+
+Rules:
+
+- **Same branch, same client — always.** A different branch or client is a cancel +
+  re-create; keeping both fixed lets one quote path and one carry check serve create and
+  revise alike.
+- **Re-pricing is whole-snapshot, at current rates.** A revision replaces the frozen price;
+  it never patches line items. If catalog prices moved since placement the new freeze
+  reflects them — the review screen makes the delta explicit before saving.
+- **The discount never survives a revision.** It was granted against the old contents;
+  re-apply it (reason + audit, as always) if still warranted.
+- **Save is guarded like a transition**: optimistic `version` check, status re-checked at
+  save (`order_edit_not_allowed` once production started or the order went terminal), and
+  the same pricing/carry error codes as placement. A revision that outlived its window can
+  only be discarded.
+- **Status never changes on a revision** — `new` stays `new`, `confirmed` stays `confirmed`.
+  The staffer saving the revision has just re-verified the content; forcing a re-approve
+  would be the same ceremony the staff-create auto-confirm avoids.
+- **A revision draft never places a new order.** Checkout rejects it; its only exit is
+  apply or discard. It is invisible to the client like any staff-minted draft.
 
 ## The state machine
 
@@ -247,8 +296,9 @@ counter. No in-system payment, no gateway, no payment-driven status.
 
 The system computes everything; the **discount is the only human input** and needs a
 reason. Frozen onto the order at creation against the chosen branch's rates; later catalog
-or pricing changes never reach an existing order (there is no re-pricing — there is no
-modification).
+or pricing changes never reach an existing order on their own — the one re-pricing path is
+a workshop [revision](#revising-a-placed-order), which replaces the whole freeze at the
+branch's current rates.
 
 | Component | When | Source |
 |---|---|---|
@@ -380,13 +430,21 @@ Permission names below are the per-branch grants from
     locked branch, contact prefilled from the resolved client, **Place order**).
 
   Success routes to the order detail, already `confirmed`.
+- **Revision — edit a placed order** (`manage_orders`, status `new` / `confirmed`) — **Edit**
+  on the order detail opens the shared editor on the order's revision draft
+  (`/workshop/orders/cutting/:draft_id`, with a strip naming the order); the editor's
+  forward action goes to `/workshop/orders/edit/:draft_id/review` — current vs. new price
+  side by side, the discount-reset note when a discount is set, **Save** (applies
+  atomically, returns to the detail) and **Discard**. While a revision sits open the order
+  detail surfaces it (resume + discard); mechanics and guards:
+  [Revising a placed order](#revising-a-placed-order).
 - **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client
   mini-card link, status badge, total) with the status-appropriate actions:
 
   | Status | Actions | Permission |
   |---|---|---|
-  | `new` | Approve (→ `confirmed`) · Cancel (reason) · Apply discount (reason) | `manage_orders` |
-  | `confirmed` | Assign / change cutter and edger (metadata) · Start cutting (→ `cutting`) · Apply discount · Cancel (reason) | assign/discount/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
+  | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount (reason) | `manage_orders` |
+  | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount · Cancel (reason) | assign/edit/discount/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
   | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
   | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
   | `ready` | Mark collected (→ `completed`) · Revert → `edge_banding`/`cutting` (reason) · Cancel (reason) | `manage_orders` |
@@ -496,8 +554,19 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Client disputes a recorded payment** — out-of-system; the client calls the workshop
   and the accountant corrects the income in the finance module.
 - **Client re-cuts from the same idea after placing** → the existing order's confirmed
-  result stays authoritative. v1 has no modification path; the client cancels and places
-  a new order if the cutting was wrong.
+  result stays authoritative. v1 has no client modification path; the workshop can
+  [revise pre-production](#revising-a-placed-order), otherwise the client cancels and
+  places a new order.
+- **Revision saved after production started or the order went terminal** →
+  `order_edit_not_allowed`; the leftover revision draft can only be discarded (the order
+  detail keeps surfacing it with a discard action at any status).
+- **Concurrent revision save and another staff action** → optimistic-lock conflict on the
+  loser; refresh and retry.
+- **Revision removes every banded side** → the edger assignment is cleared with the save;
+  banding added back later re-assigns as usual.
+- **Revision applied after the client already paid** → the settlement summary recomputes
+  against the new total; an overpayment is corrected by the accountant in the finance
+  module, like any recorded-payment dispute.
 
 ## Next
 

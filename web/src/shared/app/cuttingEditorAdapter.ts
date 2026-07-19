@@ -1,6 +1,6 @@
 import type { InjectionKey } from 'vue'
 
-import { useOrdersStore, type OrderQuote } from '@/shared/stores/orders'
+import { useOrdersStore, type OrderDetail, type OrderQuote } from '@/shared/stores/orders'
 
 /**
  * Role adapter for the shared cutting editor (`CuttingEditorView.vue`).
@@ -40,6 +40,17 @@ export interface CuttingEditorAdapter {
   useProfileDefaultBranch: boolean
   /** Role-scoped price quote for the draft's chosen result (client vs workshop endpoint). */
   quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
+  /**
+   * Order-revision support (workshop only): present when the role can edit a
+   * placed order through this editor (orders.md "Revising a placed order").
+   * `reviewPath` replaces the checkout target for a revision draft; `loadOrder`
+   * feeds the "editing order #N" strip. Absent on the client adapter — clients
+   * never see revision drafts.
+   */
+  orderRevision?: {
+    reviewPath(draftId: string): string
+    loadOrder(orderId: string): Promise<OrderDetail>
+  }
 }
 
 export type CuttingEditorAdapterFactory = () => CuttingEditorAdapter
