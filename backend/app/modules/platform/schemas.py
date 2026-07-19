@@ -158,6 +158,11 @@ class PlatformUserTempPasswordResponse(APIModel):
     temp_password: str
 
 
+class WorkshopOwnerTempPasswordResponse(APIModel):
+    owner: WorkshopUserSummary
+    temp_password: str
+
+
 class BlockPlatformUserRequest(BaseModel):
     reason: str
 

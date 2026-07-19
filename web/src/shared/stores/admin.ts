@@ -49,6 +49,11 @@ export interface PlatformWorkshopDetail {
   block_reason: string | null
 }
 
+export interface WorkshopOwnerTempPasswordResponse {
+  owner: { id: string; login: string }
+  temp_password: string
+}
+
 export interface PlatformOverview {
   workshops_total: number
   workshops_active: number
@@ -316,6 +321,7 @@ export const useAdminStore = defineStore('admin', () => {
   const materials = ref<Material[]>([])
   const platformUsers = ref<PlatformUser[]>([])
   const lastPlatformUserSecret = ref<PlatformUserTempPasswordResponse | null>(null)
+  const lastOwnerSecret = ref<WorkshopOwnerTempPasswordResponse | null>(null)
   const jobs = ref<PlatformJobSummary[]>([])
   const errors = ref<ErrorRecord[]>([])
   const errorDetail = ref<ErrorRecordDetail | null>(null)
@@ -346,6 +352,7 @@ export const useAdminStore = defineStore('admin', () => {
   function clearSecrets() {
     lastProvision.value = null
     lastPlatformUserSecret.value = null
+    lastOwnerSecret.value = null
   }
 
   const auth = useAuthStore()
@@ -629,6 +636,15 @@ export const useAdminStore = defineStore('admin', () => {
     return lastPlatformUserSecret.value
   }
 
+  async function resetWorkshopOwnerPassword(workshopId: string) {
+    lastOwnerSecret.value = await api.post<WorkshopOwnerTempPasswordResponse>(
+      `/platform/workshops/${workshopId}/owner/reset-password`,
+      undefined,
+      authInit(),
+    )
+    return lastOwnerSecret.value
+  }
+
   async function blockPlatformUser(id: string, reason: string) {
     const updated = await api.post<PlatformUser>(
       `/platform/users/${id}/block`,
@@ -778,6 +794,7 @@ export const useAdminStore = defineStore('admin', () => {
     materials.value = []
     platformUsers.value = []
     lastPlatformUserSecret.value = null
+    lastOwnerSecret.value = null
     jobs.value = []
     errors.value = []
     errorDetail.value = null
@@ -807,6 +824,7 @@ export const useAdminStore = defineStore('admin', () => {
     materials,
     platformUsers,
     lastPlatformUserSecret,
+    lastOwnerSecret,
     jobs,
     errors,
     errorDetail,
@@ -846,6 +864,7 @@ export const useAdminStore = defineStore('admin', () => {
     createPlatformUser,
     updatePlatformUser,
     resetPlatformUserPassword,
+    resetWorkshopOwnerPassword,
     blockPlatformUser,
     unblockPlatformUser,
     loadJobs,

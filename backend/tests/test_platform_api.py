@@ -328,6 +328,76 @@ async def test_block_and_unblock_workshop_revoke_staff_sessions_but_not_client_s
     assert remaining_owner_sessions == 1
 
 
+async def test_platform_resets_workshop_owner_password(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_token = await _platform_access_token(client, db_session)
+    provisioned = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={**_provision_payload(), "temp_password": "OwnerTemp123"},
+    )
+    assert provisioned.status_code == 201
+    workshop_id = provisioned.json()["workshop"]["id"]
+    owner_login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "OwnerTemp123"},
+    )
+    owner_access = owner_login.json()["access_token"]
+
+    forbidden = await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/owner/reset-password",
+        headers=_auth(owner_access),
+    )
+    missing = await client.post(
+        f"/api/v1/platform/workshops/{uuid.uuid4()}/owner/reset-password",
+        headers=_auth(access_token),
+    )
+    reset = await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/owner/reset-password",
+        headers=_auth(access_token),
+    )
+    old_password_login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": "OwnerTemp123"},
+    )
+    new_password_login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner", "password": reset.json()["temp_password"]},
+    )
+    audit_count = await db_session.scalar(
+        select(func.count())
+        .select_from(ActionLog)
+        .where(ActionLog.action == "platform.workshop.owner.password.reset")
+    )
+    # The documented support path: reset still works while the workshop is blocked.
+    block = await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/block",
+        headers=_auth(access_token),
+        json={"reason": "Contract paused"},
+    )
+    reset_while_blocked = await client.post(
+        f"/api/v1/platform/workshops/{workshop_id}/owner/reset-password",
+        headers=_auth(access_token),
+    )
+
+    assert forbidden.status_code == 403
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "workshop_not_found"
+    assert reset.status_code == 200
+    assert reset.json()["owner"]["login"] == "owner"
+    assert reset.json()["owner"]["password_reset_required"] is True
+    assert reset.json()["temp_password"]
+    assert (await client.get("/api/v1/auth/me", headers=_auth(owner_access))).status_code == 401
+    assert old_password_login.status_code == 401
+    assert new_password_login.status_code == 200
+    assert new_password_login.json()["me"]["password_reset_required"] is True
+    assert audit_count == 1
+    assert block.status_code == 200
+    assert reset_while_blocked.status_code == 200
+
+
 async def test_platform_routes_reject_non_platform_principals(
     client: AsyncClient,
     db_session: AsyncSession,

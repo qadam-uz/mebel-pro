@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-07-19
 order: 20
 ---
 
@@ -209,9 +209,15 @@ A platform operator provisions a workshop atomically with its first user and fir
   immediately; their next login is rejected. Clients are unaffected. Open orders **freeze** —
   staff can't act because they can't log in; no automatic transitions. Unblocking does **not**
   restore sessions — users log in again.
+- **Reset the owner's password.** The operator is the owner's only recovery path: the
+  owner-side staff reset refuses the owner as a target, so a locked-out owner has nowhere
+  else to go. The reset issues a new auto-generated temp password (shown **once**), sets
+  `password_reset_required`, revokes all the owner's sessions, and is audited. It works on a
+  blocked workshop too — unblock and reset are often the same support call, and login stays
+  gated by the block either way.
 
 The operator's **only** workshop write actions are: provision (workshop + first branch + first
-owner, atomic), block, and unblock. The operator does **not** edit the workshop profile or the
+owner, atomic), block, unblock, and owner password reset. The operator does **not** edit the workshop profile or the
 owner's profile/contact fields (name / phone) — that is owner territory and there is no
 operator path to it. Workshop _editing_ (profile, settings) lives in
 [`workshop.md`](workshop.md); owner-identity edits are owner self-service / owner-managed,
@@ -227,6 +233,10 @@ need, it must be specified here first — it is deliberately absent in v1.
   sign-in and lands with the first branch available in branch context.
 - **Block** (in the workshop detail) — mandatory reason; warning that staff sessions are
   revoked and open orders freeze; destructive-styled.
+- **Reset owner password** (in the workshop detail, next to the owner login) —
+  destructive-styled confirmation naming the owner login and that all their sessions are
+  revoked; on success, the standard one-time-secret confirmation with the login + temp
+  password.
 
 All provisioning, create-user, reset-password, and block dialogs move focus into the dialog, trap
 focus while open, and return focus to the trigger on close. One-time-secret confirmations expose a

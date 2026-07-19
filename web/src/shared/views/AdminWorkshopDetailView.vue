@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -17,7 +17,9 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
+import AdminSecretModal from '@/shared/components/AdminSecretModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
@@ -94,6 +96,43 @@ function openBlockModal() {
   clearFieldErrors(blockFieldErrors)
   blockModalOpen.value = true
 }
+
+// Operator-side recovery for a locked-out owner: confirm → one-time temp
+// password reveal (AB-03 — the secret never outlives the modal / session).
+const resetConfirmOpen = ref(false)
+const resetting = ref(false)
+const secretOpen = ref(false)
+
+const secretRows = computed(() => {
+  const secret = admin.lastOwnerSecret
+  if (!secret) return []
+  return [
+    { label: 'Login', value: secret.owner.login },
+    { label: 'Vaqtinchalik parol', value: secret.temp_password },
+  ]
+})
+
+async function confirmOwnerReset() {
+  if (!admin.detail) return
+  resetting.value = true
+  try {
+    await admin.resetWorkshopOwnerPassword(admin.detail.workshop.id)
+    resetConfirmOpen.value = false
+    secretOpen.value = true
+  } catch {
+    resetConfirmOpen.value = false
+    toast.danger("Egasining parolini tiklab bo'lmadi")
+  } finally {
+    resetting.value = false
+  }
+}
+
+function closeSecret() {
+  secretOpen.value = false
+  admin.clearSecrets()
+}
+
+onBeforeUnmount(() => admin.clearSecrets())
 
 onMounted(() => admin.loadWorkshop(workshopId))
 </script>
@@ -197,8 +236,16 @@ onMounted(() => admin.loadWorkshop(workshopId))
           </div>
           <div>
             <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
-            <dd class="mt-1 text-base font-bold text-ink">
+            <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
               <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
+              <button
+                type="button"
+                class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
+                :aria-label="`${admin.detail.owner.login} egasining parolini tiklash`"
+                @click="resetConfirmOpen = true"
+              >
+                Parolni tiklash
+              </button>
             </dd>
           </div>
           <div>
@@ -352,5 +399,26 @@ onMounted(() => admin.loadWorkshop(workshopId))
         </form>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="resetConfirmOpen"
+      title="Egasining parolini tiklash"
+      :message="`${admin.detail.owner.login} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
+      confirm-label="Parolni tiklash"
+      busy-label="Tiklanmoqda"
+      cancel-label="Bekor qilish"
+      :busy="resetting"
+      danger
+      @confirm="confirmOwnerReset"
+      @cancel="resetConfirmOpen = false"
+    />
+
+    <AdminSecretModal
+      :open="secretOpen && !!admin.lastOwnerSecret"
+      title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
+      intro="Login va vaqtinchalik parolni ustaxona egasiga yetkazing. Ega birinchi kirishda uni almashtiradi."
+      :rows="secretRows"
+      @close="closeSecret"
+    />
   </section>
 </template>

@@ -71,6 +71,12 @@ class CreatedPlatformUser:
 
 
 @dataclass(frozen=True)
+class OwnerPasswordReset:
+    owner: WorkshopUser
+    temp_password: str
+
+
+@dataclass(frozen=True)
 class PlatformJobRecord:
     definition: JobDefinition
     recent_runs: list[JobRun]
@@ -390,6 +396,50 @@ async def unblock_workshop(
         action_log_id=action.id,
     )
     return workshop
+
+
+async def reset_workshop_owner_password(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    workshop_id: uuid.UUID,
+) -> OwnerPasswordReset:
+    """Operator-side recovery for a locked-out workshop owner. The owner is the
+    only workshop user the owner-side reset refuses to touch, so the platform
+    operator is their recovery path. Works on a blocked workshop too — unblock
+    and reset are often the same support call, and login stays gated by the
+    block either way."""
+    require_platform_operator(principal)
+    workshop = await db.get(Workshop, workshop_id)
+    if workshop is None:
+        raise APIError(
+            "workshop_not_found",
+            "Workshop not found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    owner = await db.get(WorkshopUser, workshop.owner_user_id)
+    if owner is None:
+        raise RuntimeError("workshop owner_user_id points to a missing owner")
+    temp_password = generate_temp_password()
+    owner.password_hash = hash_password(temp_password)
+    owner.password_reset_required = True
+    await revoke_for_principal(
+        db,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=owner.id,
+    )
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="platform.workshop.owner.password.reset",
+        entity_type="workshop_user",
+        entity_id=owner.id,
+        workshop_id=workshop.id,
+        summary=f"Reset password for workshop owner {owner.login}",
+    )
+    await db.flush()
+    await db.refresh(owner)
+    return OwnerPasswordReset(owner=owner, temp_password=temp_password)
 
 
 def require_platform_operator(principal: AuthenticatedPrincipal) -> None:
