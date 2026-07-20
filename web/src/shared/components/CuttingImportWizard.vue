@@ -77,9 +77,7 @@ const mapPartsOnlyAllowed = ref(false)
 const isXmlImport = computed(() => parsed.value?.source_format === 'bazis_xml')
 const isMapImport = computed(() => parsed.value?.source_format === 'map_2dplace')
 const isDirectParsedImport = computed(() => isXmlImport.value || isMapImport.value)
-const canCommitMapLayout = computed(
-  () => isMapImport.value && !!parsed.value?.map_layout,
-)
+const canCommitMapLayout = computed(() => isMapImport.value && !!parsed.value?.map_layout)
 const visibleSteps = computed(() => {
   if (isMapImport.value) {
     return [
@@ -266,10 +264,14 @@ async function confirmMapping() {
   loading.value = true
   error.value = null
   try {
-    const response = await parseCuttingImport(selectedFile.value, {
-      skip_rows: skipRows.value,
-      mapping: mappingPayload.value,
-    }, cutting.scope)
+    const response = await parseCuttingImport(
+      selectedFile.value,
+      {
+        skip_rows: skipRows.value,
+        mapping: mappingPayload.value,
+      },
+      cutting.scope,
+    )
     if (response.status !== 'parsed') {
       error.value = "Faylni o'qib bo'lmadi."
       return

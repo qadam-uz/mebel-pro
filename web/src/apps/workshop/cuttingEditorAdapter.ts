@@ -4,10 +4,10 @@ import { useWorkshopStore } from '@/shared/stores/workshop'
 
 /**
  * Workshop-app adapter for the shared cutting editor: a fixed branch (the
- * topbar context), staff link targets under `/workshop/orders/...`, and no
- * client-profile default. Resolved once at editor mount (the factory reads the
- * workshop store at that moment), so switching the topbar branch afterward
- * never retargets an in-progress draft.
+ * topbar context) and staff link targets under `/workshop/orders/...`.
+ * Resolved once at editor mount (the factory reads the workshop store at that
+ * moment), so switching the topbar branch afterward never retargets an
+ * in-progress draft.
  */
 export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
   const workshop = useWorkshopStore()
@@ -23,7 +23,6 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
       orderDetail: (orderId: string) => `/workshop/orders/${orderId}`,
     },
     branch: branch ? { fixed: { id: branch.id, name: branch.name } } : {},
-    useProfileDefaultBranch: false,
     quoteForDraft: (draftId, quoteBranchId) => orders.quoteWorkshopBranch(draftId, quoteBranchId),
     orderRevision: {
       reviewPath: (draftId: string) => `/workshop/orders/edit/${draftId}/review`,

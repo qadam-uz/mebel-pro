@@ -23,6 +23,7 @@ function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
     preferred_branch_id: null,
     parts_snapshot: [],
     chosen_result_id: null,
+    revision_of_order_id: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     results: [],
@@ -69,7 +70,7 @@ async function mountEditor(
   const cutting = useCuttingStore()
   cutting.currentDraft = currentDraft
   vi.spyOn(cutting, 'loadBranchOptions').mockResolvedValue()
-  vi.spyOn(cutting, 'loadMaterials').mockResolvedValue()
+  vi.spyOn(cutting, 'loadMaterials').mockResolvedValue([])
 
   const wrapper = mount(CuttingEditorView, {
     global: {
