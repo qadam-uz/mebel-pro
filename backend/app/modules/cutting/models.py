@@ -16,6 +16,9 @@ from app.models.enums import CuttingResultSource, CuttingResultStatus, enum_type
 
 class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "cutting_drafts"
+    __table_args__ = (
+        UniqueConstraint("revision_of_order_id", name="uq_cutting_drafts_revision_order"),
+    )
 
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False)
     name: Mapped[str | None] = mapped_column(nullable=True)
@@ -24,6 +27,18 @@ class CuttingDraft(UUIDPrimaryKey, Timestamped, Base):
     # drafts are hidden from the client's own draft surface until ordered and
     # do not count toward the client's draft limit.
     created_via_workshop_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshops.id"))
+    # Set when this draft is an order's revision scratchpad (orders.md: "Revising
+    # a placed order"): seeded from the order's confirmed result, branch-locked,
+    # one per order; it applies back onto its order and never places a new one.
+    revision_of_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "orders.id",
+            name="fk_cutting_drafts_revision_of_order_id",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        )
+    )
     parts_snapshot: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=False,

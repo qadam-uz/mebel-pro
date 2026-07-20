@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-09
+updated: 2026-07-18
 order: 55
 ---
 
@@ -102,6 +102,80 @@ there is no standalone finance-reports page. Read-only; visible with
 - **Net** — income − expenses.
 - **Per-branch breakdown** — the three lines above, per branch.
 
+## Debts (Qarzdorlik)
+
+Who owes whom, per counterparty — derived, never stored. **A balance is never a number
+somebody typed: it is always the sum of its story.** Every balance is a read-time fold
+over append-only ledgers; voiding any source row self-corrects the balance with no sync
+step. Debts are **workshop-level** (a supplier serves every branch) and visible only to
+the **owner and `manage_finance` grantees** — `view_finance_reports` alone does not
+unlock them.
+
+Sign convention everywhere: **positive = they owe us, negative = we owe them**. The UI
+never shows a bare sign — it says the words (*Bizga qarzi* / *Bizning qarzimiz*), color
+paired with text.
+
+The two folds:
+
+> supplier balance = Σ payments (recorded expenses linked to the supplier)
+> − Σ deliveries (priced stock-ins from the supplier)
+> ± Σ adjustments (recorded, signed)
+>
+> client balance = Σ order totals (status `confirmed` → `completed`, never `new` or `cancelled`)
+> − Σ payments (recorded `order_payment` incomes)
+> ± Σ adjustments (recorded, signed)
+
+An order joins the client fold at **confirmation** — that is when the shop commits
+materials and labour and when advances are customarily taken; a `new` order is a quote.
+A cancelled order's total leaves the fold while its recorded payments stay, so a
+prepaid-then-cancelled order truthfully shows as *our* debt (we hold the advance) until
+the accountant refunds or voids per the refund flow. The client app is unchanged: clients
+keep seeing per-order paid/balance only — no aggregate debt is exposed to clients in v1
+(a wrong debt shown to a client is a relationship-burning bug; revisit once workshops
+trust the numbers).
+
+Three sources feed the supplier side:
+
+- **Deliveries** — `stock_in` transactions carrying a purchase total
+  ([`inventory.md`](../entities/inventory.md)). Pre-pricing history rows carry no price
+  and contribute zero — a supplier's true position on go-live day is entered as one
+  opening-balance adjustment, not backfilled.
+- **Payments** — any `recorded` expense with a `supplier_id`, whatever its category.
+- **Adjustments** — the signed
+  [counterparty adjustment](../entities/finance.md#counterparty-adjustment): opening
+  balances and events that are neither a delivery nor a payment (discounts, returns,
+  offsets). An adjustment never moves stock or cash — the warehouse *Adjust* operation
+  (quantity, no money) is a different record entirely; in the UI they are named
+  distinctly: *Zaxira tuzatish* (quantity) vs *Qarz tuzatish* (money).
+
+**The statement (akt sverka).** Per counterparty, any date range: chronological rows —
+deliveries, payments, adjustments — each with the running balance after it, plus an
+opening balance folding everything before the range. This is the reconciliation ritual
+Uzbek businesses already run on paper, rendered live; any disputed number resolves by
+reading the statement line by line, never by "the system says so". Within one day, rows
+order by entry time; same-second entries fall back to the natural business order (goods,
+then money, then corrections).
+
+**Accounting model — hybrid on purpose.** The finance summary stays **cash-basis**; debts
+are an **accrual overlay**. A delivery of materials is *not* an expense — the expense
+happens when cash leaves. Nothing double-counts: a stock-in's value feeds only the debt
+fold; a payment feeds both the expense summary and the fold. Shipping debts changes zero
+existing report semantics.
+
+### Operations (owner or `manage_finance`)
+
+- **List supplier debts** — every supplier with its derived balance; search, an
+  "only with debt" filter (the default), sorted most-we-owe first; totals for both
+  directions.
+- **List client debts** — every client with fold activity in this workshop; same
+  filters, sorted most-they-owe first (receivables are what the accountant chases).
+- **Read a statement** — the akt sverka above, for any date range, on either side.
+  Client statements show order rows (dated by confirmation) against payment rows.
+- **Record an adjustment** — party (one supplier or one client), amount, business date
+  (backdating allowed, future rejected), **mandatory note**. The form asks the direction
+  in words (*Qarzimiz oshadi* / *Qarzimiz kamayadi*); the system derives the sign.
+- **Void an adjustment** — mandatory reason; the fold self-corrects. No edit, no delete.
+
 ## UX
 
 A **Moliya** nav group in the workshop app. The income · expenses · net summary is not a
@@ -109,7 +183,12 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
 (visible with `manage_finance` or `view_finance_reports`). The group's own pages:
 
 - **Income & expenses** (`/workshop/finance/expenses`, with an income deep-link at
-  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The date range is
+  `/workshop/finance/income`; `manage_finance`) — one page, two tabs. The active branch
+  comes from the topbar context picker (the app-wide convention) — there is no per-page
+  branch filter, no branch field in the forms, and no branch column in the tables. New
+  records stamp the context branch; editing preserves the record's original branch.
+  Workshop-level rows (`branch_id` null) stay visible to the owner in every branch
+  context, labelled *ustaxona-keng* — scoping must not hide HQ costs. The date range is
   the app-wide date-range picker: one trigger opening preset shortcuts (today / last
   7 days / this month / last month / last 30 days / all) beside a calendar for custom
   spans; every filter auto-applies — there is no separate apply button.
@@ -118,15 +197,34 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   date column pairs the business date with the entry timestamp beneath it — a backdated
   record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
-    status, action menu. Filters: date range, type, method, branch, status, min / max
+    status, action menu. Filters: date range, type, method, status, min / max
     amount. **+ Income** → modal form (type → if `order_payment`, a searchable order
-    picker scoped to the branch; amount; method; date; note; receipt). Row actions: Edit
+    picker scoped to the context branch; amount; method; date; note; receipt). An
+    order payment derives its branch from the picked order server-side. Row actions: Edit
     (modal) · Void (dialog with a mandatory reason). No Delete.
-  - *Expenses* — table: date, category, branch, vendor, amount, description (first 60
-    chars), receipt indicator, status, action menu. Filters: date range, category, branch,
-    status, min / max amount. **+ Expense** → modal form (category, branch, amount, date,
-    vendor, description, receipt). Row actions: Edit (modal) · Void (dialog with a
-    mandatory reason). No Delete.
+  - *Expenses* — table: date, category, vendor, amount, description (first 60
+    chars), receipt indicator, status, action menu. Filters: date range, category,
+    status, min / max amount. **+ Expense** → modal form (category, amount, date,
+    an optional **supplier picker** that links the expense into the supplier's debt fold
+    and fills the vendor text with the supplier's name when blank, free-text vendor,
+    description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
+    that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
+    Edit (modal) · Void (dialog with a mandatory reason). No Delete.
+- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page,
+  two tabs: **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
+  directions), search, the "only with debt" toggle (default on), and per-row balances in
+  words + color. A row opens the **statement** (akt sverka): date range via the shared
+  picker, chronological rows with a running balance and an opening-balance row when a
+  range is set — supplier statements show deliveries against payments, client statements
+  show order rows against payments. Statement actions: **To'lov qilish** (deep-links to
+  the ledger page — the expense modal with the supplier pre-picked, or the income modal
+  on the client side) and **Tuzatish kiritish** (the adjustment form — direction in
+  words per side, amount, date, mandatory note); adjustment rows carry their own void
+  action, and **Chop etish** prints the statement as a clean paper akt sverka (a print
+  stylesheet strips the app chrome — the ritual ends with a document handed across the
+  table). The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
+  tiles, and the Ombor suppliers tab shows each supplier's balance to users who could
+  open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per
@@ -156,6 +254,13 @@ void is danger-styled and names its effect.
   recorded payments is validated ≤ `total_tiyin`.
 - **Voiding an income/expense already in a past report** — allowed; reports are
   period-scoped recomputations, so the current period reflects the void.
+- **Voided rows and debts** — a voided supplier-linked expense or adjustment leaves the
+  debt fold automatically; the balance re-derives. No cleanup job exists or is needed.
+- **Wrong-looking balance** — corrected with a *Qarz tuzatish* adjustment (noted,
+  auditable), never by faking a payment or a delivery: forcing the number through another
+  ledger would corrupt the cash report or the warehouse to fix the debt page.
+- **Supplier deactivated with an open balance** — the balance stays visible and payable;
+  deactivation only hides the supplier from new stock-ins.
 - **Workshop currency is and always will be UZS (v1)** — finance numbers are integer tiyin
   per [`architecture.md`](../../architecture.md). The frontend converts for display only.
 

@@ -11,10 +11,13 @@ from fastapi.responses import JSONResponse
 from app.api.deps import AccountReadyPrincipal, Session
 from app.core.trace import get_trace_id
 from app.modules.cutting.api import PdfContext, cutting_result_response, render_cutting_pdf
+from app.modules.cutting.schemas import CuttingDraftResponse
 from app.modules.sales.api import (
     apply_discount,
+    apply_order_edit,
     approve_order,
     assign_order_workers,
+    begin_order_edit,
     cancel_client_order,
     cancel_workshop_order,
     complete_banding,
@@ -54,6 +57,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderCompleteRequest,
     WorkshopOrderCreateRequest,
     WorkshopOrderDiscountRequest,
+    WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
     WorkshopWorkerOption,
 )
@@ -418,6 +422,28 @@ async def workshop_orders_cancel(
     db: Session,
 ) -> OrderDetailResponse:
     return await cancel_workshop_order(db, principal=principal, order_id=order_id, payload=payload)
+
+
+# Revision — editing a placed order (docs/ref/features/orders.md). Begin is
+# idempotent (resumes an open revision); apply rebinds atomically; discard is
+# the plain workshop cutting-draft DELETE.
+@router.post("/workshop/orders/{order_id}/revision", response_model=CuttingDraftResponse)
+async def workshop_orders_revision_begin(
+    order_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> CuttingDraftResponse:
+    return await begin_order_edit(db, principal=principal, order_id=order_id)
+
+
+@router.post("/workshop/orders/{order_id}/revision/apply", response_model=OrderDetailResponse)
+async def workshop_orders_revision_apply(
+    order_id: uuid.UUID,
+    payload: WorkshopOrderEditApplyRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await apply_order_edit(db, principal=principal, order_id=order_id, payload=payload)
 
 
 @router.post("/workshop/orders/{order_id}/discount", response_model=OrderDetailResponse)

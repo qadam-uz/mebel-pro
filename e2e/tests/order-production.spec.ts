@@ -32,7 +32,7 @@ interface CuttingDraftResponse {
 }
 
 // The full client-places → workshop-completes lifecycle (cutting editor +
-// optimise, then the Ishlarim station terminal) is the heaviest flow in the
+// optimise, then the Kesish/Krom station terminal) is the heaviest flow in the
 // suite and sits right on the old 90s budget; give it headroom for slower CI.
 test.setTimeout(150_000);
 
@@ -254,6 +254,7 @@ async function stockIn(
       data: {
         material_id: materialId,
         quantity,
+        unit_price_tiyin: 25_000_000,
         supplier: { name: `E2E Supplier ${branchId.slice(0, 6)}` },
         note: "Order E2E stock",
       },
@@ -523,10 +524,10 @@ test("client places an order and workshop completes it through production queues
   ).toBeVisible();
 
   // The station terminal: the started job sits pinned as "Hozirgi ish" with
-  // the worker's Tugatdim action behind a success confirm.
-  await workshopPage.getByRole("link", { name: "Ishlarim" }).first().click();
+  // the worker's Tugatdim action behind a plain success confirm.
+  await workshopPage.getByRole("link", { name: "Kesish" }).first().click();
   await expect(
-    workshopPage.getByRole("heading", { name: "Ishlarim", exact: true }),
+    workshopPage.getByRole("heading", { name: "Kesish", exact: true }),
   ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
@@ -538,9 +539,13 @@ test("client places an order and workshop completes it through production queues
   await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await cuttingDone;
 
-  // The job hands off to the Kromka station queued-but-not-started: the edger
-  // (here: the owner on-behalf) taps Boshlash, then finishes it.
-  await workshopPage.getByRole("tab", { name: /^Kromka/ }).click();
+  // The job hands off to the Krom station queued-but-not-started: the edger
+  // (here: the owner on-behalf) taps Boshlash — one tap starts the job and
+  // lands on its Chizma sheet — then finishes it from the sheet.
+  await workshopPage.getByRole("link", { name: "Krom" }).first().click();
+  await expect(
+    workshopPage.getByRole("heading", { name: "Krom", exact: true }),
+  ).toBeVisible();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();
@@ -551,12 +556,15 @@ test("client places an order and workshop completes it through production queues
     .getByRole("button", { name: "Boshlash", exact: true })
     .click();
   await bandingStarted;
+  await expect(workshopPage).toHaveURL(/\/workshop\/production\/[^/]+$/);
   const bandingDone = workshopPage.waitForResponse(
     (response) => response.url().includes("/banding-done") && response.ok(),
   );
   await workshopPage.getByRole("button", { name: /Tugatdim$/ }).click();
   await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await bandingDone;
+  // Completing from the sheet returns to the station queue.
+  await expect(workshopPage).toHaveURL(/\/workshop\/banding$/);
 
   await workshopPage.goto(workshopOrderUrl);
   await expect(

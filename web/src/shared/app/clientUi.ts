@@ -238,6 +238,7 @@ const NOTIFICATION_TITLES: Record<string, string> = {
   'order.placed': 'Buyurtma joylandi',
   'order.confirmed': 'Buyurtma tasdiqlandi',
   'order.status_changed': "Buyurtma holati o'zgardi",
+  'order.updated': 'Buyurtma yangilandi',
   'order.ready': 'Buyurtma tayyor',
   'order.cancelled': 'Buyurtma bekor qilindi',
   'order.completed': 'Buyurtma topshirildi',

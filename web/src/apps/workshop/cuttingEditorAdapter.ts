@@ -25,5 +25,9 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
     branch: branch ? { fixed: { id: branch.id, name: branch.name } } : {},
     useProfileDefaultBranch: false,
     quoteForDraft: (draftId, quoteBranchId) => orders.quoteWorkshopBranch(draftId, quoteBranchId),
+    orderRevision: {
+      reviewPath: (draftId: string) => `/workshop/orders/edit/${draftId}/review`,
+      loadOrder: (orderId: string) => orders.fetchWorkshopOrder(orderId),
+    },
   }
 }

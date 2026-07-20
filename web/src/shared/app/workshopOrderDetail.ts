@@ -189,6 +189,34 @@ function formatMetres(mm: number) {
   return `${String(mm / 1000).replace(',', '.')} m`
 }
 
+// A same-status `edited` event (orders.md "Revising a placed order") — the
+// timeline names the revision instead of rendering "tasdiqlangan → tasdiqlangan".
+export function isRevisionEvent(event: WorkshopTimelineEvent): boolean {
+  return event.metadata?.edited === true
+}
+
+export function revisionTimelineDetails(
+  event: WorkshopTimelineEvent,
+  formatMoney: (tiyin: number) => string,
+): string[] {
+  const metadata = event.metadata
+  if (!metadata || metadata.edited !== true) return []
+  const details: string[] = []
+  const previous =
+    typeof metadata.previous_total_tiyin === 'number' ? metadata.previous_total_tiyin : null
+  const next = typeof metadata.total_tiyin === 'number' ? metadata.total_tiyin : null
+  if (previous !== null && next !== null && previous !== next) {
+    details.push(`Narx: ${formatMoney(previous)} → ${formatMoney(next)}`)
+  }
+  if (typeof metadata.discount_cleared_tiyin === 'number') {
+    details.push(`Chegirma bekor qilindi: ${formatMoney(metadata.discount_cleared_tiyin)}`)
+  }
+  if (metadata.edger_assignment_cleared === true) {
+    details.push('Krom tayinlovi olib tashlandi')
+  }
+  return details
+}
+
 export function productionTimelineDetails(
   event: WorkshopTimelineEvent,
   workerName: (id: string) => string,

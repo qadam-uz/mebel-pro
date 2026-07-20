@@ -58,6 +58,7 @@ function draft(id = 'draft-1'): CuttingDraft {
     preferred_branch_id: null,
     parts_snapshot: [],
     chosen_result_id: null,
+    revision_of_order_id: null,
     created_at: '2026-07-08T00:00:00Z',
     updated_at: '2026-07-08T00:00:00Z',
     results: [],

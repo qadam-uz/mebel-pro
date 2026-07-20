@@ -63,6 +63,9 @@ const inventoryBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageInventory]),
 )
 const canFinance = computed(() => permissions.isOwner.value || financeBranches.value.length > 0)
+// Debts are the most sensitive numbers in the shop: manage_finance / owner only
+// (view_finance_reports alone does not unlock them).
+const canDebts = computed(() => permissions.isOwner.value || permissions.can(p.manageFinance))
 const canInventory = computed(() => permissions.isOwner.value || inventoryBranches.value.length > 0)
 const canOrders = computed(() => permissions.isOwner.value || orderBranches.value.length > 0)
 const canProduction = computed(
@@ -87,6 +90,13 @@ const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
 const incomeParts = computed(() => formatTiyinParts(finance.summary?.income_tiyin ?? 0))
 const expenseParts = computed(() => formatTiyinParts(finance.summary?.expense_tiyin ?? 0))
 const netParts = computed(() => formatTiyinParts(finance.summary?.net_tiyin ?? 0))
+const supplierDebtParts = computed(() =>
+  formatTiyinParts(finance.supplierDebts?.we_owe_total_tiyin ?? 0),
+)
+const clientDebtParts = computed(() =>
+  formatTiyinParts(finance.clientDebts?.they_owe_total_tiyin ?? 0),
+)
+const stockValueParts = computed(() => formatTiyinParts(workshop.stockValueTiyin ?? 0))
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
@@ -220,6 +230,11 @@ async function loadDashboard() {
     }
   }
   await loadFinanceSummary()
+  // Best-effort tiles: a failed debts load must not take the dashboard down.
+  if (canDebts.value) {
+    await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
+    await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
+  }
   const inventoryContextBranchId = contextBranchFor(inventoryBranches.value)
   const inventoryBranchIds =
     inventoryContextBranchId !== null
@@ -229,6 +244,8 @@ async function loadDashboard() {
     workshop.inventoryLoading = true
     try {
       await workshop.loadLowStock(inventoryBranchIds)
+      // Best-effort tile — a failed valuation must not take the dashboard down.
+      await workshop.loadStockValue(inventoryBranchIds).catch(() => undefined)
       workshop.inventoryError = null
       workshop.inventoryTraceId = null
     } catch (errorValue) {
@@ -354,6 +371,40 @@ watch(
         </div>
 
         <RouterLink
+          v-if="canDebts"
+          :to="rolePath('/workshop/finance/debts')"
+          class="kpi no-underline"
+          :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn' : ''"
+        >
+          <div class="lbl">Ta'minotchilarga qarzimiz</div>
+          <div
+            class="v num"
+            :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn-text' : ''"
+          >
+            <span v-if="dashboardReady" :title="supplierDebtParts.full"
+              >{{ supplierDebtParts.amount }} <small>{{ supplierDebtParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>yetkazmalar − to'lovlar</span></div>
+        </RouterLink>
+
+        <RouterLink
+          v-if="canDebts"
+          :to="rolePath('/workshop/finance/debts')"
+          class="kpi no-underline"
+        >
+          <div class="lbl">Mijozlar qarzi</div>
+          <div class="v num">
+            <span v-if="dashboardReady" :title="clientDebtParts.full"
+              >{{ clientDebtParts.amount }} <small>{{ clientDebtParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>buyurtmalar − to'lovlar</span></div>
+        </RouterLink>
+
+        <RouterLink
           v-if="canInventory"
           :to="rolePath('/workshop/inventory')"
           class="kpi no-underline"
@@ -365,6 +416,21 @@ watch(
             <span v-else class="sk block h-7 w-12"></span>
           </div>
           <div class="d"><span>me'yordan kam</span></div>
+        </RouterLink>
+
+        <RouterLink
+          v-if="canInventory && workshop.stockValueTiyin !== null"
+          :to="rolePath('/workshop/inventory')"
+          class="kpi no-underline"
+        >
+          <div class="lbl">Ombor qiymati</div>
+          <div class="v num">
+            <span v-if="dashboardReady" :title="stockValueParts.full"
+              >{{ stockValueParts.amount }} <small>{{ stockValueParts.unit }}</small></span
+            >
+            <span v-else class="sk block h-7 w-28"></span>
+          </div>
+          <div class="d"><span>oxirgi kirim narxida</span></div>
         </RouterLink>
       </div>
 
@@ -381,7 +447,7 @@ watch(
             class="grid gap-px overflow-hidden rounded-lg border border-hairline bg-hairline md:grid-cols-2"
           >
             <RouterLink
-              :to="{ path: rolePath('/workshop/production'), query: { station: 'cutting' } }"
+              :to="rolePath('/workshop/cutting')"
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
@@ -396,7 +462,7 @@ watch(
               </p>
             </RouterLink>
             <RouterLink
-              :to="{ path: rolePath('/workshop/production'), query: { station: 'banding' } }"
+              :to="rolePath('/workshop/banding')"
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">

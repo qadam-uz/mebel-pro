@@ -27,12 +27,7 @@ from app.modules.inventory.schemas import (
     SupplierCreateRequest,
     SupplierPatchRequest,
 )
-from app.modules.support.api import (
-    RECEIPT_CONTENT_TYPES,
-    attach_file,
-    record_action,
-    record_status_change,
-)
+from app.modules.support.api import record_action, record_status_change
 from app.modules.support.contracts import Notification
 
 
@@ -50,6 +45,14 @@ class TransactionRecord:
     material: Material
     supplier: Supplier | None
     actor: WorkshopUser | None
+
+
+@dataclass(frozen=True)
+class LastPriceRecord:
+    unit_price_tiyin: int
+    recorded_at: datetime
+    supplier_id: uuid.UUID | None
+    supplier_name: str | None
 
 
 async def ensure_stock_item_for_branch_material(
@@ -303,6 +306,8 @@ async def record_stock_in(
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
     if payload.quantity <= 0:
         raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
+    if payload.unit_price_tiyin < 0:
+        raise APIError("invalid_price", "Price cannot be negative", status_code=400)
     if payload.supplier_id is not None and payload.supplier is not None:
         raise APIError(
             "invalid_supplier",
@@ -338,14 +343,10 @@ async def record_stock_in(
         quantity=payload.quantity,
         supplier_id=supplier.id,
         note=_optional_text(payload.note),
-    )
-    transaction.receipt_file_id = await attach_file(
-        db,
-        principal=principal,
-        file_id=payload.receipt_file_id,
-        entity_type="stock_transaction",
-        entity_id=transaction.id,
-        allowed_content_types=RECEIPT_CONTENT_TYPES,
+        unit_price_tiyin=payload.unit_price_tiyin,
+        total_price_tiyin=stock_in_total_tiyin(
+            material.kind, payload.quantity, payload.unit_price_tiyin
+        ),
     )
     await record_action(
         db,
@@ -365,6 +366,52 @@ async def record_stock_in(
         material=material,
         supplier=supplier,
         actor=await db.get(WorkshopUser, principal.principal_id),
+    )
+
+
+async def get_last_price(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    material_id: uuid.UUID,
+    supplier_id: uuid.UUID | None = None,
+) -> LastPriceRecord | None:
+    """Latest priced stock-in for a branch's material, preferring the given supplier's."""
+
+    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
+
+    def query(only_supplier: uuid.UUID | None) -> Select[tuple[StockTransaction, Supplier]]:
+        q = (
+            select(StockTransaction, Supplier)
+            .join(StockItem, StockItem.id == StockTransaction.stock_item_id)
+            .outerjoin(Supplier, Supplier.id == StockTransaction.supplier_id)
+            .where(
+                StockItem.branch_id == scope.branch_id,
+                StockItem.material_id == material_id,
+                StockTransaction.type == StockTransactionType.STOCK_IN,
+                StockTransaction.unit_price_tiyin.is_not(None),
+            )
+        )
+        if only_supplier is not None:
+            q = q.where(StockTransaction.supplier_id == only_supplier)
+        return q.order_by(StockTransaction.created_at.desc()).limit(1)
+
+    row = None
+    if supplier_id is not None:
+        row = (await db.execute(query(supplier_id))).first()
+    if row is None:
+        row = (await db.execute(query(None))).first()
+    if row is None:
+        return None
+    transaction, supplier = row
+    if transaction.unit_price_tiyin is None:  # pragma: no cover - filtered in the query
+        return None
+    return LastPriceRecord(
+        unit_price_tiyin=transaction.unit_price_tiyin,
+        recorded_at=transaction.created_at,
+        supplier_id=transaction.supplier_id,
+        supplier_name=supplier.name if supplier else None,
     )
 
 
@@ -480,6 +527,8 @@ async def _apply_stock_delta(
     supplier_id: uuid.UUID | None,
     note: str | None,
     order_id: uuid.UUID | None = None,
+    unit_price_tiyin: int | None = None,
+    total_price_tiyin: int | None = None,
 ) -> StockTransaction:
     next_balance = stock_item.on_hand + quantity
     if next_balance < 0:
@@ -491,6 +540,8 @@ async def _apply_stock_delta(
         type=type_,
         quantity=quantity,
         balance_after=next_balance,
+        unit_price_tiyin=unit_price_tiyin,
+        total_price_tiyin=total_price_tiyin,
         order_id=order_id,
         supplier_id=supplier_id,
         actor_user_id=principal.principal_id if principal is not None else None,
@@ -650,6 +701,60 @@ async def _emit_low_stock_if_needed(
             )
         )
     await db.flush()
+
+
+async def stock_value(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> int:
+    """The branch's on-hand quantity valued at the latest purchase price.
+
+    Derived at read time like every other money number: per stock item, the most
+    recent priced stock-in's unit price times what is physically on hand (edges:
+    mm x per-metre // 1000). Items that never had a priced stock-in count zero.
+    """
+
+    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
+    latest_price = (
+        select(StockTransaction.unit_price_tiyin)
+        .where(
+            StockTransaction.stock_item_id == StockItem.id,
+            StockTransaction.type == StockTransactionType.STOCK_IN,
+            StockTransaction.unit_price_tiyin.is_not(None),
+        )
+        .order_by(StockTransaction.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    rows = (
+        await db.execute(
+            select(StockItem.on_hand, Material.kind, latest_price)
+            .join(Material, Material.id == StockItem.material_id)
+            .where(StockItem.branch_id == scope.branch_id, StockItem.on_hand > 0)
+        )
+    ).all()
+    total = 0
+    for on_hand, kind, price in rows:
+        if price is None:
+            continue
+        if kind is MaterialKind.PANEL:
+            total += on_hand * int(price)
+        else:
+            total += on_hand * int(price) // 1000
+    return total
+
+
+def stock_in_total_tiyin(kind: MaterialKind, quantity: int, unit_price_tiyin: int) -> int:
+    """Total for a priced stock-in: per-panel for panels, per-metre over mm for edges.
+
+    Mirrors the sale-side per-metre arithmetic so buy and sell math can't drift.
+    """
+
+    if kind is MaterialKind.PANEL:
+        return quantity * unit_price_tiyin
+    return quantity * unit_price_tiyin // 1000
 
 
 def stock_unit(kind: MaterialKind) -> str:

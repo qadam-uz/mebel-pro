@@ -13,6 +13,7 @@ from app.modules.inventory.api import (
     TransactionRecord,
     create_supplier,
     display_unit,
+    get_last_price,
     list_stock,
     list_suppliers,
     list_transactions,
@@ -20,13 +21,16 @@ from app.modules.inventory.api import (
     record_stock_in,
     set_supplier_status,
     stock_unit,
+    stock_value,
     update_supplier,
 )
 from app.modules.inventory.schemas import (
     StockAdjustmentRequest,
     StockInRequest,
     StockItemResponse,
+    StockLastPriceResponse,
     StockTransactionResponse,
+    StockValueResponse,
     SupplierCreateRequest,
     SupplierPatchRequest,
     SupplierResponse,
@@ -82,6 +86,46 @@ async def stock_adjustments_create(
 ) -> StockTransactionResponse:
     row = await record_adjustment(db, principal=principal, branch_id=branch_id, payload=payload)
     return _transaction_response(row)
+
+
+@router.get("/stock-value", response_model=StockValueResponse)
+async def stock_value_get(
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> StockValueResponse:
+    value = await stock_value(db, principal=principal, branch_id=branch_id)
+    return StockValueResponse(value_tiyin=value)
+
+
+@router.get("/materials/{material_id}/last-price", response_model=StockLastPriceResponse)
+async def material_last_price(
+    branch_id: uuid.UUID,
+    material_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    supplier_id: uuid.UUID | None = None,
+) -> StockLastPriceResponse:
+    row = await get_last_price(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        material_id=material_id,
+        supplier_id=supplier_id,
+    )
+    if row is None:
+        return StockLastPriceResponse(
+            unit_price_tiyin=None,
+            recorded_at=None,
+            supplier_id=None,
+            supplier_name=None,
+        )
+    return StockLastPriceResponse(
+        unit_price_tiyin=row.unit_price_tiyin,
+        recorded_at=row.recorded_at,
+        supplier_id=row.supplier_id,
+        supplier_name=row.supplier_name,
+    )
 
 
 @router.get("/stock-transactions", response_model=list[StockTransactionResponse])
@@ -214,10 +258,11 @@ def _transaction_response(row: TransactionRecord) -> StockTransactionResponse:
         type=tx.type,
         quantity=tx.quantity,
         balance_after=tx.balance_after,
+        unit_price_tiyin=tx.unit_price_tiyin,
+        total_price_tiyin=tx.total_price_tiyin,
         order_id=tx.order_id,
         supplier_id=tx.supplier_id,
         supplier_name=row.supplier.name if row.supplier else None,
-        receipt_file_id=tx.receipt_file_id,
         actor_user_id=tx.actor_user_id,
         actor_name=row.actor.full_name if row.actor else None,
         note=tx.note,

@@ -236,6 +236,7 @@ describe('role route matrix', () => {
       '/workshop/orders/new/cutting',
       '/workshop/orders/cutting/:id',
       '/workshop/orders/new/:draft_id/checkout',
+      '/workshop/orders/edit/:draft_id/review',
       '/workshop/orders/:order_id',
       '/workshop/production',
       '/workshop/production/:order_id',
@@ -249,6 +250,7 @@ describe('role route matrix', () => {
       '/workshop/branches/:branch_id',
       '/workshop/finance/income',
       '/workshop/finance/expenses',
+      '/workshop/finance/debts',
       '/workshop/finance/production',
       '/workshop/settings/users/:user_id',
       '/workshop/notifications',
@@ -397,24 +399,35 @@ describe('role route matrix', () => {
   })
 
   it('keeps the workshop editor routes out of the production namespace', () => {
-    // /workshop/production is the process_production station workspace; the
-    // manage_orders editor lives under /workshop/orders/* so the two never
-    // collide, and the retired queue URLs stay alive as redirects into it.
+    // /workshop/cutting and /workshop/banding are the process_production
+    // station pages; the manage_orders editor lives under /workshop/orders/*
+    // so the two never collide. The retired tabbed workspace URL stays alive
+    // as a redirect into the station pages.
     const editorPaths = workshopRoutes
       .map((route) => route.path)
       .filter((path) => path.includes('cutting') && path.includes('orders'))
     expect(editorPaths).toContain('/workshop/orders/new/cutting')
     expect(editorPaths).toContain('/workshop/orders/cutting/:id')
-    expect(workshopRoutes.find((r) => r.path === '/workshop/production')?.name).toBe(
-      'workshop-production',
+    expect(workshopRoutes.find((r) => r.path === '/workshop/cutting')?.name).toBe(
+      'workshop-cutting',
     )
-    expect(workshopRoutes.find((r) => r.path === '/workshop/cutting')?.redirect).toEqual({
-      path: '/workshop/production',
-      query: { station: 'cutting' },
-    })
-    expect(workshopRoutes.find((r) => r.path === '/workshop/banding')?.redirect).toEqual({
-      path: '/workshop/production',
-      query: { station: 'banding' },
-    })
+    expect(workshopRoutes.find((r) => r.path === '/workshop/banding')?.name).toBe(
+      'workshop-banding',
+    )
+    const legacy = workshopRoutes.find((r) => r.path === '/workshop/production')?.redirect
+    if (typeof legacy !== 'function') throw new Error('production URL must redirect')
+    const redirect = legacy as (to: { query: Record<string, unknown> }) => unknown
+    expect(redirect({ query: {} })).toEqual({ path: '/workshop/cutting' })
+    expect(redirect({ query: { station: 'cutting' } })).toEqual({ path: '/workshop/cutting' })
+    expect(redirect({ query: { station: 'banding' } })).toEqual({ path: '/workshop/banding' })
+
+    // Dev-mode base stripping must reach function redirects too — a raw
+    // '/workshop/...' target would double the base under createWebHistory.
+    const normalized = normalizeRoleRoutes(workshopRoutes, '/workshop', '/workshop/')
+    const devRedirect = normalized.find((r) => r.path === '/production')?.redirect
+    if (typeof devRedirect !== 'function') throw new Error('normalized redirect missing')
+    const devResolve = devRedirect as (to: { query: Record<string, unknown> }) => unknown
+    expect(devResolve({ query: {} })).toEqual({ path: '/cutting' })
+    expect(devResolve({ query: { station: 'banding' } })).toEqual({ path: '/banding' })
   })
 })

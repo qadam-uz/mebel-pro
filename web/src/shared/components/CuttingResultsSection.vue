@@ -46,6 +46,8 @@ const props = defineProps<{
   // Role-specific "place order" target (client vs workshop checkout), injected
   // by the editor from its adapter so this presentational component stays dumb.
   checkoutPath: string
+  // CTA copy override — the revision flow says "save changes", not "place order".
+  checkoutLabel?: string
   // The active branch pre-filter (null until one is picked) — drives the price
   // quote below; not the same as `draft.preferred_branch_id` while unsaved.
   branchId: string | null
@@ -542,7 +544,7 @@ async function choose(result: CuttingResult) {
           :to="rolePath(props.checkoutPath)"
           class="mp-button mp-button-primary"
         >
-          Buyurtma berish
+          {{ props.checkoutLabel ?? 'Buyurtma berish' }}
         </RouterLink>
       </div>
     </div>

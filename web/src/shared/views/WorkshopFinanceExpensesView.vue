@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
@@ -40,6 +40,7 @@ import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const route = useRoute()
+const router = useRouter()
 const permissions = useWorkshopPermissions()
 const toast = useToast()
 const finance = useFinanceStore()
@@ -77,7 +78,6 @@ const initialRange = presetRange('month', now)
 const datePreset = ref<DateRangePreset>('month')
 const dateFrom = ref(initialRange.from ?? '')
 const dateTo = ref(initialRange.to ?? '')
-const filterBranchId = ref('all')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
 const statusFilter = ref<LedgerStatus | 'all'>('recorded')
@@ -85,19 +85,21 @@ let orderBalanceRequestId = 0
 
 // Select-bound fields are `string | null` (FormSelect/SearchCombobox model type,
 // same convention as the inventory modals); payloads coerce before sending.
+// Branch comes from the topbar context — the forms only keep the owner's
+// «Ustaxona darajasida» escape hatch for HQ-level (branchless) expenses.
 const expenseForm = reactive({
-  branchId: 'workshop' as string | null,
+  workshopLevel: false,
   category: 'other' as string | null,
   amount: '',
   incurredOn: today,
   vendor: '',
+  supplierId: null as string | null,
   description: '',
   receiptFileId: null as string | null,
   receiptName: '',
 })
 const incomeForm = reactive({
   type: 'order_payment' as string | null,
-  branchId: 'workshop' as string | null,
   orderId: null as string | null,
   amount: '',
   method: 'cash' as string | null,
@@ -106,6 +108,10 @@ const incomeForm = reactive({
   receiptFileId: null as string | null,
   receiptName: '',
 })
+// Editing must never re-stamp a record onto the currently active branch — the
+// original branch is preserved and sent back unchanged.
+const editingExpenseBranchId = ref<string | null>(null)
+const editingIncomeBranchId = ref<string | null>(null)
 
 // Type-time sanitization (PhoneInput precedent): an invalid character never
 // sticks; parseSomToTiyin still owns whether the kept characters make sense.
@@ -128,35 +134,45 @@ const canManageFinance = computed(() => permissions.can(p.manageFinance))
 const financeBranches = computed(() =>
   permissions.accessibleBranches(workshop.branches, [p.manageFinance]),
 )
-const branchOptions = computed<ChoiceOption[]>(() => [
-  ...(permissions.isOwner.value
-    ? [{ value: 'workshop', label: 'Ustaxona-keng', meta: 'filialsiz yozuv' }]
-    : []),
-  ...financeBranches.value.map((branch) => ({
-    value: branch.id,
-    label: branch.name,
-    meta: branch.address,
-  })),
-])
-const filterBranchOptions = computed<DropdownOption[]>(() => [
-  {
-    value: 'all',
-    label: permissions.isOwner.value ? 'Hamma filiallar' : 'Mening filiallarim',
-  },
-  ...financeBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
-])
+// Branch is driven by the topbar context picker (AppShell); the page follows it
+// and falls back to the first accessible branch until context is set.
+const selectedBranchId = computed(() => {
+  const context = workshop.selectedBranchContext
+  if (context && financeBranches.value.some((branch) => branch.id === context)) return context
+  return financeBranches.value[0]?.id ?? ''
+})
 const orderOptions = computed<ChoiceOption[]>(() =>
   orders.workshopOrders
     .filter((order) => {
       if (order.status === 'cancelled') return false
-      if (incomeForm.branchId === 'workshop') return true
-      return order.branch_id === incomeForm.branchId
+      if (!selectedBranchId.value) return true
+      return order.branch_id === selectedBranchId.value
     })
     .map((order) => ({
       value: order.id,
       label: `${order.order_number} · ${order.contact_name}`,
       meta: formatTiyin(order.total_tiyin),
     })),
+)
+// Optional supplier link on an expense — this is what makes it count as a
+// payment in the supplier's debt fold. Inactive suppliers stay payable.
+const supplierOptions = computed<ChoiceOption[]>(() =>
+  workshop.suppliers.map((supplier) => ({
+    value: supplier.id,
+    label: supplier.name,
+    meta: supplier.status === 'active' ? (supplier.phone ?? 'faol') : 'faol emas',
+  })),
+)
+
+// A picked supplier fills the free-text vendor with its name unless the user
+// already wrote something more specific.
+watch(
+  () => expenseForm.supplierId,
+  (supplierId) => {
+    if (!supplierId) return
+    const supplier = workshop.suppliers.find((row) => row.id === supplierId)
+    if (supplier && !expenseForm.vendor.trim()) expenseForm.vendor = supplier.name
+  },
 )
 const selectedIncomeOrderDetail = computed(() =>
   orders.currentOrder?.id === incomeForm.orderId ? orders.currentOrder : null,
@@ -203,20 +219,9 @@ const incomeTypeLabel = Object.fromEntries(
 const methodLabel = Object.fromEntries(methodOptions.map((option) => [option.value, option.label]))
 
 watch(
-  () => incomeForm.branchId,
-  () => {
-    if (incomeForm.branchId === 'workshop' || !incomeForm.orderId) return
-    const selectedOrder = orders.workshopOrders.find((order) => order.id === incomeForm.orderId)
-    if (selectedOrder && selectedOrder.branch_id !== incomeForm.branchId) incomeForm.orderId = null
-  },
-)
-
-watch(
   () => incomeForm.orderId,
   (orderId) => {
     if (!orderId || incomeForm.type !== 'order_payment') return
-    const selectedOrder = orders.workshopOrders.find((order) => order.id === orderId)
-    if (selectedOrder) incomeForm.branchId = selectedOrder.branch_id
     void loadSelectedOrderBalance(orderId)
   },
 )
@@ -232,11 +237,6 @@ watch(
     if (incomeForm.orderId) void loadSelectedOrderBalance(incomeForm.orderId)
   },
 )
-
-function branchName(branchId: string | null) {
-  if (!branchId) return 'ustaxona-keng'
-  return workshop.branches.find((branch) => branch.id === branchId)?.name ?? 'Filial'
-}
 
 function incomeOrderLabel(orderId: string | null) {
   return financeOrderReferenceLabel(orderId, orders.workshopOrders, orders.currentOrder)
@@ -288,7 +288,7 @@ async function refresh() {
   const base = {
     date_from: dateFrom.value,
     date_to: dateTo.value,
-    branch_id: filterBranchId.value === 'all' ? null : filterBranchId.value,
+    branch_id: selectedBranchId.value || null,
     status: statusFilter.value === 'all' ? null : statusFilter.value,
   }
   if (activeTab.value === 'expense') {
@@ -313,20 +313,20 @@ watch(activeTab, (next, previous) => {
 // preset-driven from+to change or fast dropdown edits collapse into one fetch.
 // activeTab is intentionally excluded — its own watcher above already refreshes.
 let filterTimer: number | undefined
-watch([dateFrom, dateTo, filterBranchId, expenseCategory, incomeType, statusFilter], () => {
+watch([dateFrom, dateTo, selectedBranchId, expenseCategory, incomeType, statusFilter], () => {
   window.clearTimeout(filterTimer)
   filterTimer = window.setTimeout(() => void refresh(), 250)
 })
 
 function resetExpenseForm() {
   editingExpenseId.value = null
-  expenseForm.branchId = permissions.isOwner.value
-    ? 'workshop'
-    : (financeBranches.value[0]?.id ?? 'workshop')
+  editingExpenseBranchId.value = null
+  expenseForm.workshopLevel = false
   expenseForm.category = 'other'
   expenseForm.amount = ''
   expenseForm.incurredOn = today
   expenseForm.vendor = ''
+  expenseForm.supplierId = null
   expenseForm.description = ''
   expenseForm.receiptFileId = null
   expenseForm.receiptName = ''
@@ -334,10 +334,8 @@ function resetExpenseForm() {
 
 function resetIncomeForm() {
   editingIncomeId.value = null
+  editingIncomeBranchId.value = null
   incomeForm.type = 'order_payment'
-  incomeForm.branchId = permissions.isOwner.value
-    ? 'workshop'
-    : (financeBranches.value[0]?.id ?? 'workshop')
   incomeForm.orderId = null
   incomeForm.amount = ''
   incomeForm.method = 'cash'
@@ -372,10 +370,12 @@ function openCreateIncome() {
 
 function editExpense(expense: Expense) {
   editingExpenseId.value = expense.id
-  expenseForm.branchId = expense.branch_id ?? 'workshop'
+  editingExpenseBranchId.value = expense.branch_id
+  expenseForm.workshopLevel = expense.branch_id === null
   expenseForm.category = expense.category
   expenseForm.amount = String(expense.amount_tiyin / 100)
   expenseForm.incurredOn = expense.incurred_on
+  expenseForm.supplierId = expense.supplier_id
   expenseForm.vendor = expense.vendor ?? ''
   expenseForm.description = expense.description
   expenseForm.receiptFileId = expense.receipt_file_id
@@ -386,8 +386,8 @@ function editExpense(expense: Expense) {
 
 function editIncome(income: Income) {
   editingIncomeId.value = income.id
+  editingIncomeBranchId.value = income.branch_id
   incomeForm.type = income.type
-  incomeForm.branchId = income.branch_id ?? 'workshop'
   incomeForm.orderId = income.order_id ?? null
   incomeForm.amount = String(income.amount_tiyin / 100)
   incomeForm.method = income.method
@@ -432,13 +432,19 @@ async function saveExpense() {
   actionError.value = null
   actionTraceId.value = null
   try {
+    // Create stamps the topbar context branch; edit keeps the record's own
+    // branch. The owner's workshop-level checkbox overrides either to null.
     const payload = {
-      branch_id:
-        !expenseForm.branchId || expenseForm.branchId === 'workshop' ? null : expenseForm.branchId,
+      branch_id: expenseForm.workshopLevel
+        ? null
+        : editingExpenseId.value
+          ? (editingExpenseBranchId.value ?? selectedBranchId.value ?? null)
+          : selectedBranchId.value || null,
       category: (expenseForm.category ?? 'other') as ExpenseCategory,
       amount_tiyin: expenseAmountTiyin.value,
       incurred_on: expenseForm.incurredOn,
       vendor: expenseForm.vendor || null,
+      supplier_id: expenseForm.supplierId,
       description: expenseForm.description,
       receipt_file_id: expenseForm.receiptFileId,
     }
@@ -467,10 +473,16 @@ async function saveIncome() {
   actionError.value = null
   actionTraceId.value = null
   try {
+    // Order payments derive their branch from the order server-side; other
+    // income stamps the topbar context on create and keeps its branch on edit.
     const payload = {
       type: (incomeForm.type ?? 'other') as IncomeType,
       branch_id:
-        !incomeForm.branchId || incomeForm.branchId === 'workshop' ? null : incomeForm.branchId,
+        incomeForm.type === 'order_payment'
+          ? null
+          : editingIncomeId.value
+            ? editingIncomeBranchId.value
+            : selectedBranchId.value || null,
       order_id: incomeForm.type === 'order_payment' ? incomeForm.orderId : null,
       amount_tiyin: incomeAmountTiyin.value,
       method: (incomeForm.method ?? 'cash') as MoneyMethod,
@@ -570,16 +582,25 @@ async function confirmVoid() {
 
 onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
-  const firstBranchId = financeBranches.value[0]?.id
-  if (!permissions.isOwner.value && firstBranchId) {
-    expenseForm.branchId = firstBranchId
-    incomeForm.branchId = firstBranchId
-  }
   if (!canManageFinance.value) return
+  if (selectedBranchId.value) {
+    void workshop.loadSuppliers(selectedBranchId.value).catch(() => undefined)
+  }
   await Promise.all([
     orders.loadWorkshopOrders({ status: 'active' }).catch(() => undefined),
     refresh(),
   ])
+  // The Qarzdorlik statement's «To'lov qilish» deep-links here with the
+  // counterparty pre-picked; the query is consumed once and cleared.
+  if (route.query.create === 'expense') {
+    openCreateExpense()
+    const supplierId = route.query.supplier_id
+    if (typeof supplierId === 'string') expenseForm.supplierId = supplierId
+    void router.replace({ path: route.path })
+  } else if (route.query.create === 'income') {
+    openCreateIncome()
+    void router.replace({ path: route.path })
+  }
 })
 </script>
 
@@ -616,7 +637,17 @@ onMounted(async () => {
             label="Kategoriya"
             :options="createCategoryOptions"
           />
-          <FormSelect v-model="expenseForm.branchId" label="Filial" :options="branchOptions" />
+          <label
+            v-if="permissions.isOwner.value"
+            class="flex min-h-10 cursor-pointer items-center gap-2 self-end pb-1 text-sm font-bold text-ink-soft"
+          >
+            <input
+              v-model="expenseForm.workshopLevel"
+              type="checkbox"
+              class="size-4 accent-accent"
+            />
+            <span>Ustaxona darajasida (filialsiz)</span>
+          </label>
           <label class="field md:col-span-2">
             <span>Tavsif</span>
             <input
@@ -626,6 +657,13 @@ onMounted(async () => {
               required
             />
           </label>
+          <SearchCombobox
+            v-model="expenseForm.supplierId"
+            label="Ta'minotchi (qarz uchun)"
+            :options="supplierOptions"
+            placeholder="ixtiyoriy — qarzga bog'lash"
+            clearable
+          />
           <label class="field">
             <span>Yetkazib beruvchi</span>
             <input v-model="expenseForm.vendor" class="mp-input" placeholder="ixtiyoriy" />
@@ -748,7 +786,6 @@ onMounted(async () => {
             </small>
           </label>
           <FormSelect v-model="incomeForm.method" label="Usul" :options="methodOptions" />
-          <FormSelect v-model="incomeForm.branchId" label="Filial" :options="branchOptions" />
           <label class="field">
             <span>Qabul sanasi</span>
             <input
@@ -811,12 +848,6 @@ onMounted(async () => {
           :options="incomeTypeOptions"
           top-label
         />
-        <ProjectDropdown
-          v-model="filterBranchId"
-          label="Filial"
-          :options="filterBranchOptions"
-          top-label
-        />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
         <button
           v-if="activeTab === 'expense'"
@@ -859,7 +890,6 @@ onMounted(async () => {
                 <th>Sana</th>
                 <th>Kategoriya</th>
                 <th>Tavsif</th>
-                <th>Filial</th>
                 <th>Yetkazib beruvchi</th>
                 <th>Chek</th>
                 <th class="right">Summa</th>
@@ -879,12 +909,16 @@ onMounted(async () => {
                     Kiritildi: {{ formatDateTime(expense.created_at) }}
                   </small>
                 </td>
-                <td>{{ categoryLabel[expense.category] ?? expense.category }}</td>
+                <td>
+                  {{ categoryLabel[expense.category] ?? expense.category }}
+                  <small v-if="!expense.branch_id" class="block text-[11px] text-ink-muted">
+                    ustaxona-keng
+                  </small>
+                </td>
                 <td class="nm">
                   {{ expense.description }}
                   <small v-if="expense.voided_reason">bekor: {{ expense.voided_reason }}</small>
                 </td>
-                <td>{{ branchName(expense.branch_id) }}</td>
                 <td>
                   <small class="text-ink-soft">{{ expense.vendor ?? '—' }}</small>
                 </td>
@@ -921,7 +955,7 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="finance.expenses.length === 0">
-                <td colspan="9">
+                <td colspan="8">
                   <div class="st-empty !border-0 !py-8"><h3>Bu davrda xarajat yo'q</h3></div>
                 </td>
               </tr>
@@ -946,7 +980,6 @@ onMounted(async () => {
                 <th>Turi</th>
                 <th>Buyurtma</th>
                 <th>Usul</th>
-                <th>Filial</th>
                 <th>Izoh</th>
                 <th>Chek</th>
                 <th class="right">Summa</th>
@@ -966,14 +999,18 @@ onMounted(async () => {
                     Kiritildi: {{ formatDateTime(income.created_at) }}
                   </small>
                 </td>
-                <td>{{ incomeTypeLabel[income.type] ?? income.type }}</td>
+                <td>
+                  {{ incomeTypeLabel[income.type] ?? income.type }}
+                  <small v-if="!income.branch_id" class="block text-[11px] text-ink-muted">
+                    ustaxona-keng
+                  </small>
+                </td>
                 <td>{{ incomeOrderLabel(income.order_id) }}</td>
                 <td>
                   <small class="text-ink-soft">{{
                     methodLabel[income.method] ?? income.method
                   }}</small>
                 </td>
-                <td>{{ branchName(income.branch_id) }}</td>
                 <td>
                   <small class="text-ink-soft">{{
                     income.note ?? income.voided_reason ?? '—'
@@ -1012,7 +1049,7 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="finance.incomes.length === 0">
-                <td colspan="10">
+                <td colspan="9">
                   <div class="st-empty !border-0 !py-8"><h3>Bu davrda tushum yo'q</h3></div>
                 </td>
               </tr>

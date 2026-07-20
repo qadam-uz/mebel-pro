@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -35,6 +35,7 @@ from app.modules.finance.schemas import (
     WorkerProductionRow,
     WorkerProductionThicknessLine,
 )
+from app.modules.inventory.contracts import Supplier
 from app.modules.sales.api import get_order_finance_target, list_worker_production_records
 from app.modules.support.api import (
     RECEIPT_CONTENT_TYPES,
@@ -80,7 +81,12 @@ async def list_incomes(
         .order_by(Income.received_on.desc(), Income.created_at.desc())
     )
     if scope.branch_ids is not None:
-        query = query.where(Income.branch_id.in_(scope.branch_ids))
+        branch_filter: ColumnElement[bool] = Income.branch_id.in_(scope.branch_ids)
+        # Branch scoping must not hide workshop-level rows (branch IS NULL) from
+        # the owner — HQ costs stay visible in every branch context.
+        if principal.is_owner:
+            branch_filter = or_(branch_filter, Income.branch_id.is_(None))
+        query = query.where(branch_filter)
     if income_type is not None:
         query = query.where(Income.type == income_type)
     if method is not None:
@@ -295,7 +301,11 @@ async def list_expenses(
         .order_by(Expense.incurred_on.desc(), Expense.created_at.desc())
     )
     if scope.branch_ids is not None:
-        query = query.where(Expense.branch_id.in_(scope.branch_ids))
+        branch_filter: ColumnElement[bool] = Expense.branch_id.in_(scope.branch_ids)
+        # Same owner rule as incomes: a branch context never hides HQ costs.
+        if principal.is_owner:
+            branch_filter = or_(branch_filter, Expense.branch_id.is_(None))
+        query = query.where(branch_filter)
     if category is not None:
         query = query.where(Expense.category == category)
     if status_filter is not None:
@@ -316,6 +326,9 @@ async def create_expense(
     _positive_amount(payload.amount_tiyin)
     _not_future(payload.incurred_on)
     scope = await _write_scope(db, principal=principal, branch_id=payload.branch_id)
+    supplier = await _supplier_in_workshop(
+        db, workshop_id=scope.workshop_id, supplier_id=payload.supplier_id
+    )
     expense = Expense(
         workshop_id=scope.workshop_id,
         branch_id=payload.branch_id,
@@ -323,7 +336,10 @@ async def create_expense(
         amount_tiyin=payload.amount_tiyin,
         incurred_on=payload.incurred_on,
         description=_required_text(payload.description, "description_required"),
-        vendor=_optional_text(payload.vendor),
+        # A supplier-linked expense keeps the supplier's name as the vendor text
+        # unless the caller wrote something more specific.
+        vendor=_optional_text(payload.vendor) or (supplier.name if supplier else None),
+        supplier_id=payload.supplier_id,
         receipt_file_id=payload.receipt_file_id,
         status=LedgerStatus.RECORDED,
         recorded_by_user_id=principal.principal_id,
@@ -377,6 +393,11 @@ async def update_expense(
         expense.description = _required_text(payload.description, "description_required")
     if "vendor" in payload.model_fields_set:
         expense.vendor = _optional_text(payload.vendor)
+    if "supplier_id" in payload.model_fields_set:
+        await _supplier_in_workshop(
+            db, workshop_id=expense.workshop_id, supplier_id=payload.supplier_id
+        )
+        expense.supplier_id = payload.supplier_id
     if "receipt_file_id" in payload.model_fields_set:
         expense.receipt_file_id = await replace_attached_file(
             db,
@@ -755,6 +776,22 @@ async def _assert_order_payment_cap(
     existing = int(await db.scalar(existing_query) or 0)
     if existing + amount_tiyin > order_total_tiyin:
         raise APIError("order_payment_exceeds_total", "Order payment exceeds order total")
+
+
+async def _supplier_in_workshop(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    supplier_id: uuid.UUID | None,
+) -> Supplier | None:
+    """Resolve an optional supplier link; inactive suppliers stay payable."""
+
+    if supplier_id is None:
+        return None
+    supplier = await db.get(Supplier, supplier_id)
+    if supplier is None or supplier.workshop_id != workshop_id:
+        raise APIError("supplier_not_found", "Supplier not found", status_code=404)
+    return supplier
 
 
 def _workshop_principal_id(principal: AuthenticatedPrincipal) -> uuid.UUID:

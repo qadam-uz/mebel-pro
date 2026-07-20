@@ -145,7 +145,7 @@ describe('CuttingPanelSvg edge banding', () => {
     const lines = lineOrientations(wrapper)
     expect(lines).toHaveLength(2)
     expect(lines.every((line) => line.horizontal)).toBe(true)
-    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#0f766e')
+    expect(wrapper.find('.placement line').attributes('stroke')).toBe('#4341c6')
   })
 
   it('draws one vertical band line per banded short side (left/right)', () => {

@@ -59,7 +59,47 @@ class Expense(UUIDPrimaryKey, Timestamped, Base):
     incurred_on: Mapped[date] = mapped_column(nullable=False)
     description: Mapped[str] = mapped_column(nullable=False)
     vendor: Mapped[str | None]
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
     receipt_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
+    status: Mapped[LedgerStatus] = mapped_column(
+        enum_type(LedgerStatus, "ledger_status"),
+        default=LedgerStatus.RECORDED,
+        nullable=False,
+    )
+    voided_reason: Mapped[str | None]
+    recorded_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workshop_users.id"), nullable=False
+    )
+    voided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workshop_users.id"))
+    voided_at: Mapped[datetime | None]
+
+
+class CounterpartyAdjustment(UUIDPrimaryKey, Timestamped, Base):
+    """A signed debt correction against exactly one supplier or client.
+
+    The pressure valve of the debt fold: opening balances from the pre-system
+    era and real-world events that are neither a delivery nor a payment
+    (discounts, returns, mutual offsets). It never moves stock or cash — it
+    exists only in the derived balance.
+    """
+
+    __tablename__ = "counterparty_adjustments"
+    __table_args__ = (
+        CheckConstraint("amount_tiyin <> 0", name="ck_counterparty_adjustments_amount_nonzero"),
+        CheckConstraint(
+            "(supplier_id IS NOT NULL AND client_id IS NULL) OR "
+            "(supplier_id IS NULL AND client_id IS NOT NULL)",
+            name="ck_counterparty_adjustments_exactly_one_party",
+        ),
+    )
+
+    workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
+    client_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clients.id"))
+    # Signed, sign convention everywhere: positive = they owe us more.
+    amount_tiyin: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    adjusted_on: Mapped[date] = mapped_column(nullable=False)
+    note: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[LedgerStatus] = mapped_column(
         enum_type(LedgerStatus, "ledger_status"),
         default=LedgerStatus.RECORDED,

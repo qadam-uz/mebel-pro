@@ -9,18 +9,28 @@ from fastapi import APIRouter, Query, status
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import ExpenseCategory, IncomeType, LedgerStatus, MoneyMethod
 from app.modules.finance.api import (
+    create_adjustment,
     create_expense,
     create_income,
     finance_summary,
+    get_client_statement,
+    get_supplier_statement,
+    list_client_debts,
     list_expenses,
     list_incomes,
+    list_supplier_debts,
     update_expense,
     update_income,
+    void_adjustment,
     void_expense,
     void_income,
     worker_production,
 )
 from app.modules.finance.schemas import (
+    AdjustmentCreateRequest,
+    CounterpartyAdjustmentResponse,
+    DebtListResponse,
+    DebtStatementResponse,
     ExpenseCreateRequest,
     ExpensePatchRequest,
     ExpenseResponse,
@@ -173,6 +183,103 @@ async def expenses_void(
 ) -> ExpenseResponse:
     row = await void_expense(db, principal=principal, expense_id=expense_id, payload=payload)
     return ExpenseResponse.model_validate(row)
+
+
+@router.get("/debts/suppliers", response_model=DebtListResponse)
+async def supplier_debts_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+    only_with_debt: bool = True,
+) -> DebtListResponse:
+    return await list_supplier_debts(
+        db,
+        principal=principal,
+        search=search,
+        only_with_debt=only_with_debt,
+    )
+
+
+@router.get("/debts/suppliers/{supplier_id}/statement", response_model=DebtStatementResponse)
+async def supplier_debt_statement(
+    supplier_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> DebtStatementResponse:
+    return await get_supplier_statement(
+        db,
+        principal=principal,
+        supplier_id=supplier_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/debts/clients", response_model=DebtListResponse)
+async def client_debts_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+    only_with_debt: bool = True,
+) -> DebtListResponse:
+    return await list_client_debts(
+        db,
+        principal=principal,
+        search=search,
+        only_with_debt=only_with_debt,
+    )
+
+
+@router.get("/debts/clients/{client_id}/statement", response_model=DebtStatementResponse)
+async def client_debt_statement(
+    client_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> DebtStatementResponse:
+    return await get_client_statement(
+        db,
+        principal=principal,
+        client_id=client_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.post(
+    "/debts/adjustments",
+    response_model=CounterpartyAdjustmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adjustments_create(
+    payload: AdjustmentCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> CounterpartyAdjustmentResponse:
+    row = await create_adjustment(db, principal=principal, payload=payload)
+    return CounterpartyAdjustmentResponse.model_validate(row)
+
+
+@router.post(
+    "/debts/adjustments/{adjustment_id}/void",
+    response_model=CounterpartyAdjustmentResponse,
+)
+async def adjustments_void(
+    adjustment_id: uuid.UUID,
+    payload: VoidLedgerRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> CounterpartyAdjustmentResponse:
+    row = await void_adjustment(
+        db,
+        principal=principal,
+        adjustment_id=adjustment_id,
+        payload=payload,
+    )
+    return CounterpartyAdjustmentResponse.model_validate(row)
 
 
 @router.get("/production", response_model=WorkerProductionResponse)

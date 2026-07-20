@@ -135,14 +135,22 @@ export interface StockTransaction {
   type: StockTransactionType
   quantity: number
   balance_after: number
+  unit_price_tiyin: number | null
+  total_price_tiyin: number | null
   order_id: string | null
   supplier_id: string | null
   supplier_name: string | null
-  receipt_file_id: string | null
   actor_user_id: string | null
   actor_name: string | null
   note: string | null
   created_at: string
+}
+
+export interface StockLastPrice {
+  unit_price_tiyin: number | null
+  recorded_at: string | null
+  supplier_id: string | null
+  supplier_name: string | null
 }
 
 export interface StockTransactionFilters {
@@ -185,6 +193,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const suppliers = ref<Supplier[]>([])
   const stockItems = ref<StockItem[]>([])
   const lowStockItems = ref<StockItem[]>([])
+  const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
   const users = ref<WorkshopUser[]>([])
@@ -459,6 +468,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
     lowStockItems.value = pages.flat()
   }
 
+  // Warehouse value at the latest purchase prices — derived server-side per
+  // branch and summed here across the branches in view.
+  async function loadStockValue(branchIds: string[]) {
+    if (branchIds.length === 0) {
+      stockValueTiyin.value = null
+      return
+    }
+    const values = await Promise.all(
+      [...new Set(branchIds)].map((id) =>
+        api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
+      ),
+    )
+    stockValueTiyin.value = values.reduce((sum, row) => sum + row.value_tiyin, 0)
+  }
+
   async function loadStockTransactions(id: string, filters: StockTransactionFilters = {}) {
     const limit = filters.limit ?? INVENTORY_TX_PAGE_LIMIT
     const offset = filters.offset ?? 0
@@ -537,6 +561,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
     )
     patchSupplier(updated)
     return updated
+  }
+
+  // Read-only prefill helper — intentionally not stored: the latest price is
+  // always derived from transaction history, never cached as state.
+  async function fetchMaterialLastPrice(
+    id: string,
+    materialId: string,
+    supplierId?: string | null,
+  ) {
+    return api.get<StockLastPrice>(
+      withQuery(`/workshop/branches/${id}/materials/${materialId}/last-price`, {
+        supplier_id: supplierId ?? undefined,
+      }),
+      authInit(),
+    )
   }
 
   async function recordStockIn(id: string, payload: unknown) {
@@ -832,6 +871,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     suppliers,
     stockItems,
     lowStockItems,
+    stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
     users,
@@ -869,6 +909,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     setBranchMaterialStatus,
     loadStock,
     loadLowStock,
+    loadStockValue,
     loadStockTransactions,
     loadSuppliers,
     loadInventory,
@@ -876,6 +917,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     createSupplier,
     updateSupplier,
     setSupplierStatus,
+    fetchMaterialLastPrice,
     recordStockIn,
     recordAdjustment,
     loadUsers,

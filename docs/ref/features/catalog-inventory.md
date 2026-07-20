@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-13
+updated: 2026-07-18
 order: 50
 ---
 
@@ -116,9 +116,10 @@ Supplier ≠ manufacturer: the supplier is the workshop's buying counterparty, t
 manufacturer is who made the material — a supplier can carry many manufacturers' tape,
 and vice versa.
 
-No purchase-order or accounts-payable flow in v1 — the *money* for a purchase is a
-separate [`finance.md`](finance.md) expense the accountant records; the supplier here
-only labels where stock came from.
+No purchase-order flow in v1 — the *money* for a purchase is a separate
+[`finance.md`](finance.md) expense the accountant records. The supplier is also a **debt
+counterparty**: its priced deliveries and linked payments fold into a derived balance on
+the Qarzdorlik page ([`finance.md`](finance.md) → *Debts*).
 
 ## Inventory
 
@@ -132,7 +133,16 @@ decrements it.
 
 - **Stock-in** (owner, or `manage_inventory` on the branch) — material (must be in the
   branch's selection), positive quantity in the material's stock unit, a supplier
-  (existing or added inline), optional receipt file. `on_hand += qty`.
+  (existing or added inline), and a **required unit purchase price** (integer tiyin, per
+  panel for panels, per metre for edges). The server stores the price on the transaction
+  row and computes the authoritative total (edges: `quantity_mm × unit price // 1000`,
+  mirroring sale-side edge pricing). `on_hand += qty`. There is no per-row receipt file:
+  stock-ins are flat per-material rows, never grouped under a supplier invoice — a
+  document per money row belongs to [`finance.md`](finance.md) ledgers, not here.
+- **Last price** (same caller) — read-only lookup powering the stock-in form's prefill:
+  the most recent priced stock-in for the material at this branch, preferring the
+  selected supplier's most recent when one exists. Derived from the transaction ledger
+  at read time; no stored "latest price" column exists.
 - **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't
   go below 0. The single tool for stock-takes and **waste write-offs** of every kind
   — damage and accidents, a master's production error, an edge-roll remnant too short
@@ -186,14 +196,24 @@ now-redundant branch column:
 - **Stock** (`manage_inventory`) — table: material (name + image + manufacturer
   chip), on-hand, min-stock, unit; low-stock rows highlighted (chip + colour), and a
   "low-stock only" toggle chip. Two page actions each open a modal: **Record
-  stock-in** (qty, supplier picker with inline add, receipt upload) and **Adjust**
+  stock-in** (qty, unit price, supplier picker with inline add) and **Adjust**
   (a signed quantity with a **required leading + or −** — "-2" writes off, "+5" adds —
   live-filtered as typed, plus the mandatory reason; this supersedes the earlier
   direction-toggle design in favour of one explicit signed entry).
+  The stock-in price field **prefills** with the last price paid — supplier-specific
+  when the picked supplier has priced history, otherwise the material's overall latest —
+  with a provenance hint underneath (price · date · supplier; "birinchi kirim" when no
+  history). A prefill never overwrites a price the user has typed — a later supplier
+  change only updates the hint. A live `quantity × price` total renders under the form
+  so the warehouseman can check it against the invoice in hand; entry time must not grow.
   **Transactions** — full log: type (`stock_in` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
-  balance-after, order link (for consume/restore), supplier (for stock_in), actor,
-  note, date-time; filtered by the shared date-range picker; read-only.
+  balance-after, unit price and total (stock-in rows only), order link (for
+  consume/restore), supplier (for stock_in), actor, note, date-time; filtered by the
+  shared date-range picker and a **material filter** — one material's stock-in rows
+  read as its purchase-price history; read-only. The dashboard shows an
+  **Ombor qiymati** tile: on-hand valued at each material's latest purchase price
+  (edges: mm × per-metre), derived at read time, summed over the branches in view.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
   add / edit in a modal dialog · block (reversible). Mostly reached inline from stock-in.
 

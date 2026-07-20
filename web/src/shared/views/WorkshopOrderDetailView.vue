@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import {
   discountDraftFromOrder,
+  isRevisionEvent,
   orderPhaseSteps,
   orderReworkCount,
   parseDiscountDraft,
   productionTimelineDetails,
+  revisionTimelineDetails,
   type WorkshopDiscountKind,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
@@ -32,13 +34,16 @@ import {
 } from '@/shared/stores/orders'
 import {
   metres,
+  useCuttingStore,
   type CuttingPanel,
   type CuttingPlacement,
   type CuttingResult,
 } from '@/shared/stores/cutting'
 
 const route = useRoute()
+const router = useRouter()
 const rolePath = useRolePath()
+const cutting = useCuttingStore()
 const auth = useAuthStore()
 const permissions = useWorkshopPermissions()
 const toast = useToast()
@@ -63,6 +68,7 @@ const activePlacementId = ref<string | null>(null)
 const reasonDialogAction = ref<'revert' | 'cancel' | null>(null)
 const reasonDraft = ref('')
 const markCollectedOpen = ref(false)
+const discardEditOpen = ref(false)
 const actionPanel = ref<HTMLElement | null>(null)
 const discountPanel = ref<HTMLElement | null>(null)
 const discountValueInput = ref<HTMLInputElement | null>(null)
@@ -101,6 +107,10 @@ const canCompleteBanding = computed(() => {
 })
 const canViewSettlement = computed(() =>
   permissions.canAnyOnBranch([p.manageFinance, p.viewFinanceReports], order.value?.branch_id),
+)
+// Revision (orders.md "Revising a placed order"): pre-production only.
+const canEditOrder = computed(
+  () => canManageOrders.value && ['new', 'confirmed'].includes(order.value?.status ?? ''),
 )
 // Start is gated like completion: the assigned master, or the office on-behalf.
 const canStartCutting = computed(() => {
@@ -539,6 +549,43 @@ async function saveNote() {
   )
 }
 
+// Begin (or resume) the order's revision and hand off to the shared editor.
+async function startEdit() {
+  const current = order.value
+  if (!current || !canEditOrder.value) return
+  if (current.revision_draft_id) {
+    void router.push(rolePath(`/workshop/orders/cutting/${current.revision_draft_id}`))
+    return
+  }
+  actionError.value = null
+  actionTraceId.value = null
+  pendingAction.value = 'edit'
+  try {
+    const draft = await orders.beginRevision(current.id)
+    void router.push(rolePath(`/workshop/orders/cutting/${draft.id}`))
+  } catch {
+    actionError.value = workshopErrorMessage(orders.actionError ?? 'order_revision_failed')
+    actionTraceId.value = orders.actionTraceId
+  } finally {
+    pendingAction.value = null
+  }
+}
+
+async function discardEdit() {
+  const current = order.value
+  const revisionId = current?.revision_draft_id
+  if (!current || !revisionId) return
+  const ok = await run(
+    async () => {
+      await cutting.deleteDraft(revisionId)
+      await orders.loadWorkshopOrder(current.id)
+    },
+    'Tahrir bekor qilindi.',
+    'discardEdit',
+  )
+  if (ok) discardEditOpen.value = false
+}
+
 watch(
   order,
   (value) => {
@@ -650,13 +697,14 @@ onMounted(loadDetail)
 
           <div v-if="order.status === 'cutting' || order.status === 'edge_banding'" class="actions">
             <RouterLink
-              :to="{
-                path: rolePath('/workshop/production'),
-                query: { station: order.status === 'edge_banding' ? 'banding' : 'cutting' },
-              }"
+              :to="
+                rolePath(
+                  order.status === 'edge_banding' ? '/workshop/banding' : '/workshop/cutting',
+                )
+              "
               class="mp-button mp-button-outline min-h-11 px-3 text-xs"
             >
-              Ishlarim
+              {{ order.status === 'edge_banding' ? 'Krom' : 'Kesish' }}
             </RouterLink>
           </div>
         </div>
@@ -1040,10 +1088,20 @@ onMounted(loadDetail)
                   :class="timelineStepClass(event, index)"
                 >
                   <span class="when">{{ formatDate(event.changed_at) }}</span>
-                  {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
-                  <span class="text-ink-muted">→</span>
-                  {{ workshopStatusUz[event.to_status] }}
+                  <template v-if="isRevisionEvent(event)">Buyurtma tahrirlandi</template>
+                  <template v-else>
+                    {{ event.from_status ? workshopStatusUz[event.from_status] : 'Yaratildi' }}
+                    <span class="text-ink-muted">→</span>
+                    {{ workshopStatusUz[event.to_status] }}
+                  </template>
                   <span v-if="event.reason" class="block text-ink-soft">{{ event.reason }}</span>
+                  <span
+                    v-for="detail in revisionTimelineDetails(event, formatTiyin)"
+                    :key="detail"
+                    class="block text-ink-soft"
+                  >
+                    {{ detail }}
+                  </span>
                   <span
                     v-for="detail in timelineProductionDetails(event)"
                     :key="detail"
@@ -1280,6 +1338,56 @@ onMounted(loadDetail)
                 Bu buyurtma siz uchun faqat o'qish holatida.
               </p>
 
+              <template v-if="canEditOrder">
+                <div
+                  v-if="order.revision_draft_id"
+                  class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
+                >
+                  Bu buyurtmada ochiq tahrir bor.
+                  <div class="mt-2 grid gap-2">
+                    <RouterLink
+                      :to="rolePath(`/workshop/orders/cutting/${order.revision_draft_id}`)"
+                      class="mp-button mp-button-outline w-full"
+                    >
+                      Tahrirni davom ettirish
+                    </RouterLink>
+                    <button
+                      type="button"
+                      class="mp-button mp-button-outline w-full text-danger"
+                      :disabled="orders.actionLoading"
+                      @click="discardEditOpen = true"
+                    >
+                      Tahrirni bekor qilish
+                    </button>
+                  </div>
+                </div>
+                <button
+                  v-else
+                  type="button"
+                  class="mp-button mp-button-outline w-full"
+                  :disabled="orders.actionLoading"
+                  @click="startEdit"
+                >
+                  {{ pendingAction === 'edit' ? 'Ochilmoqda…' : 'Tahrirlash' }}
+                </button>
+              </template>
+              <!-- A revision left behind after the order moved on: only discard
+                   remains (orders.md "Revising a placed order"). -->
+              <div
+                v-else-if="canManageOrders && order.revision_draft_id"
+                class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
+              >
+                Ochiq tahrir eskirgan — buyurtma holati o'zgargan.
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline mt-2 w-full text-danger"
+                  :disabled="orders.actionLoading"
+                  @click="discardEditOpen = true"
+                >
+                  Tahrirni bekor qilish
+                </button>
+              </div>
+
               <button
                 v-if="
                   canManageOrders && ['cutting', 'edge_banding', 'ready'].includes(order.status)
@@ -1409,6 +1517,19 @@ onMounted(loadDetail)
       :busy="orders.actionLoading"
       @cancel="markCollectedOpen = false"
       @confirm="markCollected"
+    />
+
+    <ConfirmDialog
+      :open="discardEditOpen"
+      title="Tahrirni bekor qilish"
+      message="Tahrirdagi barcha o'zgarishlar o'chiriladi; buyurtma avvalgi holida qoladi."
+      confirm-label="Ha, bekor qilinsin"
+      cancel-label="Orqaga"
+      busy-label="Bajarilmoqda"
+      danger
+      :busy="orders.actionLoading"
+      @cancel="discardEditOpen = false"
+      @confirm="discardEdit"
     />
   </section>
 </template>

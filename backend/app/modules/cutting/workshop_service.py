@@ -157,7 +157,15 @@ async def update_workshop_draft(
 ) -> CuttingDraftResponse:
     draft = await _workshop_draft(db, principal=principal, draft_id=draft_id)
     resolved_branch_id = preferred_branch_id
-    if preferred_branch_id_set and preferred_branch_id is not None:
+    if preferred_branch_id_set and draft.revision_of_order_id is not None:
+        # A revision draft is branch-locked to its order (orders.md: "Revising a
+        # placed order") — same branch, same client, always.
+        if preferred_branch_id != draft.preferred_branch_id:
+            raise APIError(
+                "order_revision_branch_locked",
+                "An order revision stays on the order's branch",
+            )
+    elif preferred_branch_id_set and preferred_branch_id is not None:
         # A branch change on the staff path must still be a workshop branch the
         # staffer can act on — tenancy, not public browsability.
         scope = await resolve_branch_scope(

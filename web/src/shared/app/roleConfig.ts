@@ -102,10 +102,16 @@ export const workshopConfig: RoleConfig = {
     { label: 'Asosiy', to: '/workshop', group: 'Boshqaruv', icon: 'dashboard' },
     { label: 'Buyurtmalar', to: '/workshop/orders', group: 'Boshqaruv', icon: 'orders' },
     {
-      label: 'Ishlarim',
-      to: '/workshop/production',
+      label: 'Kesish',
+      to: '/workshop/cutting',
       group: 'Ishlab chiqarish',
       icon: 'scissors',
+    },
+    {
+      label: 'Krom',
+      to: '/workshop/banding',
+      group: 'Ishlab chiqarish',
+      icon: 'layers',
     },
     { label: 'Ombor', to: '/workshop/inventory', group: 'Resurslar', icon: 'box' },
     { label: 'Material katalogi', to: '/workshop/catalog', group: 'Resurslar', icon: 'grid' },

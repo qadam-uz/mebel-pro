@@ -1308,6 +1308,7 @@ async def _draft_response(
         preferred_branch_id=draft.preferred_branch_id,
         parts_snapshot=_parts_snapshot_response(draft.parts_snapshot),
         chosen_result_id=draft.chosen_result_id,
+        revision_of_order_id=draft.revision_of_order_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
         results=[await _result_response(db, result, summary=summary) for result in result_rows],

@@ -3,32 +3,37 @@ version: alpha
 name: Mebel Pro
 description: >-
   Design system for the three Vue SPAs (client, workshop, superadmin) — a dense,
-  utilitarian back-office language on a cool light canvas with a teal accent.
-  Realized as @theme tokens in src/assets/main.css and shared primitives under
-  src/shared/components/.
+  utilitarian back-office language on a warm paper canvas with an ultramarine
+  accent. Realized as @theme tokens in src/assets/main.css and shared primitives
+  under src/shared/components/.
 colors:
-  bg: "#f4f6f8"
+  bg: "#f5f4ef"
   elevated: "#ffffff"
-  sunk: "#ebeff3"
-  deep: "#14323a"
-  ink: "#0f1b2a"
-  ink-strong: "#27384a"
-  ink-soft: "#475569"
-  ink-muted: "#5b6675"
-  hairline: "#e5e9ef"
-  hairline-strong: "#d2dae3"
-  accent: "#0f766e"
-  accent-hover: "#0f8078"
-  accent-soft: "#e9f6f4"
-  accent-tint: "#c8e8e3"
-  success: "#15803d"
-  success-soft: "#ecf7f0"
-  warning: "#b45309"
-  warning-soft: "#fbf3e5"
-  danger: "#be3a2b"
-  danger-soft: "#fcedea"
-  info: "#1d62d8"
-  info-soft: "#edf2fc"
+  sunk: "#edebe2"
+  deep: "#211f19"
+  ink: "#23221c"
+  ink-strong: "#3b382e"
+  ink-soft: "#57544a"
+  ink-muted: "#68645a"
+  hairline: "#e7e4da"
+  hairline-strong: "#d5d1c3"
+  accent: "#4341c6"
+  accent-hover: "#4f4dd3"
+  accent-soft: "#edecfa"
+  accent-tint: "#d9d8f5"
+  accent-deep: "#322f96"
+  success: "#217a3c"
+  success-soft: "#eaf5eb"
+  success-border: "#cfe7d2"
+  warning: "#96490a"
+  warning-soft: "#faf1de"
+  warning-border: "#eedfba"
+  danger: "#b5372a"
+  danger-soft: "#fbedea"
+  danger-border: "#f2d3cb"
+  info: "#0b6e8d"
+  info-soft: "#e6f2f7"
+  info-border: "#c9e2eb"
 typography:
   headline-lg:
     fontFamily: "'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif"
@@ -107,20 +112,25 @@ every color, weight, and elevation step encodes state or hierarchy.
 One light theme; there is no dark mode. Never hardcode hex in components — always the
 semantic `--color-*` tokens.
 
-- **Canvas & surfaces** — `bg` is the cool gray page canvas; `elevated` (white) is cards,
-  popovers, modals; `sunk` is inset wells (table headers, disabled fields); `deep` is the
-  dark brand surface (shell chrome).
-- **Text** — `ink` for body, `ink-strong` for emphasis, `ink-soft`/`ink-muted` for secondary
-  and captions. `::selection` inverts to accent/white.
+- **Canvas & surfaces** — `bg` is the warm limestone-paper page canvas; `elevated` (white)
+  is cards, popovers, modals; `sunk` is inset wells (table headers, disabled fields); `deep`
+  is the dark brand surface (shell chrome). The whole neutral ramp is warm-cast — it sits
+  with the wood-tone material content instead of fighting it.
+- **Text** — `ink` (warm graphite) for body, `ink-strong` for emphasis, `ink-soft`/
+  `ink-muted` for secondary and captions. `::selection` inverts to accent/white.
 - **Borders** — `hairline` for resting dividers, `hairline-strong` where separation must
   survive on `sunk` surfaces.
-- **Accent** — teal `accent` is the single brand/action color: primary buttons, focus rings,
-  active nav, links. `accent-hover` on hover, `accent-soft`/`accent-tint` for selected and
-  tinted fills. Use it sparingly — one primary action per screen.
+- **Accent** — ultramarine `accent` is the single brand/action color: primary buttons, focus
+  rings, active nav, links. `accent-hover` on hover, `accent-soft`/`accent-tint` for
+  selected and tinted fills, `accent-deep` for gradient depth and text on `accent-tint`.
+  Use it sparingly — one primary action per screen.
 - **Status** — `success` / `warning` / `danger` / `info`, each with a `-soft` fill for pills
-  and banners. Status color is never the only signal: pair it with the state's word or an
-  icon. Colored dot prefixes are reserved for status filters, mapped from the status-pill
-  palette.
+  and banners and a `-border` tint for their outlines. Status color is never the only
+  signal: pair it with the state's word or an icon. Colored dot prefixes are reserved for
+  status filters, mapped from the status-pill palette.
+- **Derived values** — shadows/scrims tint from `ink`, glows and focus rings from `accent`,
+  via `color-mix(... , transparent)`. Never bake a palette hex into a shadow or ring — a
+  retheme must stay a token-file change.
 
 ## Typography
 

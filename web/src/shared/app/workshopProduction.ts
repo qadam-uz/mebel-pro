@@ -54,15 +54,33 @@ export function workshopProductionQueueCounts(
   return { cutting, banding, total: cutting + banding }
 }
 
-export function resolveProductionCreditUser(
-  assignedUserId: string | null | undefined,
-  selectedUserId: string | null | undefined,
-  canChooseWorker: boolean,
-) {
-  return (canChooseWorker ? selectedUserId || assignedUserId : assignedUserId) ?? null
+// The job sheet names parts by their detail name from the cutting result,
+// falling back to the editor's D-numbering — never the raw part_ref (a uuid).
+export function productionPartNames(
+  partsSnapshot: { part_ref: string; name: string | null }[],
+): Map<string, string> {
+  const names = new Map<string, string>()
+  partsSnapshot.forEach((part, index) => {
+    names.set(part.part_ref, part.name?.trim() || `D${index + 1}`)
+  })
+  return names
 }
 
-// --- Station workspace (Ishlarim) -------------------------------------------
+// After a worker marks a panel as cut, which panel should the drawing show:
+// the next uncut one in order, wrapping to the first uncut — or null when the
+// order is fully marked (the drawing stays where it is).
+export function nextUncutPanelId(
+  panels: { id: string }[],
+  marked: ReadonlySet<string>,
+  justMarkedId: string,
+): string | null {
+  const uncut = panels.filter((panel) => !marked.has(panel.id))
+  const after = panels.findIndex((panel) => panel.id === justMarkedId)
+  const target = uncut.find((panel) => panels.indexOf(panel) > after) ?? uncut[0]
+  return target?.id ?? null
+}
+
+// --- Station workspace (Kesish / Krom) ---------------------------------------
 
 export type ProductionStationKey = 'cutting' | 'banding'
 

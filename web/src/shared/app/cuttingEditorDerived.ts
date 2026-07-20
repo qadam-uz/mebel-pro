@@ -8,7 +8,7 @@ export interface EdgeRegistryColorStyle {
 }
 
 export const EDGE_REGISTRY_COLOR_STYLES = [
-  { bg: '#0f766e', fg: '#ffffff', soft: '#d8f3ea' },
+  { bg: '#4341c6', fg: '#ffffff', soft: '#e3e2f9' },
   { bg: '#D85A30', fg: '#ffffff', soft: '#fde2d6' },
   { bg: '#2563eb', fg: '#ffffff', soft: '#dbeafe' },
   { bg: '#7c3aed', fg: '#ffffff', soft: '#ede9fe' },
@@ -16,7 +16,7 @@ export const EDGE_REGISTRY_COLOR_STYLES = [
   { bg: '#475569', fg: '#ffffff', soft: '#e2e8f0' },
   { bg: '#be185d', fg: '#ffffff', soft: '#fce7f3' },
   { bg: '#15803d', fg: '#ffffff', soft: '#dcfce7' },
-  { bg: '#4338ca', fg: '#ffffff', soft: '#e0e7ff' },
+  { bg: '#0f766e', fg: '#ffffff', soft: '#d8f3ea' },
   { bg: '#a16207', fg: '#ffffff', soft: '#fef9c3' },
 ] as const satisfies readonly EdgeRegistryColorStyle[]
 

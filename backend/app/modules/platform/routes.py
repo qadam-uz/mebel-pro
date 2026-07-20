@@ -26,6 +26,7 @@ from app.modules.platform.api import (
     reopen_error_record,
     require_platform_operator,
     reset_platform_user_password,
+    reset_workshop_owner_password,
     resolve_error_record,
     run_platform_job,
     unblock_platform_user,
@@ -53,6 +54,7 @@ from app.modules.platform.schemas import (
     ProvisionWorkshopResponse,
     StatusChangeLogResponse,
     WorkshopListItem,
+    WorkshopOwnerTempPasswordResponse,
     WorkshopSummary,
     WorkshopUserSummary,
 )
@@ -147,6 +149,22 @@ async def workshops_unblock(
 ) -> WorkshopSummary:
     workshop = await unblock_workshop(db, principal=principal, workshop_id=workshop_id)
     return WorkshopSummary.model_validate(workshop)
+
+
+@router.post(
+    "/workshops/{workshop_id}/owner/reset-password",
+    response_model=WorkshopOwnerTempPasswordResponse,
+)
+async def workshops_owner_reset_password(
+    workshop_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> WorkshopOwnerTempPasswordResponse:
+    reset = await reset_workshop_owner_password(db, principal=principal, workshop_id=workshop_id)
+    return WorkshopOwnerTempPasswordResponse(
+        owner=WorkshopUserSummary.model_validate(reset.owner),
+        temp_password=reset.temp_password,
+    )
 
 
 @router.get("/jobs", response_model=list[PlatformJobSummary])

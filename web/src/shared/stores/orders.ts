@@ -12,7 +12,7 @@ import {
 import { authInit } from '@/shared/app/authInit'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import { downloadBlob } from '@/shared/app/downloadBlob'
-import type { CuttingResult, MaterialSource } from '@/shared/stores/cutting'
+import type { CuttingDraft, CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
 export type OrderStatus =
   | 'new'
@@ -200,6 +200,9 @@ export interface OrderDetail extends OrderSummary {
   events: OrderEvent[]
   cutting_result: CuttingResult | null
   settlement: OrderSettlement | null
+  // The order's open revision draft (workshop detail only) — lets the UI offer
+  // resume/discard instead of starting a fresh revision.
+  revision_draft_id: string | null
 }
 
 export const activeWorkshopStatuses: OrderStatus[] = [
@@ -508,6 +511,33 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/cancel`, { version, reason })
   }
 
+  // Revision — editing a placed order (orders.md "Revising a placed order").
+  // Begin creates or resumes the order's revision draft; the editor takes over
+  // from there. Apply rebinds the order atomically like any workshop mutation.
+  async function beginRevision(id: string) {
+    actionLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      return await api.post<CuttingDraft>(`/workshop/orders/${id}/revision`, {}, authInit())
+    } catch (errorValue) {
+      captureActionError(errorValue, 'order_revision_failed')
+      throw errorValue
+    } finally {
+      actionLoading.value = false
+    }
+  }
+
+  async function applyRevision(id: string, payload: { version: number; reason?: string | null }) {
+    return await mutate(`/workshop/orders/${id}/revision/apply`, payload)
+  }
+
+  // Plain fetch without touching currentOrder/loading — for surfaces that show
+  // order context around another primary object (the revision editor/review).
+  async function fetchWorkshopOrder(id: string) {
+    return await api.get<OrderDetail>(`/workshop/orders/${id}`, authInit())
+  }
+
   async function discount(id: string, payload: unknown) {
     return await mutate(`/workshop/orders/${id}/discount`, payload)
   }
@@ -680,6 +710,9 @@ export const useOrdersStore = defineStore('orders', () => {
     markCollected,
     revert,
     cancelWorkshopOrder,
+    beginRevision,
+    applyRevision,
+    fetchWorkshopOrder,
     discount,
     updateNote,
     downloadClientPdf,

@@ -107,6 +107,14 @@ class WorkshopOrderNoteRequest(BaseModel):
     note_workshop: str | None = None
 
 
+class WorkshopOrderEditApplyRequest(VersionedRequest):
+    """Apply the order's revision draft back onto the order (orders.md:
+    "Revising a placed order"). The reason is optional — the edit event carries
+    it when staff give one."""
+
+    reason: str | None = None
+
+
 class OrderItemResponse(APIModel):
     id: uuid.UUID
     material_id: uuid.UUID
@@ -227,6 +235,9 @@ class OrderDetailResponse(OrderSummaryResponse):
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
     cutting_result: CuttingResultResponse | None = None
     settlement: OrderSettlementResponse | None = None
+    # The order's open revision draft, surfaced on the workshop detail only —
+    # lets the UI offer resume/discard instead of starting a fresh revision.
+    revision_draft_id: uuid.UUID | None = None
 
 
 # --- Production terminal (worker-scoped, money-free) -------------------------
