@@ -214,7 +214,7 @@ def _draw_edge_summary(
     _draw_text(pdf, _MARGIN, y, "Kromka spetsifikatsiyasi", 11, bold=True)
     y -= 14
     if not registry:
-        _draw_text(pdf, _MARGIN, y, "Krom ishlatilmagan.", 9)
+        _draw_text(pdf, _MARGIN, y, "Kromka ishlatilmagan.", 9)
         return y - 12
     widths = [28, 360, 112]
     y = _draw_table_row(pdf, y, ["#", "Kromka", "Metr"], widths, bold=True)

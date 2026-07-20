@@ -31,7 +31,7 @@ export function workshopEdgeMaterialLabel(line: WorkshopEdgeMaterialDemand) {
 }
 
 export function workshopQueueEdgeLine(lines: WorkshopEdgeMaterialDemand[]) {
-  if (lines.length === 0) return 'krom rejasi'
+  if (lines.length === 0) return 'kromka rejasi'
   return lines
     .map(
       (line) => `${workshopEdgeMaterialLabel(line)}: ${formatStockQuantity(line.consumed_mm, 'm')}`,

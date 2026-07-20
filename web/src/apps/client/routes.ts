@@ -48,7 +48,7 @@ export const clientRoutes: RouteRecordRaw[] = [
     meta: { title: 'Kesim chizmalari' },
   },
   {
-    // Unsaved editor — the draft is created on the first optimise (cutting.md).
+    // New-editor entry; the first complete detail creates and autosaves the draft.
     // Must precede the `:id` route so "new" isn't matched as a draft id.
     path: '/c/cutting/new',
     name: 'client-cutting-new',

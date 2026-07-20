@@ -78,7 +78,7 @@ const isXmlImport = computed(() => parsed.value?.source_format === 'bazis_xml')
 const isMapImport = computed(() => parsed.value?.source_format === 'map_2dplace')
 const isDirectParsedImport = computed(() => isXmlImport.value || isMapImport.value)
 const canCommitMapLayout = computed(
-  () => isMapImport.value && cutting.scope === 'client' && !!parsed.value?.map_layout,
+  () => isMapImport.value && !!parsed.value?.map_layout,
 )
 const visibleSteps = computed(() => {
   if (isMapImport.value) {
@@ -205,7 +205,7 @@ async function detectFile() {
   loading.value = true
   error.value = null
   try {
-    const response = await parseCuttingImport(selectedFile.value)
+    const response = await parseCuttingImport(selectedFile.value, undefined, cutting.scope)
     if (response.status === 'parsed') {
       detection.value = null
       enterMaterials(response)
@@ -269,7 +269,7 @@ async function confirmMapping() {
     const response = await parseCuttingImport(selectedFile.value, {
       skip_rows: skipRows.value,
       mapping: mappingPayload.value,
-    })
+    }, cutting.scope)
     if (response.status !== 'parsed') {
       error.value = "Faylni o'qib bo'lmadi."
       return
@@ -632,7 +632,7 @@ function previewCell(row: (string | null)[], column: number) {
             <div class="min-w-0">
               <p class="break-words text-sm font-extrabold text-ink">
                 <template v-if="isMapImport">
-                  {{ group.side_count }} tomonda krom bor · kromka faylda ko'rsatilmagan
+                  {{ group.side_count }} tomonda kromka bor · kromka faylda ko'rsatilmagan
                 </template>
                 <template v-else>{{ group.label }}</template>
               </p>

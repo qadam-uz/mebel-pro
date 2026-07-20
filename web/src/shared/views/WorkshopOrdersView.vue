@@ -98,7 +98,7 @@ const statusOptions: DropdownOption[] = [
   { value: 'new', label: 'Yangi', dot: 'muted' },
   { value: 'confirmed', label: 'Tasdiqlangan', dot: 'info' },
   { value: 'cutting', label: 'Kesilmoqda', dot: 'accent' },
-  { value: 'edge_banding', label: 'Kromda', dot: 'accent' },
+  { value: 'edge_banding', label: 'Kromkada', dot: 'accent' },
   { value: 'ready', label: 'Tayyor', dot: 'success' },
   { value: 'completed', label: 'Tugatilgan', dot: 'muted' },
   { value: 'cancelled', label: 'Bekor qilingan', dot: 'danger' },
@@ -171,7 +171,7 @@ function assignedText(order: OrderSummary) {
   if (order.status === 'cutting')
     return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : 'kesuvchi yo‘q'
   if (order.status === 'edge_banding')
-    return order.assigned_edger_user_id ? 'kromchi tayinlangan' : 'kromchi yo‘q'
+    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : 'kromka ustasi yo‘q'
   if (order.status === 'confirmed') return 'tayinlash kerak'
   return ''
 }
@@ -387,8 +387,8 @@ function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
   }
   if (action.kind === 'start_banding') {
     return {
-      title: 'Krom boshlansinmi?',
-      message: `${order.order_number} uchun krom ishi boshlanganini belgilaysiz.`,
+      title: 'Kromka boshlansinmi?',
+      message: `${order.order_number} uchun kromka ishi boshlanganini belgilaysiz.`,
       confirmLabel: 'Boshlash',
     }
   }
@@ -401,9 +401,9 @@ function confirmConfig(action: WorkshopOrderListAction, order: OrderSummary) {
   }
   if (action.kind === 'complete_banding') {
     return {
-      title: 'Krom tugadimi?',
-      message: `${order.order_number} krom bosqichi yakunlanadi va buyurtma tayyor holatga o'tadi.`,
-      confirmLabel: 'Krom tugadi',
+      title: 'Kromka tugadimi?',
+      message: `${order.order_number} kromka bosqichi yakunlanadi va buyurtma tayyor holatga o'tadi.`,
+      confirmLabel: 'Kromka tugadi',
     }
   }
   if (action.kind === 'mark_collected') {
@@ -440,9 +440,9 @@ function reasonConfig(action: WorkshopOrderListAction, order: OrderSummary) {
 function listActionSuccessMessage(action: WorkshopOrderListAction) {
   if (action.kind === 'approve') return 'Buyurtma tasdiqlandi.'
   if (action.kind === 'start_cutting') return 'Kesish boshlandi.'
-  if (action.kind === 'start_banding') return 'Krom boshlandi.'
+  if (action.kind === 'start_banding') return 'Kromka boshlandi.'
   if (action.kind === 'complete_cutting') return 'Kesish yakunlandi.'
-  if (action.kind === 'complete_banding') return 'Krom yakunlandi.'
+  if (action.kind === 'complete_banding') return 'Kromka yakunlandi.'
   if (action.kind === 'mark_collected') return 'Buyurtma topshirildi.'
   if (action.kind === 'revert') return 'Buyurtma qaytarildi.'
   if (action.kind === 'cancel') return 'Buyurtma bekor qilindi.'
@@ -510,7 +510,7 @@ async function confirmListAction() {
   } else if (action.kind === 'complete_banding') {
     const completedBy = order.assigned_edger_user_id
     if (!completedBy) {
-      listActionError.value = 'Krom ishini bajargan xodim topilmadi.'
+      listActionError.value = 'Kromka ishini bajargan xodim topilmadi.'
       listActionTraceId.value = null
       ok = false
     } else {

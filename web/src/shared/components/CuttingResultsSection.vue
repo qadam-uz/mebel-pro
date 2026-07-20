@@ -33,7 +33,7 @@ import {
 import type { OrderQuote } from '@/shared/stores/orders'
 
 // CB-93 seam: the optimizer-results surface — KPI tiles, algorithm comparison,
-// the per-material panel strip + SVG visualiser, the krom/placement aside, and
+// the per-material panel strip + SVG visualiser, the kromka/placement aside, and
 // the order/PDF actions. All of `chosenResult` and its derived state lived only
 // here in the parent, so they move wholesale into this component; the editor
 // keeps `activeResultId`/`activePanelId` (written by optimize/the draft watch)
@@ -382,12 +382,12 @@ async function choose(result: CuttingResult) {
               </div>
             </div>
             <div class="rounded-md border border-hairline bg-elevated p-4">
-              <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
+              <div class="text-xs font-bold uppercase text-ink-muted">Kromka</div>
               <div class="mt-1 font-serif text-2xl font-semibold text-ink">
                 {{ metres(consumedShop + consumedOwn) }}
               </div>
               <p v-if="edgeByMaterial.length" class="mt-1 text-xs text-ink-muted">
-                {{ edgeByMaterial.length }} xil tasma
+                {{ edgeByMaterial.length }} xil kromka
               </p>
             </div>
           </div>
@@ -444,7 +444,7 @@ async function choose(result: CuttingResult) {
             </span>
           </p>
           <div class="rounded-lg border border-hairline bg-sunk p-4">
-            <h3 class="text-sm font-extrabold text-ink">Krom (material bo'yicha)</h3>
+            <h3 class="text-sm font-extrabold text-ink">Kromka (material bo'yicha)</h3>
             <template v-if="edgeByMaterial.length">
               <ul class="mt-2 space-y-1.5 text-sm">
                 <li
@@ -475,7 +475,7 @@ async function choose(result: CuttingResult) {
                 </li>
               </ul>
             </template>
-            <p v-else class="mt-2 text-sm text-ink-soft">Krom ishlatilmagan.</p>
+            <p v-else class="mt-2 text-sm text-ink-soft">Kromka ishlatilmagan.</p>
           </div>
           <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
             <h3 class="text-sm font-extrabold text-ink">

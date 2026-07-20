@@ -163,8 +163,7 @@ onMounted(() => {
           <span
             class="block truncate text-sm font-bold"
             :class="draft.name ? 'text-ink' : 'text-ink-soft'"
-            >{{ draftTitle(draft)
-            }}<small v-if="!draft.name" class="ml-1 text-ink-muted">(nomsiz)</small></span
+            >{{ draftTitle(draft) }}</span
           >
           <span v-if="branchName(draft)" class="client-pill client-pill-info mt-1 inline-block">
             {{ branchName(draft) }}

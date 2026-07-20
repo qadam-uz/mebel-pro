@@ -233,6 +233,6 @@ describe('workshop order detail helpers', () => {
         },
         (id) => id,
       ),
-    ).toEqual(['Bajardi: worker-2', 'Krom sarfi: 3 m'])
+    ).toEqual(['Bajardi: worker-2', 'Kromka sarfi: 3 m'])
   })
 })

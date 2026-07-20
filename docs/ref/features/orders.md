@@ -407,7 +407,7 @@ Permission names below are the per-branch grants from
 
 - **Production station** (`/workshop/production`, `process_production`) — the shop-floor
   terminal, tablet-first, replacing the former cutter/edger workspace pages. One workspace
-  with a **Kesish** and a **Krom** station tab (a tab renders only when the user's grants
+  with a **Kesish** and a **Kromka** station tab (a tab renders only when the user's grants
   cover that station's work). Each station is a priority stack, not columns: the started
   job pinned on top ("Hozirgi ish"), the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at

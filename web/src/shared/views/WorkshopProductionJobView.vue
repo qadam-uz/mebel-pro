@@ -110,7 +110,7 @@ function bandedSidesText(item: ProductionJobItem) {
   if (item.edge_bottom) names.push('pastki')
   if (item.edge_left) names.push('chap')
   if (item.edge_right) names.push("o'ng")
-  return names.length > 0 ? `krom: ${names.join(', ')}` : 'kromsiz'
+  return names.length > 0 ? `kromka: ${names.join(', ')}` : 'kromkasiz'
 }
 
 const metaLine = computed(() => (job.value ? productionJobMetaLine(job.value, station.value) : ''))
@@ -127,7 +127,7 @@ async function runStart() {
   try {
     if (station.value === 'cutting') await orders.startCutting(current.id, current.version)
     else await orders.startBanding(current.id, current.version)
-    toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Krom boshlandi.')
+    toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Kromka boshlandi.')
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
   } finally {
@@ -159,7 +159,7 @@ const completeMessage = computed(() => {
     return `${current.order_number} · ${metaLine.value}. Keyin buyurtma tayyor holatga o'tadi.`
   }
   const edger = current.assigned_edger ? ` (${current.assigned_edger.full_name} navbatiga)` : ''
-  return `${current.order_number} · ${metaLine.value}. Keyin buyurtma krom bosqichiga o'tadi${edger}.`
+  return `${current.order_number} · ${metaLine.value}. Keyin buyurtma kromka bosqichiga o'tadi${edger}.`
 })
 
 async function confirmComplete() {
@@ -341,7 +341,7 @@ onMounted(load)
 
     <ConfirmDialog
       :open="completeOpen"
-      :title="station === 'cutting' ? 'Kesish tugadimi?' : 'Krom tugadimi?'"
+      :title="station === 'cutting' ? 'Kesish tugadimi?' : 'Kromka tugadimi?'"
       :message="completeMessage"
       confirm-label="✓ Ha, tugatdim"
       cancel-label="Bekor qilish"

@@ -61,7 +61,7 @@ const multiBranch = computed(() => workshop.branches.length > 1)
 
 const stationTabs = computed<ChoiceOption[]>(() => [
   { value: 'cutting', label: `Kesish (${production.queues.cutting?.jobs.length ?? 0})` },
-  { value: 'banding', label: `Krom (${production.queues.banding?.jobs.length ?? 0})` },
+  { value: 'banding', label: `Kromka (${production.queues.banding?.jobs.length ?? 0})` },
 ])
 
 const partitioned = computed(() => partitionProductionJobs(queue.value?.jobs ?? [], station.value))
@@ -129,7 +129,7 @@ async function startJob(job: ProductionJobCard) {
   try {
     if (station.value === 'cutting') await orders.startCutting(job.id, job.version)
     else await orders.startBanding(job.id, job.version)
-    toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Krom boshlandi.')
+    toast.success(station.value === 'cutting' ? 'Kesish boshlandi.' : 'Kromka boshlandi.')
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')
   } finally {
@@ -160,7 +160,7 @@ function requestComplete(job: ProductionJobCard) {
 }
 
 const completeDialogTitle = computed(() =>
-  station.value === 'cutting' ? 'Kesish tugadimi?' : 'Krom tugadimi?',
+  station.value === 'cutting' ? 'Kesish tugadimi?' : 'Kromka tugadimi?',
 )
 const completeDialogMessage = computed(() => {
   const job = pendingComplete.value
@@ -169,7 +169,7 @@ const completeDialogMessage = computed(() => {
   if (station.value === 'banding') return `${intro}. Keyin buyurtma tayyor holatga o'tadi.`
   if (!job.has_banding) return `${intro}. Keyin buyurtma tayyor holatga o'tadi.`
   const edger = job.assigned_edger ? ` (${job.assigned_edger.full_name} navbatiga)` : ''
-  return `${intro}. Keyin buyurtma krom bosqichiga o'tadi${edger}.`
+  return `${intro}. Keyin buyurtma kromka bosqichiga o'tadi${edger}.`
 })
 
 async function confirmComplete() {

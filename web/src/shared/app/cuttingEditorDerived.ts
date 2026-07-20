@@ -41,6 +41,53 @@ export function edgeRegistryKey(materialId: string, source: 'shop' | 'own') {
   return `${materialId}:${source}`
 }
 
+// Keep this list aligned with backend/app/modules/cutting/service.py.  These
+// fields change panel placement; every other editable part field only changes
+// presentation or edge pricing/consumption metrics.
+const geometryDefaults = {
+  quantity: 0,
+  length_mm: 0,
+  width_mm: 0,
+  material_id: null,
+  follow_grain: true,
+} as const
+
+/**
+ * Whether a parts edit leaves every existing layout geometrically valid.
+ *
+ * Draft snapshots written before a field existed may omit it, so compare a
+ * missing value with the same default the backend uses rather than treating a
+ * serialization difference as a layout-changing edit.
+ */
+export function isGeometryNeutralEdit(
+  oldParts: readonly Partial<CuttingPart>[],
+  newParts: readonly Partial<CuttingPart>[],
+): boolean {
+  const oldByRef = new Map(oldParts.map((part) => [part.part_ref, part]))
+  const newByRef = new Map(newParts.map((part) => [part.part_ref, part]))
+  if (oldByRef.size !== newByRef.size) return false
+
+  for (const [partRef, oldPart] of oldByRef) {
+    const newPart = newByRef.get(partRef)
+    if (!newPart) return false
+    if (
+      (oldPart.quantity ?? geometryDefaults.quantity) !==
+        (newPart.quantity ?? geometryDefaults.quantity) ||
+      (oldPart.length_mm ?? geometryDefaults.length_mm) !==
+        (newPart.length_mm ?? geometryDefaults.length_mm) ||
+      (oldPart.width_mm ?? geometryDefaults.width_mm) !==
+        (newPart.width_mm ?? geometryDefaults.width_mm) ||
+      (oldPart.material_id ?? geometryDefaults.material_id) !==
+        (newPart.material_id ?? geometryDefaults.material_id) ||
+      (oldPart.follow_grain ?? geometryDefaults.follow_grain) !==
+        (newPart.follow_grain ?? geometryDefaults.follow_grain)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function registryColorStyle(number: number): EdgeRegistryColorStyle {
   const fixed = EDGE_REGISTRY_COLOR_STYLES[number - 1]
   if (fixed) return fixed
@@ -106,12 +153,19 @@ function usedEdgeKeys(parts: CuttingPart[]): string[] {
 }
 
 export function syncEdgeAssignments(assignments: Map<string, number>, parts: CuttingPart[]): void {
-  let nextNumber = Math.max(0, ...assignments.values()) + 1
-  for (const key of usedEdgeKeys(parts)) {
-    if (assignments.has(key)) continue
-    assignments.set(key, nextNumber)
-    nextNumber += 1
-  }
+  const liveKeys = usedEdgeKeys(parts)
+  const liveKeySet = new Set(liveKeys)
+  // A side-pattern edit can make one tape appear on more sides, but that must
+  // not reshuffle its number or colour. Only removed tapes disappear; retained
+  // tapes compact their sequence and new tapes append in first-use order.
+  const retainedKeys = [...assignments.entries()]
+    .filter(([key]) => liveKeySet.has(key))
+    .sort((left, right) => left[1] - right[1])
+    .map(([key]) => key)
+  const retainedKeySet = new Set(retainedKeys)
+  const orderedKeys = [...retainedKeys, ...liveKeys.filter((key) => !retainedKeySet.has(key))]
+  assignments.clear()
+  for (const [index, key] of orderedKeys.entries()) assignments.set(key, index + 1)
 }
 
 export function previewEdgeAssignments(

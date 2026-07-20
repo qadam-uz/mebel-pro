@@ -140,7 +140,7 @@ function validateBranchForm() {
       : undefined
   branchFieldErrors.edgeBandingRate =
     pricingForm.edgeBandingRateSom.trim() && edgeBandingRateTiyin.value === null
-      ? "Krom narxini to'g'ri kiriting — masalan: 5 000."
+      ? "Kromka narxini to'g'ri kiriting — masalan: 5 000."
       : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
@@ -458,7 +458,7 @@ onMounted(refreshBranch)
               </span>
             </label>
             <label class="field" for="branch-detail-edge-rate">
-              <span>Krom yopishtirish narxi (so'm)</span>
+              <span>Kromka yopishtirish narxi (so'm)</span>
               <input
                 id="branch-detail-edge-rate"
                 v-model="pricingForm.edgeBandingRateSom"

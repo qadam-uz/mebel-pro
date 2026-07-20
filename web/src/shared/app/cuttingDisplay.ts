@@ -105,7 +105,7 @@ export function snapshotMaterialLabel(
 
 export function snapshotEdgeLabel(
   snapshot: Record<string, unknown> | undefined,
-  fallback = 'Krom',
+  fallback = 'Kromka',
 ): string {
   const manufacturer = snapshotText(snapshot, 'manufacturer_name')
   const decor = snapshotText(snapshot, 'decor_code')

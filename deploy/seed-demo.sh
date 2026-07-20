@@ -522,7 +522,7 @@ advance_to() { # order_id target cutter_id edger_id
   ws_step "$oid" start-cutting    # confirmed → cutting (the worker's Boshlash)
   [ "$target" = cutting ] && return 0
   ws_step "$oid" cutting-done
-  # The edge_banding demo order shows a started krom job (the edger's hero card).
+  # The edge_banding demo order shows a started kromka job (the edger's hero card).
   [ "$target" = edge_banding ] && { ws_step "$oid" start-banding; return 0; }
   ws_step "$oid" banding-done
   [ "$target" = ready ] && return 0
@@ -567,7 +567,7 @@ ORDERS='
 DILSHOD|Dilshod|+998901112233|B1|new|bookshelf|none|0|Yangi buyurtma, tasdiqlanishini kutmoqda
 DILSHOD|Dilshod|+998901112233|B1|confirmed|wardrobe|none|1|Tasdiqlandi, navbatda
 DILSHOD|Dilshod|+998901112233|B1|cutting|kitchen_oak|none|2|Hozir kesilmoqda
-DILSHOD|Dilshod|+998901112233|B2|edge_banding|bookshelf|none|3|Krom yopishtirilmoqda
+DILSHOD|Dilshod|+998901112233|B2|edge_banding|bookshelf|none|3|Kromka yopishtirilmoqda
 DILSHOD|Dilshod|+998901112233|B1|ready|wardrobe|partial_cash|1|Olib ketishga tayyor
 DILSHOD|Dilshod|+998901112233|B2|ready|kitchen_walnut|full_bank|2|Tayyor, to'\''liq to'\''langan
 AZIZA|Aziza|+998901234455|B1|completed|bookshelf|full_cash|6|Topshirilgan buyurtma

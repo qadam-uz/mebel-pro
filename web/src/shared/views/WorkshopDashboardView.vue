@@ -372,7 +372,7 @@ watch(
         <div class="card-h">
           <div>
             <h2>Mening ishlab chiqarish navbatim</h2>
-            <div class="sub">Rahbar tayinlagan kesish va krom ishlari.</div>
+            <div class="sub">Rahbar tayinlagan kesish va kromka ishlari.</div>
           </div>
         </div>
         <div class="card-b">
@@ -400,19 +400,19 @@ watch(
               class="bg-elevated p-4 no-underline transition hover:bg-sunk"
             >
               <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
-                Krom
+                Kromka
               </div>
               <div class="mt-2 font-serif text-3xl font-semibold text-ink">
                 {{ productionQueueCounts.banding }}
                 <small class="font-sans text-sm text-ink-muted">ish</small>
               </div>
               <p class="mt-2 font-sans text-[12.5px] text-ink-muted">
-                Krom bosqichida sizga biriktirilgan buyurtmalar.
+                Kromka bosqichida sizga biriktirilgan buyurtmalar.
               </p>
             </RouterLink>
           </div>
           <p v-else class="text-[13px] text-ink-soft">
-            Hozir sizga ish tayinlanmagan — rahbar buyurtmani tayinlagach, u kesish yoki krom
+            Hozir sizga ish tayinlanmagan — rahbar buyurtmani tayinlagach, u kesish yoki kromka
             navbatida shu yerda ko'rinadi.
           </p>
         </div>

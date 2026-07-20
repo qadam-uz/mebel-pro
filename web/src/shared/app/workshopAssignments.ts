@@ -40,7 +40,7 @@ function chipForWorker(
 ) {
   if (!userId) return null
   const worker = resolveWorker(branchId, userId)
-  const roleLabel = key === 'cutter' ? 'Kesuvchi' : 'Kromchi'
+  const roleLabel = key === 'cutter' ? 'Kesuvchi' : 'Kromka ustasi'
   const fallback = `ID ${userId.slice(0, 8)}`
   return {
     key,

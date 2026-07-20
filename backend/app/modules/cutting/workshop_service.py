@@ -30,9 +30,11 @@ from app.modules.access.contracts import Client
 from app.modules.cutting.contracts import CuttingDraft, CuttingResult
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
+    CuttingDraftPart,
     CuttingDraftResponse,
-    CuttingPart,
+    CuttingMapImportCommitRequest,
     CuttingResultResponse,
+    WorkshopCuttingMapImportCommitRequest,
 )
 from app.modules.cutting.service import (
     _apply_choose,
@@ -40,6 +42,7 @@ from app.modules.cutting.service import (
     _apply_optimize,
     _apply_update,
     _catalog_materials,
+    _commit_imported_map_for_draft,
     _draft_response,
     _result_response,
 )
@@ -90,6 +93,47 @@ async def create_workshop_draft(
     return await _draft_response(db, draft)
 
 
+async def commit_workshop_imported_map(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    payload: WorkshopCuttingMapImportCommitRequest,
+) -> CuttingDraftResponse:
+    workshop_id = require_manage_orders_workshop(principal)
+    scope = await resolve_branch_scope(
+        db, principal, branch_id=payload.branch_id, permission=Permission.MANAGE_ORDERS
+    )
+    client = await db.get(Client, payload.client_id)
+    if client is None:
+        raise APIError(
+            "client_not_found", "Client not found", status_code=status.HTTP_404_NOT_FOUND
+        )
+    if client.status is not UserStatus.ACTIVE:
+        raise APIError(
+            "account_blocked", "Account is blocked", status_code=status.HTTP_403_FORBIDDEN
+        )
+
+    draft = CuttingDraft(
+        client_id=client.id,
+        preferred_branch_id=scope.branch_id,
+        created_via_workshop_id=workshop_id,
+    )
+    # The imported result is built by the same core as the client path. The
+    # frozen workshop branch deliberately overrides any client-path preference.
+    client_payload = CuttingMapImportCommitRequest(
+        parts=payload.parts,
+        map_layout=payload.map_layout,
+        panel_picks=payload.panel_picks,
+    )
+    return await _commit_imported_map_for_draft(
+        db,
+        principal=principal,
+        payload=client_payload,
+        draft=draft,
+        workshop_id=workshop_id,
+    )
+
+
 async def get_workshop_draft(
     db: AsyncSession,
     *,
@@ -109,7 +153,7 @@ async def update_workshop_draft(
     name: str | None,
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
-    parts_snapshot: list[CuttingPart] | None,
+    parts_snapshot: list[CuttingDraftPart] | None,
 ) -> CuttingDraftResponse:
     draft = await _workshop_draft(db, principal=principal, draft_id=draft_id)
     resolved_branch_id = preferred_branch_id

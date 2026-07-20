@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-12
+updated: 2026-07-20
 order: 80
 ---
 
@@ -33,22 +33,21 @@ manufacturer's spool to load and surprises clients at the counter.
 A **cutting draft** is the working surface a client — or, for a walk-in order, workshop staff
 on the client's behalf ([`orders.md`](orders.md#staff-created-orders-walk-in-clients)) — edits
 and re-optimises until an order is placed. It's private (see _Access_) and persists
-indefinitely (no expiry; the client's self-made drafts cap at 50). The draft becomes a server
-entity on the **first optimise** — the editor opens local and unsaved, so abandoned/empty
-editors never mint a draft (see _Lifecycle_).
+indefinitely (no expiry; the client's self-made drafts cap at 50). The first complete detail
+creates the server draft and autosave keeps the snapshot current; an editor without a complete
+detail does not mint a draft (see _Lifecycle_).
 
 A draft owns:
 
-- **A `preferred_branch_id` — required to build the parts list.** Seeded from the client's
-  stored [profile default](../entities/identity.md#client) when one exists; the current profile
-  UI does not expose setting that default. Selecting a workshop is **mandatory**: the catalog is
-  scoped to the chosen branch, so the parts editor stays gated behind a "pick a workshop" prompt
-  until one is set, and **Optimise** is disabled without it. The client can **change** the branch
-  (there is no "clear to none" — the field is required once you're editing), and the order step
-  defaults to it. Switching branches is not a data operation: parts already in the list stay
-  editable even when their materials aren't carried at the new branch (see _Recovery
-  affordances_). The column stays nullable in storage for drafts that predate this rule and for
-  the brief unsaved window before the first branch pick.
+- **A `preferred_branch_id` — required to build the parts list.** A new client editor starts with
+  no branch selected. Selecting a workshop is **mandatory**: the catalog is scoped to the chosen
+  branch, so the parts editor stays gated behind a "pick a workshop" prompt until one is set, and
+  **Optimise** is disabled without it. The client can **change** the branch (there is no "clear to
+  none" — the field is required once you're editing), and the order step defaults to it.
+  Switching branches is not a data operation: parts already in the list stay editable even when
+  their materials aren't carried at the new branch (see _Recovery affordances_). The column stays
+  nullable in storage for drafts that predate this rule and for an editor before its first saved
+  detail.
 - **Parts.** Each part picks its own **panel** material from the platform catalog,
   dimensions (length × width × quantity), and a per-side **edge** material (top, bottom,
   left, right — each `null` for no banding, or a catalog edge material). Every material is
@@ -74,32 +73,31 @@ billed and consumed totals; `own` length is tracked separately for the cutting p
 
 ```mermaid
 stateDiagram-v2
-    [*] --> editing : client opens "New cutting" (local, unsaved)
-    editing --> editing : edit parts · pick branch
-    editing --> draft : client runs the optimiser → draft created & persisted
+    [*] --> editing : client opens "New cutting" (empty)
+    editing --> draft : first complete detail → draft created & autosaved
     draft --> draft : edit parts · re-optimise · pick algorithm
     draft --> confirmed : client places an order with the chosen result
     confirmed --> [*]
 ```
 
-- `editing` is **local and unsaved** — the editor before the first optimise. No server draft
-  exists yet, so navigating away discards the entry (the editor warns first). The draft is
-  created and persisted on the **first optimise**, which is also when autosave begins.
+- `editing` has no complete detail yet. Selecting a branch, naming the drawing, or adding an
+  incomplete row does not create or save a server draft. Its first complete detail creates the
+  draft; debounced autosave then stores later snapshots only when every listed row is complete.
+  A small browser recovery copy covers refresh while a save is still in flight.
 - `draft` is mutable. `confirmed` is immutable and kept forever — it is the historical
   record an order points at.
 - Re-running the optimiser on a `draft` replaces only optimiser-generated candidates. A
   2D-Place MAP import result (`source=imported_map`) is preserved and stays chosen until the
-  user explicitly picks another result or edits the parts list. Editing parts invalidates
-  every candidate, including imported MAP layouts. No intermediate-run history.
+  user explicitly picks another result or makes a geometry-affecting parts edit. Such an edit
+  invalidates every candidate, including imported MAP layouts; name, edge-band, and
+  material-source edits retain candidates and refresh their edge metrics. No intermediate-run
+  history.
 - On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
   the draft flips to `confirmed`. Other algorithm results from the same run are discarded at
   this point.
 
-**Why create lazily.** Minting the draft only on the first optimise keeps abandoned and empty
-editors out of the drafts list and the 50-draft cap; the accepted cost is that input before
-the first optimise isn't autosaved (the editor warns before discarding it). Revisit if clients
-report losing pre-optimise work — then back the unsaved editor with local storage, or restore
-eager creation.
+**Why create on the first complete detail.** Empty, named, or incomplete drawings never consume
+a draft slot; a usable detail is saved without requiring the optimiser.
 
 ### Parts and materials
 
@@ -217,9 +215,9 @@ eager creation.
   browser.
 - As a workshop user (cutter), I want the confirmed layout and PDF on my tablet at the saw,
   so I can cut without translation.
-- As a client, I want to import a 2D-Place `.map` file and keep its exact sheet layout, so a
-  layout prepared outside the app can become the chosen cutting result without rerunning the
-  optimiser.
+- As a client or workshop staff member acting for a walk-in client, I want to import a 2D-Place
+  `.map` file and keep its exact sheet layout, so a layout prepared outside the app can become
+  the chosen cutting result without rerunning the optimiser.
 
 ## Imports
 
@@ -239,21 +237,25 @@ parts-only import. If any imported detail has banding marks, the wizard asks for
 and applies it to all marked sides. The commit endpoint validates the selected panel dimensions
 against the MAP sheet dimensions, validates that every placement matches the generated parts,
 rejects overlapping/out-of-bounds placements, then creates a new draft with an imported result
-already chosen.
+already chosen. The same flow is available in the workshop editor for a resolved walk-in client:
+staff must hold `manage_orders` on the current branch, and the new draft is staff-minted with
+that branch frozen.
 
 Imported MAP results are stamped `algorithm_name=imported-2dplace-map`,
 `algorithm_version=map-1`, `source=imported_map`, `kerf_mm=0`, and `edge_trim_mm=0`. Waste and
 cut/edge metrics are recomputed from the persisted placements; MAP waste/remainder rectangles
 are stored as panel `offcuts` and used only for preview, not pricing. The UI labels these results
-`Fayldan joylashuv`. If the user edits the parts list, the editor warns that the imported
-layout will be removed before the draft is patched.
+`Fayldan joylashuv`. The editor warns only before a geometry-affecting parts edit
+(adding/removing a row, quantity, dimensions, panel material, or texture direction), because it
+removes the imported layout. Name, edge-band, and material-source edits are geometry-neutral:
+they save without the warning and retain the layout while its edge metrics are refreshed.
 
 ## UX — the cutting wizard (client app)
 
-A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first optimise; no stepper
+A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first complete detail; no stepper
 — one editing surface above, one results panel below). Entry is the client app's home **New
-cutting** button, which opens an empty, unsaved editor; the draft is created and persisted on
-the first **Optimise** (see _Lifecycle_). A secondary **My drafts** entry lists unbound drafts.
+cutting** button, which opens an empty editor; its first complete detail creates and persists the draft
+(see _Lifecycle_). A secondary **My drafts** entry lists unbound drafts.
 
 ### Branch selector (top of the editor)
 
@@ -273,11 +275,12 @@ cells and appends a new inherited row from the last cell of the last row. Deleti
 undo toast; clearing all rows still requires confirmation.
 
 Each material group shows its own edge-tape registry under the material name. Distinct
-`(edge material_id, source)` pairs get one number and colour per draft session; row edge cells,
-group registries, and the edge picker all render that same identity. Numbers are assigned on
-first use and stay stable while the draft is open, even if rows are reordered or a tape is
-temporarily removed. The visible group registry lists only tapes currently used in that group,
-sorted by the drawing-wide number, so gaps can appear after removals.
+`(edge material_id, source)` pairs get one number and colour in their first-use order; row edge
+cells, group registries, and the edge picker all render that same identity. Applying a tape to more
+sides never changes its number or colour. When a tape is removed, the remaining tapes are compacted
+back to consecutive `1..N` numbers, so the next tape takes a deleted number and its matching colour.
+The visible group registry lists only tapes currently used in that group, sorted by this drawing-wide
+number.
 
 ### Results
 
@@ -303,8 +306,9 @@ doesn't carry get a per-row warning + recovery affordances (below).
 A mode switch at the top: **Manual entry** (default) · **Upload file** (`.csv` / `.xml`).
 Upload opens the import wizard; manual entry stays as the plain row editor. The expected
 source is БАЗИС-Мебельщик's **Спецификация в CSV** or **Спецификация в XML** export;
-Excel-made lists must be saved as CSV first. The page header carries a **Clear parts list**
-trash icon, shown only once there are rows. The primary **Optimise** button lives in a
+Excel-made lists must be saved as CSV first. For a mutable saved draft, the page header carries
+a danger-outline **Delete drawing** button; it is absent for a new or read-only drawing. The
+primary **Optimise** button lives in a
 **sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
 reason shown inline) — so it stays reachable above a long list.
 
@@ -320,12 +324,13 @@ a labelled card.
 
 ### File import wizard
 
-The import wizard is stateless: it never stores the file, creates a draft, or writes to the
-database. It only parses a local `.csv` or БАЗИС-Мебельщик XML file into ordinary editor
-parts.
+The import wizard is stateless for CSV/XML: it never stores the file and only parses it into
+ordinary editor parts. A MAP layout is the exception: committing a size-matched layout creates a
+new imported-result draft for the current client or workshop walk-in client.
 
-1. **File.** The client picks a file; the UI pre-checks the 1 MiB size cap and `.csv`/`.xml`
-   extension, then calls `POST /api/v1/client/cutting/import/parse` without a mapping.
+1. **File.** The user picks a file; the UI pre-checks the 1 MiB size cap and `.csv`/`.xml`/`.map`
+   extension, then calls the role-scoped parse endpoint (`POST /api/v1/client/cutting/import/parse`
+   or `POST /api/v1/workshop/cutting/import/parse`) without a mapping.
 2. **Columns.** CSV imports return a preview and suggested column roles. The user confirms
    or changes the mapping and sets how many top rows to skip. Length and width must be
    mapped before continuing. БАЗИС-Мебельщик XML imports skip this step because the source
@@ -373,55 +378,36 @@ The grain toggle (small arrow + `Tekstura`) appears on the row.
 Pressed means `follow_grain=true` and the part is rotation-locked; unpressed means
 `follow_grain=false` and the optimiser may rotate it.
 
-**Edge picker** (opens from the Edges cell — popover on desktop, bottom sheet on mobile):
+**Edge picker** (opens from the row glyph on every viewport):
 
-- **One surface, no modes.** The picker asks two questions first: which sides need edge
-  banding, and which tape should be used. There is no separate "match panel" section,
-  "browse other materials" section, "customise per side" button, or standalone "apply to
-  all" button.
-- **The panel diagram is the centerpiece.** Compact quick-pattern chips sit above it
-  (**None**, **All sides**, **Top + bottom**, **Left + right**) — each chip carries a mini
-  rectangle that draws its banded sides thick so it reads spatially, not just by text — and
-  the diagram below shows
-  the part with all four sides **labelled** (top / bottom / left / right) — tap a side to
-  toggle its banding; banded sides fill.
-  Choosing a tape applies it only to the **currently banded** sides; with **no** side
-  selected the tape is just remembered (highlighted in the list) and used by the next side
-  toggled on — picking a tape never auto-bands all four sides.
-- **The ranked tape list is revealed on demand.** Once a tape is chosen the list collapses
-  to a one-line summary (swatch + tape + thickness + how many sides) with a **Change**
-  toggle; opening it — or arriving at a part with no banding yet — shows the full list.
-  The chip stack starts with tapes already on this part's sides, then tapes used in the same
-  material group, then matching tapes used elsewhere in the drawing, then the best catalog
-  recommendation. A tape that already exists in the drawing keeps its real number and colour;
-  a never-used tape shows a dashed `Yangi` preview badge with the next tentative number, which
-  becomes solid after **Apply**. Catalog ranking still uses decor and colour: edges with the
-  same `decor_code` as the panel are preferred first, same-`color` matches follow; within each
-  match rank, tape width is guidance: covering tapes sort by closest width to the panel
-  thickness, while narrower tapes sort last and show `Qirradan tor` with the tooltip
-  `Lenta eni ({w} mm) panel qalinligidan ({t} mm) tor — qirrani to'liq yopmaydi.`
-  Selection is never blocked. This preserves the legitimate thickened-edge flow: model
-  the glued strip as its own part, leave mating sides untaped, then choose a wider tape
-  (for example 42 mm on an 18 mm panel whose visible edge has been thickened). The rest
-  of the **branch's carried** edge materials continue in the same list, filtered by search
-  and a thickness dropdown — like the panel picker, tapes the branch doesn't carry are not
-  offered (a tape already applied to the part stays listed so the selection can't vanish;
-  the per-side warning flags it). If no panel is selected, matching appears once the panel
-  is picked but catalog search still works.
-- **The edge picker applies to the row it was opened from.** The footer has only **Cancel**
-  and **Apply**; **Apply** saves the selected side pattern and tape to the row whose
-  **Edges** cell opened the picker, and never edits sibling rows from inside the picker.
-  **Bulk edge apply** is instead an explicit **list-level** action (see _Bulk row actions_
-  below) — the picker stays single-purpose, exactly as foreseen here.
-
-**Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
-column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
-**Apply edges** (opens the edge picker seeded from the first selected row and writes the
-applied side pattern / tape to every selected row), **Change material** (a small
-picker that sets one panel material on every selected row), and **Delete**. This is the
-list-level path for re-banding or re-materialing many identical parts without N picker
-round-trips — a desktop power feature; on mobile each row is edited individually (its own
-fields plus the per-row delete button).
+- **One modal, two in-dialog panels.** The compact glyph is display-only: its four borders
+  show banding state, while the whole glyph opens this modal on desktop and mobile alike.
+  Panel 1 is the marking view. Its tape list contains only tapes already used in this drawing:
+  first the part's sides, then its material group, then other groups. The arming ladder uses
+  those draft-scoped sources only; it never falls through to a catalog recommendation. With
+  nothing armed, sides and **4 tomon** are disabled and the dialog says
+  `Avval kromka tanlang — keyin tomonlarni bosing.`; **Kromkasiz** remains available. The visible
+  tape rows are ordered by their registry number, not by number of banded sides.
+- **Marking view.** The diagram centre shows the row name (`D{n}` when unnamed) and its
+  dimensions. Side bars show only the side name and registry-number badge. The only whole-part
+  patterns, next to the diagram, are **4 tomon** and **Kromkasiz**. Side and pattern changes apply
+  immediately; the dialog closes with its close control, Escape, or the backdrop.
+  A new tape is tentative (`Yangi`) until it is committed into the drawing registry, preserving
+  that registry's sticky number and colour identity.
+- **Catalog panel.** `+ Yana kromka qo'shish` opens panel 2. It searches the selected branch's
+  carried tapes with single-select thickness chips. `Shu panelga mos` contains decor/colour
+  matches; all remaining choices are under `Boshqa kromkalar`. Tapes already on the drawing are
+  excluded, with an explicit already-added hint. A tape narrower than the panel remains selectable
+  but carries the width warning. Selecting one returns to panel 1 armed, without changing sides.
+  A fresh drawing with no banded sides starts directly in this catalog panel.
+  **Bulk row actions (desktop).** On wide layouts the parts table gains a leading checkbox
+  column (and a select-all in the header). Selecting one or more rows reveals a bulk bar with
+  **Apply edges** (opens the edge picker seeded from the first selected row and writes the
+  applied side pattern / tape to every selected row), **Change material** (a small
+  picker that sets one panel material on every selected row), and **Delete**. This is the
+  list-level path for re-banding or re-materialing many identical parts without N picker
+  round-trips — a desktop power feature; on mobile each row is edited individually (its own
+  fields plus the per-row delete button).
 
 Per-row inline validation; when something blocks the optimiser the reason is shown inline
 next to the (disabled) **Optimise** button in the sticky bar — there is no separate roll-up
@@ -441,19 +427,20 @@ banner — the warning lives on the row that has the issue):
   note visible.
 - The row's **Delete** (trash) button still works; removal is opt-in and never automatic.
 
-### Clearing the parts list (deliberate)
+### Deleting a drawing (deliberate)
 
-A **Clear parts list** trash icon next to the page header runs a danger-styled action
-(confirmation: _"Remove all N parts? This can't be undone."_). This is the only way to wipe
-parts wholesale; changing the branch never invokes it.
+A mutable saved draft can be deleted from the page header. The danger confirmation names the
+drawing and its part count: _“«{drawing name}» — {N}-part drawing will be deleted permanently.
+This cannot be undone.”_ If deletion fails, the dialog stays open and displays the error with its
+trace id. A successful deletion returns the client to the draft list (or the workshop order list
+in workshop scope). Changing the branch never removes parts.
 
 ### Run and the result panel
 
 A primary **Optimise** button in the sticky bottom action bar. Disabled while running (5 s
 cap), then disabled until any row changes (so re-tapping doesn't re-run a stale layout); the
-disable reason is shown inline next to it. On a brand-new
-(unsaved) editor the first **Optimise** also creates and saves the draft before running, after
-which the URL becomes `/c/cutting/:id` and autosave takes over.
+disable reason is shown inline next to it. On a brand-new editor, the first complete detail
+creates and saves the draft; **Optimise** always runs against that current autosaved snapshot.
 
 The result panel only renders once an optimise has produced a result (or an error to surface);
 before the first run there is **no empty placeholder** — the parts editor and the sticky
@@ -472,7 +459,7 @@ On success, the panel scrolls into view with three regions:
    - **Edge tape** total length — the **consumed** metres (geometric banding + the fixed
      30 mm trim overhang per banded side), with a breakdown listing each edge material
      that has metres in the side panel. The tile subline shows how many distinct tapes are
-     used, e.g. `3 xil tasma`.
+     used, e.g. `3 xil kromka`.
    - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
    - Result tabs switch between imported MAP layout and optimizer variants. Choosing a tab
      changes the visualised result; **Shu variantni tanlash** makes it the orderable result.
@@ -501,7 +488,7 @@ On success, the panel scrolls into view with three regions:
      name, dimensions, quantity, rotated count, and edge-registry badges. Result registry
      numbers are derived from that result's frozen `parts_snapshot`, so they are
      self-contained and match the result details even after later editor changes.
-   - The side panel's Krom block sorts tapes by those registry numbers and shows badge,
+   - The side panel's Kromka block sorts tapes by those registry numbers and shows badge,
      fuller material label such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed
      metres.
 
@@ -525,8 +512,9 @@ On success, the panel scrolls into view with three regions:
      banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.
      Text is rendered with an embedded Unicode font, so Cyrillic material and part names
      print correctly.
-   - **Edit parts** scrolls back to the editor; any row change marks the result stale; the
-     next **Optimise** replaces it.
+   - **Edit parts** scrolls back to the editor; a geometry-affecting row change marks the
+     result stale and the next **Optimise** replaces it. Name, edge-band, and material-source
+     changes retain the layout and refresh its edge metrics.
 
 Pricing shown here is a branch quote for the currently chosen result only; per-variant price
 deltas are deliberately not shown because the backend does not quote non-chosen variants.

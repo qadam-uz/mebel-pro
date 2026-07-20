@@ -389,7 +389,7 @@ def _build_result(
         total_waste += panel.waste_area_mm2
         total_usable_area += material.usable_area_mm2
 
-    edge_metrics = _edge_metrics(parts)
+    metrics = edge_metrics(parts)
     waste_percentage = (
         Decimal(total_waste) / Decimal(total_usable_area) if total_usable_area else Decimal("0")
     )
@@ -402,13 +402,13 @@ def _build_result(
         panels_used_by_material=panels_used,
         waste_percentage=waste_percentage,
         total_cut_length_mm=total_cut_length_mm,
-        total_edge_length_mm=sum(edge_metrics.edge_length_by_material.values()),
-        edge_length_by_material=edge_metrics.edge_length_by_material,
-        edge_length_shop_by_material=edge_metrics.edge_length_shop_by_material,
-        edge_length_own_by_material=edge_metrics.edge_length_own_by_material,
-        edge_consumed_shop_by_material=edge_metrics.edge_consumed_shop_by_material,
-        edge_consumed_own_by_material=edge_metrics.edge_consumed_own_by_material,
-        edge_banded_sides_by_material=edge_metrics.edge_banded_sides_by_material,
+        total_edge_length_mm=sum(metrics.edge_length_by_material.values()),
+        edge_length_by_material=metrics.edge_length_by_material,
+        edge_length_shop_by_material=metrics.edge_length_shop_by_material,
+        edge_length_own_by_material=metrics.edge_length_own_by_material,
+        edge_consumed_shop_by_material=metrics.edge_consumed_shop_by_material,
+        edge_consumed_own_by_material=metrics.edge_consumed_own_by_material,
+        edge_banded_sides_by_material=metrics.edge_banded_sides_by_material,
     )
 
 
@@ -422,7 +422,7 @@ class _EdgeMetrics:
     edge_banded_sides_by_material: dict[str, dict[str, int]]
 
 
-def _edge_metrics(parts: list[PartInput]) -> _EdgeMetrics:
+def edge_metrics(parts: list[PartInput]) -> _EdgeMetrics:
     geometric: dict[str, int] = {}
     shop_geometric: dict[str, int] = {}
     own_geometric: dict[str, int] = {}

@@ -1,6 +1,6 @@
 import { ApiError, api, apiErrorCode } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
-import type { CuttingPart } from '@/shared/stores/cutting'
+import type { CuttingPart, CuttingScope } from '@/shared/stores/cutting'
 
 export const MAX_IMPORT_FILE_BYTES = 1_048_576
 
@@ -232,12 +232,13 @@ function cleanOptions(options: ImportParseOptions | undefined): ImportParseOptio
 export async function parseCuttingImport(
   file: File,
   options?: ImportParseOptions,
+  scope: CuttingScope = 'client',
 ): Promise<ImportParseResponse> {
   const form = new FormData()
   form.append('file', file)
   const payload = cleanOptions(options)
   if (payload) form.append('options', JSON.stringify(payload))
-  return await api.postForm<ImportParseResponse>('/client/cutting/import/parse', form, authInit())
+  return await api.postForm<ImportParseResponse>(`/${scope}/cutting/import/parse`, form, authInit())
 }
 
 export function isImportMappingComplete(

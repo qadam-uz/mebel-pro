@@ -119,7 +119,7 @@ describe('CuttingPartRow grain toggle', () => {
 
     const glyph = wrapper.get('[data-cell="edge"]')
     expect(wrapper.findAll('[data-cell="edge"]')).toHaveLength(1)
-    expect(glyph.attributes('aria-label')).toBe('Krom tomonlari')
+    expect(glyph.attributes('aria-label')).toBe('Kromka tomonlari')
     expect(glyph.attributes('style')).toContain('border-left: 3px solid')
 
     await glyph.trigger('click')

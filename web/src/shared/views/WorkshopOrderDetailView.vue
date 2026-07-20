@@ -162,7 +162,7 @@ const revertTargetLabel = computed(() => {
   if (!current) return ''
   if (current.status === 'cutting') return 'tasdiqlangan holatiga'
   if (current.status === 'edge_banding') return 'kesishga'
-  if (current.status === 'ready') return current.has_banding ? 'kromga' : 'kesishga'
+  if (current.status === 'ready') return current.has_banding ? 'kromkaga' : 'kesishga'
   return ''
 })
 const revertButtonLabel = computed(() => {
@@ -188,7 +188,7 @@ function snapshotName(item: OrderItem) {
 
 function edgeCountLabel(item: OrderItem) {
   const count = edgeSideDetails(item).length
-  return count > 0 ? `Krom · ${count} tomon` : "krom yo'q"
+  return count > 0 ? `Kromka · ${count} tomon` : "kromka yo'q"
 }
 
 function edgeSideDetails(item: OrderItem) {
@@ -324,7 +324,7 @@ async function assignWorkers() {
     return
   }
   if (current.has_banding && !edgerId.value) {
-    actionError.value = 'Krom yopishtiruvchini tanlang.'
+    actionError.value = 'Kromka yopishtiruvchini tanlang.'
     actionTraceId.value = null
     void focusFirstField(() => actionPanel.value)
     return
@@ -366,7 +366,7 @@ async function assignEdgerOnly() {
   const current = order.value
   if (!current || !canManageOrders.value || !current.has_banding) return
   if (!edgerId.value) {
-    actionError.value = 'Krom yopishtiruvchini tanlang.'
+    actionError.value = 'Kromka yopishtiruvchini tanlang.'
     actionTraceId.value = null
     void focusFirstField(() => actionPanel.value)
     return
@@ -378,7 +378,7 @@ async function assignEdgerOnly() {
         cutter_user_id: null,
         edger_user_id: edgerId.value,
       }),
-    'Kromchi saqlandi.',
+    'Kromka ustasi saqlandi.',
     'assignEdger',
   )
 }
@@ -398,7 +398,7 @@ async function startBanding() {
   if (!current || !canCompleteBanding.value || current.banding_started_at) return
   await run(
     () => orders.startBanding(current.id, current.version),
-    'Krom boshlandi.',
+    'Kromka boshlandi.',
     'startBanding',
   )
 }
@@ -429,7 +429,7 @@ async function completeBanding() {
   if (!current || !canCompleteBanding.value) return
   const completedBy = completedById.value || current.assigned_edger_user_id
   if (!completedBy) {
-    actionError.value = 'Krom ishini bajargan xodimni tanlang.'
+    actionError.value = 'Kromka ishini bajargan xodimni tanlang.'
     actionTraceId.value = null
     void focusFirstField(() => actionPanel.value)
     return
@@ -440,7 +440,7 @@ async function completeBanding() {
         version: current.version,
         completed_by_user_id: completedBy,
       }),
-    'Krom yakunlandi.',
+    'Kromka yakunlandi.',
     'completeBanding',
   )
 }
@@ -803,7 +803,7 @@ onMounted(loadDetail)
                       </li>
                     </ul>
                     <p v-else class="text-xs text-ink-muted">
-                      Bu panelda krom yo'q — yaxlit panel.
+                      Bu panelda kromka yo'q — yaxlit panel.
                     </p>
                   </div>
                 </details>
@@ -811,7 +811,9 @@ onMounted(loadDetail)
                   v-if="order.planned_edge_lines.length > 0"
                   class="mt-4 border-t border-hairline pt-4"
                 >
-                  <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">Krom sarfi</div>
+                  <div class="mb-2 text-xs font-extrabold uppercase text-ink-muted">
+                    Kromka sarfi
+                  </div>
                   <div
                     v-for="line in order.planned_edge_lines"
                     :key="line.material_id"
@@ -863,7 +865,7 @@ onMounted(loadDetail)
                 </div>
                 <div class="row-item">
                   <div>
-                    <div class="nm">Krom yopishtiruvchi</div>
+                    <div class="nm">Kromka yopishtiruvchi</div>
                     <small class="text-ink-muted">{{
                       order.has_banding
                         ? order.edge_completed_at
@@ -871,7 +873,7 @@ onMounted(loadDetail)
                           : order.assigned_edger_user_id
                             ? 'tayinlangan'
                             : 'tayinlanmagan'
-                        : "bu buyurtmada krom yo'q"
+                        : "bu buyurtmada kromka yo'q"
                     }}</small>
                   </div>
                   <div class="meta">
@@ -954,7 +956,7 @@ onMounted(loadDetail)
                     </div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="filter-label">Krom</div>
+                    <div class="filter-label">Kromka</div>
                     <div class="mt-1 text-xl font-extrabold">
                       {{ metres(result.total_edge_length_mm) }}
                     </div>
@@ -1067,7 +1069,7 @@ onMounted(loadDetail)
             </div>
             <div class="r">
               <span
-                >Krom<small
+                >Kromka<small
                   v-if="order.subtotal_edge_banding_tiyin > 0"
                   class="block text-xs text-ink-muted"
                   >{{ metres(edgeConsumedTotal(order)) }} · material + xizmat</small
@@ -1075,11 +1077,11 @@ onMounted(loadDetail)
               ><span class="num">{{ formatTiyin(order.subtotal_edge_banding_tiyin) }}</span>
             </div>
             <div v-if="order.subtotal_edge_banding_tiyin > 0" class="r text-xs text-ink-muted">
-              <span>Krom materiali</span
+              <span>Kromka materiali</span
               ><span class="num">{{ formatTiyin(edgeMaterialTotal(order)) }}</span>
             </div>
             <div v-if="order.subtotal_edge_banding_tiyin > 0" class="r text-xs text-ink-muted">
-              <span>Krom xizmati</span
+              <span>Kromka xizmati</span
               ><span class="num">{{ formatTiyin(edgeServiceTotal(order)) }}</span>
             </div>
             <div v-if="order.discount_tiyin > 0" class="r">
@@ -1134,7 +1136,7 @@ onMounted(loadDetail)
                   <FormSelect
                     v-if="order.has_banding"
                     v-model="edgerId"
-                    label="Krom yopishtiruvchi"
+                    label="Kromka yopishtiruvchi"
                     :options="workerOptions"
                     :disabled="workerOptions.length === 0"
                   />
@@ -1145,7 +1147,9 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !edgerId"
                     @click="assignEdgerOnly"
                   >
-                    {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
+                    {{
+                      pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromka ustasini saqlash'
+                    }}
                   </button>
                   <!-- Assignment is metadata now: it queues the job for the master
                        without starting it, so the button stops promising "boshlash". -->
@@ -1212,7 +1216,7 @@ onMounted(loadDetail)
                 <template v-if="canManageOrders">
                   <FormSelect
                     v-model="edgerId"
-                    label="Krom yopishtiruvchi"
+                    label="Kromka yopishtiruvchi"
                     :options="workerOptions"
                     :disabled="workerOptions.length === 0"
                   />
@@ -1222,7 +1226,9 @@ onMounted(loadDetail)
                     :disabled="orders.actionLoading || !edgerId"
                     @click="assignEdgerOnly"
                   >
-                    {{ pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromchini saqlash' }}
+                    {{
+                      pendingAction === 'assignEdger' ? 'Saqlanmoqda…' : 'Kromka ustasini saqlash'
+                    }}
                   </button>
                 </template>
                 <FormSelect
@@ -1239,7 +1245,7 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading"
                   @click="startBanding"
                 >
-                  {{ pendingAction === 'startBanding' ? 'Boshlanmoqda…' : 'Krom boshlash' }}
+                  {{ pendingAction === 'startBanding' ? 'Boshlanmoqda…' : 'Kromka boshlash' }}
                 </button>
                 <button
                   type="button"
@@ -1247,7 +1253,7 @@ onMounted(loadDetail)
                   :disabled="orders.actionLoading || !canSubmitBandingCompletion"
                   @click="completeBanding"
                 >
-                  {{ pendingAction === 'completeBanding' ? 'Bajarilmoqda…' : 'Krom tugadi' }}
+                  {{ pendingAction === 'completeBanding' ? 'Bajarilmoqda…' : 'Kromka tugadi' }}
                 </button>
               </template>
 

@@ -375,14 +375,27 @@ export const useCuttingStore = defineStore('cutting', () => {
   }
 
   async function commitMapImport(payload: CuttingMapImportCommitPayload) {
-    if (scope.value !== 'client') {
-      throw new Error('MAP layout import commit is available only on the client cutting surface')
+    let request:
+      | CuttingMapImportCommitPayload
+      | (CuttingMapImportCommitPayload & { client_id: string; branch_id: string }) = payload
+    if (scope.value === 'workshop') {
+      if (!walkInClient.value) {
+        throw new Error('Workshop MAP import requires a resolved walk-in client')
+      }
+      if (!payload.preferred_branch_id) {
+        throw new Error('Workshop MAP import requires a fixed branch')
+      }
+      request = {
+        ...payload,
+        client_id: walkInClient.value.id,
+        branch_id: payload.preferred_branch_id,
+      }
     }
     saving.value = true
     try {
       const draft = await api.post<CuttingDraft>(
-        '/client/cutting/import/map/commit',
-        payload,
+        scopedPath('/cutting/import/map/commit'),
+        request,
         authInit(),
       )
       drafts.value = [draft, ...drafts.value.filter((item) => item.id !== draft.id)]

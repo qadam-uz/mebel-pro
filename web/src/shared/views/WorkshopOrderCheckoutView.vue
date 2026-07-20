@@ -95,7 +95,7 @@ async function place() {
     const code = apiErrorCode(caught)
     placeError.value =
       code === 'missing_cutting_rate' || code === 'missing_edge_banding_rate'
-        ? 'Bu filialda kesish/krom narxi belgilanmagan — avval egasi narxlarni kiritishi kerak.'
+        ? 'Bu filialda kesish/kromka narxi belgilanmagan — avval egasi narxlarni kiritishi kerak.'
         : workshopErrorMessage(code)
   } finally {
     placing.value = false
@@ -176,7 +176,7 @@ async function place() {
             <span class="num">{{ formatTiyin(quote.subtotal_materials_tiyin) }}</span>
           </div>
           <div v-if="quote.subtotal_edge_banding_tiyin > 0" class="flex justify-between">
-            <span class="text-ink-soft">Krom</span>
+            <span class="text-ink-soft">Kromka</span>
             <span class="num">{{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}</span>
           </div>
           <div class="mt-1 flex justify-between border-t border-hairline pt-2 font-bold">

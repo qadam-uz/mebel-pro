@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
-import { ApiError, apiErrorCode } from '@/shared/api/client'
+import { ApiError, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
 import {
@@ -16,6 +16,7 @@ import {
   deriveEdgeRegistry,
   edgeRegistryKey,
   groupCuttingParts,
+  isGeometryNeutralEdit,
   partDisplayName,
   syncEdgeAssignments,
   type EdgeRegistryEntry,
@@ -45,13 +46,11 @@ import {
   type CuttingPart,
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
-import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
 const route = useRoute()
 const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
-const clientProfile = useClientProfileStore()
 const toast = useToast()
 // Role adapter (see cuttingEditorAdapter.ts): the route carries a factory under
 // `meta.cuttingEditorAdapter`; resolve it once at mount and provide it so the
@@ -67,12 +66,11 @@ provide(cuttingEditorAdapterKey, adapter)
 const fixedBranch = computed(() => adapter.branch.fixed ?? null)
 const isWorkshopScope = computed(() => cutting.scope === 'workshop')
 const draftId = computed(() => String(route.params.id))
-// Unsaved editor: opened via the adapter's new-draft route, the draft has no
-// server id yet. It's created and persisted on the first optimise
-// (docs/ref/features/cutting.md).
+// New editor: it has no server id until it contains a complete detail, which
+// creates the draft through autosave.
 const isNewDraft = computed(() => route.name === adapter.newRouteName)
-// Branch pre-filter while unsaved — held locally (no draft to PATCH); seeded from
-// the client profile default for parity with a server-created draft.
+// Branch pre-filter while the editor is still empty — seeded from the client
+// profile default for parity with a server-created draft.
 const localBranchId = ref<string | null>(null)
 const localDraftName = ref<string | null>(null)
 const draftNameEditing = ref(false)
@@ -82,10 +80,70 @@ const branchTouched = ref(false)
 // transient failure doesn't orphan a second empty draft.
 const pendingDraftId = ref<string | null>(null)
 const creatingDraft = ref(false)
-// Set just before the optimise→navigate transition so the unsaved-work guard
-// doesn't fire on our own navigation.
+// Set before the new-editor route is replaced with the persisted draft route.
 const leavingAfterCreate = ref(false)
+// True when the user leaves the new-editor route before its background save has
+// completed. It prevents that save from navigating them back into the editor.
+let abandoningNewDraft = false
 const parts = ref<CuttingPart[]>([])
+const draftRecoveryPrefix = 'mebel-pro:cutting-draft:'
+const recoveryKey = computed(
+  () => `${draftRecoveryPrefix}${isNewDraft.value ? 'new' : draftId.value}`,
+)
+
+type DraftRecovery = {
+  parts: CuttingPart[]
+  name: string | null
+  branchId: string | null
+}
+
+function writeDraftRecovery() {
+  try {
+    const snapshot: DraftRecovery = {
+      parts: parts.value,
+      name: isNewDraft.value ? localDraftName.value : (draft.value?.name ?? null),
+      branchId: activeBranchId.value,
+    }
+    window.localStorage.setItem(recoveryKey.value, JSON.stringify(snapshot))
+  } catch {
+    // Browser storage is only a last-mile recovery layer; server autosave stays
+    // authoritative when it is unavailable (private mode, quota, and so on).
+  }
+}
+
+function readDraftRecovery(): DraftRecovery | null {
+  try {
+    const raw = window.localStorage.getItem(recoveryKey.value)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<DraftRecovery>
+    if (!Array.isArray(parsed.parts)) return null
+    return {
+      parts: parsed.parts as CuttingPart[],
+      name: typeof parsed.name === 'string' ? parsed.name : null,
+      branchId: typeof parsed.branchId === 'string' ? parsed.branchId : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+function clearDraftRecovery(key = recoveryKey.value) {
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // See writeDraftRecovery: recovery storage is best effort.
+  }
+}
+
+function moveDraftRecovery(fromKey: string) {
+  try {
+    const raw = window.localStorage.getItem(fromKey)
+    if (raw) window.localStorage.setItem(recoveryKey.value, raw)
+    window.localStorage.removeItem(fromKey)
+  } catch {
+    // See writeDraftRecovery: recovery storage is best effort.
+  }
+}
 const optimizeError = ref<string | null>(null)
 // Per-row optimiser-error attribution (CB-89): the backend returns
 // details {part_ref, row_index} on a part-specific failure, so flag THAT row
@@ -97,7 +155,10 @@ const optimizeRowError = ref<{
 } | null>(null)
 const branchPickerOpen = ref(false)
 const selectedBranchId = ref<string | null>(null)
-const clearPartsConfirmOpen = ref(false)
+const deleteDraftDialogOpen = ref(false)
+const deletingDraft = ref(false)
+const deleteDraftError = ref<string | null>(null)
+const deleteDraftTraceId = ref<string | null>(null)
 const importWizardOpen = ref(false)
 const importReplaceConfirmOpen = ref(false)
 const pendingImportedParts = ref<CuttingPart[] | null>(null)
@@ -187,7 +248,11 @@ const panelChoices = computed<ChoiceOption[]>(() => {
   }
   return list.map(catalogChoice)
 })
-const hasPersistableParts = computed(() => parts.value.every((part) => !partIsInvalid(part)))
+// Do not create or update a draft until it contains at least one fully filled
+// detail. `every()` alone treats an empty list as valid.
+const hasPersistableParts = computed(
+  () => parts.value.length > 0 && parts.value.every((part) => !partIsInvalid(part)),
+)
 const lastOptimizedSignature = ref<string | null>(null)
 function partsSignature(list: CuttingPart[] = parts.value) {
   return JSON.stringify(
@@ -255,14 +320,14 @@ function blankPart(previous?: CuttingPart | null): CuttingPart {
     // auto-selecting the first catalog panel silently risked the wrong material.
     material_id: previous?.material_id ?? '',
     material_source: 'shop',
-    follow_grain: previous?.follow_grain ?? true,
+    follow_grain: false,
     length_mm: 0,
     width_mm: 0,
     quantity: 0,
-    edge_top: previous?.edge_top ? { ...previous.edge_top } : null,
-    edge_bottom: previous?.edge_bottom ? { ...previous.edge_bottom } : null,
-    edge_left: previous?.edge_left ? { ...previous.edge_left } : null,
-    edge_right: previous?.edge_right ? { ...previous.edge_right } : null,
+    edge_top: null,
+    edge_bottom: null,
+    edge_left: null,
+    edge_right: null,
   }
 }
 
@@ -317,23 +382,17 @@ function groupEdgeRegistryEntries(group: { parts: Array<{ part: CuttingPart }> }
 }
 
 function edgeIdsForParts(rows: CuttingPart[]) {
-  const counts = new Map<string, { count: number; firstSeen: number }>()
-  let order = 0
+  const ids: string[] = []
+  const seen = new Set<string>()
   for (const row of rows) {
     for (const side of edgeFields) {
       const materialId = row[side]?.material_id
-      if (!materialId) continue
-      const existing = counts.get(materialId)
-      if (existing) existing.count += 1
-      else {
-        counts.set(materialId, { count: 1, firstSeen: order })
-        order += 1
-      }
+      if (!materialId || seen.has(materialId)) continue
+      seen.add(materialId)
+      ids.push(materialId)
     }
   }
-  return [...counts.entries()]
-    .sort((left, right) => right[1].count - left[1].count || left[1].firstSeen - right[1].firstSeen)
-    .map(([materialId]) => materialId)
+  return ids
 }
 
 function groupEdgeIds(part: CuttingPart | null) {
@@ -588,15 +647,35 @@ function onCellEnter(index: number, cell: CellName, side?: EdgeField) {
   focusCell(index + 1, 'name')
 }
 
-function requestClearParts() {
-  clearPartsConfirmOpen.value = true
+function requestDeleteDraft() {
+  deleteDraftError.value = null
+  deleteDraftTraceId.value = null
+  deleteDraftDialogOpen.value = true
 }
 
-function clearParts() {
-  parts.value = []
-  preferredEdgeByPart.value = {}
-  clearPartsConfirmOpen.value = false
-  clearSelection()
+function closeDeleteDraftDialog() {
+  deleteDraftDialogOpen.value = false
+  deleteDraftError.value = null
+  deleteDraftTraceId.value = null
+}
+
+async function confirmDeleteDraft() {
+  if (!draft.value) return
+  deletingDraft.value = true
+  deleteDraftError.value = null
+  deleteDraftTraceId.value = null
+  try {
+    await cutting.deleteDraft(draft.value.id)
+    await router.push(rolePath(adapter.paths.drafts))
+  } catch (errorValue) {
+    deleteDraftError.value = clientErrorLabel(
+      apiErrorCode(errorValue),
+      "Chizmani o'chirib bo'lmadi.",
+    )
+    deleteDraftTraceId.value = apiTraceId(errorValue)
+  } finally {
+    deletingDraft.value = false
+  }
 }
 
 function openImportWizard() {
@@ -836,6 +915,7 @@ function rememberEdgeMaterial(part: CuttingPart, materialId: string | null) {
 function openEdgePicker(part: CuttingPart, event?: Event, side?: EdgeField) {
   // The modal seeds its own working selection from `part`; the editor only records
   // which part is open and the element to restore focus to on close.
+  bulkEdgeMode.value = false
   edgePickerPart.value = part
   edgePickerInitialSide.value = side ?? null
   edgeReturnFocus = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -849,22 +929,42 @@ function closeEdgePicker() {
   edgeReturnFocus = null
 }
 
-function onEdgePickerApply(payload: {
+type EdgePickerPayload = {
   edges: Record<EdgeField, CuttingEdgeBand | null>
   rememberedMaterialId: string | null
-}) {
-  // Bulk mode writes the same edge set to every selected part; single mode
-  // writes to the one open part.
-  const targets = bulkEdgeMode.value ? selectedParts.value : [edgePickerPart.value]
-  for (const part of targets) {
-    if (!part) continue
+}
+
+function applyEdgesToRefs(refs: Set<string>, payload: EdgePickerPayload) {
+  const preferred = { ...preferredEdgeByPart.value }
+  parts.value = parts.value.map((part) => {
+    if (!refs.has(part.part_ref)) return part
+    if (payload.rememberedMaterialId) preferred[part.part_ref] = payload.rememberedMaterialId
+    else delete preferred[part.part_ref]
+    return {
+      ...part,
+      edge_top: payload.edges.edge_top ? { ...payload.edges.edge_top } : null,
+      edge_bottom: payload.edges.edge_bottom ? { ...payload.edges.edge_bottom } : null,
+      edge_left: payload.edges.edge_left ? { ...payload.edges.edge_left } : null,
+      edge_right: payload.edges.edge_right ? { ...payload.edges.edge_right } : null,
+    }
+  })
+  preferredEdgeByPart.value = preferred
+}
+
+function onEdgePickerChange(payload: EdgePickerPayload) {
+  const targets = bulkEdgeMode.value
+    ? new Set(selectedParts.value.map((part) => part.part_ref))
+    : null
+  if (targets) {
+    applyEdgesToRefs(targets, payload)
+  } else if (edgePickerPart.value) {
+    const part = edgePickerPart.value
     part.edge_top = payload.edges.edge_top
     part.edge_bottom = payload.edges.edge_bottom
     part.edge_left = payload.edges.edge_left
     part.edge_right = payload.edges.edge_right
     rememberEdgeMaterial(part, payload.rememberedMaterialId)
   }
-  closeEdgePicker()
 }
 
 // The client flow no longer offers "I'll bring it" — every material is
@@ -903,7 +1003,12 @@ function resolveImportedLayoutWarning(allow: boolean) {
 }
 
 function confirmImportedLayoutMutation() {
-  if (!hasImportedMapResult.value || importedLayoutWarningAccepted.value) {
+  const savedParts = draft.value?.parts_snapshot ?? []
+  if (
+    !hasImportedMapResult.value ||
+    importedLayoutWarningAccepted.value ||
+    isGeometryNeutralEdit(savedParts, parts.value)
+  ) {
     return Promise.resolve(true)
   }
   importedLayoutWarningOpen.value = true
@@ -912,10 +1017,45 @@ function confirmImportedLayoutMutation() {
   })
 }
 
-// Debounced autosave (700ms) — the timing core, status mirror, don't-persist gate,
-// the deep `parts` watch, and the CB-15 hydration guard all live in the
-// `useDraftAutosave` composable (CB-93 seam). The gate skips incomplete/out-of-bounds
-// rows (they show their own inline validation) and a read-only bound draft.
+async function persistPartsSnapshot() {
+  const startedAsNew = isNewDraft.value
+  const oldRecoveryKey = recoveryKey.value
+  let id = draftId.value
+
+  if (startedAsNew) {
+    if (!pendingDraftId.value) {
+      pendingDraftId.value = (
+        await cutting.createDraft(
+          fixedBranch.value ? { branchId: fixedBranch.value.id } : undefined,
+        )
+      ).id
+    }
+    id = pendingDraftId.value
+  }
+
+  await cutting.updateDraft(id, {
+    parts_snapshot: parts.value,
+    ...(startedAsNew && localDraftName.value !== null ? { name: localDraftName.value } : {}),
+    ...(startedAsNew && branchTouched.value && !fixedBranch.value
+      ? { preferred_branch_id: localBranchId.value }
+      : {}),
+  })
+
+  if (!startedAsNew) {
+    clearDraftRecovery(oldRecoveryKey)
+    return
+  }
+
+  if (abandoningNewDraft) return
+  hydratedDraftId = id
+  leavingAfterCreate.value = true
+  await router.replace(rolePath(adapter.paths.editor(id)))
+  moveDraftRecovery(oldRecoveryKey)
+}
+
+// Debounced autosave (700ms) — the timing core, status mirror, draft creation,
+// the deep `parts` watch, and the hydration guard all live in this seam. A draft
+// accepts unfinished rows; only optimization applies the strict part validation.
 const autosave = useDraftAutosave({
   parts,
   persist: async () => {
@@ -929,30 +1069,29 @@ const autosave = useDraftAutosave({
       })
       return
     }
-    await cutting.updateDraft(draftId.value, { parts_snapshot: parts.value })
+    await persistPartsSnapshot()
   },
   canPersist: () => hasPersistableParts.value,
   isReadOnly: () => isReadOnly.value,
-  // Suspended while unsaved — there's no draft id to PATCH until the first
-  // optimise creates one (docs/ref/features/cutting.md).
-  enabled: () => !isNewDraft.value,
   // A row-attributed optimiser error is stale once the parts change.
   onSchedule: () => {
     optimizeRowError.value = null
+    writeDraftRecovery()
   },
 })
 const saveState = autosave.saveState
 const saveError = autosave.saveError
 
 async function setPreferredBranch(branchId: string | null) {
-  // Unsaved: there's no draft to PATCH yet — keep the pick locally and re-filter
-  // the catalog. It's persisted with the draft on the first optimise.
+  // New editor: keep the pick local until a complete detail can create the draft.
   if (isNewDraft.value) {
     localBranchId.value = branchId
     branchTouched.value = true
     branchPickerOpen.value = false
     selectedBranchId.value = branchId
+    writeDraftRecovery()
     await loadMaterials()
+    autosave.schedule()
     return
   }
   // Surface a failure instead of an unhandled rejection that leaves the local
@@ -980,6 +1119,7 @@ async function commitDraftName() {
   const name = draftNameValue.value.trim() || null
   if (isNewDraft.value) {
     localDraftName.value = name
+    autosave.schedule()
     return
   }
   if (name !== draft.value?.name) await cutting.updateDraft(draftId.value, { name })
@@ -1001,6 +1141,8 @@ async function optimize() {
   optimizeError.value = null
   optimizeRowError.value = null
   if (isNewDraft.value) {
+    await autosave.flush()
+    if (!isNewDraft.value) return optimize()
     creatingDraft.value = true
     try {
       await optimizeNewDraft()
@@ -1068,6 +1210,7 @@ async function optimizeNewDraft() {
         : {}),
     })
     await cutting.optimizeDraft(id)
+    if (abandoningNewDraft) return
     lastOptimizedSignature.value = partsSignature()
     // Hand off to the saved editor; the guard must not treat this as discarding.
     leavingAfterCreate.value = true
@@ -1158,23 +1301,21 @@ watch(
 onMounted(async () => {
   window.addEventListener('beforeunload', onBeforeUnload)
   if (isNewDraft.value) {
-    // Fixed-branch mode: the branch is the app context — skip the client-only
-    // branch-options + profile-default seed and lock the pre-filter to it.
+    // `/cutting/new` is always a distinct drawing. A shared recovery key here
+    // would otherwise repopulate this editor with the previous new draft.
+    clearDraftRecovery()
+    // Fixed-branch mode: the branch is the app context, so it cannot be
+    // unselected by the user.
     if (fixedBranch.value) {
       localBranchId.value = fixedBranch.value.id
       selectedBranchId.value = fixedBranch.value.id
       await loadMaterials()
       return
     }
-    // Unsaved editor: nothing to load. Populate the branch picker and seed the
-    // pre-filter from the client's profile default (parity with a server draft).
+    // A client-side new drawing always starts with no branch selection.
     await cutting.loadBranchOptions()
-    if (adapter.useProfileDefaultBranch) {
-      const profile = await clientProfile.load().catch(() => null)
-      localBranchId.value = profile?.preferred_branch_id ?? null
-    }
-    selectedBranchId.value = localBranchId.value
-    if (!localBranchId.value) branchPickerOpen.value = true
+    selectedBranchId.value = null
+    branchPickerOpen.value = true
     await loadMaterials()
     return
   }
@@ -1185,48 +1326,58 @@ onMounted(async () => {
   // no workshop branch-options endpoint, so skip the load.
   if (!fixedBranch.value) await cutting.loadBranchOptions()
   selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+  const recovered = readDraftRecovery()
+  if (recovered) {
+    autosave.hydrate(() => {
+      parts.value = recovered.parts.map((part) => normalizeSources(part))
+    })
+    void nextTick(() => autosave.schedule())
+  }
   if (!selectedBranchId.value) branchPickerOpen.value = true
   await loadMaterials()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  if (isNewDraft.value) {
+    autosave.cancel()
+    return
+  }
   // Flush a debounced edit before teardown so navigating away within the 700ms
   // window doesn't silently drop it (CB-15). The store action outlives the
   // component, so the PATCH still completes.
-  if (hasImportedMapResult.value && !importedLayoutWarningAccepted.value) return
+  if (
+    hasImportedMapResult.value &&
+    !importedLayoutWarningAccepted.value &&
+    !isGeometryNeutralEdit(draft.value?.parts_snapshot ?? [], parts.value)
+  ) {
+    return
+  }
   void autosave.flush()
 })
 
-// Warn before discarding unsaved work — an unsaved editor with entered parts has
-// nothing persisted until the first optimise. Skipped during our own
-// optimise→navigate handoff. (ui-ux: never lose the user's work.)
-const hasUnsavedNewWork = computed(
-  () => isNewDraft.value && !leavingAfterCreate.value && parts.value.length > 0,
-)
-// In-app leave confirmation via the design-system dialog (native window.confirm
-// is banned, routeMatrix.spec). The route guard awaits the user's choice.
-const leaveDialogOpen = ref(false)
-let leaveResolve: ((allow: boolean) => void) | null = null
-
-function resolveLeave(allow: boolean) {
-  leaveDialogOpen.value = false
-  leaveResolve?.(allow)
-  leaveResolve = null
+function onBeforeUnload() {
+  // Browsers do not wait for an async request here. The recovery snapshot was
+  // written synchronously on every edit; flush still helps when the browser
+  // keeps the request alive during unload.
+  void autosave.flush()
 }
 
-function onBeforeUnload(event: BeforeUnloadEvent) {
-  if (!hasUnsavedNewWork.value) return
-  event.preventDefault()
-  event.returnValue = ''
-}
-
-onBeforeRouteLeave(() => {
-  if (!hasUnsavedNewWork.value) return true
-  leaveDialogOpen.value = true
-  return new Promise<boolean>((resolve) => {
-    leaveResolve = resolve
-  })
+onBeforeRouteLeave(async () => {
+  // A `/cutting/new` entry is disposable. Do not hold Back navigation for an
+  // autosave, and prevent an in-flight save from replacing the destination.
+  if (isNewDraft.value) {
+    if (!leavingAfterCreate.value) {
+      abandoningNewDraft = true
+      autosave.cancel()
+    }
+    // The first autosave itself replaces `/new` with the persisted draft URL.
+    // Waiting for that autosave here would make the save and navigation wait on
+    // each other indefinitely.
+    return true
+  }
+  await autosave.flush()
+  return saveState.value !== 'error'
 })
 </script>
 
@@ -1255,14 +1406,14 @@ onBeforeRouteLeave(() => {
           {{ saveLabel() }}
         </span>
         <button
-          v-if="parts.length > 0"
+          v-if="!isNewDraft"
           type="button"
-          class="mp-button mp-button-outline px-3 text-danger"
-          aria-label="Ro'yxatni tozalash"
-          title="Ro'yxatni tozalash"
-          @click="requestClearParts"
+          class="mp-button mp-button-outline gap-2 border-danger text-danger hover:border-danger hover:bg-danger-soft"
+          aria-label="Chizmani o'chirish"
+          @click="requestDeleteDraft"
         >
           <Icon name="trash" class="size-[18px]" />
+          Chizmani o'chirish
         </button>
       </div>
     </div>
@@ -1454,7 +1605,7 @@ onBeforeRouteLeave(() => {
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
             <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
-              Krom qo'llash
+              Kromka qo'llash
             </button>
             <button type="button" class="text-accent hover:underline" @click="openBulkMaterial">
               Material almashtirish
@@ -1519,8 +1670,8 @@ onBeforeRouteLeave(() => {
                 <span aria-hidden="true" class="text-center">Bo'y</span>
                 <span aria-hidden="true" class="text-center">Eni</span>
                 <span aria-hidden="true" class="text-center">Soni</span>
-                <span aria-hidden="true" class="text-center">Tola</span>
-                <span aria-hidden="true" class="text-center">Krom</span>
+                <span aria-hidden="true" class="text-center">Tekstura</span>
+                <span aria-hidden="true" class="text-center">Kromka</span>
                 <span aria-hidden="true"></span>
               </div>
             </div>
@@ -1705,15 +1856,24 @@ onBeforeRouteLeave(() => {
     </template>
 
     <ConfirmDialog
-      :open="clearPartsConfirmOpen"
-      title="Ro'yxatni tozalash"
-      :message="`Barcha ${parts.length} qator o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
-      confirm-label="Tozalash"
+      :open="deleteDraftDialogOpen"
+      title="Chizmani o'chirish"
+      :message="
+        draft
+          ? `«${draftDisplayName(draft)}» — ${totalQuantity} qismli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`
+          : ''
+      "
+      confirm-label="O'chirish"
       cancel-label="Bekor qilish"
       danger
-      @cancel="clearPartsConfirmOpen = false"
-      @confirm="clearParts"
-    />
+      :busy="deletingDraft"
+      @cancel="closeDeleteDraftDialog"
+      @confirm="confirmDeleteDraft"
+    >
+      <p v-if="deleteDraftError" class="text-sm font-bold text-danger">
+        {{ deleteDraftError }} · trace {{ deleteDraftTraceId ?? 'unavailable' }}
+      </p>
+    </ConfirmDialog>
 
     <CuttingImportWizard
       :open="importWizardOpen"
@@ -1764,17 +1924,6 @@ onBeforeRouteLeave(() => {
       @confirm="resolveImportedLayoutWarning(true)"
     />
 
-    <ConfirmDialog
-      :open="leaveDialogOpen"
-      title="Saqlanmagan chizma"
-      message="Bu chizma hali saqlanmagan — optimallashtirilmaguncha kiritilgan qismlar yo'qoladi. Chiqasizmi?"
-      confirm-label="Chiqish"
-      cancel-label="Bekor qilish"
-      danger
-      @cancel="resolveLeave(false)"
-      @confirm="resolveLeave(true)"
-    />
-
     <CuttingEdgePickerModal
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
@@ -1787,7 +1936,7 @@ onBeforeRouteLeave(() => {
       :other-group-edge-ids="otherGroupEdgeIds(edgePickerPart)"
       :preferred-branch-id="activeBranchId"
       :preferred-branch-name="preferredBranch?.branch_name ?? 'tanlangan filial'"
-      @apply="onEdgePickerApply"
+      @edges-change="onEdgePickerChange"
       @close="closeEdgePicker"
     />
 

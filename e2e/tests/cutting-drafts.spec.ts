@@ -357,8 +357,8 @@ async function loginWorkshop(page: Page, login: string, password: string) {
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
   // The compact row exposes one rectangular edge diagram that opens the picker.
-  await page.getByRole('button', { name: 'Krom tomonlari', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: /Krom yopishtirish/ })
+  await page.getByRole('button', { name: 'Kromka tomonlari', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: /Kromka yopishtirish/ })
   // The branch's only carried tape is auto-offered as the current tape; band
   // top and bottom with that selected tape.
   await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible()
@@ -432,7 +432,7 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // The sheet strip groups thumbnails per material, captioned "List {index}".
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
-  await expect(page.getByText("Krom (material bo'yicha)")).toBeVisible()
+  await expect(page.getByText("Kromka (material bo'yicha)")).toBeVisible()
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 

@@ -48,7 +48,7 @@ describe('workshop production display helpers', () => {
   })
 
   it('names an empty banding plan without leaking ids', () => {
-    expect(workshopQueueEdgeLine([])).toBe('krom rejasi')
+    expect(workshopQueueEdgeLine([])).toBe('kromka rejasi')
   })
 
   it('counts only production jobs assigned to the current worker', () => {

@@ -364,8 +364,8 @@ async function chooseOption(
 
 async function chooseEdgeBanding(page: Page, edgeName: string) {
   // The compact row exposes one rectangular edge diagram that opens the picker.
-  await page.getByRole("button", { name: "Krom tomonlari", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: /Krom yopishtirish/ });
+  await page.getByRole("button", { name: "Kromka tomonlari", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: /Kromka yopishtirish/ });
   // The branch's only carried tape is auto-offered as the current tape; band
   // top and bottom with that selected tape.
   await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible();
@@ -505,7 +505,7 @@ test("client places an order and workshop completes it through production queues
   await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
   await chooseOption(
     workshopPage,
-    /Krom yopishtiruvchi/,
+    /Kromka yopishtiruvchi/,
     new RegExp(setup.ownerLogin),
   );
   // Assignment is metadata now — the order stays confirmed (queued in the
@@ -538,9 +538,9 @@ test("client places an order and workshop completes it through production queues
   await workshopPage.getByRole("button", { name: /Ha, tugatdim/ }).click();
   await cuttingDone;
 
-  // The job hands off to the Krom station queued-but-not-started: the edger
+  // The job hands off to the Kromka station queued-but-not-started: the edger
   // (here: the owner on-behalf) taps Boshlash, then finishes it.
-  await workshopPage.getByRole("tab", { name: /^Krom/ }).click();
+  await workshopPage.getByRole("tab", { name: /^Kromka/ }).click();
   await expect(
     workshopPage.getByText(orderNumber as string).first(),
   ).toBeVisible();

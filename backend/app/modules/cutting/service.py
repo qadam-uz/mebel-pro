@@ -37,11 +37,12 @@ from app.modules.cutting.optimizer import (
     PanelSpec,
     PartInput,
     PlacementResult,
-    _edge_metrics,
+    edge_metrics,
     run_all_algorithms,
 )
 from app.modules.cutting.schemas import (
     ClientCatalogMaterialOption,
+    CuttingDraftPart,
     CuttingDraftResponse,
     CuttingMapImportCommitRequest,
     CuttingPanelResponse,
@@ -119,6 +120,27 @@ async def commit_imported_map(
     if preferred_branch_id is not None:
         preferred_branch_id = (await visible_branch(db, preferred_branch_id)).id
 
+    draft = CuttingDraft(
+        client_id=client.id,
+        preferred_branch_id=preferred_branch_id or client.preferred_branch_id,
+    )
+    return await _commit_imported_map_for_draft(
+        db,
+        principal=principal,
+        payload=payload,
+        draft=draft,
+    )
+
+
+async def _commit_imported_map_for_draft(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    payload: CuttingMapImportCommitRequest,
+    draft: CuttingDraft,
+    workshop_id: uuid.UUID | None = None,
+) -> CuttingDraftResponse:
+    """Persist the common MAP snapshot/result for an already-authorized draft."""
     parts, optimizer_parts, _, material_snapshots = await _validate_parts(
         db,
         payload.parts,
@@ -127,11 +149,7 @@ async def commit_imported_map(
     panel_materials = await _map_panel_materials(db, payload.panel_picks)
     _validate_map_layout(payload.map_layout, optimizer_parts, panel_materials)
 
-    draft = CuttingDraft(
-        client_id=client.id,
-        preferred_branch_id=preferred_branch_id or client.preferred_branch_id,
-        parts_snapshot=parts,
-    )
+    draft.parts_snapshot = parts
     db.add(draft)
     await db.flush()
 
@@ -153,8 +171,13 @@ async def commit_imported_map(
         action="cutting_draft.create",
         entity_type="cutting_draft",
         entity_id=draft.id,
+        workshop_id=workshop_id,
         summary="Created cutting draft from MAP import",
-        details={"source": "map_2dplace", "result_id": str(result.id)},
+        details={
+            "source": "map_2dplace",
+            "result_id": str(result.id),
+            **({"on_behalf": True} if workshop_id is not None else {}),
+        },
     )
     return await _draft_response(db, draft)
 
@@ -201,7 +224,7 @@ async def update_draft(
     name: str | None,
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
-    parts_snapshot: list[CuttingPart] | None,
+    parts_snapshot: list[CuttingDraftPart] | None,
 ) -> CuttingDraftResponse:
     draft = await _client_draft(db, principal=principal, draft_id=draft_id)
     resolved_branch_id = preferred_branch_id
@@ -230,7 +253,7 @@ async def _apply_update(
     name: str | None,
     preferred_branch_id_set: bool,
     preferred_branch_id: uuid.UUID | None,
-    parts_snapshot: list[CuttingPart] | None,
+    parts_snapshot: list[CuttingDraftPart] | None,
 ) -> CuttingDraftResponse:
     """Shared update body: branch id is already resolved/authorized by the caller."""
     parts_changed = parts_snapshot is not None
@@ -239,10 +262,18 @@ async def _apply_update(
     if preferred_branch_id_set:
         draft.preferred_branch_id = preferred_branch_id
     if parts_changed:
-        normalized_parts, _, _, _ = await _validate_parts(db, parts_snapshot or [])
-        draft.parts_snapshot = normalized_parts
-        draft.chosen_result_id = None
-        await _delete_candidate_results(db, draft.id)
+        # A draft is an editing buffer: preserve incomplete rows until the
+        # operator asks to optimise. Optimisation below re-validates every row
+        # through the strict CuttingPart model.
+        await _validate_draft_parts(db, parts_snapshot or [])
+        next_snapshot = [part.model_dump(mode="json") for part in parts_snapshot or []]
+        geometry_affecting = _is_geometry_affecting_parts_edit(draft.parts_snapshot, next_snapshot)
+        draft.parts_snapshot = next_snapshot
+        if geometry_affecting:
+            draft.chosen_result_id = None
+            await _delete_candidate_results(db, draft.id)
+        else:
+            await _refresh_candidate_results_for_neutral_parts(db, draft=draft, parts=next_snapshot)
     draft.updated_at = datetime.now(UTC)
     await db.flush()
     await record_action(
@@ -257,9 +288,77 @@ async def _apply_update(
             if draft.preferred_branch_id
             else None,
             "parts_changed": parts_changed,
+            "geometry_affecting": geometry_affecting if parts_changed else False,
         },
     )
     return await _draft_response(db, draft)
+
+
+_GEOMETRY_DEFAULTS: dict[str, object] = {
+    "quantity": 0,
+    "length_mm": 0,
+    "width_mm": 0,
+    "material_id": None,
+    "follow_grain": True,
+}
+
+
+def _is_geometry_affecting_parts_edit(
+    old_snapshot: list[dict[str, Any]], new_snapshot: list[dict[str, Any]]
+) -> bool:
+    old_by_ref = {str(part.get("part_ref", "")): part for part in old_snapshot}
+    new_by_ref = {str(part.get("part_ref", "")): part for part in new_snapshot}
+    if old_by_ref.keys() != new_by_ref.keys():
+        return True
+    for part_ref, old_part in old_by_ref.items():
+        new_part = new_by_ref[part_ref]
+        if any(
+            old_part.get(field, default) != new_part.get(field, default)
+            for field, default in _GEOMETRY_DEFAULTS.items()
+        ):
+            return True
+    return False
+
+
+async def _refresh_candidate_results_for_neutral_parts(
+    db: AsyncSession,
+    *,
+    draft: CuttingDraft,
+    parts: list[dict[str, Any]],
+) -> None:
+    strict_parts = [CuttingPart.model_validate(part) for part in parts]
+    _, optimizer_parts, _, material_snapshots = await _validate_parts(
+        db, strict_parts, require_non_empty=True
+    )
+    metrics = edge_metrics(optimizer_parts)
+    edge_snapshot_ids = {
+        str(edge.material_id)
+        for part in optimizer_parts
+        for edge in (part.edge_top, part.edge_bottom, part.edge_left, part.edge_right)
+        if edge is not None
+    }
+    candidates = (
+        await db.scalars(
+            select(CuttingResult).where(
+                CuttingResult.draft_id == draft.id,
+                CuttingResult.status == CuttingResultStatus.CANDIDATE,
+            )
+        )
+    ).all()
+    for result in candidates:
+        result.parts_snapshot = parts
+        result.total_edge_length_mm = sum(metrics.edge_length_by_material.values())
+        result.edge_length_by_material = metrics.edge_length_by_material
+        result.edge_length_shop_by_material = metrics.edge_length_shop_by_material
+        result.edge_length_own_by_material = metrics.edge_length_own_by_material
+        result.edge_consumed_shop_by_material = metrics.edge_consumed_shop_by_material
+        result.edge_consumed_own_by_material = metrics.edge_consumed_own_by_material
+        result.edge_banded_sides_by_material = metrics.edge_banded_sides_by_material
+        snapshots = dict(result.material_snapshots)
+        for material_id in edge_snapshot_ids:
+            if material_id not in snapshots and material_id in material_snapshots:
+                snapshots[material_id] = material_snapshots[material_id]
+        result.material_snapshots = snapshots
 
 
 async def delete_draft(
@@ -786,7 +885,7 @@ async def _create_imported_map_result(
             )
         )
 
-    edge_metrics = _edge_metrics(optimizer_parts)
+    metrics = edge_metrics(optimizer_parts)
     waste_percentage = (
         Decimal(total_sheet_area - total_part_area) / Decimal(total_sheet_area)
         if total_sheet_area
@@ -803,15 +902,15 @@ async def _create_imported_map_result(
         panels_used_by_material=panels_used,
         waste_percentage=waste_percentage,
         total_cut_length_mm=total_cut_length,
-        total_edge_length_mm=sum(edge_metrics.edge_length_by_material.values()),
-        edge_length_by_material=edge_metrics.edge_length_by_material,
+        total_edge_length_mm=sum(metrics.edge_length_by_material.values()),
+        edge_length_by_material=metrics.edge_length_by_material,
         parts_snapshot=parts,
         material_snapshots=material_snapshots,
-        edge_length_shop_by_material=edge_metrics.edge_length_shop_by_material,
-        edge_length_own_by_material=edge_metrics.edge_length_own_by_material,
-        edge_consumed_shop_by_material=edge_metrics.edge_consumed_shop_by_material,
-        edge_consumed_own_by_material=edge_metrics.edge_consumed_own_by_material,
-        edge_banded_sides_by_material=edge_metrics.edge_banded_sides_by_material,
+        edge_length_shop_by_material=metrics.edge_length_shop_by_material,
+        edge_length_own_by_material=metrics.edge_length_own_by_material,
+        edge_consumed_shop_by_material=metrics.edge_consumed_shop_by_material,
+        edge_consumed_own_by_material=metrics.edge_consumed_own_by_material,
+        edge_banded_sides_by_material=metrics.edge_banded_sides_by_material,
         created_at=now,
     )
     db.add(result)
@@ -992,6 +1091,88 @@ async def _validate_parts(
         panel_specs,
         material_snapshots,
     )
+
+
+async def _validate_draft_parts(db: AsyncSession, parts: list[CuttingDraftPart]) -> None:
+    """Validate references that are meaningful before a row is complete.
+
+    Dimensions and quantity are intentionally excluded: while a row is being
+    typed they may be zero or temporarily out of range. The optimiser remains
+    responsible for those strict production constraints.
+    """
+
+    errors: list[dict[str, Any]] = []
+    seen_part_refs: set[str] = set()
+    material_ids: set[uuid.UUID] = set()
+    for row_index, part in enumerate(parts, start=1):
+        part.part_ref = part.part_ref.strip()
+        if not part.part_ref:
+            errors.append({"row_index": row_index, "part_ref": "", "code": "invalid_part_ref"})
+        elif part.part_ref in seen_part_refs:
+            errors.append(
+                {
+                    "row_index": row_index,
+                    "part_ref": part.part_ref,
+                    "code": "duplicate_part_ref",
+                }
+            )
+        else:
+            seen_part_refs.add(part.part_ref)
+        if part.material_id is not None:
+            material_ids.add(part.material_id)
+        for side in (part.edge_top, part.edge_bottom, part.edge_left, part.edge_right):
+            if side is not None:
+                material_ids.add(side.material_id)
+
+    material_rows = await _material_rows(db, material_ids)
+    for row_index, part in enumerate(parts, start=1):
+        if part.material_id is not None:
+            panel_row = material_rows.get(part.material_id)
+            if panel_row is None:
+                errors.append(
+                    {
+                        "row_index": row_index,
+                        "part_ref": part.part_ref,
+                        "code": "material_not_found",
+                        "material_id": str(part.material_id),
+                    }
+                )
+            elif panel_row[0].kind is not MaterialKind.PANEL:
+                errors.append(
+                    {
+                        "row_index": row_index,
+                        "part_ref": part.part_ref,
+                        "code": "invalid_panel_material",
+                        "material_id": str(part.material_id),
+                    }
+                )
+        for side_name, edge in (
+            ("edge_top", part.edge_top),
+            ("edge_bottom", part.edge_bottom),
+            ("edge_left", part.edge_left),
+            ("edge_right", part.edge_right),
+        ):
+            if edge is None:
+                continue
+            edge_row = material_rows.get(edge.material_id)
+            if edge_row is None:
+                code = "material_not_found"
+            elif edge_row[0].kind is not MaterialKind.EDGE:
+                code = "invalid_edge_material"
+            else:
+                continue
+            errors.append(
+                {
+                    "row_index": row_index,
+                    "part_ref": part.part_ref,
+                    "code": code,
+                    "material_id": str(edge.material_id),
+                    "side": side_name,
+                }
+            )
+
+    if errors:
+        raise APIError("invalid_cutting_parts", "Invalid cutting parts", details={"errors": errors})
 
 
 async def _material_rows(
@@ -1216,4 +1397,6 @@ async def _result_response(
 
 
 def _parts_snapshot_response(parts_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [CuttingPart.model_validate(part).model_dump(mode="json") for part in parts_snapshot]
+    return [
+        CuttingDraftPart.model_validate(part).model_dump(mode="json") for part in parts_snapshot
+    ]

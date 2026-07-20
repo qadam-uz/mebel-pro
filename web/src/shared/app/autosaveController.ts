@@ -48,6 +48,9 @@ export function createAutosaveController(options: AutosaveControllerOptions): Au
   let timer: ReturnType<typeof setTimeout> | undefined
   let dirty = false
   let status: AutosaveStatus = 'saved'
+  let revision = 0
+  let savedRevision = 0
+  let running: Promise<void> | null = null
 
   function setStatus(next: AutosaveStatus) {
     status = next
@@ -63,6 +66,7 @@ export function createAutosaveController(options: AutosaveControllerOptions): Au
 
   async function run(): Promise<void> {
     clearTimer()
+    if (running) return running
     if (!options.canPersist()) {
       // Invalid rows / read-only draft surface their own state; never fire a
       // doomed network save, and keep the queued edit so a later valid flush
@@ -70,13 +74,27 @@ export function createAutosaveController(options: AutosaveControllerOptions): Au
       setStatus('editing')
       return
     }
-    setStatus('saving')
+    const revisionAtStart = revision
+    running = (async () => {
+      setStatus('saving')
+      try {
+        await options.persist()
+        savedRevision = revisionAtStart
+        dirty = revision > savedRevision
+        if (dirty) {
+          setStatus('editing')
+          timer = setTimeout(() => void run(), delayMs)
+        } else {
+          setStatus('saved')
+        }
+      } catch {
+        setStatus('error')
+      }
+    })()
     try {
-      await options.persist()
-      dirty = false
-      setStatus('saved')
-    } catch {
-      setStatus('error')
+      await running
+    } finally {
+      running = null
     }
   }
 
@@ -85,21 +103,30 @@ export function createAutosaveController(options: AutosaveControllerOptions): Au
       return status
     },
     schedule() {
+      revision += 1
       dirty = true
       clearTimer()
       setStatus('editing')
       timer = setTimeout(() => void run(), delayMs)
     },
     async flush() {
-      if (!dirty) {
-        clearTimer()
-        return
+      while (dirty || running) {
+        if (running) await running
+        if (!dirty) break
+        if (!options.canPersist()) {
+          clearTimer()
+          setStatus('editing')
+          return
+        }
+        await run()
+        if (status === 'error') return
       }
-      await run()
+      clearTimer()
     },
     markSaved() {
       clearTimer()
       dirty = false
+      savedRevision = revision
       setStatus('saved')
     },
     cancel() {

@@ -28,7 +28,7 @@ describe('workshop assignment chips', () => {
         key: 'edger',
         className: 'p-eb',
         icon: 'layers',
-        label: 'Kromchi: Madina Sobirova',
+        label: 'Kromka ustasi: Madina Sobirova',
         initials: 'MS',
       }),
     ])

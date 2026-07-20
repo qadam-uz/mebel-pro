@@ -4,6 +4,7 @@ import {
   deriveEdgeRegistry,
   edgeRegistryKey,
   groupCuttingParts,
+  isGeometryNeutralEdit,
   partDisplayName,
   previewEdgeAssignments,
   registryColorStyle,
@@ -30,6 +31,66 @@ function part(overrides: Partial<CuttingPart> = {}): CuttingPart {
 }
 
 describe('cuttingEditorDerived', () => {
+  it.each([
+    ['quantity', { quantity: 2 }],
+    ['length_mm', { length_mm: 101 }],
+    ['width_mm', { width_mm: 51 }],
+    ['material_id', { material_id: 'panel-2' }],
+    ['follow_grain', { follow_grain: false }],
+  ] as const)('treats %s changes as geometry-affecting', (_field, change) => {
+    expect(
+      isGeometryNeutralEdit(
+        [part({ part_ref: 'one', material_id: 'panel-1' })],
+        [part({ part_ref: 'one', material_id: 'panel-1', ...change })],
+      ),
+    ).toBe(false)
+  })
+
+  it('treats adding or removing a part reference as geometry-affecting', () => {
+    const original = [part({ part_ref: 'one', material_id: 'panel-1' })]
+    expect(isGeometryNeutralEdit(original, [...original, part({ part_ref: 'two' })])).toBe(false)
+    expect(isGeometryNeutralEdit([...original, part({ part_ref: 'two' })], original)).toBe(false)
+  })
+
+  it('keeps layouts for name, edge and material-source edits', () => {
+    const original = part({
+      part_ref: 'one',
+      material_id: 'panel-1',
+      edge_top: { material_id: 'edge-1', source: 'shop' },
+    })
+    expect(
+      isGeometryNeutralEdit(
+        [original],
+        [
+          {
+            ...original,
+            name: 'Shelf',
+            material_source: 'own',
+            edge_top: { material_id: 'edge-2', source: 'shop' },
+          },
+        ],
+      ),
+    ).toBe(true)
+  })
+
+  it('uses backend defaults for missing geometry fields', () => {
+    expect(
+      isGeometryNeutralEdit(
+        [{ part_ref: 'one' }],
+        [
+          {
+            part_ref: 'one',
+            quantity: 0,
+            length_mm: 0,
+            width_mm: 0,
+            material_id: null as unknown as string,
+            follow_grain: true,
+          },
+        ],
+      ),
+    ).toBe(true)
+  })
+
   it('falls back to row display names without storing them', () => {
     expect(partDisplayName(part({ name: null }), 2)).toBe('D3')
     expect(partDisplayName(part({ name: 'Shelf' }), 2)).toBe('Shelf')
@@ -76,7 +137,7 @@ describe('cuttingEditorDerived', () => {
     ])
   })
 
-  it('keeps assignment numbers stable when used edges are removed and added later', () => {
+  it('compacts assignment numbers after an edge is removed', () => {
     const assignments = new Map<string, number>()
     syncEdgeAssignments(assignments, [
       part({ edge_top: { material_id: 'edge-a', source: 'shop' } }),
@@ -87,7 +148,6 @@ describe('cuttingEditorDerived', () => {
     ])
     syncEdgeAssignments(assignments, [
       part({ edge_top: { material_id: 'edge-b', source: 'shop' } }),
-      part({ edge_top: { material_id: 'edge-c', source: 'shop' } }),
     ])
 
     const entries = deriveEdgeRegistry(
@@ -98,10 +158,33 @@ describe('cuttingEditorDerived', () => {
       assignments,
     )
 
-    expect(assignments.get(edgeRegistryKey('edge-a', 'shop'))).toBe(1)
-    expect(entries.map((entry) => [entry.materialId, entry.number])).toEqual([
-      ['edge-b', 2],
-      ['edge-c', 3],
+    expect(assignments.has(edgeRegistryKey('edge-a', 'shop'))).toBe(false)
+    expect(entries.map((entry) => [entry.materialId, entry.number])).toEqual([['edge-b', 1]])
+  })
+
+  it('keeps a tape number when it is applied to more sides', () => {
+    const assignments = new Map<string, number>()
+    syncEdgeAssignments(assignments, [
+      part({
+        edge_top: { material_id: 'edge-a', source: 'shop' },
+        edge_left: { material_id: 'edge-b', source: 'shop' },
+      }),
+    ])
+
+    // B is now on three sides and occurs first in the side traversal. Its use
+    // count must not change the established A=#1, B=#2 registry identity.
+    syncEdgeAssignments(assignments, [
+      part({
+        edge_top: { material_id: 'edge-b', source: 'shop' },
+        edge_bottom: { material_id: 'edge-b', source: 'shop' },
+        edge_left: { material_id: 'edge-a', source: 'shop' },
+        edge_right: { material_id: 'edge-b', source: 'shop' },
+      }),
+    ])
+
+    expect([...assignments.entries()]).toEqual([
+      [edgeRegistryKey('edge-a', 'shop'), 1],
+      [edgeRegistryKey('edge-b', 'shop'), 2],
     ])
   })
 

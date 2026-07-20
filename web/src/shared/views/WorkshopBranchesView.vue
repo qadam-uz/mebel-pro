@@ -87,7 +87,7 @@ async function createBranch() {
     // The branch is live for client orders the moment it exists, but with no
     // cutting/banding pricing yet — land the owner on the detail page where
     // those two numbers are set instead of silently closing the form.
-    toast.success("Filial qo'shildi. Endi kesish va krom narxlarini kiriting.")
+    toast.success("Filial qo'shildi. Endi kesish va kromka narxlarini kiriting.")
     await router.push(rolePath(`/workshop/branches/${created.id}`))
   } catch (caught) {
     Object.assign(

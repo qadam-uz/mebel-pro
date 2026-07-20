@@ -137,9 +137,9 @@ const materialApiLocMap: Partial<Record<string, MaterialField>> = {
 }
 
 const kindOptions = [
-  dropdownOption('all', 'Hammasi', 'panel va krom'),
+  dropdownOption('all', 'Hammasi', 'panel va kromka'),
   dropdownOption('panel', 'Panel', 'plita materiallari'),
-  dropdownOption('edge', 'Krom', 'krom lenta'),
+  dropdownOption('edge', 'Kromka', 'kromka'),
 ]
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
@@ -172,7 +172,7 @@ const materialTypeOptions: ChoiceOption[] = [
 const materialTypeFilterOptions = computed<ChoiceOption[]>(() => materialTypeOptions)
 const materialKindOptions: ChoiceOption[] = [
   { value: 'panel', label: 'Panel', meta: 'plita materiali' },
-  { value: 'edge', label: 'Krom', meta: 'krom lenta' },
+  { value: 'edge', label: 'Kromka', meta: 'kromka' },
 ]
 
 // Filtering + paging are server-side (the catalog holds hundreds of rows). Every
@@ -295,7 +295,7 @@ function materialSpec(material: Material) {
   if (material.kind === 'panel') {
     return `${materialTypeLabel(material.type)} . ${material.panel_length_mm} x ${material.panel_width_mm} mm`
   }
-  return `krom · ${material.thickness_mm} x ${material.edge_width_mm ?? '-'} mm`
+  return `kromka · ${material.thickness_mm} x ${material.edge_width_mm ?? '-'} mm`
 }
 
 function materialTypeLabel(type: PanelMaterialType | null | undefined) {
@@ -496,7 +496,7 @@ onMounted(async () => {
     <section v-else-if="admin.materials.length === 0" class="admin-empty">
       <template v-if="!hasActiveFilters">
         <h3>Material yo'q</h3>
-        <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki krom material yarating.</p>
+        <p>Avval ishlab chiqaruvchi qo'shing, keyin panel yoki kromka material yarating.</p>
         <div class="mt-3 flex flex-wrap justify-center gap-2">
           <button type="button" class="admin-primary-action" @click="openCreate">
             + Yangi material

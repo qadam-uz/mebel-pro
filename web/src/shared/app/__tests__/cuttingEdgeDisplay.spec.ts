@@ -156,8 +156,8 @@ describe('recommendedEdge (CB-130)', () => {
     expect(recommendedEdge(panel, edges, null, null, [], ['a', 'match'])?.id).toBe('match')
   })
 
-  it('falls back to the top-ranked edge when no usage candidate matches', () => {
-    expect(recommendedEdge(panel, edges, null, null)?.id).toBe('match')
+  it('does not arm a catalog edge when the draft has no usage candidate', () => {
+    expect(recommendedEdge(panel, edges, null, null)).toBeNull()
   })
 
   it('returns null when there are no edges', () => {

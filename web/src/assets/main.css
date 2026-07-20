@@ -939,7 +939,7 @@
     left: 50%;
     z-index: 80;
     display: flex;
-    width: min(calc(100% - 32px), 620px);
+    width: min(calc(100% - 32px), 480px);
     max-height: 90vh;
     max-height: 90dvh;
     flex-direction: column;
@@ -965,9 +965,9 @@
 
   .client-edge-modal-h h3 {
     margin: 0;
-    font-family: var(--font-serif);
-    font-size: 19px;
-    font-weight: 600;
+    font-family: var(--font-sans);
+    font-size: 14.5px;
+    font-weight: 700;
   }
 
   .client-edge-close {

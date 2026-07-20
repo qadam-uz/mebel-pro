@@ -169,8 +169,8 @@ watch(
               <th class="px-5 py-3">Xodim</th>
               <th class="px-5 py-3">Kesilgan panel</th>
               <th class="px-5 py-3">Kesimlar</th>
-              <th class="px-5 py-3">Kromlangan buyurtma</th>
-              <th class="px-5 py-3">Krom metri</th>
+              <th class="px-5 py-3">Kromka qilingan buyurtma</th>
+              <th class="px-5 py-3">Kromka metri</th>
               <th class="px-5 py-3">Qalinlik jamlanmasi</th>
             </tr>
           </thead>
@@ -182,7 +182,7 @@ watch(
               <td class="px-5 py-3 font-mono text-xs">{{ row.orders_banded }}</td>
               <td class="px-5 py-3 text-xs">
                 <span v-if="edgeLengthLines(row).length === 0" class="text-ink-muted">
-                  Krom metri yo'q
+                  Kromka metri yo'q
                 </span>
                 <ul v-else class="grid min-w-52 gap-1">
                   <li

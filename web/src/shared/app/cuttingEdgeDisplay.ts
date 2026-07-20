@@ -62,9 +62,10 @@ export function rankedEdges(
 }
 
 /**
- * The edge to default to: the currently-picked one, else the remembered one for
- * the part, else the top-ranked. `currentId`/`rememberedId` resolve against the
- * same `edges` list.
+ * The draft-scoped edge to arm: the currently-picked one, else the remembered one
+ * for the part, then group/document usage. Catalog ranking deliberately does not
+ * arm a tape; a fresh drawing must return null until the user selects one.
+ * `currentId`/`rememberedId` resolve against the same `edges` list.
  */
 export function recommendedEdge(
   panel: ClientCatalogMaterialOption | null | undefined,
@@ -85,5 +86,5 @@ export function recommendedEdge(
     const edge = byId(id)
     if (edge && edgeRank(panel, edge) < 2) return edge
   }
-  return rankedEdges(panel, edges)[0]?.material ?? null
+  return null
 }

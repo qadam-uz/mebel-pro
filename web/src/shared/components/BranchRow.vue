@@ -51,7 +51,7 @@ defineEmits<{ select: [] }>()
         v-if="selected && quote"
         class="mt-2 grid gap-1 border-t border-hairline pt-2 text-xs text-ink-soft"
         >Kesish xizmati: {{ formatTiyin(quote.subtotal_cutting_tiyin) }}<br />Materiallar:
-        {{ formatTiyin(quote.subtotal_materials_tiyin) }}<br />Krom yopishtirish:
+        {{ formatTiyin(quote.subtotal_materials_tiyin) }}<br />Kromka yopishtirish:
         {{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}</span
       ></span
     ><span

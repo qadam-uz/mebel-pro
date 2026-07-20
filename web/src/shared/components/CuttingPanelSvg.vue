@@ -20,6 +20,14 @@ const NORM_WIDTH = 800
 const LABEL_FONT = 11
 const LABEL_MIN_W = 80
 const LABEL_MIN_H = 30
+// Dimension texts sit at the edges (Bazis-style): the placed length centred
+// just inside the top edge, the placed width rotated 90° just inside the left
+// edge. The inset clears the band ticks (BAND_INSET + stroke) with room to
+// spare; the fit thresholds are per-dimension so a thin strip still shows the
+// number that fits (a 4-digit number needs ~44px along its axis).
+const DIM_INSET = 12
+const DIM_MIN_ALONG = 44
+const DIM_MIN_ACROSS = 24
 // Edge-banding marks: a short, centred "tape" tick set just inside each banded
 // side — not a full-length frame. Inset, length and thickness are on-screen
 // constants (same normalization as labels), so a banded side reads the same on a
@@ -85,7 +93,27 @@ function labelFits(placement: CuttingPlacement) {
 function placementLabel(placement: CuttingPlacement) {
   const row = partRowsByRef.value.get(placement.part_ref)
   const name = row ? partDisplayName(row.part, row.index) : placement.part_ref
-  return `${name} ${placement.length_mm}×${placement.width_mm}${placement.rotated ? ' ↻' : ''}`
+  return `${name}${placement.rotated ? ' ↻' : ''}`
+}
+
+// Per-dimension fit: each number renders independently of the name label, so a
+// thin strip still shows the dimension that has room.
+function lengthDimFits(placement: CuttingPlacement) {
+  return (
+    placement.length_mm * normScale.value > DIM_MIN_ALONG &&
+    placement.width_mm * normScale.value > DIM_MIN_ACROSS
+  )
+}
+
+function widthDimFits(placement: CuttingPlacement) {
+  return (
+    placement.width_mm * normScale.value > DIM_MIN_ALONG &&
+    placement.length_mm * normScale.value > DIM_MIN_ACROSS
+  )
+}
+
+function dimInset() {
+  return DIM_INSET / normScale.value
 }
 
 // Which physical sides of the *placed* rectangle carry edge banding. Unrotated:
@@ -260,6 +288,35 @@ function offcutTransform(offcut: CuttingOffcut) {
         stroke-linecap="round"
         aria-hidden="true"
       />
+      <text
+        v-if="lengthDimFits(placement)"
+        :x="placement.x_mm + placement.length_mm / 2"
+        :y="svgY(placement) + dimInset()"
+        fill="var(--color-ink-soft)"
+        :font-size="labelFontSize"
+        font-family="sans-serif"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        :font-weight="placement.id === activePlacementId ? 700 : 400"
+        aria-hidden="true"
+      >
+        {{ placement.length_mm }}
+      </text>
+      <text
+        v-if="widthDimFits(placement)"
+        :x="placement.x_mm + dimInset()"
+        :y="svgY(placement) + placement.width_mm / 2"
+        fill="var(--color-ink-soft)"
+        :font-size="labelFontSize"
+        font-family="sans-serif"
+        text-anchor="middle"
+        dominant-baseline="middle"
+        :font-weight="placement.id === activePlacementId ? 700 : 400"
+        :transform="`rotate(-90 ${placement.x_mm + dimInset()} ${svgY(placement) + placement.width_mm / 2})`"
+        aria-hidden="true"
+      >
+        {{ placement.width_mm }}
+      </text>
       <template v-if="labelFits(placement)">
         <text
           :x="placement.x_mm + placement.length_mm / 2"

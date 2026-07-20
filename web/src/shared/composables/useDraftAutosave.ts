@@ -70,5 +70,6 @@ export function useDraftAutosave<T>(opts: {
     hydrate,
     flush: () => controller.flush(),
     markSaved: () => controller.markSaved(),
+    cancel: () => controller.cancel(),
   }
 }

@@ -15,6 +15,7 @@ from app.modules.cutting.api import (
     choose_workshop_result,
     client_catalog_materials,
     commit_imported_map,
+    commit_workshop_imported_map,
     create_draft,
     create_workshop_draft,
     delete_draft,
@@ -45,6 +46,7 @@ from app.modules.cutting.schemas import (
     CuttingDraftResponse,
     CuttingMapImportCommitRequest,
     WorkshopCuttingDraftCreateRequest,
+    WorkshopCuttingMapImportCommitRequest,
 )
 
 router = APIRouter(tags=["cutting"])
@@ -57,6 +59,13 @@ async def client_cutting_import_parse(
     options: Annotated[str | None, Form()] = None,
 ) -> ImportParseResponse:
     del principal
+    return await _parse_cutting_import(file, options)
+
+
+async def _parse_cutting_import(
+    file: UploadFile,
+    options: str | None,
+) -> ImportParseResponse:
     content = await file.read(MAX_IMPORT_FILE_BYTES + 1)
     try:
         parse_options = parse_options_json(options)
@@ -203,6 +212,25 @@ async def client_catalog_materials_index(
 
 
 # ── Workshop staff acting for a walk-in client (manage_orders) ────────────────
+
+
+@router.post("/workshop/cutting/import/parse", response_model=ImportParseResponse)
+async def workshop_cutting_import_parse(
+    principal: AccountReadyPrincipal,
+    file: Annotated[UploadFile, File()],
+    options: Annotated[str | None, Form()] = None,
+) -> ImportParseResponse:
+    del principal
+    return await _parse_cutting_import(file, options)
+
+
+@router.post("/workshop/cutting/import/map/commit", response_model=CuttingDraftResponse)
+async def workshop_cutting_import_map_commit(
+    payload: WorkshopCuttingMapImportCommitRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> CuttingDraftResponse:
+    return await commit_workshop_imported_map(db, principal=principal, payload=payload)
 
 
 @router.post(

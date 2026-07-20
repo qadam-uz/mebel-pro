@@ -35,6 +35,7 @@ from app.modules.cutting.service import (
 )
 from app.modules.cutting.workshop_service import (
     choose_workshop_result,
+    commit_workshop_imported_map,
     create_workshop_draft,
     delete_workshop_draft,
     get_workshop_draft,
@@ -65,6 +66,7 @@ __all__ = [
     "choose_workshop_result",
     "client_catalog_materials",
     "commit_imported_map",
+    "commit_workshop_imported_map",
     "create_draft",
     "create_workshop_draft",
     "cutting_result_response",

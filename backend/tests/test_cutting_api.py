@@ -1,8 +1,10 @@
 import uuid
+from copy import deepcopy
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
 from app.core.security import hash_password
 from app.models.enums import (
     AuthenticatedPrincipalType,
@@ -343,6 +345,131 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert action_count == 5
 
 
+async def test_neutral_parts_edit_keeps_candidate_result_and_refreshes_edges(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, _ = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    parts = _parts(panel.id, edge.id)
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": parts},
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize", headers=_auth(access)
+    )
+    result = optimized.json()["results"][0]
+    before_panels = result["panels"]
+
+    neutral = deepcopy(parts)
+    neutral[0]["name"] = "Renamed shelf"
+    neutral[0]["edge_top"] = None
+    neutral[0]["material_source"] = "own"
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": neutral},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["chosen_result_id"] == result["id"]
+    refreshed = patched.json()["results"][0]
+    assert refreshed["id"] == result["id"]
+    assert refreshed["parts_snapshot"][0]["name"] == "Renamed shelf"
+    assert refreshed["edge_length_by_material"] == {str(edge.id): 240}
+    assert refreshed["panels"] == before_panels
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["quantity", "length_mm", "width_mm", "material_id", "follow_grain", "add_ref", "remove_ref"],
+)
+async def test_geometry_parts_edits_delete_candidate_results(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    change: str,
+) -> None:
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    panel, edge, other_panel = await _materials(db_session, branch_id=branch_id)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    parts = _parts(panel.id, edge.id)
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": parts},
+    )
+    await client.post(f"/api/v1/client/cutting-drafts/{draft_id}/optimize", headers=_auth(access))
+    changed = deepcopy(parts)
+    if change == "add_ref":
+        added = deepcopy(changed[0])
+        added["part_ref"] = "added"
+        changed.append(added)
+    elif change == "remove_ref":
+        changed = []
+    elif change == "material_id":
+        changed[0]["material_id"] = str(other_panel.id)
+    elif change == "follow_grain":
+        changed[0]["follow_grain"] = False
+    else:
+        changed[0][change] = int(changed[0][change]) + 1
+    patched = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": changed},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["chosen_result_id"] is None
+    assert patched.json()["results"] == []
+
+
+async def test_client_cutting_draft_keeps_incomplete_rows_for_autosave(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, _, branch_id, _ = await _workshop_owner_access(db_session)
+    access, _ = await _client_access(db_session, preferred_branch_id=branch_id)
+
+    created = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = created.json()["id"]
+    incomplete = {
+        "part_ref": "in-progress-row",
+        "name": "Yon devor",
+        "material_id": "",
+        "material_source": "shop",
+        "follow_grain": False,
+        "length_mm": 120,
+        "width_mm": 0,
+        "quantity": 0,
+        "edge_top": None,
+        "edge_bottom": None,
+        "edge_left": None,
+        "edge_right": None,
+    }
+
+    updated = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={"parts_snapshot": [incomplete]},
+    )
+    loaded = await client.get(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["parts_snapshot"][0]["material_id"] is None
+    assert loaded.status_code == 200
+    assert loaded.json()["parts_snapshot"][0] == updated.json()["parts_snapshot"][0]
+
+
 async def test_grained_part_follow_grain_controls_rotation_validation_and_result(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -497,8 +624,11 @@ async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
         "optimizer",
     }
     assert patched.status_code == 200
-    assert patched.json()["results"] == []
-    assert patched.json()["chosen_result_id"] is None
+    assert {row["source"] for row in patched.json()["results"]} == {
+        "imported_map",
+        "optimizer",
+    }
+    assert patched.json()["chosen_result_id"] == imported_result["id"]
 
 
 async def test_client_map_import_commit_rejects_material_size_mismatch(
@@ -530,6 +660,84 @@ async def test_client_map_import_commit_rejects_material_size_mismatch(
 
     assert rejected.status_code == 400
     assert rejected.json()["code"] == "map_layout_material_mismatch"
+
+
+async def test_workshop_map_import_commit_creates_staff_minted_imported_draft(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
+    access, _ = await _staff_user_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+    walk_in = Client(phone="+998901111042", name="Walk-in client")
+    db_session.add(walk_in)
+    await db_session.flush()
+    panel, edge = await _map_materials(db_session, branch_id=branch_id)
+    fixture = Path(__file__).parent / "fixtures" / "cutting_import" / "map" / "6.map"
+    parsed = parse_import_file(filename="6.map", content=fixture.read_bytes()).model_dump(
+        mode="json"
+    )
+
+    committed = await client.post(
+        "/api/v1/workshop/cutting/import/map/commit",
+        headers=_auth(access),
+        json={
+            "client_id": str(walk_in.id),
+            "branch_id": str(branch_id),
+            "parts": _map_commit_parts(parsed, panel.id, edge.id),
+            "map_layout": parsed["map_layout"],
+            "panel_picks": {"m1": str(panel.id)},
+        },
+    )
+
+    assert committed.status_code == 200, committed.text
+    body = committed.json()
+    stored = await db_session.get(CuttingDraft, uuid.UUID(body["id"]))
+    assert stored is not None
+    assert stored.client_id == walk_in.id
+    assert stored.preferred_branch_id == branch_id
+    assert stored.created_via_workshop_id == workshop_id
+    assert body["results"][0]["source"] == "imported_map"
+
+
+async def test_workshop_map_import_commit_requires_branch_manage_orders_grant(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    _, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
+    access, _ = await _staff_user_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.VIEW_DASHBOARD,
+    )
+    walk_in = Client(phone="+998901111043", name="Walk-in client")
+    db_session.add(walk_in)
+    await db_session.flush()
+
+    forbidden = await client.post(
+        "/api/v1/workshop/cutting/import/map/commit",
+        headers=_auth(access),
+        json={
+            "client_id": str(walk_in.id),
+            "branch_id": str(branch_id),
+            "parts": [],
+            "map_layout": {
+                "sheets": [],
+                "part_rows": [],
+                "description": "",
+                "customer_name": "",
+                "order_type": "",
+            },
+            "panel_picks": {},
+        },
+    )
+
+    assert forbidden.status_code == 403
 
 
 async def test_old_cutting_part_snapshots_default_to_follow_grain_true(

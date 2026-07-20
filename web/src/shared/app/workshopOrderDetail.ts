@@ -93,7 +93,7 @@ export function revertTargetLabelForOrder(order: {
 }): string {
   if (order.status === 'cutting') return 'tasdiqlangan holatiga'
   if (order.status === 'edge_banding') return 'kesishga'
-  if (order.status === 'ready') return order.has_banding ? 'kromga' : 'kesishga'
+  if (order.status === 'ready') return order.has_banding ? 'kromkaga' : 'kesishga'
   return ''
 }
 
@@ -139,13 +139,13 @@ export function workshopOrderListActions(
   if (order.status === 'edge_banding') {
     if (access.canCompleteBanding && order.assigned_edger_user_id) {
       if (!order.banding_started_at) {
-        actions.push({ kind: 'start_banding', label: 'Krom boshlash' })
+        actions.push({ kind: 'start_banding', label: 'Kromka boshlash' })
       }
-      actions.push({ kind: 'complete_banding', label: 'Krom tugadi' })
+      actions.push({ kind: 'complete_banding', label: 'Kromka tugadi' })
     }
     if (access.canManageOrders) {
       if (!order.assigned_edger_user_id) {
-        actions.push({ kind: 'assign', label: 'Kromchini tanlash' })
+        actions.push({ kind: 'assign', label: 'Kromka ustasini tanlash' })
       }
       actions.push({
         kind: 'revert',
@@ -204,7 +204,7 @@ export function productionTimelineDetails(
   if (panelCount !== null) details.push(`Panel sarfi: ${panelCount} panel`)
 
   const edgeMillimetres = summedRecordValue(metadata.edge_demands)
-  if (edgeMillimetres !== null) details.push(`Krom sarfi: ${formatMetres(edgeMillimetres)}`)
+  if (edgeMillimetres !== null) details.push(`Kromka sarfi: ${formatMetres(edgeMillimetres)}`)
 
   return details
 }

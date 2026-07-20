@@ -84,7 +84,7 @@ const financeOpen = computed(
 
 function statusSubtext(status: OrderStatus) {
   if (status === 'cutting') return 'Kesilmoqda'
-  if (status === 'edge_banding') return 'Krom yopishtirilmoqda'
+  if (status === 'edge_banding') return 'Kromka yopishtirilmoqda'
   if (status === 'ready') return 'Olib ketishga tayyor'
   if (status === 'cancelled') return 'Bekor qilingan'
   return ''
@@ -379,7 +379,7 @@ onMounted(() => {
                 <template v-if="order.subtotal_edge_banding_tiyin > 0">
                   <div class="client-row-item">
                     <div>
-                      <div class="client-row-name">Krom</div>
+                      <div class="client-row-name">Kromka</div>
                       <div class="text-sm text-ink-muted">
                         {{ metres(totalEdge) }} · material + xizmat
                       </div>
@@ -390,14 +390,14 @@ onMounted(() => {
                   </div>
                   <div class="client-row-item">
                     <div>
-                      <div class="client-row-name">Krom materiali</div>
+                      <div class="client-row-name">Kromka materiali</div>
                       <div class="text-sm text-ink-muted">lenta narxi</div>
                     </div>
                     <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.materials) }}</div>
                   </div>
                   <div class="client-row-item">
                     <div>
-                      <div class="client-row-name">Krom yopishtirish xizmati</div>
+                      <div class="client-row-name">Kromka yopishtirish xizmati</div>
                       <div class="text-sm text-ink-muted">ish haqi · metr bo'yicha</div>
                     </div>
                     <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
@@ -433,13 +433,13 @@ onMounted(() => {
                   </div>
                   <template v-if="order.subtotal_edge_banding_tiyin > 0">
                     <div class="flex justify-between py-1 text-ink-soft">
-                      <span>Krom materiali</span
+                      <span>Kromka materiali</span
                       ><span class="font-mono text-ink">{{
                         formatTiyin(edgeCostSplit.materials)
                       }}</span>
                     </div>
                     <div class="flex justify-between py-1 text-ink-soft">
-                      <span>Krom yopishtirish xizmati</span
+                      <span>Kromka yopishtirish xizmati</span
                       ><span class="font-mono text-ink">{{
                         formatTiyin(edgeCostSplit.service)
                       }}</span>
@@ -543,7 +543,7 @@ onMounted(() => {
                     <div class="mt-1 text-xl font-bold text-ink">{{ totalPanels }}</div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">
-                    <div class="text-xs font-bold uppercase text-ink-muted">Krom</div>
+                    <div class="text-xs font-bold uppercase text-ink-muted">Kromka</div>
                     <div class="mt-1 text-xl font-bold text-ink">{{ metres(totalEdge) }}</div>
                   </div>
                   <div class="rounded-md bg-sunk p-3">

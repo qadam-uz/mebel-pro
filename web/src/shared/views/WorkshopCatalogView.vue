@@ -72,7 +72,7 @@ const statusOptions: DropdownOption[] = [
 const kindOptions: DropdownOption[] = [
   { value: 'all', label: 'Barcha turlar' },
   { value: 'panel', label: 'Panel' },
-  { value: 'edge', label: 'Krom' },
+  { value: 'edge', label: 'Kromka' },
 ]
 const availableCatalogOptions = computed(() =>
   workshop.catalogOptions
@@ -111,7 +111,7 @@ function applyRouteSearch() {
 
 function materialMeta(row: (typeof workshop.branchMaterials)[number]) {
   const material = row.material
-  if (material.kind === 'edge') return `krom · ${material.thickness_mm} mm · ${material.color}`
+  if (material.kind === 'edge') return `kromka · ${material.thickness_mm} mm · ${material.color}`
   return `${material.type?.toUpperCase() ?? 'panel'} · ${material.thickness_mm} mm · ${material.color} · ${material.panel_length_mm}x${material.panel_width_mm}`
 }
 
@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
                 <td>
                   <span :class="row.material.kind === 'edge' ? 'pill p-eb' : 'pill p-cut'">
                     <span class="pd"></span
-                    >{{ row.material.kind === 'edge' ? 'Krom (metr)' : 'Panel' }}
+                    >{{ row.material.kind === 'edge' ? 'Kromka (metr)' : 'Panel' }}
                   </span>
                 </td>
                 <td class="amt">

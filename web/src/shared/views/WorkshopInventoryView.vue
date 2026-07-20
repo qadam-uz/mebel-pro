@@ -151,7 +151,7 @@ function stockItemByMaterial(materialId: string | null): StockItem | null {
 }
 
 function materialMeta(item: (typeof workshop.stockItems)[number]) {
-  if (item.kind === 'edge') return `${item.material.thickness_mm} mm · krom (metr)`
+  if (item.kind === 'edge') return `${item.material.thickness_mm} mm · kromka (metr)`
   return `${item.material.thickness_mm} mm · ${item.material.panel_length_mm}x${item.material.panel_width_mm}`
 }
 

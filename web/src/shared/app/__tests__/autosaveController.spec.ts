@@ -68,6 +68,31 @@ describe('createAutosaveController', () => {
     expect(persist).toHaveBeenCalledTimes(1)
   })
 
+  it('queues an edit made while the previous save is in flight', async () => {
+    let resolveFirst: (() => void) | undefined
+    const persist = vi
+      .fn<() => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve
+          }),
+      )
+      .mockResolvedValueOnce(undefined)
+    const controller = createAutosaveController({ persist, canPersist: () => true, delayMs: 700 })
+
+    controller.schedule()
+    await vi.advanceTimersByTimeAsync(700)
+    expect(persist).toHaveBeenCalledTimes(1)
+
+    controller.schedule()
+    resolveFirst?.()
+    await vi.runAllTimersAsync()
+
+    expect(persist).toHaveBeenCalledTimes(2)
+    expect(controller.status).toBe('saved')
+  })
+
   it('stays in editing without a network call when canPersist is false', async () => {
     const canPersist = vi.fn().mockReturnValue(false)
     const { controller, persist, statuses } = setup({ canPersist })

@@ -183,7 +183,7 @@ const ADMIN_STATUS_LABELS: Record<string, string> = {
   new: 'Yangi',
   verified: 'Tekshirilgan',
   cutting: 'Kesilmoqda',
-  banding: 'Kromlanmoqda',
+  banding: 'Kromka yopishtirilmoqda',
   ready: 'Tayyor',
   collected: 'Topshirilgan',
   cancelled: 'Bekor qilingan',
@@ -245,7 +245,7 @@ export function adminJobLogText(value: string | null | undefined) {
 
 export function materialKindLabel(kind: MaterialKind | null | undefined) {
   if (kind === 'panel') return 'Panel'
-  if (kind === 'edge') return 'Krom'
+  if (kind === 'edge') return 'Kromka'
   return 'Hammasi'
 }
 

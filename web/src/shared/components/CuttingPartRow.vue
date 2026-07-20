@@ -2,14 +2,14 @@
 import { computed, ref } from 'vue'
 
 import { MIN_PART_MM } from '@/shared/app/constants'
-import { edgeShortLabel, type EdgeField } from '@/shared/app/cuttingDisplay'
+import { type EdgeField } from '@/shared/app/cuttingDisplay'
 import {
   partDisplayName,
   registryEntryForBand,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
 import Icon from '@/shared/components/AppIcon.vue'
-import { useCuttingStore, type CuttingPart } from '@/shared/stores/cutting'
+import { type CuttingPart } from '@/shared/stores/cutting'
 
 // CB-93 seam: one parts-table row. Purely presentational — the editor stays the
 // single owner of `parts`, validation (size/missing/not-carried/optimiser errors),
@@ -44,19 +44,7 @@ const emit = defineEmits<{
   'toggle-select': []
 }>()
 
-const cutting = useCuttingStore()
 const actionsOpen = ref(false)
-const edgeSideCells: Array<{ field: EdgeField; label: string }> = [
-  { field: 'edge_top', label: 'Д1' },
-  { field: 'edge_bottom', label: 'Д2' },
-  { field: 'edge_left', label: 'Ш1' },
-  { field: 'edge_right', label: 'Ш2' },
-]
-
-function edgeById(id: string | null | undefined) {
-  return cutting.edgeOptions.find((material) => material.id === id) ?? null
-}
-
 // Writable computeds keep the original `v-model.number` semantics while emitting
 // (a number input bound straight to the prop would mutate it).
 const lengthModel = computed({
@@ -93,12 +81,6 @@ function edgeRegistryEntry(side: EdgeField) {
   return registryEntryForBand(props.edgeRegistry, band?.material_id, band?.source)
 }
 
-function edgeCellTitle(side: EdgeField, label: string) {
-  const band = props.part[side]
-  const material = edgeById(band?.material_id)
-  return band ? `${label}: ${edgeShortLabel(material, true)}` : `${label}: kromsiz`
-}
-
 function edgeGlyphStyle() {
   const sideStyles = {
     edge_top: 'borderTop',
@@ -116,10 +98,6 @@ function edgeGlyphStyle() {
     }),
   )
 }
-
-const edgeGlyphTitle = computed(() =>
-  edgeSideCells.map((cell) => edgeCellTitle(cell.field, cell.label)).join(' · '),
-)
 
 function updateFollowGrain(event: Event) {
   const input = event.target
@@ -184,7 +162,7 @@ function focusNumericFromPointer(event: MouseEvent) {
       </div>
 
       <div
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 @min-[680px]:contents"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 @min-[680px]:contents"
       >
         <label
           class="grid min-w-0 gap-1 text-xs font-bold text-ink-muted @min-[680px]:col-start-2 @min-[680px]:row-start-1"
@@ -194,7 +172,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             v-model="nameModel"
             :data-part-index="index"
             data-cell="name"
-            class="mp-input border-transparent bg-transparent @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :placeholder="partDisplayName(part, index)"
             aria-label="Nomi"
             @keydown="onRapidEntryKeydown($event, 'name')"
@@ -214,6 +192,72 @@ function focusNumericFromPointer(event: MouseEvent) {
             @change="updateFollowGrain"
           />
         </label>
+        <div
+          class="grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-7 @min-[680px]:row-start-1"
+        >
+          <span class="@min-[680px]:hidden">Kromka</span>
+          <button
+            type="button"
+            :data-part-index="index"
+            data-cell="edge"
+            class="size-8 rounded-md bg-sunk/30 transition hover:bg-sunk"
+            :style="edgeGlyphStyle()"
+            title="Kromka"
+            aria-label="Kromka tomonlari"
+            aria-haspopup="dialog"
+            @click="emit('open-edge-picker', $event)"
+          ></button>
+        </div>
+        <div
+          class="relative grid justify-items-center gap-1 text-[10px] font-bold text-ink-muted @min-[680px]:col-start-8 @min-[680px]:row-start-1 @min-[680px]:flex @min-[680px]:justify-end"
+        >
+          <span class="@min-[680px]:hidden">Amallar</span>
+          <button
+            v-if="actionsOpen"
+            type="button"
+            class="fixed inset-0 z-20 cursor-default"
+            aria-label="Amallar menyusini yopish"
+            @click="actionsOpen = false"
+          ></button>
+          <button
+            type="button"
+            class="mp-action-icon-button size-8 min-h-0"
+            :aria-label="`Qism #${index + 1} amallari`"
+            title="Amallar"
+            @click="actionsOpen = !actionsOpen"
+          >
+            ⋯
+          </button>
+          <div
+            v-if="actionsOpen"
+            class="absolute bottom-9 right-0 z-30 grid min-w-48 overflow-hidden rounded-md border border-hairline-strong bg-elevated py-1 shadow-lg"
+          >
+            <button
+              type="button"
+              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
+              @click="duplicateFromMenu"
+            >
+              <Icon name="layers" class="size-4 text-ink-muted" />
+              Nusxalash
+            </button>
+            <button
+              type="button"
+              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
+              @click="moveFromMenu"
+            >
+              <Icon name="swap" class="size-4 text-ink-muted" />
+              Boshqa materialga ko'chirish
+            </button>
+            <button
+              type="button"
+              class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft"
+              @click="deleteFromMenu"
+            >
+              <Icon name="trash" class="size-4" />
+              O'chirish
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Below the single-row fit width: the three dimensions share one row;
@@ -232,7 +276,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.length_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Bo'y millimetr"
             @mousedown="focusNumericFromPointer"
@@ -253,7 +297,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             :min="MIN_PART_MM"
             inputmode="numeric"
             enterkeyhint="next"
-            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.width_mm < MIN_PART_MM || sizeError ? 'border-danger' : ''"
             aria-label="Eni millimetr"
             @mousedown="focusNumericFromPointer"
@@ -274,7 +318,7 @@ function focusNumericFromPointer(event: MouseEvent) {
             min="1"
             inputmode="numeric"
             enterkeyhint="done"
-            class="mp-input border-transparent bg-transparent text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline focus:border-accent"
+            class="mp-input border-hairline bg-elevated/40 text-right font-mono @min-[680px]:min-h-9 @min-[680px]:px-1 hover:border-hairline-strong focus:border-accent"
             :class="part.quantity < 1 ? 'border-danger' : ''"
             aria-label="Soni"
             @mousedown="focusNumericFromPointer"
@@ -282,65 +326,6 @@ function focusNumericFromPointer(event: MouseEvent) {
             @keydown="onRapidEntryKeydown($event, 'quantity')"
           />
         </label>
-      </div>
-
-      <button
-        type="button"
-        :data-part-index="index"
-        data-cell="edge"
-        class="mx-auto size-7 rounded-md bg-sunk/30 transition hover:bg-sunk @min-[680px]:col-start-7 @min-[680px]:row-start-1"
-        :style="edgeGlyphStyle()"
-        :title="edgeGlyphTitle"
-        aria-label="Krom tomonlari"
-        aria-haspopup="dialog"
-        @click="emit('open-edge-picker', $event)"
-      ></button>
-      <div class="relative flex justify-end @min-[680px]:col-start-8 @min-[680px]:row-start-1">
-        <button
-          v-if="actionsOpen"
-          type="button"
-          class="fixed inset-0 z-20 cursor-default"
-          aria-label="Amallar menyusini yopish"
-          @click="actionsOpen = false"
-        ></button>
-        <button
-          type="button"
-          class="mp-action-icon-button"
-          :aria-label="`Qism #${index + 1} amallari`"
-          title="Amallar"
-          @click="actionsOpen = !actionsOpen"
-        >
-          ⋯
-        </button>
-        <div
-          v-if="actionsOpen"
-          class="absolute bottom-9 right-0 z-30 grid min-w-48 overflow-hidden rounded-md border border-hairline-strong bg-elevated py-1 shadow-lg"
-        >
-          <button
-            type="button"
-            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
-            @click="duplicateFromMenu"
-          >
-            <Icon name="layers" class="size-4 text-ink-muted" />
-            Nusxalash
-          </button>
-          <button
-            type="button"
-            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sunk"
-            @click="moveFromMenu"
-          >
-            <Icon name="swap" class="size-4 text-ink-muted" />
-            Boshqa materialga ko'chirish
-          </button>
-          <button
-            type="button"
-            class="relative z-30 flex items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft"
-            @click="deleteFromMenu"
-          >
-            <Icon name="trash" class="size-4" />
-            O'chirish
-          </button>
-        </div>
       </div>
     </div>
 
@@ -385,7 +370,7 @@ function focusNumericFromPointer(event: MouseEvent) {
         class="mp-button mp-button-outline"
         @click="emit('open-edge-picker', undefined)"
       >
-        Boshqa krom tanlash
+        Boshqa kromka tanlash
       </button>
     </div>
   </article>

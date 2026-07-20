@@ -52,10 +52,42 @@ class CuttingPart(BaseModel):
         return normalize_name(value)
 
 
+class CuttingDraftPart(BaseModel):
+    """A work-in-progress row stored by a cutting draft.
+
+    Drafts deliberately retain incomplete rows while an operator is entering a
+    drawing. ``CuttingPart`` remains the strict shape accepted by optimisation
+    and map import.
+    """
+
+    part_ref: str
+    name: str | None = Field(default=None, max_length=64)
+    material_id: uuid.UUID | None = None
+    material_source: MaterialSource = MaterialSource.SHOP
+    follow_grain: bool = True
+    length_mm: int = 0
+    width_mm: int = 0
+    quantity: int = 0
+    edge_top: CuttingEdgeBand | None = None
+    edge_bottom: CuttingEdgeBand | None = None
+    edge_left: CuttingEdgeBand | None = None
+    edge_right: CuttingEdgeBand | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: object) -> object:
+        return normalize_name(value)
+
+    @field_validator("material_id", mode="before")
+    @classmethod
+    def normalize_material_id(cls, value: object) -> object:
+        return None if value == "" else value
+
+
 class CuttingDraftPatchRequest(BaseModel):
     name: str | None = Field(default=None, max_length=64)
     preferred_branch_id: uuid.UUID | None = None
-    parts_snapshot: list[CuttingPart] | None = None
+    parts_snapshot: list[CuttingDraftPart] | None = None
 
     @field_validator("name", mode="before")
     @classmethod
@@ -72,6 +104,18 @@ class CuttingMapImportCommitRequest(BaseModel):
     parts: list[CuttingPart]
     map_layout: ImportMapLayout
     panel_picks: dict[str, uuid.UUID]
+
+
+class WorkshopCuttingMapImportCommitRequest(CuttingMapImportCommitRequest):
+    """MAP import committed by workshop staff for a walk-in client.
+
+    ``branch_id`` is the frozen workshop context; ``preferred_branch_id`` from
+    the shared client payload is accepted for shape compatibility but the
+    workshop commit always uses this branch.
+    """
+
+    client_id: uuid.UUID
+    branch_id: uuid.UUID
 
 
 class WorkshopCuttingDraftCreateRequest(BaseModel):

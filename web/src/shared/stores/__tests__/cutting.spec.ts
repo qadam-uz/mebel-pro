@@ -8,6 +8,7 @@ import {
   useCuttingStore,
   type ClientCatalogMaterialOption,
   type CuttingDraft,
+  type CuttingResult,
 } from '@/shared/stores/cutting'
 
 vi.mock('@/shared/app/authInit', () => ({
@@ -147,6 +148,26 @@ describe('cutting store scope', () => {
     expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/client/cutting/import/map/commit')
   })
 
+  it('commits MAP layout imports for the walk-in client through the workshop endpoint', async () => {
+    const store = useCuttingStore()
+    store.configureScope('workshop')
+    store.setWalkInClient(WALK_IN)
+    vi.mocked(api.post).mockResolvedValue(draft('draft-map'))
+
+    await store.commitMapImport({
+      preferred_branch_id: 'branch-1',
+      parts: [],
+      panel_picks: { m1: 'panel-1' },
+      map_layout: { sheets: [], part_rows: [], description: '', customer_name: '', order_type: '' },
+    })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/workshop/cutting/import/map/commit',
+      expect.objectContaining({ client_id: 'client-9', branch_id: 'branch-1' }),
+      expect.anything(),
+    )
+  })
+
   it('routes every action through /workshop/* after configureScope', async () => {
     const store = useCuttingStore()
     store.configureScope('workshop')
@@ -210,6 +231,26 @@ describe('cutting store scope', () => {
 
     expect(api.post).not.toHaveBeenCalled()
     expect(store.saving).toBe(false)
+  })
+
+  it('keeps candidate results returned by a geometry-neutral parts PATCH', async () => {
+    const result = {
+      id: 'result-imported',
+      source: 'imported_map',
+      status: 'candidate',
+      parts_snapshot: [],
+      panels: [],
+    } as unknown as CuttingResult
+    const updated = draft('draft-1')
+    updated.chosen_result_id = result.id
+    updated.results = [result]
+    vi.mocked(api.patch).mockResolvedValue(updated)
+
+    const stored = await useCuttingStore().updateDraft('draft-1', { parts_snapshot: [] })
+
+    expect(stored.results).toEqual([result])
+    expect(useCuttingStore().currentDraft?.results).toEqual([result])
+    expect(useCuttingStore().currentDraft?.chosen_result_id).toBe(result.id)
   })
 
   it('loads branch options from the client surface in client scope', async () => {

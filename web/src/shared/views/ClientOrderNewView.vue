@@ -439,7 +439,7 @@ onMounted(async () => {
                       }}</span>
                     </div>
                     <div class="flex justify-between gap-4 py-1">
-                      <span>Krom yopishtirish</span>
+                      <span>Kromka yopishtirish</span>
                       <span class="text-ink">{{
                         formatTiyin(quoteBranch(branch.branch_id)?.subtotal_edge_banding_tiyin ?? 0)
                       }}</span>
@@ -609,7 +609,7 @@ onMounted(async () => {
                 </div>
                 <div v-if="(selectedQuote?.subtotal_edge_banding_tiyin ?? 0) > 0" class="py-1">
                   <div class="flex justify-between gap-4">
-                    <span class="text-ink-soft">Krom yopishtirish</span>
+                    <span class="text-ink-soft">Kromka yopishtirish</span>
                     <span class="text-ink">{{
                       formatTiyin(selectedQuote?.subtotal_edge_banding_tiyin ?? 0)
                     }}</span>
@@ -673,7 +673,7 @@ onMounted(async () => {
               <span class="font-mono font-bold text-ink">{{ totalPanels }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Krom</span>
+              <span class="text-ink-soft">Kromka</span>
               <span class="font-mono font-bold text-ink">{{ metres(totalEdge) }}</span>
             </div>
             <div class="flex justify-between gap-4">
@@ -709,7 +709,7 @@ onMounted(async () => {
                   </span>
                 </div>
                 <div class="flex justify-between gap-4">
-                  <span class="text-ink-soft">Krom</span>
+                  <span class="text-ink-soft">Kromka</span>
                   <span class="font-mono font-bold text-ink">
                     {{ formatTiyin(selectedQuote.subtotal_edge_banding_tiyin) }}
                   </span>

@@ -188,7 +188,17 @@ describe('CuttingPanelSvg edge banding', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('Shelf 300×200')
+    expect(wrapper.text()).toContain('Shelf')
+    // Dims moved out of the centre label to the edges (Bazis-style): the placed
+    // length renders horizontally near the top edge, the placed width rotated
+    // -90° near the left edge.
+    expect(wrapper.text()).not.toContain('300×200')
+    const texts = wrapper.findAll('.placement text').map((node) => node.text())
+    expect(texts).toEqual(expect.arrayContaining(['300', '200', 'Shelf']))
+    const widthDim = wrapper.findAll('.placement text').find((node) => node.text() === '200')
+    expect(widthDim?.attributes('transform')).toContain('rotate(-90')
+    const lengthDim = wrapper.findAll('.placement text').find((node) => node.text() === '300')
+    expect(lengthDim?.attributes('transform')).toBeUndefined()
     expect(wrapper.text()).toContain('Qoldiq 400×120')
     expect(wrapper.text()).not.toContain('sizda qoladi')
     expect(wrapper.find('.offcut rect').attributes('stroke-dasharray')).toBe('12 8')
