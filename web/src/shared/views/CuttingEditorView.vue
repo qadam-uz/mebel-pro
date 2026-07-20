@@ -47,7 +47,6 @@ import {
 } from '@/shared/stores/cutting'
 import { applyImportedParts, type ImportLoadMode } from '@/shared/stores/cuttingImport'
 import type { OrderDetail } from '@/shared/stores/orders'
-import { useClientProfileStore } from '@/shared/stores/clientProfile'
 
 const route = useRoute()
 const router = useRouter()

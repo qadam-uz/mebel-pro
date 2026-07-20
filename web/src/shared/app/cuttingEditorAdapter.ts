@@ -36,8 +36,6 @@ export interface CuttingEditorAdapter {
    * the app's current branch must not retarget an in-progress draft.
    */
   branch: { fixed?: { id: string; name: string } }
-  /** Seed the unsaved editor's branch pre-filter from the client profile default. */
-  useProfileDefaultBranch: boolean
   /** Role-scoped price quote for the draft's chosen result (client vs workshop endpoint). */
   quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
   /**
@@ -74,7 +72,6 @@ export function clientCuttingEditorAdapter(): CuttingEditorAdapter {
       orderDetail: (orderId: string) => `/c/orders/${orderId}`,
     },
     branch: {},
-    useProfileDefaultBranch: true,
     quoteForDraft: (draftId, branchId) => orders.quoteForDraft(draftId, branchId),
   }
 }

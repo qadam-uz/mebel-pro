@@ -366,12 +366,17 @@ async function chooseOption(
 async function chooseEdgeBanding(page: Page, edgeName: string) {
   // The compact row exposes one rectangular edge diagram that opens the picker.
   await page.getByRole("button", { name: "Kromka tomonlari", exact: true }).click();
+  // A drawing with no tapes yet opens straight into the branch tape catalog;
+  // picking the tape returns to the banding panel with it armed as current.
+  const catalog = page.getByRole("dialog", { name: /Yana kromka qo'shish/ });
+  await catalog.getByRole("button", { name: new RegExp(edgeName) }).click();
   const dialog = page.getByRole("dialog", { name: /Kromka yopishtirish/ });
-  // The branch's only carried tape is auto-offered as the current tape; band
-  // top and bottom with that selected tape.
   await expect(dialog.getByText(new RegExp(edgeName))).toBeVisible();
-  await dialog.getByRole("button", { name: "Yuqori + pastki" }).click();
-  await dialog.getByRole("button", { name: "Qo'llash" }).click();
+  // Band top and bottom with the armed tape; edits apply live, so closing the
+  // dialog keeps them.
+  await dialog.getByRole("button", { name: /^Yuqori tomon/ }).click();
+  await dialog.getByRole("button", { name: /^Pastki tomon/ }).click();
+  await dialog.getByRole("button", { name: "Kromka oynasini yopish" }).click();
 }
 
 test("client places an order and workshop completes it through production queues", async ({

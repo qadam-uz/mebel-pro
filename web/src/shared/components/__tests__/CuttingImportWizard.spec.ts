@@ -162,7 +162,9 @@ describe('CuttingImportWizard', () => {
     const cutting = useCuttingStore()
     cutting.configureScope('workshop')
     cutting.setWalkInClient({ id: 'walk-in-1', name: 'Ali', phone: '+998901112233' })
-    const commit = vi.spyOn(cutting, 'commitMapImport').mockResolvedValue({ id: 'draft-map' } as never)
+    const commit = vi
+      .spyOn(cutting, 'commitMapImport')
+      .mockResolvedValue({ id: 'draft-map' } as never)
     parseMock.mockResolvedValueOnce({
       status: 'parsed',
       source_format: 'map_2dplace',
@@ -185,7 +187,14 @@ describe('CuttingImportWizard', () => {
         },
       ],
       material_groups: [
-        { key: 'm1', label: '2750×1830 mm', width_mm: 2750, height_mm: 1830, sheet_count: 1, hint: null },
+        {
+          key: 'm1',
+          label: '2750×1830 mm',
+          width_mm: 2750,
+          height_mm: 1830,
+          sheet_count: 1,
+          hint: null,
+        },
       ],
       map_layout: {
         description: '',
@@ -213,7 +222,10 @@ describe('CuttingImportWizard', () => {
     await wrapper.get('[data-test="combobox"]').trigger('click')
     await continueButton(wrapper)?.trigger('click')
     await flushPromises()
-    await wrapper.findAll('button').find((button) => button.text().includes('Import qilish'))?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Import qilish'))
+      ?.trigger('click')
     await flushPromises()
 
     expect(parseMock).toHaveBeenCalledWith(expect.any(File), undefined, 'workshop')
