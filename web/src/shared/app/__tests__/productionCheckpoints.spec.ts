@@ -10,8 +10,28 @@ import {
 const PREFIX = 'mp-prod-marks:v1:'
 const DAY_MS = 24 * 60 * 60 * 1000
 
+function memoryStorage(): Storage {
+  const values = new Map<string, string>()
+  return {
+    get length() {
+      return values.size
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => values.delete(key),
+    setItem: (key, value) => values.set(key, String(value)),
+  }
+}
+
 beforeEach(() => {
-  window.localStorage.clear()
+  // Node's jsdom setup can expose an incomplete localStorage shim. Use a full
+  // in-memory Storage implementation so these browser-storage tests are
+  // deterministic in every worker.
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: memoryStorage(),
+  })
 })
 
 describe('production panel checkpoints', () => {
