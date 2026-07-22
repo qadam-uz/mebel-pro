@@ -216,6 +216,14 @@ touching them; don't add new off-scale values.
   image is set.
 - **Date ranges** — the shared date-range picker: one trigger opening a popover with preset
   shortcuts and a calendar; selections auto-apply (no apply button).
+- **Filter bars** (`.mp-filters`) — filters **auto-apply** (debounced for text) with no apply
+  button, and because auto-apply is invisible by itself, the bar must prove it worked: while
+  any filter is active, a `role="status"` line under the bar shows the live result count
+  ("Filtr bo'yicha N ta buyurtma topildi", "Yangilanmoqda…" while refreshing) — a silent list
+  swap reads as "nothing happened". Every **text filter carries its own inline ✕** (visible
+  only when non-empty, clears just that field); the bar-level "Tozalash" is the separate
+  reset-everything action and never the only way to clear one field. Filtered-empty keeps the
+  no-results empty state, never first-run copy.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.

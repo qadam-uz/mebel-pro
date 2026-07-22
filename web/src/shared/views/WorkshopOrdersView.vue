@@ -740,20 +740,50 @@ onBeforeUnmount(() => {
         v-model:date-from="dateFrom"
         v-model:date-to="dateTo"
       />
-      <label class="mp-filter-input">
+      <label class="mp-filter-input relative">
         <span>Telefon</span>
         <input
           v-model="phoneFilter"
+          class="pr-9!"
           inputmode="tel"
           autocomplete="off"
           placeholder="+998 yoki raqam qismi"
           aria-label="Mijoz telefoni bo'yicha filtrlash"
         />
+        <!-- The input is the label's 40px bottom row; bottom-2 centers the 24px
+             clear button on it (the CSS skin needs `> input`, so no wrapper). -->
+        <button
+          v-if="phoneFilter"
+          type="button"
+          class="absolute right-1.5 bottom-2 grid size-6 place-items-center rounded text-base text-ink-muted transition hover:bg-bg hover:text-ink"
+          aria-label="Telefon filtrini tozalash"
+          @click.prevent="phoneFilter = ''"
+        >
+          ×
+        </button>
       </label>
       <button v-if="hasActiveFilters" type="button" class="mp-filter-reset" @click="resetFilters">
         Tozalash
       </button>
     </div>
+
+    <!-- The filtered state must announce itself (DESIGN.md UX bar: visible
+         feedback) — a silent list swap reads as "nothing happened". -->
+    <p
+      v-if="hasActiveFilters"
+      class="mb-3 -mt-2 text-xs font-bold text-ink-soft"
+      role="status"
+      aria-live="polite"
+    >
+      <template v-if="orders.loading">Yangilanmoqda…</template>
+      <template v-else>
+        Filtr bo'yicha
+        <b class="font-mono text-ink"
+          >{{ orders.workshopOrders.length }}{{ orders.workshopOrdersHasMore ? '+' : '' }}</b
+        >
+        ta buyurtma topildi
+      </template>
+    </p>
 
     <section
       v-if="orders.loading && orders.workshopOrders.length === 0"
