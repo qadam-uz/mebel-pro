@@ -222,6 +222,7 @@ describe('role route matrix', () => {
       '/c/cutting/drafts',
       '/c/cutting/new',
       '/c/cutting/:id',
+      '/c/cutting/:id/result',
       '/c/branches',
       '/c/notifications',
       '/:pathMatch(.*)*',
@@ -235,6 +236,7 @@ describe('role route matrix', () => {
       '/workshop/orders/new',
       '/workshop/orders/new/cutting',
       '/workshop/orders/cutting/:id',
+      '/workshop/orders/cutting/:id/result',
       '/workshop/orders/new/:draft_id/checkout',
       '/workshop/orders/edit/:draft_id/review',
       '/workshop/orders/:order_id',
@@ -396,6 +398,20 @@ describe('role route matrix', () => {
     const clientEditor = await lazyComponent(clientRoutes, 'client-cutting-editor')()
     const workshopEditor = await lazyComponent(workshopRoutes, 'workshop-order-cutting-editor')()
     expect(clientEditor.default).toBe(workshopEditor.default)
+  })
+
+  it('serves one shared cutting result module to both client and workshop apps', async () => {
+    function lazyComponent(routes: typeof clientRoutes, name: string) {
+      const record = routes.find((route) => route.name === name)
+      if (!record || typeof record.component !== 'function') {
+        throw new Error(`route ${name} is not a lazy component`)
+      }
+      return record.component as () => Promise<{ default: unknown }>
+    }
+
+    const clientResult = await lazyComponent(clientRoutes, 'client-cutting-result')()
+    const workshopResult = await lazyComponent(workshopRoutes, 'workshop-order-cutting-result')()
+    expect(clientResult.default).toBe(workshopResult.default)
   })
 
   it('keeps the workshop editor routes out of the production namespace', () => {

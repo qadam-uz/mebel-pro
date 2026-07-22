@@ -426,20 +426,19 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await page.getByLabel('Eni millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
   await chooseEdgeBanding(page, edge.name)
-  await page.getByRole('button', { name: 'Optimallashtirish' }).click()
+  await page.getByRole('button', { name: 'Davom etish' }).click()
 
   // The first optimise creates + persists + optimises the draft, then routes to
-  // the real draft id (no longer /new).
-  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
+  // the standalone result stage.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/)
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  await expect(page.getByText('cutting-engine-best')).toBeVisible()
   await expect(page.getByText(new RegExp(panel.name)).first()).toBeVisible()
   // The sheet strip groups thumbnails per material, captioned "List {index}".
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
-  await expect(page.getByText("Kromka (material bo'yicha)")).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kromka' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
 
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'PDF yuklab olish' }).click()
@@ -492,34 +491,45 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await page.getByLabel("Bo'y millimetr").fill('260')
   await page.getByLabel('Eni millimetr').fill('180')
   await page.getByLabel('Soni').fill('2')
-  await page.getByRole('button', { name: 'Optimallashtirish' }).click()
+  await page.getByRole('button', { name: 'Davom etish' }).click()
 
-  // The first optimise persists the draft and hands off to its real id route.
-  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/)
+  // The first optimise persists the draft and hands off to the result stage.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/)
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  const editorUrl = page.url()
+  const resultUrl = page.url()
 
-  // Resume path #1 — reload on /cutting/:id: the part rows, the selected
-  // branch, and the optimiser results must all re-hydrate from the server.
+  // Resume path #1 — reload keeps the standalone result fully hydrated.
   await page.reload()
+  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
+
+  // Editing is a deliberate trip back to the detail stage.
+  await page.getByRole('link', { name: 'Detallarni tahrirlash' }).click()
   await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
   await expect(page.getByLabel('Eni millimetr')).toHaveValue('180')
   await expect(page.getByLabel('Soni')).toHaveValue('2')
   await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Buyurtma berish' })).toBeVisible()
 
-  // Resume path #2 — drafts list → open: the saved draft is listed and
-  // re-opens the editor fully hydrated on the same URL.
+  // The one primary CTA keeps its name and opens the current result.
+  const continueButton = page.getByRole('button', { name: 'Davom etish' })
+  await expect(continueButton).toHaveCount(1)
+  await continueButton.click()
+  await expect(page).toHaveURL(resultUrl)
+
+  // Resume path #2 — drafts with a chosen result reopen on the result stage.
   await page.goto('/client/c/cutting/drafts')
   await expect(page.getByRole('heading', { name: 'Saqlangan chizmalar' })).toBeVisible()
   await page.getByRole('button', { name: 'Ochish →' }).click()
-  await expect(page).toHaveURL(editorUrl)
-  await expect(page.getByLabel("Bo'y millimetr")).toHaveValue('260')
-  await expect(page.getByText(`Cutting Branch ${id} · Cutting Workshop ${id}`)).toBeVisible()
+  await expect(page).toHaveURL(resultUrl)
   await expect(page.getByRole('heading', { name: 'Kesish natijasi' })).toBeVisible()
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
+
+  // Changing geometry invalidates that current snapshot. The same one CTA now
+  // optimises instead of exposing a stale result.
+  await page.getByRole('link', { name: 'Detallarni tahrirlash' }).click()
+  await page.getByLabel("Bo'y millimetr").fill('261')
+  await expect(page.getByRole('button', { name: 'Davom etish' })).toHaveCount(1)
 })
 
 test('workshop opens a confirmed order cutting plan and downloads PDF', async ({

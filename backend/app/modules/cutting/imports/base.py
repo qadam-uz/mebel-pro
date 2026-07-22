@@ -14,7 +14,7 @@ MAX_SCAN_ROWS = 2000
 MAX_SCAN_COLS = 30
 PREVIEW_ROWS = 15
 PREVIEW_COLS = 20
-MAX_IMPORT_PIECES = 100
+MAX_IMPORT_PIECES = 300
 
 SourceFormat = Literal["csv", "bazis_xml", "map_2dplace"]
 ImportStatus = Literal["needs_mapping", "parsed"]

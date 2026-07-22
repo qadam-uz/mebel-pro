@@ -19,6 +19,7 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
     paths: {
       drafts: '/workshop/orders',
       editor: (id: string) => `/workshop/orders/cutting/${id}`,
+      result: (id: string) => `/workshop/orders/cutting/${id}/result`,
       checkout: (draftId: string) => `/workshop/orders/new/${draftId}/checkout`,
       orderDetail: (orderId: string) => `/workshop/orders/${orderId}`,
     },

@@ -27,7 +27,7 @@ from app.models.enums import MaterialSource
 KERF_MM = 4
 EDGE_TRIM_MM = 10
 EDGE_OVERHANG_MM = 30
-MAX_PARTS_PER_RUN = 100
+MAX_PARTS_PER_RUN = 300
 MAX_PANELS_PER_MATERIAL = 20
 OPTIMIZATION_TIMEOUT_SECONDS = 5.0
 ALGORITHM_VERSION = f"cutting-engine-{version('cutting-engine')}"

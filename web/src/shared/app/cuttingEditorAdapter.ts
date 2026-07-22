@@ -26,6 +26,7 @@ export interface CuttingEditorAdapter {
   paths: {
     drafts: string
     editor(id: string): string
+    result(id: string): string
     checkout(draftId: string): string
     orderDetail(orderId: string): string
   }
@@ -68,6 +69,7 @@ export function clientCuttingEditorAdapter(): CuttingEditorAdapter {
     paths: {
       drafts: '/c/cutting/drafts',
       editor: (id: string) => `/c/cutting/${id}`,
+      result: (id: string) => `/c/cutting/${id}/result`,
       checkout: (draftId: string) => `/c/orders/new/${draftId}`,
       orderDetail: (orderId: string) => `/c/orders/${orderId}`,
     },

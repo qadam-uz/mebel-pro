@@ -59,7 +59,8 @@ function newCutting() {
 }
 
 function openDraft(draft: CuttingDraft) {
-  void router.push(rolePath(`/c/cutting/${draft.id}`))
+  const suffix = chosenResult(draft) ? '/result' : ''
+  void router.push(rolePath(`/c/cutting/${draft.id}${suffix}`))
 }
 
 function requestDeleteDraft(draft: CuttingDraft) {

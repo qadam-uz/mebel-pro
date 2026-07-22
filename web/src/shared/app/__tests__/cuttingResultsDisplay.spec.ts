@@ -5,9 +5,7 @@ import {
   groupPanelPlacements,
   offcutLabelMode,
   panelDisplayIndex,
-  sheetsSavingsBanner,
   snapshotShortLabel,
-  wasteToneClass,
 } from '@/shared/app/cuttingResultsDisplay'
 import type { CuttingPanel, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
 
@@ -61,15 +59,6 @@ function result(overrides: Partial<CuttingResult> = {}): CuttingResult {
 }
 
 describe('cutting results display helpers', () => {
-  it('maps waste percentage boundaries to KPI tone classes', () => {
-    expect(wasteToneClass(14.9)).toBe('text-success')
-    expect(wasteToneClass(15)).toBe('text-success')
-    expect(wasteToneClass(15.1)).toBe('text-ink')
-    expect(wasteToneClass(30)).toBe('text-ink')
-    expect(wasteToneClass(30.1)).toBe('text-warning')
-    expect(wasteToneClass(null)).toBe('text-ink')
-  })
-
   it('uses one snapshot short-label ladder', () => {
     expect(snapshotShortLabel({ decor_code: 'H1334', color: 'Oak', name: 'Long name' })).toBe(
       'H1334',
@@ -78,21 +67,6 @@ describe('cutting results display helpers', () => {
     expect(snapshotShortLabel({ name: 'Very long generated material name' })).toBe(
       'Very long generate',
     )
-  })
-
-  it('announces sheets-only savings for the fewer-sheet active variant', () => {
-    const imported = result({
-      id: 'imported',
-      source: 'imported_map',
-      panels_used_by_material: { a: 5 },
-    })
-    const optimizer = result({ id: 'optimizer', panels_used_by_material: { a: 4 } })
-
-    expect(sheetsSavingsBanner([imported, optimizer], optimizer)).toBe(
-      '«Optimizer» varianti 1 list kam ishlatadi',
-    )
-    expect(sheetsSavingsBanner([imported, optimizer], imported)).toBeNull()
-    expect(sheetsSavingsBanner([optimizer], optimizer)).toBeNull()
   })
 
   it('chooses offcut label modes without clipping narrow remnants', () => {
@@ -120,7 +94,7 @@ describe('cutting results display helpers', () => {
     ])
   })
 
-  it('groups active sheet placements by part with counts, rotation and tape numbers', () => {
+  it('groups active sheet placements by part with counts and rotation', () => {
     const panel: CuttingPanel = {
       id: 'panel-a',
       material_id: 'panel-a',
@@ -169,7 +143,6 @@ describe('cutting results display helpers', () => {
         width_mm: 200,
         count: 2,
         rotatedCount: 1,
-        tapeNumbers: [1, 2],
       },
     ])
   })

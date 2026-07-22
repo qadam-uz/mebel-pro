@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
-import { clientErrorLabel, formatPercent } from '@/shared/app/clientUi'
+import { clientErrorLabel } from '@/shared/app/clientUi'
 import { snapshotEdgeLabel, snapshotMaterialLabel } from '@/shared/app/cuttingDisplay'
 import {
   deriveSnapshotEdgeRegistry,
@@ -12,16 +12,13 @@ import {
   panelDisplayIndex,
   panelFillPercent,
   resultPanelCount,
-  sheetsSavingsBanner,
-  wasteToneClass,
 } from '@/shared/app/cuttingResultsDisplay'
-import { formatTiyinParts } from '@/shared/formatters'
+import { formatTiyin } from '@/shared/formatters'
 import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import CuttingSheetThumbnails from '@/shared/components/CuttingSheetThumbnails.vue'
-import CuttingVariantTabs from '@/shared/components/CuttingVariantTabs.vue'
 import {
   metres,
   useCuttingStore,
@@ -32,16 +29,13 @@ import {
 } from '@/shared/stores/cutting'
 import type { OrderQuote } from '@/shared/stores/orders'
 
-// CB-93 seam: the optimizer-results surface — KPI tiles, algorithm comparison,
-// the per-material panel strip + SVG visualiser, the kromka/placement aside, and
-// the order/PDF actions. All of `chosenResult` and its derived state lived only
-// here in the parent, so they move wholesale into this component; the editor
-// keeps `activeResultId`/`activePanelId` (written by optimize/the draft watch)
-// and binds them as v-models, plus passes the parent-owned `optimizeError`.
+// CB-93 seam: the results surface — per-material panel strip + SVG visualiser,
+// kromka/placement aside, and order/PDF actions. A draft has one orderable
+// result; legacy drafts may carry older candidates, but they are never offered
+// for comparison here.
 const props = defineProps<{
   draft: CuttingDraft
   optimizeError: string | null
-  activeResultId: string | null
   activePanelId: string | null
   // Role-specific "place order" target (client vs workshop checkout), injected
   // by the editor from its adapter so this presentational component stays dumb.
@@ -56,7 +50,6 @@ const props = defineProps<{
   quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
 }>()
 const emit = defineEmits<{
-  'update:activeResultId': [string | null]
   'update:activePanelId': [string | null]
 }>()
 
@@ -66,15 +59,11 @@ const toast = useToast()
 
 const activePartRef = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
-const hasVariantTabs = computed(() => props.draft.results.length > 1)
 
 const chosenResult = computed(() => {
   const draft = props.draft
   return (
-    draft.results.find((result) => result.id === props.activeResultId) ??
-    draft.results.find((result) => result.id === draft.chosen_result_id) ??
-    draft.results[0] ??
-    null
+    draft.results.find((result) => result.id === draft.chosen_result_id) ?? draft.results[0] ?? null
   )
 })
 const footerResult = computed(
@@ -87,20 +76,15 @@ const activePanel = computed(() => {
   if (!result) return null
   return result.panels.find((panel) => panel.id === props.activePanelId) ?? result.panels[0] ?? null
 })
-const totalPanels = computed(() =>
-  chosenResult.value
-    ? Object.values(chosenResult.value.panels_used_by_material).reduce(
-        (sum, count) => sum + count,
-        0,
-      )
-    : 0,
-)
-const consumedShop = computed(() => sumRecord(chosenResult.value?.edge_consumed_shop_by_material))
-const consumedOwn = computed(() => sumRecord(chosenResult.value?.edge_consumed_own_by_material))
-const resultWaste = computed(() => formatPercent(chosenResult.value?.waste_percentage))
 const activeResultIsChosen = computed(() => chosenResult.value?.id === props.draft.chosen_result_id)
-const viewingNonChosen = computed(
-  () => Boolean(chosenResult.value && footerResult.value) && !activeResultIsChosen.value,
+const orderPanelCount = computed(() =>
+  footerResult.value ? resultPanelCount(footerResult.value) : 0,
+)
+const orderEdgeLength = computed(() =>
+  metres(
+    sumRecord(footerResult.value?.edge_consumed_shop_by_material) +
+      sumRecord(footerResult.value?.edge_consumed_own_by_material),
+  ),
 )
 const placedCount = computed(() =>
   chosenResult.value
@@ -140,27 +124,32 @@ const edgeByMaterial = computed(() => {
     .filter((row) => row.total > 0)
     .sort((left, right) => (left.entry?.number ?? 999) - (right.entry?.number ?? 999))
 })
-const savingsBanner = computed<string | null>(() =>
-  sheetsSavingsBanner(props.draft.results, chosenResult.value),
-)
+const panelMaterials = computed(() => {
+  const result = chosenResult.value
+  if (!result) return []
+  return Object.entries(result.panels_used_by_material)
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => ({
+      id,
+      count,
+      label: snapshotMaterialLabel(result.material_snapshots[id], id.slice(0, 8)),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'uz'))
+})
 const snapshotEdgeRegistry = computed(() =>
   chosenResult.value ? deriveSnapshotEdgeRegistry(chosenResult.value.parts_snapshot ?? []) : [],
 )
 const activePanelGroups = computed(() =>
   chosenResult.value && activePanel.value
-    ? groupPanelPlacements(chosenResult.value, activePanel.value, snapshotEdgeRegistry.value)
+    ? groupPanelPlacements(chosenResult.value, activePanel.value)
     : [],
 )
 
-// The price always reflects the officially CHOSEN result (what ordering right
-// now would actually cost) — not whichever tab is being viewed — because the
-// backend quote endpoint only ever prices `draft.chosen_result_id` (there is
-// no per-variant preview quote). `viewingNonChosen` below annotates the card
-// when the viewed tab differs, so the number never reads as "this variant".
+// The price always reflects the officially chosen result (what ordering now
+// would cost) because the backend quote endpoint only prices that result.
 const quote = ref<OrderQuote | null>(null)
 const quoteLoading = ref(false)
 const quoteError = ref<string | null>(null)
-const priceParts = computed(() => (quote.value ? formatTiyinParts(quote.value.total_tiyin) : null))
 
 watch(
   [
@@ -210,14 +199,6 @@ function panelCaption(result: CuttingResult, panel: CuttingPanel) {
   return `List ${panelDisplayIndex(result, panel)} · ${material} · KIM ${panelFillPercent(result, panel)}`
 }
 
-function selectResult(resultId: string) {
-  const result = props.draft.results.find((item) => item.id === resultId)
-  emit('update:activeResultId', resultId)
-  emit('update:activePanelId', result?.panels[0]?.id ?? null)
-  activePlacementId.value = null
-  activePartRef.value = null
-}
-
 function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
   activePartRef.value = placement.part_ref
@@ -242,15 +223,6 @@ function clearSelection() {
   activePlacementId.value = null
 }
 
-function tapeBadgeStyle(number: number) {
-  const entry = snapshotEdgeRegistry.value.find((item) => item.number === number)
-  if (!entry) return {}
-  return {
-    background: entry.colorStyle.bg,
-    color: entry.colorStyle.fg,
-  }
-}
-
 async function choose(result: CuttingResult) {
   // chooseResult can throw (stale/invalidated result, network) — surface it
   // rather than silently leaving the chosen result out of sync (CB-57).
@@ -260,7 +232,6 @@ async function choose(result: CuttingResult) {
     toast.danger("Natijani tanlab bo'lmadi. Qayta urinib ko'ring.")
     return
   }
-  emit('update:activeResultId', result.id)
   emit('update:activePanelId', result.panels[0]?.id ?? null)
 }
 </script>
@@ -270,7 +241,6 @@ async function choose(result: CuttingResult) {
     <div class="client-card-h">
       <div>
         <h2>Kesish natijasi</h2>
-        <p class="mt-1 text-sm text-ink-muted">PDF yuklab oling yoki natijadan buyurtma bering.</p>
       </div>
       <div v-if="chosenResult" class="flex flex-wrap items-center gap-2">
         <span
@@ -309,21 +279,8 @@ async function choose(result: CuttingResult) {
     </div>
 
     <div v-if="chosenResult" class="grid gap-5 p-5">
-      <div v-if="savingsBanner" class="client-banner success">
-        <span class="font-mono font-black">✓</span>
-        <span>{{ savingsBanner }}</span>
-      </div>
-
-      <CuttingVariantTabs
-        v-if="hasVariantTabs"
-        :results="draft.results"
-        :active-result-id="chosenResult.id"
-        :chosen-result-id="draft.chosen_result_id"
-        @select="selectResult"
-      />
-
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div class="min-w-0 space-y-4">
+      <div class="grid gap-5 2xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_300px]">
+        <div class="order-1 min-w-0 space-y-4 2xl:col-start-2 2xl:row-start-1">
           <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
             <span class="font-mono font-black">!</span>
             <span
@@ -332,66 +289,10 @@ async function choose(result: CuttingResult) {
             >
           </div>
 
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="text-sm font-bold text-ink-muted">
-              {{ chosenResult.algorithm_name }}
-            </div>
-            <button
-              v-if="!activeResultIsChosen"
-              type="button"
-              class="mp-button mp-button-outline"
-              @click="choose(chosenResult)"
-            >
+          <div v-if="!activeResultIsChosen" class="flex justify-end">
+            <button type="button" class="mp-button mp-button-outline" @click="choose(chosenResult)">
               Shu variantni tanlash
             </button>
-            <span v-else class="mp-chip bg-success-soft text-success">Tanlangan ✓</span>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-md border border-hairline bg-elevated p-4">
-              <div class="text-xs font-bold uppercase text-ink-muted">Taxminiy narx</div>
-              <div v-if="!branchId" class="mt-1 text-lg font-extrabold text-ink">
-                Filial tanlang
-              </div>
-              <div v-else-if="quoteLoading" class="mt-1 text-lg font-extrabold text-ink-muted">
-                Hisoblanmoqda…
-              </div>
-              <div v-else-if="quoteError" class="mt-1 text-sm font-bold text-danger">
-                {{ quoteError }}
-              </div>
-              <div v-else-if="priceParts" class="mt-1 flex items-baseline gap-1">
-                <span class="font-serif text-2xl font-semibold text-ink">{{
-                  priceParts.amount
-                }}</span>
-                <span class="text-xs font-bold text-ink-muted">{{ priceParts.unit }}</span>
-              </div>
-              <div v-else class="mt-1 text-lg font-extrabold text-ink">—</div>
-              <p v-if="priceParts && viewingNonChosen" class="mt-1 text-xs text-ink-muted">
-                tanlangan variant narxi
-              </p>
-            </div>
-            <div class="rounded-md border border-hairline bg-elevated p-4">
-              <div class="text-xs font-bold uppercase text-ink-muted">Listlar</div>
-              <div class="mt-1 font-serif text-2xl font-semibold text-ink">{{ totalPanels }}</div>
-            </div>
-            <div class="rounded-md border border-hairline bg-elevated p-4">
-              <div class="text-xs font-bold uppercase text-ink-muted">Chiqit</div>
-              <div
-                class="mt-1 font-serif text-2xl font-semibold"
-                :class="wasteToneClass(chosenResult.waste_percentage)"
-              >
-                {{ resultWaste }}
-              </div>
-            </div>
-            <div class="rounded-md border border-hairline bg-elevated p-4">
-              <div class="text-xs font-bold uppercase text-ink-muted">Kromka</div>
-              <div class="mt-1 font-serif text-2xl font-semibold text-ink">
-                {{ metres(consumedShop + consumedOwn) }}
-              </div>
-              <p v-if="edgeByMaterial.length" class="mt-1 text-xs text-ink-muted">
-                {{ edgeByMaterial.length }} xil kromka
-              </p>
-            </div>
           </div>
 
           <div v-if="!allPlaced" class="client-banner danger" role="alert">
@@ -426,46 +327,39 @@ async function choose(result: CuttingResult) {
           </section>
         </div>
 
-        <aside class="space-y-4">
-          <button
-            type="button"
-            class="mp-button mp-button-outline w-full"
-            :disabled="cutting.downloadingId === chosenResult.id"
-            @click="cutting.downloadClientPdf(chosenResult.id)"
-          >
-            {{ cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish' }}
-          </button>
-          <p
-            v-if="cutting.downloadError"
-            class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
-            role="alert"
-          >
-            {{ cutting.downloadError }}
-            <span v-if="cutting.downloadTraceId" class="block text-xs font-normal opacity-80">
-              trace {{ cutting.downloadTraceId }}
-            </span>
-          </p>
-          <div class="rounded-lg border border-hairline bg-sunk p-4">
-            <h3 class="text-sm font-extrabold text-ink">Kromka (material bo'yicha)</h3>
+        <aside class="order-2 space-y-4 2xl:col-start-1 2xl:row-start-1">
+          <div class="rounded-lg border border-hairline p-4">
+            <h3 class="text-sm font-extrabold text-ink">Materiallar</h3>
+            <ul class="mt-2 space-y-1.5 text-sm">
+              <li
+                v-for="material in panelMaterials"
+                :key="material.id"
+                class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
+              >
+                <span class="mt-1.5 size-1.5 rounded-full bg-ink-muted" aria-hidden="true"></span>
+                <span class="min-w-0 font-bold leading-tight text-ink-soft">{{
+                  material.label
+                }}</span>
+                <span class="shrink-0 font-mono text-ink">{{ material.count }} list</span>
+              </li>
+            </ul>
+
+            <div class="my-4 border-t border-hairline"></div>
+
+            <h3 class="text-sm font-extrabold text-ink">Kromka</h3>
             <template v-if="edgeByMaterial.length">
               <ul class="mt-2 space-y-1.5 text-sm">
                 <li
                   v-for="row in edgeByMaterial"
                   :key="row.id"
-                  class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+                  class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
                   :title="row.label"
                 >
                   <span
-                    v-if="row.entry"
-                    class="grid size-6 place-items-center rounded-full text-[11px] font-black"
-                    :style="{
-                      background: row.entry.colorStyle.bg,
-                      color: row.entry.colorStyle.fg,
-                    }"
-                  >
-                    {{ row.entry.number }}
-                  </span>
-                  <span v-else class="size-6"></span>
+                    class="mt-1.5 size-1.5 rounded-full bg-ink-muted"
+                    :style="row.entry ? { background: row.entry.colorStyle.bg } : undefined"
+                    aria-hidden="true"
+                  ></span>
                   <span class="min-w-0">
                     <span
                       class="block whitespace-normal text-sm font-bold leading-tight text-ink-soft"
@@ -479,7 +373,7 @@ async function choose(result: CuttingResult) {
             </template>
             <p v-else class="mt-2 text-sm text-ink-soft">Kromka ishlatilmagan.</p>
           </div>
-          <div v-if="activePanel" class="rounded-lg border border-hairline bg-sunk p-4">
+          <div v-if="activePanel" class="rounded-lg border border-hairline p-4">
             <h3 class="text-sm font-extrabold text-ink">
               Detallar — List {{ panelDisplayIndex(chosenResult, activePanel) }}
             </h3>
@@ -512,40 +406,99 @@ async function choose(result: CuttingResult) {
                   >
                     ↻ {{ group.rotatedCount }}
                   </span>
-                  <span
-                    v-for="number in group.tapeNumbers"
-                    :key="number"
-                    class="grid size-5 place-items-center rounded-full text-[10px] font-black"
-                    :style="tapeBadgeStyle(number)"
-                  >
-                    {{ number }}
-                  </span>
                 </span>
               </button>
             </div>
           </div>
         </aside>
-      </div>
 
-      <div
-        v-if="footerResult"
-        class="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_rgb(15_27_45_/_30%)] backdrop-blur"
-      >
-        <div class="text-sm">
-          <span class="font-mono font-bold text-ink">
-            {{ resultPanelCount(footerResult) }} list ·
-            {{ formatPercent(footerResult.waste_percentage) }} chiqit ·
-            {{ !branchId ? 'Filial tanlang' : priceParts ? priceParts.full : '—' }}
-          </span>
-          <span v-if="viewingNonChosen" class="ml-2 text-ink-muted">Boshqa variant tanlangan</span>
-        </div>
-        <RouterLink
-          v-if="draft.chosen_result_id"
-          :to="rolePath(props.checkoutPath)"
-          class="mp-button mp-button-primary"
-        >
-          {{ props.checkoutLabel ?? 'Buyurtma berish' }}
-        </RouterLink>
+        <aside class="order-3 2xl:col-start-3 2xl:row-start-1">
+          <section class="rounded-lg border border-hairline bg-sunk p-4">
+            <h3 class="font-serif text-xl font-semibold text-ink">Buyurtmangiz</h3>
+
+            <dl class="mt-4 grid grid-cols-2 gap-4 border-b border-hairline pb-4">
+              <div>
+                <dt class="text-xs font-bold uppercase text-ink-muted">Listlar</dt>
+                <dd class="mt-1 font-serif text-xl font-semibold text-ink">
+                  {{ orderPanelCount }} dona
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-bold uppercase text-ink-muted">Kromka</dt>
+                <dd class="mt-1 font-serif text-xl font-semibold text-ink">
+                  {{ orderEdgeLength }}
+                </dd>
+              </div>
+            </dl>
+
+            <div v-if="!branchId" class="py-4 text-sm text-ink-muted">
+              Narxni ko'rish uchun filialni tanlang.
+            </div>
+            <div v-else-if="quoteLoading" class="py-4 text-sm font-bold text-ink-muted">
+              Hisoblanmoqda…
+            </div>
+            <div v-else-if="quoteError" class="py-4 text-sm font-bold text-danger" role="alert">
+              {{ quoteError }}
+            </div>
+            <dl v-else-if="quote" class="divide-y divide-hairline py-2">
+              <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                <dt class="text-ink-soft">Kesish</dt>
+                <dd class="font-mono font-bold text-ink">
+                  {{ formatTiyin(quote.subtotal_cutting_tiyin) }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                <dt class="text-ink-soft">Materiallar</dt>
+                <dd class="font-mono font-bold text-ink">
+                  {{ formatTiyin(quote.subtotal_materials_tiyin) }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-3 text-sm">
+                <dt class="text-ink-soft">Kromka</dt>
+                <dd class="font-mono font-bold text-ink">
+                  {{ formatTiyin(quote.subtotal_edge_banding_tiyin) }}
+                </dd>
+              </div>
+              <div class="flex items-center justify-between gap-4 py-4">
+                <dt class="text-lg font-extrabold text-ink">Jami</dt>
+                <dd class="font-mono text-lg font-extrabold text-ink">
+                  {{ formatTiyin(quote.total_tiyin) }}
+                </dd>
+              </div>
+            </dl>
+            <p v-else class="py-4 text-sm text-ink-muted">Narx hozircha mavjud emas.</p>
+
+            <div class="mt-3 grid gap-2">
+              <button
+                type="button"
+                class="mp-button mp-button-outline w-full"
+                :disabled="cutting.downloadingId === chosenResult.id"
+                @click="cutting.downloadClientPdf(chosenResult.id)"
+              >
+                {{
+                  cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish'
+                }}
+              </button>
+              <RouterLink
+                v-if="draft.chosen_result_id"
+                :to="rolePath(props.checkoutPath)"
+                class="mp-button mp-button-primary w-full"
+              >
+                {{ props.checkoutLabel ?? 'Buyurtmaga davom etish' }}
+              </RouterLink>
+            </div>
+            <p
+              v-if="cutting.downloadError"
+              class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+              role="alert"
+            >
+              {{ cutting.downloadError }}
+              <span v-if="cutting.downloadTraceId" class="block text-xs font-normal opacity-80">
+                trace {{ cutting.downloadTraceId }}
+              </span>
+            </p>
+          </section>
+        </aside>
       </div>
     </div>
   </section>

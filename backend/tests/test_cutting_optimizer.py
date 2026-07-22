@@ -82,6 +82,16 @@ def test_cutting_engine_places_every_instance_without_overlap() -> None:
             _assert_no_overlap(panel_result.placements)
 
 
+def test_rejects_more_than_300_parts_before_optimizing() -> None:
+    panel = _panel()
+    part = _part(material_id=panel.material_id, quantity=301)
+
+    with pytest.raises(OptimizerError) as exc:
+        run_all_algorithms([part], {panel.material_id: panel})
+
+    assert exc.value.code == "too_many_parts"
+
+
 def test_follow_grain_rejects_rotation_even_on_non_grained_material() -> None:
     panel = _panel(length=300, width=200, grain=False)
     part = _part(material_id=panel.material_id, length=170, width=260)

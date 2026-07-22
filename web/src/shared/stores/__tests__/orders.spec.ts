@@ -128,6 +128,17 @@ describe('orders store', () => {
     })
   })
 
+  it('captures a single-branch quote error for checkout copy', async () => {
+    vi.mocked(api.get).mockRejectedValueOnce(
+      new ApiError(400, { code: 'missing_cutting_rate', trace_id: 'trace-rate' }),
+    )
+    const store = useOrdersStore()
+
+    await expect(store.quoteForDraft('draft-1', 'branch-1')).rejects.toBeInstanceOf(ApiError)
+
+    expect(store.error).toBe('order_quote_failed')
+  })
+
   it('quotes a workshop branch against the workshop mirror endpoint', async () => {
     vi.mocked(api.get).mockResolvedValueOnce(quote('branch-1'))
 

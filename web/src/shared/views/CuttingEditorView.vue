@@ -32,7 +32,6 @@ import CuttingEdgePickerModal from '@/shared/components/CuttingEdgePickerModal.v
 import CuttingEdgeTapeRegistry from '@/shared/components/CuttingEdgeTapeRegistry.vue'
 import CuttingImportWizard from '@/shared/components/CuttingImportWizard.vue'
 import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
-import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
@@ -170,8 +169,6 @@ const errorFilterEnabled = ref(false)
 const registryPickerOpen = ref(false)
 const registryReplaceEntry = ref<EdgeRegistryEntry | null>(null)
 const registryPickedEdgeId = ref<string | null>(null)
-const activeResultId = ref<string | null>(null)
-const activePanelId = ref<string | null>(null)
 const preferredEdgeByPart = ref<Record<string, string>>({})
 const edgeAssignments = ref(new Map<string, number>())
 const edgePickerPart = ref<CuttingPart | null>(null)
@@ -273,7 +270,6 @@ const panelChoices = computed<ChoiceOption[]>(() => {
 const hasPersistableParts = computed(
   () => parts.value.length > 0 && parts.value.every((part) => !partIsInvalid(part)),
 )
-const lastOptimizedSignature = ref<string | null>(null)
 function partsSignature(list: CuttingPart[] = parts.value) {
   return JSON.stringify(
     list.map((part) => [
@@ -290,9 +286,19 @@ function partsSignature(list: CuttingPart[] = parts.value) {
     ]),
   )
 }
-const optimizedUnchanged = computed(
-  () => lastOptimizedSignature.value !== null && partsSignature() === lastOptimizedSignature.value,
-)
+// A result is actionable only when the draft explicitly chooses it and it was
+// calculated for the exact parts currently visible in the editor. This rejects
+// stale ids and preserved MAP layouts after a geometry edit, while allowing an
+// unchanged MAP layout to return to its result stage.
+const currentChosenResult = computed(() => {
+  const currentDraft = draft.value
+  if (!currentDraft?.chosen_result_id) return null
+  const result = currentDraft.results.find((item) => item.id === currentDraft.chosen_result_id)
+  if (!result || result.status === 'invalidated' || !Array.isArray(result.parts_snapshot))
+    return null
+  return partsSignature(result.parts_snapshot) === partsSignature() ? result : null
+})
+const hasCurrentChosenResult = computed(() => currentChosenResult.value !== null)
 // docs/ref/features/cutting.md — at most MAX_PARTS per optimisation (CB-102).
 const canOptimize = computed(
   () =>
@@ -302,17 +308,31 @@ const canOptimize = computed(
     !!activeBranchId.value &&
     parts.value.length > 0 &&
     hasPersistableParts.value &&
-    totalQuantity.value <= MAX_PARTS &&
-    !optimizedUnchanged.value,
+    totalQuantity.value <= MAX_PARTS,
 )
 const optimizeDisabledHint = computed(() => {
+  if (isReadOnly.value) return 'Bu chizma buyurtmaga biriktirilgan'
   if (!activeBranchId.value) return 'Avval ustaxona tanlang'
   if (parts.value.length === 0) return "Avval qism qo'shing"
   if (!hasPersistableParts.value) return "To'ldirilmagan qatorlarni to'ldiring"
   if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
-  if (optimizedUnchanged.value) return "Natija allaqachon hisoblangan — qismni o'zgartiring"
   return ''
 })
+const primaryCtaLabel = computed(() => {
+  if (cutting.optimizing || creatingDraft.value) return 'Hisoblanmoqda'
+  return 'Davom etish'
+})
+const primaryCtaDisabled = computed(
+  () =>
+    cutting.optimizing ||
+    creatingDraft.value ||
+    (!hasCurrentChosenResult.value && !canOptimize.value),
+)
+const primaryCtaHint = computed(() =>
+  hasCurrentChosenResult.value || cutting.optimizing || creatingDraft.value
+    ? ''
+    : optimizeDisabledHint.value,
+)
 const totalQuantity = computed(() =>
   parts.value.reduce((sum, part) => sum + Math.max(0, Number(part.quantity) || 0), 0),
 )
@@ -743,7 +763,7 @@ function onImportCommitted(nextDraftId: string) {
   importReplaceConfirmOpen.value = false
   pendingImportedParts.value = null
   leavingAfterCreate.value = true
-  void router.replace(rolePath(adapter.paths.editor(nextDraftId)))
+  void router.replace(rolePath(adapter.paths.result(nextDraftId)))
 }
 
 // --- Bulk selection (desktop power-feature) --------------------------------
@@ -1156,15 +1176,30 @@ function closeBranchPicker() {
   selectedBranchId.value = activeBranchId.value
 }
 
+async function runPrimaryCta() {
+  if (primaryCtaDisabled.value) return
+  if (hasCurrentChosenResult.value && draft.value) {
+    await router.push(rolePath(adapter.paths.result(draft.value.id)))
+    return
+  }
+  await optimize()
+}
+
 async function optimize() {
   if (cutting.optimizing || creatingDraft.value || !canOptimize.value) return
   optimizeError.value = null
   optimizeRowError.value = null
   if (isNewDraft.value) {
-    await autosave.flush()
-    if (!isNewDraft.value) return optimize()
     creatingDraft.value = true
     try {
+      // A pending autosave may mint and route to the saved editor. Mark the
+      // one CTA busy before that round-trip so it cannot be triggered twice.
+      await autosave.flush()
+      if (!isNewDraft.value) {
+        creatingDraft.value = false
+        await optimize()
+        return
+      }
       await optimizeNewDraft()
     } finally {
       creatingDraft.value = false
@@ -1177,10 +1212,9 @@ async function optimize() {
   if (saveState.value === 'error') return
   let failedRowRef: string | null = null
   try {
-    const updated = await cutting.optimizeDraft(draftId.value)
-    activeResultId.value = updated.chosen_result_id
-    activePanelId.value = updated.results[0]?.panels[0]?.id ?? null
-    lastOptimizedSignature.value = partsSignature()
+    await cutting.optimizeDraft(draftId.value)
+    await router.push(rolePath(adapter.paths.result(draftId.value)))
+    return
   } catch (errorValue) {
     optimizeError.value = clientErrorLabel(
       cutting.error,
@@ -1194,12 +1228,13 @@ async function optimize() {
     }
   }
   await nextTick()
-  // On a row-attributed failure, scroll the offending row into view; otherwise
-  // the results section (CB-89).
-  const target = failedRowRef
-    ? document.getElementById(`part-row-${failedRowRef}`)
-    : document.getElementById('cutting-results')
-  target?.scrollIntoView({ behavior: 'smooth', block: failedRowRef ? 'center' : 'start' })
+  // On a row-attributed failure, keep the user in the editor and bring that
+  // row into view. General errors stay beside the sticky optimise action.
+  if (failedRowRef) {
+    document
+      .getElementById(`part-row-${failedRowRef}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 }
 
 // First optimise on an unsaved editor: create the draft, persist the parts (and
@@ -1231,10 +1266,9 @@ async function optimizeNewDraft() {
     })
     await cutting.optimizeDraft(id)
     if (abandoningNewDraft) return
-    lastOptimizedSignature.value = partsSignature()
-    // Hand off to the saved editor; the guard must not treat this as discarding.
+    // Hand off to the standalone result stage; the guard must not treat this as discarding.
     leavingAfterCreate.value = true
-    await router.replace(rolePath(adapter.paths.editor(id)))
+    await router.replace(rolePath(adapter.paths.result(id)))
   } catch (errorValue) {
     // The parts are still in local state, so the user keeps their work and can
     // retry; the row attribution still maps because the parts are unchanged.
@@ -1299,18 +1333,6 @@ watch(
     if (!value.results.some((result) => result.source === 'imported_map')) {
       importedLayoutWarningAccepted.value = false
     }
-    activeResultId.value = value.chosen_result_id ?? value.results[0]?.id ?? null
-    // Only an OPTIMIZER-sourced result counts as "already optimized for these
-    // parts" — an imported_map result (the map-import flow's kept layout) must
-    // never block running our optimizer for the first time on the same parts.
-    const optimizerResult = value.results.find((result) => result.source === 'optimizer')
-    lastOptimizedSignature.value = optimizerResult
-      ? partsSignature(optimizerResult.parts_snapshot)
-      : null
-    activePanelId.value =
-      value.results.find((result) => result.id === activeResultId.value)?.panels[0]?.id ??
-      value.results[0]?.panels[0]?.id ??
-      null
     // Don't clobber a pending pick while the picker is open (e.g. a debounced
     // autosave round-trips mid-selection); mirror the saved preference otherwise.
     if (!branchPickerOpen.value) selectedBranchId.value = value.preferred_branch_id
@@ -1846,11 +1868,7 @@ onBeforeRouteLeave(async () => {
             </button>
           </div>
 
-          <div
-            v-if="isNewDraft && optimizeError"
-            class="client-banner danger mx-5 mt-4"
-            role="alert"
-          >
+          <div v-if="optimizeError" class="client-banner danger mx-5 mt-4" role="alert">
             <span class="font-mono font-black">!</span>
             <span>
               {{ optimizeError }}
@@ -1865,9 +1883,10 @@ onBeforeRouteLeave(async () => {
           </div>
         </section>
 
-        <!-- Sticky action bar: the primary Optimise CTA stays reachable without
-             scrolling to the bottom of a long parts list, and the disabled reason
-             is shown inline (visible on touch) instead of only in a title tooltip. -->
+        <!-- Sticky action bar: its single primary CTA stays reachable without
+             scrolling to the bottom of a long parts list. It opens a current
+             chosen result or starts optimisation; disabled reasons remain visible
+             inline (including on touch) instead of only in a title tooltip. -->
         <div
           v-if="parts.length > 0"
           class="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-hairline-strong bg-elevated/95 px-4 py-3 shadow-[0_-6px_24px_-14px_rgb(15_27_45_/_30%)] backdrop-blur"
@@ -1880,40 +1899,24 @@ onBeforeRouteLeave(async () => {
           </div>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <span
-              v-if="!cutting.optimizing && !creatingDraft && optimizeDisabledHint"
+              v-if="!cutting.optimizing && !creatingDraft && primaryCtaHint"
               class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted"
             >
               <span class="font-black text-warning" aria-hidden="true">!</span>
-              {{ optimizeDisabledHint }}
+              {{ primaryCtaHint }}
             </span>
             <button
               type="button"
               class="mp-button mp-button-primary"
-              :disabled="cutting.optimizing || creatingDraft || !canOptimize"
-              :title="optimizeDisabledHint"
-              @click="optimize"
+              :disabled="primaryCtaDisabled"
+              :title="primaryCtaHint"
+              @click="runPrimaryCta"
             >
-              {{ cutting.optimizing || creatingDraft ? 'Hisoblanmoqda' : 'Optimallashtirish' }}
+              {{ primaryCtaLabel }}
             </button>
           </div>
         </div>
       </fieldset>
-
-      <CuttingResultsSection
-        v-if="draft && (draft.results.length > 0 || optimizeError)"
-        :draft="draft"
-        :optimize-error="optimizeError"
-        :checkout-path="
-          revisionOrderId && adapter.orderRevision
-            ? adapter.orderRevision.reviewPath(draft.id)
-            : adapter.paths.checkout(draft.id)
-        "
-        :checkout-label="revisionOrderId ? 'O\'zgarishlarni saqlash' : undefined"
-        :branch-id="activeBranchId"
-        :quote-for-draft="adapter.quoteForDraft"
-        v-model:active-result-id="activeResultId"
-        v-model:active-panel-id="activePanelId"
-      />
     </template>
 
     <ConfirmDialog
@@ -1976,11 +1979,10 @@ onBeforeRouteLeave(async () => {
 
     <ConfirmDialog
       :open="importedLayoutWarningOpen"
-      title="Import qilingan joylashuv bekor bo'ladi"
-      message="Detallar o'zgartirilsa, fayldan olingan joylashuv o'chiriladi. Yangi joylashuv olish uchun qayta optimallashtiring."
-      confirm-label="O'zgartirish"
+      title="Import qilingan joylashuvga ta'sir qiladi"
+      message="Bu o'zgarish fayldagi chizmani bekor qiladi. Saqlangandan keyin yangi optimallashtirilgan chizma yaratiladi."
+      confirm-label="O'zgartirishni saqlash"
       cancel-label="Bekor qilish"
-      danger
       @cancel="resolveImportedLayoutWarning(false)"
       @confirm="resolveImportedLayoutWarning(true)"
     />
