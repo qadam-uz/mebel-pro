@@ -12,6 +12,7 @@ and how the branch is validated (workshop tenancy, not public browsability).
 import uuid
 
 from fastapi import status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -34,6 +35,7 @@ from app.modules.cutting.schemas import (
     CuttingDraftResponse,
     CuttingMapImportCommitRequest,
     CuttingResultResponse,
+    WorkshopCuttingDraftSummary,
     WorkshopCuttingMapImportCommitRequest,
 )
 from app.modules.cutting.service import (
@@ -48,6 +50,7 @@ from app.modules.cutting.service import (
 )
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
+from app.modules.workshop.contracts import Branch
 
 
 async def create_workshop_draft(
@@ -91,6 +94,85 @@ async def create_workshop_draft(
         details={"client_id": str(client.id), "on_behalf": True},
     )
     return await _draft_response(db, draft)
+
+
+async def list_workshop_drafts(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+) -> list[WorkshopCuttingDraftSummary]:
+    """This workshop's unfinished walk-in drafts (cutting.md#workshop-side): the
+    staff scratchpads that were saved but never turned into an order. Ordered
+    drafts are deleted on placement, so every row here is genuinely in-progress.
+    Revision scratchpads (revision_of_order_id set) belong to an order, not the
+    saved-drafts surface, so they're excluded."""
+    workshop_id = require_manage_orders_workshop(principal)
+    drafts = (
+        (
+            await db.execute(
+                select(CuttingDraft)
+                .where(
+                    CuttingDraft.created_via_workshop_id == workshop_id,
+                    CuttingDraft.revision_of_order_id.is_(None),
+                )
+                .order_by(CuttingDraft.updated_at.desc(), CuttingDraft.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not drafts:
+        return []
+    client_ids = {draft.client_id for draft in drafts}
+    branch_ids = {draft.preferred_branch_id for draft in drafts if draft.preferred_branch_id}
+    result_ids = {draft.chosen_result_id for draft in drafts if draft.chosen_result_id}
+    clients = {
+        row.id: row
+        for row in (await db.scalars(select(Client).where(Client.id.in_(client_ids)))).all()
+    }
+    branches = (
+        {
+            row.id: row
+            for row in (await db.scalars(select(Branch).where(Branch.id.in_(branch_ids)))).all()
+        }
+        if branch_ids
+        else {}
+    )
+    results = (
+        {
+            row.id: row
+            for row in (
+                await db.scalars(select(CuttingResult).where(CuttingResult.id.in_(result_ids)))
+            ).all()
+        }
+        if result_ids
+        else {}
+    )
+    summaries: list[WorkshopCuttingDraftSummary] = []
+    for draft in drafts:
+        client = clients.get(draft.client_id)
+        branch = branches.get(draft.preferred_branch_id) if draft.preferred_branch_id else None
+        result = results.get(draft.chosen_result_id) if draft.chosen_result_id else None
+        summaries.append(
+            WorkshopCuttingDraftSummary(
+                id=draft.id,
+                client_id=draft.client_id,
+                client_name=client.name if client else "",
+                client_phone=client.phone if client else "",
+                name=draft.name,
+                preferred_branch_id=draft.preferred_branch_id,
+                branch_name=branch.name if branch else None,
+                part_count=sum(int(part.get("quantity", 0)) for part in draft.parts_snapshot),
+                panel_count=(
+                    sum(result.panels_used_by_material.values()) if result is not None else 0
+                ),
+                waste_percentage=result.waste_percentage if result is not None else None,
+                has_result=result is not None,
+                created_at=draft.created_at,
+                updated_at=draft.updated_at,
+            )
+        )
+    return summaries
 
 
 async def commit_workshop_imported_map(

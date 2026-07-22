@@ -23,6 +23,7 @@ import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDate, formatRelativeUz, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useCuttingStore } from '@/shared/stores/cutting'
 import {
   activeWorkshopStatuses,
   useOrdersStore,
@@ -36,6 +37,12 @@ const orders = useOrdersStore()
 const workshop = useWorkshopStore()
 const auth = useAuthStore()
 const permissions = useWorkshopPermissions()
+const cutting = useCuttingStore()
+// Saved walk-in drafts are a workshop-wide surface (manage_orders anywhere), not
+// branch-scoped like the create gate. The count gives ambient awareness of
+// unfinished cuttings waiting to become orders.
+const canViewDrafts = computed(() => permissions.can(p.manageOrders))
+const draftCount = computed(() => cutting.workshopDrafts.length)
 const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
@@ -637,6 +644,9 @@ onMounted(async () => {
   await refresh()
   // Now that the first load has landed, let user-driven filter edits refresh.
   hydrated.value = true
+  // Ambient count for the Chizmalar entry; non-blocking so it never delays the
+  // board/table.
+  if (canViewDrafts.value) void cutting.loadWorkshopDrafts()
 })
 
 onBeforeUnmount(() => {
@@ -656,6 +666,15 @@ onBeforeUnmount(() => {
         <p class="sub">Buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
+        <RouterLink
+          v-if="canViewDrafts"
+          :to="rolePath('/workshop/orders/drafts')"
+          class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+        >
+          Chizmalar<span v-if="draftCount > 0" class="ml-1 font-mono font-bold text-ink"
+            >· {{ draftCount }}</span
+          >
+        </RouterLink>
         <RouterLink
           v-if="canCreateWalkIn"
           :to="rolePath('/workshop/orders/new')"

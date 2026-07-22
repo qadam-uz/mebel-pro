@@ -460,3 +460,91 @@ async def test_draft_limit_excludes_staff_minted_drafts(
         )
     )
     assert own_count == 1
+
+
+async def test_workshop_saved_drafts_index(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access, _, branch_id, _ = await _priced_workshop(db_session)
+    panel, edge = await _materials(db_session, branch_id=branch_id)
+    dilshod = await _resolve_client(client, access, phone="+998901112255", name="Walk-in Dilshod")
+    aziza = await _resolve_client(client, access, phone="+998901112266", name="Walk-in Aziza")
+
+    # An optimised draft (ready for checkout) and a bare one (still in progress).
+    optimized_id = await _optimized_workshop_draft(
+        client, access, client_id=dilshod, branch_id=branch_id, panel=panel, edge=edge
+    )
+    bare = await client.post(
+        "/api/v1/workshop/cutting-drafts",
+        headers=_auth(access),
+        json={"client_id": aziza, "branch_id": str(branch_id)},
+    )
+    assert bare.status_code == 201
+
+    listed = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(access))
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()
+    assert {row["id"] for row in rows} == {optimized_id, bare.json()["id"]}
+    by_id = {row["id"]: row for row in rows}
+
+    ready = by_id[optimized_id]
+    assert ready["client_name"] == "Walk-in Dilshod"
+    assert ready["client_phone"] == "+998901112255"
+    assert ready["branch_name"]
+    assert ready["part_count"] == 2
+    assert ready["has_result"] is True
+    assert ready["panel_count"] >= 1
+    assert ready["waste_percentage"] is not None
+
+    in_progress = by_id[bare.json()["id"]]
+    assert in_progress["client_name"] == "Walk-in Aziza"
+    assert in_progress["has_result"] is False
+    assert in_progress["part_count"] == 0
+    assert in_progress["waste_percentage"] is None
+
+
+async def test_workshop_saved_drafts_index_scope_and_lifecycle(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    access_a, _, branch_a, _ = await _priced_workshop(db_session)
+    panel, edge = await _materials(db_session, branch_id=branch_a)
+    client_a = await _resolve_client(client, access_a, phone="+998901113344", name="A Client")
+    draft_a = await _optimized_workshop_draft(
+        client, access_a, client_id=client_a, branch_id=branch_a, panel=panel, edge=edge
+    )
+
+    # A different workshop never sees workshop A's drafts.
+    access_b, _, _, _ = await _priced_workshop(db_session)
+    list_b = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(access_b))
+    assert list_b.status_code == 200
+    assert list_b.json() == []
+
+    # process_production without manage_orders is rejected.
+    prod_access = await _staff_access(
+        db_session,
+        workshop_id=(
+            await db_session.get(CuttingDraft, uuid.UUID(draft_a))
+        ).created_via_workshop_id,
+        branch_id=branch_a,
+        permission=Permission.PROCESS_PRODUCTION,
+    )
+    forbidden = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(prod_access))
+    assert forbidden.status_code == 403
+
+    # Once ordered, the draft is consumed and drops off the saved list.
+    placed = await client.post(
+        "/api/v1/workshop/orders",
+        headers=_auth(access_a),
+        json={
+            "draft_id": draft_a,
+            "branch_id": str(branch_a),
+            "contact_name": "A Client",
+            "contact_phone": "+998901113344",
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    after = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(access_a))
+    assert after.status_code == 200
+    assert after.json() == []

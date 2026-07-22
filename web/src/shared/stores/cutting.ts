@@ -115,6 +115,25 @@ export interface CuttingDraft {
   results: CuttingResult[]
 }
 
+// A staff-minted walk-in draft on the workshop's saved-drafts surface. The
+// backend denormalizes the walk-in client + branch and derives readiness
+// (`has_result`) so the list card needs no per-row fetch.
+export interface WorkshopDraftSummary {
+  id: string
+  client_id: string
+  client_name: string
+  client_phone: string
+  name: string | null
+  preferred_branch_id: string | null
+  branch_name: string | null
+  part_count: number
+  panel_count: number
+  waste_percentage: number | null
+  has_result: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface CuttingMapImportCommitPayload {
   preferred_branch_id?: string | null
   parts: CuttingPart[]
@@ -303,6 +322,26 @@ export const useCuttingStore = defineStore('cutting', () => {
     traceId.value = null
     try {
       drafts.value = await api.get<CuttingDraft[]>(scopedPath('/cutting-drafts'), authInit())
+    } catch (errorValue) {
+      captureError(errorValue, 'cutting_drafts_load_failed')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // The workshop's unfinished walk-in drafts (saved but never ordered). Always a
+  // workshop endpoint, so it doesn't go through scopedPath; delete reuses the
+  // scope-aware deleteDraft below.
+  const workshopDrafts = ref<WorkshopDraftSummary[]>([])
+  async function loadWorkshopDrafts() {
+    loading.value = true
+    error.value = null
+    traceId.value = null
+    try {
+      workshopDrafts.value = await api.get<WorkshopDraftSummary[]>(
+        '/workshop/cutting-drafts',
+        authInit(),
+      )
     } catch (errorValue) {
       captureError(errorValue, 'cutting_drafts_load_failed')
     } finally {
@@ -546,6 +585,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     // bootstrap, not session state. The walk-in client IS session state.
     walkInClient.value = null
     drafts.value = []
+    workshopDrafts.value = []
     currentDraft.value = null
     branchOptions.value = []
     panelOptions.value = []
@@ -571,6 +611,8 @@ export const useCuttingStore = defineStore('cutting', () => {
     resolveWalkInClient,
     loadWalkInClient,
     drafts,
+    workshopDrafts,
+    loadWorkshopDrafts,
     currentDraft,
     branchOptions,
     panelOptions,

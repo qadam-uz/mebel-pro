@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-21
+updated: 2026-07-22
 order: 80
 ---
 
@@ -191,10 +191,14 @@ a draft slot; a usable detail is saved without requiring the optimiser.
   mid-sale. Revisit if intra-workshop draft visibility becomes a confidentiality concern —
   then tighten to branch scope. Outside the minting workshop a draft simply doesn't exist
   (404, no existence oracle).
-- Abandonment of a staff-minted draft is a **recorded punt**: there is **no staff draft
-  listing in v1**. The editor's leave-guard offers to discard (delete) a never-ordered
-  walk-in draft on exit; a draft left behind anyway is invisible to the client and harmless.
-  Revisit when workshops ask to resume walk-in drafts — then add a listing.
+- A staff-minted draft left unfinished is **saved and resumable**: the workshop's
+  **Saqlangan chizmalar** surface ([UX](#workshop-side)) lists every never-ordered walk-in
+  draft of the workshop, so an interrupted sale can be picked back up instead of restarted.
+  The editor's leave-guard still offers to discard on exit for the operator who knows they're
+  done; a draft kept is simply reachable from the listing. Ordered drafts are consumed on
+  placement, so the listing only ever shows genuinely in-progress work; an order's revision
+  scratchpad ([`orders.md`](orders.md#revising-a-placed-order)) is not a standalone draft and
+  never appears there.
 - Workshop staff and the owner see confirmed results bound to orders in their scope; the PDF
   download is gated the same way. Every optimisation run is audited.
 
@@ -537,8 +541,20 @@ The workshop app runs the **same editor component** for staff-created walk-in dr
 the branch selector is hidden, the branch is locked to the branch the flow was entered from
 and frozen into the draft at creation (a later topbar branch switch never retargets an
 in-progress draft), and a persistent **identity strip** in the editor header names the
-walk-in client (name + phone). Everything else — parts editor, edge picker, optimise,
-results — is this page, unchanged.
+walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
+just during the continuous create flow), so a re-opened draft still names who it's for.
+Everything else — parts editor, edge picker, optimise, results — is this page, unchanged.
+
+**Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
+unfinished walk-in cuttings, reached from a **Chizmalar** entry beside **+ Yangi buyurtma** on
+the Orders screen (the entry carries a count of open drafts). Each row shows the walk-in
+client (name + phone), the locked branch, part / panel / waste figures, and a **derived status
+label** — *Tayyor — buyurtma berish mumkin* once a result is chosen, else *Tahrirlanmoqda*.
+A draft carries no status column of its own; the label is derived from whether a cutting
+result has been chosen. **Davom etish** reopens the shared editor on the saved draft (which
+routes on to checkout once a result is picked); a per-row delete discards it with a danger
+confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via **+ Yangi
+buyurtma**) / error, each recoverable.
 
 An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
 

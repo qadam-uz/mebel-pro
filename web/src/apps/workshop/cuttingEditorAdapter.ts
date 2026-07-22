@@ -17,13 +17,16 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
   return {
     newRouteName: 'workshop-order-cutting-new',
     paths: {
-      drafts: '/workshop/orders',
+      drafts: '/workshop/orders/drafts',
       editor: (id: string) => `/workshop/orders/cutting/${id}`,
       result: (id: string) => `/workshop/orders/cutting/${id}/result`,
       checkout: (draftId: string) => `/workshop/orders/new/${draftId}/checkout`,
       orderDetail: (orderId: string) => `/workshop/orders/${orderId}`,
     },
     branch: branch ? { fixed: { id: branch.id, name: branch.name } } : {},
+    // Resolve live from the store so a resumed draft's frozen branch (which may
+    // differ from the topbar) is named correctly in the locked-branch strip.
+    branchNameById: (id) => workshop.branches.find((item) => item.id === id)?.name ?? null,
     quoteForDraft: (draftId, quoteBranchId) => orders.quoteWorkshopBranch(draftId, quoteBranchId),
     orderRevision: {
       reviewPath: (draftId: string) => `/workshop/orders/edit/${draftId}/review`,

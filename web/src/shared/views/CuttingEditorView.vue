@@ -194,6 +194,16 @@ const isReadOnly = computed(() => boundOrderId.value !== null)
 // order — the strip and the results CTA switch to the revision flow. The order
 // context loads lazily and non-fatally; the editor works without it.
 const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null)
+// The locked-branch strip names the branch the editor actually operates on. For a
+// resumed walk-in draft that's the draft's frozen branch (which may differ from
+// the topbar the adapter froze at mount); fall back to the topbar name.
+const lockedBranchName = computed(() => {
+  const draftBranchId = draft.value?.preferred_branch_id
+  if (draftBranchId && adapter.branchNameById) {
+    return adapter.branchNameById(draftBranchId) ?? fixedBranch.value?.name ?? null
+  }
+  return fixedBranch.value?.name ?? null
+})
 const revisionOrder = ref<OrderDetail | null>(null)
 watch(
   revisionOrderId,
@@ -1364,6 +1374,23 @@ onMounted(async () => {
   // Reuse an already-loaded draft (e.g. just optimised from the new editor) to
   // avoid a load flash; otherwise fetch it.
   if (cutting.currentDraft?.id !== draftId.value) await cutting.loadDraft(draftId.value)
+  // Resuming a saved walk-in draft (from the saved-drafts list, or after a
+  // reload): the walk-in identity strip needs its client, which the resolve step
+  // seeded only during the continuous flow. Re-hydrate it here so a resumed draft
+  // still names who it's for. Revision drafts hide the strip, so skip them.
+  const resumedDraft = draft.value
+  if (
+    isWorkshopScope.value &&
+    resumedDraft &&
+    !resumedDraft.revision_of_order_id &&
+    cutting.walkInClient?.id !== resumedDraft.client_id
+  ) {
+    try {
+      await cutting.loadWalkInClient(resumedDraft.client_id)
+    } catch {
+      // A missing/blocked client shouldn't block editing the drawing itself.
+    }
+  }
   // Branch options power the picker; in fixed-branch mode there's no picker and
   // no workshop branch-options endpoint, so skip the load.
   if (!fixedBranch.value) await cutting.loadBranchOptions()
@@ -1553,10 +1580,11 @@ onBeforeRouteLeave(async () => {
             i
           </span>
           <div class="min-w-0 flex-1">
-            <!-- A revision is locked to the ORDER's branch, which may differ
-                 from the topbar context the adapter froze at mount. -->
+            <!-- A revision is locked to the ORDER's branch, and a resumed walk-in
+                 draft to its own frozen branch — both may differ from the topbar
+                 context the adapter froze at mount. -->
             <b class="text-ink">{{
-              revisionOrder ? revisionOrder.branch_name : fixedBranch.name
+              revisionOrder ? revisionOrder.branch_name : (lockedBranchName ?? fixedBranch.name)
             }}</b>
           </div>
         </section>
