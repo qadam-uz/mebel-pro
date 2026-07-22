@@ -800,6 +800,40 @@ async def test_workshop_orders_date_filter_and_csv_export(
     assert str(order["order_number"]) in csv_export.text
 
 
+async def test_workshop_orders_contact_phone_filter(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The operator types whatever the client dictates — partial digits, spaced
+    formatting, or the full number — and only digits count as signal."""
+    order, _, owner_access, _, branch_id, _ = await _placed_order(client, db_session)
+
+    async def rows(phone: str) -> list[str]:
+        response = await client.get(
+            "/api/v1/workshop/orders",
+            headers=_auth(owner_access),
+            params={"branch_id": str(branch_id), "contact_phone": phone},
+        )
+        assert response.status_code == 200, response.text
+        return [row["id"] for row in response.json()]
+
+    # Partial digits (the tail the operator remembers) and formatted input both hit.
+    assert await rows("1555222") == [order["id"]]
+    assert await rows("+998 90 155 52 22") == [order["id"]]
+    # A non-matching number filters everything out.
+    assert await rows("998977777777") == []
+    # An input with no digits is formatting-only — it must not filter at all.
+    assert await rows("++--") == [order["id"]]
+
+    csv_export = await client.get(
+        "/api/v1/workshop/orders/export.csv",
+        headers=_auth(owner_access),
+        params={"branch_id": str(branch_id), "contact_phone": "998977777777"},
+    )
+    assert csv_export.status_code == 200
+    assert str(order["order_number"]) not in csv_export.text
+
+
 async def _client_order_notifications(db: AsyncSession, order_id: str) -> list[Notification]:
     rows = await db.scalars(
         select(Notification)

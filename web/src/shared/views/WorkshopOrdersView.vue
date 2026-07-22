@@ -62,6 +62,9 @@ const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
 const search = ref('')
+// Digits-contains phone filter — the operator types whatever the client
+// dictates (partial tail, spaced, +998…); the backend strips formatting.
+const phoneFilter = ref('')
 const datePreset = ref<DateRangePreset>('all')
 const dateFrom = ref('')
 const dateTo = ref('')
@@ -121,13 +124,16 @@ const visibleOrderBranchIds = computed(() => [
   ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
 ])
 // Branch and search are driven by the topbar (context + global search), so the
-// in-page reset only clears the status / date dropdowns.
-const hasActiveFilters = computed(() => status.value !== 'active' || datePreset.value !== 'all')
+// in-page reset only clears the status / date / phone controls.
+const hasActiveFilters = computed(
+  () => status.value !== 'active' || datePreset.value !== 'all' || phoneFilter.value.trim() !== '',
+)
 
 function resetFilters() {
   status.value = 'active'
   // DateRangePicker re-derives from/to (to open) when the preset flips to 'all'.
   datePreset.value = 'all'
+  phoneFilter.value = ''
 }
 
 function applyContextBranch() {
@@ -167,6 +173,7 @@ function listFilters() {
     branch_id: branchId.value === 'all' ? null : branchId.value,
     status: status.value,
     search: search.value,
+    contact_phone: phoneFilter.value.trim() || null,
     date_from: dateFrom.value || null,
     date_to: dateTo.value || null,
   }
@@ -626,7 +633,7 @@ watch(branchId, (value) => {
   if (value !== 'all') workshop.setSelectedBranchContext(value)
 })
 
-watch([branchId, status, search, dateFrom, dateTo], () => {
+watch([branchId, status, search, phoneFilter, dateFrom, dateTo], () => {
   if (!hydrated.value) return
   window.clearTimeout(timer)
   timer = window.setTimeout(() => void refresh(), 250)
@@ -733,6 +740,16 @@ onBeforeUnmount(() => {
         v-model:date-from="dateFrom"
         v-model:date-to="dateTo"
       />
+      <label class="mp-filter-input">
+        <span>Telefon</span>
+        <input
+          v-model="phoneFilter"
+          inputmode="tel"
+          autocomplete="off"
+          placeholder="+998 yoki raqam qismi"
+          aria-label="Mijoz telefoni bo'yicha filtrlash"
+        />
+      </label>
       <button v-if="hasActiveFilters" type="button" class="mp-filter-reset" @click="resetFilters">
         Tozalash
       </button>

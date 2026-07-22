@@ -133,6 +133,9 @@ export interface WorkshopOrderFilters {
   branch_id?: string | null
   status?: string
   search?: string
+  // Digits-contains match against the order's contact phone; formatting in the
+  // input is ignored server-side.
+  contact_phone?: string | null
   date_from?: string | null
   date_to?: string | null
   assigned_cutter_user_id?: string | null
@@ -405,6 +408,7 @@ export const useOrdersStore = defineStore('orders', () => {
           branch_id: filters.branch_id,
           status: filters.status,
           search: filters.search,
+          contact_phone: filters.contact_phone,
           date_from: filters.date_from,
           date_to: filters.date_to,
           assigned_cutter_user_id: filters.assigned_cutter_user_id,
@@ -432,6 +436,7 @@ export const useOrdersStore = defineStore('orders', () => {
         branch_id: filters.branch_id,
         status: filters.status,
         search: filters.search,
+        contact_phone: filters.contact_phone,
         date_from: filters.date_from,
         date_to: filters.date_to,
         assigned_cutter_user_id: filters.assigned_cutter_user_id,
