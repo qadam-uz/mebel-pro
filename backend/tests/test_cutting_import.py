@@ -390,10 +390,20 @@ def test_invalid_mapping_and_too_many_parts_raise_422_codes() -> None:
         )
     assert invalid.value.code == "invalid_mapping"
 
+    at_cap = parse_import_file(
+        filename="at_cap.csv",
+        content=_csv_bytes("L;W;Qty\n100;100;300\n"),
+        options=ImportParseOptions(
+            skip_rows=1,
+            mapping={"length_mm": 0, "width_mm": 1, "quantity": 2},
+        ),
+    )
+    assert at_cap.total_pieces == 300
+
     with pytest.raises(ImportParseError) as too_many:
         parse_import_file(
             filename="too_many.csv",
-            content=_csv_bytes("L;W;Qty\n100;100;101\n"),
+            content=_csv_bytes("L;W;Qty\n100;100;301\n"),
             options=ImportParseOptions(
                 skip_rows=1,
                 mapping={"length_mm": 0, "width_mm": 1, "quantity": 2},
@@ -403,7 +413,7 @@ def test_invalid_mapping_and_too_many_parts_raise_422_codes() -> None:
 
     panel = (
         "<Объект><ТипОбъекта>Панель</ТипОбъекта><Длина>100</Длина><Ширина>100</Ширина>"
-        "<Количество>101</Количество></Объект>"
+        "<Количество>301</Количество></Объект>"
     )
     too_many_xml_content = (
         f"<Проект><Изделие><СписокЭлементов>{panel}</СписокЭлементов></Изделие></Проект>"

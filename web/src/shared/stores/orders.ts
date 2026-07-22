@@ -251,10 +251,17 @@ export const useOrdersStore = defineStore('orders', () => {
   }
 
   async function quoteForDraft(draftId: string, branchId: string) {
-    return await api.get<OrderQuote>(
-      withQuery('/client/orders/quote', { draft_id: draftId, branch_id: branchId }),
-      authInit(),
-    )
+    error.value = null
+    traceId.value = null
+    try {
+      return await api.get<OrderQuote>(
+        withQuery('/client/orders/quote', { draft_id: draftId, branch_id: branchId }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureError(errorValue, 'order_quote_failed')
+      throw errorValue
+    }
   }
 
   // Workshop mirror of quoteForDraft for the walk-in checkout — the branch is

@@ -106,7 +106,7 @@ def parse_bazis_xml(content: bytes) -> ImportParsedResponse:
     if total_pieces > MAX_IMPORT_PIECES:
         raise ImportParseError(
             "too_many_parts",
-            f"Faylda {total_pieces} dona detal — bir optimallashtirishga eng ko'pi 100 dona. "
+            f"Faylda {total_pieces} dona detal — bir optimallashtirishga eng ko'pi 300 dona. "
             "Faylni bo'lib yuklang",
             details={"total_pieces": total_pieces},
         )

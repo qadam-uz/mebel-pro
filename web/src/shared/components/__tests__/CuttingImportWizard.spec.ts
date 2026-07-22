@@ -230,5 +230,6 @@ describe('CuttingImportWizard', () => {
 
     expect(parseMock).toHaveBeenCalledWith(expect.any(File), undefined, 'workshop')
     expect(commit).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('committed')).toEqual([['draft-map']])
   })
 })

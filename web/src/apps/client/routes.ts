@@ -62,6 +62,12 @@ export const clientRoutes: RouteRecordRaw[] = [
     meta: { title: 'Kesim chizmasi' },
   },
   {
+    path: '/c/cutting/:id/result',
+    name: 'client-cutting-result',
+    component: () => import('@/shared/views/CuttingResultView.vue'),
+    meta: { title: 'Kesish natijasi' },
+  },
+  {
     path: '/c/branches',
     name: 'client-branches',
     component: () => import('@/shared/views/ClientBranchesView.vue'),

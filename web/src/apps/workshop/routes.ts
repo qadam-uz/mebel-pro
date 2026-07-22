@@ -85,6 +85,16 @@ export const workshopRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/workshop/orders/cutting/:id/result',
+    name: 'workshop-order-cutting-result',
+    component: () => import('@/shared/views/CuttingResultView.vue'),
+    meta: {
+      title: 'Kesish natijasi',
+      workshopAccess: { any: orderAccess },
+      cuttingEditorAdapter: workshopCuttingEditorAdapter,
+    },
+  },
+  {
     path: '/workshop/orders/new/:draft_id/checkout',
     name: 'workshop-order-checkout',
     component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),

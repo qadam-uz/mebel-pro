@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-20
+updated: 2026-07-21
 order: 80
 ---
 
@@ -169,7 +169,7 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 | -------------------------------- | --------------------------------------------------------------------------------------------- |
 | Part minimum                     | 50 mm × 50 mm                                                                                 |
 | Part maximum                     | panel − 2× edge trim (for the part's chosen panel material)                                   |
-| Parts per optimisation           | ≤ 100 (across all materials)                                                                  |
+| Parts per optimisation           | ≤ 300 (across all materials)                                                                  |
 | Import file                      | ≤ 1 MiB; `.csv`, БАЗИС-Мебельщик `Спецификация в XML` `.xml`, or 2D-Place `.map`              |
 | Panels per material per result   | ≤ 20 (a single material above this must be split into separate orders)                        |
 | Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see _Access_) |
@@ -245,17 +245,21 @@ Imported MAP results are stamped `algorithm_name=imported-2dplace-map`,
 `algorithm_version=map-1`, `source=imported_map`, `kerf_mm=0`, and `edge_trim_mm=0`. Waste and
 cut/edge metrics are recomputed from the persisted placements; MAP waste/remainder rectangles
 are stored as panel `offcuts` and used only for preview, not pricing. The UI labels these results
-`Fayldan joylashuv`. The editor warns only before a geometry-affecting parts edit
-(adding/removing a row, quantity, dimensions, panel material, or texture direction), because it
-removes the imported layout. Name, edge-band, and material-source edits are geometry-neutral:
-they save without the warning and retain the layout while its edge metrics are refreshed.
+`Fayldan joylashuv`. A successful MAP commit opens that result before any editing. The editor
+warns only before a geometry-affecting parts edit (adding/removing a row, quantity, dimensions,
+panel material, or texture direction). Accepting the edit removes the file layout, clears the
+choice, and requires a fresh optimiser run. Name, edge-band, and material-source edits are
+geometry-neutral: they save without the warning and retain the layout while its edge metrics are
+refreshed.
 
-## UX — the cutting wizard (client app)
+## UX — the cutting flow (client app)
 
-A single workspace at `/c/cutting/:id` (`/c/cutting/new` before the first complete detail; no stepper
-— one editing surface above, one results panel below). Entry is the client app's home **New
-cutting** button, which opens an empty editor; its first complete detail creates and persists the draft
-(see _Lifecycle_). A secondary **My drafts** entry lists unbound drafts.
+Two stages share one draft: the detail editor at `/c/cutting/:id` (`/c/cutting/new` before the
+first complete detail), then the standalone result at `/c/cutting/:id/result`. Entry is the client
+app's home **New cutting** button, which opens an empty editor; its first complete detail creates
+and persists the draft (see _Lifecycle_). **Optimise** moves to the result stage only after a
+successful run. A secondary **My drafts** entry lists unbound drafts and opens drafts with a chosen
+result on the result stage; drafts without one reopen in the editor.
 
 ### Branch selector (top of the editor)
 
@@ -284,11 +288,10 @@ number.
 
 ### Results
 
-Results render as one active variant at a time. When an imported MAP layout and an optimiser
-layout both exist, tabs switch between `Fayldagi joylashuv` and `Optimizer varianti` without
-changing the chosen result; `Shu variantni tanlash` updates `chosen_result_id`. The results area
-shows metric cards, a sheet-thumbnail strip, one large sheet SVG, offcut/remainder overlays, and a
-sticky footer summarising the currently chosen result before checkout.
+Results expose one current, chosen layout. A MAP import opens its file layout; a geometry edit
+removes it, and the next optimisation creates one replacement layout. The result area shows the
+sheet-thumbnail strip, one large sheet SVG, offcut/remainder overlays, material and detail rails,
+and the order summary before checkout.
 
 - **None set** → "No workshop selected" + a **Pick a workshop** button.
 - **Set** → just the branch name, e.g. "Yunusobod · Furniture House" + a **Change** button.
@@ -308,9 +311,12 @@ Upload opens the import wizard; manual entry stays as the plain row editor. The 
 source is БАЗИС-Мебельщик's **Спецификация в CSV** or **Спецификация в XML** export;
 Excel-made lists must be saved as CSV first. For a mutable saved draft, the page header carries
 a danger-outline **Delete drawing** button; it is absent for a new or read-only drawing. The
-primary **Optimise** button lives in a
-**sticky bottom action bar** — alongside the row / piece count (and, when it's disabled, the
-reason shown inline) — so it stays reachable above a long list.
+sticky bottom action bar has exactly one primary action — alongside the row / piece count (and,
+when optimisation is disabled, the reason shown inline) — so it stays reachable above a long
+list. When the draft's chosen result exists and its parts snapshot matches the current editor
+parts, it is **View result** and opens the result stage; otherwise it is **Optimise**. A geometry
+edit therefore changes an unchanged MAP import from **View result** to **Optimise**, while a
+read-only drawing can still open its current result.
 
 Adding a row follows the content rather than a fixed header control: an empty editor shows a
 centred **Add part** call-to-action, and once there are rows a dashed **Add part** tile sits
@@ -326,7 +332,9 @@ a labelled card.
 
 The import wizard is stateless for CSV/XML: it never stores the file and only parses it into
 ordinary editor parts. A MAP layout is the exception: committing a size-matched layout creates a
-new imported-result draft for the current client or workshop walk-in client.
+new imported-result draft for the current client or workshop walk-in client and opens the result
+stage immediately. A MAP whose selected panel size does not match degrades to parts-only import
+and stays in the editor; there is no unseen result to warn about.
 
 1. **File.** The user picks a file; the UI pre-checks the 1 MiB size cap and `.csv`/`.xml`/`.map`
    extension, then calls the role-scoped parse endpoint (`POST /api/v1/client/cutting/import/parse`
@@ -357,8 +365,8 @@ but appear as warnings.
 
 Rows skipped because they cannot be represented (for example an `Итого` footer in a numeric
 column) appear in the report. Recoverable domain problems still import: a sub-50 mm part is
-loaded and then flagged by the editor's normal validation. Imports over 100 pieces are
-rejected at parse time; imports that make the current editor exceed 100 pieces show a notice
+loaded and then flagged by the editor's normal validation. Imports over 300 pieces are
+rejected at parse time; imports that make the current editor exceed 300 pieces show a notice
 and the optimiser remains blocked until rows are removed.
 
 The parts table:
@@ -435,36 +443,26 @@ This cannot be undone.”_ If deletion fails, the dialog stays open and displays
 trace id. A successful deletion returns the client to the draft list (or the workshop order list
 in workshop scope). Changing the branch never removes parts.
 
-### Run and the result panel
+### Run and the result stage
 
-A primary **Optimise** button in the sticky bottom action bar. Disabled while running (5 s
-cap), then disabled until any row changes (so re-tapping doesn't re-run a stale layout); the
-disable reason is shown inline next to it. On a brand-new editor, the first complete detail
-creates and saves the draft; **Optimise** always runs against that current autosaved snapshot.
+The editor's single primary sticky action reads **Davom etish**. With a current chosen result it
+opens the result stage; otherwise it runs optimisation and shows its validation reason inline when
+unavailable. While a run is in progress (5 s cap), it is disabled and shows **Hisoblanmoqda**. On
+a brand-new editor, the first complete detail creates and saves the draft before continuing.
 
-The result panel only renders once an optimise has produced a result (or an error to surface);
-before the first run there is **no empty placeholder** — the parts editor and the sticky
-Optimise button are all there is to see.
+The editor never embeds results. Before the first run there is no result placeholder — the parts
+editor and sticky action are all there is to see. A successful run navigates to the standalone
+result stage; a failure stays in the editor beside the affected row or action. Only a current
+chosen result makes **Davom etish** open the result; merely having an unchosen or stale candidate
+makes it run optimisation instead.
 
-On success, the panel scrolls into view with three regions:
+The result stage has three desktop columns: materials and details at left, the layout visualiser
+in the centre, and **Buyurtmangiz** alone at right. Narrow screens stack the visualiser, details,
+then order summary.
 
-1. **Headline metrics.**
-   - The chosen-result quote for the active branch; when the user is viewing a different
-     variant, the tile says the price belongs to the chosen variant.
-   - Weighted **waste %** (across all panel materials), tinted as a signal: ≤15% success,
-     > 30% warning, otherwise neutral.
-   - **Panels used** total only; per-material grouping lives in the sheet thumbnails below.
-   - If multiple variants use different sheet counts, the fewer-sheet active variant shows
-     a sheets-only savings line: `«{variant}» varianti {d} list kam ishlatadi`.
-   - **Edge tape** total length — the **consumed** metres (geometric banding + the fixed
-     30 mm trim overhang per banded side), with a breakdown listing each edge material
-     that has metres in the side panel. The tile subline shows how many distinct tapes are
-     used, e.g. `3 xil kromka`.
-   - **Parts placed** count, e.g. `24 / 24` ✓ (red with a per-part list if any didn't fit).
-   - Result tabs switch between imported MAP layout and optimizer variants. Choosing a tab
-     changes the visualised result; **Shu variantni tanlash** makes it the orderable result.
-
-2. **Panel layout visualiser.**
+1. **Panel layout visualiser.**
+   - The result header shows the imported-layout and placement state. Only the chosen result is
+     shown; legacy or previous candidates are not offered as variants.
    - A sheet thumbnail strip grouped by panel material. Each group header shows the material
      type, fuller material label, and that material's sheet count; compact thumbnails below
      it show drawing-wide `List N` numbering and a bottom-right fill badge.
@@ -484,17 +482,19 @@ On success, the panel scrolls into view with three regions:
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
      a rotated placement maps them 90° clockwise. Tick inset, length and weight are
      normalised, so banding reads the same on a large and a small panel.
-   - The side panel is grouped by part for the active sheet (`Detallar — List N`), showing
-     name, dimensions, quantity, rotated count, and edge-registry badges. Result registry
-     numbers are derived from that result's frozen `parts_snapshot`, so they are
-     self-contained and match the result details even after later editor changes.
-   - The side panel's Kromka block sorts tapes by those registry numbers and shows badge,
-     fuller material label such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed
-     metres.
+   - The left rail is grouped by part for the active sheet (`Detallar — List N`), showing
+     name, dimensions, quantity, and rotated count. Result data is frozen from that result's
+     `parts_snapshot`, so it remains self-contained after later editor changes.
+   - The left rail first lists every panel material and its sheet count with a plain bullet,
+     then its Kromka block shows a dot in the same colour as the drawing, fuller material label
+     such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed metres. These two cards have
+     border-only surfaces.
 
-3. **Actions.**
-   - **Place order with this cutting** → routes into the order wizard
-     (see [`orders.md`](orders.md)).
+2. **Buyurtmangiz.** The dedicated right-side card shows the orderable chosen result's panel
+   count, consumed edge length, and the active branch quote split into
+   cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
+   available, it asks the user to select one instead of inventing a price.
+   - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
    - **Download PDF** — the print-ready cutting document for the saw operator. It is fixed
      A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
@@ -512,12 +512,12 @@ On success, the panel scrolls into view with three regions:
      banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.
      Text is rendered with an embedded Unicode font, so Cyrillic material and part names
      print correctly.
-   - **Edit parts** scrolls back to the editor; a geometry-affecting row change marks the
-     result stale and the next **Optimise** replaces it. Name, edge-band, and material-source
-     changes retain the layout and refresh its edge metrics.
+   - **Edit parts** returns to the editor. Name, edge-band, and material-source changes retain
+     the current layout and refresh edge metrics. A geometry-affecting edit removes all previous
+     results, including an imported MAP. The next **Optimise** creates and chooses one fresh
+     optimizer result; the result stage never offers a file/original comparison.
 
-Pricing shown here is a branch quote for the currently chosen result only; per-variant price
-deltas are deliberately not shown because the backend does not quote non-chosen variants.
+Pricing shown here is a branch quote for the current result.
 
 ### My drafts (`/c/cutting/drafts`)
 
@@ -563,8 +563,8 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - **Recoverable imported typos** — imported parts below the 50 mm minimum or otherwise
   outside the chosen panel's bounds are loaded into the editor and flagged inline by the
   existing validation, so the client can correct them instead of losing the row.
-- **Import piece cap** — a parsed file above 100 pieces is rejected; an append that makes
-  the editor exceed 100 pieces is allowed to land but the optimiser stays blocked until the
+- **Import piece cap** — a parsed file above 300 pieces is rejected; an append that makes
+  the editor exceed 300 pieces is allowed to land but the optimiser stays blocked until the
   client removes rows.
 - **All-`own` cutting** — no `shop` materials at all; the order step accepts any active
   branch with a saw.

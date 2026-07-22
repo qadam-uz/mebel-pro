@@ -30,7 +30,7 @@ export const CATALOG_PICKER_LIMIT = 50
 export const MIN_PART_MM = 10
 
 /** Max parts (summed quantity) per optimisation (matches backend too_many_parts). */
-export const MAX_PARTS = 100
+export const MAX_PARTS = 300
 
 /** Saved-drafts cap per client (matches backend DRAFT_LIMIT). */
 export const DRAFT_LIMIT = 50

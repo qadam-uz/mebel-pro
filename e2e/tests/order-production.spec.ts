@@ -448,24 +448,23 @@ test("client places an order and workshop completes it through production queues
   await page.getByLabel("Eni millimetr").fill("180");
   await page.getByLabel("Soni").fill("2");
   await chooseEdgeBanding(page, edge.name);
-  await page.getByRole("button", { name: "Optimallashtirish" }).click();
+  await page.getByRole("button", { name: "Davom etish" }).click();
 
-  // First optimise persists the draft and hands off from `/new` to the real id.
-  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+$/);
+  // First optimise persists the draft and hands off to the standalone result stage.
+  await expect(page).toHaveURL(/\/client\/c\/cutting\/[0-9a-f-]+\/result$/);
   await expect(page.getByRole("heading", { name: "Kesish natijasi" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Buyurtma berish" })).toBeVisible();
-  await page.getByRole("link", { name: "Buyurtma berish" }).click();
+  await expect(page.getByRole("link", { name: "Buyurtmaga davom etish" })).toBeVisible();
+  await page.getByRole("link", { name: "Buyurtmaga davom etish" }).click();
 
-  await expect(page.getByRole("heading", { name: "Ustaxonani tanlang" })).toBeVisible();
-  await page
-    .getByRole("button", { name: new RegExp(`Order Branch ${id}`) })
-    .click();
   await expect(
-    page.getByRole("heading", { name: "Tasdiqlash", level: 1 }),
+    page.getByRole("heading", { name: "Buyurtmani tasdiqlash", level: 1 }),
   ).toBeVisible();
+  await expect(page.getByText(`Order Branch ${id}`).first()).toBeVisible();
   await expect(page.getByText("Jami").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Buyurtma berish" })).toBeEnabled();
-  await page.getByRole("button", { name: "Buyurtma berish" }).click();
+  await expect(
+    page.getByRole("button", { name: "Buyurtmani tasdiqlash" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Buyurtmani tasdiqlash" }).click();
 
   await expect(page.getByText("Buyurtma berildi")).toBeVisible();
   const orderText = await page
@@ -621,21 +620,19 @@ test("client sees branch pricing setup errors while placing an order", async ({
   );
 
   await loginClient(page, clientPhone, `Price Client ${id}`);
-  const allQuotesFailed = page.waitForResponse(
+  const quoteFailed = page.waitForResponse(
     (response) =>
-      response.request().method() === "POST" &&
-      response.url().includes("/api/v1/client/orders/quote/batch") &&
-      response.status() === 409,
+      response.request().method() === "GET" &&
+      response.url().includes("/api/v1/client/orders/quote?") &&
+      response.status() === 400,
   );
   await page.goto(`/client/c/orders/new/${draft.id}`);
-  await allQuotesFailed;
+  await quoteFailed;
 
-  await expect(page.getByRole("heading", { name: "Ustaxonani tanlang" })).toBeVisible();
-  const branchCard = page.getByRole("button", {
-    name: new RegExp(`Order Workshop ${id}.*Order Branch ${id}`),
-  });
-  await expect(branchCard).toBeVisible();
-  await expect(branchCard).toBeDisabled();
-  await expect(branchCard).toContainText("Bu ustaxona narxlari hali sozlanmagan.");
-  await expect(page.getByText("Ustaxonalardan narx olinmadi")).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: "Buyurtmani tasdiqlash" }),
+  ).toBeVisible();
+  await expect(page.getByText("Filial narxi yuklanmadi.")).toBeVisible();
+  await expect(page.getByText("Ustaxona kesish narxini hali kiritmagan.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Buyurtmani tasdiqlash" })).toBeDisabled();
 });

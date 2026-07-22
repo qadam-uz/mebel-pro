@@ -555,7 +555,7 @@ async def test_follow_grain_locks_rotation_on_non_grained_material(
     assert placements[0]["rotated"] is True
 
 
-async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
+async def test_client_map_import_commit_keeps_a_single_result_lifecycle(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -618,17 +618,32 @@ async def test_client_map_import_commit_creates_imported_result_and_lifecycle(
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF")
     assert optimized.status_code == 200
-    assert optimized.json()["chosen_result_id"] == imported_result["id"]
-    assert {row["source"] for row in optimized.json()["results"]} == {
-        "imported_map",
-        "optimizer",
-    }
+    assert [row["source"] for row in optimized.json()["results"]] == ["optimizer"]
+    assert optimized.json()["chosen_result_id"] == optimized.json()["results"][0]["id"]
     assert patched.status_code == 200
-    assert {row["source"] for row in patched.json()["results"]} == {
-        "imported_map",
-        "optimizer",
-    }
-    assert patched.json()["chosen_result_id"] == imported_result["id"]
+    assert [row["source"] for row in patched.json()["results"]] == ["optimizer"]
+    assert patched.json()["chosen_result_id"] == optimized.json()["results"][0]["id"]
+
+    changed_parts = deepcopy(parts)
+    changed_parts[0]["quantity"] += 1
+    geometry_edit = await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft['id']}",
+        headers=_auth(access),
+        json={"parts_snapshot": changed_parts},
+    )
+
+    assert geometry_edit.status_code == 200
+    assert geometry_edit.json()["chosen_result_id"] is None
+    assert geometry_edit.json()["results"] == []
+
+    reoptimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft['id']}/optimize",
+        headers=_auth(access),
+    )
+
+    assert reoptimized.status_code == 200
+    assert [row["source"] for row in reoptimized.json()["results"]] == ["optimizer"]
+    assert reoptimized.json()["chosen_result_id"] == reoptimized.json()["results"][0]["id"]
 
 
 async def test_client_map_import_commit_rejects_material_size_mismatch(

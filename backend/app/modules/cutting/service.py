@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
 from fastapi import status
 from sqlalchemy import and_, delete, func, or_, select
@@ -30,6 +30,7 @@ from app.modules.cutting.contracts import (
 from app.modules.cutting.imports.base import ImportMapLayout, ImportMapPlacement
 from app.modules.cutting.optimizer import (
     EDGE_TRIM_MM,
+    MAX_PARTS_PER_RUN,
     EdgeBandInput,
     OffcutResult,
     OptimizerError,
@@ -271,6 +272,9 @@ async def _apply_update(
         draft.parts_snapshot = next_snapshot
         if geometry_affecting:
             draft.chosen_result_id = None
+            # A changed geometry no longer describes an imported layout. Remove
+            # every candidate so the next run exposes one fresh optimizer result,
+            # never a file/original comparison.
             await _delete_candidate_results(db, draft.id)
         else:
             await _refresh_candidate_results_for_neutral_parts(db, draft=draft, parts=next_snapshot)
@@ -424,15 +428,9 @@ async def _apply_optimize(
             details=_optimizer_error_details(exc),
         ) from exc
 
-    imported_candidate_id = await _candidate_imported_result_id(db, draft.id)
-    if imported_candidate_id is None:
-        draft.chosen_result_id = None
+    draft.chosen_result_id = None
     await db.flush()
-    await _delete_candidate_results(
-        db,
-        draft.id,
-        sources={CuttingResultSource.OPTIMIZER},
-    )
+    await _delete_candidate_results(db, draft.id)
     now = datetime.now(UTC)
     created_results: list[CuttingResult] = []
     for optimizer_result in optimizer_results:
@@ -484,11 +482,8 @@ async def _apply_optimize(
                     )
                 )
         created_results.append(result)
-    if imported_candidate_id is not None:
-        draft.chosen_result_id = imported_candidate_id
-    else:
-        winner = min(created_results, key=lambda item: (item.waste_percentage, item.algorithm_name))
-        draft.chosen_result_id = winner.id
+    winner = min(created_results, key=lambda item: (item.waste_percentage, item.algorithm_name))
+    draft.chosen_result_id = winner.id
     draft.updated_at = now
     await db.flush()
     await record_action(
@@ -979,7 +974,7 @@ async def _validate_parts(
 ]:
     if require_non_empty and not parts:
         raise APIError("empty_parts", "At least one part is required")
-    if sum(part.quantity for part in parts) > 100:
+    if sum(part.quantity for part in parts) > MAX_PARTS_PER_RUN:
         raise APIError("too_many_parts", "Too many parts for one optimization")
     errors: list[dict[str, Any]] = []
     seen_part_refs: set[str] = set()
@@ -1241,19 +1236,6 @@ def _material_snapshot(material: Material, manufacturer: Manufacturer) -> dict[s
         "edge_width_mm": material.edge_width_mm,
         "image_file_id": str(material.image_file_id) if material.image_file_id else None,
     }
-
-
-async def _candidate_imported_result_id(db: AsyncSession, draft_id: uuid.UUID) -> uuid.UUID | None:
-    return cast(
-        uuid.UUID | None,
-        await db.scalar(
-            select(CuttingResult.id).where(
-                CuttingResult.draft_id == draft_id,
-                CuttingResult.status == CuttingResultStatus.CANDIDATE,
-                CuttingResult.source == CuttingResultSource.IMPORTED_MAP,
-            )
-        ),
-    )
 
 
 async def _delete_candidate_results(

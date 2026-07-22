@@ -11,6 +11,11 @@ import { useCuttingStore, type CuttingDraft, type CuttingPart } from '@/shared/s
 const editorRoutes = [
   { path: '/c/cutting/new', name: 'client-cutting-new', component: { template: '<div />' } },
   { path: '/c/cutting/:id', name: 'client-cutting-editor', component: { template: '<div />' } },
+  {
+    path: '/c/cutting/:id/result',
+    name: 'client-cutting-result',
+    component: { template: '<div />' },
+  },
   { path: '/c/cutting/drafts', name: 'client-cutting-drafts', component: { template: '<div />' } },
   { path: '/c/orders/:id', name: 'client-order-detail', component: { template: '<div />' } },
 ]
@@ -98,7 +103,11 @@ async function mountEditor(
           `,
         },
         CuttingEdgeTapeRegistry: true,
-        CuttingImportWizard: true,
+        CuttingImportWizard: {
+          props: ['open'],
+          emits: ['committed'],
+          template: `<button v-if="open" data-test="map-committed" @click="$emit('committed', 'draft-map')" />`,
+        },
         CuttingPartRow: {
           props: [
             'part',
@@ -185,6 +194,49 @@ describe('CuttingEditorView draft deletion', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(wrapper.get('[role="dialog"]').text()).toContain('trace trace-delete-1')
   })
+
+  it('opens a current result but never optimizes a read-only drawing', async () => {
+    const initialPart = part()
+    const currentResult = {
+      ...importedResult([initialPart]),
+      order_id: 'order-1',
+    }
+    const saved = await mountEditor(
+      '/c/cutting/draft-read-only-result',
+      draft({
+        id: 'draft-read-only-result',
+        preferred_branch_id: 'branch-1',
+        parts_snapshot: [initialPart],
+        chosen_result_id: 'imported-result-1',
+        results: [currentResult],
+      }),
+    )
+    const viewResult = saved.wrapper
+      .findAll('button')
+      .filter((button) => button.text() === 'Davom etish')
+
+    expect(viewResult).toHaveLength(1)
+    expect(viewResult[0]?.attributes('disabled')).toBeUndefined()
+    await viewResult[0]?.trigger('click')
+    await flushPromises()
+    expect(saved.router.currentRoute.value.path).toBe('/c/cutting/draft-read-only-result/result')
+
+    const withoutResult = await mountEditor(
+      '/c/cutting/draft-read-only-empty',
+      draft({
+        id: 'draft-read-only-empty',
+        preferred_branch_id: 'branch-1',
+        parts_snapshot: [initialPart],
+        results: [{ order_id: 'order-1', panels: [] }] as unknown as CuttingDraft['results'],
+      }),
+    )
+    const optimise = withoutResult.wrapper
+      .findAll('button')
+      .filter((button) => button.text() === 'Davom etish')
+
+    expect(optimise).toHaveLength(1)
+    expect(optimise[0]?.attributes('disabled')).toBeDefined()
+  })
 })
 
 describe('CuttingEditorView imported layout guard', () => {
@@ -195,6 +247,61 @@ describe('CuttingEditorView imported layout guard', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('opens a committed MAP import on the standalone result stage', async () => {
+    const { wrapper, router } = await mountEditor(
+      '/c/cutting/draft-1',
+      draft({ preferred_branch_id: 'branch-1' }),
+    )
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Fayldan import')
+      ?.trigger('click')
+    await wrapper.get('[data-test="map-committed"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/c/cutting/draft-map/result')
+  })
+
+  it('offers one Continue CTA for an unchanged chosen MAP layout', async () => {
+    const initialPart = part()
+    const { wrapper, router } = await mountEditor(
+      '/c/cutting/draft-map',
+      draft({
+        id: 'draft-map',
+        preferred_branch_id: 'branch-1',
+        parts_snapshot: [initialPart],
+        chosen_result_id: 'imported-result-1',
+        results: [importedResult([initialPart])],
+      }),
+    )
+
+    const viewResult = wrapper.findAll('button').filter((button) => button.text() === 'Davom etish')
+    expect(viewResult).toHaveLength(1)
+
+    await viewResult[0]?.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/c/cutting/draft-map/result')
+  })
+
+  it('keeps one Continue CTA when the chosen MAP snapshot is stale', async () => {
+    const { wrapper } = await mountEditor(
+      '/c/cutting/draft-map-stale',
+      draft({
+        id: 'draft-map-stale',
+        preferred_branch_id: 'branch-1',
+        parts_snapshot: [part({ length_mm: 301 })],
+        chosen_result_id: 'imported-result-1',
+        results: [importedResult([part({ length_mm: 300 })])],
+      }),
+    )
+
+    expect(
+      wrapper.findAll('button').filter((button) => button.text() === 'Davom etish'),
+    ).toHaveLength(1)
   })
 
   it('does not warn for an edge-only edit and keeps the returned layout', async () => {

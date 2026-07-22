@@ -71,8 +71,9 @@ function openOrder(id: string) {
   void router.push(rolePath(`/c/orders/${id}`))
 }
 
-function openDraft(id: string) {
-  void router.push(rolePath(`/c/cutting/${id}`))
+function openDraft(draft: CuttingDraft) {
+  const suffix = chosenResult(draft) ? '/result' : ''
+  void router.push(rolePath(`/c/cutting/${draft.id}${suffix}`))
 }
 
 async function reloadHome() {
@@ -366,8 +367,8 @@ onMounted(() => {
             role="link"
             tabindex="0"
             :aria-label="draftTitle(draft)"
-            @click="openDraft(draft.id)"
-            @keydown.enter="openDraft(draft.id)"
+            @click="openDraft(draft)"
+            @keydown.enter="openDraft(draft)"
           >
             <span
               class="grid size-10 shrink-0 place-items-center rounded-[11px] bg-sunk text-ink-soft"
@@ -395,7 +396,7 @@ onMounted(() => {
               </div>
             </div>
             <RouterLink
-              :to="rolePath(`/c/cutting/${draft.id}`)"
+              :to="rolePath(`/c/cutting/${draft.id}${chosenResult(draft) ? '/result' : ''}`)"
               class="mp-button mp-button-outline hidden min-h-9 shrink-0 px-3 text-xs sm:inline-flex"
               @click.stop
             >

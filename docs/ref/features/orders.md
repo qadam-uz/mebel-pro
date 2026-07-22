@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-19
+updated: 2026-07-21
 order: 30
 ---
 
@@ -348,30 +348,22 @@ chosen at placement, against a specific cutting — defaulted from the draft's
   orders**, **in production** (`cutting` + `edge_banding`), and **saved drafts**. Below, the
   **active orders** list shows each order as a row — number, branch, placed-at, a phase-progress
   bar with the current and next phase, the status pill, total, and a track/detail action — and a
-  **continue** list links the most recent drafts back into the editor. A client with nothing
+  **continue** list opens drafts with a chosen result on the result stage and unfinished drafts
+  in the editor. A client with nothing
   active and no saved drafts sees a single first-run start prompt instead of empty sections;
   New cutting is always one action away in the header.
 - **Cutting wizard** — see [`cutting.md`](cutting.md). Entry point and where the client
   spends most of their time.
-- **Order create wizard** (`/c/orders/new/:draftId`) — opens from the cutting result's
-  **Place order with this cutting** button. Pre-checks the draft is still `draft` with a
-  chosen result (else redirect with a toast). Two screens, a sticky summary card on each
-  (parts, panels per material, edge metres per material — **consumed**, the standard trim
-  already folded in — waste %, total once a branch is picked):
+- **Order confirmation** (`/c/orders/new/:draftId`) — opens from the cutting result's
+  **Place order with this cutting** button. The branch was already chosen before detail entry;
+  this stage never lists or compares branches. It pre-checks that the draft still has a chosen
+  result and preferred branch, quotes only that branch, then renders one scrollable page with a
+  sticky cutting summary (parts, panels, consumed edge metres, waste, total):
 
-  1. **Branch pick.** Active branches that can fulfil the cutting's material set (every
-     `shop` panel and every `shop` edge side's material). A fully-`own` cutting accepts
-     any active branch with a saw. The draft's `preferred_branch_id` (if it can fulfil)
-     is **pre-selected** at the top with a "Recommended — your preferred branch" chip;
-     the client can switch to any other fulfilling branch in the same step. Each card:
-     name, address, today's hours, and a **price breakdown** at that branch's rates
-     (cutting, panel materials per material — `shop` share only, edge banding per edge
-     material — `shop` share only, **subtotal**). Tapping a card commits the branch and
-     freezes pricing. Empty / error states: no branch carries the set (inline panel
-     listing the offending materials + a "go back to the cutting and pick a different
-     material" link); branch went `temporarily_closed` (greyed card with reason); branch
-     pricing incomplete (greyed, "this branch can't take orders right now").
-  2. **Checkout** — one scrollable page, two sections:
+  - **Pickup** — the chosen branch, address, today's hours, and phone as read-only context. A
+    client who needs another branch returns to the detail editor, where changing the branch also
+    exposes material-carrying conflicts at their source.
+  - **Checkout** — two sections:
      - **Contact** — phone and name, prefilled from the client's profile, editable
        inline, then frozen onto the order as the workshop-facing contact snapshot. It
        has a non-dismissible note: *"This is shared with the workshop so they can call
@@ -380,7 +372,9 @@ chosen at placement, against a specific cutting — defaulted from the draft's
        contact. A primary **Place order** button; an Edit link returns to the relevant
        field.
 
-  The client does not choose a payment plan and pays nothing online — payment is
+  A closed branch, incomplete branch pricing, or material-carrying failure blocks confirmation
+  with the branch-specific reason and a retry/back-to-details path; it never falls back to a
+  comparison list. The client does not choose a payment plan and pays nothing online — payment is
   recorded by the workshop's accountant at the counter ([`finance.md`](finance.md)). On
   success → `/c/orders/:id` with a banner: *"Order placed — the workshop will review and
   call you."*

@@ -1,9 +1,8 @@
-import { edgeFields, snapshotShortLabel } from '@/shared/app/cuttingDisplay'
+import { snapshotShortLabel } from '@/shared/app/cuttingDisplay'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
   partDisplayName,
-  registryEntryForBand,
   syncEdgeAssignments,
   type EdgeRegistryEntry,
 } from '@/shared/app/cuttingEditorDerived'
@@ -45,33 +44,8 @@ export function panelDisplayIndex(result: CuttingResult, panel: CuttingPanel) {
   return index >= 0 ? index + 1 : panel.panel_index
 }
 
-export function wasteToneClass(pct: number | string | null | undefined): string {
-  if (pct == null) return 'text-ink'
-  const value = Number(pct)
-  if (!Number.isFinite(value)) return 'text-ink'
-  const percent = value <= 1 ? value * 100 : value
-  if (percent <= 15) return 'text-success'
-  if (percent > 30) return 'text-warning'
-  return 'text-ink'
-}
-
-export function variantLabel(result: Pick<CuttingResult, 'source'>) {
-  return result.source === 'imported_map' ? 'Fayldagi joylashuv' : 'Optimizer'
-}
-
 export function resultPanelCount(result: Pick<CuttingResult, 'panels_used_by_material'>) {
   return Object.values(result.panels_used_by_material).reduce((sum, count) => sum + count, 0)
-}
-
-export function sheetsSavingsBanner(results: CuttingResult[], activeResult: CuttingResult | null) {
-  if (!activeResult || results.length <= 1) return null
-  const counts = results.map((result) => ({ result, count: resultPanelCount(result) }))
-  const minCount = Math.min(...counts.map((entry) => entry.count))
-  const maxCount = Math.max(...counts.map((entry) => entry.count))
-  if (minCount === maxCount) return null
-  const activeCount = resultPanelCount(activeResult)
-  if (activeCount !== minCount) return null
-  return `«${variantLabel(activeResult)}» varianti ${maxCount - minCount} list kam ishlatadi`
 }
 
 function textFits(text: string, lengthMm: number, widthMm: number, normScale: number) {
@@ -118,14 +92,9 @@ export interface PanelPartGroup {
   width_mm: number
   count: number
   rotatedCount: number
-  tapeNumbers: number[]
 }
 
-export function groupPanelPlacements(
-  result: CuttingResult,
-  panel: CuttingPanel,
-  edgeRegistry: EdgeRegistryEntry[] = deriveSnapshotEdgeRegistry(result.parts_snapshot ?? []),
-): PanelPartGroup[] {
+export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel): PanelPartGroup[] {
   const partsByRef = new Map<string, { part: CuttingPart; index: number }>(
     (result.parts_snapshot ?? []).map((part, index) => [part.part_ref, { part, index }]),
   )
@@ -144,7 +113,6 @@ export function groupPanelPlacements(
         width_mm: part?.width_mm ?? placement.width_mm,
         count: 0,
         rotatedCount: 0,
-        tapeNumbers: part ? partTapeNumbers(part, edgeRegistry) : [],
       }
       indexByRef.set(placement.part_ref, groups.length)
       groups.push(group)
@@ -153,16 +121,6 @@ export function groupPanelPlacements(
     if (placement.rotated) group.rotatedCount += 1
   }
   return groups
-}
-
-export function partTapeNumbers(part: CuttingPart, edgeRegistry: EdgeRegistryEntry[]) {
-  const numbers = new Set<number>()
-  for (const side of edgeFields) {
-    const band = part[side]
-    const entry = registryEntryForBand(edgeRegistry, band?.material_id, band?.source)
-    if (entry) numbers.add(entry.number)
-  }
-  return [...numbers].sort((left, right) => left - right)
 }
 
 export function edgeRegistryEntryByMaterial(

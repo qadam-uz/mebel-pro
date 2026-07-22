@@ -370,8 +370,8 @@ export function cuttingImportErrorLabel(error: unknown): string {
   if (code === 'too_many_parts') {
     const total = typeof details?.total_pieces === 'number' ? details.total_pieces : null
     return total
-      ? `Faylda ${total} dona detal - bir optimallashtirishga eng ko'pi 100 dona. Faylni bo'lib yuklang`
-      : "Faylda detal ko'p - bir optimallashtirishga eng ko'pi 100 dona. Faylni bo'lib yuklang"
+      ? `Faylda ${total} dona detal - bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang`
+      : "Faylda detal ko'p - bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang"
   }
   return fallback
 }
