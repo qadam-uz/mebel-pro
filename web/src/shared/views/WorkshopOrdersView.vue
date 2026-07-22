@@ -682,7 +682,7 @@ onBeforeUnmount(() => {
             :title="terminalStatus ? 'Yakunlangan buyurtmalar faqat jadval rejimida' : undefined"
             @click="setMode('board')"
           >
-            Taxta
+            Doska
           </button>
           <button
             class="mp-button min-h-11 px-3 text-xs"
