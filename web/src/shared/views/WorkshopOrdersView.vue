@@ -124,10 +124,18 @@ const visibleOrderBranchIds = computed(() => [
   ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
 ])
 // Branch and search are driven by the topbar (context + global search), so the
-// in-page reset only clears the status / date / phone controls.
-const hasActiveFilters = computed(
-  () => status.value !== 'active' || datePreset.value !== 'all' || phoneFilter.value.trim() !== '',
+// in-page reset only counts the status / date / phone controls.
+const activeFilterCount = computed(
+  () =>
+    Number(status.value !== 'active') +
+    Number(datePreset.value !== 'all') +
+    Number(phoneFilter.value.trim() !== ''),
 )
+const hasActiveFilters = computed(() => activeFilterCount.value > 0)
+// Every filter already clears itself (the dropdowns via their default option,
+// the phone via its inline ×), so reset-all only earns its place once it does
+// more than any single inline clear — i.e. from the second active filter on.
+const showResetAll = computed(() => activeFilterCount.value > 1)
 
 function resetFilters() {
   status.value = 'active'
@@ -762,8 +770,8 @@ onBeforeUnmount(() => {
           ×
         </button>
       </label>
-      <button v-if="hasActiveFilters" type="button" class="mp-filter-reset" @click="resetFilters">
-        Tozalash
+      <button v-if="showResetAll" type="button" class="mp-filter-reset" @click="resetFilters">
+        Hammasini tozalash
       </button>
     </div>
 

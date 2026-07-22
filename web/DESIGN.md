@@ -220,10 +220,13 @@ touching them; don't add new off-scale values.
   button, and because auto-apply is invisible by itself, the bar must prove it worked: while
   any filter is active, a `role="status"` line under the bar shows the live result count
   ("Filtr bo'yicha N ta buyurtma topildi", "Yangilanmoqda…" while refreshing) — a silent list
-  swap reads as "nothing happened". Every **text filter carries its own inline ✕** (visible
-  only when non-empty, clears just that field); the bar-level "Tozalash" is the separate
-  reset-everything action and never the only way to clear one field. Filtered-empty keeps the
-  no-results empty state, never first-run copy.
+  swap reads as "nothing happened". Every filter **clears itself** — dropdowns via their
+  default option, text filters via an inline ✕ shown only when non-empty — so a control that
+  clears one field is always inside that field. A bar-level **reset-all** ("Hammasini
+  tozalash") is a convenience for the multi-filter case only: it appears from the **second**
+  active filter on, because with one filter active it would duplicate that filter's own clear
+  sitting right beside it. **No two visible controls may do the same thing.** Filtered-empty
+  keeps the no-results empty state, never first-run copy.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.
