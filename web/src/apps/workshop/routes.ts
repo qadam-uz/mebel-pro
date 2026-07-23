@@ -100,6 +100,14 @@ export const workshopRoutes: RouteRecordRaw[] = [
     component: () => import('@/shared/views/WorkshopOrderCheckoutView.vue'),
     meta: { title: 'Buyurtmani rasmiylashtirish', workshopAccess: { any: orderAccess } },
   },
+  // Saved walk-in drafts — unfinished cuttings staff can resume. Declared before
+  // `:order_id` so the literal `drafts` segment isn't captured as an order id.
+  {
+    path: '/workshop/orders/drafts',
+    name: 'workshop-order-drafts',
+    component: () => import('@/shared/views/WorkshopDraftsView.vue'),
+    meta: { title: 'Saqlangan chizmalar', workshopAccess: { any: orderAccess } },
+  },
   // Revision review: current vs. new price before applying an order edit
   // (docs/ref/features/orders.md "Revising a placed order").
   {

@@ -31,6 +31,15 @@ export function orderPillClass(status: OrderStatus) {
   return 'pill p-new'
 }
 
+// A saved walk-in draft carries no DB status; its readiness is derived from
+// whether a cutting result has been chosen. `has_result` → ready for checkout;
+// otherwise the operator still has parts to finish.
+export function workshopDraftStatus(hasResult: boolean): { label: string; pill: string } {
+  return hasResult
+    ? { label: 'Tayyor — buyurtma berish mumkin', pill: 'pill p-rdy' }
+    : { label: 'Tahrirlanmoqda', pill: 'pill p-new' }
+}
+
 export const branchStatusUz: Record<BranchStatus, string> = {
   active: 'Faol',
   temporarily_closed: 'Vaqtincha yopiq',

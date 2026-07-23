@@ -780,6 +780,7 @@ async def list_workshop_orders(
     search: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    contact_phone: str | None = None,
     assigned_cutter_user_id: uuid.UUID | None = None,
     assigned_edger_user_id: uuid.UUID | None = None,
     limit: int = 30,
@@ -795,6 +796,7 @@ async def list_workshop_orders(
         search=search,
         date_from=date_from,
         date_to=date_to,
+        contact_phone=contact_phone,
     )
     if assigned_cutter_user_id is not None:
         query = query.where(Order.assigned_cutter_user_id == assigned_cutter_user_id)
@@ -2703,6 +2705,7 @@ def _apply_order_filters(
     search: str | None,
     date_from: date | None = None,
     date_to: date | None = None,
+    contact_phone: str | None = None,
 ) -> Any:
     if date_from and date_to and date_from > date_to:
         raise APIError("invalid_date_range", "date_from must be before date_to")
@@ -2736,6 +2739,14 @@ def _apply_order_filters(
         query = query.where(
             or_(Order.order_number.ilike(pattern), Order.contact_name.ilike(pattern))
         )
+    # Phone filtering is digits-contains: the operator types whatever the client
+    # dictates ("90 111 22 33", "+998901112233", the last four digits) and we
+    # match it against the stored normalized +998XXXXXXXXX. Non-digits in the
+    # input are formatting, never signal — strip them; an input with no digits
+    # filters nothing rather than everything.
+    phone_digits = re.sub(r"\D", "", contact_phone) if contact_phone else ""
+    if phone_digits:
+        query = query.where(Order.contact_phone.like(f"%{phone_digits}%"))
     return query
 
 

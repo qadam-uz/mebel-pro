@@ -238,6 +238,7 @@ describe('role route matrix', () => {
       '/workshop/orders/cutting/:id',
       '/workshop/orders/cutting/:id/result',
       '/workshop/orders/new/:draft_id/checkout',
+      '/workshop/orders/drafts',
       '/workshop/orders/edit/:draft_id/review',
       '/workshop/orders/:order_id',
       '/workshop/production',

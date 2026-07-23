@@ -23,6 +23,7 @@ import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatDate, formatRelativeUz, formatTiyin } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useCuttingStore } from '@/shared/stores/cutting'
 import {
   activeWorkshopStatuses,
   useOrdersStore,
@@ -36,6 +37,12 @@ const orders = useOrdersStore()
 const workshop = useWorkshopStore()
 const auth = useAuthStore()
 const permissions = useWorkshopPermissions()
+const cutting = useCuttingStore()
+// Saved walk-in drafts are a workshop-wide surface (manage_orders anywhere), not
+// branch-scoped like the create gate. The count gives ambient awareness of
+// unfinished cuttings waiting to become orders.
+const canViewDrafts = computed(() => permissions.can(p.manageOrders))
+const draftCount = computed(() => cutting.workshopDrafts.length)
 const toast = useToast()
 const rolePath = useRolePath()
 const route = useRoute()
@@ -55,6 +62,9 @@ const mode = ref<'board' | 'table'>('board')
 const branchId = ref('all')
 const status = ref('active')
 const search = ref('')
+// Digits-contains phone filter — the operator types whatever the client
+// dictates (partial tail, spaced, +998…); the backend strips formatting.
+const phoneFilter = ref('')
 const datePreset = ref<DateRangePreset>('all')
 const dateFrom = ref('')
 const dateTo = ref('')
@@ -114,13 +124,24 @@ const visibleOrderBranchIds = computed(() => [
   ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
 ])
 // Branch and search are driven by the topbar (context + global search), so the
-// in-page reset only clears the status / date dropdowns.
-const hasActiveFilters = computed(() => status.value !== 'active' || datePreset.value !== 'all')
+// in-page reset only counts the status / date / phone controls.
+const activeFilterCount = computed(
+  () =>
+    Number(status.value !== 'active') +
+    Number(datePreset.value !== 'all') +
+    Number(phoneFilter.value.trim() !== ''),
+)
+const hasActiveFilters = computed(() => activeFilterCount.value > 0)
+// Every filter already clears itself (the dropdowns via their default option,
+// the phone via its inline ×), so reset-all only earns its place once it does
+// more than any single inline clear — i.e. from the second active filter on.
+const showResetAll = computed(() => activeFilterCount.value > 1)
 
 function resetFilters() {
   status.value = 'active'
   // DateRangePicker re-derives from/to (to open) when the preset flips to 'all'.
   datePreset.value = 'all'
+  phoneFilter.value = ''
 }
 
 function applyContextBranch() {
@@ -160,6 +181,7 @@ function listFilters() {
     branch_id: branchId.value === 'all' ? null : branchId.value,
     status: status.value,
     search: search.value,
+    contact_phone: phoneFilter.value.trim() || null,
     date_from: dateFrom.value || null,
     date_to: dateTo.value || null,
   }
@@ -619,7 +641,7 @@ watch(branchId, (value) => {
   if (value !== 'all') workshop.setSelectedBranchContext(value)
 })
 
-watch([branchId, status, search, dateFrom, dateTo], () => {
+watch([branchId, status, search, phoneFilter, dateFrom, dateTo], () => {
   if (!hydrated.value) return
   window.clearTimeout(timer)
   timer = window.setTimeout(() => void refresh(), 250)
@@ -637,6 +659,9 @@ onMounted(async () => {
   await refresh()
   // Now that the first load has landed, let user-driven filter edits refresh.
   hydrated.value = true
+  // Ambient count for the Chizmalar entry; non-blocking so it never delays the
+  // board/table.
+  if (canViewDrafts.value) void cutting.loadWorkshopDrafts()
 })
 
 onBeforeUnmount(() => {
@@ -656,6 +681,15 @@ onBeforeUnmount(() => {
         <p class="sub">Buyurtmalar oqimi.</p>
       </div>
       <div class="tools">
+        <RouterLink
+          v-if="canViewDrafts"
+          :to="rolePath('/workshop/orders/drafts')"
+          class="mp-button mp-button-outline min-h-11 px-3 text-xs"
+        >
+          Chizmalar<span v-if="draftCount > 0" class="ml-1 font-mono font-bold text-ink"
+            >· {{ draftCount }}</span
+          >
+        </RouterLink>
         <RouterLink
           v-if="canCreateWalkIn"
           :to="rolePath('/workshop/orders/new')"
@@ -714,10 +748,50 @@ onBeforeUnmount(() => {
         v-model:date-from="dateFrom"
         v-model:date-to="dateTo"
       />
-      <button v-if="hasActiveFilters" type="button" class="mp-filter-reset" @click="resetFilters">
-        Tozalash
+      <label class="mp-filter-input relative">
+        <span>Telefon</span>
+        <input
+          v-model="phoneFilter"
+          class="pr-9!"
+          inputmode="tel"
+          autocomplete="off"
+          placeholder="+998 yoki raqam qismi"
+          aria-label="Mijoz telefoni bo'yicha filtrlash"
+        />
+        <!-- The input is the label's 40px bottom row; bottom-2 centers the 24px
+             clear button on it (the CSS skin needs `> input`, so no wrapper). -->
+        <button
+          v-if="phoneFilter"
+          type="button"
+          class="absolute right-1.5 bottom-2 grid size-6 place-items-center rounded text-base text-ink-muted transition hover:bg-bg hover:text-ink"
+          aria-label="Telefon filtrini tozalash"
+          @click.prevent="phoneFilter = ''"
+        >
+          ×
+        </button>
+      </label>
+      <button v-if="showResetAll" type="button" class="mp-filter-reset" @click="resetFilters">
+        Hammasini tozalash
       </button>
     </div>
+
+    <!-- The filtered state must announce itself (DESIGN.md UX bar: visible
+         feedback) — a silent list swap reads as "nothing happened". -->
+    <p
+      v-if="hasActiveFilters"
+      class="mb-3 -mt-2 text-xs font-bold text-ink-soft"
+      role="status"
+      aria-live="polite"
+    >
+      <template v-if="orders.loading">Yangilanmoqda…</template>
+      <template v-else>
+        Filtr bo'yicha
+        <b class="font-mono text-ink"
+          >{{ orders.workshopOrders.length }}{{ orders.workshopOrdersHasMore ? '+' : '' }}</b
+        >
+        ta buyurtma topildi
+      </template>
+    </p>
 
     <section
       v-if="orders.loading && orders.workshopOrders.length === 0"

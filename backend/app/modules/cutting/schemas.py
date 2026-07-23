@@ -197,6 +197,27 @@ class CuttingDraftResponse(APIModel):
     results: list[CuttingResultResponse] = Field(default_factory=list)
 
 
+class WorkshopCuttingDraftSummary(APIModel):
+    """A staff-minted walk-in draft on the workshop's saved-drafts surface
+    (cutting.md#workshop-side). Denormalizes the walk-in client and branch so the
+    list card needs no per-row fetch; `has_result` is the derived readiness the UI
+    turns into a status label (a draft carries no status of its own)."""
+
+    id: uuid.UUID
+    client_id: uuid.UUID
+    client_name: str
+    client_phone: str
+    name: str | None
+    preferred_branch_id: uuid.UUID | None
+    branch_name: str | None
+    part_count: int
+    panel_count: int
+    waste_percentage: Decimal | None
+    has_result: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class ClientCatalogMaterialOption(APIModel):
     id: uuid.UUID
     kind: MaterialKind

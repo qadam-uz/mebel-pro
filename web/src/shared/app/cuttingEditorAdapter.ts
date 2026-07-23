@@ -37,6 +37,13 @@ export interface CuttingEditorAdapter {
    * the app's current branch must not retarget an in-progress draft.
    */
   branch: { fixed?: { id: string; name: string } }
+  /**
+   * Resolve a branch label by id (workshop only). A resumed walk-in draft carries
+   * its own frozen branch, which may differ from the topbar the adapter froze at
+   * mount — the locked-branch strip names the *draft's* branch, not the topbar.
+   * Absent on the client adapter (no fixed branch, no strip).
+   */
+  branchNameById?: (id: string) => string | null
   /** Role-scoped price quote for the draft's chosen result (client vs workshop endpoint). */
   quoteForDraft: (draftId: string, branchId: string) => Promise<OrderQuote>
   /**

@@ -25,6 +25,7 @@ from app.modules.cutting.api import (
     get_workshop_draft,
     get_workshop_result,
     list_drafts,
+    list_workshop_drafts,
     optimize_draft,
     optimize_workshop_draft,
     parse_import_file,
@@ -46,6 +47,7 @@ from app.modules.cutting.schemas import (
     CuttingDraftResponse,
     CuttingMapImportCommitRequest,
     WorkshopCuttingDraftCreateRequest,
+    WorkshopCuttingDraftSummary,
     WorkshopCuttingMapImportCommitRequest,
 )
 
@@ -231,6 +233,14 @@ async def workshop_cutting_import_map_commit(
     db: Session,
 ) -> CuttingDraftResponse:
     return await commit_workshop_imported_map(db, principal=principal, payload=payload)
+
+
+@router.get("/workshop/cutting-drafts", response_model=list[WorkshopCuttingDraftSummary])
+async def workshop_cutting_drafts_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> list[WorkshopCuttingDraftSummary]:
+    return await list_workshop_drafts(db, principal=principal)
 
 
 @router.post(

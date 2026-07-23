@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-21
+updated: 2026-07-22
 order: 30
 ---
 
@@ -408,9 +408,12 @@ Permission names below are the per-branch grants from
     assigned cutter / edger chip when set. **No drag between status columns** — status
     changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: status dropdown and the app-wide
-    date-range picker (preset shortcuts + a calendar for custom spans); branch and
-    search come from the topbar. Empty: "No orders in your
+    total, items, created, action menu. Filters: status dropdown, the app-wide
+    date-range picker (preset shortcuts + a calendar for custom spans), and a **client
+    phone** field — digits-contains against the order's contact phone, so a partial tail
+    or a formatted number both match (non-digits in the input are ignored); branch and
+    search come from the topbar. The filters apply to both modes and to the CSV export.
+    Empty: "No orders in your
     branch(es)." Zero branches: "No branches assigned — ask your workshop owner."
 - **New order — walk-in flow** (`manage_orders`) — the **+ New order** button on the Orders
   screen starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's
