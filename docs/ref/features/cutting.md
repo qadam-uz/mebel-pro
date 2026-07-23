@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-21
+updated: 2026-07-23
 order: 80
 ---
 
@@ -58,12 +58,12 @@ A draft owns:
   matters only on grained panels. Edge thickness and colour are properties of the chosen edge
   material — the user picks the tape, not a thickness. A part may also carry an optional
   display `name`; blank names stay `null` and render as `D{row}` in the editor, SVG, and PDF.
-- **Algorithm results.** Re-running the optimiser produces one result per available
-  algorithm in a single call against the same input. All N results are kept on the draft until
-  the next run replaces them. The client picks one as the **chosen** result; the chosen one is
-  what binds to an order.
+- **Layout result.** Re-running the optimiser produces one best result against the current input.
+  Solver variants are an engine implementation detail: the engine validates and scores them,
+  then returns only its winner. That result is chosen automatically and is what binds to an
+  order.
 
-Each algorithm result records: `algorithm_name`, `algorithm_version`, per-material panels
+Each result records: an internal `algorithm_name` / `algorithm_version` audit stamp, per-material panels
 and their placements, weighted `waste_percentage`, `panels_used_by_material`,
 `total_cut_length_mm`, `total_edge_length_mm`, `edge_length_by_material` (integer millimetres
 per edge material; UI/pricing displays metres; only the `shop`-source length feeds the order's
@@ -75,7 +75,7 @@ billed and consumed totals; `own` length is tracked separately for the cutting p
 stateDiagram-v2
     [*] --> editing : client opens "New cutting" (empty)
     editing --> draft : first complete detail → draft created & autosaved
-    draft --> draft : edit parts · re-optimise · pick algorithm
+    draft --> draft : edit parts · re-optimise
     draft --> confirmed : client places an order with the chosen result
     confirmed --> [*]
 ```
@@ -86,15 +86,13 @@ stateDiagram-v2
   A small browser recovery copy covers refresh while a save is still in flight.
 - `draft` is mutable. `confirmed` is immutable and kept forever — it is the historical
   record an order points at.
-- Re-running the optimiser on a `draft` replaces only optimiser-generated candidates. A
-  2D-Place MAP import result (`source=imported_map`) is preserved and stays chosen until the
-  user explicitly picks another result or makes a geometry-affecting parts edit. Such an edit
-  invalidates every candidate, including imported MAP layouts; name, edge-band, and
-  material-source edits retain candidates and refresh their edge metrics. No intermediate-run
-  history.
-- On order placement, the **chosen** algorithm result becomes the draft's frozen snapshot and
-  the draft flips to `confirmed`. Other algorithm results from the same run are discarded at
-  this point.
+- A 2D-Place MAP import result (`source=imported_map`) is the draft's sole chosen result until a
+  geometry-affecting parts edit. Such an edit invalidates the file layout; the next continue
+  action runs the optimiser and stores one generated result. Name, edge-band, and
+  material-source edits retain the imported layout and refresh its edge metrics. There is no
+  imported-versus-optimizer choice and no intermediate-run history.
+- On order placement, the chosen result becomes the draft's frozen snapshot and the draft flips
+  to `confirmed`.
 
 **Why create on the first complete detail.** Empty, named, or incomplete drawings never consume
 a draft slot; a usable detail is saved without requiring the optimiser.
@@ -119,13 +117,13 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 
 ### The optimiser
 
-- **One run, multiple materials, multiple algorithms.** A run takes all parts, groups them
-  by panel material, and produces an independent layout per material (panels aren't shared
-  across materials — different thicknesses, colours). Every available algorithm runs against
-  the same input in the same request; all results are returned.
-- **Winner = lowest weighted waste %.** Pre-selected as the chosen result; the client may
-  switch to a different algorithm's result if the trade favours fewer panels or different
-  cut topology.
+- **One run, multiple materials, one result.** A run takes all parts, groups them by panel
+  material, and produces an independent layout per material (panels aren't shared across
+  materials — different thicknesses, colours). The cutting engine may evaluate native and
+  PackingSolver candidates internally, but it validates and scores them with one engine-owned
+  policy and returns only the winner for each material group. The application combines those
+  groups into one chosen result; the client never selects a solver. Provider orchestration and
+  fallback remain the cutting engine's contract.
 - **Guillotine cuts only.** A cut runs edge-to-edge; the algorithm recursively splits the
   panel into smaller rectangles. Non-guillotine, L-shaped, and CNC paths are out of scope.
 - **Tekstura lock = part instruction.** Each part carries `follow_grain` (default `true`).
@@ -173,7 +171,7 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 | Import file                      | ≤ 1 MiB; `.csv`, БАЗИС-Мебельщик `Спецификация в XML` `.xml`, or 2D-Place `.map`              |
 | Panels per material per result   | ≤ 20 (a single material above this must be split into separate orders)                        |
 | Open self-made drafts per client | ≤ 50 (anti-abuse; client deletes to add more; staff-minted drafts don't count — see _Access_) |
-| Hard timeout per run             | 5 s → `optimization_timeout`                                                                  |
+| Hard timeout per run             | 10 s → `optimization_timeout`                                                                 |
 
 ### Access
 
@@ -202,8 +200,8 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 
 - As a client, I want all my parts in one cutting even when they need different materials,
   so I don't run multiple cuttings and reconcile panels / prices afterwards.
-- As a client, I want to compare algorithm results before committing, so I can pick "fewer
-  panels" over "lowest waste" when I care more about cost than offcuts.
+- As a client, I want the optimiser to choose one valid, practical layout, so I can continue
+  without understanding or comparing solver implementations.
 - As a client, I want to choose the workshop up front so I only ever pick materials it can
   actually cut — but when I switch workshops I don't want that to throw away parts I've
   already entered.
@@ -447,7 +445,7 @@ in workshop scope). Changing the branch never removes parts.
 
 The editor's single primary sticky action reads **Davom etish**. With a current chosen result it
 opens the result stage; otherwise it runs optimisation and shows its validation reason inline when
-unavailable. While a run is in progress (5 s cap), it is disabled and shows **Hisoblanmoqda**. On
+unavailable. While a run is in progress (10 s cap), it is disabled and shows **Hisoblanmoqda**. On
 a brand-new editor, the first complete detail creates and saves the draft before continuing.
 
 The editor never embeds results. Before the first run there is no result placeholder — the parts
@@ -594,3 +592,5 @@ An order's **Cutting** tab embeds the SVG of the order's confirmed result and a 
 - [`catalog-inventory.md`](catalog-inventory.md) — the platform catalog (manufacturers,
   panels, edges) the wizard reads from, and the branch's selection that scopes the
   editor's catalog.
+- [PackingSolver provider spec](https://github.com/BerdiyorovAbrorjon/cutting-engine/blob/main/docs/PACKINGSOLVER_PROVIDER_SPEC.md)
+  — the internal multi-provider optimizer contract, validation, fallback, and deployment rules.

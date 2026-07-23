@@ -2,20 +2,20 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-07-20
+updated: 2026-07-23
 order: 40
 ---
 
 # Cutting
 
-The client's cutting workspace (a draft) and the output of optimisation runs (one result per
-algorithm). Drafts are mutable while the client iterates; results are immutable. Rules are in
+The client's cutting workspace (a draft) and the output of optimisation runs (one chosen result
+per run). Drafts are mutable while the client iterates; results are immutable. Rules are in
 [`cutting.md`](../features/cutting.md).
 
 ## Cutting draft
 
 The client's editable workspace for one set of parts. Holds the parts list, the most recent
-optimisation run's results (one per algorithm — see below), the client's chosen result, and
+optimisation or imported result, the automatically chosen result, and
 the branch the cutting is scoped to. Private to the client — or, when minted by workshop
 staff for a walk-in, to that workshop's staff until the order is placed. Persists
 indefinitely (no expiry); a client may have at most 50 self-made drafts open at once.
@@ -35,15 +35,15 @@ Invariants: owned by the client (`client_id`) whether self-made (`created_via_wo
 null) or staff-minted for a walk-in (set); never visible beyond the access rules in
 [`cutting.md`](../features/cutting.md#access); `parts_snapshot` has 1..100
 parts; every referenced `material_id` is a `panel`-kind material; every side's `edge_*` (when
-non-null) references an `edge`-kind material; on each optimise the previous optimiser
-results are replaced and `chosen_result_id` re-points to the imported MAP result when one
-exists, otherwise to the lowest-waste algorithm; a geometry-affecting `parts_snapshot` edit
+non-null) references an `edge`-kind material; each optimise replaces the previous candidate
+with one engine-selected result and points `chosen_result_id` to it; an imported MAP result is
+the sole chosen result until a geometry-affecting `parts_snapshot` edit
 (adding/removing a `part_ref`, or changing quantity, dimensions, panel material, or
 `follow_grain`) deletes every candidate result, including imported MAP results; a geometry-neutral
 edit (name, edge bands, or material source) retains candidates and refreshes their edge metrics
 and material snapshots while preserving `chosen_result_id`; a draft has at most one `chosen` at a
 time; on order placement — or a revision apply — the chosen result transitions to
-`confirmed` (bound to the order) and the draft + the unchosen results are deleted; a
+`confirmed` (bound to the order) and the draft is deleted; a
 revision apply also deletes the order's superseded confirmed result (with its panels and
 placements); a self-made draft is deletable by the
 client at any time, a staff-minted one by the minting workshop's staff (cascades to results,
@@ -51,19 +51,18 @@ panels, placements).
 
 ## Cutting result
 
-The output of **one algorithm** on a draft's parts. A single optimise call produces N
-results (one per available algorithm); all are kept until the next optimise call replaces
-them, and the client picks one as `chosen`. On order placement the chosen result becomes
-`confirmed` and bound; the others are discarded. The algorithm version is stamped — replacing
-the algorithm later doesn't touch past results.
+The single output selected by the cutting engine for a draft's parts. A run may evaluate several
+providers internally, but persists only their validated, engine-scored winner and chooses it
+automatically. On order placement it becomes `confirmed` and bound. The engine/provider version
+is stamped for audit; replacing a solver later doesn't touch past results.
 
 | Field                                                              | Type       | Notes                                                                                                                                                                                |
 | ------------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                                                               | UUID       | PK                                                                                                                                                                                   |
 | `draft_id`                                                         | UUID?      | the draft this result came from; null once `confirmed` (the draft is gone, the result outlives it via `order_id`)                                                                    |
-| `algorithm_name` / `algorithm_version`                             | text       | e.g. `ffd-guillotine` / `1.0` for optimiser results; `imported-2dplace-map` / `map-1` for 2D-Place MAP imports — stamped at run time                                                 |
+| `algorithm_name` / `algorithm_version`                             | text       | internal audit stamp: `cutting-engine/native`, `cutting-engine/packingsolver`, or `cutting-engine/hybrid` plus engine/provider version; `imported-2dplace-map` / `map-1` for MAP imports. Not a client-visible choice |
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
-| `status`                                                           | enum       | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order)                                                                                             |
+| `status`                                                           | enum       | `candidate` (the draft's current result) · `confirmed` (chosen and bound to an order)                                                                                                |
 | `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the global constants at run time; imported MAP results store `0` / `0` because the external layout is kept as-is                                                         |
 | `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material)                                                           |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
@@ -79,8 +78,7 @@ the algorithm later doesn't touch past results.
 
 Lifecycle: `candidate` on optimise → `confirmed` on order placement (`order_id` set,
 `confirmed_at`, `draft_id` cleared). `confirmed` results are kept forever; `candidate`
-results are short-lived (deleted on the next optimise call, on order placement when they
-weren't chosen, or with the draft).
+results are short-lived (replaced on the next optimise call or deleted with the draft).
 
 Invariants: **immutable** after creation — only `status`, `order_id`, `confirmed_at`,
 and `draft_id` (cleared on confirm) change; layout, metrics, snapshots, and the per-panel
@@ -89,11 +87,11 @@ plan after the draft is deleted or catalog display facts change. A `confirmed` r
 non-null `order_id`; a `candidate` has a non-null `draft_id`. For
 each material in `panels_used_by_material`, the count is ≤ 20; the result has placements
 covering every part-instance from the source parts list. Visible only to its draft's creator
-while `candidate`; to workshop staff in scope and the client once `confirmed`. Imported MAP
-candidate results are preserved across optimiser reruns and remain selectable alongside
-`source=optimizer` candidates. They are deleted only by a geometry-affecting parts edit;
-geometry-neutral name, edge-band, and material-source edits retain the external placement and
-refresh its edge metrics and material snapshots.
+while `candidate`; to workshop staff in scope and the client once `confirmed`. An imported MAP
+candidate is never offered beside an optimizer candidate. A geometry-affecting parts edit deletes
+the imported layout and the next run replaces it with one optimizer result; geometry-neutral name,
+edge-band, and material-source edits retain the external placement and refresh its edge metrics
+and material snapshots.
 
 ## Cutting panel
 
@@ -133,3 +131,9 @@ parts list appears exactly once across the result's placements; the placement si
 panel whose `material_id` matches the part's panel material; a locked part (grained material
 and `follow_grain=true`) is never `rotated`; placements don't overlap and stay within
 `panel − 2× edge_trim`; immutable.
+
+## Next
+
+- [`../features/cutting.md`](../features/cutting.md) — cutting behavior and lifecycle.
+- [PackingSolver provider spec](https://github.com/BerdiyorovAbrorjon/cutting-engine/blob/main/docs/PACKINGSOLVER_PROVIDER_SPEC.md)
+  — internal solver orchestration and audit stamps.
