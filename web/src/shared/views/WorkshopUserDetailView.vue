@@ -319,8 +319,8 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
     <RouterLink :to="rolePath('/workshop/settings/users')" class="back">← Xodimlar</RouterLink>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
-      <p>Ruxsatlar va sessiyalarni egasi boshqaradi.</p>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
+      <p>Ruxsatlar va sessiyalarni rahbar boshqaradi.</p>
     </section>
 
     <section v-else-if="workshop.loading" class="card p-5" aria-live="polite">
@@ -352,7 +352,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             <div>
               <h1>
                 {{ user.full_name }}
-                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Egasi</span>
+                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Rahbar</span>
                 <span
                   v-else
                   class="ml-2 align-middle"
@@ -426,7 +426,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         </div>
       </div>
       <div v-else-if="user.is_owner" class="banner info mt-3">
-        <div class="grow">Egasi bloklanmaydi va barcha ruxsatlarga ega.</div>
+        <div class="grow">Rahbar bloklanmaydi va barcha ruxsatlarga ega.</div>
       </div>
 
       <AppTabs
@@ -577,7 +577,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         </div>
         <div class="card-b">
           <div v-if="user.is_owner" class="banner info">
-            <div class="grow">Egasi avtomatik tarzda barcha filialda barcha ruxsatga ega.</div>
+            <div class="grow">Rahbar avtomatik tarzda barcha filialda barcha ruxsatga ega.</div>
           </div>
           <div class="table-wrap">
             <table class="matrix">

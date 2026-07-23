@@ -637,7 +637,7 @@ onBeforeUnmount(() => {
 
     <div v-if="!canUseInventory" class="st-empty">
       <h3>Ombor bo'limiga ruxsatingiz yo'q</h3>
-      <p>Ustaxona egasiga murojaat qiling.</p>
+      <p>Ustaxona rahbariga murojaat qiling.</p>
     </div>
 
     <div v-else-if="accessibleBranches.length === 0" class="st-empty">

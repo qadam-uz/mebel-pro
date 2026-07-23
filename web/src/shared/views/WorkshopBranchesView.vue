@@ -129,7 +129,7 @@ onMounted(() => {
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
       <p>Filial qo'shish va holatini boshqarish egaga tegishli.</p>
     </section>
 

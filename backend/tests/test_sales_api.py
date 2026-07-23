@@ -281,6 +281,18 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert planned_edge_line["thickness_mm"] == "2"
     assert planned_edge_line["color"] == "White"
     assert planned_edge_line["consumed_mm"] == 1000
+    # Itemized money lines rebuilt from order-time snapshots: the panel line
+    # reconciles with subtotal_materials, the edge line carries only the
+    # material share of subtotal_edge_banding (labor stays an aggregate).
+    panel_line, edge_line = order["price_lines"]
+    assert panel_line["kind"] == "panel"
+    assert panel_line["panels_used"] == 1
+    assert panel_line["line_total_tiyin"] == 250_000
+    assert panel_line["material_name"].startswith("Phase 5 Maker ")
+    assert edge_line["kind"] == "edge"
+    assert edge_line["material_id"] == str(edge_id)
+    assert edge_line["consumed_mm"] == 1000
+    assert edge_line["line_total_tiyin"] == 10_000
     assert result is not None
     assert result.status is CuttingResultStatus.CONFIRMED
     assert result.order_id == order_id
@@ -660,6 +672,106 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     assert edge_restored == 10000
 
 
+async def test_assignment_locks_per_role_once_the_stage_starts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The cutter locks when cutting starts and the edger when banding is
+    stamped started; revert clears the start stamp and unlocks again."""
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    cutter = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    edger = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    substitute = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(cutter.id),
+            "edger_user_id": str(edger.id),
+        },
+    )
+    assert assigned.status_code == 200
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    assert started.status_code == 200
+
+    cutter_swap = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "cutter_user_id": str(substitute.id)},
+    )
+    assert cutter_swap.status_code == 400
+    assert cutter_swap.json()["code"] == "cutting_already_started"
+
+    # The edger's work hasn't started — swapping them mid-cut is still allowed.
+    edger_swap = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_swap.status_code == 200
+    assert edger_swap.json()["assigned_edger_user_id"] == str(substitute.id)
+
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": edger_swap.json()["version"], "completed_by_user_id": str(cutter.id)},
+    )
+    assert cut_done.status_code == 200
+    assert cut_done.json()["status"] == "edge_banding"
+
+    # Queued at the banding station the edger is still swappable...
+    edger_back = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "edger_user_id": str(edger.id)},
+    )
+    assert edger_back.status_code == 200
+
+    banding_started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-banding",
+        headers=_auth(owner_access),
+        json={"version": edger_back.json()["version"]},
+    )
+    assert banding_started.status_code == 200
+
+    # ...but not once banding is stamped started.
+    edger_late = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": banding_started.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_late.status_code == 400
+    assert edger_late.json()["code"] == "banding_already_started"
+
+    # Revert clears the start stamp — the deliberate unlock path.
+    reverted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/revert",
+        headers=_auth(owner_access),
+        json={"version": banding_started.json()["version"], "reason": "Swap the edger"},
+    )
+    assert reverted.status_code == 200
+    assert reverted.json()["status"] == "cutting"
+    edger_after_revert = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": reverted.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_after_revert.status_code == 200
+    assert edger_after_revert.json()["assigned_edger_user_id"] == str(substitute.id)
+
+
 async def test_discount_requires_version_and_client_cancel_only_new(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -752,7 +864,7 @@ async def test_client_orders_active_filter_expands_to_status_union(
     assert order_id in _ids(await _list("cancelled"))
 
 
-async def test_workshop_orders_date_filter_and_csv_export(
+async def test_workshop_orders_date_filter(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -778,26 +890,10 @@ async def test_workshop_orders_date_filter_and_csv_export(
             "date_to": tomorrow.isoformat(),
         },
     )
-    csv_export = await client.get(
-        "/api/v1/workshop/orders/export.csv",
-        headers=_auth(owner_access),
-        params={
-            "branch_id": str(branch_id),
-            "date_from": today.isoformat(),
-            "date_to": today.isoformat(),
-        },
-    )
-
     assert today_rows.status_code == 200
     assert [row["id"] for row in today_rows.json()] == [order["id"]]
     assert future_rows.status_code == 200
     assert future_rows.json() == []
-    assert csv_export.status_code == 200
-    assert csv_export.headers["content-type"].startswith("text/csv")
-    assert "order_number,client_name,client_phone,branch_name,status,total_tiyin,created_at" in (
-        csv_export.text
-    )
-    assert str(order["order_number"]) in csv_export.text
 
 
 async def test_workshop_orders_contact_phone_filter(
@@ -824,14 +920,6 @@ async def test_workshop_orders_contact_phone_filter(
     assert await rows("998977777777") == []
     # An input with no digits is formatting-only — it must not filter at all.
     assert await rows("++--") == [order["id"]]
-
-    csv_export = await client.get(
-        "/api/v1/workshop/orders/export.csv",
-        headers=_auth(owner_access),
-        params={"branch_id": str(branch_id), "contact_phone": "998977777777"},
-    )
-    assert csv_export.status_code == 200
-    assert str(order["order_number"]) not in csv_export.text
 
 
 async def _client_order_notifications(db: AsyncSession, order_id: str) -> list[Notification]:

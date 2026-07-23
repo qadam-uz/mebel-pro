@@ -105,6 +105,17 @@ export interface OrderEdgeMaterialDemand {
   consumed_mm: number
 }
 
+// Itemized money line rebuilt from order-time snapshots — panel lines carry
+// panels_used, edge lines carry consumed_mm and only the material share.
+export interface OrderPriceLine {
+  material_id: string
+  material_name: string
+  kind: 'panel' | 'edge'
+  panels_used: number | null
+  consumed_mm: number | null
+  line_total_tiyin: number
+}
+
 export interface OrderSettlement {
   total_tiyin: number
   recorded_tiyin: number
@@ -201,6 +212,7 @@ export interface OrderSummary {
 export interface OrderDetail extends OrderSummary {
   items: OrderItem[]
   events: OrderEvent[]
+  price_lines: OrderPriceLine[]
   cutting_result: CuttingResult | null
   settlement: OrderSettlement | null
   // The order's open revision draft (workshop detail only) — lets the UI offer
@@ -425,26 +437,6 @@ export const useOrdersStore = defineStore('orders', () => {
     } finally {
       loading.value = false
     }
-  }
-
-  async function downloadWorkshopOrdersCsv(
-    filters: Omit<WorkshopOrderFilters, 'limit' | 'offset'>,
-    filename = 'workshop-orders.csv',
-  ) {
-    await downloadBlob(
-      withQuery('/workshop/orders/export.csv', {
-        branch_id: filters.branch_id,
-        status: filters.status,
-        search: filters.search,
-        contact_phone: filters.contact_phone,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
-        assigned_cutter_user_id: filters.assigned_cutter_user_id,
-        assigned_edger_user_id: filters.assigned_edger_user_id,
-      }),
-      filename,
-      authInit(),
-    )
   }
 
   async function loadRecentWorkshopOrders(
@@ -709,7 +701,6 @@ export const useOrdersStore = defineStore('orders', () => {
     loadClientOrder,
     cancelClientOrder,
     loadWorkshopOrders,
-    downloadWorkshopOrdersCsv,
     loadRecentWorkshopOrders,
     loadWorkshopOrder,
     loadWorkers,

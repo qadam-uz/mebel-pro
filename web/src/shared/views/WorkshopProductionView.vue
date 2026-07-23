@@ -196,15 +196,6 @@ watch(station, () => {
       <div>
         <h1>{{ stationTitle }}</h1>
       </div>
-      <div class="tools">
-        <RouterLink
-          v-if="isManagerView"
-          :to="rolePath('/workshop/orders')"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-        >
-          Buyurtmalar
-        </RouterLink>
-      </div>
     </div>
 
     <section v-if="production.loading && !queue" class="card mt-4 p-5" aria-live="polite">

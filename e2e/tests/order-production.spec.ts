@@ -494,8 +494,8 @@ test("client places an order and workshop completes it through production queues
   const workshopOrderRow = workshopPage.getByRole("row", {
     name: new RegExp(orderNumber as string),
   });
-  // The table row itself opens the order detail (the kebab is only for status
-  // actions); click the order-number cell to navigate.
+  // The table row itself opens the order detail (status actions now live only
+  // on the detail page); click the order-number cell to navigate.
   await workshopOrderRow.getByText(orderNumber as string).click();
 
   await expect(
@@ -507,18 +507,26 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
 
+  // Picking a worker applies the assignment immediately — no separate save tap.
+  const cutterAssigned = workshopPage.waitForResponse(
+    (response) => response.url().includes("/assign") && response.ok(),
+  );
   await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
+  await cutterAssigned;
+  const edgerAssigned = workshopPage.waitForResponse(
+    (response) => response.url().includes("/assign") && response.ok(),
+  );
   await chooseOption(
     workshopPage,
     /Kromka yopishtiruvchi/,
     new RegExp(setup.ownerLogin),
   );
-  // Assignment is metadata now — the order stays confirmed (queued in the
+  await edgerAssigned;
+  // Assignment is metadata — the order stays confirmed (queued in the
   // master's station) until the job is actually started.
-  await workshopPage.getByRole("button", { name: "Tayinlash", exact: true }).click();
   await expect(
     workshopPage.getByRole("button", { name: "Kesishni boshlash" }),
-  ).toBeVisible();
+  ).toBeEnabled();
   await expect(
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();

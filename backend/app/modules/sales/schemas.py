@@ -163,6 +163,21 @@ class OrderEdgeMaterialDemand(APIModel):
     consumed_mm: int
 
 
+class OrderPriceLine(APIModel):
+    """One material's share of the order price, rebuilt from order-time
+    snapshots (item snapshot prices x cutting-result demands) so the itemized
+    breakdown reconciles with the stored subtotals even after price-list
+    changes. Panel lines carry panels_used; edge lines carry consumed_mm and
+    only the material share (edge labor stays an aggregate)."""
+
+    material_id: uuid.UUID
+    material_name: str
+    kind: Literal["panel", "edge"]
+    panels_used: int | None = None
+    consumed_mm: int | None = None
+    line_total_tiyin: int
+
+
 class OrderSettlementResponse(APIModel):
     total_tiyin: int
     recorded_tiyin: int
@@ -233,6 +248,7 @@ class OrderSummaryResponse(APIModel):
 class OrderDetailResponse(OrderSummaryResponse):
     items: list[OrderItemResponse] = Field(default_factory=list)
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
+    price_lines: list[OrderPriceLine] = Field(default_factory=list)
     cutting_result: CuttingResultResponse | None = None
     settlement: OrderSettlementResponse | None = None
     # The order's open revision draft, surfaced on the workshop detail only —

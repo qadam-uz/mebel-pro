@@ -341,7 +341,7 @@ onBeforeUnmount(() => {
 
     <div v-if="!canUseCatalog" class="st-empty">
       <h3>Material katalogiga ruxsatingiz yo'q</h3>
-      <p>Ustaxona egasiga murojaat qiling.</p>
+      <p>Ustaxona rahbariga murojaat qiling.</p>
     </div>
 
     <div v-else-if="accessibleBranches.length === 0" class="st-empty">
