@@ -79,12 +79,16 @@ test('owner applies a discount and it persists after reload', async ({ page, req
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
 
-  await page.getByLabel('Qiymat').fill('12345')
-  await page.getByLabel('Sabab').fill('E2E discount persists')
+  // Discount lives behind the header overflow menu now, in a modal.
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
+  await page.getByRole('button', { name: "Chegirma qo'shish" }).click()
+  const discountDialog = page.getByRole('dialog', { name: 'Chegirma' })
+  await discountDialog.getByLabel('Qiymat').fill('12345')
+  await discountDialog.getByLabel('Sabab').fill('E2E discount persists')
   const discounted = page.waitForResponse(
     (response) => response.url().includes('/discount') && response.ok(),
   )
-  await page.getByRole('button', { name: "Chegirma qo'shish" }).click()
+  await discountDialog.getByRole('button', { name: "Chegirma qo'shish" }).click()
   await discounted
   await expect(page.getByText('E2E discount persists')).toBeVisible()
 
@@ -161,6 +165,8 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByText('Kesilmoqda', { exact: true }).first()).toBeVisible()
+  // Revert sits in the header overflow menu.
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: 'tasdiqlangan holatiga qaytarish' }).click()
   const revertDialog = page.getByRole('dialog', { name: 'Buyurtmani qaytarish' })
   await revertDialog.getByLabel('Sabab').fill('E2E revert reason')
@@ -174,6 +180,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   })
   await expectOk(note)
 
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: 'Buyurtmani bekor qilish' }).click()
   const cancelDialog = page.getByRole('dialog', { name: 'Buyurtmani bekor qilish' })
   await cancelDialog.getByLabel('Sabab').fill('E2E stale cancel')

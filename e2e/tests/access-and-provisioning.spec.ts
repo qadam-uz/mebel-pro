@@ -173,7 +173,7 @@ test("admin provisions and blocks a workshop", async ({ page }, testInfo) => {
   await provisionForm.getByLabel("Birinchi filial").fill(`Branch ${id}`);
   await provisionForm.getByLabel("Filial manzili").fill("Tashkent, Test");
   await provisionForm.getByLabel("Filial telefoni").fill(phoneFor(id, 11));
-  await provisionForm.getByLabel("Ega login").fill(`ui-owner-${id}`);
+  await provisionForm.getByLabel("Rahbar login").fill(`ui-owner-${id}`);
   await provisionForm.getByLabel("Vaqtinchalik parol").fill("OwnerTemp123");
   await provisionForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
 
