@@ -15,7 +15,8 @@ const props = defineProps<{
   // in-trigger eyebrow goes screen-reader-only) and the COMPACT skin — a lean
   // one-line trigger and option rows without icon tile, meta line, or status
   // dots (only explicit `option.dot` markers render). The rich skin stays for
-  // the topbar and forms.
+  // the topbar: a one-line trigger (icon tile + label, topbar height) whose
+  // option rows keep the meta line and status dots.
   topLabel?: boolean
 }>()
 
@@ -186,7 +187,7 @@ onBeforeUnmount(() => {
               'flex min-h-10 items-center gap-2 rounded-lg border bg-elevated px-3 text-left transition',
               open ? 'border-accent' : 'border-hairline-strong hover:bg-sunk',
             ]
-          : 'mp-surface flex min-h-11 min-w-52 items-center gap-3 px-3 py-2 text-left transition hover:border-hairline-strong'
+          : 'mp-surface flex h-10 min-w-52 items-center gap-2.5 rounded-[7px] border-hairline-strong px-3 text-left shadow-none transition'
       "
       :aria-expanded="open"
       :aria-controls="listboxId"
@@ -225,12 +226,6 @@ onBeforeUnmount(() => {
           "
         >
           {{ selected.label }}
-        </span>
-        <span
-          v-if="!topLabel && selected.meta"
-          class="block truncate font-mono text-[11px] text-ink-muted"
-        >
-          {{ selected.meta }}
         </span>
       </span>
       <svg class="size-4 shrink-0 text-ink-muted" viewBox="0 0 20 20" aria-hidden="true">
