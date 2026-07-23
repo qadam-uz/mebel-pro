@@ -58,6 +58,7 @@ from app.modules.sales.schemas import (
     OrderDetailResponse,
     OrderEdgeMaterialDemand,
     OrderItemResponse,
+    OrderPriceLine,
     OrderQuoteResponse,
     OrderSettlementResponse,
     OrderStatusEventResponse,
@@ -785,7 +786,6 @@ async def list_workshop_orders(
     assigned_edger_user_id: uuid.UUID | None = None,
     limit: int = 30,
     offset: int = 0,
-    max_limit: int = 100,
 ) -> list[OrderSummaryResponse]:
     _require_workshop(principal)
     query = select(Order).order_by(Order.created_at.desc(), Order.order_number.desc())
@@ -805,7 +805,7 @@ async def list_workshop_orders(
     # Keep the summary builder's per-order enrichment bounded. A fuller batch
     # summary path can still replace this later, but the API no longer downloads
     # or enriches an unbounded order history.
-    query = query.limit(max(1, min(limit, max_limit))).offset(max(0, offset))
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
     return await _order_summary_responses(db, rows)
 
@@ -1100,8 +1100,10 @@ async def assign_order_workers(
         raise APIError("worker_required", "Choose a worker")
 
     if payload.cutter_user_id is not None:
-        if order.cut_completed_at is not None:
-            raise APIError("cutting_already_done", "Cutting is already complete")
+        # The cutter locks the moment cutting starts — after that the fix path is
+        # revert (which clears the start stamp), not a silent swap mid-job.
+        if order.status is not OrderStatus.CONFIRMED:
+            raise APIError("cutting_already_started", "Cutting has already started")
         await _validate_production_worker(
             db,
             workshop_id=order.workshop_id,
@@ -1114,8 +1116,10 @@ async def assign_order_workers(
     if payload.edger_user_id is not None:
         if not await _order_has_banding(db, order.id):
             raise APIError("edger_not_required", "This order has no edge banding")
-        if order.edge_completed_at is not None:
-            raise APIError("banding_already_done", "Banding is already complete")
+        # The edger locks once banding starts; until then (queued, or still at
+        # the saw) the office may still swap the assignee.
+        if order.banding_started_at is not None:
+            raise APIError("banding_already_started", "Banding has already started")
         await _validate_production_worker(
             db,
             workshop_id=order.workshop_id,
@@ -2112,6 +2116,7 @@ async def _order_response(
     return OrderDetailResponse(
         **base,
         items=[OrderItemResponse.model_validate(item) for item in items],
+        price_lines=_order_price_lines(items, result),
         events=[
             OrderStatusEventResponse(
                 id=event.id,
@@ -2167,6 +2172,62 @@ def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialD
             )
         )
     return lines
+
+
+def _order_price_lines(
+    items: Sequence[OrderItem],
+    result: CuttingResult | None,
+) -> list[OrderPriceLine]:
+    """Itemized material lines for the order money breakdown. Prices come from
+    the snapshots frozen on the order items at placement — not live branch
+    pricing — so panel lines sum exactly to subtotal_materials and edge lines
+    to the material share of subtotal_edge_banding."""
+    if result is None:
+        return []
+    panel_prices: dict[uuid.UUID, int] = {}
+    edge_prices: dict[uuid.UUID, int] = {}
+    for item in items:
+        if item.material_source is MaterialSource.SHOP:
+            panel_prices.setdefault(
+                item.material_id, int(item.material_snapshot.get("price_tiyin") or 0)
+            )
+        for edge in (item.edge_top, item.edge_bottom, item.edge_left, item.edge_right):
+            if edge is None or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
+                continue
+            snapshot = edge.get("snapshot") or {}
+            edge_prices.setdefault(
+                uuid.UUID(str(edge["material_id"])), int(snapshot.get("price_tiyin") or 0)
+            )
+
+    def _line_label(material_id: uuid.UUID) -> str:
+        return _material_label(
+            result.material_snapshots.get(str(material_id), {}),
+            fallback=f"Material {str(material_id)[:8]}",
+        )
+
+    panel_lines = [
+        OrderPriceLine(
+            material_id=material_id,
+            material_name=_line_label(material_id),
+            kind="panel",
+            panels_used=quantity,
+            line_total_tiyin=panel_prices.get(material_id, 0) * quantity,
+        )
+        for material_id, quantity in _panel_stock_demands(result).items()
+    ]
+    edge_lines = [
+        OrderPriceLine(
+            material_id=material_id,
+            material_name=_line_label(material_id),
+            kind="edge",
+            consumed_mm=consumed_mm,
+            line_total_tiyin=_millimetre_price(consumed_mm, edge_prices.get(material_id, 0)),
+        )
+        for material_id, consumed_mm in _edge_stock_demands(result).items()
+    ]
+    panel_lines.sort(key=lambda line: line.material_name)
+    edge_lines.sort(key=lambda line: line.material_name)
+    return panel_lines + edge_lines
 
 
 def _material_label(snapshot: dict[str, Any], *, fallback: str = "Material") -> str:
