@@ -26,6 +26,7 @@ const ADMIN_LOGIN_ERROR_UZ: Record<string, string> = {
   invalid_credentials: "Login yoki parol noto'g'ri.",
   account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
   account_blocked: 'Hisob bloklangan.',
+  login_rate_limited: "Juda ko'p urinish. Birozdan so'ng urinib ko'ring.",
   network_error: "Server bilan bog'lanib bo'lmadi.",
 }
 const errorText = computed(() =>

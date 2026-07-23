@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     # CIDRs. Keep prod narrow and add the Caddy peer/network explicitly.
     TRUSTED_PROXY_CIDRS: list[str] = ["127.0.0.1/32", "::1/128"]
 
+    # Password login throttle: failed attempts per client IP in a sliding
+    # window (in-memory, process-local — the app runs as a single instance).
+    # Complements the per-account lockout, which can't cover logins shared
+    # across workshops or guessing rotated across many accounts. Env-tunable
+    # so an ongoing incident can be throttled without a deploy.
+    LOGIN_IP_THROTTLE_ENABLED: bool = True
+    LOGIN_IP_MAX_FAILURES: int = 20
+    LOGIN_IP_WINDOW_SECONDS: int = 900
+
     # --- Database ----------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432

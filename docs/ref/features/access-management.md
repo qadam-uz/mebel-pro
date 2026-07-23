@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-19
+updated: 2026-07-23
 order: 20
 ---
 
@@ -27,6 +27,18 @@ bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower
 otherwise valid. Unknown login, wrong password, wrong password for a locked account, wrong
 password for a blocked account, and ambiguous same-login / same-password matches all return the
 same generic credential error.
+
+Failed password attempts are also **throttled per client IP**: too many credential misses inside
+a sliding window (default 20 per 15 min) → `login_rate_limited` (429) with a
+`retry_after_seconds`, and while an IP is tripped even valid credentials from it are refused.
+Only credential misses count, a success never resets the budget (one valid login can't launder
+brute-force budget for its IP), and both password sign-in surfaces share one bucket. This
+covers what the per-account lockout can't: a login shared across workshops records no
+per-account failure, and guessing rotated across many accounts stays under each lockout. The
+counter is in-memory and process-local (the app runs as a single instance; the account lockout
+remains the durable backstop across restarts) and is env-tunable via `LOGIN_IP_THROTTLE_*`
+settings. Like the OTP per-IP budgets, it needs the deploy's trusted-proxy config
+(`TRUSTED_PROXY_CIDRS`) — without it all traffic shares one bucket.
 
 `password_reset_required` (set on creation, on a higher-principal password reset, and after
 a security rotation) is an account gate. It is returned from `get-me` and the workshop /
@@ -72,7 +84,8 @@ revoke one or all, and fetch their `me` (principal type, ids, `is_owner`, grant 
 - **Sign-in screen** (workshop app `/auth/login`; superadmin app `/auth/login`) — both
   password-auth surfaces show login + password only. Failure uses the same generic error; a
   lockout banner ("try again at HH:MM") appears only after credentials are otherwise valid and
-  the account is locked.
+  the account is locked. A tripped IP throttle shows a generic "too many attempts, try again
+  later" line — no per-IP detail is surfaced.
 - **Password-reset gate** — shown in the workshop / superadmin app shell when
   `password_reset_required = true`; it is persistent, blocking for non-account routes, and links
   to the profile password tab. The gate disappears only after a successful password change.
