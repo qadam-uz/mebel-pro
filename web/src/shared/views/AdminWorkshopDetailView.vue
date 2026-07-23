@@ -121,7 +121,7 @@ async function confirmOwnerReset() {
     secretOpen.value = true
   } catch {
     resetConfirmOpen.value = false
-    toast.danger("Egasining parolini tiklab bo'lmadi")
+    toast.danger("Rahbarning parolini tiklab bo'lmadi")
   } finally {
     resetting.value = false
   }
@@ -235,13 +235,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
             <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
+            <dt class="text-xs font-extrabold uppercase text-ink-muted">Rahbar</dt>
             <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
               <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
               <button
                 type="button"
                 class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
-                :aria-label="`${admin.detail.owner.login} egasining parolini tiklash`"
+                :aria-label="`${admin.detail.owner.login} rahbarining parolini tiklash`"
                 @click="resetConfirmOpen = true"
               >
                 Parolni tiklash
@@ -324,7 +324,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
       <div class="admin-card-b">
         <article class="admin-row-item">
-          <span class="admin-pill admin-pill-success">Egasi</span>
+          <span class="admin-pill admin-pill-success">Rahbar</span>
           <span>
             <b class="font-mono">{{ admin.detail.owner.login }}</b>
           </span>
@@ -402,7 +402,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
 
     <ConfirmDialog
       :open="resetConfirmOpen"
-      title="Egasining parolini tiklash"
+      title="Rahbarning parolini tiklash"
       :message="`${admin.detail.owner.login} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
       confirm-label="Parolni tiklash"
       busy-label="Tiklanmoqda"
@@ -416,7 +416,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <AdminSecretModal
       :open="secretOpen && !!admin.lastOwnerSecret"
       title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
-      intro="Login va vaqtinchalik parolni ustaxona egasiga yetkazing. Ega birinchi kirishda uni almashtiradi."
+      intro="Login va vaqtinchalik parolni ustaxona rahbariga yetkazing. Rahbar birinchi kirishda uni almashtiradi."
       :rows="secretRows"
       @close="closeSecret"
     />

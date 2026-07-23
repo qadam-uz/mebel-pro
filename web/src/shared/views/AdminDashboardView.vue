@@ -182,7 +182,7 @@ onMounted(loadAll)
                 <thead>
                   <tr>
                     <th>Ustaxona</th>
-                    <th>Egasi</th>
+                    <th>Rahbar</th>
                     <th>Filiallar</th>
                     <th>Yaratildi</th>
                     <th>Holat</th>

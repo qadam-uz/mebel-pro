@@ -68,7 +68,7 @@ const tenantLabel = computed(() => {
 const tenantMeta = computed(() => {
   if (!auth.me) return config.tenantMeta
   if (config.role === 'workshop') {
-    return auth.me.is_owner ? 'Egasi · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
+    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
   }
   if (config.role === 'client') return auth.me.phone ?? auth.displayName
   if (config.role === 'admin') return auth.displayName
