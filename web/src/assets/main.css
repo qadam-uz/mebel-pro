@@ -3540,13 +3540,6 @@
     text-transform: uppercase;
   }
 
-  .prod-group-h {
-    color: var(--color-ink);
-    font-size: 14px;
-    font-weight: 800;
-    margin: 16px 0 8px;
-  }
-
   .prod-done-row {
     display: flex;
     align-items: center;
@@ -3606,12 +3599,85 @@
     padding: 12px 0;
   }
 
+  /* Job-sheet head chips: the job's size in glanceable numbers, sharing the
+     order number's row (the head flex row handles wrap and spacing). */
+  .prod-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .prod-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: 999px;
+    background: var(--color-elevated);
+    color: var(--color-ink-soft);
+    font-size: 13px;
+    padding: 5px 12px;
+  }
+
+  .prod-stat b {
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+
+  .prod-stat-ico {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: var(--color-ink-muted);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  /* Tape legend under the Krom drawing — swatches match the edge ticks. */
+  .prod-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    color: var(--color-ink-soft);
+    font-size: 12.5px;
+    margin-top: 12px;
+  }
+
+  .prod-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .prod-legend-item b {
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+
+  .prod-legend-swatch {
+    border-radius: 2px;
+    flex-shrink: 0;
+    height: 4px;
+    width: 14px;
+  }
+
   /* Job sheet: the drawing beside its panels rail. The rail carries the
      worker's cut checkpoints — one 44px toggle per panel, big enough for a
-     gloved tap; the marked state pairs the ✓ glyph with a success tint. */
+     gloved tap; the marked state pairs the ✓ icon with a success fill. */
   .prod-sheet {
     display: grid;
     gap: 16px;
+  }
+
+  /* The drawing must fit the screen: height-capped, aspect kept, centred.
+     dvh over vh so a tablet's collapsing browser chrome doesn't clip it. */
+  .cutting-svg-fit {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(56vh, 640px);
+    max-height: min(56dvh, 640px);
+    margin-inline: auto;
   }
 
   @media (min-width: 900px) {
@@ -3655,8 +3721,8 @@
   }
 
   .prod-rail-row.marked {
-    border-color: var(--color-success-border);
-    background: var(--color-success-soft);
+    border-color: var(--color-accent-tint);
+    background: var(--color-accent-soft);
   }
 
   .prod-rail-select {
@@ -3678,21 +3744,35 @@
   .prod-rail-mark {
     align-items: center;
     border: 1.5px solid var(--color-hairline-strong);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--color-elevated);
-    color: #fff;
+    color: var(--color-ink-muted);
     display: flex;
     flex-shrink: 0;
-    font-size: 15px;
-    font-weight: 800;
     height: 44px;
     justify-content: center;
     width: 44px;
   }
 
+  .prod-rail-mark svg {
+    height: 22px;
+    width: 22px;
+    fill: none;
+    opacity: 0.4;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.5;
+  }
+
   .prod-rail-mark[aria-pressed='true'] {
-    border-color: var(--color-success);
-    background: var(--color-success);
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: #fff;
+  }
+
+  .prod-rail-mark[aria-pressed='true'] svg {
+    opacity: 1;
   }
 
   .field {

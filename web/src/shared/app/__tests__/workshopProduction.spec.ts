@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  groupProductionJobsByAssignee,
   isProductionJobStarted,
   nextUncutPanelId,
   partitionProductionJobs,
   productionJobMetaLine,
   productionPartNames,
-  workshopEdgeMaterialLabel,
   workshopProductionQueueCounts,
-  workshopQueueEdgeLine,
   workshopQueuePartsLine,
   type ProductionStationJob,
 } from '@/shared/app/workshopProduction'
@@ -33,23 +30,6 @@ describe('workshop production display helpers', () => {
         panels_used_snapshot: 1,
       }),
     ).toBe('4 qism · 1 panel')
-  })
-
-  it('renders edge-material labels instead of raw material ids', () => {
-    const line = {
-      material_label: 'Egger White Edge',
-      thickness_mm: '2',
-      color: 'White',
-      consumed_mm: 12500,
-    }
-
-    expect(workshopEdgeMaterialLabel(line)).toBe('Egger White Edge · 2 mm · White')
-    expect(workshopQueueEdgeLine([line])).toContain('Egger White Edge · 2 mm · White')
-    expect(workshopQueueEdgeLine([line])).toMatch(/12[,.]5/)
-  })
-
-  it('names an empty banding plan without leaking ids', () => {
-    expect(workshopQueueEdgeLine([])).toBe('kromka rejasi')
   })
 
   it('counts only production jobs assigned to the current worker', () => {
@@ -119,7 +99,6 @@ function stationJob(overrides: Partial<ProductionStationJob> = {}): ProductionSt
     banding_started_at: null,
     assigned_cutter: { id: 'worker-1', full_name: 'Sardor' },
     assigned_edger: { id: 'worker-2', full_name: 'Jamshid' },
-    material_labels: ['Premium Oq'],
     item_count: 6,
     planned_panels: 1,
     planned_edge_lines: [
@@ -154,21 +133,12 @@ describe('station workspace partitioning', () => {
     })
   })
 
-  it('groups the manager view by assignee in queue order', () => {
-    const a1 = stationJob()
-    const b = stationJob({ assigned_cutter: { id: 'worker-9', full_name: 'Bek' } })
-    const a2 = stationJob()
-    const groups = groupProductionJobsByAssignee([a1, b, a2], 'cutting')
-    expect(groups.map((group) => group.worker?.full_name)).toEqual(['Sardor', 'Bek'])
-    expect(groups[0]?.jobs).toEqual([a1, a2])
-  })
-
   it('sizes the job for the saw and for the edge bander differently', () => {
-    expect(productionJobMetaLine(stationJob(), 'cutting')).toBe('Premium Oq · 6 qism · 1 panel')
-    // The edge line already names the tape — no panel-material prefix.
-    expect(productionJobMetaLine(stationJob(), 'banding')).toBe('PVX Oq · 2 mm · oq: 3.9 m')
+    expect(productionJobMetaLine(stationJob(), 'cutting')).toBe('6 qism · 1 panel')
+    // The bander sizes a job in metres of tape; material names live on the sheet.
+    expect(productionJobMetaLine(stationJob(), 'banding')).toBe('3.9 m krom · 6 qism')
     expect(productionJobMetaLine(stationJob({ planned_edge_lines: [] }), 'banding')).toBe(
-      'Premium Oq',
+      '6 qism · 1 panel',
     )
   })
 })

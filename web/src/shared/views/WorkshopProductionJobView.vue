@@ -15,12 +15,15 @@ import {
   productionPartNames,
   type ProductionStationKey,
 } from '@/shared/app/workshopProduction'
-import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import {
+  deriveSnapshotEdgeRegistry,
+  edgeRegistryEntryByMaterial,
+} from '@/shared/app/cuttingResultsDisplay'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
+import { formatStockQuantity } from '@/shared/formatters'
 import { useAuthStore } from '@/shared/stores/auth'
 import type { CuttingPanel, CuttingPlacement, CuttingResult } from '@/shared/stores/cutting'
 import { useOrdersStore } from '@/shared/stores/orders'
@@ -35,7 +38,6 @@ const rolePath = useRolePath()
 const orders = useOrdersStore()
 const production = useProductionStore()
 const toast = useToast()
-const permissions = useWorkshopPermissions()
 
 const orderId = computed(() => String(route.params.order_id ?? ''))
 const job = computed(() => production.job)
@@ -59,8 +61,12 @@ const stationListPath = computed(() =>
 const assignee = computed(() =>
   station.value === 'cutting' ? job.value?.assigned_cutter : job.value?.assigned_edger,
 )
-const isManager = computed(() => permissions.canOnBranch(p.manageOrders, job.value?.branch_id))
-const canAct = computed(() => assignee.value?.id === auth.me?.principal_id || isManager.value)
+// The sheet is the worker's page: only the assignee acts here. Owners and
+// operators manage statuses on-behalf from the office order page.
+const canAct = computed(() => assignee.value?.id === auth.me?.principal_id)
+// The cut checkpoints are a saw-station aid; the banding station just reads
+// the drawing, so the marks (and their auto-advance) exist for cutting only.
+const marksEnabled = computed(() => station.value === 'cutting')
 
 // The single state-appropriate action for the sticky bar.
 const primaryAction = computed<'start' | 'complete' | null>(() => {
@@ -115,6 +121,7 @@ function isPanelMarked(panel: CuttingPanel) {
 // Marking the panel on screen advances the drawing to the next uncut one, so
 // a long order is a sequence of taps, not scrolling.
 function togglePanelMark(panel: CuttingPanel) {
+  if (!marksEnabled.value) return
   const next = new Set(markedPanelIds.value)
   if (next.has(panel.id)) next.delete(panel.id)
   else next.add(panel.id)
@@ -156,6 +163,35 @@ function bandedSidesText(item: ProductionJobItem) {
 }
 
 const metaLine = computed(() => (job.value ? productionJobMetaLine(job.value, station.value) : ''))
+
+// Head chips size the job in glanceable numbers; material names live in the
+// panels rail and the parts list, so the head stays one line tall.
+const kromTotal = computed(() => {
+  const total = (job.value?.planned_edge_lines ?? []).reduce(
+    (sum, line) => sum + line.consumed_mm,
+    0,
+  )
+  return total > 0 ? formatStockQuantity(total, 'm') : null
+})
+
+// Krom legend: one row per tape, swatch-matched to the drawing's edge ticks,
+// so the bander sees which roll to load and how much it will consume.
+const edgeLegend = computed(() => {
+  if (station.value !== 'banding') return []
+  const registry = deriveSnapshotEdgeRegistry(result.value?.parts_snapshot ?? [])
+  return (job.value?.planned_edge_lines ?? []).map((line) => ({
+    key: line.material_id,
+    swatch:
+      (
+        edgeRegistryEntryByMaterial(registry, line.material_id, 'shop') ??
+        edgeRegistryEntryByMaterial(registry, line.material_id, 'own')
+      )?.colorStyle.bg ?? 'var(--color-accent)',
+    label: [line.color ?? line.material_label, line.thickness_mm ? `${line.thickness_mm} mm` : null]
+      .filter(Boolean)
+      .join(' · '),
+    metres: formatStockQuantity(line.consumed_mm, 'm'),
+  }))
+})
 
 async function load() {
   await production.loadJob(orderId.value)
@@ -239,12 +275,16 @@ function onPrimary() {
 
 onMounted(async () => {
   prunePanelMarks()
-  markedPanelIds.value = loadPanelMarks(orderId.value)
   await load()
-  // A resuming worker lands on the first uncut panel, not on panel one.
-  const panels = result.value?.panels ?? []
-  const firstUncut = panels.find((panel) => !markedPanelIds.value.has(panel.id))
-  if (firstUncut) activePanelId.value = firstUncut.id
+  // Checkpoints belong to the saw: the station is known only after the job
+  // loads, and the banding view must not resurrect marks stored while cutting.
+  if (marksEnabled.value) {
+    markedPanelIds.value = loadPanelMarks(orderId.value)
+    // A resuming worker lands on the first uncut panel, not on panel one.
+    const panels = result.value?.panels ?? []
+    const firstUncut = panels.find((panel) => !markedPanelIds.value.has(panel.id))
+    if (firstUncut) activePanelId.value = firstUncut.id
+  }
   pollTimer = setInterval(() => {
     if (!document.hidden && !orders.actionLoading && !actionBusy.value) void load()
   }, POLL_INTERVAL_MS)
@@ -259,12 +299,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section>
-    <RouterLink
-      :to="stationListPath"
-      class="mb-4 inline-flex items-center gap-1 text-sm font-bold text-accent no-underline"
-    >
-      ‹ {{ stationTitle }}
-    </RouterLink>
+    <RouterLink :to="stationListPath" class="back">← {{ stationTitle }}</RouterLink>
 
     <section v-if="production.jobLoading && !job" class="card p-5" aria-live="polite">
       <div class="grid gap-3">
@@ -292,11 +327,28 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="page-head">
-        <div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 class="!font-mono !text-[22px]">{{ job.order_number }}</h1>
-          <p class="mt-1 text-sm text-ink-soft">
-            {{ metaLine }} · {{ job.client_first_name }} uchun
-          </p>
+          <!-- The job's size in numbers, on the number's own row; material
+               names stay in the panels rail and the parts list. -->
+          <div class="prod-stats">
+            <span class="prod-stat">
+              <svg viewBox="0 0 24 24" class="prod-stat-ico" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+              </svg>
+              <b>{{ job.client_first_name }}</b>
+            </span>
+            <span class="prod-stat"
+              >Qismlar <b class="font-mono">{{ job.item_count }}</b></span
+            >
+            <span v-if="job.planned_panels > 0" class="prod-stat">
+              Panellar <b class="font-mono">{{ job.planned_panels }}</b>
+            </span>
+            <span v-if="kromTotal" class="prod-stat">
+              Krom <b class="font-mono">{{ kromTotal }}</b>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -311,19 +363,33 @@ onBeforeUnmount(() => {
            it holds the panels with the worker's own cut checkpoints (✓) —
            they live on this tablet only. -->
       <section v-if="result" class="card">
-        <div class="card-b">
+        <!-- card-b's zero top padding expects a card-h above; this card has
+             none, so pad the top to keep the plan off the wrapper's edge. -->
+        <div class="card-b !pt-[22px]">
           <div class="prod-sheet">
-            <CuttingPanelSvg
-              v-if="activePanel"
-              :result="result"
-              :panel="activePanel"
-              :active-placement-id="activePlacementId"
-              @select-placement="selectPlacement"
-            />
+            <div class="min-w-0">
+              <CuttingPanelSvg
+                v-if="activePanel"
+                :result="result"
+                :panel="activePanel"
+                :active-placement-id="activePlacementId"
+                fit="viewport"
+                @select-placement="selectPlacement"
+              />
+              <!-- Which tape rolls this order needs: swatches match the
+                   drawing's edge ticks. -->
+              <div v-if="edgeLegend.length" class="prod-legend">
+                <span v-for="line in edgeLegend" :key="line.key" class="prod-legend-item">
+                  <span class="prod-legend-swatch" :style="{ background: line.swatch }"></span>
+                  {{ line.label }} · <b class="font-mono">{{ line.metres }}</b>
+                </span>
+              </div>
+            </div>
             <div class="prod-rail">
               <div class="prod-rail-h">
                 <span>Panellar</span>
-                <span>{{ markedCount }}/{{ result.panels.length }}</span>
+                <span v-if="marksEnabled">{{ markedCount }}/{{ result.panels.length }}</span>
+                <span v-else>{{ result.panels.length }} ta</span>
               </div>
               <div
                 v-for="panel in result.panels"
@@ -343,13 +409,16 @@ onBeforeUnmount(() => {
                   {{ panelTitle(result, panel) }}
                 </button>
                 <button
+                  v-if="marksEnabled"
                   type="button"
                   class="prod-rail-mark"
                   :aria-pressed="isPanelMarked(panel)"
                   :aria-label="`${panelTitle(result, panel)} kesildi`"
                   @click="togglePanelMark(panel)"
                 >
-                  {{ isPanelMarked(panel) ? '✓' : '' }}
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m5 12.5 4.5 4.5L19 7.5" />
+                  </svg>
                 </button>
               </div>
             </div>

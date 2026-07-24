@@ -496,25 +496,33 @@ Permission names below are the per-branch grants from
   the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at
   the bottom. The page stays fresh on its own (~15 s poll + refresh on focus) — no manual
-  refresh button. Cards: order #, material, panel / part counts (cutting station) or
-  metres by edge material (banding station), assignment age, and the client's **first
-  name only** — production surfaces never show prices, discounts, or client phone
-  numbers; the payload is **server-trimmed**, not hidden client-side. A non-owner sees
-  only their own assignments; an **owner / `manage_orders`** user sees the whole branch
-  queue grouped by assignee, with unassigned `confirmed` work surfaced as a call to
-  action into Orders, and may start / complete **on behalf**. **Boshlash** on a queued
+  refresh button. Cards: order #, part / panel counts (cutting station) or metres of
+  tape + parts (banding station), assignment age, and the client's **first name only**
+  — material names live on the Chizma sheet, one tap away, and production surfaces
+  never show prices, discounts, or client phone numbers; the payload is
+  **server-trimmed**, not hidden client-side. The queue is
+  **personal for everyone, owner included**: only jobs assigned to the signed-in user,
+  scoped to the topbar branch picker, and "completed today" is the caller's own tally —
+  the server enforces the scope. Owners / `manage_orders` users manage statuses
+  **on-behalf from the office order page**, not at the station. **Boshlash** on a queued
   card starts the job and opens its Chizma sheet in one tap. Empty: "Nothing assigned —
   nice."
 - **"Chizma" job sheet** (`/workshop/production/:order_id`) — the worker-grade job view
-  and the pure-`process_production` replacement for the office order detail: the cutting
-  plan SVG (zoomable) with a **panels rail** beside it — panels stacked vertically, each
-  with a mark toggle the worker uses as their own cut checkpoints (stored on the tablet
-  only, never synced; marking a panel advances the drawing to the next unmarked one), the
-  parts list under it (part **names**, never refs; dimensions in large mono type; a
-  per-part edge glyph marking which sides get banding), and a sticky action bar with the
-  single state-appropriate action (**Boshlash** / **Tugatdim**). The sheet stays fresh
-  like the queues and re-fetches right before start / complete so a stale version can't
-  conflict. The PDF lives on the office order page, not here.
+  and the pure-`process_production` replacement for the office order detail: a head of
+  **stat chips** (client first name, parts, panels, total tape metres — no material
+  text), the cutting plan SVG (zoomable, height-capped so the whole panel fits the
+  screen without scrolling; on the banding station a **tape legend** under it names
+  each roll with a swatch matching the drawing's edge ticks and its metres) with a
+  **panels rail** beside it — panels stacked vertically; on the
+  **cutting station only**, each panel carries an icon mark toggle the worker uses as
+  their own cut checkpoints (stored on the tablet only, never synced; marking a panel
+  advances the drawing to the next unmarked one — the banding view shows the rail
+  without marks), the parts list under it (part **names**, never refs; dimensions in
+  large mono type; a per-part edge glyph marking which sides get banding), and a sticky
+  action bar with the single state-appropriate action (**Boshlash** / **Tugatdim**),
+  shown **to the assignee only**. The sheet stays fresh like the queues and re-fetches
+  right before start / complete so a stale version can't conflict. The PDF lives on the
+  office order page, not here.
 - **Completion** — a success-styled confirm (not danger) naming the order and what
   happens next ("moves to banding — <edger>'s queue"); the manager-revert-only caveat is
   a quiet secondary line. The terminal credits **the assignee**; the on-behalf "who did
