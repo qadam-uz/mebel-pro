@@ -18,6 +18,7 @@ import {
   formatStockQuantity,
 } from '@/shared/formatters'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import OnboardingChecklist from '@/shared/components/OnboardingChecklist.vue'
 import { activeWorkshopStatuses, useOrdersStore } from '@/shared/stores/orders'
 import { useFinanceStore } from '@/shared/stores/finance'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -294,6 +295,8 @@ watch(
         </button>
       </div>
     </div>
+
+    <OnboardingChecklist />
 
     <div v-if="dashboardError" class="banner danger mb-4">
       <div class="grow">

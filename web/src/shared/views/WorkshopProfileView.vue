@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -14,6 +15,7 @@ const config = useRoleConfig()
 const auth = useAuthStore()
 const toast = useToast()
 const workshop = useWorkshopStore()
+const router = useRouter()
 const {
   sessions,
   logoutCurrentOpen,
@@ -75,11 +77,18 @@ async function savePassword() {
   error.value = null
   message.value = null
   isSaving.value = true
+  const wasForced = auth.me?.password_reset_required === true
   try {
     await auth.changePassword(currentPassword.value, newPassword.value)
     currentPassword.value = ''
     newPassword.value = ''
     toast.success("Parol o'zgartirildi.")
+    // First-run continuation (docs/ref/features/onboarding.md): the forced
+    // change was step 1 of the owner's setup — land them on the home checklist.
+    if (wasForced && auth.me?.principal_type === 'workshop_user' && auth.me.is_owner) {
+      void router.push(config.homePath)
+      return
+    }
     await loadSessions()
   } catch {
     error.value = auth.lastError ?? 'password_change_failed'
