@@ -94,10 +94,25 @@ export interface PanelPartGroup {
   rotatedCount: number
 }
 
+// Placements whose part_ref is missing from parts_snapshot (older results)
+// still get a stable D-number continuing after the snapshot, in placement
+// order across the whole result — the raw part_ref uuid never renders.
+export function orphanPartIndexByRef(result: CuttingResult): Map<string, number> {
+  const known = new Set((result.parts_snapshot ?? []).map((part) => part.part_ref))
+  const orphans = new Map<string, number>()
+  let next = known.size
+  for (const panel of result.panels)
+    for (const placement of panel.placements)
+      if (!known.has(placement.part_ref) && !orphans.has(placement.part_ref))
+        orphans.set(placement.part_ref, next++)
+  return orphans
+}
+
 export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel): PanelPartGroup[] {
   const partsByRef = new Map<string, { part: CuttingPart; index: number }>(
     (result.parts_snapshot ?? []).map((part, index) => [part.part_ref, { part, index }]),
   )
+  const orphanIndex = orphanPartIndexByRef(result)
   const groups: PanelPartGroup[] = []
   const indexByRef = new Map<string, number>()
   for (const placement of panel.placements) {
@@ -108,7 +123,9 @@ export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel)
       const part = row?.part
       group = {
         partRef: placement.part_ref,
-        name: row ? partDisplayName(row.part, row.index) : placement.part_ref,
+        name: row
+          ? partDisplayName(row.part, row.index)
+          : `D${(orphanIndex.get(placement.part_ref) ?? 0) + 1}`,
         length_mm: part?.length_mm ?? placement.length_mm,
         width_mm: part?.width_mm ?? placement.width_mm,
         count: 0,

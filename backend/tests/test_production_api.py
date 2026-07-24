@@ -300,7 +300,9 @@ async def test_production_queue_scopes_partitions_and_stays_money_free(
         assert assigned.status_code == 200
         order_ids.append(order["id"])
 
-    # Worker A sees only their own queue; the owner sees the whole branch.
+    # The station queue is personal for everyone: worker A sees only their own
+    # jobs, and even the owner sees no one else's work (on-behalf management
+    # lives on the office order page).
     queue_a = await client.get(
         "/api/v1/workshop/production/queue?station=cutting", headers=_auth(access_a)
     )
@@ -312,10 +314,12 @@ async def test_production_queue_scopes_partitions_and_stays_money_free(
     owner_queue = await client.get(
         "/api/v1/workshop/production/queue?station=cutting", headers=_auth(owner_access)
     )
-    assert {job["id"] for job in owner_queue.json()["jobs"]} == set(order_ids)
+    assert owner_queue.status_code == 200
+    assert owner_queue.json()["jobs"] == []
+    assert owner_queue.json()["completed_today"] == []
 
     # The payload is money-free by construction — no tiyin, no client phone.
-    leakable = json.dumps(owner_queue.json())
+    leakable = json.dumps(queue_a.json())
     assert "tiyin" not in leakable
     assert "998901555222" not in leakable
     assert "client_phone" not in leakable

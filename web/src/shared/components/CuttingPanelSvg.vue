@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { deriveSnapshotEdgeRegistry, offcutLabelMode } from '@/shared/app/cuttingResultsDisplay'
+import {
+  deriveSnapshotEdgeRegistry,
+  offcutLabelMode,
+  orphanPartIndexByRef,
+} from '@/shared/app/cuttingResultsDisplay'
 import { partDisplayName, registryEntryForBand } from '@/shared/app/cuttingEditorDerived'
 import type { EdgeField } from '@/shared/app/cuttingDisplay'
 import type {
@@ -41,6 +45,9 @@ const props = defineProps<{
   panel: CuttingPanel
   activePartRef?: string | null
   activePlacementId?: string | null
+  // 'width' (default) fills the container; 'viewport' caps the height so the
+  // whole panel stays on a shop-floor screen without scrolling.
+  fit?: 'width' | 'viewport'
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +72,8 @@ const partRowsByRef = computed(
     ),
 )
 const edgeRegistry = computed(() => deriveSnapshotEdgeRegistry(props.result.parts_snapshot ?? []))
+// Refs missing from parts_snapshot still label as D-numbers, never raw uuids.
+const orphanIndex = computed(() => orphanPartIndexByRef(props.result))
 
 type PhysicalSide = 'top' | 'bottom' | 'left' | 'right'
 type BandedSide = { physical: PhysicalSide; field: EdgeField }
@@ -92,7 +101,9 @@ function labelFits(placement: CuttingPlacement) {
 
 function placementLabel(placement: CuttingPlacement) {
   const row = partRowsByRef.value.get(placement.part_ref)
-  const name = row ? partDisplayName(row.part, row.index) : placement.part_ref
+  const name = row
+    ? partDisplayName(row.part, row.index)
+    : `D${(orphanIndex.value.get(placement.part_ref) ?? 0) + 1}`
   return `${name}${placement.rotated ? ' ↻' : ''}`
 }
 
@@ -210,7 +221,8 @@ function offcutTransform(offcut: CuttingOffcut) {
 
 <template>
   <svg
-    class="block h-auto w-full rounded-md border border-hairline-strong bg-elevated"
+    class="block rounded-md border border-hairline-strong bg-elevated"
+    :class="fit === 'viewport' ? 'cutting-svg-fit' : 'h-auto w-full'"
     :viewBox="viewBox"
     style="touch-action: pinch-zoom"
     role="img"
