@@ -11,6 +11,7 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
@@ -484,7 +485,7 @@ onMounted(refreshBranch)
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
             <p v-else-if="saveError" class="text-sm font-bold text-danger">
-              Saqlab bo'lmadi · trace_id: {{ saveTraceId ?? 'unavailable' }}
+              Saqlab bo'lmadi{{ traceSuffix(saveTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
               {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
@@ -526,7 +527,7 @@ onMounted(refreshBranch)
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="statusSaved" class="text-sm font-bold text-success">Holat saqlandi</p>
             <p v-else-if="statusError" class="text-sm font-bold text-danger">
-              Holat saqlanmadi · trace_id: {{ statusTraceId ?? 'unavailable' }}
+              Holat saqlanmadi{{ traceSuffix(statusTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="statusSaving">
               {{ statusSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}

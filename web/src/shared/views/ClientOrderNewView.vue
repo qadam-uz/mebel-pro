@@ -11,6 +11,7 @@ import {
   isUzPhone,
   normalizeUzPhone,
 } from '@/shared/app/clientUi'
+import { traceLine } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -181,7 +182,7 @@ onMounted(async () => {
       <div class="client-error-icon">!</div>
       <h3>Chizma yuklanmadi</h3>
       <p>Buyurtma berish uchun chizma ma'lumotlarini qayta yuklash kerak.</p>
-      <p class="client-trace">trace {{ cutting.traceId ?? 'unavailable' }}</p>
+      <p class="client-trace">{{ traceLine(cutting.traceId) }}</p>
     </section>
 
     <section

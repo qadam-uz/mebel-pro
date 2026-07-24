@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -363,9 +364,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="rowActionError" class="banner danger mb-4">
-        <div class="grow">
-          {{ rowActionError }} · trace_id: {{ rowActionTraceId ?? 'unavailable' }}
-        </div>
+        <div class="grow">{{ rowActionError }}{{ traceSuffix(rowActionTraceId) }}</div>
       </div>
 
       <AppModal
@@ -445,7 +444,7 @@ onBeforeUnmount(() => {
 
       <section v-else-if="workshop.catalogError" class="st-error">
         <h3>Ma'lumotni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.catalogTraceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(workshop.catalogTraceId) }}</p>
       </section>
 
       <section v-else class="card">

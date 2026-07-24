@@ -12,6 +12,7 @@ import {
   formatRelativeDate,
   formatTodayHours,
 } from '@/shared/app/clientUi'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -748,7 +749,7 @@ onMounted(() => {
           </section>
 
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
-            {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+            {{ clientErrorLabel(actionError) }}{{ traceSuffix(orders.actionTraceId) }}
           </p>
         </aside>
       </div>

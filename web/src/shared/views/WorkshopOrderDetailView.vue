@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import {
@@ -780,7 +781,7 @@ onBeforeUnmount(() => {
       >
         Qayta urinish
       </button>
-      <p class="mt-3 text-xs text-ink-muted">trace_id: {{ orders.traceId ?? 'unavailable' }}</p>
+      <p class="mt-3 text-xs text-ink-muted">{{ traceLine(orders.traceId) }}</p>
     </section>
     <section v-else-if="!order" class="st-empty">
       <h3>Buyurtma topilmadi</h3>
@@ -936,9 +937,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="orders.downloadError" class="banner danger mb-4" role="alert">
-        <div class="grow">
-          {{ orders.downloadError }} · trace_id: {{ orders.downloadTraceId ?? 'unavailable' }}
-        </div>
+        <div class="grow">{{ orders.downloadError }}{{ traceSuffix(orders.downloadTraceId) }}</div>
       </div>
 
       <!-- An open revision is important state — a quiet banner, not a menu item

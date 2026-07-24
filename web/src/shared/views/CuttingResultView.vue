@@ -6,6 +6,7 @@ import {
   clientCuttingEditorAdapter,
   type CuttingEditorAdapterFactory,
 } from '@/shared/app/cuttingEditorAdapter'
+import { traceLine } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import CuttingResultsSection from '@/shared/components/CuttingResultsSection.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -74,7 +75,7 @@ onMounted(async () => {
       <div class="client-error-icon">!</div>
       <h3>Kesish natijasi yuklanmadi</h3>
       <p>Sahifani qayta yuklang yoki detallar sahifasiga qayting.</p>
-      <p class="client-trace">trace {{ cutting.traceId ?? 'unavailable' }}</p>
+      <p class="client-trace">{{ traceLine(cutting.traceId) }}</p>
     </section>
 
     <CuttingResultsSection

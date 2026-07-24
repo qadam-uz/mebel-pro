@@ -12,6 +12,7 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { copyText } from '@/shared/app/clipboard'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import {
@@ -460,7 +461,7 @@ onBeforeUnmount(() => {
             v-if="createError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            {{ createError }} · trace_id: {{ createTraceId ?? 'unavailable' }}
+            {{ createError }}{{ traceSuffix(createTraceId) }}
           </p>
         </form>
       </AppModal>
@@ -515,7 +516,7 @@ onBeforeUnmount(() => {
 
       <section v-else-if="workshop.error" class="st-error">
         <h3>Xodimlarni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(workshop.traceId) }}</p>
       </section>
 
       <section v-else class="card">

@@ -192,7 +192,7 @@ describe('CuttingEditorView draft deletion', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    expect(wrapper.get('[role="dialog"]').text()).toContain('trace trace-delete-1')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('trace_id: trace-delete-1')
   })
 
   it('opens a current result but never optimizes a read-only drawing', async () => {

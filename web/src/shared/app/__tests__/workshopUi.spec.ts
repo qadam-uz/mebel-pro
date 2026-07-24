@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  dashboardFailureLine,
   stockTransactionTypeLabel,
   workshopDraftStatus,
   workshopErrorMessage,
@@ -16,6 +17,24 @@ describe('workshop UI helpers', () => {
   it('hides unknown raw codes behind a generic recovery message', () => {
     expect(workshopErrorMessage('future_raw_code')).toBe("Amal bajarilmadi. Qayta urinib ko'ring.")
     expect(workshopErrorMessage(null)).toBe("Amal bajarilmadi. Qayta urinib ko'ring.")
+  })
+
+  it('names the cause and keeps code + trace for a backend-reported dashboard failure', () => {
+    expect(
+      dashboardFailureLine({ section: 'Moliya', code: 'permission_denied', traceId: 'ab12cd34' }),
+    ).toBe("Moliya — ruxsat yo'q (permission_denied · trace: ab12cd34)")
+  })
+
+  it('keeps an unknown dashboard failure code visible so support is never blind', () => {
+    expect(
+      dashboardFailureLine({ section: 'Buyurtmalar', code: 'quota_exceeded', traceId: 'ff00' }),
+    ).toBe('Buyurtmalar — kutilmagan xatolik (quota_exceeded · trace: ff00)')
+  })
+
+  it('reads a missing trace as "the backend never answered" and names the connection cause', () => {
+    expect(
+      dashboardFailureLine({ section: 'Ombor', code: 'inventory_load_failed', traceId: null }),
+    ).toBe("Ombor — serverga ulanib bo'lmadi")
   })
 
   it('derives a saved-draft status from readiness (drafts carry no DB status)', () => {

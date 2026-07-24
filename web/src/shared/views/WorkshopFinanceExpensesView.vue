@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -703,7 +704,7 @@ onMounted(async () => {
             v-if="actionError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2"
           >
-            {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+            {{ actionError }}{{ traceSuffix(actionTraceId) }}
           </p>
           <div class="flex items-center gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
@@ -755,7 +756,7 @@ onMounted(async () => {
           >
             <p v-if="orderBalanceLoading" class="font-bold text-ink-soft">Qoldiq yuklanmoqda...</p>
             <p v-else-if="orderBalanceError" class="font-bold text-danger">
-              {{ orderBalanceError }} · trace_id: {{ orderBalanceTraceId ?? 'unavailable' }}
+              {{ orderBalanceError }}{{ traceSuffix(orderBalanceTraceId) }}
             </p>
             <div v-else-if="selectedIncomeSettlement" class="grid gap-2 md:grid-cols-[1fr_auto]">
               <div class="grid gap-1 text-ink-soft">
@@ -815,7 +816,7 @@ onMounted(async () => {
             v-if="actionError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger md:col-span-2"
           >
-            {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+            {{ actionError }}{{ traceSuffix(actionTraceId) }}
           </p>
           <div class="flex items-center gap-2 md:col-span-2">
             <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
@@ -872,7 +873,7 @@ onMounted(async () => {
 
       <section v-else-if="finance.error" class="st-error">
         <h3>Yozuvlarni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ finance.traceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(finance.traceId) }}</p>
       </section>
 
       <section
@@ -1078,7 +1079,7 @@ onMounted(async () => {
           <input v-model="voidReason" class="mp-input" required />
         </label>
         <p v-if="actionError" class="mt-2 text-sm font-bold text-danger">
-          {{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}
+          {{ actionError }}{{ traceSuffix(actionTraceId) }}
         </p>
       </ConfirmDialog>
     </template>

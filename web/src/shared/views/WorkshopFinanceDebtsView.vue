@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
+import { traceLine } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
@@ -356,7 +357,7 @@ onBeforeUnmount(() => {
 
         <section v-else-if="finance.error" class="st-error">
           <h3>Qarzdorlikni yuklab bo'lmadi</h3>
-          <p>trace_id: {{ finance.traceId ?? 'unavailable' }}</p>
+          <p>{{ traceLine(finance.traceId) }}</p>
         </section>
 
         <section v-else class="card">
@@ -450,7 +451,7 @@ onBeforeUnmount(() => {
 
         <section v-else-if="finance.error" class="st-error">
           <h3>Akt sverkani yuklab bo'lmadi</h3>
-          <p>trace_id: {{ finance.traceId ?? 'unavailable' }}</p>
+          <p>{{ traceLine(finance.traceId) }}</p>
         </section>
 
         <section v-else-if="finance.statement" class="card">
