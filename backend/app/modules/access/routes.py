@@ -15,12 +15,14 @@ from app.core.principal import AuthenticatedPrincipal
 from app.core.trace import get_trace_id
 from app.models.enums import AuthenticatedPrincipalType
 from app.modules.access.api import (
+    INVALID_CREDENTIALS_CODE,
     OtpSender,
     PlainSessionTokens,
     TelegramGatewaySender,
     authenticate_platform_user,
     authenticate_workshop_user,
     change_password,
+    login_throttle,
     refresh_session,
     request_otp_code,
     resolve_client_ip,
@@ -68,13 +70,19 @@ async def platform_login(
     response: Response,
     db: Session,
 ) -> TokenResponse:
-    result = await authenticate_platform_user(
-        db,
-        login=payload.login,
-        password=payload.password,
-        trace_id=get_trace_id(),
-        device_info=_device_info(request),
-    )
+    ip = _request_ip(request)
+    login_throttle.check(ip)
+    try:
+        result = await authenticate_platform_user(
+            db,
+            login=payload.login,
+            password=payload.password,
+            trace_id=get_trace_id(),
+            device_info=_device_info(request),
+        )
+    except APIError as exc:
+        _record_login_failure(ip, exc)
+        raise
     _set_refresh_cookie(response, result.tokens)
     return await _token_response(db, result.tokens, result.principal)
 
@@ -86,13 +94,19 @@ async def workshop_login(
     response: Response,
     db: Session,
 ) -> TokenResponse:
-    result = await authenticate_workshop_user(
-        db,
-        login=payload.login,
-        password=payload.password,
-        trace_id=get_trace_id(),
-        device_info=_device_info(request),
-    )
+    ip = _request_ip(request)
+    login_throttle.check(ip)
+    try:
+        result = await authenticate_workshop_user(
+            db,
+            login=payload.login,
+            password=payload.password,
+            trace_id=get_trace_id(),
+            device_info=_device_info(request),
+        )
+    except APIError as exc:
+        _record_login_failure(ip, exc)
+        raise
     _set_refresh_cookie(response, result.tokens)
     return await _token_response(db, result.tokens, result.principal)
 
@@ -377,6 +391,13 @@ def _clear_refresh_cookie(response: Response) -> None:
         secure=True,
         samesite="lax",
     )
+
+
+def _record_login_failure(ip: str, exc: APIError) -> None:
+    # Only credential misses count against the IP budget — lockout/blocked
+    # responses are already throttled by the account state itself.
+    if exc.code == INVALID_CREDENTIALS_CODE:
+        login_throttle.record_failure(ip)
 
 
 def _device_info(request: Request) -> dict[str, Any]:

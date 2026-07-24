@@ -306,8 +306,8 @@ onBeforeUnmount(() => {
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
-      <p>Xodimlar va ruxsatlar matritsasini egasi boshqaradi.</p>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
+      <p>Xodimlar va ruxsatlar matritsasini rahbar boshqaradi.</p>
     </section>
 
     <template v-else>
@@ -540,7 +540,7 @@ onBeforeUnmount(() => {
                     <span class="min-w-0">
                       <span class="nm">
                         {{ user.full_name }}
-                        <span v-if="user.is_owner" class="pill p-cut ml-1">Egasi</span>
+                        <span v-if="user.is_owner" class="pill p-cut ml-1">Rahbar</span>
                       </span>
                       <small class="block truncate text-ink-muted">{{ user.phone }}</small>
                     </span>

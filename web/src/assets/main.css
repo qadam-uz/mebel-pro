@@ -1677,6 +1677,17 @@
     stroke-width: 1.8;
   }
 
+  .workshop-icon-button svg,
+  .workshop-mobile-button svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
   .workshop-user-card {
     display: flex;
     align-items: center;
@@ -1722,16 +1733,60 @@
   }
 
   .workshop-mobile-button {
-    display: none;
-    min-height: 38px;
-    align-items: center;
-    gap: 8px;
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: none;
+    place-items: center;
     border: 1px solid var(--color-hairline-strong);
     border-radius: 7px;
     background: var(--color-elevated);
     color: var(--color-ink);
-    font-weight: 800;
-    padding: 8px 11px;
+  }
+
+  /* Desktop icon rail: the hamburger shrinks the sidebar to icons so
+     production pages (Kesish/Krom) get a wider workspace. Labels come back
+     via title tooltips; mobile never collapses (it uses the drawer). */
+  @media (min-width: 921px) {
+    .workshop-app.nav-collapsed {
+      grid-template-columns: 68px minmax(0, 1fr);
+    }
+
+    .workshop-app.nav-collapsed .workshop-sidebar {
+      padding: 18px 8px 14px;
+    }
+
+    .workshop-app.nav-collapsed .workshop-brand {
+      justify-content: center;
+      padding: 4px 0 18px;
+    }
+
+    .workshop-app.nav-collapsed .workshop-brand-copy,
+    .workshop-app.nav-collapsed .workshop-tenant-name,
+    .workshop-app.nav-collapsed .workshop-tenant-meta,
+    .workshop-app.nav-collapsed .workshop-user-name,
+    .workshop-app.nav-collapsed .workshop-user-meta,
+    .workshop-app.nav-collapsed .workshop-nav-label,
+    .workshop-app.nav-collapsed .workshop-nav-item > span:not(.workshop-nav-icon) {
+      display: none;
+    }
+
+    .workshop-app.nav-collapsed .workshop-tenant,
+    .workshop-app.nav-collapsed .workshop-user-card {
+      justify-content: center;
+      margin-right: 0;
+      margin-left: 0;
+      padding: 8px 0;
+    }
+
+    .workshop-app.nav-collapsed .workshop-sidebar > .workshop-nav {
+      padding-right: 0;
+    }
+
+    .workshop-app.nav-collapsed .workshop-nav-item {
+      justify-content: center;
+      padding: 8px 0;
+    }
   }
 
   .workshop-search-wrap {
@@ -2161,173 +2216,222 @@
     min-width: 0;
   }
 
+  /* The detail page fills the viewport under the sticky topbar — cards stretch
+     to the bottom edge and the page itself doesn't scroll. Anchored to the
+     shell's real geometry (the page container becomes a column flex when this
+     page is inside it) rather than a 100vh calc: the topbar's actual height
+     (border, wrapping rows) made any fixed subtraction overshoot by a few
+     pixels of scroll. Content taller than the window degrades to normal
+     scrolling. */
+  .workshop-page:has(> .od-page) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .od-page {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .od-fill {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
   .od-grid {
     display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+    flex: 1 1 auto;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  /* Order header is two cards side by side (QAD-92): a compact identity card on
-     the left and a wider phase-stepper card on the right. They wrap to stacked
-     full-width cards when the row is too narrow (no shrink → labels never get
-     crushed). */
-  .od-head-row {
-    display: grid;
-    grid-template-columns: fit-content(420px) minmax(0, 1fr);
-    gap: 18px;
-    margin-bottom: 18px;
+  .od-grid > .card {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
   }
 
+  .od-grid > .card > .card-b {
+    flex: 1 1 auto;
+  }
+
+  /* Order header — one command card (order-detail redesign): identity + status
+     pill + the single primary action on the first row, the meta line beneath,
+     and the compact phase strip along the bottom. */
   .od-head {
-    min-width: 0;
     border: 1px solid var(--color-hairline);
     border-radius: 12px;
     background: var(--color-elevated);
     box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
-    padding: 18px 22px;
+    padding: 16px 24px;
+    margin-bottom: 16px;
   }
 
-  .od-stepper-card {
+  .od-top {
     display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 14px;
-    border: 1px solid var(--color-hairline);
-    border-radius: 12px;
-    background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 4%, transparent);
-    padding: 18px 22px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
   }
 
-  .od-stepper-title {
-    margin: 0;
+  .od-top h1 {
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    margin: 0;
   }
 
-  .od-stepper-body {
+  .od-top .actions {
     display: flex;
-    flex: 1;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
     gap: 8px;
-  }
-
-  .od-stepper-card .od-steps {
-    margin-top: 0;
+    margin-left: auto;
   }
 
   .od-meta {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 8px 20px;
     margin-top: 8px;
     color: var(--color-ink-soft);
     font-size: 13.5px;
   }
 
-  .od-head h1 {
+  .od-meta b {
     color: var(--color-ink);
-    font-family: var(--font-serif);
-    font-size: 20px;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.15;
-    margin: 2px 0;
+    font-weight: 700;
   }
 
-  .od-head .actions {
+  .od-meta .lbl {
+    color: var(--color-ink-muted);
+  }
+
+  .od-hint {
+    margin: 8px 0 0;
+    color: var(--color-ink-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  /* The workshop note on the order's face — an inline content line, not a form.
+     Empty state is a quiet "+ Izoh qo'shish" ghost; the pencil opens the
+     blur-to-save editor in place. */
+  .od-note {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    border-top: 1px solid var(--color-hairline);
-    margin-top: 14px;
-    padding-top: 14px;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin-top: 8px;
+    font-size: 13.5px;
   }
 
-  /* Horizontal phase stepper in the order header (QAD-83) — at-a-glance "where
-     is this order", replacing the old Tarix tab. */
+  .od-note .lbl {
+    color: var(--color-ink-muted);
+  }
+
+  .od-note .txt {
+    color: var(--color-ink-soft);
+  }
+
+  .od-note-edit {
+    border: 0;
+    background: none;
+    padding: 2px;
+    cursor: pointer;
+    color: var(--color-ink-muted);
+    transition: color 140ms ease;
+  }
+
+  .od-note-edit:hover {
+    color: var(--color-ink);
+  }
+
+  .od-note-add {
+    border: 0;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 700;
+    transition: color 140ms ease;
+  }
+
+  .od-note-add:hover {
+    color: var(--color-ink);
+  }
+
+  /* Horizontal phase strip along the header card's bottom (QAD-83, slimmed by
+     the order-detail redesign) — accent marks progress; green stays reserved
+     for real success states. */
   .od-steps {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     margin-top: 16px;
+    border-top: 1px solid var(--color-hairline);
+    padding-top: 12px;
+    overflow-x: auto;
   }
 
   .od-step {
     display: flex;
     flex: 0 0 auto;
-    min-width: 54px;
-    flex-direction: column;
     align-items: center;
     gap: 7px;
-    text-align: center;
   }
 
   .od-step .od-dot {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--color-hairline-strong);
+    width: 11px;
+    height: 11px;
     border-radius: 999px;
-    background: var(--color-elevated);
+    background: var(--color-hairline-strong);
   }
 
+  /* Done = fully colored; current = outline only — the hollow ring reads as
+     "in progress", the solid fill as "behind us". */
   .od-step.done .od-dot {
-    border-color: var(--color-success);
-    background: var(--color-success);
+    background: var(--color-accent);
   }
 
   .od-step.current .od-dot {
-    border-color: var(--color-accent);
     background: var(--color-elevated);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 16%, transparent);
+    border: 2.5px solid var(--color-accent);
   }
 
   .od-step .od-lbl {
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 700;
     line-height: 1.2;
+    white-space: nowrap;
   }
 
   .od-step.done .od-lbl {
-    color: var(--color-ink-soft);
+    color: var(--color-ink);
   }
 
   .od-step.current .od-lbl {
-    color: var(--color-accent);
+    color: var(--color-accent-deep);
     font-weight: 800;
   }
 
   .od-conn {
     flex: 1 1 auto;
-    min-width: 14px;
+    min-width: 16px;
     height: 2px;
-    margin-top: 8px;
-    background: var(--color-hairline-strong);
+    margin: 0 8px;
+    background: var(--color-hairline);
   }
 
   .od-conn.done {
-    background: var(--color-success);
-  }
-
-  .od-cancelled {
-    display: inline-flex;
-    align-items: center;
-    margin-top: 16px;
-    border-radius: 999px;
-    background: var(--color-danger-soft);
-    color: var(--color-danger);
-    font-size: 13px;
-    font-weight: 800;
-    padding: 6px 14px;
-  }
-
-  .od-rework {
-    margin-top: 8px;
-    color: var(--color-warning);
-    font-size: 12px;
-    font-weight: 700;
+    background: var(--color-accent);
   }
 
   /* Collapsible detailed history (the former Tarix tab), folded into Umumiy. */
@@ -2790,6 +2894,7 @@
 
   .tbl .amt,
   .amt,
+  .tbl .right,
   .right {
     text-align: right;
   }
@@ -3697,16 +3802,15 @@
     content: '';
   }
 
+  /* Node language mirrors the header phase strip: done = fully colored,
+     the live phase = outline only (CB-113). */
   .tl .step.done::before {
-    background: var(--color-success);
+    background: var(--color-accent);
   }
 
-  /* Current phase — a hollow accent dot with a ring (CB-113). */
   .tl .step.now::before {
     background: var(--color-elevated);
-    box-shadow:
-      0 0 0 2px var(--color-accent),
-      0 0 0 5px color-mix(in srgb, var(--color-accent) 22%, transparent);
+    box-shadow: 0 0 0 2.5px var(--color-accent);
   }
 
   .tl .step.now {
@@ -5401,12 +5505,10 @@
       grid-template-columns: 1fr;
     }
 
-    /* QAD-70: on a shop-floor phone the order-detail sidebar (price summary +
-       the single primary action) must not sit below the whole overview. Once
-       .od-grid is a single column, float the aside above main so the totals
-       and the "Amallar" CTA land right under the tabs. Desktop is untouched. */
-    .od-grid > aside {
-      order: -1;
+    /* Stacked single-column detail: viewport-fill stops making sense — let the
+       cards take their natural height and the page scroll normally. */
+    .od-grid {
+      flex: 0 0 auto;
     }
   }
 
@@ -5423,10 +5525,6 @@
 
     .workshop-sidebar {
       display: none;
-    }
-
-    .workshop-mobile-button {
-      display: inline-flex;
     }
 
     .workshop-topbar {

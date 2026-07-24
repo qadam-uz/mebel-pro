@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-22
+updated: 2026-07-24
 order: 30
 ---
 
@@ -191,7 +191,7 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 ### Rules
 
 - **Assignment is metadata, not a trigger.** `manage_orders` staff assign the cutter and
-  edger from `confirmed` onward; assigning stamps `cutter_assigned_at` /
+  edger once the order is `confirmed`; assigning stamps `cutter_assigned_at` /
   `edger_assigned_at` and orders the station queue, but the order **stays `confirmed`**
   until the cutter starts. There is **no self-claiming** — a worker only sees and starts
   work already assigned to them. *Why the split:* when assignment itself flipped the
@@ -206,10 +206,14 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 - **One button per job; no per-item work.** Workers don't manage line items. The cutter
   views the cutting plan read-only and marks **Cutting done** once; the edger marks
   **Banding done** once. A `manage_orders` user may complete a job **on behalf** (worker
-  absent / system issue) — the dialog asks **"Who did this work?"**, defaulting to the
-  assignee; the chosen user is who gets **credited** for the production reports
-  ([`finance.md`](finance.md)).
-- **Re-assignment** of the cutter or edger is allowed until that job is marked done.
+  absent / system issue) — completion always **credits the assigned worker** in the
+  production reports ([`finance.md`](finance.md)); changing who gets credit is a
+  deliberate revert → reassign, never a completion-time pick.
+- **Re-assignment locks when the stage starts.** The cutter can be changed only while the
+  order is `confirmed`; the edger until banding is stamped started (so still swappable while
+  cutting runs). After the lock the deliberate path is a **revert** — it clears the start
+  stamp and reopens assignment — never a silent mid-job swap that would re-credit running
+  work.
 - **Revert is mistake-correction only** — one step, never out of `completed` or
   `cancelled`.
 - **Every transition is an `order_status_event`** (actor, from → to, reason, metadata),
@@ -408,13 +412,15 @@ Permission names below are the per-branch grants from
     assigned cutter / edger chip when set. **No drag between status columns** — status
     changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: status dropdown, the app-wide
+    total, items, created, action menu. Filters: a status dropdown of lifecycle buckets
+    (active default · completed · cancelled · all) — per-status drill-down is the board's
+    columns, not the filter — plus the app-wide
     date-range picker (preset shortcuts + a calendar for custom spans), and a **client
     phone** field — digits-contains against the order's contact phone, so a partial tail
     or a formatted number both match (non-digits in the input are ignored); branch and
-    search come from the topbar. The filters apply to both modes and to the CSV export.
-    Empty: "No orders in your
-    branch(es)." Zero branches: "No branches assigned — ask your workshop owner."
+    search come from the topbar. The filters apply to both modes.
+    Empty: "No orders — nothing matches the selected filters." Zero branches: "No branches
+    assigned — ask your workshop owner."
 - **New order — walk-in flow** (`manage_orders`) — the **+ New order** button on the Orders
   screen starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's
   enabled per the entry gate there, disabled with a "switch branch" hint otherwise. Screens:
@@ -435,30 +441,45 @@ Permission names below are the per-branch grants from
   atomically, returns to the detail) and **Discard**. While a revision sits open the order
   detail surfaces it (resume + discard); mechanics and guards:
   [Revising a placed order](#revising-a-placed-order).
-- **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client
-  mini-card link, status badge, total) with the status-appropriate actions:
+- **Order detail** (`/workshop/orders/:id`) — one command header card: order #, status
+  pill, client + total on a meta line, the internal workshop note inline beneath it
+  (added/edited in place, saved on blur; a quiet "add note" ghost when empty), a compact
+  phase strip along the bottom, and exactly **one status-appropriate primary action**;
+  the status history opens from a header clock button as a modal timeline; rarer actions
+  (edit, discount — a modal, revert, cancel) fold into an overflow menu. The
+  status-appropriate actions:
 
   | Status | Actions | Permission |
   |---|---|---|
   | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount (reason) | `manage_orders` |
   | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount · Cancel (reason) | assign/edit/discount/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
-  | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
-  | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
+  | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Change edger (metadata; the cutter is locked) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
+  | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Change edger (until banding starts) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
   | `ready` | Mark collected (→ `completed`) · Revert → `edge_banding`/`cutting` (reason) · Cancel (reason) | `manage_orders` |
   | `completed` / `cancelled` | (read-only) | — |
 
-  On-behalf job completion asks **"Who did this work?"** (defaults to the assignee; the
-  chosen user is credited). Destructive actions (cancel, revert) and "Mark collected"
-  use a danger / confirm dialog that names the effect ("client collected everything?").
+  Completion (own or on-behalf) credits the assigned worker. Destructive actions
+  (cancel, revert) and "Mark collected" use a danger / confirm dialog that names the
+  effect ("client collected everything?").
 
-  Tabs: Overview (item snapshots showing per-side edge materials, price breakdown, a
-  **read-only settlement summary** — total / recorded / balance, sourced from the
-  finance module, shown at any status to staff with
-  `view_finance_reports`/`manage_finance`; hidden otherwise — the warehouse warning if a
-  `shop` material is short, the internal note — inline editable), Cutting (SVG + PDF),
-  Timeline (status events + audit), Notes. There is
-  **no** Payments or Refunds tab here — recording and correcting money is the finance
-  module; the summary is a read-only mirror.
+  Below the header the page splits into two equal cards that fill the viewport (no page
+  scroll at desktop heights; short or narrow windows fall back to normal scrolling): the
+  **production card** — instant-apply assignment selects per the lock rules, full-width,
+  with the kromka slot always rendered (a quiet disabled box when the order has no
+  banding), completion sub-lines carrying the cut snapshot counters, and a **"Chizma va
+  tarkib"** button opening a modal with the cutting SVG + PDF, the item snapshots showing
+  per-side edge materials, and edge-material consumption — and the **money card**: total,
+  the **read-only settlement summary** (recorded / balance, sourced from the finance
+  module, shown at any status to staff with `view_finance_reports`/`manage_finance`,
+  hidden otherwise), and an always-expanded itemized price breakdown — one line per
+  material actually used (each `shop` panel material with its panels, each `shop` kromka
+  material with its consumed metres), the services (cutting, banding labour) with their
+  quantities, discount last. The material lines are rebuilt from order-time snapshots
+  (item snapshot prices × cutting-result demands), so they reconcile exactly with the
+  frozen subtotals even after later price-list changes. The warehouse warning banner (if
+  a `shop` material is short) sits above the cards. There is **no** Payments or Refunds
+  surface here — recording and correcting money is the finance module; the summary is a
+  read-only mirror.
 
 - **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
   `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar

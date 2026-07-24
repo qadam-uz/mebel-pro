@@ -102,7 +102,7 @@ const secretRows = computed(() => {
   const provision = admin.lastProvision
   if (!provision) return []
   return [
-    { label: 'Ega login', value: provision.owner.login },
+    { label: 'Rahbar login', value: provision.owner.login },
     { label: 'Vaqtinchalik parol', value: provision.temp_password },
   ]
 })
@@ -318,7 +318,7 @@ onMounted(async () => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidirish</span>
-        <input v-model="search" placeholder="Ustaxona nomi yoki egasi" />
+        <input v-model="search" placeholder="Ustaxona nomi yoki rahbari" />
       </label>
       <FormSelect
         v-model="statusFilter"
@@ -353,7 +353,7 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>Ustaxona</th>
-              <th>Egasi</th>
+              <th>Rahbar</th>
               <th>Filiallar</th>
               <th>Yaratildi</th>
               <th>Holat</th>
@@ -420,7 +420,7 @@ onMounted(async () => {
         @keydown="provisionTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="new-workshop-title">Yangi ustaxona va egasi</h3>
+          <h3 id="new-workshop-title">Yangi ustaxona va rahbari</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -507,7 +507,7 @@ onMounted(async () => {
                 </span>
               </label>
               <label class="admin-field" for="o-login">
-                <span>Ega login</span>
+                <span>Rahbar login</span>
                 <input
                   id="o-login"
                   v-model="form.ownerLogin"
@@ -640,7 +640,7 @@ onMounted(async () => {
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
       title="Ustaxona qo'shildi — bir martalik maxfiy ma'lumot"
-      intro="Ega login va vaqtinchalik parolni ustaxona egasiga yetkazing."
+      intro="Rahbar login va vaqtinchalik parolni ustaxona rahbariga yetkazing."
       :rows="secretRows"
       @close="closeSecret"
     />

@@ -21,8 +21,15 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 from app.api.deps import get_session
 from app.main import app
 from app.models import Base, import_all_models
+from app.modules.access.login_throttle import login_throttle
 
 import_all_models()
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_throttle() -> None:
+    # The login IP throttle is process-global in-memory state — isolate tests.
+    login_throttle.reset()
 
 
 @pytest.fixture

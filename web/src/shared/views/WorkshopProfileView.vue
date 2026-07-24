@@ -38,13 +38,13 @@ const isSaving = ref(false)
 const accountLabel = computed(() => auth.displayName)
 const scopeLabel = computed(() => {
   if (auth.me?.principal_type === 'workshop_user') {
-    return auth.me.is_owner ? 'Egasi · barcha ruxsatlar' : `${auth.me.grants.length} ruxsat`
+    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : `${auth.me.grants.length} ruxsat`
   }
   if (auth.me?.principal_type === 'platform_user') return 'Platforma operatori'
   return auth.me?.preferred_branch_id ? 'Afzal filial tanlangan' : 'Afzal filial tanlanmagan'
 })
 const workshopProfileSubtitle = computed(() => {
-  const role = auth.me?.is_owner ? 'Egasi' : 'Xodim'
+  const role = auth.me?.is_owner ? 'Rahbar' : 'Xodim'
   const tenant = workshop.settings?.name?.trim() || config.tenantLabel
   return `${auth.displayName} · ${role} · ${tenant}`
 })
@@ -182,7 +182,7 @@ onMounted(async () => {
           </div>
           <div class="row-item">
             <div>
-              <div class="nm">Egasi</div>
+              <div class="nm">Rahbar</div>
             </div>
             <div class="meta">
               <span
@@ -218,10 +218,10 @@ onMounted(async () => {
         <div class="card-b">
           <div v-if="auth.me?.is_owner" class="client-banner warn mb-0">
             <span class="font-extrabold">i</span>
-            <span>Egasi sifatida barcha filialda barcha ruxsatga avtomatik egasiz.</span>
+            <span>Rahbar sifatida barcha filialda barcha ruxsatga avtomatik egasiz.</span>
           </div>
           <p v-else-if="workshopGrantRows.length === 0" class="text-sm text-ink-soft">
-            Sizga hali hech qanday ruxsat berilmagan — ustaxona egasiga murojaat qiling.
+            Sizga hali hech qanday ruxsat berilmagan — ustaxona rahbariga murojaat qiling.
           </p>
           <div v-else class="divide-y divide-hairline">
             <div

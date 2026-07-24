@@ -1,6 +1,7 @@
 """Public access API used by routes and other modules."""
 
 from app.modules.access.auth import (
+    INVALID_CREDENTIALS_CODE,
     AuthSessionResult,
     authenticate_platform_user,
     authenticate_workshop_user,
@@ -20,6 +21,7 @@ from app.modules.access.clients import (
     normalize_uz_phone,
     seed_preferred_branch_if_missing,
 )
+from app.modules.access.login_throttle import LoginIpThrottle, login_throttle
 from app.modules.access.otp import (
     ClientOtpLoginResult,
     ClientOtpVerifyResult,
@@ -52,6 +54,7 @@ from app.modules.access.sessions import (
 
 __all__ = [
     "ACCESS_TTL",
+    "INVALID_CREDENTIALS_CODE",
     "MAX_SESSIONS_PER_PRINCIPAL",
     "REFRESH_TTL",
     "AuthSessionResult",
@@ -59,6 +62,7 @@ __all__ = [
     "ClientOtpLoginResult",
     "ClientOtpVerifyResult",
     "ClientResolution",
+    "LoginIpThrottle",
     "OtpRequestResult",
     "OtpSender",
     "PlainSessionTokens",
@@ -73,6 +77,7 @@ __all__ = [
     "get_session_by_access_token",
     "get_session_by_refresh_token",
     "hash_otp_code",
+    "login_throttle",
     "normalize_uz_phone",
     "principal_from_session",
     "prune_expired_otp_challenges",

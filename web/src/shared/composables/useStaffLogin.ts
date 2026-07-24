@@ -9,6 +9,7 @@ const STAFF_ERROR_TEXT: Record<string, string> = {
   invalid_credentials: 'Credentials do not match an active account.',
   account_locked: 'Account is locked. Try again later.',
   account_blocked: 'Account is blocked.',
+  login_rate_limited: 'Too many attempts. Try again later.',
   network_error: 'API is not reachable.',
 }
 

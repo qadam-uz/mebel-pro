@@ -118,8 +118,8 @@ onMounted(() => {
     </div>
 
     <div v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu sahifa faqat ustaxona egasiga ochiq</h3>
-      <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona egasiga murojaat qiling.</p>
+      <h3>Bu sahifa faqat ustaxona rahbariga ochiq</h3>
+      <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona rahbariga murojaat qiling.</p>
     </div>
 
     <div v-else-if="workshop.setupLoading" class="card max-w-[720px] p-5" aria-live="polite">

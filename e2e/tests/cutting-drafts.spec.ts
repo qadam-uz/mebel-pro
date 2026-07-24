@@ -568,11 +568,11 @@ test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   await page.goto(`/workshop/orders/${orderId}`)
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()
 
-  // The cutting plan lives under the order's "Chizma" tab.
-  await page.getByRole('tab', { name: 'Chizma' }).click()
-  await expect(page.getByRole('heading', { name: 'Chizma rejasi' })).toBeVisible()
-  await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
-  await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
+  // The cutting plan lives in the "Chizma va tarkib" modal now.
+  await page.getByRole('button', { name: 'Chizma va tarkib' }).click()
+  const chizmaDialog = page.getByRole('dialog', { name: 'Chizma va tarkib' })
+  await expect(chizmaDialog.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
+  await expect(chizmaDialog.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
 
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Chizma (PDF)' }).click()

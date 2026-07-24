@@ -39,6 +39,11 @@ const router = useRouter()
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const mobileNavOpen = ref(false)
+// Desktop icon-rail collapse: production workers mostly live in Kesish/Krom,
+// so the sidebar can shrink to icons for a wider workspace. Device-level
+// preference (floor tablets); mobile keeps the drawer instead.
+const SIDEBAR_COLLAPSED_KEY = 'mp-workshop-sidebar-collapsed'
+const sidebarCollapsed = ref(browserStorage()?.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
 const mobileTriggerRef = ref<HTMLButtonElement | null>(null)
 const drawerPanelRef = ref<HTMLElement | null>(null)
 const workshopSearchRootRef = ref<HTMLElement | null>(null)
@@ -71,7 +76,7 @@ const tenantLabel = computed(() => {
 const tenantMeta = computed(() => {
   if (!auth.me) return config.tenantMeta
   if (config.role === 'workshop') {
-    return auth.me.is_owner ? 'Egasi · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
+    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
   }
   if (config.role === 'client') return auth.me.phone ?? auth.displayName
   if (config.role === 'admin') return auth.displayName
@@ -238,6 +243,18 @@ function openMobileNav() {
 function closeMobileNav() {
   if (!mobileNavOpen.value) return
   mobileNavOpen.value = false
+}
+
+// One trigger for both worlds: on desktop it toggles the sidebar between full
+// and icon-rail; on mobile it opens the drawer.
+function onNavTrigger() {
+  const isDesktop = window.matchMedia('(min-width: 921px)').matches
+  if (config.role === 'workshop' && isDesktop) {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+    browserStorage()?.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
+    return
+  }
+  openMobileNav()
 }
 
 function onDrawerKeydown(event: KeyboardEvent) {
@@ -493,7 +510,11 @@ onBeforeUnmount(() => {
     </main>
   </div>
 
-  <div v-else-if="config.role === 'workshop'" class="workshop-app">
+  <div
+    v-else-if="config.role === 'workshop'"
+    class="workshop-app"
+    :class="{ 'nav-collapsed': sidebarCollapsed }"
+  >
     <aside class="workshop-sidebar" aria-label="Workshop navigation">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="workshop-brand-mark" />
@@ -520,6 +541,7 @@ onBeforeUnmount(() => {
             :to="item.to"
             class="workshop-nav-item"
             active-class="on"
+            :title="item.label"
           >
             <span class="workshop-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
@@ -593,10 +615,10 @@ onBeforeUnmount(() => {
           ref="mobileTriggerRef"
           class="workshop-mobile-button"
           type="button"
-          @click="openMobileNav"
+          aria-label="Menyu"
+          @click="onNavTrigger"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
-          Menyu
         </button>
 
         <ProjectDropdown

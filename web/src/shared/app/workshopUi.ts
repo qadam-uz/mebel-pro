@@ -77,7 +77,7 @@ export function grantSummary(
   isOwner: boolean,
   grants: Array<{ permission: string; branch_id: string }>,
 ) {
-  if (isOwner) return 'Egasi · barcha ruxsatlar'
+  if (isOwner) return 'Rahbar · barcha ruxsatlar'
   if (grants.length === 0) return 'Ruxsat berilmagan'
   const branches = new Set(grants.map((grant) => grant.branch_id))
   const permissions = new Set(grants.map((grant) => grant.permission))
@@ -104,6 +104,8 @@ export const workshopErrorMessages: Record<string, string> = {
   order_revision_branch_locked:
     "Tahrir buyurtmaning filialida qoladi — filialni o'zgartirib bo'lmaydi.",
   order_revision_failed: "Tahrirni boshlab bo'lmadi. Qayta urinib ko'ring.",
+  cutting_already_started: "Kesish allaqachon boshlangan — kesuvchini o'zgartirib bo'lmaydi.",
+  banding_already_started: "Kromka ishi allaqachon boshlangan — ustani o'zgartirib bo'lmaydi.",
   cutting_complete_failed: "Kesishni tugatib bo'lmadi. Qayta urinib ko'ring.",
   banding_complete_failed: "Kromka ishini tugatib bo'lmadi. Qayta urinib ko'ring.",
   expense_save_failed: "Xarajatni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
