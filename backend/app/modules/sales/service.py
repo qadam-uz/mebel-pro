@@ -1165,8 +1165,6 @@ async def start_cutting(
     _expect_status(order, {OrderStatus.CONFIRMED})
     if order.assigned_cutter_user_id is None:
         raise APIError("cutter_required", "Assign a cutter first")
-    if await _order_has_banding(db, order.id) and order.assigned_edger_user_id is None:
-        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_cutter_user_id, job="cutting"
     )
@@ -1199,6 +1197,10 @@ async def start_banding(
     _expect_status(order, {OrderStatus.EDGE_BANDING})
     if order.banding_started_at is not None:
         raise APIError("banding_already_started", "Banding is already started")
+    # Each stage gates on its own worker at its own start — cutting is never
+    # held up by the edger slot; the edger becomes mandatory here.
+    if order.assigned_edger_user_id is None:
+        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_edger_user_id, job="banding"
     )

@@ -513,17 +513,10 @@ test("client places an order and workshop completes it through production queues
   );
   await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
   await cutterAssigned;
-  const edgerAssigned = workshopPage.waitForResponse(
-    (response) => response.url().includes("/assign") && response.ok(),
-  );
-  await chooseOption(
-    workshopPage,
-    /Kromka yopishtiruvchi/,
-    new RegExp(setup.ownerLogin),
-  );
-  await edgerAssigned;
   // Assignment is metadata — the order stays confirmed (queued in the
-  // master's station) until the job is actually started.
+  // master's station) until the job is actually started. The edger slot may
+  // stay open: cutting starts on a cutter-only assignment; the edger gate
+  // lives at the banding start.
   await expect(
     workshopPage.getByRole("button", { name: "Kesishni boshlash" }),
   ).toBeEnabled();
@@ -534,6 +527,21 @@ test("client places an order and workshop completes it through production queues
   await expect(
     workshopPage.getByText("Kesilmoqda", { exact: true }).first(),
   ).toBeVisible();
+
+  // The open edger slot carries a nudge while the saw runs; filling it mid-cut
+  // is the supported path (the edger locks only once banding starts).
+  await expect(
+    workshopPage.getByText(/kromka boshlanishidan oldin tanlang/i),
+  ).toBeVisible();
+  const edgerAssigned = workshopPage.waitForResponse(
+    (response) => response.url().includes("/assign") && response.ok(),
+  );
+  await chooseOption(
+    workshopPage,
+    /Kromka yopishtiruvchi/,
+    new RegExp(setup.ownerLogin),
+  );
+  await edgerAssigned;
 
   // The station terminal: the started job sits pinned as "Hozirgi ish" with
   // the worker's Tugatdim action behind a plain success confirm.

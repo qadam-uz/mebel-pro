@@ -34,12 +34,13 @@ async def _worker_access(db: AsyncSession, worker_id: uuid.UUID) -> str:
     return tokens.access_token
 
 
-async def test_start_cutting_requires_cutter_and_edger_assignments(
+async def test_start_cutting_requires_only_a_cutter(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
     order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
     worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    edger = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
     order_id = order["id"]
 
     approved = await client.post(
@@ -57,7 +58,8 @@ async def test_start_cutting_requires_cutter_and_edger_assignments(
     assert unassigned_start.status_code == 400
     assert unassigned_start.json()["code"] == "cutter_required"
 
-    # A banded order accepts a cutter-only assignment (metadata) …
+    # A banded order starts cutting on a cutter-only assignment — the edger
+    # slot may stay open until the banding stage itself needs it.
     cutter_only = await client.post(
         f"/api/v1/workshop/orders/{order_id}/assign",
         headers=_auth(owner_access),
@@ -65,28 +67,82 @@ async def test_start_cutting_requires_cutter_and_edger_assignments(
     )
     assert cutter_only.status_code == 200
     assert cutter_only.json()["status"] == "confirmed"
+    assert cutter_only.json()["assigned_edger_user_id"] is None
 
-    # … but cannot start until the edger is also assigned.
-    no_edger_start = await client.post(
+    started = await client.post(
         f"/api/v1/workshop/orders/{order_id}/start-cutting",
         headers=_auth(owner_access),
         json={"version": cutter_only.json()["version"]},
     )
-    assert no_edger_start.status_code == 400
-    assert no_edger_start.json()["code"] == "edger_required"
+    assert started.status_code == 200
+    assert started.json()["status"] == "cutting"
 
+    # The edger can still be assigned mid-cut (metadata, no status change).
+    late_edger = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "edger_user_id": str(edger.id)},
+    )
+    assert late_edger.status_code == 200
+    assert late_edger.json()["status"] == "cutting"
+    assert late_edger.json()["assigned_edger_user_id"] == str(edger.id)
+
+
+async def test_start_banding_requires_an_assigned_edger(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
     assigned = await client.post(
         f"/api/v1/workshop/orders/{order_id}/assign",
         headers=_auth(owner_access),
-        json={"version": cutter_only.json()["version"], "edger_user_id": str(worker.id)},
+        json={"version": approved.json()["version"], "cutter_user_id": str(worker.id)},
     )
     started = await client.post(
         f"/api/v1/workshop/orders/{order_id}/start-cutting",
         headers=_auth(owner_access),
         json={"version": assigned.json()["version"]},
     )
-    assert started.status_code == 200
-    assert started.json()["status"] == "cutting"
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+    assert cut_done.json()["status"] == "edge_banding"
+    assert cut_done.json()["assigned_edger_user_id"] is None
+
+    # The banding stage owns the edger gate — even on-behalf, start is refused
+    # until someone is assigned, so the stage can never run uncredited.
+    no_edger_start = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-banding",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"]},
+    )
+    assert no_edger_start.status_code == 400
+    assert no_edger_start.json()["code"] == "edger_required"
+
+    late_assign = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "edger_user_id": str(worker.id)},
+    )
+    assert late_assign.status_code == 200
+
+    band_start = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-banding",
+        headers=_auth(owner_access),
+        json={"version": late_assign.json()["version"]},
+    )
+    assert band_start.status_code == 200
+    assert band_start.json()["banding_started_at"] is not None
 
 
 async def test_start_banding_stamps_once_within_edge_banding(
