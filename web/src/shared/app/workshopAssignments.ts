@@ -61,3 +61,17 @@ export function assignmentChipsForOrder(
     chipForWorker('edger', order.assigned_edger_user_id, resolveWorker, order.branch_id),
   ].filter((chip): chip is AssignmentChip => chip !== null)
 }
+
+export interface EdgerGapOrder {
+  status: string
+  has_banding: boolean
+  assigned_edger_user_id: string | null
+}
+
+// Starting the saw no longer waits for the edger, so once production is
+// running the open slot needs a visible nudge: from `cutting` on, a banded
+// order without an edger is heading for a stall at the Krom station.
+export function edgerMissingForOrder(order: EdgerGapOrder): boolean {
+  if (!order.has_banding || order.assigned_edger_user_id) return false
+  return order.status === 'cutting' || order.status === 'edge_banding'
+}
