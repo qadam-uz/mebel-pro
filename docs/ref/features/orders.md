@@ -180,7 +180,7 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 | — → `new` | client places the order from a chosen cutting result · or `manage_orders` staff place it for a walk-in ([Staff-created orders](#staff-created-orders-walk-in-clients)) | price snapshot frozen |
 | `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) · automatic on a staff-created order (same staff actor, same operation) | — |
 | `new → cancelled` | **Cancel** · client (only while `new`) or `manage_orders` + reason | — |
-| `confirmed → cutting` | **Start cutting** · `process_production` (the assigned cutter), or `manage_orders` on-behalf — requires a cutter assigned, and an edger too if any part is banded | stamp `cutting_started_at` |
+| `confirmed → cutting` | **Start cutting** · `process_production` (the assigned cutter), or `manage_orders` on-behalf — requires a cutter assigned | stamp `cutting_started_at` |
 | `cutting → edge_banding` | **Cutting done** · `process_production`, or `manage_orders` on-behalf — *gateway: a part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
 | `cutting → ready` | **Cutting done** · same — *gateway: no part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
 | `edge_banding → ready` | **Banding done** · `process_production`, or `manage_orders` on-behalf | stamp the edger + snapshot; **decrement edge stock per edge material** (`shop` sides only) |
@@ -203,6 +203,13 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
   assigned worker — or `manage_orders` on-behalf. "In production" therefore means a
   machine is actually running — including for the client, whose tracker enters *In
   production* only at the start, not at assignment.
+- **Each stage gates on its own worker, at its own start.** Start cutting requires only
+  the assigned cutter (`cutter_required`); Start banding requires an assigned edger
+  (`edger_required`). A banded order may start cutting with the edger slot still open —
+  the saw never waits on a later stage's staffing; the office fills the slot while
+  cutting runs, and the board and order detail flag the open slot from `cutting` on. An
+  order can therefore sit in `edge_banding` unassigned; banding cannot start until the
+  slot is filled.
 - **One button per job; no per-item work.** Workers don't manage line items. The cutter
   views the cutting plan read-only and marks **Cutting done** once; the edger marks
   **Banding done** once. A `manage_orders` user may complete a job **on behalf** (worker
@@ -419,8 +426,9 @@ Permission names below are the per-branch grants from
   branch-scoped, two modes:
   - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each
     header has a count; cards: order #, client name + phone, total, item count, age, the
-    assigned cutter / edger chip when set. **No drag between status columns** — status
-    changes go through the card's action menu.
+    assigned cutter / edger chip when set — plus a warning chip when a banded order in
+    `cutting` / `edge_banding` still has no edger. **No drag between status columns** —
+    status changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
     total, items, created, action menu. Filters: a status dropdown of lifecycle buckets
     (active default · completed · cancelled · all) — per-status drill-down is the board's
@@ -464,7 +472,7 @@ Permission names below are the per-branch grants from
   | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount / surcharge (reason) | `manage_orders` |
   | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount / surcharge · Cancel (reason) | assign/edit/discount/surcharge/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
   | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Change edger (metadata; the cutter is locked) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
-  | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Change edger (until banding starts) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
+  | `edge_banding` | Start banding (stamp; requires an assigned edger) · Banding done (→ `ready`; decrements edges per material) · Change edger (until banding starts) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
   | `ready` | Mark collected (→ `completed`) · Revert → `edge_banding`/`cutting` (reason) · Cancel (reason) | `manage_orders` |
   | `completed` / `cancelled` | (read-only) | — |
 
@@ -498,25 +506,33 @@ Permission names below are the per-branch grants from
   the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at
   the bottom. The page stays fresh on its own (~15 s poll + refresh on focus) — no manual
-  refresh button. Cards: order #, material, panel / part counts (cutting station) or
-  metres by edge material (banding station), assignment age, and the client's **first
-  name only** — production surfaces never show prices, discounts, or client phone
-  numbers; the payload is **server-trimmed**, not hidden client-side. A non-owner sees
-  only their own assignments; an **owner / `manage_orders`** user sees the whole branch
-  queue grouped by assignee, with unassigned `confirmed` work surfaced as a call to
-  action into Orders, and may start / complete **on behalf**. **Boshlash** on a queued
+  refresh button. Cards: order #, part / panel counts (cutting station) or metres of
+  tape + parts (banding station), assignment age, and the client's **first name only**
+  — material names live on the Chizma sheet, one tap away, and production surfaces
+  never show prices, discounts, or client phone numbers; the payload is
+  **server-trimmed**, not hidden client-side. The queue is
+  **personal for everyone, owner included**: only jobs assigned to the signed-in user,
+  scoped to the topbar branch picker, and "completed today" is the caller's own tally —
+  the server enforces the scope. Owners / `manage_orders` users manage statuses
+  **on-behalf from the office order page**, not at the station. **Boshlash** on a queued
   card starts the job and opens its Chizma sheet in one tap. Empty: "Nothing assigned —
   nice."
 - **"Chizma" job sheet** (`/workshop/production/:order_id`) — the worker-grade job view
-  and the pure-`process_production` replacement for the office order detail: the cutting
-  plan SVG (zoomable) with a **panels rail** beside it — panels stacked vertically, each
-  with a mark toggle the worker uses as their own cut checkpoints (stored on the tablet
-  only, never synced; marking a panel advances the drawing to the next unmarked one), the
-  parts list under it (part **names**, never refs; dimensions in large mono type; a
-  per-part edge glyph marking which sides get banding), and a sticky action bar with the
-  single state-appropriate action (**Boshlash** / **Tugatdim**). The sheet stays fresh
-  like the queues and re-fetches right before start / complete so a stale version can't
-  conflict. The PDF lives on the office order page, not here.
+  and the pure-`process_production` replacement for the office order detail: a head of
+  **stat chips** (client first name, parts, panels, total tape metres — no material
+  text), the cutting plan SVG (zoomable, height-capped so the whole panel fits the
+  screen without scrolling; on the banding station a **tape legend** under it names
+  each roll with a swatch matching the drawing's edge ticks and its metres) with a
+  **panels rail** beside it — panels stacked vertically; on the
+  **cutting station only**, each panel carries an icon mark toggle the worker uses as
+  their own cut checkpoints (stored on the tablet only, never synced; marking a panel
+  advances the drawing to the next unmarked one — the banding view shows the rail
+  without marks), the parts list under it (part **names**, never refs; dimensions in
+  large mono type; a per-part edge glyph marking which sides get banding), and a sticky
+  action bar with the single state-appropriate action (**Boshlash** / **Tugatdim**),
+  shown **to the assignee only**. The sheet stays fresh like the queues and re-fetches
+  right before start / complete so a stale version can't conflict. The PDF lives on the
+  office order page, not here.
 - **Completion** — a success-styled confirm (not danger) naming the order and what
   happens next ("moves to banding — <edger>'s queue"); the manager-revert-only caveat is
   a quiet secondary line. The terminal credits **the assignee**; the on-behalf "who did
@@ -563,10 +579,10 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Assigned but not started** → the order stays `confirmed`: queued in the assignee's
   station, grouped under them in the owner's view, still "Confirmed" to the client. No
   auto-start, no timeout.
-- **Start guards** → starting cutting without an assigned cutter (`cutter_required`), or
-  on a banded order without an edger (`edger_required`), is rejected; a non-assigned
-  `process_production` user starting someone else's job is rejected; **Start banding**
-  twice is rejected (`banding_already_started`).
+- **Start guards** → starting cutting without an assigned cutter (`cutter_required`) is
+  rejected — the edger slot never blocks the saw; **Start banding** without an assigned
+  edger (`edger_required`) or twice (`banding_already_started`) is rejected; a
+  non-assigned `process_production` user starting someone else's job is rejected.
 - **One person holds `manage_orders` + `process_production`** → fine; they approve,
   assign themselves, start, and complete the jobs (credited to themselves). v1 assumes
   **no separation of duties**.

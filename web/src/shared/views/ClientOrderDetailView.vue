@@ -12,6 +12,8 @@ import {
   formatRelativeDate,
   formatTodayHours,
 } from '@/shared/app/clientUi'
+import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
+import { orphanPartIndexByRef } from '@/shared/app/cuttingResultsDisplay'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -123,6 +125,23 @@ function materialName(snapshot: Record<string, unknown>) {
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
   return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+}
+
+// Placement rows name parts like the drawing does — detail names with the
+// editor's D-numbering as fallback, never the raw part_ref uuid.
+const partNamesByRef = computed(() => {
+  const current = result.value
+  const names = new Map<string, string>()
+  if (!current) return names
+  ;(current.parts_snapshot ?? []).forEach((part, index) => {
+    names.set(part.part_ref, partDisplayName(part, index))
+  })
+  for (const [ref, index] of orphanPartIndexByRef(current)) names.set(ref, `D${index + 1}`)
+  return names
+})
+
+function placementName(placement: CuttingPlacement) {
+  return partNamesByRef.value.get(placement.part_ref) ?? 'D1'
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -605,7 +624,7 @@ onMounted(() => {
                         "
                         @click="selectPlacement(placement)"
                       >
-                        {{ placement.part_ref }} #{{ placement.part_quantity_index }}
+                        {{ placementName(placement) }} #{{ placement.part_quantity_index }}
                         <span v-if="placement.rotated" class="font-bold">R</span>
                       </button>
                     </div>
@@ -749,9 +768,9 @@ onMounted(() => {
           <section class="client-card">
             <div class="client-card-h"><h2 class="!text-base">Qismlar</h2></div>
             <div class="client-card-b">
-              <div v-for="item in order.items" :key="item.id" class="client-row-item">
+              <div v-for="(item, index) in order.items" :key="item.id" class="client-row-item">
                 <div>
-                  <div class="client-row-name">{{ item.part_ref }}</div>
+                  <div class="client-row-name">D{{ index + 1 }}</div>
                   <div class="text-sm text-ink-muted">
                     {{ materialName(item.material_snapshot) }} · {{ item.length_mm }}x{{
                       item.width_mm

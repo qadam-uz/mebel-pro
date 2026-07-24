@@ -7,7 +7,7 @@ import type { DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine } from '@/shared/app/errorTrace'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { useRolePath } from '@/shared/app/paths'
-import { assignmentChipsForOrder } from '@/shared/app/workshopAssignments'
+import { assignmentChipsForOrder, edgerMissingForOrder } from '@/shared/app/workshopAssignments'
 import {
   revertTargetLabelForOrder,
   workshopOrderListActions,
@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
                 </span>
               </span>
               <span
-                v-if="assignmentChips(order).length > 0"
+                v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
                 class="worker-chips mt-3"
                 :aria-label="`${order.order_number} mas'ullari`"
               >
@@ -876,6 +876,14 @@ onBeforeUnmount(() => {
                 >
                   <AppIcon :name="chip.icon" />
                   {{ chip.initials }}
+                </span>
+                <span
+                  v-if="edgerMissingForOrder(order)"
+                  class="pill p-warn"
+                  title="Kromka ustasi tayinlanmagan"
+                >
+                  <AppIcon name="alert" />
+                  kromka ustasi yo'q
                 </span>
               </span>
             </div>
@@ -919,7 +927,10 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td>
-                  <span v-if="assignmentChips(order).length > 0" class="worker-chips">
+                  <span
+                    v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
+                    class="worker-chips"
+                  >
                     <span
                       v-for="chip in assignmentChips(order)"
                       :key="`${order.id}-table-${chip.key}-${chip.userId}`"
@@ -930,6 +941,14 @@ onBeforeUnmount(() => {
                     >
                       <AppIcon :name="chip.icon" />
                       {{ chip.initials }}
+                    </span>
+                    <span
+                      v-if="edgerMissingForOrder(order)"
+                      class="pill p-warn"
+                      title="Kromka ustasi tayinlanmagan"
+                    >
+                      <AppIcon name="alert" />
+                      kromka ustasi yo'q
                     </span>
                   </span>
                   <small v-else class="text-ink-soft">{{ assignedText(order) || '—' }}</small>

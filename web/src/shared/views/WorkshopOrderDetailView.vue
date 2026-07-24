@@ -142,16 +142,23 @@ const edgerSub = computed<SlotSub>(() => {
     return { kind: 'done', text: formatDate(current.edge_completed_at) }
   if (canManageOrders.value && current.status === 'edge_banding' && current.banding_started_at)
     return { kind: 'hint', text: "Kromka boshlangan — ustani o'zgartirib bo'lmaydi." }
+  // The open slot doesn't block the saw, so from `cutting` on it carries the
+  // nudge that used to live on the (blocked) start button.
+  if (canManageOrders.value && !current.assigned_edger_user_id) {
+    if (current.status === 'cutting')
+      return { kind: 'hint', text: 'Hali tayinlanmagan — kromka boshlanishidan oldin tanlang.' }
+    if (current.status === 'edge_banding')
+      return { kind: 'hint', text: 'Kromka ustasi tayinlanmaguncha ish boshlanmaydi.' }
+  }
   return null
 })
-// What still blocks the start tap — the backend refuses to start a banded
-// order without an edger, so surface the gap instead of a dead click.
+// What still blocks the start tap — surface the gap instead of a dead click.
+// The edger is deliberately not required here: its gate sits at the banding
+// start, so the saw never waits on a later stage's staffing.
 const startCuttingMissing = computed(() => {
   const current = order.value
   if (!current || current.status !== 'confirmed') return null
   if (!current.assigned_cutter_user_id) return 'Kesuvchi tanlanmagan'
-  if (current.has_banding && !current.assigned_edger_user_id)
-    return 'Kromka yopishtiruvchi tanlanmagan'
   return null
 })
 // Start is gated like completion: the assigned master, or the office on-behalf.
@@ -159,6 +166,15 @@ const canStartCutting = computed(() => {
   const current = order.value
   if (!current || current.status !== 'confirmed') return false
   return startCuttingMissing.value === null && canCompleteCutting.value
+})
+// The banding start owns the edger gate (backend `edger_required`) — only the
+// office can ever see this state, a worker without the assignment gets no
+// button at all.
+const startBandingMissing = computed(() => {
+  const current = order.value
+  if (!current || current.status !== 'edge_banding' || current.banding_started_at) return null
+  if (!current.assigned_edger_user_id) return 'Kromka yopishtiruvchi tanlanmagan'
+  return null
 })
 const workerOptions = computed<ChoiceOption[]>(() =>
   orders.workerOptions.map((worker) => ({
@@ -259,6 +275,8 @@ const primaryAction = computed<PrimaryAction | null>(() => {
           key: 'startBanding',
           label: 'Kromka boshlash',
           busyLabel: 'Boshlanmoqda…',
+          disabled: startBandingMissing.value !== null,
+          hint: startBandingMissing.value,
           run: startBanding,
         }
   }
@@ -506,6 +524,7 @@ async function startCutting() {
 async function startBanding() {
   const current = order.value
   if (!current || !canCompleteBanding.value || current.banding_started_at) return
+  if (!current.assigned_edger_user_id) return
   await run(
     () => orders.startBanding(current.id, current.version),
     'Kromka boshlandi.',

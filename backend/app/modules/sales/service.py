@@ -1175,8 +1175,6 @@ async def start_cutting(
     _expect_status(order, {OrderStatus.CONFIRMED})
     if order.assigned_cutter_user_id is None:
         raise APIError("cutter_required", "Assign a cutter first")
-    if await _order_has_banding(db, order.id) and order.assigned_edger_user_id is None:
-        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_cutter_user_id, job="cutting"
     )
@@ -1209,6 +1207,10 @@ async def start_banding(
     _expect_status(order, {OrderStatus.EDGE_BANDING})
     if order.banding_started_at is not None:
         raise APIError("banding_already_started", "Banding is already started")
+    # Each stage gates on its own worker at its own start — cutting is never
+    # held up by the edger slot; the edger becomes mandatory here.
+    if order.assigned_edger_user_id is None:
+        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_edger_user_id, job="banding"
     )
@@ -1252,17 +1254,19 @@ async def list_production_queue(
     base_query = select(Order).where(Order.workshop_id == principal.workshop_id)
     if branch_id is not None:
         base_query = base_query.where(Order.branch_id == branch_id)
+    # The station queue is personal for everyone — owner included: only jobs
+    # assigned to the caller, only the caller's own completions. On-behalf
+    # management lives on the office order page, not at the station terminal.
+    _require_station_access(principal)
     active_query = base_query.where(
-        assigned_column.is_not(None),
+        assigned_column == principal.principal_id,
         Order.status.in_(active_statuses),
     )
     completed_since = datetime.now(UTC) - timedelta(hours=24)
-    completed_query = base_query.where(completed_column >= completed_since)
-    if not principal.is_owner:
-        active_scope = _production_visibility(principal, worker_column=assigned_column)
-        completed_scope = _production_visibility(principal, worker_column=credited_column)
-        active_query = active_query.where(active_scope)
-        completed_query = completed_query.where(completed_scope)
+    completed_query = base_query.where(
+        credited_column == principal.principal_id,
+        completed_column >= completed_since,
+    )
 
     active_orders = list((await db.scalars(active_query)).all())
     completed_orders = list((await db.scalars(completed_query)).all())
@@ -1307,32 +1311,17 @@ async def get_production_job(
     )
 
 
-def _production_visibility(
-    principal: AuthenticatedPrincipal,
-    *,
-    worker_column: Any,
-) -> ColumnElement[bool]:
-    """Station visibility for non-owners: whole branch where the principal can
-    manage orders, own jobs only where they merely process production."""
-    manage_branch_ids = {
-        grant.branch_id
+def _require_station_access(principal: AuthenticatedPrincipal) -> None:
+    """The station pages need some production standing — the owner, or any
+    process_production / manage_orders grant. Assignment does the real scoping."""
+    if principal.is_owner:
+        return
+    if any(
+        grant.permission in {Permission.PROCESS_PRODUCTION, Permission.MANAGE_ORDERS}
         for grant in principal.grants
-        if grant.permission is Permission.MANAGE_ORDERS
-    }
-    process_branch_ids = _production_branch_ids(principal) - manage_branch_ids
-    conditions: list[ColumnElement[bool]] = []
-    if manage_branch_ids:
-        conditions.append(Order.branch_id.in_(manage_branch_ids))
-    if process_branch_ids:
-        conditions.append(
-            and_(
-                Order.branch_id.in_(process_branch_ids),
-                worker_column == principal.principal_id,
-            )
-        )
-    if not conditions:
-        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
-    return or_(*conditions)
+    ):
+        return
+    raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
 
 async def _production_job_cards(

@@ -24,21 +24,6 @@ export function workshopQueuePartsLine(order: WorkshopQueuePanelSummary) {
   return `${order.item_count} qism${panels ? ` · ${panels} panel` : ''}`
 }
 
-export function workshopEdgeMaterialLabel(line: WorkshopEdgeMaterialDemand) {
-  return [line.material_label, line.thickness_mm ? `${line.thickness_mm} mm` : null, line.color]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-export function workshopQueueEdgeLine(lines: WorkshopEdgeMaterialDemand[]) {
-  if (lines.length === 0) return 'kromka rejasi'
-  return lines
-    .map(
-      (line) => `${workshopEdgeMaterialLabel(line)}: ${formatStockQuantity(line.consumed_mm, 'm')}`,
-    )
-    .join(' · ')
-}
-
 export function workshopProductionQueueCounts(
   orders: WorkshopProductionQueueOrder[],
   userId: string | null | undefined,
@@ -90,7 +75,6 @@ export interface ProductionStationJob {
   banding_started_at: string | null
   assigned_cutter: { id: string; full_name: string } | null
   assigned_edger: { id: string; full_name: string } | null
-  material_labels: string[]
   item_count: number
   planned_panels: number
   planned_edge_lines: WorkshopEdgeMaterialDemand[]
@@ -122,37 +106,17 @@ export function productionJobAssignee(job: ProductionStationJob, station: Produc
   return station === 'cutting' ? job.assigned_cutter : job.assigned_edger
 }
 
-// Owner view: the branch queue grouped by master, insertion-ordered so groups
-// follow the queue's FIFO order. Jobs missing an assignee (shouldn't happen —
-// the backend only returns assigned jobs) fall into a trailing group.
-export function groupProductionJobsByAssignee<T extends ProductionStationJob>(
-  jobs: T[],
-  station: ProductionStationKey,
-) {
-  const groups = new Map<string, { worker: { id: string; full_name: string } | null; jobs: T[] }>()
-  for (const job of jobs) {
-    const worker = productionJobAssignee(job, station)
-    const key = worker?.id ?? 'unassigned'
-    const group = groups.get(key) ?? { worker, jobs: [] }
-    group.jobs.push(job)
-    groups.set(key, group)
-  }
-  return [...groups.values()]
-}
-
-// One line of card meta: what the master needs to size the job at a glance —
-// panel material + counts for the saw; metres by edge material for the bander
-// (the edge line already names the tape, so the panel material would be noise).
+// One line of card meta: how big the job is, in the station's own units —
+// parts + panels for the saw, metres of tape (plus parts) for the bander.
+// Material names live on the Chizma sheet, one tap away.
 export function productionJobMetaLine(job: ProductionStationJob, station: ProductionStationKey) {
-  if (station === 'banding') {
-    if (job.planned_edge_lines.length > 0) return workshopQueueEdgeLine(job.planned_edge_lines)
-    return job.material_labels.join(', ')
-  }
-  const material = job.material_labels.join(', ')
   const counts = workshopQueuePartsLine({
     item_count: job.item_count,
     planned_panels: job.planned_panels,
     panels_used_snapshot: null,
   })
-  return [material, counts].filter(Boolean).join(' · ')
+  if (station !== 'banding') return counts
+  const totalMm = job.planned_edge_lines.reduce((sum, line) => sum + line.consumed_mm, 0)
+  if (totalMm <= 0) return counts
+  return `${formatStockQuantity(totalMm, 'm')} krom · ${job.item_count} qism`
 }
