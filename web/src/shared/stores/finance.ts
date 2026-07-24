@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 
 export type IncomeType = 'order_payment' | 'other'
@@ -183,8 +183,9 @@ export const useFinanceStore = defineStore('finance', () => {
   const actionTraceId = ref<string | null>(null)
 
   function capture(errorValue: unknown, fallback: string) {
-    error.value = fallback
-    traceId.value = apiTraceId(errorValue)
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
   }
 
   function captureAction(errorValue: unknown, fallback: string) {

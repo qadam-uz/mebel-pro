@@ -5,6 +5,7 @@ import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ApiError, apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, draftDisplayName } from '@/shared/app/clientUi'
 import { MAX_PARTS, MIN_PART_MM } from '@/shared/app/constants'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import {
   clientCuttingEditorAdapter,
   cuttingEditorAdapterKey,
@@ -1496,7 +1497,7 @@ onBeforeRouteLeave(async () => {
       <div class="client-error-icon">!</div>
       <h3>Chizma yuklanmadi</h3>
       <p>Chizmani ochish uchun sahifani qayta yuklang yoki saqlangan chizmalarga qayting.</p>
-      <p class="client-trace">trace {{ cutting.traceId ?? 'unavailable' }}</p>
+      <p class="client-trace">{{ traceLine(cutting.traceId) }}</p>
     </section>
 
     <template v-else-if="draft || isNewDraft">
@@ -1963,7 +1964,7 @@ onBeforeRouteLeave(async () => {
       @confirm="confirmDeleteDraft"
     >
       <p v-if="deleteDraftError" class="text-sm font-bold text-danger">
-        {{ deleteDraftError }} · trace {{ deleteDraftTraceId ?? 'unavailable' }}
+        {{ deleteDraftError }}{{ traceSuffix(deleteDraftTraceId) }}
       </p>
     </ConfirmDialog>
 

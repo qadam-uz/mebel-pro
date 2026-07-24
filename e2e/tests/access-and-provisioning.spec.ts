@@ -300,7 +300,17 @@ test("owner manages branches from a simple system table and detail view", async 
   await seedPlatform(adminLogin);
   const token = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, token, id);
-  await readyOwnerToken(request, setup);
+  const ownerToken = await readyOwnerToken(request, setup);
+  // Prices are set up front so the branch-detail onboarding spotlight stays out
+  // of this test's way — the guided first-run flow owns onboarding.spec.ts.
+  const priced = await request.put(
+    `/api/v1/workshop/branches/${setup.branch.id}/pricing`,
+    {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: { cutting_rate_tiyin: 50_000, edge_banding_rate_tiyin: 20_000 },
+    },
+  );
+  await expectOk(priced);
 
   await page.goto("/workshop/");
   await page.getByLabel("Login").fill(setup.ownerLogin);

@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
 import type { DateRangePreset } from '@/shared/app/dateRange'
+import { traceLine } from '@/shared/app/errorTrace'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { useRolePath } from '@/shared/app/paths'
 import { assignmentChipsForOrder, edgerMissingForOrder } from '@/shared/app/workshopAssignments'
@@ -782,8 +783,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div v-if="orders.error" class="banner danger mb-4" aria-live="polite">
         <div class="grow">
-          Buyurtmalarni yuklashda xato yuz berdi · trace_id:
-          {{ orders.traceId ?? 'unavailable' }}
+          Buyurtmalarni yuklashda xato yuz berdi · {{ traceLine(orders.traceId) }}
         </div>
       </div>
 

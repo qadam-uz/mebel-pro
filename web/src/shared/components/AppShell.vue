@@ -19,16 +19,19 @@ import {
 import { grantSummary, initials, workshopStatusUz } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
+import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import ToastHost from '@/shared/components/ToastHost.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useOnboardingStore } from '@/shared/stores/onboarding'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 import { useWorkshopSearchStore } from '@/shared/stores/workshopSearch'
 
 const config = useRoleConfig()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const onboarding = useOnboardingStore()
 const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
 const route = useRoute()
@@ -401,7 +404,11 @@ watch(
 watch(
   canLoadWorkshopContext,
   (canLoad) => {
-    if (canLoad) void workshop.loadBranchContext().catch(() => undefined)
+    if (canLoad) {
+      void workshop.loadBranchContext().catch(() => undefined)
+      // Guided first-run setup — owner-only; the store no-ops for staff.
+      void onboarding.ensureLoaded()
+    }
   },
   { immediate: true },
 )
@@ -787,6 +794,7 @@ onBeforeUnmount(() => {
       <section class="workshop-page">
         <RouterView />
       </section>
+      <OnboardingSpotlight />
     </main>
   </div>
 

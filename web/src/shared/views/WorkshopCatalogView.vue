@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { apiTraceId } from '@/shared/api/client'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSanitizers'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
@@ -11,6 +12,7 @@ import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import AppModal from '@/shared/components/AppModal.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
@@ -30,6 +32,7 @@ const permissions = useWorkshopPermissions()
 const workshop = useWorkshopStore()
 const toast = useToast()
 const route = useRoute()
+const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>('all')
 const kindFilter = ref<'all' | MaterialKind>('all')
 const search = ref('')
@@ -217,7 +220,11 @@ async function saveBranchMaterial() {
     resetMaterialForm()
     materialModalOpen.value = false
     await refreshCatalog()
-    toast.success(wasEditing ? 'Material sozlamasi saqlandi.' : "Material filialga qo'shildi.")
+    if (wasEditing) {
+      toast.success('Material sozlamasi saqlandi.')
+    } else if (!(await notifyProgress())) {
+      toast.success("Material filialga qo'shildi.")
+    }
   } catch {
     materialError.value = 'branch_material_save_failed'
   } finally {
@@ -357,15 +364,18 @@ onBeforeUnmount(() => {
         </label>
         <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" top-label />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />
-        <button type="button" class="mp-button mp-button-primary" @click="openCreateMaterial">
+        <button
+          type="button"
+          class="mp-button mp-button-primary"
+          data-onboard="catalog-add"
+          @click="openCreateMaterial"
+        >
           + Material qo'shish
         </button>
       </div>
 
       <div v-if="rowActionError" class="banner danger mb-4">
-        <div class="grow">
-          {{ rowActionError }} · trace_id: {{ rowActionTraceId ?? 'unavailable' }}
-        </div>
+        <div class="grow">{{ rowActionError }}{{ traceSuffix(rowActionTraceId) }}</div>
       </div>
 
       <AppModal
@@ -445,7 +455,7 @@ onBeforeUnmount(() => {
 
       <section v-else-if="workshop.catalogError" class="st-error">
         <h3>Ma'lumotni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.catalogTraceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(workshop.catalogTraceId) }}</p>
       </section>
 
       <section v-else class="card">

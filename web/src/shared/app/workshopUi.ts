@@ -127,3 +127,32 @@ export function workshopErrorMessage(code: string | null | undefined) {
   if (!code) return "Amal bajarilmadi. Qayta urinib ko'ring."
   return workshopErrorMessages[code] ?? "Amal bajarilmadi. Qayta urinib ko'ring."
 }
+
+export interface DashboardSectionFailure {
+  /** Uzbek section label shown to the operator; also the per-section dedupe key. */
+  section: string
+  code: string
+  traceId: string | null
+}
+
+const dashboardFailureCauses: Record<string, string> = {
+  permission_denied: "ruxsat yo'q",
+  internal_error: 'serverda ichki xatolik',
+  validation_error: "so'rov xato tuzilgan",
+  not_found: "ma'lumot topilmadi",
+}
+
+/**
+ * One diagnostic line per failed dashboard section: the named cause plus the
+ * raw code and trace_id support needs to find the incident. The backend stamps
+ * trace_id on every error body, so a missing trace means the response never
+ * came from the app — reported as a connection failure rather than a
+ * meaningless "trace_id: unavailable".
+ */
+export function dashboardFailureLine(failure: DashboardSectionFailure): string {
+  if (failure.traceId === null) {
+    return `${failure.section} — serverga ulanib bo'lmadi`
+  }
+  const cause = dashboardFailureCauses[failure.code] ?? 'kutilmagan xatolik'
+  return `${failure.section} — ${cause} (${failure.code} · trace: ${failure.traceId})`
+}

@@ -9,6 +9,7 @@ import {
   formatRelativeDate,
 } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -248,7 +249,7 @@ onMounted(() => {
         <textarea v-model="cancelReason" class="mp-input min-h-24 resize-y" />
       </label>
       <p v-if="actionError" class="mt-3 text-sm font-bold text-danger">
-        {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+        {{ clientErrorLabel(actionError) }}{{ traceSuffix(orders.actionTraceId) }}
       </p>
     </ConfirmDialog>
   </section>

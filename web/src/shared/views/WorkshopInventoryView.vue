@@ -5,6 +5,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { apiTraceId } from '@/shared/api/client'
 import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
+import { traceLine } from '@/shared/app/errorTrace'
 import {
   sanitizeMoneyInput,
   sanitizeQuantityInput,
@@ -812,14 +813,13 @@ onBeforeUnmount(() => {
 
       <div v-else-if="workshop.inventoryError && activeListEmpty" class="st-error">
         <h3>Ma'lumotni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.inventoryTraceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(workshop.inventoryTraceId) }}</p>
       </div>
 
       <section v-else-if="activeTab === 'stock'" class="card">
         <div v-if="workshop.inventoryError" class="banner danger m-4">
           <div class="grow">
-            Ma'lumotni yuklashda xato · trace_id:
-            {{ workshop.inventoryTraceId ?? 'unavailable' }}
+            Ma'lumotni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
           </div>
         </div>
         <div class="table-wrap">
@@ -881,8 +881,7 @@ onBeforeUnmount(() => {
       >
         <div v-if="workshop.inventoryError" class="banner danger m-4">
           <div class="grow">
-            Tranzaksiyalarni yuklashda xato · trace_id:
-            {{ workshop.inventoryTraceId ?? 'unavailable' }}
+            Tranzaksiyalarni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
           </div>
         </div>
         <div class="table-wrap">

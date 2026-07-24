@@ -10,6 +10,7 @@ import {
   formatRelativeDate,
   pluralUz,
 } from '@/shared/app/clientUi'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useRolePath } from '@/shared/app/paths'
@@ -219,7 +220,7 @@ onMounted(() => {
       @confirm="confirmDeleteDraft"
     >
       <p v-if="deleteError" class="text-sm font-bold text-danger">
-        {{ deleteError }} · trace {{ deleteTraceId ?? 'unavailable' }}
+        {{ deleteError }}{{ traceSuffix(deleteTraceId) }}
       </p>
     </ConfirmDialog>
   </section>

@@ -2,12 +2,18 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
-import { apiTraceId } from '@/shared/api/client'
+import { captureApiError } from '@/shared/api/client'
+import { traceLine } from '@/shared/app/errorTrace'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
 import { workshopProductionQueueCounts } from '@/shared/app/workshopProduction'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { orderPillClass, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  dashboardFailureLine,
+  orderPillClass,
+  workshopStatusUz,
+  type DashboardSectionFailure,
+} from '@/shared/app/workshopUi'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import {
   formatDate,
@@ -18,6 +24,7 @@ import {
   formatStockQuantity,
 } from '@/shared/formatters'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
+import OnboardingChecklist from '@/shared/components/OnboardingChecklist.vue'
 import { activeWorkshopStatuses, useOrdersStore } from '@/shared/stores/orders'
 import { useFinanceStore } from '@/shared/stores/finance'
 import { useAuthStore } from '@/shared/stores/auth'
@@ -34,8 +41,7 @@ const dashboardLoading = ref(false)
 // First-load flag: drives skeletons on the very first paint only, so later
 // refreshes / period / branch-context reloads swap data in place without flicker.
 const dashboardReady = ref(false)
-const dashboardError = ref<string | null>(null)
-const dashboardTraceId = ref<string | null>(null)
+const dashboardFailures = ref<DashboardSectionFailure[]>([])
 const chartDays = ref(14)
 const chartPeriodOptions = [7, 14, 30]
 const CHART_WIDTH = 640
@@ -168,10 +174,19 @@ function chartRange() {
   }
 }
 
-function recordDashboardError(code: string, traceId: string | null) {
-  if (dashboardError.value) return
-  dashboardError.value = code
-  dashboardTraceId.value = traceId
+// Uzbek section labels for the partial-load banner (also its dedupe keys).
+const dashboardSections = {
+  branches: 'Filiallar',
+  orders: 'Buyurtmalar',
+  finance: 'Moliya',
+  inventory: 'Ombor',
+}
+
+function recordDashboardError(section: string, code: string, traceId: string | null) {
+  // First failure per section wins — a follow-up call for the same section
+  // (e.g. recent orders after active orders) repeats the same cause.
+  if (dashboardFailures.value.some((failure) => failure.section === section)) return
+  dashboardFailures.value.push({ section, code, traceId })
 }
 
 function contextBranchFor(branches: Array<{ id: string }>) {
@@ -194,24 +209,27 @@ function setChartPeriod(days: number) {
 
 async function loadFinanceSummary() {
   if (!canFinance.value) return
+  // Period/branch filter changes re-fetch finance alone — drop its previous
+  // verdict so the banner reflects the latest attempt.
+  dashboardFailures.value = dashboardFailures.value.filter(
+    (failure) => failure.section !== dashboardSections.finance,
+  )
   await finance.loadSummary({
     ...chartRange(),
     branch_id:
       contextBranchFor(financeBranches.value) ??
       (permissions.isOwner.value ? null : (financeBranches.value[0]?.id ?? null)),
   })
-  if (finance.error) recordDashboardError(finance.error, finance.traceId)
+  if (finance.error) recordDashboardError(dashboardSections.finance, finance.error, finance.traceId)
 }
 
 async function loadDashboard() {
   dashboardLoading.value = true
-  dashboardError.value = null
-  dashboardTraceId.value = null
-  await workshop
-    .loadBranchContext()
-    .catch((errorValue) =>
-      recordDashboardError('branch_context_load_failed', apiTraceId(errorValue)),
-    )
+  dashboardFailures.value = []
+  await workshop.loadBranchContext().catch((errorValue) => {
+    const captured = captureApiError(errorValue, 'branch_context_load_failed')
+    recordDashboardError(dashboardSections.branches, captured.code, captured.traceId)
+  })
   if (canOrders.value || canProduction.value) {
     const visibleOrderBranches = canOrders.value ? orderBranches.value : productionBranches.value
     const orderBranchId = contextBranchFor(visibleOrderBranches)
@@ -220,13 +238,13 @@ async function loadDashboard() {
       limit: 100,
       branch_id: orderBranchId,
     })
-    if (orders.error) recordDashboardError(orders.error, orders.traceId)
+    if (orders.error) recordDashboardError(dashboardSections.orders, orders.error, orders.traceId)
     if (canOrders.value) {
       await orders.loadRecentWorkshopOrders({
         branch_id: orderBranchId,
         limit: 8,
       })
-      if (orders.error) recordDashboardError(orders.error, orders.traceId)
+      if (orders.error) recordDashboardError(dashboardSections.orders, orders.error, orders.traceId)
     }
   }
   await loadFinanceSummary()
@@ -249,9 +267,10 @@ async function loadDashboard() {
       workshop.inventoryError = null
       workshop.inventoryTraceId = null
     } catch (errorValue) {
-      workshop.inventoryError = 'inventory_load_failed'
-      workshop.inventoryTraceId = apiTraceId(errorValue)
-      recordDashboardError('inventory_load_failed', workshop.inventoryTraceId)
+      const captured = captureApiError(errorValue, 'inventory_load_failed')
+      workshop.inventoryError = captured.code
+      workshop.inventoryTraceId = captured.traceId
+      recordDashboardError(dashboardSections.inventory, captured.code, captured.traceId)
     } finally {
       workshop.inventoryLoading = false
     }
@@ -295,10 +314,16 @@ watch(
       </div>
     </div>
 
-    <div v-if="dashboardError" class="banner danger mb-4">
+    <OnboardingChecklist />
+
+    <div v-if="dashboardFailures.length > 0" class="banner danger mb-4" role="alert">
       <div class="grow">
-        Dashboard ma'lumotlarini to'liq yuklab bo'lmadi · trace_id:
-        {{ dashboardTraceId ?? 'unavailable' }}
+        <p class="font-bold">Dashboard ma'lumotlarini to'liq yuklab bo'lmadi</p>
+        <ul class="mt-1 grid gap-0.5">
+          <li v-for="failure in dashboardFailures" :key="failure.section">
+            {{ dashboardFailureLine(failure) }}
+          </li>
+        </ul>
       </div>
       <button
         class="mp-button mp-button-outline min-h-8 px-3 text-xs"
@@ -621,7 +646,7 @@ watch(
             </div>
             <div v-else-if="workshop.inventoryError" class="st-error !py-8">
               <h3>Zaxira ma'lumotini yuklab bo'lmadi</h3>
-              <p>trace_id: {{ workshop.inventoryTraceId ?? 'unavailable' }}</p>
+              <p>{{ traceLine(workshop.inventoryTraceId) }}</p>
             </div>
             <div v-else-if="lowStock.length === 0" class="st-empty !py-8">
               <h3>Kam qolgan material yo'q</h3>

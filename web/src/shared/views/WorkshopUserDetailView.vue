@@ -11,6 +11,7 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { copyText } from '@/shared/app/clipboard'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
@@ -333,7 +334,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 
     <section v-else-if="workshop.error" class="st-error">
       <h3>Xodimni yuklab bo'lmadi</h3>
-      <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+      <p>{{ traceLine(workshop.traceId) }}</p>
     </section>
 
     <section v-else-if="!user" class="st-empty">
@@ -530,7 +531,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 v-if="profileError"
                 class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
               >
-                {{ profileError }} · trace_id: {{ profileTraceId ?? 'unavailable' }}
+                {{ profileError }}{{ traceSuffix(profileTraceId) }}
               </p>
             </form>
             <div v-else>
@@ -661,7 +662,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
       </section>
 
       <div v-if="actionError" class="banner danger mt-4">
-        <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
+        <div class="grow">{{ actionError }}{{ traceSuffix(actionTraceId) }}</div>
       </div>
 
       <ConfirmDialog
