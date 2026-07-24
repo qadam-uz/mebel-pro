@@ -97,10 +97,22 @@ class WorkshopOrderCompleteRequest(VersionedRequest):
     completed_by_user_id: uuid.UUID | None = None
 
 
-class WorkshopOrderDiscountRequest(VersionedRequest):
+class WorkshopOrderAdjustmentRequest(VersionedRequest):
+    """A manual price adjustment — a discount or a surcharge. `value` is tiyin
+    when `kind="fixed"`, or a whole percent (0-100) when `kind="percent"`,
+    resolved against the order's computed subtotal at apply time."""
+
     kind: Literal["fixed", "percent"]
     value: int
     reason: str
+
+
+class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
+    pass
+
+
+class WorkshopOrderSurchargeRequest(WorkshopOrderAdjustmentRequest):
+    pass
 
 
 class WorkshopOrderNoteRequest(BaseModel):
@@ -217,6 +229,9 @@ class OrderSummaryResponse(APIModel):
     discount_tiyin: int
     discount_reason: str | None
     discount_applied_by_user_id: uuid.UUID | None
+    surcharge_tiyin: int
+    surcharge_reason: str | None
+    surcharge_applied_by_user_id: uuid.UUID | None
     total_tiyin: int
     currency: Currency
     assigned_cutter_user_id: uuid.UUID | None

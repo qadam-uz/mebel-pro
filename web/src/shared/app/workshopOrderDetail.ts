@@ -1,52 +1,41 @@
+import { parseSomToTiyin } from '@/shared/formatters'
 import type { OrderStatus } from '@/shared/stores/orders'
 
-export type WorkshopDiscountKind = 'fixed' | 'percent'
+// A manual price adjustment — a discount (chegirma) or a surcharge (ustama).
+// Both share the same input shape: a fixed sum entered in so'm, or a whole
+// percent (1-100). The parse resolves the fixed sum to tiyin here (the so'm↔tiyin
+// boundary), so the API always receives tiyin for `fixed`.
+export type WorkshopAdjustmentKind = 'fixed' | 'percent'
 
-export interface WorkshopDiscountDraft {
-  kind: WorkshopDiscountKind
-  value: string
-  reason: string
-}
-
-export type WorkshopDiscountParseResult =
+export type WorkshopAdjustmentParseResult =
   | {
       ok: true
-      payload: { kind: WorkshopDiscountKind; value: number; reason: string }
+      payload: { kind: WorkshopAdjustmentKind; value: number; reason: string }
     }
   | { ok: false; message: string }
 
-export function discountDraftFromOrder(order: {
-  discount_reason: string | null
-}): WorkshopDiscountDraft {
-  return {
-    kind: 'fixed',
-    value: '',
-    reason: order.discount_reason ?? '',
-  }
-}
-
-export function parseDiscountDraft(
+export function parseOrderAdjustmentDraft(
   kind: string,
   valueText: string,
   reasonText: string,
-): WorkshopDiscountParseResult {
-  const value = Number(valueText)
-  if (!Number.isInteger(value) || value < 0) {
-    return { ok: false, message: "Chegirma qiymatini manfiy bo'lmagan butun son qilib kiriting." }
-  }
-  if (kind === 'percent' && value > 100) {
-    return { ok: false, message: "Foiz 0 dan 100 gacha bo'lishi kerak." }
-  }
+): WorkshopAdjustmentParseResult {
   const reason = reasonText.trim()
-  if (!reason) return { ok: false, message: 'Chegirma sababini kiriting.' }
-  return {
-    ok: true,
-    payload: {
-      kind: kind === 'percent' ? 'percent' : 'fixed',
-      value,
-      reason,
-    },
+  if (kind === 'percent') {
+    const percent = Number(valueText)
+    if (!Number.isInteger(percent) || percent <= 0 || percent > 100) {
+      return { ok: false, message: 'Foizni 1 dan 100 gacha butun son qilib kiriting.' }
+    }
+    if (!reason) return { ok: false, message: 'Sababni kiriting.' }
+    return { ok: true, payload: { kind: 'percent', value: percent, reason } }
   }
+  // Fixed sum is entered in so'm and stored as tiyin — parseSomToTiyin rejects
+  // zero, blanks, and unparseable input (returns null).
+  const tiyin = parseSomToTiyin(valueText)
+  if (tiyin === null) {
+    return { ok: false, message: "Qiymatni to'g'ri kiriting — masalan: 50 000." }
+  }
+  if (!reason) return { ok: false, message: 'Sababni kiriting.' }
+  return { ok: true, payload: { kind: 'fixed', value: tiyin, reason } }
 }
 
 export type WorkshopOrderListActionKind =

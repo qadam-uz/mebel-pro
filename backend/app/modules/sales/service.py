@@ -78,6 +78,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderDiscountRequest,
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
+    WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
 from app.modules.support.api import record_action, record_status_change
@@ -188,6 +189,7 @@ async def place_client_order(
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         discount_tiyin=0,
+        surcharge_tiyin=0,
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
@@ -402,6 +404,7 @@ async def place_workshop_order(
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         discount_tiyin=0,
+        surcharge_tiyin=0,
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
@@ -544,6 +547,7 @@ async def apply_order_edit(
     old_result = await _order_result(db, order)
     previous_total = order.total_tiyin
     previous_discount = order.discount_tiyin
+    previous_surcharge = order.surcharge_tiyin
     previous_result_id = str(old_result.id)
     # The superseded result must release the unique order binding
     # (uq_cutting_results_order is immediate) before the new one takes it.
@@ -565,9 +569,13 @@ async def apply_order_edit(
     _add_order_items(db, order=order, pricing=pricing)
 
     discount_cleared = previous_discount > 0
+    surcharge_cleared = previous_surcharge > 0
     order.discount_tiyin = 0
     order.discount_reason = None
     order.discount_applied_by_user_id = None
+    order.surcharge_tiyin = 0
+    order.surcharge_reason = None
+    order.surcharge_applied_by_user_id = None
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
     order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
@@ -589,6 +597,8 @@ async def apply_order_edit(
     }
     if discount_cleared:
         metadata["discount_cleared_tiyin"] = previous_discount
+    if surcharge_cleared:
+        metadata["surcharge_cleared_tiyin"] = previous_surcharge
     if edger_cleared:
         metadata["edger_assignment_cleared"] = True
     await _append_order_event(
@@ -1660,6 +1670,8 @@ async def apply_discount(
     subtotal = _pre_discount_total(order)
     if payload.value < 0:
         raise APIError("invalid_discount", "Discount must be non-negative")
+    if payload.kind == "percent" and payload.value > 100:
+        raise APIError("invalid_discount", "Percent must be between 0 and 100")
     discount = payload.value if payload.kind == "fixed" else subtotal * payload.value // 100
     if discount > subtotal:
         raise APIError("invalid_discount", "Discount cannot exceed subtotal")
@@ -1670,7 +1682,7 @@ async def apply_discount(
     else:
         order.discount_reason = reason
         order.discount_applied_by_user_id = principal.principal_id
-    order.total_tiyin = subtotal - discount
+    order.total_tiyin = subtotal - discount + order.surcharge_tiyin
     _bump_order(order)
     await record_action(
         db,
@@ -1682,6 +1694,55 @@ async def apply_discount(
         branch_id=order.branch_id,
         summary=f"Applied discount to {order.order_number}",
         details={"discount_tiyin": discount, "reason": reason},
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def apply_surcharge(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderSurchargeRequest,
+) -> OrderDetailResponse:
+    """Set the order's surcharge (ustama) — symmetric to apply_discount but
+    additive and uncapped (orders.md: "Pricing"). Allowed on new/confirmed
+    orders by manage_orders; percent resolves against the computed subtotal."""
+    order = await _locked_workshop_order_for_action(
+        db,
+        principal=principal,
+        order_id=order_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+    _expect_version(order, payload.version)
+    if order.status not in {OrderStatus.NEW, OrderStatus.CONFIRMED}:
+        raise APIError("surcharge_not_allowed", "Surcharge is not allowed at this status")
+    reason = _required_reason(payload.reason)
+    subtotal = _pre_discount_total(order)
+    if payload.value < 0:
+        raise APIError("invalid_surcharge", "Surcharge must be non-negative")
+    if payload.kind == "percent" and payload.value > 100:
+        raise APIError("invalid_surcharge", "Percent must be between 0 and 100")
+    surcharge = payload.value if payload.kind == "fixed" else subtotal * payload.value // 100
+    order.surcharge_tiyin = surcharge
+    if surcharge == 0:
+        order.surcharge_reason = None
+        order.surcharge_applied_by_user_id = None
+    else:
+        order.surcharge_reason = reason
+        order.surcharge_applied_by_user_id = principal.principal_id
+    order.total_tiyin = subtotal - order.discount_tiyin + surcharge
+    _bump_order(order)
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.surcharge",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Applied surcharge to {order.order_number}",
+        details={"surcharge_tiyin": surcharge, "reason": reason},
     )
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
@@ -2046,6 +2107,9 @@ def _order_summary_base(
         "discount_tiyin": order.discount_tiyin,
         "discount_reason": order.discount_reason,
         "discount_applied_by_user_id": order.discount_applied_by_user_id,
+        "surcharge_tiyin": order.surcharge_tiyin,
+        "surcharge_reason": order.surcharge_reason,
+        "surcharge_applied_by_user_id": order.surcharge_applied_by_user_id,
         "total_tiyin": order.total_tiyin,
         "currency": order.currency,
         "assigned_cutter_user_id": order.assigned_cutter_user_id,

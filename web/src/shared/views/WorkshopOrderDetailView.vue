@@ -3,16 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
-import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import {
-  discountDraftFromOrder,
   isRevisionEvent,
   orderPhaseSteps,
-  parseDiscountDraft,
   productionTimelineDetails,
   revisionTimelineDetails,
-  type WorkshopDiscountKind,
+  type WorkshopAdjustmentKind,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
@@ -21,6 +18,7 @@ import AppModal from '@/shared/components/AppModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import OrderPriceAdjustmentModal from '@/shared/components/OrderPriceAdjustmentModal.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -55,9 +53,6 @@ const cutterId = ref<string | null>(null)
 const edgerId = ref<string | null>(null)
 const noteDraft = ref('')
 const loadedOrderId = ref<string | null>(null)
-const discountKind = ref<WorkshopDiscountKind>('fixed')
-const discountValue = ref('')
-const discountReason = ref('')
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
 // Which single button is mid-request, so only the clicked one shows a busy
@@ -71,19 +66,15 @@ const markCollectedOpen = ref(false)
 const discardEditOpen = ref(false)
 const menuOpen = ref(false)
 const discountOpen = ref(false)
+const surchargeOpen = ref(false)
+// Server-side apply/remove errors surfaced inside each modal (the page-level
+// banner would otherwise hide behind the open overlay).
+const discountSubmitError = ref<string | null>(null)
+const surchargeSubmitError = ref<string | null>(null)
 const chizmaOpen = ref(false)
 const historyOpen = ref(false)
 const noteEditing = ref(false)
 const noteInput = ref<HTMLTextAreaElement | null>(null)
-const discountValueInput = ref<HTMLInputElement | null>(null)
-const discountError = ref<string | null>(null)
-
-// Type-time sanitization (PhoneInput precedent) — the money charset covers both
-// discount kinds (a percent is digits with an optional decimal separator).
-watch(discountValue, (value) => {
-  const clean = sanitizeMoneyInput(value)
-  if (clean !== value) discountValue.value = clean
-})
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
@@ -195,14 +186,13 @@ const productionMeta = computed(() => {
   const pieces = `${totalPieces.value} detal`
   return result.value ? `${pieces} · ${totalPanels.value} panel` : pieces
 })
-const discountOptions: ChoiceOption[] = [
-  { value: 'fixed', label: "So'm", meta: "aniq chegirma so'mda" },
-  { value: 'percent', label: 'Foiz', meta: '0-100 foiz' },
-]
 const phaseSteps = computed(() => (order.value ? orderPhaseSteps(order.value) : []))
 const isCancelled = computed(() => order.value?.status === 'cancelled')
 const discountButtonLabel = computed(() =>
   order.value?.discount_tiyin ? 'Chegirmani yangilash' : "Chegirma qo'shish",
+)
+const surchargeButtonLabel = computed(() =>
+  order.value?.surcharge_tiyin ? 'Ustamani yangilash' : "Ustama qo'shish",
 )
 const noteDirty = computed(() => noteDraft.value.trim() !== (order.value?.note_workshop ?? ''))
 // Cutting would oversell stock (projected balance below zero), not just dip low —
@@ -289,8 +279,24 @@ const menuItems = computed<OrderMenuItem[]>(() => {
   const items: OrderMenuItem[] = []
   if (canEditOrder.value && !current.revision_draft_id)
     items.push({ key: 'edit', label: 'Tahrirlash', run: startEdit })
-  if (canManageOrders.value && ['new', 'confirmed'].includes(current.status))
-    items.push({ key: 'discount', label: discountButtonLabel.value, run: openDiscount })
+  if (canManageOrders.value && ['new', 'confirmed'].includes(current.status)) {
+    items.push({
+      key: 'discount',
+      label: discountButtonLabel.value,
+      run: () => {
+        discountSubmitError.value = null
+        discountOpen.value = true
+      },
+    })
+    items.push({
+      key: 'surcharge',
+      label: surchargeButtonLabel.value,
+      run: () => {
+        surchargeSubmitError.value = null
+        surchargeOpen.value = true
+      },
+    })
+  }
   if (canManageOrders.value && ['cutting', 'edge_banding', 'ready'].includes(current.status))
     items.push({
       key: 'revert',
@@ -436,11 +442,6 @@ async function run(action: () => Promise<unknown>, successMessage?: string, key?
 function runMenuItem(item: OrderMenuItem) {
   menuOpen.value = false
   item.run()
-}
-
-function openDiscount() {
-  discountError.value = null
-  discountOpen.value = true
 }
 
 function onDocumentClick(event: MouseEvent) {
@@ -594,36 +595,29 @@ async function confirmReasonedAction() {
   if (ok) reasonDialogAction.value = null
 }
 
-async function applyDiscount() {
+// Discount (chegirma −) and surcharge (ustama +) share the shape and the
+// pre-production gate; each modal emits an already-parsed {kind, value, reason}
+// (value in tiyin for a fixed sum) and the store posts it to the matching
+// endpoint. Removal posts a zeroed adjustment, which clears the reason + actor.
+type AdjustmentPayload = { kind: WorkshopAdjustmentKind; value: number; reason: string }
+
+async function applyDiscount(payload: AdjustmentPayload) {
   const current = order.value
   if (!current || !canManageOrders.value) return
-  discountError.value = null
-  const parsed = parseDiscountDraft(discountKind.value, discountValue.value, discountReason.value)
-  if (!parsed.ok) {
-    // Surface the validation error inside the modal, beside the field (QAD-75).
-    discountError.value = parsed.message
-    void nextTick(() => discountValueInput.value?.focus({ preventScroll: true }))
-    return
-  }
+  discountSubmitError.value = null
   const ok = await run(
-    () =>
-      orders.discount(current.id, {
-        version: current.version,
-        ...parsed.payload,
-      }),
+    () => orders.discount(current.id, { version: current.version, ...payload }),
     'Chegirma saqlandi.',
     'discount',
   )
-  if (ok) {
-    discountError.value = null
-    discountOpen.value = false
-  }
+  if (ok) discountOpen.value = false
+  else discountSubmitError.value = actionError.value
 }
 
 async function removeDiscount() {
   const current = order.value
   if (!current || !canManageOrders.value || current.discount_tiyin <= 0) return
-  discountError.value = null
+  discountSubmitError.value = null
   const ok = await run(
     () =>
       orders.discount(current.id, {
@@ -636,6 +630,39 @@ async function removeDiscount() {
     'removeDiscount',
   )
   if (ok) discountOpen.value = false
+  else discountSubmitError.value = actionError.value
+}
+
+async function applySurcharge(payload: AdjustmentPayload) {
+  const current = order.value
+  if (!current || !canManageOrders.value) return
+  surchargeSubmitError.value = null
+  const ok = await run(
+    () => orders.surcharge(current.id, { version: current.version, ...payload }),
+    'Ustama saqlandi.',
+    'surcharge',
+  )
+  if (ok) surchargeOpen.value = false
+  else surchargeSubmitError.value = actionError.value
+}
+
+async function removeSurcharge() {
+  const current = order.value
+  if (!current || !canManageOrders.value || current.surcharge_tiyin <= 0) return
+  surchargeSubmitError.value = null
+  const ok = await run(
+    () =>
+      orders.surcharge(current.id, {
+        version: current.version,
+        kind: 'fixed',
+        value: 0,
+        reason: 'Ustama olib tashlandi',
+      }),
+    'Ustama olib tashlandi.',
+    'removeSurcharge',
+  )
+  if (ok) surchargeOpen.value = false
+  else surchargeSubmitError.value = actionError.value
 }
 
 // Display-first note: the editor opens on demand and saves on blur — a note is
@@ -712,10 +739,6 @@ watch(
       noteDraft.value = value.note_workshop ?? ''
     }
     loadedOrderId.value = value.id
-    const discountDraft = discountDraftFromOrder(value)
-    discountKind.value = discountDraft.kind
-    discountValue.value = discountDraft.value
-    discountReason.value = discountDraft.reason
   },
   { immediate: true },
 )
@@ -1182,19 +1205,39 @@ onBeforeUnmount(() => {
                 </div>
               </div>
               <div
-                v-if="order.discount_tiyin > 0"
-                class="mt-2 flex items-baseline justify-between gap-3 border-t border-hairline pt-2"
+                v-if="order.surcharge_tiyin > 0 || order.discount_tiyin > 0"
+                class="mt-2 grid gap-2.5 border-t border-hairline pt-2"
               >
-                <span class="min-w-0 text-ink"
-                  >Chegirma<small
-                    v-if="order.discount_reason"
-                    class="block text-xs text-ink-muted"
-                    >{{ order.discount_reason }}</small
-                  ></span
+                <div
+                  v-if="order.surcharge_tiyin > 0"
+                  class="flex items-baseline justify-between gap-3"
                 >
-                <span class="shrink-0 font-mono whitespace-nowrap text-ink"
-                  >- {{ formatTiyin(order.discount_tiyin) }}</span
+                  <span class="min-w-0 text-ink"
+                    >Ustama<small
+                      v-if="order.surcharge_reason"
+                      class="block text-xs text-ink-muted"
+                      >{{ order.surcharge_reason }}</small
+                    ></span
+                  >
+                  <span class="shrink-0 font-mono whitespace-nowrap text-ink"
+                    >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
+                  >
+                </div>
+                <div
+                  v-if="order.discount_tiyin > 0"
+                  class="flex items-baseline justify-between gap-3"
                 >
+                  <span class="min-w-0 text-ink"
+                    >Chegirma<small
+                      v-if="order.discount_reason"
+                      class="block text-xs text-ink-muted"
+                      >{{ order.discount_reason }}</small
+                    ></span
+                  >
+                  <span class="shrink-0 font-mono whitespace-nowrap text-ink"
+                    >- {{ formatTiyin(order.discount_tiyin) }}</span
+                  >
+                </div>
               </div>
             </div>
             <!-- Bottom-line figures close the receipt: Jami leads, settlement
@@ -1439,61 +1482,50 @@ onBeforeUnmount(() => {
       </div>
     </AppModal>
 
-    <AppModal :open="discountOpen" title="Chegirma" @close="discountOpen = false">
-      <div class="grid gap-3">
-        <p
-          v-if="order && order.discount_tiyin > 0"
-          class="rounded-md bg-sunk p-3 text-sm text-ink-soft"
-        >
-          Hozirgi chegirma: {{ formatTiyin(order.discount_tiyin) }}. O'zgartirish uchun tur va
-          qiymatni qayta kiriting.
-        </p>
-        <FormSelect v-model="discountKind" label="Turi" :options="discountOptions" />
-        <div class="grid gap-1">
-          <label class="field !mb-0"
-            ><span>Qiymat</span
-            ><input
-              id="discount-value"
-              ref="discountValueInput"
-              v-model="discountValue"
-              class="mp-input"
-              :class="discountError ? 'border-danger' : ''"
-              inputmode="numeric"
-              :aria-invalid="discountError ? 'true' : undefined"
-              :aria-describedby="discountError ? 'discount-value-error' : undefined"
-          /></label>
-          <p
-            v-if="discountError"
-            id="discount-value-error"
-            role="alert"
-            class="text-sm font-bold text-danger"
-          >
-            {{ discountError }}
-          </p>
-        </div>
-        <label class="field !mb-0"
-          ><span>Sabab</span><input v-model="discountReason" class="mp-input"
-        /></label>
-        <div class="grid gap-2">
-          <button
-            type="button"
-            class="mp-button mp-button-primary w-full whitespace-normal text-center leading-tight"
-            :disabled="orders.actionLoading"
-            @click="applyDiscount"
-          >
-            {{ pendingAction === 'discount' ? 'Saqlanmoqda…' : discountButtonLabel }}
-          </button>
-          <button
-            v-if="order && order.discount_tiyin > 0"
-            type="button"
-            class="mp-button mp-button-outline w-full whitespace-normal text-center leading-tight text-danger"
-            :disabled="orders.actionLoading"
-            @click="removeDiscount"
-          >
-            {{ pendingAction === 'removeDiscount' ? 'Saqlanmoqda…' : 'Chegirmani olib tashlash' }}
-          </button>
-        </div>
-      </div>
-    </AppModal>
+    <OrderPriceAdjustmentModal
+      v-if="order"
+      :open="discountOpen"
+      title="Chegirma"
+      fixed-hint="aniq chegirma so'mda"
+      :current-tiyin="order.discount_tiyin"
+      :current-reason="order.discount_reason"
+      :apply-label="discountButtonLabel"
+      remove-label="Chegirmani olib tashlash"
+      :busy="orders.actionLoading"
+      :pending="
+        pendingAction === 'discount'
+          ? 'apply'
+          : pendingAction === 'removeDiscount'
+            ? 'remove'
+            : null
+      "
+      :submit-error="discountSubmitError"
+      @apply="applyDiscount"
+      @remove="removeDiscount"
+      @close="discountOpen = false"
+    />
+
+    <OrderPriceAdjustmentModal
+      v-if="order"
+      :open="surchargeOpen"
+      title="Ustama"
+      fixed-hint="aniq ustama so'mda"
+      :current-tiyin="order.surcharge_tiyin"
+      :current-reason="order.surcharge_reason"
+      :apply-label="surchargeButtonLabel"
+      remove-label="Ustamani olib tashlash"
+      :busy="orders.actionLoading"
+      :pending="
+        pendingAction === 'surcharge'
+          ? 'apply'
+          : pendingAction === 'removeSurcharge'
+            ? 'remove'
+            : null
+      "
+      :submit-error="surchargeSubmitError"
+      @apply="applySurcharge"
+      @remove="removeSurcharge"
+      @close="surchargeOpen = false"
+    />
   </section>
 </template>

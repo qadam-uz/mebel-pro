@@ -181,6 +181,9 @@ export interface OrderSummary {
   discount_tiyin: number
   discount_reason: string | null
   discount_applied_by_user_id: string | null
+  surcharge_tiyin: number
+  surcharge_reason: string | null
+  surcharge_applied_by_user_id: string | null
   total_tiyin: number
   currency: 'UZS'
   assigned_cutter_user_id: string | null
@@ -546,6 +549,10 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/discount`, payload)
   }
 
+  async function surcharge(id: string, payload: unknown) {
+    return await mutate(`/workshop/orders/${id}/surcharge`, payload)
+  }
+
   async function updateNote(id: string, note: string | null) {
     return await mutate(`/workshop/orders/${id}/note`, { note_workshop: note }, 'patch')
   }
@@ -717,6 +724,7 @@ export const useOrdersStore = defineStore('orders', () => {
     applyRevision,
     fetchWorkshopOrder,
     discount,
+    surcharge,
     updateNote,
     downloadClientPdf,
     downloadWorkshopPdf,

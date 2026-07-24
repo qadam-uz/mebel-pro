@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-07-24
 order: 50
 ---
 
@@ -45,9 +45,11 @@ post-placement modification, so it is never re-priced)
 | `subtotal_cutting_tiyin` | bigint | snapshot subtotal — `Σ panels × cutting_rate_tiyin` at this branch; ≥ 0 |
 | `subtotal_materials_tiyin` | bigint | snapshot subtotal — `shop`-source panel cost; ≥ 0 |
 | `subtotal_edge_banding_tiyin` | bigint | snapshot subtotal — `shop`-source edge cost; ≥ 0 |
-| `discount_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; ≤ pre-discount total |
+| `discount_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; ≤ pre-adjustment subtotal (never makes the price negative) |
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
-| `total_tiyin` | bigint | `cutting + materials + edge banding − discount`; ≥ 0 |
+| `surcharge_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; no cap (reason + audit are the control) |
+| `surcharge_reason` / `surcharge_applied_by_user_id` | text? / UUID? | required if `surcharge_tiyin > 0` |
+| `total_tiyin` | bigint | `cutting + materials + edge banding − discount + surcharge`; ≥ 0 |
 | `currency` | enum | `UZS` (only value in v1) |
 
 **Worker assignment + production stamps** (assignment is mutable until the job is done;
@@ -75,7 +77,10 @@ draft with a `chosen` result (which becomes `confirmed` and bound); a staff-crea
 lands `confirmed` with `confirmed_at` set at creation; the checkout contact snapshot is
 frozen at creation so later client profile edits do not rewrite the workshop-facing order;
 all money fields are integer
-tiyin; `total_tiyin` follows the formula and can't go negative; the price snapshot is frozen
+tiyin; `total_tiyin` follows the formula and can't go negative; the discount and surcharge
+are independent manual adjustments (either, both, or neither), each requiring a reason and
+applied-by stamp when non-zero, settable only while `new`/`confirmed` and cleared by a
+revision; the price snapshot is otherwise frozen
 at creation (no re-pricing — there is no modification); status transitions follow the state
 machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
 `edger_user_id` reference workshop users who hold `process_production` on `branch_id`;

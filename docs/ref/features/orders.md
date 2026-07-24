@@ -118,8 +118,8 @@ The revision is a **scratchpad draft, applied atomically**:
 3. **Review & save** shows the current frozen price next to the new quote at the order's
    branch. Saving atomically: rebinds the order to the new chosen result (the superseded
    confirmed result and its panels are deleted), replaces the item snapshots, **re-freezes
-   pricing at the branch's current rates**, clears any discount, clears the edger assignment
-   when no side needs banding any more, bumps the order `version`, appends an `edited`
+   pricing at the branch's current rates**, clears any discount and surcharge, clears the
+   edger assignment when no side needs banding any more, bumps the order `version`, appends an `edited`
    status event (same-status, staff actor, old/new totals in metadata), mirrors to the audit
    log, and notifies the client (`order.updated`).
 4. **Discard** deletes the revision draft; the order never notices.
@@ -132,8 +132,8 @@ Rules:
 - **Re-pricing is whole-snapshot, at current rates.** A revision replaces the frozen price;
   it never patches line items. If catalog prices moved since placement the new freeze
   reflects them — the review screen makes the delta explicit before saving.
-- **The discount never survives a revision.** It was granted against the old contents;
-  re-apply it (reason + audit, as always) if still warranted.
+- **Neither the discount nor the surcharge survives a revision.** Both were granted against
+  the old contents; re-apply either (reason + audit, as always) if still warranted.
 - **Save is guarded like a transition**: optimistic `version` check, status re-checked at
   save (`order_edit_not_allowed` once production started or the order went terminal), and
   the same pricing/carry error codes as placement. A revision that outlived its window can
@@ -280,9 +280,10 @@ counter. No in-system payment, no gateway, no payment-driven status.
 - **One disclosure rule.** Split the order's money into two parts and gate them
   differently:
   - The **frozen total + price breakdown** is visible to the client **from placement
-    onward** (the Overview tab). The client already saw these figures in the order
-    wizard; pricing is frozen at creation and never re-priced, so there is nothing to
-    hide and hiding it only confuses ("what will this cost?").
+    onward** (the Overview tab) — including any workshop-applied discount (−) and
+    surcharge (+) lines, each with its reason. The client already saw the computed
+    figures in the order wizard; pricing is frozen at creation and never re-priced, so
+    there is nothing to hide and hiding it only confuses ("what will this cost?").
   - The **settlement figures** — recorded-so-far and balance — appear to the client
     **only at `ready` and `completed`** (the Finance tab), the moment they need to settle
     on collection and the receipt afterwards. There is no in-app payment action; a
@@ -298,11 +299,12 @@ counter. No in-system payment, no gateway, no payment-driven status.
 
 ## Pricing
 
-The system computes everything; the **discount is the only human input** and needs a
-reason. Frozen onto the order at creation against the chosen branch's rates; later catalog
-or pricing changes never reach an existing order on their own — the one re-pricing path is
-a workshop [revision](#revising-a-placed-order), which replaces the whole freeze at the
-branch's current rates.
+The system computes everything; the **two manual adjustments — a discount and a surcharge —
+are the only human inputs**, each needing a reason. Frozen onto the order at creation
+against the chosen branch's rates; later catalog or pricing changes never reach an existing
+order on their own — the one re-pricing path is a workshop
+[revision](#revising-a-placed-order), which replaces the whole freeze at the branch's
+current rates.
 
 | Component | When | Source |
 |---|---|---|
@@ -310,9 +312,17 @@ branch's current rates.
 | Panel materials | parts with `material_source = shop` | Σ (the branch's per-panel price × panels attributable to that material's `shop` parts) |
 | Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
 | Edge banding labour | when any `shop` side has banding | total `shop` **consumed metres** of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
-| Discount | when a `manage_orders` user adds one | percent or fixed sum; subtracted; **reason + the user id recorded** (audited); no enforced cap in v1 — the reason + audit are the control |
+| Discount (chegirma) | when a `manage_orders` user adds one | percent or fixed sum; **subtracted**; capped at the computed subtotal (a discount never makes the price negative); **reason + the user id recorded** (audited) |
+| Surcharge (ustama) | when a `manage_orders` user adds one | percent or fixed sum; **added**; no enforced cap in v1 — the reason + audit are the control; **reason + the user id recorded** (audited) |
 
-**Total = cutting + panel materials + edge materials + edge banding labour − discount.**
+**Total = cutting + panel materials + edge materials + edge banding labour − discount + surcharge.**
+
+Discount and surcharge are **independent** — an order may carry both (e.g. a rush surcharge
+and a loyalty discount), each with its own reason and applied-by stamp. Each is applied on a
+`new` or `confirmed` order by a `manage_orders` user; both lock once production starts.
+Setting an adjustment to zero clears its reason and stamp. The percent form resolves against
+the computed subtotal at apply time and is stored as the resolved sum — the order keeps the
+absolute tiyin figure, not the percentage.
 
 **Consumed metres.** A banded side eats more tape than its visible edge: the master glues
 it long and trims it flush after — ~3 cm per side (15 mm at each end). So edge metres — the
@@ -446,13 +456,13 @@ Permission names below are the per-branch grants from
   (added/edited in place, saved on blur; a quiet "add note" ghost when empty), a compact
   phase strip along the bottom, and exactly **one status-appropriate primary action**;
   the status history opens from a header clock button as a modal timeline; rarer actions
-  (edit, discount — a modal, revert, cancel) fold into an overflow menu. The
+  (edit, discount and surcharge — each a modal, revert, cancel) fold into an overflow menu. The
   status-appropriate actions:
 
   | Status | Actions | Permission |
   |---|---|---|
-  | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount (reason) | `manage_orders` |
-  | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount · Cancel (reason) | assign/edit/discount/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
+  | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount / surcharge (reason) | `manage_orders` |
+  | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount / surcharge · Cancel (reason) | assign/edit/discount/surcharge/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
   | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Change edger (metadata; the cutter is locked) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
   | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Change edger (until banding starts) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
   | `ready` | Mark collected (→ `completed`) · Revert → `edge_banding`/`cutting` (reason) · Cancel (reason) | `manage_orders` |
@@ -474,7 +484,7 @@ Permission names below are the per-branch grants from
   hidden otherwise), and an always-expanded itemized price breakdown — one line per
   material actually used (each `shop` panel material with its panels, each `shop` kromka
   material with its consumed metres), the services (cutting, banding labour) with their
-  quantities, discount last. The material lines are rebuilt from order-time snapshots
+  quantities, then the surcharge (+) and discount (−) adjustments last. The material lines are rebuilt from order-time snapshots
   (item snapshot prices × cutting-result demands), so they reconcile exactly with the
   frozen subtotals even after later price-list changes. The warehouse warning banner (if
   a `shop` material is short) sits above the cards. There is **no** Payments or Refunds

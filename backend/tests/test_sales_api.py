@@ -826,6 +826,137 @@ async def test_discount_requires_version_and_client_cancel_only_new(
     assert stock_tx_count == 0
 
 
+async def test_surcharge_adds_to_total_and_coexists_with_discount(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    order_id = order["id"]  # pre-adjustment total is 330_000
+
+    surcharged = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "fixed", "value": 20_000, "reason": "Rush job"},
+    )
+    assert surcharged.status_code == 200
+    assert surcharged.json()["surcharge_tiyin"] == 20_000
+    assert surcharged.json()["surcharge_reason"] == "Rush job"
+    assert surcharged.json()["surcharge_applied_by_user_id"] is not None
+    assert surcharged.json()["total_tiyin"] == 350_000  # 330_000 + 20_000
+
+    # A discount stacks with the surcharge: 330_000 - 30_000 + 20_000 = 320_000.
+    discounted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/discount",
+        headers=_auth(owner_access),
+        json={
+            "version": surcharged.json()["version"],
+            "kind": "fixed",
+            "value": 30_000,
+            "reason": "Loyalty",
+        },
+    )
+    assert discounted.status_code == 200
+    assert discounted.json()["discount_tiyin"] == 30_000
+    assert discounted.json()["surcharge_tiyin"] == 20_000
+    assert discounted.json()["total_tiyin"] == 320_000
+
+    # Percent surcharge resolves against the subtotal (330_000), not the discounted
+    # total: 10% → 33_000, so total = 330_000 - 30_000 + 33_000 = 333_000.
+    percent = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": discounted.json()["version"],
+            "kind": "percent",
+            "value": 10,
+            "reason": "10% custom work",
+        },
+    )
+    assert percent.status_code == 200
+    assert percent.json()["surcharge_tiyin"] == 33_000
+    assert percent.json()["total_tiyin"] == 333_000
+
+    # Removing the surcharge clears its metadata and returns the total to the
+    # discounted figure (330_000 - 30_000 = 300_000).
+    removed = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": percent.json()["version"],
+            "kind": "fixed",
+            "value": 0,
+            "reason": "Remove surcharge",
+        },
+    )
+    assert removed.status_code == 200
+    assert removed.json()["surcharge_tiyin"] == 0
+    assert removed.json()["surcharge_reason"] is None
+    assert removed.json()["surcharge_applied_by_user_id"] is None
+    assert removed.json()["total_tiyin"] == 300_000
+
+    stale = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "fixed", "value": 5_000, "reason": "Stale"},
+    )
+    assert stale.status_code == 409
+
+
+async def test_surcharge_rejects_bad_percent_terminal_status_and_unprivileged(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, owner_access, workshop_id, branch_id, _ = await _placed_order(
+        client, db_session
+    )
+    order_id = order["id"]
+
+    # A percent above 100 is rejected outright (not silently resolved to >100%).
+    bad_percent = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "percent", "value": 150, "reason": "Too much"},
+    )
+    assert bad_percent.status_code == 400
+    assert bad_percent.json()["code"] == "invalid_surcharge"
+
+    # A production-scoped staffer without manage_orders can't set a surcharge.
+    staff = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    staff_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=staff.id,
+    )
+    forbidden = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(staff_tokens.access_token),
+        json={"version": order["version"], "kind": "fixed", "value": 5_000, "reason": "Nope"},
+    )
+    # Denied for lack of manage_orders — the scoped lookup declines the order
+    # (403 forbidden, or 404 to avoid an existence oracle) — never applies it.
+    assert forbidden.status_code in (403, 404)
+
+    # Once the order is terminal (cancelled), a surcharge is not allowed.
+    cancelled = await client.post(
+        f"/api/v1/client/orders/{order_id}/cancel",
+        headers=_auth(client_access),
+        json={"version": order["version"], "reason": "Changed plans"},
+    )
+    assert cancelled.status_code == 200
+    surcharge_after = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": cancelled.json()["version"],
+            "kind": "fixed",
+            "value": 5_000,
+            "reason": "Late",
+        },
+    )
+    assert surcharge_after.status_code == 400
+    assert surcharge_after.json()["code"] == "surcharge_not_allowed"
+
+
 async def test_client_orders_active_filter_expands_to_status_union(
     client: AsyncClient,
     db_session: AsyncSession,

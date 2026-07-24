@@ -23,6 +23,7 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
         CheckConstraint("subtotal_materials_tiyin >= 0", name="ck_orders_materials_nonnegative"),
         CheckConstraint("subtotal_edge_banding_tiyin >= 0", name="ck_orders_edge_nonnegative"),
         CheckConstraint("discount_tiyin >= 0", name="ck_orders_discount_nonnegative"),
+        CheckConstraint("surcharge_tiyin >= 0", name="ck_orders_surcharge_nonnegative"),
         CheckConstraint("total_tiyin >= 0", name="ck_orders_total_nonnegative"),
         CheckConstraint(
             "discount_tiyin <= ("
@@ -32,13 +33,18 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
         CheckConstraint(
             "total_tiyin = ("
             "subtotal_cutting_tiyin + subtotal_materials_tiyin "
-            "+ subtotal_edge_banding_tiyin - discount_tiyin)",
+            "+ subtotal_edge_banding_tiyin - discount_tiyin + surcharge_tiyin)",
             name="ck_orders_total_formula",
         ),
         CheckConstraint(
             "discount_tiyin = 0 OR ("
             "discount_reason IS NOT NULL AND discount_applied_by_user_id IS NOT NULL)",
             name="ck_orders_discount_metadata_required",
+        ),
+        CheckConstraint(
+            "surcharge_tiyin = 0 OR ("
+            "surcharge_reason IS NOT NULL AND surcharge_applied_by_user_id IS NOT NULL)",
+            name="ck_orders_surcharge_metadata_required",
         ),
     )
 
@@ -75,6 +81,11 @@ class Order(UUIDPrimaryKey, Timestamped, Base):
     discount_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     discount_reason: Mapped[str | None]
     discount_applied_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workshop_users.id")
+    )
+    surcharge_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    surcharge_reason: Mapped[str | None]
+    surcharge_applied_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workshop_users.id")
     )
     total_tiyin: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)

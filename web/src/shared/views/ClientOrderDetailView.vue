@@ -404,6 +404,13 @@ onMounted(() => {
                     <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
                   </div>
                 </template>
+                <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
+                  <div>
+                    <div class="client-row-name">Ustama</div>
+                    <div class="text-sm text-ink-muted">{{ order.surcharge_reason ?? '' }}</div>
+                  </div>
+                  <div class="client-row-meta">+ {{ formatTiyin(order.surcharge_tiyin) }}</div>
+                </div>
                 <div v-if="order.discount_tiyin > 0" class="client-row-item">
                   <div>
                     <div class="client-row-name">Chegirma</div>
@@ -446,6 +453,15 @@ onMounted(() => {
                       }}</span>
                     </div>
                   </template>
+                  <div
+                    v-if="order.surcharge_tiyin > 0"
+                    class="flex justify-between py-1 text-ink-soft"
+                  >
+                    <span>Ustama</span
+                    ><span class="font-mono text-ink"
+                      >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
+                    >
+                  </div>
                   <div
                     v-if="order.discount_tiyin > 0"
                     class="flex justify-between py-1 text-success"

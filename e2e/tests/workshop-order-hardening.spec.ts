@@ -79,11 +79,13 @@ test('owner applies a discount and it persists after reload', async ({ page, req
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
 
-  // Discount lives behind the header overflow menu now, in a modal.
+  // Discount lives behind the header overflow menu now, in a modal. The fixed
+  // value is entered in so'm and stored as tiyin (1 000 so'm = 100 000 tiyin),
+  // safely within the order subtotal.
   await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: "Chegirma qo'shish" }).click()
   const discountDialog = page.getByRole('dialog', { name: 'Chegirma' })
-  await discountDialog.getByLabel('Qiymat').fill('12345')
+  await discountDialog.getByLabel('Qiymat').fill('1000')
   await discountDialog.getByLabel('Sabab').fill('E2E discount persists')
   const discounted = page.waitForResponse(
     (response) => response.url().includes('/discount') && response.ok(),
@@ -95,6 +97,42 @@ test('owner applies a discount and it persists after reload', async ({ page, req
   await page.reload()
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
   await expect(page.getByText('E2E discount persists')).toBeVisible()
+})
+
+test('owner applies a surcharge and it persists after reload', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const seeded = await seedOrderableBranch(request, id)
+  const placed = await placeClientOrderViaApi(request, {
+    phone: phoneFor(id, 41),
+    name: `Surcharge Client ${id}`,
+    branchId: seeded.branchId,
+    panelId: seeded.panel.id,
+    edgeId: seeded.edge.id,
+  })
+
+  await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
+  await page.goto(`/workshop/orders/${placed.order.id}`)
+  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
+  await page.getByRole('button', { name: "Ustama qo'shish" }).click()
+  const surchargeDialog = page.getByRole('dialog', { name: 'Ustama' })
+  await surchargeDialog.getByLabel('Qiymat').fill('2000')
+  await surchargeDialog.getByLabel('Sabab').fill('E2E rush surcharge')
+  const surcharged = page.waitForResponse(
+    (response) => response.url().includes('/surcharge') && response.ok(),
+  )
+  await surchargeDialog.getByRole('button', { name: "Ustama qo'shish" }).click()
+  await surcharged
+  // The breakdown shows the surcharge as an additive line with its reason.
+  await expect(page.getByText('E2E rush surcharge')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByText('E2E rush surcharge')).toBeVisible()
 })
 
 test('owner records order income and standalone expense', async ({ page, request }, testInfo) => {

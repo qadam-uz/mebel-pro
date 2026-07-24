@@ -13,6 +13,7 @@ from app.modules.cutting.schemas import CuttingDraftResponse
 from app.modules.sales.api import (
     apply_discount,
     apply_order_edit,
+    apply_surcharge,
     approve_order,
     assign_order_workers,
     begin_order_edit,
@@ -57,6 +58,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderDiscountRequest,
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
+    WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
 
@@ -398,6 +400,16 @@ async def workshop_orders_discount(
     db: Session,
 ) -> OrderDetailResponse:
     return await apply_discount(db, principal=principal, order_id=order_id, payload=payload)
+
+
+@router.post("/workshop/orders/{order_id}/surcharge", response_model=OrderDetailResponse)
+async def workshop_orders_surcharge(
+    order_id: uuid.UUID,
+    payload: WorkshopOrderSurchargeRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await apply_surcharge(db, principal=principal, order_id=order_id, payload=payload)
 
 
 @router.patch("/workshop/orders/{order_id}/note", response_model=OrderDetailResponse)
