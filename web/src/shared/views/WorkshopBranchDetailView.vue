@@ -17,6 +17,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
+import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import { useWorkshopStore } from '@/shared/stores/workshop'
@@ -35,6 +36,7 @@ const route = useRoute()
 const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const toast = useToast()
+const { notifyProgress } = useOnboardingContinuation()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
 const loading = ref(false)
 const pageError = ref<string | null>(null)
@@ -220,7 +222,7 @@ async function saveBranch() {
       edge_banding_rate_tiyin: edgeBandingRateTiyin.value,
     })
     saved.value = true
-    toast.success('Filial saqlandi.')
+    if (!(await notifyProgress())) toast.success('Filial saqlandi.')
   } catch (caught) {
     Object.assign(
       branchFieldErrors,
@@ -434,7 +436,7 @@ onMounted(refreshBranch)
               </div>
             </div>
           </fieldset>
-          <div class="grid gap-3 md:grid-cols-2">
+          <div class="grid gap-3 md:grid-cols-2" data-onboard="branch-pricing">
             <label class="field" for="branch-detail-cutting-rate">
               <span>Kesish narxi (so'm)</span>
               <input

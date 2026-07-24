@@ -163,6 +163,13 @@ class BranchPricingPutRequest(BaseModel):
     edge_banding_rate_tiyin: int | None = None
 
 
+class WorkshopOnboardingResponse(APIModel):
+    branch_configured: bool
+    materials_added: bool
+    setup_complete: bool
+    first_branch_id: uuid.UUID | None
+
+
 class GrantInput(BaseModel):
     permission: Permission
     branch_id: uuid.UUID

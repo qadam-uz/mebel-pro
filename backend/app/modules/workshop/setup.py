@@ -12,7 +12,7 @@ from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import BranchStatus
 from app.modules.access.api import normalize_uz_phone
-from app.modules.catalog.contracts import BranchPricing
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
     record_action,
@@ -25,6 +25,7 @@ from app.modules.workshop.schemas import (
     BranchPatchRequest,
     BranchPricingPutRequest,
     BranchStatusRequest,
+    WorkshopOnboardingResponse,
     WorkshopSettingsPatchRequest,
     dump_working_hours,
 )
@@ -243,6 +244,49 @@ async def get_branch_pricing(
         db.add(row)
         await db.flush()
     return row
+
+
+async def get_onboarding_status(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+) -> WorkshopOnboardingResponse:
+    workshop_id = require_workshop_owner(principal)
+    first_branch_id = await db.scalar(
+        select(Branch.id)
+        .where(Branch.workshop_id == workshop_id, Branch.status == BranchStatus.ACTIVE)
+        .order_by(Branch.created_at, Branch.id)
+        .limit(1)
+    )
+    branch_configured = (
+        await db.scalar(
+            select(Branch.id)
+            .join(BranchPricing, BranchPricing.branch_id == Branch.id)
+            .where(
+                Branch.workshop_id == workshop_id,
+                Branch.status == BranchStatus.ACTIVE,
+                BranchPricing.cutting_rate_tiyin.is_not(None),
+                BranchPricing.edge_banding_rate_tiyin.is_not(None),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+    materials_added = (
+        await db.scalar(
+            select(BranchMaterial.id)
+            .join(Branch, Branch.id == BranchMaterial.branch_id)
+            .where(Branch.workshop_id == workshop_id)
+            .limit(1)
+        )
+        is not None
+    )
+    return WorkshopOnboardingResponse(
+        branch_configured=branch_configured,
+        materials_added=materials_added,
+        setup_complete=branch_configured and materials_added,
+        first_branch_id=first_branch_id,
+    )
 
 
 async def update_branch_pricing(

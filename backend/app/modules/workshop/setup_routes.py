@@ -10,6 +10,7 @@ from app.modules.workshop.api import (
     create_branch,
     get_branch,
     get_branch_pricing,
+    get_onboarding_status,
     get_settings,
     list_branches,
     set_branch_status,
@@ -25,6 +26,7 @@ from app.modules.workshop.schemas import (
     BranchPricingResponse,
     BranchResponse,
     BranchStatusRequest,
+    WorkshopOnboardingResponse,
     WorkshopSettingsPatchRequest,
     WorkshopSettingsResponse,
 )
@@ -49,6 +51,14 @@ async def settings_update(
 ) -> WorkshopSettingsResponse:
     row = await update_settings(db, principal=principal, payload=payload)
     return WorkshopSettingsResponse.model_validate(row)
+
+
+@router.get("/onboarding", response_model=WorkshopOnboardingResponse)
+async def onboarding_show(
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> WorkshopOnboardingResponse:
+    return await get_onboarding_status(db, principal=principal)
 
 
 @router.get("/branches", response_model=list[BranchResponse])
