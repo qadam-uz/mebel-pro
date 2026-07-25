@@ -36,7 +36,6 @@ import CuttingPartRow from '@/shared/components/CuttingPartRow.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import {
-  EDGE_TRIM_MM,
   materialLabel,
   partFitError,
   partNotCarried,
@@ -235,6 +234,18 @@ const activeBranchId = computed(() => {
 })
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
+)
+// The edge trim actually in effect for this editor: the saved draft's
+// resolved value first (server-authoritative), then the client-picked branch,
+// then the workshop's fixed branch. Null only when no branch is chosen yet —
+// canOptimize already gates on a branch being picked, so fit validation is
+// simply skipped rather than guessing a number (cutting.md).
+const activeTrimMm = computed(
+  () =>
+    draft.value?.edge_trim_mm ??
+    preferredBranch.value?.edge_trim_mm ??
+    fixedBranch.value?.edgeTrimMm ??
+    null,
 )
 // Every row's panel picker draws from this branch-filtered catalog; the picker's
 // own search narrows further. With a branch selected only its carried materials show.
@@ -519,13 +530,21 @@ function rowNotCarried(part: CuttingPart) {
 function partSizeError(part: CuttingPart): string | null {
   const panel = materialById(part.material_id)
   if (!panel || panel.panel_length_mm == null || panel.panel_width_mm == null) return null
-  const code = partFitError(part.length_mm, part.width_mm, panel, part.follow_grain !== false)
+  const trimMm = activeTrimMm.value
+  if (trimMm == null) return null
+  const code = partFitError(
+    part.length_mm,
+    part.width_mm,
+    panel,
+    part.follow_grain !== false,
+    trimMm,
+  )
   if (!code) return null
-  const usableLength = panel.panel_length_mm - 2 * EDGE_TRIM_MM
-  const usableWidth = panel.panel_width_mm - 2 * EDGE_TRIM_MM
+  const usableLength = panel.panel_length_mm - 2 * trimMm
+  const usableWidth = panel.panel_width_mm - 2 * trimMm
   if (code === 'impossible_grain')
     return `Tekstura yo'nalishi qat'iy — qism ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
-  return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${EDGE_TRIM_MM} mm chetki qirqim).`
+  return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${trimMm} mm chetki qirqim).`
 }
 
 // A chosen panel id that no longer resolves in the loaded catalog — e.g. the

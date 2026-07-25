@@ -1,6 +1,16 @@
 @import 'tailwindcss';
 
 @theme {
+  /* The desktop `zoom: 90%` below scales content but NOT media queries — they
+     still measure the unzoomed viewport, so every breakpoint would fire 11%
+     later than the room actually warrants. Scaling the desktop tiers by 0.9
+     re-syncs them: `xl:` now fires exactly when the content area reaches the
+     1280px it was written for. `sm` / `md` stay untouched — they live at or
+     below the 768px cutoff where no zoom is applied. */
+  --breakpoint-lg: 922px; /* 1024 × 0.9 */
+  --breakpoint-xl: 1152px; /* 1280 × 0.9 */
+  --breakpoint-2xl: 1382px; /* 1536 × 0.9 */
+
   --font-serif: 'Source Serif 4', 'Charter', 'Iowan Old Style', Georgia, serif;
   --font-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
@@ -35,6 +45,18 @@
 }
 
 @layer base {
+  /* Bakes in the 90% density the design was tuned at, so the app reads right
+     at the browser's actual 100% zoom — `zoom` (not a root font-size or
+     transform) because it scales spacing/borders/icons along with type,
+     matching real browser zoom pixel-for-pixel. Scoped above the CB-68 mobile
+     breakpoint so the iOS auto-zoom-on-focus fix (which depends on inputs
+     hitting a true 16px) is untouched on phones. */
+  @media (min-width: 769px) {
+    html {
+      zoom: 90%;
+    }
+  }
+
   html,
   body,
   #app {
@@ -46,7 +68,7 @@
     background: var(--color-bg);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -206,7 +228,7 @@
     .ep-search,
     textarea,
     [role='combobox'] {
-      font-size: 16px;
+      font-size: 1rem;
     }
   }
 
@@ -220,7 +242,7 @@
     background: var(--color-sunk);
     padding: 3px 9px;
     color: var(--color-ink-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
   }
 
@@ -284,7 +306,7 @@
 
   .client-brand-name {
     font-family: var(--font-serif);
-    font-size: 19px;
+    font-size: 1.1875rem;
     font-weight: 600;
     letter-spacing: 0;
   }
@@ -320,7 +342,7 @@
     border-radius: 7px;
     padding: 6px 12px;
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 600;
     text-decoration: none;
     transition:
@@ -381,7 +403,7 @@
     border-radius: 999px;
     background: var(--color-accent);
     color: #fff;
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 800;
     line-height: 14px;
     text-align: center;
@@ -416,7 +438,7 @@
     border-radius: 50%;
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
     color: #fff;
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 800;
     line-height: 1;
   }
@@ -438,7 +460,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.08;
@@ -448,7 +470,7 @@
     margin: 6px 0 0;
     max-width: 680px;
     color: var(--color-ink-soft);
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .client-card {
@@ -493,7 +515,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
   }
 
@@ -514,7 +536,7 @@
   .client-section-title h2 {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 600;
   }
 
@@ -556,7 +578,7 @@
     margin: 0 auto 14px;
     border-radius: 12px;
     font-family: var(--font-serif);
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
   }
 
@@ -586,7 +608,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 600;
   }
 
@@ -595,7 +617,7 @@
     margin: 8px auto 0;
     max-width: 520px;
     color: var(--color-ink-soft);
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .client-skeleton {
@@ -625,7 +647,7 @@
     gap: 5px;
     border-radius: 999px;
     padding: 3px 9px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -679,14 +701,14 @@
 
   .client-row-name {
     color: var(--color-ink);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 700;
   }
 
   .client-row-meta {
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .client-back {
@@ -699,7 +721,7 @@
     border-radius: 7px;
     background: none;
     color: var(--color-ink-muted);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     padding-inline: 0;
     text-decoration: none;
@@ -725,7 +747,7 @@
     color: var(--color-ink-soft);
     cursor: pointer;
     padding: 10px 14px;
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -741,7 +763,7 @@
     gap: 10px;
     border-radius: 9px;
     padding: 12px 16px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     margin-bottom: 16px;
   }
 
@@ -792,7 +814,7 @@
     background: var(--color-elevated);
     box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--color-ink) 35%, transparent);
     padding: 12px 14px;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-ink);
     pointer-events: auto;
@@ -825,7 +847,7 @@
     border-radius: 6px;
     background: transparent;
     color: inherit;
-    font-size: 18px;
+    font-size: 1.125rem;
     line-height: 1;
     opacity: 0.7;
   }
@@ -903,7 +925,7 @@
   .client-edge-svg .lbl {
     fill: var(--color-accent);
     font-family: var(--font-mono);
-    font-size: 6.5px;
+    font-size: 0.40625rem;
     font-weight: 800;
   }
 
@@ -920,13 +942,13 @@
   }
 
   .client-edge-summary b {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .client-edge-summary small {
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     margin-top: 2px;
   }
 
@@ -971,7 +993,7 @@
   .client-edge-modal-h h3 {
     margin: 0;
     font-family: var(--font-sans);
-    font-size: 14.5px;
+    font-size: 0.90625rem;
     font-weight: 700;
   }
 
@@ -984,7 +1006,7 @@
     border-radius: 7px;
     background: transparent;
     color: var(--color-ink-muted);
-    font-size: 22px;
+    font-size: 1.375rem;
     line-height: 1;
   }
 
@@ -1019,7 +1041,7 @@
     border-radius: 8px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 600;
     line-height: 1.45;
     padding: 10px 12px;
@@ -1070,7 +1092,7 @@
   .ep-source .nm {
     display: block;
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     line-height: 1.2;
   }
@@ -1079,7 +1101,7 @@
   .ep-source .meta {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 600;
     line-height: 1.3;
     margin-top: 2px;
@@ -1115,13 +1137,13 @@
       var(--color-elevated) 14px
     );
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
   }
 
   .edge-diagram .lbl {
     color: var(--color-ink-muted);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1137,7 +1159,7 @@
     color: var(--color-ink-soft);
     cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     line-height: 1.2;
     padding: 4px;
@@ -1183,7 +1205,7 @@
     border-radius: 7px;
     background: var(--color-sunk);
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     padding: 10px 12px;
   }
@@ -1273,14 +1295,14 @@
 
   .ep-edge-opt .nm {
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
   }
 
   .ep-edge-opt .meta {
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     margin-top: 2px;
   }
 
@@ -1290,7 +1312,7 @@
     background: var(--color-sunk);
     color: var(--color-ink-strong);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     padding: 2px 8px;
     white-space: nowrap;
@@ -1309,7 +1331,7 @@
     border-radius: 999px;
     background: var(--color-accent-soft);
     color: var(--color-accent);
-    font-size: 9px;
+    font-size: 0.5625rem;
     font-weight: 900;
     letter-spacing: 0.04em;
     padding: 1px 6px;
@@ -1319,7 +1341,7 @@
   .ep-empty,
   .ep-branch-note {
     border-radius: 7px;
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 600;
     line-height: 1.45;
     padding: 12px;
@@ -1342,7 +1364,7 @@
     margin-top: 10px;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   @media (max-width: 860px) {
@@ -1371,7 +1393,7 @@
     .client-nav a {
       min-height: 34px;
       padding-inline: 8px;
-      font-size: 12.5px;
+      font-size: 0.78125rem;
     }
 
     .client-nav::-webkit-scrollbar {
@@ -1498,7 +1520,7 @@
     display: block;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 17px;
+    font-size: 1.0625rem;
     font-weight: 600;
     line-height: 1.1;
   }
@@ -1506,7 +1528,7 @@
   .workshop-brand-role {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 800;
     letter-spacing: 0.14em;
     line-height: 1.25;
@@ -1540,14 +1562,14 @@
     height: 28px;
     border-radius: 6px;
     font-family: var(--font-serif);
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .workshop-user-avatar {
     width: 30px;
     height: 30px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .workshop-tenant-name,
@@ -1555,7 +1577,7 @@
     display: block;
     overflow: hidden;
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -1568,7 +1590,7 @@
     overflow: hidden;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1615,7 +1637,7 @@
     align-items: center;
     gap: 8px;
     color: var(--color-ink-muted);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 800;
     letter-spacing: 0.15em;
     padding: 4px 10px;
@@ -1636,7 +1658,7 @@
     gap: 10px;
     border-radius: 7px;
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 700;
     padding: 8px 10px;
     text-decoration: none;
@@ -1840,7 +1862,7 @@
     background: var(--color-sunk);
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 0.625rem;
     padding: 1px 5px;
   }
 
@@ -1871,7 +1893,7 @@
   .workshop-search-section-title {
     padding: 4px 7px 6px;
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 900;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1908,14 +1930,14 @@
   }
 
   .workshop-search-result strong {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 900;
   }
 
   .workshop-search-result small {
     margin-top: 2px;
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 650;
   }
 
@@ -1924,7 +1946,7 @@
     border-radius: 999px;
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-style: normal;
     font-weight: 850;
     padding: 4px 7px;
@@ -1939,7 +1961,7 @@
   .workshop-search-error {
     margin: 0;
     color: var(--color-ink-muted);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     padding: 14px 10px;
   }
@@ -1955,7 +1977,7 @@
     margin-top: 3px;
     color: currentColor;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
   }
 
   .workshop-search-shortcuts {
@@ -1968,7 +1990,7 @@
     border: 1px solid var(--color-hairline);
     border-radius: 999px;
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     padding: 6px 9px;
     text-decoration: none;
@@ -2004,7 +2026,7 @@
   .workshop-top-user-text {
     max-width: 160px;
     overflow: hidden;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2048,7 +2070,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.08;
@@ -2057,7 +2079,7 @@
   .page-head .date,
   .page-head .sub {
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     margin-top: 6px;
   }
 
@@ -2093,13 +2115,13 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
   }
 
   .card-h .sub {
     color: var(--color-ink-muted);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
   }
 
   .card-b {
@@ -2153,7 +2175,7 @@
     color: var(--color-ink-muted);
     background: color-mix(in srgb, var(--color-elevated) 85%, transparent);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 600;
     padding-left: 6px;
   }
@@ -2163,7 +2185,7 @@
     justify-content: space-between;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 600;
     margin-top: 6px;
   }
@@ -2176,7 +2198,7 @@
     margin-top: 10px;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .chart-key {
@@ -2202,7 +2224,7 @@
 
   .more {
     color: var(--color-accent);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 800;
     text-decoration: none;
   }
@@ -2280,7 +2302,7 @@
 
   .od-top h1 {
     color: var(--color-ink);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 800;
     letter-spacing: -0.01em;
     line-height: 1.15;
@@ -2300,7 +2322,7 @@
     gap: 8px 20px;
     margin-top: 8px;
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
   }
 
   .od-meta b {
@@ -2315,7 +2337,7 @@
   .od-hint {
     margin: 8px 0 0;
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     text-align: right;
   }
@@ -2329,7 +2351,7 @@
     align-items: baseline;
     gap: 4px 8px;
     margin-top: 8px;
-    font-size: 13.5px;
+    font-size: 0.84375rem;
   }
 
   .od-note .lbl {
@@ -2359,7 +2381,7 @@
     padding: 0;
     cursor: pointer;
     color: var(--color-ink-muted);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     transition: color 140ms ease;
   }
@@ -2407,7 +2429,7 @@
 
   .od-step .od-lbl {
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.2;
     white-space: nowrap;
@@ -2458,7 +2480,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
   }
 
@@ -2467,7 +2489,7 @@
     align-items: center;
     gap: 10px;
     color: var(--color-ink-muted);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
   }
 
   .od-chev {
@@ -2516,7 +2538,7 @@
   .bom-qty {
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     white-space: nowrap;
   }
@@ -2545,7 +2567,7 @@
     border: 0;
     background: transparent;
     color: var(--color-accent);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     margin-bottom: 12px;
     padding: 0;
@@ -2561,7 +2583,7 @@
     border-radius: 10px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
-    font-size: 13px;
+    font-size: 0.8125rem;
     padding: 14px 18px;
   }
 
@@ -2589,7 +2611,7 @@
 
   .totals .grand .num {
     font-family: var(--font-serif);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 600;
   }
 
@@ -2611,7 +2633,7 @@
     gap: 14px;
     border-bottom: 1px solid var(--color-hairline);
     color: var(--color-ink-soft);
-    font-size: 13px;
+    font-size: 0.8125rem;
     padding: 9px 0;
   }
 
@@ -2665,7 +2687,7 @@
   .br-card h3 {
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.15;
@@ -2675,7 +2697,7 @@
   .br-card .addr {
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     margin-top: 4px;
   }
 
@@ -2689,7 +2711,7 @@
 
   .br-card .kpi-grid .l {
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.07em;
     margin-bottom: 4px;
@@ -2699,7 +2721,7 @@
   .br-card .kpi-grid .v {
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 600;
     line-height: 1;
   }
@@ -2747,7 +2769,7 @@
 
   .kpi .lbl {
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     margin-bottom: 10px;
@@ -2769,7 +2791,7 @@
   .kpi .v small {
     color: var(--color-ink-soft);
     font-family: var(--font-sans);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
   }
 
@@ -2796,7 +2818,7 @@
     justify-content: space-between;
     gap: 8px;
     color: var(--color-ink-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-top: 10px;
   }
 
@@ -2812,7 +2834,7 @@
     width: 100%;
     min-width: 680px;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   @media (max-width: 720px) {
@@ -2836,7 +2858,7 @@
     border-bottom: 1px solid var(--color-hairline-strong);
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.07em;
     padding: 10px 12px;
@@ -2873,7 +2895,7 @@
   .tbl .id,
   .id {
     color: var(--color-ink-soft);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 800;
     white-space: nowrap;
   }
@@ -2888,7 +2910,7 @@
   .nm small {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 500;
   }
 
@@ -2946,7 +2968,7 @@
     border-radius: 6px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     transition:
       border-color 140ms ease,
@@ -2963,7 +2985,7 @@
   .mp-action-icon-button {
     width: 34px;
     justify-content: center;
-    font-size: 16px;
+    font-size: 1rem;
     letter-spacing: 1px;
   }
 
@@ -2999,7 +3021,7 @@
     border-radius: 6px;
     background: transparent;
     color: var(--color-ink-strong);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     gap: 8px;
     padding: 8px 10px;
@@ -3036,7 +3058,7 @@
 
   .filter-label {
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -3064,7 +3086,7 @@
     background: none;
     color: var(--color-ink-soft);
     padding: 10px 14px;
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -3083,7 +3105,7 @@
     gap: 5px;
     border-radius: 999px;
     padding: 3px 9px;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     white-space: nowrap;
   }
@@ -3105,7 +3127,7 @@
   .assignment-chip {
     gap: 4px;
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 0.625rem;
     line-height: 1.2;
   }
 
@@ -3174,7 +3196,7 @@
   .row-item .meta {
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     text-align: right;
   }
@@ -3194,7 +3216,7 @@
     align-items: flex-start;
     gap: 10px;
     border-radius: 9px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     margin-bottom: 16px;
     padding: 12px 16px;
   }
@@ -3238,7 +3260,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 600;
   }
 
@@ -3246,7 +3268,7 @@
   .st-error p {
     max-width: 520px;
     color: var(--color-ink-soft);
-    font-size: 14px;
+    font-size: 0.875rem;
     margin: 8px auto 0;
   }
 
@@ -3294,7 +3316,7 @@
     border-radius: 8px;
     background: var(--color-sunk);
     color: var(--color-ink-soft);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     margin: 0 0 10px;
@@ -3315,7 +3337,7 @@
      keys off, so it leads; the amount is demoted below it. */
   .board-card .id {
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .board-card .amt {
@@ -3383,7 +3405,7 @@
     display: block;
     min-width: 0;
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     margin-top: 8px;
     overflow-wrap: anywhere;
@@ -3395,7 +3417,7 @@
     flex-wrap: wrap;
     gap: 6px;
     color: var(--color-ink-muted);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     margin-top: 6px;
   }
 
@@ -3422,7 +3444,7 @@
     justify-content: space-between;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
     margin: 0 0 12px;
   }
@@ -3444,14 +3466,14 @@
   .q-card h4 {
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     margin: 0;
   }
 
   .q-card .meta {
     color: var(--color-ink-soft);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     margin-top: 4px;
   }
 
@@ -3472,7 +3494,7 @@
     border-radius: 999px;
     background: var(--color-accent-soft);
     color: var(--color-accent);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     padding: 3px 8px;
   }
@@ -3496,7 +3518,7 @@
     background: var(--color-accent);
     color: #fff;
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.1em;
     padding: 2px 10px;
@@ -3507,7 +3529,7 @@
   .prod-card h4 {
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: 17px;
+    font-size: 1.0625rem;
     font-weight: 800;
     margin: 0;
   }
@@ -3515,7 +3537,7 @@
   .prod-hero .meta,
   .prod-card .meta {
     color: var(--color-ink-soft);
-    font-size: 14px;
+    font-size: 0.875rem;
     margin-top: 4px;
   }
 
@@ -3533,7 +3555,7 @@
     justify-content: space-between;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.09em;
     margin: 20px 0 10px;
@@ -3546,7 +3568,7 @@
     gap: 10px;
     border-top: 1px dashed var(--color-hairline);
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     padding: 9px 4px;
   }
 
@@ -3557,7 +3579,7 @@
   .prod-done-row .when {
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
     margin-left: auto;
   }
 
@@ -3615,7 +3637,7 @@
     border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
-    font-size: 13px;
+    font-size: 0.8125rem;
     padding: 5px 12px;
   }
 
@@ -3639,7 +3661,7 @@
     flex-wrap: wrap;
     gap: 8px 16px;
     color: var(--color-ink-soft);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     margin-top: 12px;
   }
 
@@ -3699,7 +3721,7 @@
     justify-content: space-between;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     letter-spacing: 0.09em;
     padding: 0 2px;
@@ -3730,7 +3752,7 @@
     background: transparent;
     color: var(--color-ink);
     flex: 1;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     min-height: 44px;
     padding: 8px 10px;
@@ -3783,7 +3805,7 @@
 
   .field label {
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
   }
 
@@ -3791,14 +3813,14 @@
      label rule would otherwise repaint it bold black (specificity trap). */
   .field > span:not(.mp-field-error) {
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
   }
 
   .field:has(input:required, textarea:required) > span:first-child::after {
     color: var(--color-danger);
     content: ' *';
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 900;
     letter-spacing: 0;
   }
@@ -3806,7 +3828,7 @@
   .mp-field-required {
     margin-left: 4px;
     color: var(--color-danger);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 900;
     letter-spacing: 0;
     text-transform: none;
@@ -3814,7 +3836,7 @@
 
   .mp-field-error {
     color: var(--color-danger);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 750;
     line-height: 1.25;
   }
@@ -3829,7 +3851,7 @@
     width: 100%;
     min-width: 720px;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .matrix th,
@@ -3842,7 +3864,7 @@
   .matrix th {
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.07em;
     text-transform: uppercase;
@@ -3867,7 +3889,7 @@
     position: relative;
     border-left: 2px solid var(--color-hairline-strong);
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     padding: 0 0 16px 18px;
   }
 
@@ -3906,7 +3928,7 @@
     display: block;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     margin-bottom: 3px;
   }
 
@@ -3919,7 +3941,7 @@
     border-radius: 999px;
     background: var(--color-accent);
     color: #fff;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
   }
 
@@ -4015,7 +4037,7 @@
     background: var(--color-accent);
     color: #fff;
     padding: 9px 12px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     text-decoration: none;
     box-shadow: var(--shadow-elevated);
@@ -4072,7 +4094,7 @@
     display: block;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 17px;
+    font-size: 1.0625rem;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.15;
@@ -4081,7 +4103,7 @@
   .admin-brand-role {
     display: block;
     color: var(--color-ink-muted);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 800;
     letter-spacing: 0.14em;
     line-height: 1.2;
@@ -4113,7 +4135,7 @@
     );
     color: #fff;
     font-family: var(--font-serif);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
   }
 
@@ -4122,7 +4144,7 @@
     display: block;
     overflow: hidden;
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -4134,7 +4156,7 @@
     display: block;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1.35;
   }
 
@@ -4179,7 +4201,7 @@
     margin-bottom: 4px;
     padding: 4px 10px;
     color: var(--color-ink-muted);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-weight: 800;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -4197,7 +4219,7 @@
     background: transparent;
     color: var(--color-ink-soft);
     padding: 8px 10px;
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 650;
     text-align: left;
     text-decoration: none;
@@ -4283,7 +4305,7 @@
     flex: 1 1 260px;
     flex-direction: column;
     gap: 1px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .admin-reset-gate-body strong {
@@ -4295,7 +4317,7 @@
     border: 1px solid currentColor;
     border-radius: 7px;
     padding: 6px 12px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     color: inherit;
     white-space: nowrap;
@@ -4322,7 +4344,7 @@
     background: var(--color-sunk);
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     padding: 1px 6px;
   }
@@ -4353,7 +4375,7 @@
     border-radius: 5px;
     padding: 7px 9px;
     color: var(--color-ink-soft);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     text-decoration: none;
   }
@@ -4393,7 +4415,7 @@
     border-radius: 999px;
     background: linear-gradient(135deg, var(--color-accent), var(--color-accent-deep));
     color: #fff;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
   }
 
@@ -4465,7 +4487,7 @@
     border: 0;
     background: transparent;
     color: var(--color-ink);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 600;
     outline: 0;
   }
@@ -4476,7 +4498,7 @@
     background: var(--color-sunk);
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     padding: 1px 5px;
   }
 
@@ -4536,7 +4558,7 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 32px;
+    font-size: 2rem;
     font-weight: 600;
     letter-spacing: 0;
     line-height: 1.08;
@@ -4546,14 +4568,14 @@
   .admin-page-sub {
     margin: 5px 0 0;
     color: var(--color-ink-soft);
-    font-size: 14px;
+    font-size: 0.875rem;
   }
 
   .admin-page-head .date {
     margin-top: 5px;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
   }
 
   .admin-page-tools {
@@ -4571,7 +4593,7 @@
     background: transparent;
     color: var(--color-ink-muted);
     padding: 4px 0;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 700;
     text-decoration: none;
   }
@@ -4625,7 +4647,7 @@
   .admin-kpi-label {
     margin-bottom: 10px;
     color: var(--color-ink-muted);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -4655,7 +4677,7 @@
     gap: 8px;
     margin-top: 10px;
     color: var(--color-ink-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .admin-card {
@@ -4682,14 +4704,14 @@
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-serif);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
     letter-spacing: 0;
   }
 
   .admin-card-h .sub {
     color: var(--color-ink-muted);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
   }
 
   .admin-card-b {
@@ -4706,7 +4728,7 @@
     border: 0;
     background: transparent;
     color: var(--color-accent);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 800;
     text-decoration: none;
   }
@@ -4733,7 +4755,7 @@
     width: max(100%, 680px);
     min-width: 0;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: 0.8125rem;
     text-align: left;
   }
 
@@ -4748,7 +4770,7 @@
     border-bottom: 1px solid var(--color-hairline-strong);
     background: var(--color-sunk);
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.07em;
     line-height: 1.3;
@@ -4779,7 +4801,7 @@
   .admin-table .id,
   .admin-mono {
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
   }
 
   .admin-table .nm {
@@ -4791,7 +4813,7 @@
     display: block;
     color: var(--color-ink-muted);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 500;
   }
 
@@ -4825,7 +4847,7 @@
     border-radius: 999px;
     background: rgb(255 255 255 / 88%);
     color: var(--color-ink-strong);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 850;
     box-shadow: 0 2px 8px color-mix(in srgb, var(--color-ink) 12%, transparent);
   }
@@ -4876,7 +4898,7 @@
     min-height: 18px;
     align-items: center;
     color: var(--color-ink-muted) !important;
-    font-size: 10.5px !important;
+    font-size: 0.65625rem !important;
     font-weight: 850 !important;
     letter-spacing: 0;
     line-height: 1.2 !important;
@@ -4895,7 +4917,7 @@
     border-radius: 8px;
     background: var(--color-elevated);
     color: var(--color-ink);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 400;
     line-height: 1.25;
     outline: 0;
@@ -4905,7 +4927,7 @@
   /* Workshop filter row runs at the slimmer 40px control height. */
   .mp-filter-input > input {
     min-height: 40px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .mp-filter-input > input:focus-visible,
@@ -4971,7 +4993,7 @@
      `.mp-filters` bar the shared caption rule above already covers it). */
   .mp-filter-dd-label {
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 850;
     line-height: 1.2;
     text-transform: uppercase;
@@ -4990,7 +5012,7 @@
     border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-ink-soft);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
     white-space: nowrap;
     transition:
@@ -5034,7 +5056,7 @@
     margin-top: 22px;
     padding: 0 8px;
     color: var(--color-ink-soft);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
     white-space: nowrap;
     transition: color 150ms ease;
@@ -5055,7 +5077,7 @@
   .admin-field > span:first-child,
   .admin-field-label {
     color: var(--color-ink-muted);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -5064,7 +5086,7 @@
   .admin-field:has(input:required, textarea:required) > span:first-child::after {
     color: var(--color-danger);
     content: ' *';
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 900;
     letter-spacing: 0;
   }
@@ -5072,7 +5094,7 @@
   .admin-field-required {
     margin-left: 4px;
     color: var(--color-danger);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 900;
     letter-spacing: 0;
     text-transform: none;
@@ -5081,7 +5103,7 @@
   .admin-field-error {
     margin-top: -2px;
     color: var(--color-danger);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 750;
     line-height: 1.25;
   }
@@ -5094,7 +5116,7 @@
     border-radius: 7px;
     background: var(--color-elevated);
     color: var(--color-ink);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 600;
     line-height: 1.35;
     outline: 0;
@@ -5119,7 +5141,7 @@
   .admin-working-hours legend {
     padding: 0 6px;
     color: var(--color-ink-muted);
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 800;
     letter-spacing: 0;
     text-transform: uppercase;
@@ -5139,7 +5161,7 @@
 
   .admin-working-hours-row > span {
     color: var(--color-ink);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 800;
   }
 
@@ -5196,7 +5218,7 @@
     min-height: 132px;
     place-items: center;
     color: var(--color-ink-muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
   }
 
@@ -5206,7 +5228,7 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--color-ink) 82%, transparent);
     color: #fff;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 850;
     padding: 6px 9px;
     text-align: center;
@@ -5222,14 +5244,14 @@
 
   .admin-image-upload-copy strong {
     color: var(--color-ink);
-    font-size: 15px;
+    font-size: 0.9375rem;
     line-height: 1.25;
   }
 
   .admin-image-upload-copy span,
   .admin-image-upload-copy small {
     color: var(--color-ink-muted);
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     font-weight: 650;
     line-height: 1.35;
   }
@@ -5249,7 +5271,7 @@
   .admin-image-upload-error {
     margin: 0;
     color: var(--color-danger);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 800;
   }
 
@@ -5259,7 +5281,7 @@
     gap: 5px;
     border-radius: 999px;
     border: 1px solid transparent;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 800;
     padding: 3px 9px;
     white-space: nowrap;
@@ -5318,7 +5340,7 @@
     background: transparent;
     color: var(--color-ink-soft);
     padding: 10px 14px;
-    font-size: 13.5px;
+    font-size: 0.84375rem;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -5354,7 +5376,7 @@
   .admin-error h3 {
     margin: 0 0 6px;
     font-family: var(--font-serif);
-    font-size: 21px;
+    font-size: 1.3125rem;
     font-weight: 600;
   }
 
@@ -5363,7 +5385,7 @@
     margin: 0 auto;
     max-width: 460px;
     color: var(--color-ink-soft);
-    font-size: 13.5px;
+    font-size: 0.84375rem;
   }
 
   .admin-error p {
@@ -5437,7 +5459,7 @@
   .admin-modal-h h3 {
     margin: 0;
     font-family: var(--font-serif);
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 600;
   }
 
@@ -5504,7 +5526,7 @@
 
   .admin-secret-key {
     color: var(--color-ink-muted);
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -5513,7 +5535,7 @@
   .admin-secret-value {
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 800;
     word-break: break-all;
   }
@@ -5817,7 +5839,7 @@
     }
 
     .page-head h1 {
-      font-size: 28px;
+      font-size: 1.75rem;
     }
 
     .field-row,
@@ -5850,7 +5872,7 @@
     }
 
     .admin-page-head h1 {
-      font-size: 26px;
+      font-size: 1.625rem;
     }
 
     .admin-kpis,
@@ -5957,7 +5979,7 @@
   /* iOS Safari zooms when focusing a sub-16px control; match .mp-input (CB-68). */
   @media (max-width: 768px) {
     .mp-phone .mp-phone-native {
-      font-size: 16px;
+      font-size: 1rem;
     }
   }
 }

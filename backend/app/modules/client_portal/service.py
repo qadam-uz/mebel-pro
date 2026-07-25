@@ -121,6 +121,8 @@ async def branch_options(
             status=branch.status,
             closed_reason=branch.closed_reason,
             today_hours=branch.today_hours(),
+            kerf_mm=branch.kerf_mm,
+            edge_trim_mm=branch.edge_trim_mm,
         )
         for branch, workshop in rows
     ]

@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-06-28
+updated: 2026-07-25
 order: 20
 ---
 
@@ -61,6 +61,8 @@ whether clients see it and order from it.
 | `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |
+| `kerf_mm` | int | the branch saw's kerf width; 1–20 mm; default `4`. Resolved into every cutting optimisation run scoped to this branch ([`cutting.md`](../features/cutting.md)) |
+| `edge_trim_mm` | int | edge trim per side (usable panel area = panel − 2× this); 0–50 mm; default `5` |
 | `created_at` / `updated_at` | timestamp | |
 
 Lifecycle: `active` — visible to clients, accepts new orders & cutting; `temporarily_closed` —

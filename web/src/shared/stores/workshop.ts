@@ -27,6 +27,8 @@ export interface BranchContextItem {
   phone: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
+  kerf_mm: number
+  edge_trim_mm: number
   permissions: string[]
 }
 
@@ -72,6 +74,8 @@ export interface ManagedBranch {
   working_hours: Record<string, unknown>
   status: BranchStatus
   closed_reason: string | null
+  kerf_mm: number
+  edge_trim_mm: number
   created_at: string
   updated_at: string
 }

@@ -26,6 +26,8 @@ function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
     client_id: 'client-1',
     name: 'Oshxona',
     preferred_branch_id: null,
+    kerf_mm: 4,
+    edge_trim_mm: 5,
     parts_snapshot: [],
     chosen_result_id: null,
     revision_of_order_id: null,

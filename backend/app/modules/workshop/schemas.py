@@ -75,6 +75,8 @@ class BranchContextItem(APIModel):
     phone: str
     status: BranchStatus
     closed_reason: str | None
+    kerf_mm: int
+    edge_trim_mm: int
     permissions: list[Permission] = Field(default_factory=list)
 
 
@@ -107,6 +109,9 @@ class BranchCreateRequest(BaseModel):
     latitude: Decimal | None = None
     longitude: Decimal | None = None
     working_hours: WorkingHours
+    # Physical saw properties (cutting.md); platform defaults when omitted.
+    kerf_mm: int = Field(default=4, ge=1, le=20)
+    edge_trim_mm: int = Field(default=5, ge=0, le=50)
 
     @field_validator("working_hours")
     @classmethod
@@ -121,6 +126,8 @@ class BranchPatchRequest(BaseModel):
     latitude: Decimal | None = None
     longitude: Decimal | None = None
     working_hours: WorkingHours | None = None
+    kerf_mm: int | None = Field(default=None, ge=1, le=20)
+    edge_trim_mm: int | None = Field(default=None, ge=0, le=50)
 
     @field_validator("working_hours")
     @classmethod
@@ -146,6 +153,8 @@ class BranchResponse(APIModel):
     working_hours: dict[str, Any]
     status: BranchStatus
     closed_reason: str | None
+    kerf_mm: int
+    edge_trim_mm: int
     created_at: datetime
     updated_at: datetime
 

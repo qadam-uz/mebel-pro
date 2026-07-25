@@ -4,8 +4,9 @@ import pytest
 from app.models.enums import MaterialSource
 from app.modules.cutting import optimizer as optimizer_module
 from app.modules.cutting.api import (
+    DEFAULT_CUT_PARAMS,
     EDGE_OVERHANG_MM,
-    EDGE_TRIM_MM,
+    CutParams,
     EdgeBandInput,
     OptimizerError,
     PanelSpec,
@@ -50,17 +51,24 @@ def _part(
     )
 
 
-def test_cutting_engine_places_every_instance_without_overlap() -> None:
+@pytest.mark.parametrize(
+    "params",
+    [DEFAULT_CUT_PARAMS, CutParams(kerf_mm=3, edge_trim_mm=12)],
+    ids=["default-params", "alt-branch-params"],
+)
+def test_cutting_engine_places_every_instance_without_overlap(params: CutParams) -> None:
     panel = _panel()
     parts = [
         _part(material_id=panel.material_id, part_ref="a", length=320, width=180, quantity=2),
         _part(material_id=panel.material_id, part_ref="b", length=250, width=200),
     ]
 
-    results = run_all_algorithms(parts, {panel.material_id: panel})
+    results = run_all_algorithms(parts, {panel.material_id: panel}, params=params)
 
     assert [result.algorithm_name for result in results] == ["cutting-engine-best"]
     for result in results:
+        assert result.kerf_mm == params.kerf_mm
+        assert result.edge_trim_mm == params.edge_trim_mm
         placements = [
             placement for panel_result in result.panels for placement in panel_result.placements
         ]
@@ -75,10 +83,10 @@ def test_cutting_engine_places_every_instance_without_overlap() -> None:
                 offcut.length_mm > 0 and offcut.width_mm > 0 for offcut in panel_result.offcuts
             )
             for placement in panel_result.placements:
-                assert placement.x_mm >= EDGE_TRIM_MM
-                assert placement.y_mm >= EDGE_TRIM_MM
-                assert placement.x_mm + placement.length_mm <= panel.length_mm - EDGE_TRIM_MM
-                assert placement.y_mm + placement.width_mm <= panel.width_mm - EDGE_TRIM_MM
+                assert placement.x_mm >= params.edge_trim_mm
+                assert placement.y_mm >= params.edge_trim_mm
+                assert placement.x_mm + placement.length_mm <= panel.length_mm - params.edge_trim_mm
+                assert placement.y_mm + placement.width_mm <= panel.width_mm - params.edge_trim_mm
             _assert_no_overlap(panel_result.placements)
 
 
@@ -87,7 +95,7 @@ def test_rejects_more_than_300_parts_before_optimizing() -> None:
     part = _part(material_id=panel.material_id, quantity=301)
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms([part], {panel.material_id: panel})
+        run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert exc.value.code == "too_many_parts"
 
@@ -97,7 +105,7 @@ def test_follow_grain_rejects_rotation_even_on_non_grained_material() -> None:
     part = _part(material_id=panel.material_id, length=170, width=260)
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms([part], {panel.material_id: panel})
+        run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert exc.value.code == "impossible_grain"
     assert exc.value.part_ref == "part-1"
@@ -107,7 +115,7 @@ def test_rotation_allowed_when_part_does_not_follow_grain() -> None:
     panel = _panel(length=300, width=200, grain=False)
     part = _part(material_id=panel.material_id, length=170, width=260, follow_grain=False)
 
-    results = run_all_algorithms([part], {panel.material_id: panel})
+    results = run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     for result in results:
         placement = result.panels[0].placements[0]
@@ -121,7 +129,7 @@ def test_grained_material_rejects_rotation_locked_impossible_part() -> None:
     part = _part(material_id=panel.material_id, length=170, width=260)
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms([part], {panel.material_id: panel})
+        run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert exc.value.code == "impossible_grain"
     assert exc.value.part_ref == "part-1"
@@ -160,7 +168,7 @@ def test_grained_material_allows_rotation_when_part_does_not_follow_grain() -> N
         follow_grain=False,
     )
 
-    result = run_all_algorithms([part], {panel.material_id: panel})[0]
+    result = run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)[0]
 
     placement = result.panels[0].placements[0]
     assert placement.rotated is True
@@ -181,7 +189,7 @@ def test_edge_metrics_split_shop_and_own_with_consumed_overhang() -> None:
         edge_left=EdgeBandInput(material_id=own_edge, source=MaterialSource.OWN),
     )
 
-    result = run_all_algorithms([part], {panel.material_id: panel})[0]
+    result = run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)[0]
 
     assert result.total_edge_length_mm == 300
     assert result.edge_length_by_material == {str(shop_edge): 200, str(own_edge): 100}
@@ -200,7 +208,7 @@ def test_panel_cap_rejects_more_than_twenty_panels_for_one_material() -> None:
     part = _part(material_id=panel.material_id, length=100, width=100, quantity=21)
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms([part], {panel.material_id: panel})
+        run_all_algorithms([part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert exc.value.code == "too_many_panels_needed"
 
@@ -210,7 +218,9 @@ def test_timeout_rejected_before_work_starts() -> None:
     part = _part(material_id=panel.material_id)
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms([part], {panel.material_id: panel}, timeout_seconds=0)
+        run_all_algorithms(
+            [part], {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS, timeout_seconds=0
+        )
 
     assert exc.value.code == "optimization_timeout"
 
@@ -223,9 +233,28 @@ def test_duplicate_part_refs_are_rejected() -> None:
     ]
 
     with pytest.raises(OptimizerError) as exc:
-        run_all_algorithms(parts, {panel.material_id: panel})
+        run_all_algorithms(parts, {panel.material_id: panel}, params=DEFAULT_CUT_PARAMS)
 
     assert exc.value.code == "duplicate_part_ref"
+
+
+def test_branch_trim_changes_usable_area_and_panel_count() -> None:
+    """Two branches with different edge trims must resolve to different usable
+    panel area for the identical parts — the whole point of per-branch settings
+    (cutting.md)."""
+    panel = _panel(length=1000, width=800)
+    parts = [_part(material_id=panel.material_id, length=480, width=380, quantity=3)]
+
+    tight = run_all_algorithms(
+        parts, {panel.material_id: panel}, params=CutParams(kerf_mm=4, edge_trim_mm=5)
+    )[0]
+    generous_trim = run_all_algorithms(
+        parts, {panel.material_id: panel}, params=CutParams(kerf_mm=4, edge_trim_mm=200)
+    )[0]
+
+    assert tight.edge_trim_mm == 5
+    assert generous_trim.edge_trim_mm == 200
+    assert tight.waste_percentage != generous_trim.waste_percentage
 
 
 def _assert_no_overlap(placements: list[PlacementResult]) -> None:

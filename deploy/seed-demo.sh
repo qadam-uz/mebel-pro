@@ -330,6 +330,13 @@ jcall PUT "$API/workshop/branches/$BRANCH2_ID/pricing" "$OWNER_TOKEN" \
   '{"cutting_rate_tiyin":60000,"edge_banding_rate_tiyin":25000}' >/dev/null
 ok "pricing set on B1 and B2"
 
+# B1 keeps the platform defaults (kerf 4 / trim 5, set at creation). B2 gets
+# visibly different cutting settings so the per-branch feature is checkable by
+# hand — the same parts on B1 vs B2 must yield a different fit/waste result.
+jcall PATCH "$API/workshop/branches/$BRANCH2_ID" "$OWNER_TOKEN" \
+  '{"kerf_mm":3,"edge_trim_mm":12}' >/dev/null
+ok "cutting settings: B1 kerf 4mm/trim 5mm (default), B2 kerf 3mm/trim 12mm"
+
 # ============================================================================
 # 7 · Staff (create → first login → change temp to final)
 # ============================================================================

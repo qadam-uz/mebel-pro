@@ -35,8 +35,10 @@ export interface CuttingEditorAdapter {
    * branch picker, never calls the client-only branch-options endpoint, and
    * seeds the draft's branch from `fixed.id` at creation — a later change of
    * the app's current branch must not retarget an in-progress draft.
+   * `kerfMm`/`edgeTrimMm` are the fixed branch's own cutting settings (no
+   * platform-wide default exists client-side — see cutting.md).
    */
-  branch: { fixed?: { id: string; name: string } }
+  branch: { fixed?: { id: string; name: string; kerfMm: number; edgeTrimMm: number } }
   /**
    * Resolve a branch label by id (workshop only). A resumed walk-in draft carries
    * its own frozen branch, which may differ from the topbar the adapter froze at

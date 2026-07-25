@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+import pytest
 from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -101,6 +102,8 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "phone": "+998902222222",
             "status": "active",
             "closed_reason": None,
+            "kerf_mm": 4,
+            "edge_trim_mm": 5,
             "permissions": ["manage_orders"],
         }
     ]
@@ -521,6 +524,88 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
         ("active", "blocked"),
         ("blocked", "active"),
     ]
+
+
+async def test_owner_edits_branch_cutting_settings_within_bounds(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+
+    defaults = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}", headers=_auth(owner_access)
+    )
+    updated = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"kerf_mm": 3, "edge_trim_mm": 12},
+    )
+    reloaded = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}", headers=_auth(owner_access)
+    )
+
+    assert defaults.json()["kerf_mm"] == 4
+    assert defaults.json()["edge_trim_mm"] == 5
+    assert updated.status_code == 200
+    assert updated.json()["kerf_mm"] == 3
+    assert updated.json()["edge_trim_mm"] == 12
+    assert reloaded.json()["kerf_mm"] == 3
+    assert reloaded.json()["edge_trim_mm"] == 12
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"kerf_mm": 0},
+        {"kerf_mm": 21},
+        {"edge_trim_mm": -1},
+        {"edge_trim_mm": 51},
+    ],
+)
+async def test_owner_branch_patch_rejects_out_of_bounds_cutting_settings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    payload: dict[str, int],
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+
+    response = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json=payload,
+    )
+
+    assert response.status_code == 422
+
+
+async def test_non_owner_staff_cannot_edit_branch_cutting_settings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Staff",
+            "phone": "+998908080809",
+            "login": "cuttersetting",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [{"permission": "manage_orders", "branch_id": branch_id}],
+        },
+    )
+    assert created.status_code == 201
+    staff_access = await _ready_staff_access(client, login="cuttersetting")
+
+    response = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(staff_access),
+        json={"kerf_mm": 3, "edge_trim_mm": 12},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "forbidden"
 
 
 async def test_non_owner_staff_cannot_manage_users(

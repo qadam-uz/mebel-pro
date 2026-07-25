@@ -36,7 +36,7 @@ function result(overrides: Partial<CuttingResult> = {}): CuttingResult {
     source: 'optimizer',
     status: 'candidate',
     kerf_mm: 4,
-    edge_trim_mm: 10,
+    edge_trim_mm: 5,
     panels_used_by_material: { 'panel-a': 1 },
     waste_percentage: '0.12',
     total_cut_length_mm: 0,

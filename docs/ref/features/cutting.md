@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-22
+updated: 2026-07-25
 order: 80
 ---
 
@@ -144,8 +144,11 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **One catalog material → one standard panel size.** The same spec in another size is a
   separate catalog material (size is part of its identity and name); custom panel sizes
   per run are future.
-- **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = panel − 2× edge
-  trim).
+- **Kerf and edge trim are per-branch settings**, not global constants — each branch owns its
+  saw's kerf and its own edge trim (usable area = panel − 2× edge trim), editable by the
+  workshop owner on the branch form ([`workshop.md`](workshop.md)). Platform defaults for a new
+  branch: kerf 4 mm, edge trim 5 mm. Every optimisation run resolves both from the draft's
+  branch; a branch-less draft falls back to the platform defaults.
 - **Edge-banding length is computed here.** For each part edge with a banding material set,
   the edge length is the part's length (top/bottom) or width (left/right). Totals roll up
   **by edge material** (`edge_length_by_material`, integer millimetres) — this is the

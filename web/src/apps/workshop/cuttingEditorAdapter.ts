@@ -23,7 +23,16 @@ export function workshopCuttingEditorAdapter(): CuttingEditorAdapter {
       checkout: (draftId: string) => `/workshop/orders/new/${draftId}/checkout`,
       orderDetail: (orderId: string) => `/workshop/orders/${orderId}`,
     },
-    branch: branch ? { fixed: { id: branch.id, name: branch.name } } : {},
+    branch: branch
+      ? {
+          fixed: {
+            id: branch.id,
+            name: branch.name,
+            kerfMm: branch.kerf_mm,
+            edgeTrimMm: branch.edge_trim_mm,
+          },
+        }
+      : {},
     // Resolve live from the store so a resumed draft's frozen branch (which may
     // differ from the topbar) is named correctly in the locked-branch strip.
     branchNameById: (id) => workshop.branches.find((item) => item.id === id)?.name ?? null,

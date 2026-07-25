@@ -279,8 +279,12 @@ async function choose(result: CuttingResult) {
     </div>
 
     <div v-if="chosenResult" class="grid gap-5 p-5">
-      <div class="grid gap-5 2xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_300px]">
-        <div class="order-1 min-w-0 space-y-4 2xl:col-start-2 2xl:row-start-1">
+      <div
+        class="grid gap-5 xl:grid-cols-[minmax(190px,220px)_minmax(0,1fr)_250px] 2xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_300px]"
+      >
+        <div
+          class="order-1 min-w-0 space-y-4 xl:col-start-2 xl:row-start-1 2xl:col-start-2 2xl:row-start-1"
+        >
           <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
             <span class="font-mono font-black">!</span>
             <span
@@ -324,10 +328,16 @@ async function choose(result: CuttingResult) {
               @select-placement="selectPlacement"
               @clear-selection="clearSelection"
             />
+            <p class="mt-2 text-right text-xs text-ink-muted">
+              Arra kesigi {{ chosenResult.kerf_mm }} mm · Chetki qirqim
+              {{ chosenResult.edge_trim_mm }} mm
+            </p>
           </section>
         </div>
 
-        <aside class="order-2 space-y-4 2xl:col-start-1 2xl:row-start-1">
+        <aside
+          class="order-2 space-y-4 xl:col-start-1 xl:row-start-1 2xl:col-start-1 2xl:row-start-1"
+        >
           <div class="rounded-lg border border-hairline p-4">
             <h3 class="text-sm font-extrabold text-ink">Materiallar</h3>
             <ul class="mt-2 space-y-1.5 text-sm">
@@ -412,7 +422,7 @@ async function choose(result: CuttingResult) {
           </div>
         </aside>
 
-        <aside class="order-3 2xl:col-start-3 2xl:row-start-1">
+        <aside class="order-3 xl:col-start-3 xl:row-start-1 2xl:col-start-3 2xl:row-start-1">
           <section class="rounded-lg border border-hairline bg-sunk p-4">
             <h3 class="font-serif text-xl font-semibold text-ink">Buyurtmangiz</h3>
 

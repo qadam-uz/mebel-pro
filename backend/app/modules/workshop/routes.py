@@ -53,6 +53,8 @@ async def branch_context_route(
                 phone=context.branch.phone,
                 status=context.branch.status,
                 closed_reason=context.branch.closed_reason,
+                kerf_mm=context.branch.kerf_mm,
+                edge_trim_mm=context.branch.edge_trim_mm,
                 permissions=sorted(context.permissions),
             )
             for context in contexts

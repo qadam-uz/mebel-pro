@@ -31,6 +31,8 @@ class ClientBranchOption(APIModel):
     status: BranchStatus
     closed_reason: str | None
     today_hours: dict[str, str | None]
+    kerf_mm: int
+    edge_trim_mm: int
 
 
 class ClientBranchMaterialPreview(APIModel):

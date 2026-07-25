@@ -47,6 +47,10 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     __table_args__ = (
         CheckConstraint("latitude >= -90 AND latitude <= 90", name="ck_branches_latitude"),
         CheckConstraint("longitude >= -180 AND longitude <= 180", name="ck_branches_longitude"),
+        CheckConstraint("kerf_mm >= 1 AND kerf_mm <= 20", name="ck_branches_kerf_mm"),
+        CheckConstraint(
+            "edge_trim_mm >= 0 AND edge_trim_mm <= 50", name="ck_branches_edge_trim_mm"
+        ),
     )
 
     workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
@@ -55,6 +59,11 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     phone: Mapped[str] = mapped_column(nullable=False)
     latitude: Mapped[Decimal | None]
     longitude: Mapped[Decimal | None]
+    # Physical properties of this branch's saw — how the cutting optimiser
+    # resolves kerf/trim for every draft scoped to this branch (cutting.md).
+    # Platform defaults: kerf 4 mm, edge trim 5 mm.
+    kerf_mm: Mapped[int] = mapped_column(nullable=False, default=4, server_default="4")
+    edge_trim_mm: Mapped[int] = mapped_column(nullable=False, default=5, server_default="5")
     working_hours: Mapped[dict[str, Any]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=False,

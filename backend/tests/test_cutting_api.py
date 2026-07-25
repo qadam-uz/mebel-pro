@@ -26,7 +26,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import default_working_hours, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -343,6 +343,158 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert loaded_old_panel.json()["results"][0]["panels"][0]["offcuts"] == []
     assert deleted.status_code == 204
     assert action_count == 5
+
+
+async def _big_panel(db: AsyncSession) -> Material:
+    """A panel generous enough that different branch edge-trims still leave room
+    to place the parts (per-branch kerf/trim, cutting.md)."""
+    manufacturer = Manufacturer(name=f"BigPanels {uuid.uuid4().hex[:6]}", country="UZ")
+    db.add(manufacturer)
+    await db.flush()
+    panel = Material(
+        kind=MaterialKind.PANEL,
+        manufacturer_id=manufacturer.id,
+        type=PanelMaterialType.DSP,
+        name="Big DSP 18",
+        thickness_mm=Decimal("18"),
+        color="White",
+        decor_code="H1000",
+        panel_length_mm=1000,
+        panel_width_mm=800,
+        grain_direction=False,
+    )
+    db.add(panel)
+    await db.flush()
+    return panel
+
+
+async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Same parts, two branches with different cutting settings, must resolve to
+    different kerf/trim on the persisted result and a different waste % — the
+    whole point of per-branch settings (cutting.md)."""
+    owner_access, _workshop_id, branch1_id, _ = await _workshop_owner_access(db_session)
+    branch2 = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Second branch",
+            "address": "Tashkent, Second",
+            "phone": "+998907654321",
+            "working_hours": default_working_hours(),
+        },
+    )
+    assert branch2.status_code == 201
+    branch2_id = branch2.json()["id"]
+    patched_branch2 = await client.patch(
+        f"/api/v1/workshop/branches/{branch2_id}",
+        headers=_auth(owner_access),
+        json={"kerf_mm": 3, "edge_trim_mm": 50},
+    )
+    assert patched_branch2.status_code == 200
+    panel = await _big_panel(db_session)
+    parts = [
+        {
+            "part_ref": "shelf",
+            "material_id": str(panel.id),
+            "material_source": "shop",
+            "length_mm": 480,
+            "width_mm": 380,
+            "quantity": 3,
+            "edge_top": None,
+            "edge_bottom": None,
+            "edge_left": None,
+            "edge_right": None,
+        }
+    ]
+
+    access1, _ = await _client_access(
+        db_session, phone="+998901111051", preferred_branch_id=branch1_id
+    )
+    draft1 = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access1))
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft1.json()['id']}",
+        headers=_auth(access1),
+        json={"parts_snapshot": parts},
+    )
+    optimized1 = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft1.json()['id']}/optimize",
+        headers=_auth(access1),
+    )
+
+    access2, _ = await _client_access(
+        db_session, phone="+998901111052", preferred_branch_id=uuid.UUID(branch2_id)
+    )
+    draft2 = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access2))
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft2.json()['id']}",
+        headers=_auth(access2),
+        json={"parts_snapshot": parts},
+    )
+    optimized2 = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft2.json()['id']}/optimize",
+        headers=_auth(access2),
+    )
+
+    assert optimized1.status_code == 200
+    assert optimized2.status_code == 200
+    result1 = optimized1.json()["results"][0]
+    result2 = optimized2.json()["results"][0]
+    assert result1["kerf_mm"] == 4
+    assert result1["edge_trim_mm"] == 5
+    assert result2["kerf_mm"] == 3
+    assert result2["edge_trim_mm"] == 50
+    assert result1["waste_percentage"] != result2["waste_percentage"]
+
+
+async def test_optimize_falls_back_to_platform_defaults_without_a_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    panel = await _big_panel(db_session)
+    access, _ = await _client_access(db_session, phone="+998901111053", preferred_branch_id=None)
+    draft = await client.post("/api/v1/client/cutting-drafts", headers=_auth(access))
+    draft_id = draft.json()["id"]
+    loaded = await client.get(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+    )
+    await client.patch(
+        f"/api/v1/client/cutting-drafts/{draft_id}",
+        headers=_auth(access),
+        json={
+            "parts_snapshot": [
+                {
+                    "part_ref": "shelf",
+                    "material_id": str(panel.id),
+                    "material_source": "shop",
+                    "length_mm": 480,
+                    "width_mm": 380,
+                    "quantity": 1,
+                    "edge_top": None,
+                    "edge_bottom": None,
+                    "edge_left": None,
+                    "edge_right": None,
+                }
+            ]
+        },
+    )
+    optimized = await client.post(
+        f"/api/v1/client/cutting-drafts/{draft_id}/optimize",
+        headers=_auth(access),
+    )
+
+    assert draft.json()["preferred_branch_id"] is None
+    assert draft.json()["kerf_mm"] == 4
+    assert draft.json()["edge_trim_mm"] == 5
+    assert loaded.json()["kerf_mm"] == 4
+    assert loaded.json()["edge_trim_mm"] == 5
+    assert optimized.status_code == 200
+    result = optimized.json()["results"][0]
+    assert result["kerf_mm"] == 4
+    assert result["edge_trim_mm"] == 5
 
 
 async def test_neutral_parts_edit_keeps_candidate_result_and_refreshes_edges(

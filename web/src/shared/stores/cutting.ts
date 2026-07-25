@@ -105,6 +105,10 @@ export interface CuttingDraft {
   client_id: string
   name: string | null
   preferred_branch_id: string | null
+  // Effective kerf/edge-trim for this draft, resolved server-side from its
+  // branch (or the platform defaults for a branch-less draft) on every read.
+  kerf_mm: number
+  edge_trim_mm: number
   parts_snapshot: CuttingPart[]
   chosen_result_id: string | null
   // Set only on an order's revision draft — the editor switches to revision
@@ -170,6 +174,8 @@ export interface ClientBranchOption {
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
   today_hours: { open: string | null; close: string | null }
+  kerf_mm: number
+  edge_trim_mm: number
 }
 
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
@@ -181,14 +187,13 @@ export function metres(mm: number) {
   return `${(mm / 1000).toFixed(2)} m`
 }
 
-// Mirrors the backend cutting optimizer (app/modules/cutting/optimizer.py).
-export const EDGE_TRIM_MM = 10
-
 /**
  * Pure check of whether a part fits its chosen panel, mirroring the backend
  * validation (panel usable area = panel − 2×edge-trim; rotation is locked when
- * this part follows texture). Returns the matching
- * backend error code, or null when the part fits (or the panel size is unknown).
+ * this part follows texture). `trimMm` is the branch's own edge trim (no
+ * platform-wide default exists client-side — see cutting.md). Returns the
+ * matching backend error code, or null when the part fits (or the panel size
+ * is unknown).
  */
 export function partFitError(
   lengthMm: number,
@@ -198,7 +203,7 @@ export function partFitError(
     'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
   >,
   followGrain: boolean,
-  trimMm: number = EDGE_TRIM_MM,
+  trimMm: number,
 ): 'impossible_grain' | 'part_too_large' | null {
   if (panel.panel_length_mm == null || panel.panel_width_mm == null) return null
   const length = Number(lengthMm)

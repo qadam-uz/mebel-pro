@@ -145,6 +145,8 @@ def _branch_response(row: Branch) -> BranchResponse:
         working_hours=row.working_hours,
         status=row.status,
         closed_reason=row.closed_reason,
+        kerf_mm=row.kerf_mm,
+        edge_trim_mm=row.edge_trim_mm,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

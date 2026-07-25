@@ -2,7 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-updated: 2026-07-22
+updated: 2026-07-25
 order: 40
 ---
 
@@ -64,7 +64,7 @@ the algorithm later doesn't touch past results.
 | `algorithm_name` / `algorithm_version`                             | text       | e.g. `ffd-guillotine` / `1.0` for optimiser results; `imported-2dplace-map` / `map-1` for 2D-Place MAP imports — stamped at run time                                                 |
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
 | `status`                                                           | enum       | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order)                                                                                             |
-| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the global constants at run time; imported MAP results store `0` / `0` because the external layout is kept as-is                                                         |
+| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; imported MAP results store `0` / `0` because the external layout is kept as-is |
 | `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material)                                                           |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |

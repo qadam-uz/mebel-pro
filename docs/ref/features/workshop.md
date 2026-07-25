@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-25
 order: 40
 ---
 
@@ -79,8 +79,9 @@ Visibility for read operations:
 - **Branch create dialog** — modal form: name, address, phone, working-hours grid (per weekday
   open / close, with a "closed this day" toggle).
 - **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
-  working hours, pricing (entered in so'm), and status controls. It does not duplicate materials,
-  stock, staff, or order management; those stay in their own sidebar sections.
+  working hours, pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), and
+  status controls. It does not duplicate materials, stock, staff, or order management; those
+  stay in their own sidebar sections.
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.
 

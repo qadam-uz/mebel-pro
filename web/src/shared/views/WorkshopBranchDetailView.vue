@@ -29,7 +29,14 @@ type WorkingDay = {
   from: string
   to: string
 }
-type BranchField = 'name' | 'address' | 'phone' | 'cuttingRate' | 'edgeBandingRate'
+type BranchField =
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'cuttingRate'
+  | 'edgeBandingRate'
+  | 'kerfMm'
+  | 'edgeTrimMm'
 type StatusField = 'reason'
 
 const route = useRoute()
@@ -54,7 +61,21 @@ const branchForm = reactive({
   name: '',
   address: '',
   phone: '',
+  kerfMm: '',
+  edgeTrimMm: '',
 })
+// Integers only — kerf/trim are millimetres, never fractional (bounds mirror
+// the backend CheckConstraints: kerf 1-20, trim 0-50).
+const KERF_MM_MIN = 1
+const KERF_MM_MAX = 20
+const EDGE_TRIM_MM_MIN = 0
+const EDGE_TRIM_MM_MAX = 50
+function parseMm(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null
+  return Number(value.trim())
+}
+const kerfMmValue = computed(() => parseMm(branchForm.kerfMm))
+const edgeTrimMmValue = computed(() => parseMm(branchForm.edgeTrimMm))
 const pricingForm = reactive({
   cuttingRateSom: '',
   edgeBandingRateSom: '',
@@ -95,6 +116,8 @@ const branchFieldOrder: BranchField[] = [
   'phone',
   'cuttingRate',
   'edgeBandingRate',
+  'kerfMm',
+  'edgeTrimMm',
 ]
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
@@ -102,6 +125,8 @@ const branchFieldIds: Record<BranchField, string> = {
   phone: 'branch-detail-phone',
   cuttingRate: 'branch-detail-cutting-rate',
   edgeBandingRate: 'branch-detail-edge-rate',
+  kerfMm: 'branch-detail-kerf-mm',
+  edgeTrimMm: 'branch-detail-edge-trim-mm',
 }
 const statusFieldErrors = reactive<FieldErrors<StatusField>>({})
 const statusFieldOrder: StatusField[] = ['reason']
@@ -145,6 +170,16 @@ function validateBranchForm() {
     pricingForm.edgeBandingRateSom.trim() && edgeBandingRateTiyin.value === null
       ? "Kromka narxini to'g'ri kiriting — masalan: 5 000."
       : undefined
+  branchFieldErrors.kerfMm =
+    kerfMmValue.value === null || kerfMmValue.value < KERF_MM_MIN || kerfMmValue.value > KERF_MM_MAX
+      ? `Arra kesigini ${KERF_MM_MIN}–${KERF_MM_MAX} mm oralig'ida kiriting.`
+      : undefined
+  branchFieldErrors.edgeTrimMm =
+    edgeTrimMmValue.value === null ||
+    edgeTrimMmValue.value < EDGE_TRIM_MM_MIN ||
+    edgeTrimMmValue.value > EDGE_TRIM_MM_MAX
+      ? `Chetki qirqimni ${EDGE_TRIM_MM_MIN}–${EDGE_TRIM_MM_MAX} mm oralig'ida kiriting.`
+      : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
   return !hasErrors
@@ -166,6 +201,8 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
+  branchForm.kerfMm = String(branch.kerf_mm)
+  branchForm.edgeTrimMm = String(branch.edge_trim_mm)
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
   for (const day of hours) {
@@ -216,6 +253,8 @@ async function saveBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       working_hours: workingHoursPayload(),
+      kerf_mm: kerfMmValue.value,
+      edge_trim_mm: edgeTrimMmValue.value,
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: cuttingRateTiyin.value,
@@ -237,6 +276,8 @@ async function saveBranch() {
           name: 'name',
           address: 'address',
           phone: 'phone',
+          kerf_mm: 'kerfMm',
+          edge_trim_mm: 'edgeTrimMm',
         },
       ),
     )
@@ -484,6 +525,56 @@ onMounted(refreshBranch)
               </span>
             </label>
           </div>
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">Kesish sozlamalari</legend>
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="field" for="branch-detail-kerf-mm">
+                <span>Arra kesigi (kerf), mm</span>
+                <input
+                  id="branch-detail-kerf-mm"
+                  v-model="branchForm.kerfMm"
+                  class="mp-input"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!branchFieldErrors.kerfMm"
+                  :aria-describedby="
+                    branchFieldErrors.kerfMm ? 'branch-detail-kerf-mm-error' : undefined
+                  "
+                />
+                <span
+                  v-if="branchFieldErrors.kerfMm"
+                  id="branch-detail-kerf-mm-error"
+                  class="mp-field-error"
+                >
+                  {{ branchFieldErrors.kerfMm }}
+                </span>
+              </label>
+              <label class="field" for="branch-detail-edge-trim-mm">
+                <span>Chetki qirqim, mm</span>
+                <input
+                  id="branch-detail-edge-trim-mm"
+                  v-model="branchForm.edgeTrimMm"
+                  class="mp-input"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!branchFieldErrors.edgeTrimMm"
+                  :aria-describedby="
+                    branchFieldErrors.edgeTrimMm ? 'branch-detail-edge-trim-mm-error' : undefined
+                  "
+                />
+                <span
+                  v-if="branchFieldErrors.edgeTrimMm"
+                  id="branch-detail-edge-trim-mm-error"
+                  class="mp-field-error"
+                >
+                  {{ branchFieldErrors.edgeTrimMm }}
+                </span>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-ink-muted">
+              Panelning ishlatiladigan yuzasi = panel − 2× chetki qirqim.
+            </p>
+          </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
             <p v-else-if="saveError" class="text-sm font-bold text-danger">
