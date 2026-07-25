@@ -179,6 +179,13 @@ Two overlay layers, and the order matters: dropdown/popover panels teleport at *
 the modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS
 Safari can't scroll behind).
 
+Desktop paints at `zoom: 90%` on the root (≥769px), which splits the units the DOM reports:
+`getBoundingClientRect()` and `window.inner*` are **painted** pixels, while `offsetHeight` and
+anything written into `style.top/left` are **local** pixels the browser then scales. An overlay
+positioned straight from a measured rect therefore lands at 90% of its anchor. Measure through
+`overlayRect()` / `overlayViewport()` (`shared/app/overlayGeometry.ts`) — never
+`getBoundingClientRect()` directly — so the whole calculation stays in one unit.
+
 ## Shapes
 
 Radius scale: **6px** for buttons and inputs, **8px** for cards and popover items, **12px**

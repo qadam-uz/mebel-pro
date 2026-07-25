@@ -1,5 +1,7 @@
 import { onBeforeUnmount, ref, type Ref } from 'vue'
 
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+
 const MAX_LIST_PX = 288 // matches the max-h clamp (18rem)
 
 /**
@@ -19,9 +21,10 @@ export function useDropdownPlacement(
   function measure() {
     const el = anchor.value
     if (!el) return
-    const rect = el.getBoundingClientRect()
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-    const spaceBelow = viewportHeight - rect.bottom
+    // Overlay space keeps this comparable to `offsetHeight` below, which the
+    // root zoom leaves in local pixels.
+    const rect = overlayRect(el)
+    const spaceBelow = overlayViewport().height - rect.bottom
     const spaceAbove = rect.top
     // `|| MAX_LIST_PX` (not `??`): offsetHeight is 0 before the first paint, and a
     // 0 here would wrongly suppress the flip — fall back to the clamp height.

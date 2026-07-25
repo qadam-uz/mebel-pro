@@ -11,6 +11,7 @@ import {
   type DateRangePreset,
 } from '@/shared/app/dateRange'
 import { nextStableId } from '@/shared/app/listboxNav'
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
 
 // Filter-bar date range control: one compact trigger opening a popover with
 // preset shortcuts and a real calendar. Preset clicks and completed calendar
@@ -117,9 +118,8 @@ function updatePanelPosition() {
   const button = buttonRef.value
   const panel = panelRef.value
   if (!button || !panel) return
-  const rect = button.getBoundingClientRect()
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const rect = overlayRect(button)
+  const { width: viewportWidth, height: viewportHeight } = overlayViewport()
   const panelWidth = Math.min(panel.offsetWidth, viewportWidth - GUTTER * 2)
   const panelHeight = panel.offsetHeight
   const spaceBelow = viewportHeight - rect.bottom - GUTTER - 6

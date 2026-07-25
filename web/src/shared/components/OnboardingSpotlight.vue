@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
 import { ONBOARDING_HINTS, useOnboardingStore } from '@/shared/stores/onboarding'
 
 // Spotlight coach-mark host (docs/ref/features/onboarding.md). Dims and blocks
@@ -158,7 +159,11 @@ function reposition() {
     onboarding.dismissHint({ markSeen: false })
     return
   }
-  const rect = element.getBoundingClientRect()
+  // Overlay space, not client space — the spotlight paints under the zoomed
+  // root, and a hole measured in client pixels would sit beside the target
+  // instead of over it, leaving a blocker to swallow the very click the hint
+  // asks for.
+  const rect = overlayRect(element)
   hole.value = {
     top: rect.top - HOLE_PADDING,
     left: rect.left - HOLE_PADDING,
@@ -172,10 +177,11 @@ function positionCallout() {
   const area = hole.value
   const callout = calloutRef.value
   if (!area || !callout) return
-  const width = Math.min(340, window.innerWidth - VIEWPORT_MARGIN * 2)
+  const viewport = overlayViewport()
+  const width = Math.min(340, viewport.width - VIEWPORT_MARGIN * 2)
   const height = callout.offsetHeight
   const below = area.top + area.height + CALLOUT_GAP
-  const fitsBelow = below + height + VIEWPORT_MARGIN <= window.innerHeight
+  const fitsBelow = below + height + VIEWPORT_MARGIN <= viewport.height
   const fitsAbove = area.top - height - CALLOUT_GAP >= VIEWPORT_MARGIN
   if (!fitsBelow && !fitsAbove && !scrollNudged && targetEl.value) {
     // Short viewport: park the target at the bottom edge so the space above can
@@ -188,7 +194,7 @@ function positionCallout() {
   const top = fitsBelow ? below : Math.max(VIEWPORT_MARGIN, area.top - height - CALLOUT_GAP)
   const left = Math.min(
     Math.max(VIEWPORT_MARGIN, area.left),
-    Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN),
+    Math.max(VIEWPORT_MARGIN, viewport.width - width - VIEWPORT_MARGIN),
   )
   calloutStyle.value = {
     top: `${top}px`,
