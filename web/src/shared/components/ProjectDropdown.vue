@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { nextStableId } from '@/shared/app/listboxNav'
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 
 const props = defineProps<{
@@ -63,9 +64,8 @@ const activeOptionId = computed(() => {
 function updatePopoverPosition() {
   const button = buttonRef.value
   if (!button) return
-  const rect = button.getBoundingClientRect()
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const rect = overlayRect(button)
+  const { width: viewportWidth, height: viewportHeight } = overlayViewport()
   const panelWidth = Math.min(
     Math.max(rect.width, props.topLabel ? 200 : 260),
     Math.max(160, viewportWidth - 16),
