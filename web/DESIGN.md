@@ -205,6 +205,13 @@ touching them; don't add new off-scale values.
   ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
   arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
   textareas, checkboxes, radios, and file inputs until a project primitive exists.
+- **Server-backed pickers** — when the candidate set is too large or too live to preload, the
+  combobox queries the server instead of filtering a page it already holds (`SearchCombobox`
+  with `serverFiltered` + `loading` + `searchDebounceMs`). Non-negotiable: the query is
+  **debounced** (never a request per keystroke), the panel shows a loading row and a
+  no-results row, an explicit clear skips the debounce, and a standing footer hint names what
+  the list contains and what it searches. Rich rows go through the `#option` slot — the plain
+  label still drives the input's text.
 - **Modals** — create/edit forms open in `AppModal` dialogs, never as inline on-page cards;
   reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
   the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
@@ -234,6 +241,12 @@ touching them; don't add new off-scale values.
   active filter on, because with one filter active it would duplicate that filter's own clear
   sitting right beside it. **No two visible controls may do the same thing.** Filtered-empty
   keeps the no-results empty state, never first-run copy.
+- **Segmented control** (`SegmentedControl`) — a **closed set of two or three** form choices,
+  all visible at once on a `sunk` track, selected segment filled `accent-soft` with
+  `accent-deep` text. A dropdown for two options is a click that reveals nothing; past three
+  or four segments the row stops fitting and it goes back to `FormSelect`. Keyboard contract
+  is the radiogroup one: `role="radiogroup"` + `role="radio"`/`aria-checked`, one tab stop
+  with a roving tabindex, arrows wrap, `Home`/`End` jump, focus follows the selection.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.
@@ -275,7 +288,10 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   nothing in its place. Modals trap focus and return it to the trigger on close.
 - **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
   Errors sit next to their field, name the fix in plain language, and never clear the form.
-  Validate on blur or submit, not per keystroke.
+  Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
+  the danger border, `aria-invalid`, and an `aria-describedby` message — and the message stays
+  **readable**: a field that opens a popover anchors it clear of its own error text, because a
+  message the operator can't see is the same as no message.
 - **Every action gives visible feedback within ~100ms**; submit buttons disable + show
   progress during async work so they can't double-fire. Destructive actions name their
   consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.

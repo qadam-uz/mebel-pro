@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from fastapi import status
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import Select, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -136,6 +136,39 @@ class FinanceOrderTarget:
     workshop_id: uuid.UUID
     branch_id: uuid.UUID
     total_tiyin: int
+
+
+@dataclass(frozen=True)
+class PayableOrder:
+    """An order that still owes money, with its settlement already folded in."""
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    contact_phone: str
+    status: OrderStatus
+    created_at: datetime
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
+
+
+@dataclass(frozen=True)
+class OrderSettlementRef:
+    """One order's identity and settlement, for a caller that already has its id.
+
+    Same three money figures as `PayableOrder`, but no candidacy rules: an
+    income keeps pointing at its order long after that order stops being a
+    payment candidate (settled, or cancelled), and the ledger still has to name
+    it.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
 
 
 @dataclass(frozen=True)
@@ -843,6 +876,99 @@ async def get_order_finance_target(
         branch_id=order.branch_id,
         total_tiyin=order.total_tiyin,
     )
+
+
+async def list_payable_orders(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    branch_ids: frozenset[uuid.UUID] | None,
+    search: str | None = None,
+    limit: int = 20,
+) -> list[PayableOrder]:
+    """Orders that still owe money, newest first — the finance order picker.
+
+    Deliberately unfiltered by status apart from `cancelled`: money is most
+    often taken at pickup, so a `completed` order is the single most likely
+    payment target and hiding it is what made operators say "my order isn't
+    there". A cancelled order stays out because v1 has no refund flow
+    (`docs/scope.md`) — its recorded advance is settled off-system.
+
+    The unpaid predicate runs in SQL, before LIMIT. Trimming a page in Python
+    would silently return fewer rows than asked for whenever the newest orders
+    happen to be settled, which reads to the operator as "not found".
+    """
+    if branch_ids is not None and not branch_ids:
+        return []
+    recorded = _recorded_income_total(Order.id).correlate(Order).scalar_subquery()
+    query = (
+        select(Order, recorded.label("recorded_tiyin"))
+        .where(
+            Order.workshop_id == workshop_id,
+            Order.status != OrderStatus.CANCELLED,
+            Order.total_tiyin > recorded,
+        )
+        .order_by(Order.created_at.desc(), Order.order_number.desc())
+        .limit(max(1, min(limit, 100)))
+    )
+    if branch_ids is not None:
+        query = query.where(Order.branch_id.in_(branch_ids))
+    search_condition = _order_search_condition(search)
+    if search_condition is not None:
+        query = query.where(search_condition)
+    rows = (await db.execute(query)).all()
+    return [
+        PayableOrder(
+            order_id=order.id,
+            order_number=order.order_number,
+            contact_name=order.contact_name,
+            contact_phone=order.contact_phone,
+            status=order.status,
+            created_at=order.created_at,
+            total_tiyin=order.total_tiyin,
+            recorded_tiyin=int(recorded_tiyin),
+            balance_tiyin=_settlement_balance(order.total_tiyin, int(recorded_tiyin)),
+        )
+        for order, recorded_tiyin in rows
+    ]
+
+
+async def list_order_settlements(
+    db: AsyncSession,
+    *,
+    workshop_ids: frozenset[uuid.UUID],
+    order_ids: frozenset[uuid.UUID],
+) -> list[OrderSettlementRef]:
+    """Identity + settlement for a whole set of orders, in one round trip.
+
+    The finance ledger resolves every order-linked row of a listed page through
+    this — one aggregate over the set, never a query per row. Unlike
+    `list_payable_orders` it applies no candidacy filter: the caller names the
+    orders it already holds, and a settled or cancelled one still needs a label.
+
+    Tenant-scoped by `workshop_ids` rather than permission-gated: the caller
+    resolves rows it has already been authorized to read, and the ids come from
+    those rows, not from user input.
+    """
+    if not order_ids or not workshop_ids:
+        return []
+    recorded = _recorded_income_total(Order.id).correlate(Order).scalar_subquery()
+    query = select(Order, recorded.label("recorded_tiyin")).where(
+        Order.workshop_id.in_(workshop_ids),
+        Order.id.in_(order_ids),
+    )
+    rows = (await db.execute(query)).all()
+    return [
+        OrderSettlementRef(
+            order_id=order.id,
+            order_number=order.order_number,
+            contact_name=order.contact_name,
+            total_tiyin=order.total_tiyin,
+            recorded_tiyin=int(recorded_tiyin),
+            balance_tiyin=_settlement_balance(order.total_tiyin, int(recorded_tiyin)),
+        )
+        for order, recorded_tiyin in rows
+    ]
 
 
 async def list_worker_production_records(
@@ -2313,20 +2439,31 @@ def _snapshot_text(value: object) -> str | None:
     return text or None
 
 
-async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
-    recorded = int(
-        await db.scalar(
-            select(func.coalesce(func.sum(Income.amount_tiyin), 0)).where(
-                Income.order_id == order.id,
-                Income.status == LedgerStatus.RECORDED,
-            )
-        )
-        or 0
+def _recorded_income_total(order_id: Any) -> Select[tuple[int]]:
+    """Σ of an order's `recorded` income — the single definition of "paid".
+
+    Takes a value or a column so the same statement serves a one-order lookup
+    and a correlated subquery inside a list query; a voided row leaves the sum
+    by itself, which is why no balance is ever stored.
+    """
+    return select(func.coalesce(func.sum(Income.amount_tiyin), 0)).where(
+        Income.order_id == order_id,
+        Income.status == LedgerStatus.RECORDED,
     )
+
+
+def _settlement_balance(total_tiyin: int, recorded_tiyin: int) -> int:
+    """What is still owed. Clamped at zero — an overpayment is not a debt."""
+
+    return max(total_tiyin - recorded_tiyin, 0)
+
+
+async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
+    recorded = int(await db.scalar(_recorded_income_total(order.id)) or 0)
     return OrderSettlementResponse(
         total_tiyin=order.total_tiyin,
         recorded_tiyin=recorded,
-        balance_tiyin=max(order.total_tiyin - recorded, 0),
+        balance_tiyin=_settlement_balance(order.total_tiyin, recorded),
     )
 
 
@@ -2853,15 +2990,45 @@ def _apply_order_filters(
         query = query.where(
             or_(Order.order_number.ilike(pattern), Order.contact_name.ilike(pattern))
         )
-    # Phone filtering is digits-contains: the operator types whatever the client
-    # dictates ("90 111 22 33", "+998901112233", the last four digits) and we
-    # match it against the stored normalized +998XXXXXXXXX. Non-digits in the
-    # input are formatting, never signal — strip them; an input with no digits
-    # filters nothing rather than everything.
-    phone_digits = re.sub(r"\D", "", contact_phone) if contact_phone else ""
-    if phone_digits:
-        query = query.where(Order.contact_phone.like(f"%{phone_digits}%"))
+    phone_condition = _phone_digits_condition(contact_phone)
+    if phone_condition is not None:
+        query = query.where(phone_condition)
     return query
+
+
+def _phone_digits_condition(value: str | None) -> ColumnElement[bool] | None:
+    """Digits-contains match against the stored normalized +998XXXXXXXXX.
+
+    The operator types whatever the client dictates ("90 111 22 33",
+    "+998901112233", the last four digits); non-digits in the input are
+    formatting, never signal. An input with no digits matches nothing here and
+    the caller drops the clause, so it filters nothing rather than everything.
+    """
+    digits = re.sub(r"\D", "", value) if value else ""
+    if not digits:
+        return None
+    return Order.contact_phone.like(f"%{digits}%")
+
+
+def _order_search_condition(search: str | None) -> ColumnElement[bool] | None:
+    """One search box over order number, contact name, and contact phone.
+
+    The finance order picker gets a single field rather than the list page's
+    separate search + phone filters: at the counter the operator has one thing
+    the client just said, and doesn't know which field it lands in.
+    """
+    normalized = search.strip() if search else ""
+    if not normalized:
+        return None
+    pattern = f"%{normalized.lower()}%"
+    conditions: list[ColumnElement[bool]] = [
+        Order.order_number.ilike(pattern),
+        Order.contact_name.ilike(pattern),
+    ]
+    phone_condition = _phone_digits_condition(normalized)
+    if phone_condition is not None:
+        conditions.append(phone_condition)
+    return or_(*conditions)
 
 
 def _can_view_workshop_order(principal: AuthenticatedPrincipal, order: Order) -> bool:

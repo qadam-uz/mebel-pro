@@ -4,7 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
-import { financeLedgerTabFromPath, financeOrderReferenceLabel } from '@/shared/app/financeLedger'
+import {
+  exceedsOrderBalance,
+  financeIncomeOrderLabel,
+  financeLedgerTabFromPath,
+  incomeSettlementView,
+} from '@/shared/app/financeLedger'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
@@ -15,8 +20,10 @@ import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
+import PayableOrderOption from '@/shared/components/PayableOrderOption.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -32,12 +39,13 @@ import {
   type Expense,
   type ExpenseCategory,
   type Income,
+  type IncomeOrderRef,
   type IncomeType,
   type LedgerStatus,
   type MoneyMethod,
+  type PayableOrder,
 } from '@/shared/stores/finance'
 import { useFilesStore } from '@/shared/stores/files'
-import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const route = useRoute()
@@ -46,7 +54,6 @@ const permissions = useWorkshopPermissions()
 const toast = useToast()
 const finance = useFinanceStore()
 const files = useFilesStore()
-const orders = useOrdersStore()
 const workshop = useWorkshopStore()
 const now = new Date()
 const today = formatDateInputValue(now)
@@ -70,9 +77,10 @@ const editingIncomeId = ref<string | null>(null)
 const saving = ref(false)
 const actionError = ref<string | null>(null)
 const actionTraceId = ref<string | null>(null)
-const orderBalanceLoading = ref(false)
-const orderBalanceError = ref<string | null>(null)
-const orderBalanceTraceId = ref<string | null>(null)
+// The missing-order failure belongs on the field the operator must fix, not in
+// a banner three hundred pixels below it.
+const incomeOrderError = ref<string | null>(null)
+const incomeOrderCombobox = ref<InstanceType<typeof SearchCombobox> | null>(null)
 const voidTarget = ref<{ kind: 'expense' | 'income'; id: string } | null>(null)
 const voidReason = ref('')
 const initialRange = presetRange('month', now)
@@ -82,7 +90,6 @@ const dateTo = ref(initialRange.to ?? '')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
 const statusFilter = ref<LedgerStatus | 'all'>('recorded')
-let orderBalanceRequestId = 0
 
 // Select-bound fields are `string | null` (FormSelect/SearchCombobox model type,
 // same convention as the inventory modals); payloads coerce before sending.
@@ -113,6 +120,17 @@ const incomeForm = reactive({
 // original branch is preserved and sent back unchanged.
 const editingExpenseBranchId = ref<string | null>(null)
 const editingIncomeBranchId = ref<string | null>(null)
+// The income being edited already sits inside its order's `recorded` total, so
+// the inline over-balance check adds it back — the same headroom the server's
+// cap computes with `exclude_income_id`.
+const editingIncomeAmountTiyin = ref(0)
+// The picked row is kept out of `finance.payableOrders`: the next search
+// replaces that list, and the selection must survive it.
+const selectedPayableOrder = ref<PayableOrder | null>(null)
+// The order of the income being edited, as that income's own row carries it.
+// A settled order is no longer a picker candidate, so this is the only source.
+const editingIncomeOrder = ref<IncomeOrderRef | null>(null)
+const incomeOrderQuery = ref('')
 
 // Type-time sanitization (PhoneInput precedent): an invalid character never
 // sticks; parseSomToTiyin still owns whether the kept characters make sense.
@@ -142,18 +160,18 @@ const selectedBranchId = computed(() => {
   if (context && financeBranches.value.some((branch) => branch.id === context)) return context
   return financeBranches.value[0]?.id ?? ''
 })
-const orderOptions = computed<ChoiceOption[]>(() =>
-  orders.workshopOrders
-    .filter((order) => {
-      if (order.status === 'cancelled') return false
-      if (!selectedBranchId.value) return true
-      return order.branch_id === selectedBranchId.value
-    })
-    .map((order) => ({
-      value: order.id,
-      label: `${order.order_number} · ${order.contact_name}`,
-      meta: formatTiyin(order.total_tiyin),
-    })),
+// The picker is server-filtered: the backend already scoped the rows to the
+// branch and to "still owes money", and it searched fields the option text
+// doesn't carry (the phone). Re-filtering here would hide its own matches.
+const payableOrderOptions = computed<ChoiceOption[]>(() =>
+  finance.payableOrders.map((order) => ({
+    value: order.order_id,
+    label: `${order.order_number} · ${order.contact_name}`,
+    meta: formatTiyin(order.balance_tiyin),
+  })),
+)
+const payableOrderById = computed<Record<string, PayableOrder>>(() =>
+  Object.fromEntries(finance.payableOrders.map((order) => [order.order_id, order])),
 )
 // Optional supplier link on an expense — this is what makes it count as a
 // payment in the supplier's debt fold. Inactive suppliers stay payable.
@@ -175,10 +193,16 @@ watch(
     if (supplier && !expenseForm.vendor.trim()) expenseForm.vendor = supplier.name
   },
 )
-const selectedIncomeOrderDetail = computed(() =>
-  orders.currentOrder?.id === incomeForm.orderId ? orders.currentOrder : null,
-)
-const selectedIncomeSettlement = computed(() => selectedIncomeOrderDetail.value?.settlement ?? null)
+// Two sources, one shape, neither of them an order read. Creating: the picked
+// picker row already carries the settlement. Editing: the income row carries
+// its own order — the order it points at may long since have left the picker.
+const selectedIncomeOrder = computed<IncomeOrderRef | PayableOrder | null>(() => {
+  const editing = editingIncomeOrder.value
+  if (editing && editing.order_id === incomeForm.orderId) return editing
+  const picked = selectedPayableOrder.value
+  if (picked && picked.order_id === incomeForm.orderId) return picked
+  return null
+})
 // Shared by the filter dropdowns (compact skin ignores meta) and the modal
 // FormSelects (meta renders as the option's hint line).
 const categoryOptions: ChoiceOption[] = [
@@ -201,9 +225,12 @@ const incomeTypeOptions: ChoiceOption[] = [
   { value: 'other', label: 'Boshqa tushum', meta: 'qo`lda yozuv' },
 ]
 const createIncomeTypeOptions = incomeTypeOptions.filter((option) => option.value !== 'all')
+// One word per method. The three sit in a half-width segmented row, and
+// «Bank / karta» ran past its segment at desktop width — a choice you can't
+// read is not a visible choice. The card/terminal case lives in the meta line.
 const methodOptions: ChoiceOption[] = [
   { value: 'cash', label: 'Naqd', meta: 'kassa' },
-  { value: 'bank_transfer', label: 'Bank / karta', meta: 'o`tkazma' },
+  { value: 'bank_transfer', label: 'Bank', meta: 'o`tkazma yoki karta' },
   { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi' },
 ]
 const statusOptions: DropdownOption[] = [
@@ -222,25 +249,49 @@ const methodLabel = Object.fromEntries(methodOptions.map((option) => [option.val
 watch(
   () => incomeForm.orderId,
   (orderId) => {
-    if (!orderId || incomeForm.type !== 'order_payment') return
-    void loadSelectedOrderBalance(orderId)
+    if (!orderId) {
+      selectedPayableOrder.value = null
+      return
+    }
+    incomeOrderError.value = null
+    if (incomeForm.type !== 'order_payment') return
+    const picked = payableOrderById.value[orderId]
+    if (!picked) return
+    selectedPayableOrder.value = picked
+    // Most counter payments settle the order outright, so the remaining
+    // balance is the right default; the operator overtypes it for a part
+    // payment.
+    if (!editingIncomeId.value) incomeForm.amount = moneyInputValue(picked.balance_tiyin)
   },
 )
 
 watch(
   () => incomeForm.type,
-  (type) => {
-    if (type !== 'order_payment') {
-      orderBalanceError.value = null
-      orderBalanceTraceId.value = null
-      return
-    }
-    if (incomeForm.orderId) void loadSelectedOrderBalance(incomeForm.orderId)
+  () => {
+    incomeOrderError.value = null
   },
 )
 
-function incomeOrderLabel(orderId: string | null) {
-  return financeOrderReferenceLabel(orderId, orders.workshopOrders, orders.currentOrder)
+// The picker's candidates depend on the branch context and on the modal being
+// an order payment at all — reload whenever any of those move.
+watch([incomeModalOpen, selectedBranchId, () => incomeForm.type], () => {
+  if (!incomeModalOpen.value || editingIncomeId.value) return
+  if (incomeForm.type !== 'order_payment') return
+  void loadPayableOrders()
+})
+
+function loadPayableOrders() {
+  return finance.loadPayableOrders({
+    branch_id: selectedBranchId.value || null,
+    search: incomeOrderQuery.value || null,
+  })
+}
+
+// Already debounced by the combobox — this is one request per pause, not per
+// keystroke.
+function onPayableOrderSearch(value: string) {
+  incomeOrderQuery.value = value
+  void loadPayableOrders()
 }
 
 // Names the record the void will hit — date · category/type · sum — so the
@@ -262,27 +313,47 @@ const voidTargetLabel = computed(() => {
 // input and the submit guard — an unparseable amount blocks the save instead
 // of silently booking 0 (or a 1000x-smaller sum).
 const AMOUNT_HINT = 'Summani tekshiring — masalan: 1 500 000'
+const OVER_BALANCE_HINT = 'Qoldiqdan oshib ketdi'
 const expenseAmountTiyin = computed(() => parseSomToTiyin(expenseForm.amount))
 const incomeAmountTiyin = computed(() => parseSomToTiyin(incomeForm.amount))
+
+// The figures the form is measured against, in the frame the operator is in:
+// while editing, this income's own amount comes back out of «Yozilgan» and
+// into «Qoldiq», so the summary's Qoldiq *is* what the Qoldiq button fills.
+// One number, one word — the ceiling below reads straight off it.
+const incomeSettlement = computed(() =>
+  incomeForm.type === 'order_payment'
+    ? incomeSettlementView(
+        selectedIncomeOrder.value,
+        editingIncomeId.value ? editingIncomeAmountTiyin.value : null,
+      )
+    : null,
+)
+// The most an order payment may still take. Null when there is nothing to cap
+// against (other income, or no order picked yet).
+const incomeAmountCeilingTiyin = computed(() => incomeSettlement.value?.balance_tiyin ?? null)
+const incomeAmountOverBalance = computed(() =>
+  exceedsOrderBalance(incomeAmountTiyin.value, incomeAmountCeilingTiyin.value),
+)
+const showRemainingBalanceButton = computed(
+  () => incomeAmountCeilingTiyin.value !== null && incomeAmountCeilingTiyin.value > 0,
+)
+// Caught here so the operator sees the problem beside the field they typed it
+// in; the server's cap stays the authority, this only saves the round trip.
+const incomeAmountError = computed(() => {
+  if (incomeForm.amount.trim() && incomeAmountTiyin.value === null) return AMOUNT_HINT
+  if (incomeAmountOverBalance.value) return OVER_BALANCE_HINT
+  return null
+})
 
 function moneyInputValue(tiyin: number) {
   return String(Math.max(tiyin, 0) / 100)
 }
 
-async function loadSelectedOrderBalance(orderId: string) {
-  const requestId = ++orderBalanceRequestId
-  orderBalanceLoading.value = true
-  orderBalanceError.value = null
-  orderBalanceTraceId.value = null
-  await orders.loadWorkshopOrder(orderId)
-  if (requestId !== orderBalanceRequestId || incomeForm.orderId !== orderId) return
-  if (orders.error) {
-    orderBalanceError.value = workshopErrorMessage(orders.error)
-    orderBalanceTraceId.value = orders.traceId
-  } else if (selectedIncomeSettlement.value && !editingIncomeId.value) {
-    incomeForm.amount = moneyInputValue(selectedIncomeSettlement.value.balance_tiyin)
-  }
-  orderBalanceLoading.value = false
+function fillRemainingBalance() {
+  const ceiling = incomeAmountCeilingTiyin.value
+  if (ceiling === null) return
+  incomeForm.amount = moneyInputValue(ceiling)
 }
 
 async function refresh() {
@@ -336,6 +407,11 @@ function resetExpenseForm() {
 function resetIncomeForm() {
   editingIncomeId.value = null
   editingIncomeBranchId.value = null
+  editingIncomeAmountTiyin.value = 0
+  editingIncomeOrder.value = null
+  selectedPayableOrder.value = null
+  incomeOrderQuery.value = ''
+  incomeOrderError.value = null
   incomeForm.type = 'order_payment'
   incomeForm.orderId = null
   incomeForm.amount = ''
@@ -344,10 +420,6 @@ function resetIncomeForm() {
   incomeForm.note = ''
   incomeForm.receiptFileId = null
   incomeForm.receiptName = ''
-  orderBalanceRequestId += 1
-  orderBalanceLoading.value = false
-  orderBalanceError.value = null
-  orderBalanceTraceId.value = null
 }
 
 // The modals own focus (useFocusTrap moves focus in, restores it on close) — no
@@ -388,6 +460,11 @@ function editExpense(expense: Expense) {
 function editIncome(income: Income) {
   editingIncomeId.value = income.id
   editingIncomeBranchId.value = income.branch_id
+  editingIncomeAmountTiyin.value = income.amount_tiyin
+  editingIncomeOrder.value = income.order
+  selectedPayableOrder.value = null
+  incomeOrderQuery.value = ''
+  incomeOrderError.value = null
   incomeForm.type = income.type
   incomeForm.orderId = income.order_id ?? null
   incomeForm.amount = String(income.amount_tiyin / 100)
@@ -396,7 +473,6 @@ function editIncome(income: Income) {
   incomeForm.note = income.note ?? ''
   incomeForm.receiptFileId = income.receipt_file_id
   incomeForm.receiptName = income.receipt_file_id ? 'Biriktirilgan chek' : ''
-  if (income.order_id) void loadSelectedOrderBalance(income.order_id)
   clearActionError()
   incomeModalOpen.value = true
 }
@@ -468,6 +544,19 @@ async function saveIncome() {
   if (incomeAmountTiyin.value === null) {
     actionError.value = AMOUNT_HINT
     actionTraceId.value = null
+    return
+  }
+  if (incomeAmountOverBalance.value) {
+    actionError.value = OVER_BALANCE_HINT
+    actionTraceId.value = null
+    return
+  }
+  // Errored on the combobox itself, which then takes focus — the same
+  // treatment the amount field gets. A banner at the foot of the form is too
+  // far from the control that has to change.
+  if (incomeForm.type === 'order_payment' && !incomeForm.orderId) {
+    incomeOrderError.value = workshopErrorMessage('order_required')
+    incomeOrderCombobox.value?.focus()
     return
   }
   saving.value = true
@@ -587,10 +676,9 @@ onMounted(async () => {
   if (selectedBranchId.value) {
     void workshop.loadSuppliers(selectedBranchId.value).catch(() => undefined)
   }
-  await Promise.all([
-    orders.loadWorkshopOrders({ status: 'active' }).catch(() => undefined),
-    refresh(),
-  ])
+  // The ledger needs no order list: every income carries its own order label
+  // and settlement, so no page of orders can be too short to name a row.
+  await refresh()
   // The Qarzdorlik statement's «To'lov qilish» deep-links here with the
   // counterparty pre-picked; the query is consumed once and cleared.
   if (route.query.create === 'expense') {
@@ -724,7 +812,7 @@ onMounted(async () => {
         @close="closeIncomeModal"
       >
         <form class="grid gap-3 md:grid-cols-2" @submit.prevent="saveIncome">
-          <FormSelect
+          <SegmentedControl
             v-if="!editingIncomeId"
             v-model="incomeForm.type"
             label="Turi"
@@ -738,55 +826,107 @@ onMounted(async () => {
               disabled
             />
           </label>
+          <SegmentedControl v-model="incomeForm.method" label="Usul" :options="methodOptions" />
           <SearchCombobox
             v-if="incomeForm.type === 'order_payment' && !editingIncomeId"
+            ref="incomeOrderCombobox"
             v-model="incomeForm.orderId"
+            class="md:col-span-2"
             label="Buyurtma"
-            :options="orderOptions"
-            placeholder="Buyurtmani tanlang"
+            :options="payableOrderOptions"
+            :error="incomeOrderError"
+            :loading="finance.payableOrdersLoading"
+            :search-debounce-ms="250"
+            server-filtered
+            placeholder="Raqam, ism yoki telefon"
+            no-results-text="Qoldig'i bor buyurtma topilmadi"
+            hint="Faqat qoldig'i bor buyurtmalar · raqam, ism yoki telefon bo'yicha qidiring"
             clearable
-          />
-          <label v-else-if="incomeForm.type === 'order_payment'" class="field">
+            @search="onPayableOrderSearch"
+          >
+            <template #option="{ option }">
+              <PayableOrderOption :order="payableOrderById[option.value]" />
+            </template>
+          </SearchCombobox>
+          <label v-else-if="incomeForm.type === 'order_payment'" class="field md:col-span-2">
             <span>Buyurtma</span>
-            <input class="mp-input" :value="incomeOrderLabel(incomeForm.orderId)" disabled />
+            <input
+              class="mp-input"
+              :value="financeIncomeOrderLabel(incomeForm.orderId, editingIncomeOrder)"
+              disabled
+            />
           </label>
+          <!-- The picker row already showed the balance, so the old three-line
+               panel would repeat it. One line under the selection is enough to
+               confirm the figures the payment is being measured against.
+               While editing, this income is lifted out of «Yozilgan» so that
+               «Qoldiq» is the headroom this row actually has — the same number
+               the Qoldiq button fills. -->
           <div
             v-if="incomeForm.type === 'order_payment' && incomeForm.orderId"
-            class="rounded-md border border-hairline bg-sunk p-3 text-sm md:col-span-2"
+            class="md:col-span-2"
+            aria-live="polite"
           >
-            <p v-if="orderBalanceLoading" class="font-bold text-ink-soft">Qoldiq yuklanmoqda...</p>
-            <p v-else-if="orderBalanceError" class="font-bold text-danger">
-              {{ orderBalanceError }}{{ traceSuffix(orderBalanceTraceId) }}
+            <p
+              v-if="incomeSettlement"
+              class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-hairline bg-sunk px-3 py-2 text-[12px] text-ink-soft"
+            >
+              <span>
+                Jami
+                <b class="ml-1 font-mono text-ink">
+                  {{ formatTiyin(incomeSettlement.total_tiyin) }}
+                </b>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {{ editingIncomeId ? 'Boshqa yozuvlar' : 'Yozilgan' }}
+                <b class="ml-1 font-mono text-ink">
+                  {{ formatTiyin(incomeSettlement.recorded_tiyin) }}
+                </b>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Qoldiq
+                <b class="ml-1 font-mono text-danger">
+                  {{ formatTiyin(incomeSettlement.balance_tiyin) }}
+                </b>
+              </span>
             </p>
-            <div v-else-if="selectedIncomeSettlement" class="grid gap-2 md:grid-cols-[1fr_auto]">
-              <div class="grid gap-1 text-ink-soft">
-                <span>Jami: {{ formatTiyin(selectedIncomeSettlement.total_tiyin) }}</span>
-                <span>Yozilgan: {{ formatTiyin(selectedIncomeSettlement.recorded_tiyin) }}</span>
-                <b class="text-ink"
-                  >Qoldiq: {{ formatTiyin(selectedIncomeSettlement.balance_tiyin) }}</b
-                >
-              </div>
-              <button
-                type="button"
-                class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-                @click="incomeForm.amount = moneyInputValue(selectedIncomeSettlement.balance_tiyin)"
-              >
-                Qoldiqni kiritish
-              </button>
-            </div>
-            <p v-else class="font-bold text-ink-soft">Qoldiq ma'lumoti topilmadi.</p>
+            <p v-else class="text-[12px] font-bold text-ink-soft">Qoldiq ma'lumoti topilmadi.</p>
           </div>
           <label class="field">
             <span>Summa (to'liq yoki qisman)</span>
-            <input v-model="incomeForm.amount" class="mp-input" inputmode="numeric" required />
-            <small v-if="incomeAmountTiyin !== null" class="text-ink-muted">
+            <div class="relative">
+              <!-- Explicit name: the wrapping <label> now also contains the
+                   Qoldiq button, whose text would otherwise be folded into this
+                   input's accessible name. -->
+              <input
+                v-model="incomeForm.amount"
+                class="mp-input"
+                :class="[
+                  incomeAmountError ? 'border-danger' : '',
+                  showRemainingBalanceButton ? 'pr-16' : '',
+                ]"
+                :aria-invalid="incomeAmountError ? 'true' : undefined"
+                aria-label="Summa (to'liq yoki qisman)"
+                inputmode="numeric"
+                required
+              />
+              <!-- The fill-the-balance action belongs on the field it fills. -->
+              <button
+                v-if="showRemainingBalanceButton"
+                type="button"
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm px-2 py-1 text-[11px] font-bold text-accent transition hover:bg-accent-soft"
+                @click="fillRemainingBalance"
+              >
+                Qoldiq
+              </button>
+            </div>
+            <small v-if="incomeAmountError" class="mp-field-error">{{ incomeAmountError }}</small>
+            <small v-else-if="incomeAmountTiyin !== null" class="text-ink-muted">
               = {{ formatTiyin(incomeAmountTiyin) }}
             </small>
-            <small v-else-if="incomeForm.amount.trim()" class="mp-field-error">
-              {{ AMOUNT_HINT }}
-            </small>
           </label>
-          <FormSelect v-model="incomeForm.method" label="Usul" :options="methodOptions" />
           <label class="field">
             <span>Qabul sanasi</span>
             <input
@@ -819,7 +959,11 @@ onMounted(async () => {
             {{ actionError }}{{ traceSuffix(actionTraceId) }}
           </p>
           <div class="flex items-center gap-2 md:col-span-2">
-            <button type="submit" class="mp-button mp-button-primary" :disabled="saving">
+            <button
+              type="submit"
+              class="mp-button mp-button-primary"
+              :disabled="saving || incomeAmountOverBalance"
+            >
               {{ saving ? 'Saqlanmoqda' : editingIncomeId ? 'Saqlash' : 'Yozish' }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="closeIncomeModal">
@@ -1006,7 +1150,7 @@ onMounted(async () => {
                     ustaxona-keng
                   </small>
                 </td>
-                <td>{{ incomeOrderLabel(income.order_id) }}</td>
+                <td>{{ financeIncomeOrderLabel(income.order_id, income.order) }}</td>
                 <td>
                   <small class="text-ink-soft">{{
                     methodLabel[income.method] ?? income.method

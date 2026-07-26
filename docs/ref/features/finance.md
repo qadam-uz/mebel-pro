@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 55
 ---
 
@@ -30,6 +30,13 @@ Money the workshop received. Recorded by a user with `manage_finance`. Every inc
 **type**; one type is **`order_payment`** and carries the order it settles, the rest
 (`other`) carry none.
 
+An order-payment income **carries its order's number, contact name, and settlement**
+(total · recorded · balance) on the record itself. Finance therefore never reads the order
+back to name or price it — the accountant who keys the payments holds no order permission,
+and a settled order has already left the payable set, so both of the obvious sources fail
+exactly when the ledger needs them. The figures are resolved for the whole listed page in
+one aggregate, not per row.
+
 ### Operations (`manage_finance`)
 
 - **Record an income** — `type`; `order_id` (**required iff `order_payment`**, must be an
@@ -40,6 +47,14 @@ separate `card` method); `received_on` (date);
   optional `note` (bank reference / receipt id) and receipt scan. The recording user is
   logged. Several order payments may be recorded for one order (advance then balance); their
   running sum is validated **≤ the order's `total_tiyin`**.
+- **List payable orders** — the candidate set an order payment may name: every order of the
+  workshop (branch-scoped, searchable by order number, contact name, or contact phone) whose
+  **balance is still above zero**, newest first. Deliberately **not** filtered by production
+  status — money most often changes hands at pickup, so a `completed` order is the likeliest
+  target. Only two exclusions: a fully-paid order (offering it invites a double payment the
+  cap would reject anyway) and a **cancelled** order (v1 has no refund flow — see the edge
+  cases below). Each candidate carries its own total, recorded sum, and balance, so the form
+  can show what is owed without opening the order. Same permission as recording the income.
 - **Edit an income** — only while `recorded`; audited.
 - **Void an income** — `status = voided` with a **mandatory reason** (used to correct a
   mistake, e.g. a client disputes "I paid, it's not marked"). A voided income doesn't appear
@@ -198,9 +213,24 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, status, min / max
-    amount. **+ Income** → modal form (type → if `order_payment`, a searchable order
-    picker scoped to the context branch; amount; method; date; note; receipt). An
-    order payment derives its branch from the picked order server-side. Row actions: Edit
+    amount. **+ Income** → modal form. Type and method are two- and three-way segmented
+    toggles sharing one row — with a closed set this small a dropdown is a click that
+    reveals nothing. If the type is `order_payment`, an **order picker** searches the
+    payable-orders set above server-side (debounced, so a burst of typing is one query, not
+    one per character); each row shows the order number and contact (the contact wraps to
+    its own line when the screen is too narrow to keep it legible), phone · date · status
+    beneath, and the **balance in the danger colour** — with the order total demoted under
+    it **only when the two differ**, since the numbers are easy to confuse and printing one
+    figure twice reads as a fault. Submitting with no order picked errors the picker itself
+    and returns focus to it. Picking one collapses to a single *Jami · Yozilgan · Qoldiq*
+    line and seeds the amount with the remaining balance; a **Qoldiq** button on the amount
+    field refills it after a part payment is typed. An amount above the balance errors on
+    the field and blocks submit before the round trip — the server's cap stays the
+    authority. **While editing**, the income's own amount is lifted back out of the recorded
+    sum (*Boshqa yozuvlar*) and into *Qoldiq*, so the summary shows the headroom this row
+    actually has — the same number the Qoldiq button fills and the same one the server's cap
+    computes. Two different figures may not share the word.
+    An order payment derives its branch from the picked order server-side. Row actions: Edit
     (modal) · Void (dialog with a mandatory reason). No Delete.
   - *Expenses* — table: date, category, vendor, amount, description (first 60
     chars), receipt indicator, status, action menu. Filters: date range, category,

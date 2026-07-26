@@ -121,6 +121,30 @@ export const workshopErrorMessages: Record<string, string> = {
   user_unblock_failed: "Xodimni faollashtirib bo'lmadi. Qayta urinib ko'ring.",
   sessions_revoke_failed: "Sessiyalarni yopib bo'lmadi. Qayta urinib ko'ring.",
   session_revoke_failed: "Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.",
+  // Finance ledger codes (QAD-123). The generic fallback is for genuinely
+  // unexpected failures — a rejected save the operator can fix must say what
+  // to fix, in the words the form uses.
+  order_required: "Buyurtma to'lovi uchun buyurtma tanlang.",
+  order_not_allowed: "Faqat buyurtma to'loviga buyurtma biriktiriladi.",
+  scope_mismatch: 'Tushum filiali buyurtma filialiga mos emas.',
+  order_payment_exceeds_total: "Summa buyurtma qoldig'idan oshib ketdi.",
+  order_not_found: "Buyurtma topilmadi — ro'yxatdan qaytadan tanlang.",
+  branch_required: 'Filialni tanlang — yozuv qaysi filialga tegishli ekani kerak.',
+  forbidden: "Bu amal uchun ruxsatingiz yo'q.",
+  invalid_amount: "Summa noldan katta bo'lishi kerak.",
+  invalid_amount_range: 'Eng kichik summa eng kattasidan oshib ketmasin.',
+  invalid_status: "Faqat yozilgan yozuvni o'zgartirish mumkin.",
+  ledger_not_recorded: "Bu yozuv allaqachon bekor qilingan — uni o'zgartirib bo'lmaydi.",
+  future_date_not_allowed: "Sana kelajakda bo'lishi mumkin emas.",
+  description_required: 'Tavsifni yozing.',
+  note_required: 'Izohni yozing — tuzatish sababsiz saqlanmaydi.',
+  reason_required: 'Sababni yozing.',
+  income_not_found: "Tushum topilmadi — ro'yxatni yangilang.",
+  expense_not_found: "Xarajat topilmadi — ro'yxatni yangilang.",
+  supplier_not_found: "Ta'minotchi topilmadi — ro'yxatdan qaytadan tanlang.",
+  client_not_found: "Mijoz topilmadi — ro'yxatdan qaytadan tanlang.",
+  adjustment_not_found: "Tuzatish topilmadi — ro'yxatni yangilang.",
+  invalid_party: "Tuzatish bitta tomonga yoziladi: yo ta'minotchi, yo mijoz.",
 }
 
 export function workshopErrorMessage(code: string | null | undefined) {
