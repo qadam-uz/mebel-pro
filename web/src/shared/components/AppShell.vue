@@ -25,6 +25,7 @@ import ToastHost from '@/shared/components/ToastHost.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOnboardingStore } from '@/shared/stores/onboarding'
+import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 import { useWorkshopSearchStore } from '@/shared/stores/workshopSearch'
 
@@ -32,6 +33,7 @@ const config = useRoleConfig()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
 const onboarding = useOnboardingStore()
+const orders = useOrdersStore()
 const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
 const route = useRoute()
@@ -170,6 +172,23 @@ const groupedWorkshopNav = computed(() => {
   }
   return groups
 })
+// Sidebar `+N` badge on Buyurtmalar (QAD-156): a live count of orders still in
+// NEW for the selected branch, so staff notice an arrival without being on the
+// board. Not an unread counter — it falls on its own as orders get confirmed.
+const ordersNavPath = computed(() => rolePath('/workshop/orders'))
+const canSeeOrdersNav = computed(() =>
+  visibleNav.value.some((item) => item.to === ordersNavPath.value),
+)
+const newOrderBadge = computed(() => {
+  if (config.role !== 'workshop' || !canSeeOrdersNav.value || orders.newOrderCount < 1) return null
+  return orders.newOrderCount > 99 ? '99+' : String(orders.newOrderCount)
+})
+// The badge itself is decorative; the count belongs to the link's own name so a
+// screen reader hears "Buyurtmalar — 4 ta yangi buyurtma" in one go.
+function navAriaLabel(item: NavItem) {
+  if (item.to !== ordersNavPath.value || !newOrderBadge.value) return undefined
+  return `${item.label} — ${orders.newOrderCount} ta yangi buyurtma`
+}
 const groupedAdminNav = computed(() => groupedNav(visibleNav.value))
 const adminMetrics = computed(() =>
   adminNavMetrics({
@@ -361,6 +380,18 @@ function browserStorage() {
   return typeof window === 'undefined' ? null : window.localStorage
 }
 
+// No polling: the count refreshes on the moments it can actually change for this
+// user — shell mount, a branch switch, the tab coming back into view, and every
+// order mutation (that last one lives in the orders store).
+function reloadNewOrderCount() {
+  if (config.role !== 'workshop' || !canLoadWorkshopContext.value || !canSeeOrdersNav.value) return
+  void orders.loadNewOrderCount(selectedWorkshopBranch.value?.id ?? null)
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') reloadNewOrderCount()
+}
+
 watch(
   [dropdownOptions, contextStorageKey],
   ([options, storageKey], oldValue) => {
@@ -455,15 +486,23 @@ watch(
   { flush: 'post' },
 )
 
+// The branch (or the right to see orders at all) only settles once the branch
+// context has loaded, so drive the count off that instead of a bare onMounted.
+watch([() => selectedWorkshopBranch.value?.id, canSeeOrdersNav], reloadNewOrderCount, {
+  immediate: true,
+})
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   window.clearTimeout(workshopSearchTimer)
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onGlobalKeydown)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (mobileNavOpen.value) unlockBodyScroll()
   previousMobileFocus = null
 })
@@ -542,11 +581,18 @@ onBeforeUnmount(() => {
             class="workshop-nav-item"
             active-class="on"
             :title="item.label"
+            :aria-label="navAriaLabel(item)"
           >
             <span class="workshop-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
             </span>
             <span>{{ item.label }}</span>
+            <span
+              v-if="newOrderBadge && item.to === ordersNavPath"
+              class="workshop-nav-badge"
+              aria-hidden="true"
+              >{{ newOrderBadge }}</span
+            >
           </RouterLink>
         </section>
       </nav>
@@ -598,11 +644,18 @@ onBeforeUnmount(() => {
               :to="item.to"
               class="workshop-nav-item"
               active-class="on"
+              :aria-label="navAriaLabel(item)"
             >
               <span class="workshop-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
               </span>
               <span>{{ item.label }}</span>
+              <span
+                v-if="newOrderBadge && item.to === ordersNavPath"
+                class="workshop-nav-badge"
+                aria-hidden="true"
+                >{{ newOrderBadge }}</span
+              >
             </RouterLink>
           </section>
         </nav>

@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-24
+updated: 2026-07-26
 order: 30
 ---
 
@@ -422,6 +422,13 @@ chosen at placement, against a specific cutting — defaulted from the draft's
 Permission names below are the per-branch grants from
 [`access-management.md`](access-management.md); a single user may hold all of them.
 
+- **New-order badge** (`manage_orders`) — the sidebar's **Orders** item carries a red `+N`
+  pill: how many orders sit in `new` for the selected branch, so an arrival is visible from
+  any screen. It is a live count, not an unread marker — no read state, no per-user
+  tracking; it falls on its own as staff confirm. Hidden entirely at zero, `99+` above 99,
+  and branch-scoped so it always agrees with the list it links to. Refreshes on shell load,
+  on a branch switch, when the tab returns to the foreground, and after any order mutation;
+  a failed count renders no badge and never disturbs the shell.
 - **Orders** (`/workshop/orders`, `view_dashboard` to see; `manage_orders` to act) —
   branch-scoped, two modes:
   - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each

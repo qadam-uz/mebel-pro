@@ -203,6 +203,12 @@ class WorkshopWorkerOption(APIModel):
     home_branch_id: uuid.UUID
 
 
+class NewOrderCountResponse(APIModel):
+    """Ambient count behind the workshop sidebar's `+N` badge."""
+
+    count: int
+
+
 class OrderSummaryResponse(APIModel):
     id: uuid.UUID
     order_number: str

@@ -239,6 +239,8 @@ export const useOrdersStore = defineStore('orders', () => {
   const workshopOrders = ref<OrderSummary[]>([])
   const recentWorkshopOrders = ref<OrderSummary[]>([])
   const workshopOrdersHasMore = ref(false)
+  const newOrderCount = ref(0)
+  const newOrderCountBranchId = ref<string | null>(null)
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
@@ -469,6 +471,31 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
+  // Ambient count behind the sidebar's `Buyurtmalar` badge (QAD-156). Failure is
+  // silent by design: the badge is decoration, and a dead count must never leave
+  // an error banner or a stale number on the shell — it just stops rendering.
+  async function loadNewOrderCount(branchId: string | null = null) {
+    newOrderCountBranchId.value = branchId
+    try {
+      const response = await api.get<{ count: number }>(
+        withQuery('/workshop/orders/new-count', { branch_id: branchId }),
+        authInit(),
+      )
+      // The shell fires an unscoped load on mount and a scoped one as soon as the
+      // branch context resolves; without this guard the slower of the two wins and
+      // the badge shows the wrong branch's number.
+      if (newOrderCountBranchId.value !== branchId) return
+      newOrderCount.value = Math.max(0, response.count)
+    } catch {
+      if (newOrderCountBranchId.value !== branchId) return
+      newOrderCount.value = 0
+    }
+  }
+
+  async function refreshNewOrderCount() {
+    await loadNewOrderCount(newOrderCountBranchId.value)
+  }
+
   async function loadWorkshopOrder(id: string) {
     await loadOrder(`/workshop/orders/${id}`, 'workshop_order_load_failed')
   }
@@ -603,7 +630,13 @@ export const useOrdersStore = defineStore('orders', () => {
           : await api.patch<OrderDetail>(path, payload, authInit())
       currentOrder.value = order
       if (scope === 'client') patchClientOrder(order)
-      else if (scope === 'workshop') patchWorkshopOrder(order)
+      else if (scope === 'workshop') {
+        patchWorkshopOrder(order)
+        // Confirming or cancelling a NEW order changes the sidebar badge (QAD-156).
+        // Refreshing on every workshop mutation keeps one hook instead of a list of
+        // transitions to keep in sync; it's a `count(*)` and never blocks the caller.
+        void refreshNewOrderCount()
+      }
       return order
     } catch (errorValue) {
       // On an optimistic-concurrency conflict the cached version is stale; refetch
@@ -669,6 +702,8 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders.value = []
     recentWorkshopOrders.value = []
     workshopOrdersHasMore.value = false
+    newOrderCount.value = 0
+    newOrderCountBranchId.value = null
     currentOrder.value = null
     workerOptions.value = []
     loading.value = false
@@ -687,6 +722,7 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders,
     recentWorkshopOrders,
     workshopOrdersHasMore,
+    newOrderCount,
     currentOrder,
     workerOptions,
     loading,
@@ -710,6 +746,8 @@ export const useOrdersStore = defineStore('orders', () => {
     loadWorkshopOrders,
     loadRecentWorkshopOrders,
     loadWorkshopOrder,
+    loadNewOrderCount,
+    refreshNewOrderCount,
     loadWorkers,
     approve,
     assign,

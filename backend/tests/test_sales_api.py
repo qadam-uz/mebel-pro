@@ -23,11 +23,12 @@ from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.sales.contracts import Order, OrderItem
 from app.modules.support.contracts import Notification
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import default_working_hours, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -1233,3 +1234,60 @@ async def test_client_order_with_indivisible_panel_price_and_quantity(
     # and the order's authoritative material subtotal stays the exact, un-floored cost.
     assert order.subtotal_materials_tiyin % 3 != 0
     assert item.unit_material_price_tiyin == order.subtotal_materials_tiyin // 3
+
+
+async def test_workshop_new_order_count_is_branch_scoped_and_tenant_isolated(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The sidebar badge (QAD-156) counts only NEW orders the caller may manage,
+    in the branch they are looking at — and never another workshop's orders."""
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+
+    async def count(access: str, **params: str) -> int:
+        response = await client.get(
+            "/api/v1/workshop/orders/new-count",
+            headers=_auth(access),
+            params=params,
+        )
+        assert response.status_code == 200, response.text
+        return int(response.json()["count"])
+
+    # The fresh order is NEW, so the owner sees it workshop-wide and in its branch.
+    assert await count(owner_access) == 1
+    assert await count(owner_access, branch_id=str(branch_id)) == 1
+    # A branch with no orders of its own reports zero, not the workshop total.
+    other_branch = Branch(
+        workshop_id=workshop_id,
+        name="Chilonzor",
+        address="Tashkent, Chilonzor",
+        phone="+998902222333",
+        latitude=Decimal("41.28"),
+        longitude=Decimal("69.20"),
+        working_hours=default_working_hours(),
+    )
+    db_session.add(other_branch)
+    await db_session.flush()
+    assert await count(owner_access, branch_id=str(other_branch.id)) == 0
+
+    # Production-only staff can't manage orders, so they get no badge at all.
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    worker_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=worker.id,
+    )
+    assert await count(worker_tokens.access_token) == 0
+
+    # A different workshop never sees these orders in its own count.
+    outsider_access, _, _, _ = await _workshop_setup(db_session)
+    assert await count(outsider_access) == 0
+
+    # Confirming the order takes it out of NEW, and the count falls on its own.
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert await count(owner_access, branch_id=str(branch_id)) == 0
