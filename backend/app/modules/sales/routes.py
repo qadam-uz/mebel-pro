@@ -165,7 +165,7 @@ async def client_order_cutting_pdf(
 ) -> Response:
     order = await get_client_order(db, principal=principal, order_id=order_id)
     result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),
@@ -430,7 +430,7 @@ async def workshop_order_cutting_pdf(
 ) -> Response:
     order = await get_workshop_order(db, principal=principal, order_id=order_id)
     result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),

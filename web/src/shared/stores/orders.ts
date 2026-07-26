@@ -11,7 +11,7 @@ import {
 } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
-import { downloadBlob } from '@/shared/app/downloadBlob'
+import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import type { CuttingDraft, CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
 export type OrderStatus =
@@ -250,8 +250,8 @@ export const useOrdersStore = defineStore('orders', () => {
   // state (the page gates on `error`). Views read these for the inline message.
   const actionError = ref<string | null>(null)
   const actionTraceId = ref<string | null>(null)
-  // PDF download feedback (CB-17): id of the order currently downloading, plus a
-  // transient error + trace for the last failed download.
+  // PDF feedback (CB-17): id of the order whose PDF is being fetched, plus a
+  // transient error + trace for the last failed open.
   const downloadingId = ref<string | null>(null)
   const downloadError = ref<string | null>(null)
   const downloadTraceId = ref<string | null>(null)
@@ -557,20 +557,12 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/note`, { note_workshop: note }, 'patch')
   }
 
-  async function downloadClientPdf(orderId: string) {
-    await downloadPdf(
-      `/client/orders/${orderId}/cutting/pdf`,
-      `order-${orderId}-cutting.pdf`,
-      orderId,
-    )
+  async function openClientPdf(orderId: string) {
+    await openPdf(`/client/orders/${orderId}/cutting/pdf`, orderId)
   }
 
-  async function downloadWorkshopPdf(orderId: string) {
-    await downloadPdf(
-      `/workshop/orders/${orderId}/cutting/pdf`,
-      `order-${orderId}-cutting.pdf`,
-      orderId,
-    )
+  async function openWorkshopPdf(orderId: string) {
+    await openPdf(`/workshop/orders/${orderId}/cutting/pdf`, orderId)
   }
 
   async function loadOrder(path: string, fallback: string) {
@@ -649,14 +641,17 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders.value = replaceOrPrependOrder(workshopOrders.value, order)
   }
 
-  async function downloadPdf(path: string, filename: string, id: string) {
+  async function openPdf(path: string, id: string) {
     downloadingId.value = id
     downloadError.value = null
     downloadTraceId.value = null
     try {
-      await downloadBlob(path, filename, authInit())
+      await openBlobInNewTab(path, authInit())
     } catch (errorValue) {
-      downloadError.value = "PDF'ni yuklab bo'lmadi. Qayta urinib ko'ring."
+      downloadError.value =
+        errorValue instanceof PopupBlockedError
+          ? "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering."
+          : "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
       downloadTraceId.value = apiTraceId(errorValue)
     } finally {
       downloadingId.value = null
@@ -726,8 +721,8 @@ export const useOrdersStore = defineStore('orders', () => {
     discount,
     surcharge,
     updateNote,
-    downloadClientPdf,
-    downloadWorkshopPdf,
+    openClientPdf,
+    openWorkshopPdf,
     reset,
   }
 })

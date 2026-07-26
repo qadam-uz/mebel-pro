@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-24
+updated: 2026-07-26
 order: 30
 ---
 
@@ -409,7 +409,7 @@ chosen at placement, against a specific cutting — defaulted from the draft's
   The client-facing status is **five phases**: Placed → **Confirmed** → **In production**
   → **Ready** → Done — collapsing `cutting`/`edge_banding` into "In production" with
   optional sub-text. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
-  (the SVG + PDF link), **Finance**
+  (the SVG + a button opening the PDF in a new tab), **Finance**
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
   while `new`.
