@@ -55,6 +55,7 @@ from app.modules.sales.schemas import (
     ClientOrderCreateRequest,
     EdgePriceLine,
     MaterialPriceLine,
+    NewOrderCountResponse,
     OrderDetailResponse,
     OrderEdgeMaterialDemand,
     OrderItemResponse,
@@ -818,6 +819,39 @@ async def list_workshop_orders(
     query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
     return await _order_summary_responses(db, rows)
+
+
+async def count_new_workshop_orders(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
+) -> NewOrderCountResponse:
+    """Backs the sidebar's `+N` badge (QAD-156): how many orders still sit in
+    NEW and are waiting for someone to confirm them. Scoped to the branches the
+    caller may manage orders in, so the number always agrees with the list the
+    badge links to. Omitting `branch_id` counts the whole workshop."""
+    _require_workshop(principal)
+    query = select(func.count())
+    query = query.select_from(Order).where(
+        Order.workshop_id == principal.workshop_id,
+        Order.status == OrderStatus.NEW,
+    )
+    if principal.is_owner:
+        if branch_id is not None:
+            query = query.where(Order.branch_id == branch_id)
+    else:
+        managed_branch_ids = {
+            grant.branch_id
+            for grant in principal.grants
+            if grant.permission is Permission.MANAGE_ORDERS
+        }
+        if branch_id is not None:
+            managed_branch_ids &= {branch_id}
+        if not managed_branch_ids:
+            return NewOrderCountResponse(count=0)
+        query = query.where(Order.branch_id.in_(managed_branch_ids))
+    return NewOrderCountResponse(count=await db.scalar(query) or 0)
 
 
 async def get_order_finance_target(

@@ -1681,6 +1681,32 @@
     box-shadow: 0 2px 8px -3px color-mix(in srgb, var(--color-accent) 28%, transparent);
   }
 
+  /* `+N` pill on Buyurtmalar (QAD-156) — how many orders still wait in NEW.
+     Rendered only for a non-zero count, so it never shows a bare 0. */
+  .workshop-nav-badge {
+    display: inline-flex;
+    min-width: 20px;
+    min-height: 18px;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    border-radius: 999px;
+    background: var(--color-danger);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 800;
+    line-height: 1;
+    padding: 1px 6px;
+  }
+
+  .workshop-nav-item.on .workshop-nav-badge,
+  .workshop-nav-item.router-link-active .workshop-nav-badge {
+    /* On the active (accent) row a flat danger fill muddies; a hairline ring
+       keeps the red legible against it. */
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 55%);
+  }
+
   .workshop-nav-icon {
     display: grid;
     width: 18px;
@@ -1789,8 +1815,29 @@
     .workshop-app.nav-collapsed .workshop-user-name,
     .workshop-app.nav-collapsed .workshop-user-meta,
     .workshop-app.nav-collapsed .workshop-nav-label,
-    .workshop-app.nav-collapsed .workshop-nav-item > span:not(.workshop-nav-icon) {
+    .workshop-app.nav-collapsed
+      .workshop-nav-item
+      > span:not(.workshop-nav-icon):not(.workshop-nav-badge) {
       display: none;
+    }
+
+    /* The rail hides labels, but the badge is the whole point — pin it to the
+       icon's top-right corner so the count survives the collapse. */
+    .workshop-app.nav-collapsed .workshop-nav-item {
+      position: relative;
+    }
+
+    .workshop-app.nav-collapsed .workshop-nav-badge {
+      position: absolute;
+      top: 0;
+      right: 2px;
+      min-width: 16px;
+      min-height: 15px;
+      margin-left: 0;
+      border: 1.5px solid var(--color-elevated);
+      font-size: 0.5625rem;
+      padding: 0 4px;
+      box-shadow: none;
     }
 
     .workshop-app.nav-collapsed .workshop-tenant,
