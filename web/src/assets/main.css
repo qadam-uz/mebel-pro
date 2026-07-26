@@ -3809,9 +3809,10 @@
     font-weight: 800;
   }
 
-  /* :not(.mp-field-error) — the error span lives inside the label too, and the
-     label rule would otherwise repaint it bold black (specificity trap). */
-  .field > span:not(.mp-field-error) {
+  /* :not(.mp-field-error, .mp-field-hint) — the error and hint spans live inside
+     the label too, and the label rule would otherwise repaint them bold black
+     (specificity trap). */
+  .field > span:not(.mp-field-error, .mp-field-hint) {
     color: var(--color-ink);
     font-size: 0.8125rem;
     font-weight: 800;
@@ -3838,6 +3839,14 @@
     color: var(--color-danger);
     font-size: 0.75rem;
     font-weight: 750;
+    line-height: 1.25;
+  }
+
+  /* Advisory copy under a field — quieter than the label, quieter than an error. */
+  .mp-field-hint {
+    color: var(--color-ink-soft);
+    font-size: 0.75rem;
+    font-weight: 600;
     line-height: 1.25;
   }
 

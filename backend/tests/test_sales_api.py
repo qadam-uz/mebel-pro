@@ -48,8 +48,10 @@ async def _client_access(db: AsyncSession, *, phone: str = "+998901555000") -> t
 
 async def _workshop_setup(
     db: AsyncSession,
+    *,
+    login: str = "owner",
 ) -> tuple[str, uuid.UUID, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db)
+    workshop, branch, owner = await seed_workshop_with_owner(db, login=login)
     owner.password_reset_required = False
     db.add(
         BranchPricing(
@@ -210,8 +212,10 @@ async def _optimized_draft(
 async def _placed_order(
     client: AsyncClient,
     db: AsyncSession,
+    *,
+    login: str = "owner",
 ) -> tuple[dict[str, object], str, str, uuid.UUID, uuid.UUID, uuid.UUID]:
-    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db)
+    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db, login=login)
     panel, edge = await _materials(db, branch_id=branch_id)
     client_access, _ = await _client_access(db, phone=f"+99890{uuid.uuid4().int % 10**7:07d}")
     draft = await _optimized_draft(
@@ -1146,7 +1150,11 @@ async def test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does(
     assert cancelled.status_code == 200
     assert await _client_order_notifications(db_session, self_id) == []
 
-    shop_cancel, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    shop_cancel, _, owner_access, _, _, _ = await _placed_order(
+        client,
+        db_session,
+        login="owner_b",
+    )
     shop_id = shop_cancel["id"]
     shop_cancelled = await client.post(
         f"/api/v1/workshop/orders/{shop_id}/cancel",

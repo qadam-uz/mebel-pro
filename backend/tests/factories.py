@@ -41,7 +41,13 @@ async def seed_platform_user(
     return user
 
 
-async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, WorkshopUser]:
+async def seed_workshop_with_owner(
+    db: AsyncSession,
+    *,
+    login: str = "owner",
+) -> tuple[Workshop, Branch, WorkshopUser]:
+    """Seed a workshop with its owner. Logins are globally unique — pass a distinct
+    `login` when a test seeds more than one workshop."""
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
     workshop = Workshop(
@@ -66,7 +72,7 @@ async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, 
     owner = WorkshopUser(
         id=owner_id,
         workshop_id=workshop.id,
-        login="owner",
+        login=login,
         password_hash=hash_password("Owner123"),
         full_name="Workshop Owner",
         phone="+998903333333",
