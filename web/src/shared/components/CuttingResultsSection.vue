@@ -325,6 +325,7 @@ async function choose(result: CuttingResult) {
               :panel="activePanel"
               :active-part-ref="activePartRef"
               :active-placement-id="activePlacementId"
+              fit="viewport"
               @select-placement="selectPlacement"
               @clear-selection="clearSelection"
             />

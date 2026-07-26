@@ -436,6 +436,9 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // The sheet strip groups thumbnails per material, captioned "List {index}".
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
+  // The sheet is height-capped (`fit="viewport"`) so a whole panel fits one
+  // screen — without it the drawing stretches to the full container width.
+  await expect(page.locator('svg.cutting-svg-fit')).toHaveCount(1)
   await expect(page.getByRole('heading', { name: 'Kromka' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
