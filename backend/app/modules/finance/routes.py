@@ -15,9 +15,11 @@ from app.modules.finance.api import (
     finance_summary,
     get_client_statement,
     get_supplier_statement,
+    invoice_numbers_for,
     list_client_debts,
     list_expenses,
     list_incomes,
+    list_payable_supplier_invoices,
     list_supplier_debts,
     update_expense,
     update_income,
@@ -26,6 +28,7 @@ from app.modules.finance.api import (
     void_income,
     worker_production,
 )
+from app.modules.finance.contracts import Expense
 from app.modules.finance.schemas import (
     AdjustmentCreateRequest,
     CounterpartyAdjustmentResponse,
@@ -38,6 +41,7 @@ from app.modules.finance.schemas import (
     IncomeCreateRequest,
     IncomePatchRequest,
     IncomeResponse,
+    PayableInvoiceResponse,
     VoidLedgerRequest,
     WorkerProductionResponse,
 )
@@ -150,7 +154,7 @@ async def expenses_index(
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
-    return [ExpenseResponse.model_validate(row) for row in rows]
+    return await _expense_responses(db, rows)
 
 
 @router.post("/expenses", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
@@ -160,7 +164,7 @@ async def expenses_create(
     db: Session,
 ) -> ExpenseResponse:
     row = await create_expense(db, principal=principal, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
 
 
 @router.patch("/expenses/{expense_id}", response_model=ExpenseResponse)
@@ -171,7 +175,7 @@ async def expenses_update(
     db: Session,
 ) -> ExpenseResponse:
     row = await update_expense(db, principal=principal, expense_id=expense_id, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
 
 
 @router.post("/expenses/{expense_id}/void", response_model=ExpenseResponse)
@@ -182,7 +186,16 @@ async def expenses_void(
     db: Session,
 ) -> ExpenseResponse:
     row = await void_expense(db, principal=principal, expense_id=expense_id, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
+
+
+@router.get("/payable-invoices", response_model=list[PayableInvoiceResponse])
+async def payable_invoices_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+) -> list[PayableInvoiceResponse]:
+    return await list_payable_supplier_invoices(db, principal=principal, search=search)
 
 
 @router.get("/debts/suppliers", response_model=DebtListResponse)
@@ -298,6 +311,18 @@ async def production_show(
         date_to=end,
         branch_id=branch_id,
     )
+
+
+async def _expense_responses(db: Session, rows: list[Expense]) -> list[ExpenseResponse]:
+    """Expense rows plus the `K-…` label of whatever invoice each one pays."""
+
+    numbers = await invoice_numbers_for(db, expenses=rows)
+    return [
+        ExpenseResponse.model_validate(row).model_copy(
+            update={"invoice_no": numbers.get(row.invoice_id) if row.invoice_id else None}
+        )
+        for row in rows
+    ]
 
 
 def _period(date_from: date | None, date_to: date | None) -> tuple[date, date]:

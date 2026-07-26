@@ -19,7 +19,6 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import {
   formatDate,
   formatDateInputValue,
-  formatStockQuantity,
   formatTiyin,
   formatTiyinParts,
   parseSomToTiyin,
@@ -116,11 +115,13 @@ function balanceChip(balance: number) {
 
 function statementRowLabel(row: DebtStatementRow) {
   if (row.kind === 'delivery') {
-    const qty =
-      row.quantity !== null && row.display_unit
-        ? ` · ${formatStockQuantity(row.quantity, row.display_unit)}`
-        : ''
-    return `Kirim · ${row.material_name ?? 'Material'}${qty}`
+    // A delivery term is one faktura, at the grain the supplier quotes: its
+    // number, how many positions it carried, and any skidka/ustama on it.
+    const parts = [`Kirim · ${row.invoice_no ?? 'faktura'}`]
+    if (row.line_count !== null) parts.push(`${row.line_count} pozitsiya`)
+    if (row.discount_tiyin) parts.push(`skidka ${formatTiyin(row.discount_tiyin)}`)
+    if (row.surcharge_tiyin) parts.push(`ustama ${formatTiyin(row.surcharge_tiyin)}`)
+    return parts.join(' · ')
   }
   if (row.kind === 'payment') {
     if (row.order_number) return `To'lov · ${row.order_number}`

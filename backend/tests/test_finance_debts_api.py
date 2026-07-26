@@ -224,9 +224,12 @@ async def test_supplier_debt_fold_statement_and_voids(
         -4_500_000,
         -4_000_000,
     ]
+    # A delivery term is now one invoice, not one stock-in line: same money,
+    # the grain the supplier's own document is written in.
     assert body["rows"][1]["amount_tiyin"] == -10_300_000
-    assert body["rows"][1]["quantity"] == 20
-    assert body["rows"][1]["display_unit"] == "panel"
+    assert body["rows"][1]["invoice_no"] == "K-0001"
+    assert body["rows"][1]["line_count"] == 1
+    assert body["rows"][1]["discount_tiyin"] == 0
     assert body["opening_balance_tiyin"] == 0
     assert body["closing_balance_tiyin"] == -4_000_000
     assert body["current_balance_tiyin"] == -4_000_000

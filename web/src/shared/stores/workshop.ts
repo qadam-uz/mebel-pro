@@ -150,6 +150,50 @@ export interface StockTransaction {
   created_at: string
 }
 
+export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export interface SupplierInvoiceLine {
+  transaction_id: string
+  material_id: string
+  material_name: string
+  kind: MaterialKind
+  display_unit: string
+  quantity: number
+  unit_price_tiyin: number | null
+  total_price_tiyin: number | null
+  note: string | null
+}
+
+export interface SupplierInvoice {
+  id: string
+  workshop_id: string
+  branch_id: string
+  branch_name: string | null
+  supplier_id: string | null
+  supplier_name: string | null
+  invoice_no: string
+  invoice_date: string
+  subtotal_tiyin: number
+  discount_tiyin: number
+  surcharge_tiyin: number
+  total_tiyin: number
+  note: string | null
+  line_count: number
+  paid_tiyin: number
+  outstanding_tiyin: number
+  payment_status: InvoicePaymentStatus
+  recorded_by_user_id: string
+  recorded_by_name: string | null
+  created_at: string
+  lines: SupplierInvoiceLine[]
+}
+
+export interface SupplierInvoiceFilters {
+  supplier_id?: string | null
+  search?: string | null
+  payment_status?: InvoicePaymentStatus | null
+}
+
 export interface StockLastPrice {
   unit_price_tiyin: number | null
   recorded_at: string | null
@@ -200,6 +244,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
+  const supplierInvoices = ref<SupplierInvoice[]>([])
   const users = ref<WorkshopUser[]>([])
   const selectedUser = ref<WorkshopUser | null>(null)
   const sessions = ref<SessionResponse[]>([])
@@ -525,12 +570,25 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
+  async function loadSupplierInvoices(id: string, filters: SupplierInvoiceFilters = {}) {
+    supplierInvoices.value = await api.get<SupplierInvoice[]>(
+      withQuery('/workshop/inventory/invoices', {
+        branch_id: id,
+        supplier_id: filters.supplier_id,
+        search: filters.search,
+        payment_status: filters.payment_status,
+      }),
+      authInit(),
+    )
+  }
+
   function clearInventory() {
     suppliers.value = []
     stockItems.value = []
     lowStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
+    supplierInvoices.value = []
     inventoryError.value = null
     inventoryTraceId.value = null
   }
@@ -580,6 +638,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       }),
       authInit(),
     )
+  }
+
+  // One arrival document and all its lines, committed together server-side.
+  // The stock and transaction views are refreshed after it so the page never
+  // shows a half-applied arrival.
+  async function createSupplierInvoice(id: string, payload: unknown) {
+    const invoice = await api.post<SupplierInvoice>(
+      '/workshop/inventory/invoices',
+      { ...(payload as object), branch_id: id },
+      authInit(),
+    )
+    supplierInvoices.value = [invoice, ...supplierInvoices.value]
+    await loadStock(id).catch(() => undefined)
+    if ((payload as { supplier?: unknown }).supplier) await loadSuppliers(id).catch(() => undefined)
+    return invoice
   }
 
   async function recordStockIn(id: string, payload: unknown) {
@@ -878,6 +951,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
+    supplierInvoices,
     users,
     selectedUser,
     sessions,
@@ -916,12 +990,14 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loadStockValue,
     loadStockTransactions,
     loadSuppliers,
+    loadSupplierInvoices,
     loadInventory,
     clearInventory,
     createSupplier,
     updateSupplier,
     setSupplierStatus,
     fetchMaterialLastPrice,
+    createSupplierInvoice,
     recordStockIn,
     recordAdjustment,
     loadUsers,

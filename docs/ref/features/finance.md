@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 55
 ---
 
@@ -67,6 +67,15 @@ Money the workshop spent — rent, utilities, consumables it buys, and **staff s
 - **Record an expense** — `branch_id` (nullable; a workshop-level cost like HQ rent has no
   branch), `category`, `amount_tiyin`, `incurred_on`, `description`, optional `vendor`,
   optional receipt scan. The recording user is logged.
+- **Record an invoice payment** — the same operation with a
+  [supplier invoice](../entities/inventory.md#supplier-invoice) named instead of a branch and
+  a supplier: both are taken from the invoice. Category defaults to `raw_materials` and stays
+  editable — invoices almost always carry materials, but some shops book deliveries as
+  `supplies`, and forcing it would be worse than defaulting it. Paying more than the
+  outstanding balance succeeds; the caller is warned, not blocked.
+- **List payable invoices** — unpaid and partially paid invoices across the workshop's
+  branches, newest first, searchable by invoice number and supplier name. This is what the
+  expense form's picker reads.
 - **Edit an expense** — only while `recorded`; audited.
 - **Void an expense** — `status = voided` with a **mandatory reason**. Voided expenses are
   excluded from reports. No delete.
@@ -118,7 +127,7 @@ paired with text.
 The two folds:
 
 > supplier balance = Σ payments (recorded expenses linked to the supplier)
-> − Σ deliveries (priced stock-ins from the supplier)
+> − Σ deliveries (supplier invoice totals, post discount and surcharge)
 > ± Σ adjustments (recorded, signed)
 >
 > client balance = Σ order totals (status `confirmed` → `completed`, never `new` or `cancelled`)
@@ -136,11 +145,16 @@ trust the numbers).
 
 Three sources feed the supplier side:
 
-- **Deliveries** — `stock_in` transactions carrying a purchase total
-  ([`inventory.md`](../entities/inventory.md)). Pre-pricing history rows carry no price
-  and contribute zero — a supplier's true position on go-live day is entered as one
-  opening-balance adjustment, not backfilled.
-- **Payments** — any `recorded` expense with a `supplier_id`, whatever its category.
+- **Deliveries** — [supplier invoices](../entities/inventory.md#supplier-invoice), folded at
+  `total_tiyin`, i.e. **after** the discount the supplier put on the document. This is the
+  grain the conversation actually happens in: an accountant negotiates in invoice totals, and
+  summing raw line prices can never see a document-level discount, so the number here and the
+  number the supplier quotes would never agree. An invoice with no supplier takes no part.
+  Arrivals recorded before pricing shipped total zero — a supplier's true position on go-live
+  day is entered as one opening-balance adjustment, not backfilled.
+- **Payments** — any `recorded` expense with a `supplier_id`, whatever its category. That
+  covers both ways of paying a supplier, because an invoice payment copies the supplier from
+  the invoice: against a specific faktura, or as a bare advance.
 - **Adjustments** — the signed
   [counterparty adjustment](../entities/finance.md#counterparty-adjustment): opening
   balances and events that are neither a delivery nor a payment (discounts, returns,
@@ -158,7 +172,7 @@ then money, then corrections).
 
 **Accounting model — hybrid on purpose.** The finance summary stays **cash-basis**; debts
 are an **accrual overlay**. A delivery of materials is *not* an expense — the expense
-happens when cash leaves. Nothing double-counts: a stock-in's value feeds only the debt
+happens when cash leaves. Nothing double-counts: an invoice's value feeds only the debt
 fold; a payment feeds both the expense summary and the fold. Shipping debts changes zero
 existing report semantics.
 
@@ -202,14 +216,28 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     picker scoped to the context branch; amount; method; date; note; receipt). An
     order payment derives its branch from the picked order server-side. Row actions: Edit
     (modal) · Void (dialog with a mandatory reason). No Delete.
-  - *Expenses* — table: date, category, vendor, amount, description (first 60
-    chars), receipt indicator, status, action menu. Filters: date range, category,
-    status, min / max amount. **+ Expense** → modal form (category, amount, date,
-    an optional **supplier picker** that links the expense into the supplier's debt fold
-    and fills the vendor text with the supplier's name when blank, free-text vendor,
-    description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
-    that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
-    Edit (modal) · Void (dialog with a mandatory reason). No Delete.
+  - *Expenses* — table: date, category, vendor (with the `K-…` of the invoice paid, when
+    there is one), amount, description (first 60 chars), receipt indicator, status, action
+    menu. Filters: date range, category, status, min / max amount. **+ Expense** → modal
+    form opening on a **Turi** toggle, *Kirim to'lovi* | *Boshqa xarajat*, mirroring the
+    income form's *Buyurtma to'lovi* | *Boshqa tushum*. Both sides of the ledger then read
+    the same way: money in is against an order or it's misc, money out is against an invoice
+    or it's misc.
+    - *Kirim to'lovi* — an invoice picker offering only unpaid and partial fakturas, each
+      row showing number · supplier · date · branch · position count, with the **outstanding
+      balance prominent in the danger colour** and the invoice total demoted beneath it.
+      Supplier and branch leave the form and are shown as a read-only strip; category, amount
+      and date remain. A **Qoldiq** button fills the amount with the remaining balance, and an
+      amount above it raises an inline advance warning without blocking the save.
+    - *Boshqa xarajat* — category, amount, date, an optional **supplier picker** that links
+      the expense into the supplier's debt fold and fills the vendor text with the supplier's
+      name when blank, free-text vendor, description, receipt, and — owner only — an
+      *Ustaxona darajasida* checkbox that records the cost workshop-level with no branch, the
+      HQ-rent case.
+
+    Editing never changes which faktura the money paid: the toggle and the picker are
+    read-only on an edit. Row actions: Edit (modal) · Void (dialog with a mandatory reason).
+    No Delete.
 - **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page,
   two tabs: **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
   directions), search, the "only with debt" toggle (default on), and per-row balances in

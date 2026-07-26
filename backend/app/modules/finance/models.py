@@ -59,7 +59,11 @@ class Expense(UUIDPrimaryKey, Timestamped, Base):
     incurred_on: Mapped[date] = mapped_column(nullable=False)
     description: Mapped[str] = mapped_column(nullable=False)
     vendor: Mapped[str | None]
+    # `supplier_id` stays populated even when the expense pays an invoice — it is
+    # copied from the invoice — so the payments side of the supplier balance is
+    # identical for a faktura payment and a bare advance.
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("supplier_invoices.id"))
     receipt_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id"))
     status: Mapped[LedgerStatus] = mapped_column(
         enum_type(LedgerStatus, "ledger_status"),

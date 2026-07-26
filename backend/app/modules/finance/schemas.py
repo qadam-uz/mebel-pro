@@ -6,7 +6,13 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import ExpenseCategory, IncomeType, LedgerStatus, MoneyMethod
+from app.models.enums import (
+    ExpenseCategory,
+    IncomeType,
+    InvoicePaymentStatus,
+    LedgerStatus,
+    MoneyMethod,
+)
 from app.schemas.common import APIModel
 
 
@@ -31,6 +37,9 @@ class IncomePatchRequest(BaseModel):
 
 
 class ExpenseCreateRequest(BaseModel):
+    """A cost. With `invoice_id` set it is a payment against a supplier faktura,
+    and supplier + branch are taken from the invoice, not from the caller."""
+
     branch_id: uuid.UUID | None = None
     category: ExpenseCategory
     amount_tiyin: int
@@ -38,6 +47,7 @@ class ExpenseCreateRequest(BaseModel):
     description: str
     vendor: str | None = None
     supplier_id: uuid.UUID | None = None
+    invoice_id: uuid.UUID | None = None
     receipt_file_id: uuid.UUID | None = None
 
 
@@ -86,6 +96,8 @@ class ExpenseResponse(APIModel):
     description: str
     vendor: str | None
     supplier_id: uuid.UUID | None
+    invoice_id: uuid.UUID | None
+    invoice_no: str | None = None
     receipt_file_id: uuid.UUID | None
     status: LedgerStatus
     voided_reason: str | None
@@ -94,6 +106,23 @@ class ExpenseResponse(APIModel):
     voided_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class PayableInvoiceResponse(APIModel):
+    """One row of the expense form's invoice picker — what is still owed on it."""
+
+    id: uuid.UUID
+    invoice_no: str
+    invoice_date: date
+    supplier_id: uuid.UUID | None
+    supplier_name: str | None
+    branch_id: uuid.UUID
+    branch_name: str | None
+    line_count: int
+    total_tiyin: int
+    paid_tiyin: int
+    outstanding_tiyin: int
+    payment_status: InvoicePaymentStatus
 
 
 class FinanceBranchSummary(APIModel):
@@ -171,8 +200,9 @@ class DebtStatementRow(APIModel):
     """One dated statement line with the running balance after it.
 
     `amount_tiyin` is the signed fold term (positive = their debt grew).
-    Optional detail fields depend on `kind`: deliveries carry material info,
-    payments carry the money detail, orders carry the order number.
+    Optional detail fields depend on `kind`: deliveries carry the invoice
+    (number, line count, and the document's own skidka/ustama), payments carry
+    the money detail, orders carry the order number.
     """
 
     kind: str
@@ -182,9 +212,10 @@ class DebtStatementRow(APIModel):
     amount_tiyin: int
     balance_after_tiyin: int
     note: str | None = None
-    material_name: str | None = None
-    quantity: int | None = None
-    display_unit: str | None = None
+    invoice_no: str | None = None
+    line_count: int | None = None
+    discount_tiyin: int | None = None
+    surcharge_tiyin: int | None = None
     category: ExpenseCategory | None = None
     method: MoneyMethod | None = None
     order_number: str | None = None

@@ -120,6 +120,14 @@ class LedgerStatus(StrEnum):
     VOIDED = "voided"
 
 
+class InvoicePaymentStatus(StrEnum):
+    """How far a supplier invoice is settled — derived at read time, never stored."""
+
+    UNPAID = "unpaid"
+    PARTIAL = "partial"
+    PAID = "paid"
+
+
 class ExpenseCategory(StrEnum):
     RENT = "rent"
     UTILITIES = "utilities"
