@@ -484,11 +484,9 @@ async function choose(result: CuttingResult) {
                 type="button"
                 class="mp-button mp-button-outline w-full"
                 :disabled="cutting.downloadingId === chosenResult.id"
-                @click="cutting.downloadClientPdf(chosenResult.id)"
+                @click="cutting.openClientPdf(chosenResult.id)"
               >
-                {{
-                  cutting.downloadingId === chosenResult.id ? 'Yuklanmoqda…' : 'PDF yuklab olish'
-                }}
+                {{ cutting.downloadingId === chosenResult.id ? 'Ochilmoqda…' : 'PDF ochish' }}
               </button>
               <RouterLink
                 v-if="draft.chosen_result_id"

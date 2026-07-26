@@ -9,7 +9,7 @@ vi.mock('@/shared/app/authInit', () => ({
 }))
 
 vi.mock('@/shared/app/downloadBlob', () => ({
-  downloadBlob: vi.fn(),
+  openBlobInNewTab: vi.fn(),
 }))
 
 vi.mock('@/shared/api/client', () => {

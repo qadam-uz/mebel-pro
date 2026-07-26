@@ -186,7 +186,7 @@ async def client_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_client_result(db, principal=principal, result_id=result_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
 
 
@@ -332,7 +332,7 @@ async def workshop_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_workshop_result(db, principal=principal, result_id=result_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
 
 

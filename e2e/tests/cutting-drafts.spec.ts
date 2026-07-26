@@ -443,9 +443,11 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
 
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'PDF yuklab olish' }).click()
-  expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
+  // QAD-160: the PDF opens in a new tab (blob URL) instead of downloading.
+  const popup = page.waitForEvent('popup')
+  await page.getByRole('button', { name: 'PDF ochish' }).click()
+  const pdfTab = await popup
+  await expect.poll(() => pdfTab.url()).toMatch(/^blob:/)
 })
 
 test('client resumes a saved cutting draft after reload and from the drafts list', async ({

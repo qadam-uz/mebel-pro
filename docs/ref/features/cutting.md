@@ -502,7 +502,14 @@ then order summary.
    cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
    available, it asks the user to select one instead of inventing a price.
    - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
-   - **Download PDF** — the print-ready cutting document for the saw operator. It is fixed
+   - **PDF ochish** — the print-ready cutting document for the saw operator, opened in a new
+     browser tab rather than saved to disk: the reader wants to look at or print the plan, and
+     the browser's own viewer already offers both plus a download. Every PDF entry point
+     behaves this way; there is no separate download action. The endpoints are Bearer-authed,
+     so the client fetches the bytes with its access token and hands the tab an object URL —
+     the tab is opened synchronously in the click handler, because a popup opened after an
+     await is blocked. A blocked popup surfaces a message telling the user to allow popups; it
+     never silently falls back to downloading. The document is fixed
      A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
      identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
@@ -563,7 +570,7 @@ routes on to checkout once a result is picked); a per-row delete discards it wit
 confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via **+ Yangi
 buyurtma**) / error, each recoverable.
 
-An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
+An order's **Cutting** tab embeds the SVG of the order's confirmed result and a button that opens the PDF in a new tab.
 
 ## Edge cases
 

@@ -1447,9 +1447,9 @@ onBeforeUnmount(() => {
             type="button"
             class="mp-button mp-button-outline w-full"
             :disabled="orders.downloadingId === order.id"
-            @click="orders.downloadWorkshopPdf(order.id)"
+            @click="orders.openWorkshopPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'Chizma (PDF)' }}
+            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizma (PDF)' }}
           </button>
         </template>
         <div v-else class="st-empty !border-0 !py-6">
