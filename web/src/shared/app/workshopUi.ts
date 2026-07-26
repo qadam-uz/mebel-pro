@@ -93,6 +93,29 @@ export function initials(name: string | null | undefined, fallback = 'MP') {
     .join('')
 }
 
+/** Longest slug we prefill; a prefix that eats the field helps nobody. */
+const LOGIN_PREFIX_MAX = 12
+
+/**
+ * Suggest a login prefix from the workshop name — "Mebel Pro" → `mebelpro_`.
+ * Logins are unique across the whole platform, so an unprefixed `admin` is
+ * usually already taken; steering the owner toward a workshop-shaped name
+ * avoids the collision. Purely a suggestion: the field stays fully editable.
+ */
+export function loginPrefix(workshopName: string | null | undefined) {
+  if (!workshopName) return ''
+  const slug = workshopName
+    .toLowerCase()
+    // Decompose so an accented letter keeps its ASCII base once the marks go;
+    // everything else non-alphanumeric (spaces, punctuation, the turned comma
+    // in o‘/g‘) simply drops.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, LOGIN_PREFIX_MAX)
+  return slug ? `${slug}_` : ''
+}
+
 export const workshopErrorMessages: Record<string, string> = {
   permission_denied: "Bu amal uchun ruxsatingiz yo'q.",
   order_action_failed: "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",

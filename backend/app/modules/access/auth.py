@@ -113,27 +113,11 @@ async def authenticate_workshop_user(
     device_info: dict[str, Any] | None = None,
     now: datetime | None = None,
 ) -> AuthSessionResult:
-    # Workshop logins are unique per workshop, not globally, so the login alone
-    # can't name the workshop. Resolve it with the password: among the accounts
-    # sharing this login, the one whose password matches is the user. Exactly one
-    # match authenticates; with none, a lone account still records the failed
-    # attempt (so lockout holds) while a shared login can't be locked by guesses;
-    # a duplicate match (same login AND password in two workshops) stays generic.
-    candidates = (
-        await db.scalars(
-            select(WorkshopUser).where(func.lower(WorkshopUser.login) == _normalized(login))
-        )
-    ).all()
-    matched = [
-        candidate for candidate in candidates if verify_password(password, candidate.password_hash)
-    ]
-    user: WorkshopUser | None
-    if len(matched) == 1:
-        user = matched[0]
-    elif not matched and len(candidates) == 1:
-        user = candidates[0]
-    else:
-        user = None
+    # Workshop logins are globally unique, so the login alone names the account
+    # and the workshop follows from it — one lookup, one password verification.
+    user = await db.scalar(
+        select(WorkshopUser).where(func.lower(WorkshopUser.login) == _normalized(login))
+    )
     workshop = await db.get(Workshop, user.workshop_id) if user is not None else None
     return await _authenticate_user(
         db,
@@ -215,6 +199,10 @@ async def _authenticate_user(
     if not password_valid:
         if user.status is UserStatus.ACTIVE and not is_locked(state, now=current):
             _set_login_state(user, record_login_failure(state, now=current))
+            # The 401 raised below unwinds the request session, and the counter
+            # would roll back with it — leaving every attempt "the first one" and
+            # the lockout permanently out of reach. Commit the failure first.
+            await db.commit()
         raise _invalid_credentials()
 
     if is_locked(state, now=current):

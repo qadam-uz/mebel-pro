@@ -151,7 +151,7 @@ async def create_user(
 ) -> CreatedWorkshopUser:
     workshop_id = require_workshop_owner(principal)
     login = _required_text(payload.login, "login_required")
-    if await _login_exists(db, workshop_id=workshop_id, login=login):
+    if await _login_exists(db, login=login):
         raise APIError("login_exists", "Login already exists", status_code=status.HTTP_409_CONFLICT)
     home_branch_id = await _validate_home_branch(db, workshop_id, payload.home_branch_id)
     temp_password = payload.temp_password or generate_temp_password()
@@ -205,11 +205,7 @@ async def update_user(
         user.phone = normalize_uz_phone(payload.phone)
     if payload.login is not None:
         login = _required_text(payload.login, "login_required")
-        if login.lower() != user.login.lower() and await _login_exists(
-            db,
-            workshop_id=user.workshop_id,
-            login=login,
-        ):
+        if login.lower() != user.login.lower() and await _login_exists(db, login=login):
             raise APIError(
                 "login_exists",
                 "Login already exists",
@@ -539,12 +535,10 @@ async def _validate_grant_branches(
         )
 
 
-async def _login_exists(db: AsyncSession, *, workshop_id: uuid.UUID, login: str) -> bool:
+async def _login_exists(db: AsyncSession, *, login: str) -> bool:
+    """Workshop logins are unique across the whole platform, not per workshop."""
     existing = await db.scalar(
-        select(WorkshopUser.id).where(
-            WorkshopUser.workshop_id == workshop_id,
-            func.lower(WorkshopUser.login) == login.lower(),
-        )
+        select(WorkshopUser.id).where(func.lower(WorkshopUser.login) == login.lower())
     )
     return existing is not None
 

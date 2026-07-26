@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   dashboardFailureLine,
+  loginPrefix,
   stockTransactionTypeLabel,
   workshopDraftStatus,
   workshopErrorMessage,
@@ -12,6 +13,19 @@ describe('workshop UI helpers', () => {
     expect(workshopErrorMessage('order_version_conflict')).toContain('Buyurtma boshqa joyda')
     expect(workshopErrorMessage('permission_denied')).not.toContain('permission_denied')
     expect(workshopErrorMessage('expense_save_failed')).not.toContain('expense_save_failed')
+  })
+
+  it('suggests a login prefix from the workshop name', () => {
+    expect(loginPrefix('Mebel Pro')).toBe('mebelpro_')
+    expect(loginPrefix('Mebel Master')).toBe('mebelmaster_')
+    // Non-ASCII letters keep their base; apostrophes and punctuation drop.
+    expect(loginPrefix("O'zbek Mebel")).toBe('ozbekmebel_')
+    expect(loginPrefix('Sätz & Söhne')).toBe('satzsohne_')
+    // Capped, so the suggestion never fills the field on its own.
+    expect(loginPrefix('Toshkent Mebel Fabrikasi')).toBe('toshkentmebe_')
+    // Nothing to slugify → no prefix at all, rather than a bare underscore.
+    expect(loginPrefix('«»')).toBe('')
+    expect(loginPrefix(null)).toBe('')
   })
 
   it('hides unknown raw codes behind a generic recovery message', () => {

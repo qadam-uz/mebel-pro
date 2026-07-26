@@ -40,12 +40,9 @@ class PlatformUser(UUIDPrimaryKey, Timestamped, Base):
 class WorkshopUser(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "workshop_users"
     __table_args__ = (
-        Index(
-            "uq_workshop_users_workshop_login_ci",
-            "workshop_id",
-            func.lower(text("login")),
-            unique=True,
-        ),
+        # Globally unique, not per workshop: the login alone must name exactly one
+        # account, so sign-in is a single lookup and the per-account lockout holds.
+        Index("uq_workshop_users_login_ci", func.lower(text("login")), unique=True),
         Index(
             "uq_workshop_users_one_owner_per_workshop",
             "workshop_id",

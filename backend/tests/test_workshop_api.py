@@ -433,6 +433,32 @@ async def test_owner_updates_staff_profile_fields(
     assert duplicate.json()["code"] == "login_exists"
 
 
+async def test_staff_login_collides_across_workshops(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Logins are unique platform-wide, so the second workshop to reach for a name
+    # is refused — the owner sees a specific `login_exists`, never a 500.
+    owner_access, branch_id = await _owner_login(client, db_session)
+    await seed_workshop_with_owner(db_session, login="taken")
+
+    collision = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Office Staff",
+            "phone": "+998906060606",
+            "login": "TAKEN",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [],
+        },
+    )
+
+    assert collision.status_code == 409
+    assert collision.json()["code"] == "login_exists"
+
+
 async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
     client: AsyncClient,
     db_session: AsyncSession,

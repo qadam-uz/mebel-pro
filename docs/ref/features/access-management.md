@@ -15,26 +15,24 @@ and how the surfaces look in the three apps.
 ## Workshop & platform user sign-in
 
 Platform users sign in with login + password. Workshop users also sign in with login +
-password. Workshop-user login is case-insensitive and unique only inside one workshop, so the
-backend resolves the submitted login by checking the password across same-login accounts:
-exactly one password match authenticates, no match fails, and more than one match fails as
-ambiguous. The error on a bad pair is a **generic** "login or password is
-incorrect" — no account-existence oracle. **Five consecutive bad attempts → a 15-minute
+password. Workshop-user login is case-insensitive and **unique across the whole platform**, so
+the login alone names exactly one account and the workshop follows from it — sign-in is a single
+lookup plus one password verification, never a scan across same-login candidates. The error on a
+bad pair is a **generic** "login or password is incorrect" — no account-existence oracle. **Five consecutive bad attempts → a 15-minute
 lockout** (`locked_until`); a correct password resets the counter. Passwords are argon2 /
 bcrypt-hashed at rest; complexity ≥ 8 chars with at least one upper, one lower, one digit.
 
 `account_locked` and `account_blocked` are returned only after the submitted credential pair is
-otherwise valid. Unknown login, wrong password, wrong password for a locked account, wrong
-password for a blocked account, and ambiguous same-login / same-password matches all return the
-same generic credential error.
+otherwise valid. Unknown login, wrong password, wrong password for a locked account, and wrong
+password for a blocked account all return the same generic credential error.
 
 Failed password attempts are also **throttled per client IP**: too many credential misses inside
 a sliding window (default 20 per 15 min) → `login_rate_limited` (429) with a
 `retry_after_seconds`, and while an IP is tripped even valid credentials from it are refused.
 Only credential misses count, a success never resets the budget (one valid login can't launder
 brute-force budget for its IP), and both password sign-in surfaces share one bucket. This
-covers what the per-account lockout can't: a login shared across workshops records no
-per-account failure, and guessing rotated across many accounts stays under each lockout. The
+covers what the per-account lockout can't: guessing rotated across many accounts stays under
+each account's lockout threshold. The
 counter is in-memory and process-local (the app runs as a single instance; the account lockout
 remains the durable backstop across restarts) and is env-tunable via `LOGIN_IP_THROTTLE_*`
 settings. Like the OTP per-IP budgets, it needs the deploy's trusted-proxy config
@@ -373,10 +371,11 @@ grants at least one active branch permission.
 
 - **Create-workshop fails after the workshop row but before the owner row** — the whole
   operation rolls back (atomic).
-- **Owner login collides** with an existing owner login in another workshop — allowed because
-  logins are unique per workshop, not globally. If the same login also has the same password in
-  more than one workshop, sign-in rejects it as ambiguous until one password differs.
-- **Login collision within the same workshop** — rejected.
+- **Login collides with any existing workshop login** — rejected with `login_exists` (409),
+  whether the holder is in this workshop or another one. The create-user form surfaces it inline
+  on the login field ("Bu login band. Boshqa login tanlang.") and prefills a workshop-derived
+  prefix (a slug of the workshop name + `_`) to steer owners away from the obvious collisions.
+  The prefix is a suggestion only — fully editable and clearable, with no enforced format.
 - **Block a workshop while staff are mid-action** — their next request 401s; the platform
   operator can still read the workshop's data for incident response.
 - **A staff member's only granted branch goes `inactive`** — they effectively have no

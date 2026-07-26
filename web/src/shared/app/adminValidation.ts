@@ -89,7 +89,7 @@ function apiValidationMessage(code: string | null): string {
     case 'invalid_current_password':
       return "Joriy parol noto'g'ri."
     case 'login_exists':
-      return 'Bu login band.'
+      return 'Bu login band. Boshqa login tanlang.'
     case 'manufacturer_name_exists':
       return 'Bu ishlab chiqaruvchi allaqachon bor.'
     case 'weak_password':

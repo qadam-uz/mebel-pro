@@ -37,8 +37,12 @@ async def _platform_access(db_session: AsyncSession) -> str:
     return tokens.access_token
 
 
-async def _owner_fixture(db_session: AsyncSession) -> tuple[str, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+async def _owner_fixture(
+    db_session: AsyncSession,
+    *,
+    login: str = "owner",
+) -> tuple[str, uuid.UUID, uuid.UUID]:
+    workshop, branch, owner = await seed_workshop_with_owner(db_session, login=login)
     owner.password_reset_required = False
     tokens = await create_session(
         db_session,
@@ -424,7 +428,7 @@ async def test_adjustment_validation_and_scope(
     db_session: AsyncSession,
 ) -> None:
     owner_access, workshop_id, branch_id = await _owner_fixture(db_session)
-    other_owner_access, _, other_branch_id = await _owner_fixture(db_session)
+    other_owner_access, _, other_branch_id = await _owner_fixture(db_session, login="owner_b")
     supplier = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/suppliers",
         headers=_auth(owner_access),

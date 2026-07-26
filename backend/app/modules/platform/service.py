@@ -243,6 +243,8 @@ async def provision_workshop(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         ) from exc
     owner_login = _required_text(payload.owner.login, "owner_login_required")
+    if await _workshop_login_exists(db, login=owner_login):
+        raise APIError("login_exists", "Login already exists", status_code=status.HTTP_409_CONFLICT)
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
     workshop = Workshop(
@@ -957,6 +959,14 @@ async def list_platform_status_change_logs(
 async def _platform_login_exists(db: AsyncSession, *, login: str) -> bool:
     existing = await db.scalar(
         select(PlatformUser.id).where(func.lower(PlatformUser.login) == login.lower())
+    )
+    return existing is not None
+
+
+async def _workshop_login_exists(db: AsyncSession, *, login: str) -> bool:
+    """Workshop logins are unique platform-wide, so a new owner can collide with any workshop."""
+    existing = await db.scalar(
+        select(WorkshopUser.id).where(func.lower(WorkshopUser.login) == login.lower())
     )
     return existing is not None
 
