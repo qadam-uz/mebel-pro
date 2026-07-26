@@ -5008,6 +5008,20 @@
     text-transform: uppercase;
   }
 
+  /* Why a ProjectDropdown is inert — sits BESIDE the disabled trigger (workshop
+     topbar on pages the branch context doesn't reach) so the row keeps its
+     height and the topbar doesn't jump between routes. Clamped so a long hint
+     can't crowd out the search field next to it. */
+  .mp-dd-hint {
+    max-width: 15rem;
+    overflow: hidden;
+    color: var(--color-ink-muted);
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Toggle chip used as a boolean filter (e.g. low-stock only). Sits in a
      `.mp-filters` row; margin-top drops it to the control baseline, skipping the
      18px caption row the labelled controls carry. */
@@ -5652,10 +5666,17 @@
     .workshop-branch-dd {
       order: 3;
       flex-basis: 100%;
+      flex-wrap: wrap;
     }
 
     .workshop-branch-dd > button {
       width: 100%;
+    }
+
+    /* The phone topbar already stacks, so the scope hint drops under the
+       full-width trigger instead of competing with it for the row. */
+    .workshop-branch-dd > .mp-dd-hint {
+      max-width: 100%;
     }
 
     .workshop-search-wrap {

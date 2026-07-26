@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 55
 ---
 
@@ -210,8 +210,10 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
     that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
     Edit (modal) · Void (dialog with a mandatory reason). No Delete.
-- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page,
-  two tabs: **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
+- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page.
+  Unlike the ledger above it is **workshop-wide**: a counterparty's balance spans every
+  branch, so the topbar picker renders inert here and says so. Two tabs:
+  **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
   directions), search, the "only with debt" toggle (default on), and per-row balances in
   words + color. A row opens the **statement** (akt sverka): date range via the shared
   picker, chronological rows with a running balance and an opening-balance row when a

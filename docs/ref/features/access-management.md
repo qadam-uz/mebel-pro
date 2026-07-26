@@ -488,6 +488,45 @@ Rules:
   trusts it anyway: create/list operations may submit a branch id, which the service validates
   against the grant set; operations on existing records derive the target branch from stored data.
 
+### Which pages the context reaches
+
+Not every screen is branch-scoped, and a picker that looks live while doing nothing is worse
+than no picker. Every workshop route **declares** its scope; the shell renders the picker from
+that declaration, so a new route has to state where it stands.
+
+| Scope | What it means | Picker | Pages |
+| --- | --- | --- | --- |
+| `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Saqlangan chizmalar · Kesish · Krom · Ombor · Material katalogi · Xodimlar · Tushum va xarajat · Xodimlar mehnati · Yangi buyurtma |
+| `workshop` | Workshop-wide by design | disabled, with the reason | Qarzdorlik · Sozlamalar · Filiallar · Bildirishnomalar · Profil |
+| `entity` | Takes its branch from the record on screen | disabled, with the reason | Buyurtma tafsilotlari · Chizma (ish) · Kesim chizmasi + natija + rasmiylashtirish · Filial tafsilotlari · Xodim tafsilotlari |
+
+`Qarzdorlik` is workshop-wide because debt is tracked per client across the workshop, not per
+branch. An `entity` page must never let the topbar override the branch stored on the record —
+a cutting draft in particular is frozen to the branch it was started on, and the editor keeps
+its own in-page branch control for that reason. It seeds that control from the current context
+when the draft has no branch bound yet, so the user isn't asked twice for a choice they already
+made in the topbar.
+
+The picker is hidden entirely in a single-branch workshop: there is no choice to offer, and
+every page behaves as if that one branch is selected.
+
+### The route guard is branch-blind, deliberately
+
+Route requirements name permissions, never a branch: a grant on *any* branch satisfies a
+workshop route. **The frontend route layer is not part of branch isolation, and shouldn't
+be.** Every request re-derives the target branch server-side from the grant set and the stored
+record, so a route guard that also checked branches would be a second, weaker copy of a rule
+the server already enforces — and one that drifts. The guard's job is narrower: don't route a
+user to a screen they can hold no permission for. Branch scope is the server's.
+
+This leaves one asymmetry worth naming: global search *is* branch-scoped in the client — it
+reads the selected branch's permission list to decide which result sections to request. That's
+result shaping, not enforcement; the search endpoints re-derive scope like everything else.
+
+Revisit if a branch-scoped route ever needs to render before its first API call resolves — a
+guard would then be the only thing standing between the user and a flash of another branch's
+shell. Nothing does today.
+
 Zero-grant staff keep access to account controls: profile, password-reset gate, sessions, logout,
 and logout-everywhere. Branch-scoped navigation and work screens stay hidden / empty until the owner
 grants at least one active branch permission.

@@ -239,8 +239,9 @@ async def workshop_cutting_import_map_commit(
 async def workshop_cutting_drafts_index(
     principal: AccountReadyPrincipal,
     db: Session,
+    branch_id: uuid.UUID | None = None,
 ) -> list[WorkshopCuttingDraftSummary]:
-    return await list_workshop_drafts(db, principal=principal)
+    return await list_workshop_drafts(db, principal=principal, branch_id=branch_id)
 
 
 @router.post(

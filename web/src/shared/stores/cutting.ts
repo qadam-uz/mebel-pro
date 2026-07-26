@@ -336,15 +336,16 @@ export const useCuttingStore = defineStore('cutting', () => {
 
   // The workshop's unfinished walk-in drafts (saved but never ordered). Always a
   // workshop endpoint, so it doesn't go through scopedPath; delete reuses the
-  // scope-aware deleteDraft below.
+  // scope-aware deleteDraft below. `branchId` is the topbar branch context —
+  // omit it (or pass null) for the whole workshop.
   const workshopDrafts = ref<WorkshopDraftSummary[]>([])
-  async function loadWorkshopDrafts() {
+  async function loadWorkshopDrafts(branchId: string | null = null) {
     loading.value = true
     error.value = null
     traceId.value = null
     try {
       workshopDrafts.value = await api.get<WorkshopDraftSummary[]>(
-        '/workshop/cutting-drafts',
+        withQuery('/workshop/cutting-drafts', { branch_id: branchId }),
         authInit(),
       )
     } catch (errorValue) {

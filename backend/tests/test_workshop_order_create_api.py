@@ -25,7 +25,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import seed_workshop_with_owner
+from tests.factories import default_working_hours, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -553,3 +553,49 @@ async def test_workshop_saved_drafts_index_scope_and_lifecycle(
     after = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(access_a))
     assert after.status_code == 200
     assert after.json() == []
+
+
+async def test_workshop_saved_drafts_index_filters_by_branch(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The saved-drafts surface follows the app's branch context (QAD-148): a
+    draft is frozen to the branch it was started on, so `branch_id` narrows the
+    list to that branch and omitting it still returns the whole workshop."""
+    access, workshop_id, chilonzor, _ = await _priced_workshop(db_session)
+    yunusobod = Branch(
+        workshop_id=workshop_id,
+        name="Yunusobod-2",
+        address="Tashkent, Yunusobod",
+        phone="+998904444444",
+        latitude=Decimal("41.365"),
+        longitude=Decimal("69.285"),
+        working_hours=default_working_hours(),
+    )
+    db_session.add(yunusobod)
+    await db_session.flush()
+
+    walk_in = await _resolve_client(client, access, phone="+998901115577", name="Walk-in Aziza")
+    here = await client.post(
+        "/api/v1/workshop/cutting-drafts",
+        headers=_auth(access),
+        json={"client_id": walk_in, "branch_id": str(chilonzor)},
+    )
+    assert here.status_code == 201, here.text
+    there = await client.post(
+        "/api/v1/workshop/cutting-drafts",
+        headers=_auth(access),
+        json={"client_id": walk_in, "branch_id": str(yunusobod.id)},
+    )
+    assert there.status_code == 201, there.text
+
+    unfiltered = await client.get("/api/v1/workshop/cutting-drafts", headers=_auth(access))
+    assert unfiltered.status_code == 200
+    assert {row["id"] for row in unfiltered.json()} == {here.json()["id"], there.json()["id"]}
+
+    scoped = await client.get(
+        f"/api/v1/workshop/cutting-drafts?branch_id={yunusobod.id}", headers=_auth(access)
+    )
+    assert scoped.status_code == 200, scoped.text
+    assert [row["id"] for row in scoped.json()] == [there.json()["id"]]
+    assert scoped.json()[0]["preferred_branch_id"] == str(yunusobod.id)
