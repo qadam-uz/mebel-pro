@@ -880,7 +880,7 @@ async def test_workshop_map_import_commit_requires_branch_manage_orders_grant(
         db_session,
         workshop_id=workshop_id,
         branch_id=branch_id,
-        permission=Permission.VIEW_DASHBOARD,
+        permission=Permission.VIEW_ORDERS,
     )
     walk_in = Client(phone="+998901111043", name="Walk-in client")
     db_session.add(walk_in)

@@ -265,7 +265,7 @@ permission on every branch implicitly, plus owner-only carve-outs.
 
 | Permission             | Grants on the granted branch                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `view_dashboard`       | see the branch's dashboard / KPIs / order summary                                                                                                                                                                                                                                                                                                                                                       |
+| `view_orders`          | **read-only** access to the branch's orders — list, search, and open any order in the branch, including the client's name and phone, line prices, materials and production stamps. No action on them, and no dashboard section of its own. It was called `view_dashboard` until 2026-07; the name promised a KPI page while the grant handed over every order in the branch, so it was renamed to what it does. |
 | `manage_orders`        | the office side of the order workflow — verify / approve (`new → confirmed`), assign and re-assign the cutter / edger, apply discounts, complete a production job **on behalf** of an absent worker, **revert** one step on a mistake, cancel any pre-`completed` order with a reason, and **create a cutting draft + place an order on behalf of a walk-in client**, resolving them by phone ([Staff-resolved walk-ins](#staff-resolved-walk-ins-find-or-create)). Cannot do production work itself unless it also holds `process_production`. See [`orders.md`](orders.md).    |
 | `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
@@ -310,7 +310,10 @@ that **cannot be delegated to staff in v1**:
 - **Edit profile fields** — `full_name`, `phone`, `home_branch_id`.
 - **Set grants** — replaces the user's `permission_grant` rows atomically; each
   `(permission, branch)` is validated against the catalog and the workshop's branches. **The
-  new grants take effect on the user's next request** — no session revoke.
+  new grants take effect on the user's next request** — no session revoke. An open tab holding
+  the old set corrects itself the first time the server refuses it: the refused read drops the
+  rows it was refreshing, the app re-reads the principal and the branch context, and a page that
+  is no longer allowed redirects home.
 - **Reset password** — a temp password + `password_reset_required = true`; revokes the user's
   sessions.
 - **Block / unblock** — blocking revokes sessions immediately; unblocking does not restore
@@ -354,7 +357,7 @@ is a floor. Every place they diverge is listed below.
 
 | Permission             | Sidebar entries (group)                                                   |
 | ---------------------- | ------------------------------------------------------------------------- |
-| `view_dashboard`       | none                                                                      |
+| `view_orders`          | none — it is an order-read grant, and the board it reads needs `manage_orders` |
 | `manage_orders`        | Buyurtmalar (Boshqaruv)                                                   |
 | `process_production`   | Kesish · Krom (Ishlab chiqarish)                                          |
 | `manage_inventory`     | Ombor (Resurslar)                                                         |
@@ -365,10 +368,29 @@ is a floor. Every place they diverge is listed below.
 
 **Asosiy** (Boshqaruv) is shown to every signed-in workshop user, zero-grant staff included. It
 is the app's home path and the redirect target for every refused route, so it cannot be gated
-without first giving each principal its own landing page.
+without first giving each principal its own landing page. Because it is ungated, the dashboard
+carries the honest empty state instead: it names what the reader is missing whenever **no
+section of the page renders** — not only when the grant set is empty. A holder of
+`manage_catalog` alone has grants and still no dashboard card, and gets "nothing to show here,
+your work is elsewhere" plus a link to the catalog, rather than a bare heading and a refresh
+button.
 
 The collapsed icon rail renders the same item list — collapsing hides labels in CSS only — so a
 permission-hidden entry stays hidden and no tooltip names a page the user cannot open.
+
+### Links obey the target's requirement, not the card's
+
+A card, tile or back link is gated on the permission that **renders** it; the page it points at
+has its own, usually stricter, requirement. The two must be checked separately or the link
+bounces off the router guard straight back to `/workshop`. Every dashboard tile therefore
+renders as a plain tile — no anchor, no hover lift, no pointer cursor — when its target is out
+of reach, and each "more" link disappears rather than dangling. The rule lives in one place,
+`web/src/shared/app/workshopDashboard.ts`, which answers both questions side by side:
+`view_orders` renders the order cards but cannot open `/workshop/orders`;
+`view_finance_reports` renders the money tiles but cannot open the ledgers; the per-branch
+production tiles link only for the owner, since branch pages are owner-only. On an order screen
+the back link points at the orders board for `manage_orders` holders and at **Asosiy** for
+everyone else the page admits.
 
 ### What each route requires
 
@@ -377,7 +399,7 @@ permission-hidden entry stays hidden and no tooltip names a page the user cannot
 | `/workshop`                                                                                                                                                  | none                                                   |
 | `/workshop/profile` · `/workshop/notifications`                                                                                                              | none — account surfaces stay open to zero-grant staff  |
 | `/workshop/orders` · `/orders/new` · `/orders/new/cutting` · `/orders/cutting/:id` · `/orders/cutting/:id/result` · `/orders/new/:draft_id/checkout` · `/orders/drafts` · `/orders/edit/:draft_id/review` | `manage_orders`                                        |
-| `/workshop/orders/:order_id`                                                                                                                                 | `view_dashboard` · `manage_orders` · `process_production` |
+| `/workshop/orders/:order_id`                                                                                                                                 | `view_orders` · `manage_orders` · `process_production` |
 | `/workshop/cutting` · `/workshop/banding` · `/workshop/production/:order_id` (`/workshop/production` redirects into them)                                     | `process_production` · `manage_orders`                 |
 | `/workshop/inventory`                                                                                                                                        | `manage_inventory`                                     |
 | `/workshop/catalog`                                                                                                                                          | `manage_catalog`                                       |
@@ -393,7 +415,7 @@ them only on `process_production` — an order manager reaches Kesish / Krom by 
 
 | Grant on the **selected** branch          | Search section    |
 | ----------------------------------------- | ----------------- |
-| `view_dashboard` or `manage_orders`       | Buyurtmalar       |
+| `view_orders` or `manage_orders`          | Buyurtmalar       |
 | `manage_catalog`                          | Material katalogi |
 | `manage_inventory`                        | Ombor             |
 | owner only                                | Xodimlar          |
@@ -406,18 +428,21 @@ returning an empty result set.
 
 One probe user per permission, each holding exactly that grant on one branch, driven through
 every workshop route in a browser against the seeded demo world. `pass` means the cell matched
-the tables above; a `D` reference points at a known deviation below.
+the tables above; a `D` reference points at a known deviation below. The `owner`, `view_orders`,
+`manage_catalog`, `view_finance_reports` and `manage_inventory` rows were re-driven after the
+rename and the link fixes landed, including a live grant revocation against an open tab; the
+remaining rows carry the earlier walk, whose deviations were closed by the same change.
 
 | Principal                                | Sidebar | Forbidden URL refused | Allowed pages clean | Global search | Empty / partial states |
 | ---------------------------------------- | ------- | --------------------- | ------------------- | ------------- | ---------------------- |
 | owner                                    | pass    | pass (nothing refused) | pass               | pass          | pass                   |
-| `view_dashboard`                         | pass    | pass                  | D2 · D4 · D5        | pass          | D6                     |
-| `manage_orders`                          | pass    | pass                  | D4 · D5             | pass          | D6                     |
+| `view_orders`                            | pass    | pass                  | D4                  | pass          | D6                     |
+| `manage_orders`                          | pass    | pass                  | D4                  | pass          | D6                     |
 | `process_production`                     | pass    | pass                  | D4                  | pass          | D6                     |
-| `manage_catalog`                         | pass    | pass                  | D4                  | pass          | D1                     |
+| `manage_catalog`                         | pass    | pass                  | D4                  | pass          | pass                   |
 | `manage_inventory`                       | pass    | pass                  | D4                  | pass          | pass                   |
-| `manage_finance`                         | pass    | pass                  | D3 · D4 · D5        | pass          | pass                   |
-| `view_finance_reports`                   | pass    | pass                  | D4 · D5             | pass          | pass                   |
+| `manage_finance`                         | pass    | pass                  | D3 · D4             | pass          | pass                   |
+| `view_finance_reports`                   | pass    | pass                  | D4                  | pass          | pass                   |
 | no grants                                | pass    | pass                  | D4                  | pass          | pass                   |
 | `manage_orders` + `manage_inventory`     | pass    | pass                  | D4                  | pass          | D6                     |
 | `manage_inventory` on the second branch  | pass    | pass                  | D4                  | pass          | pass                   |
@@ -425,39 +450,26 @@ the tables above; a `D` reference points at a known deviation below.
 Every refused route landed on `/workshop` with no frame of the refused view rendered, and no
 principal saw a nav entry, search section, or owner-only route it was not entitled to. Grants on
 one branch unlocked nothing on the other: the branch picker offers only granted branches, and an
-order in a branch the reader has no grant on answers 404.
+order in a branch the reader has no grant on answers 404. No screen offered a link to a page its
+viewer could not open.
 
-Revoking a grant while the holder is signed in fails closed on the server — the next data request
-from the open tab is refused — but the tab itself keeps the old sidebar until it is reloaded (D7).
+Revoking a grant while the holder is signed in fails closed on the server, and the open tab now
+follows within one round-trip: the refused request clears the rows it was meant to refresh, the
+app re-reads `me` and the branch context, the sidebar collapses, and a page that is no longer
+allowed redirects to `/workshop`. No reload needed.
 
 ### Known deviations
 
-Each is a defect against the tables above, not a rule.
+Each is a defect against the tables above, not a rule. Identifiers are stable — a fixed
+deviation is struck from the list rather than renumbered.
 
-- **D1 — `/workshop` renders blank for staff whose grants light up no dashboard section.**
-  `WorkshopDashboardView.vue` shows an honest "Sizga hali hech qanday ruxsat berilmagan" state
-  only when the grant set is empty; a user holding `manage_catalog` alone falls past it into the
-  granted branch, where every card is behind a `can*` flag that is false. The page is a heading
-  and a refresh button. The empty state should cover "has grants, none of them shown here".
-- **D2 — `view_dashboard` is an order-read grant, not a dashboard grant.** Its only backend use
-  is `WORKSHOP_ORDER_VIEW_PERMISSIONS` (`backend/app/modules/sales/service.py:89`), which admits
-  the holder to workshop order reads; the frontend labels it "Asosiy panel"
-  (`web/src/shared/app/workshopUi.ts:66`). A holder gets no sidebar entry but can open any order
-  in the branch by URL — client name and phone, prices, materials, production stamps — search
-  orders, and read the dashboard's order cards. The order screen then 403s on the assignment
-  picker (`/workshop/orders/workers`) and renders both workers as "Noma'lum xodim". The name and
-  the effect have to be reconciled.
 - **D3 — the finance ledger fetches suppliers it may not read.** The expenses screen loads the
-  branch supplier list, which requires `manage_inventory`
-  (`backend/app/modules/inventory/service.py:608`), so `manage_finance`-only staff take a 403 and
-  a silently empty supplier picker on a page they are entitled to.
-- **D4 — every non-owner takes a 403 on their own profile.** `WorkshopProfileView.vue:102` calls
-  the owner-only workshop-settings read on mount; the workshop name then falls back to the
-  generic tenant label in the page subtitle.
-- **D5 — screens link to routes the viewer cannot open.** The dashboard's low-stock card is
-  rendered without a permission check and links to `/workshop/inventory`; its order KPI and
-  recent-orders card link to `/workshop/orders` for `view_dashboard` holders, as does the order
-  screen's back link. Following any of them bounces off the guard back to `/workshop`.
+  branch supplier list, which requires `manage_inventory`, so `manage_finance`-only staff take a
+  403 and a silently empty supplier picker on a page they are entitled to.
+- **D4 — every non-owner takes a 403 on their own profile.** `WorkshopProfileView.vue` calls the
+  owner-only workshop-settings read on mount; the workshop name then falls back to the generic
+  tenant label in the page subtitle. The same screen keeps a private copy of the permission
+  labels, so a `view_orders` grant shows the raw code instead of a name.
 - **D6 — an order the reader is not entitled to reports a network failure.** The API answers 404
   (correctly — no existence oracle) for an order outside the reader's branch, and for
   `process_production` staff for any order not assigned to them; the order screen renders
@@ -465,11 +477,6 @@ Each is a defect against the tables above, not a rule.
   blames the connection for an authorization outcome, and for production staff that is the
   ordinary case, not the edge one — `/workshop/orders/:order_id` admits `process_production`
   while the data rule behind it admits only the assignee.
-- **D7 — a revoked grant leaves a stale shell.** The shell reads the grant set from the `me`
-  response captured at sign-in and never re-reads it, so after the owner revokes a grant the open
-  tab keeps the nav entry, keeps the already-loaded rows on screen, and adds a generic load-error
-  line when the next fetch is refused. Only a reload collapses the sidebar and lands the user on
-  the no-permission state. The server is not fooled; the screen is.
 
 ## Branch context (workshop app)
 

@@ -89,6 +89,16 @@ const canManageOrders = computed(() =>
 const canProcessProduction = computed(() =>
   permissions.canOnBranch(p.processProduction, order.value?.branch_id),
 )
+// The back link goes where the reader can actually go. This page admits
+// `view_orders` and `process_production`, but the orders board itself requires
+// `manage_orders` — the fixed link bounced everyone else off the router guard
+// (QAD-170). Branch-blind, like the guard it has to agree with, and independent
+// of `order` so it doesn't change under the loading and error states.
+const backLink = computed(() =>
+  permissions.can(p.manageOrders)
+    ? { to: rolePath('/workshop/orders'), label: '← Buyurtmalar' }
+    : { to: rolePath('/workshop'), label: '← Asosiy' },
+)
 const canCompleteCutting = computed(() => {
   const current = order.value
   if (!current) return false
@@ -804,7 +814,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="od-page">
-    <RouterLink :to="rolePath('/workshop/orders')" class="back">← Buyurtmalar</RouterLink>
+    <RouterLink :to="backLink.to" class="back">{{ backLink.label }}</RouterLink>
 
     <section v-if="orders.loading" aria-busy="true" aria-live="polite" class="od-fill">
       <div class="od-head">

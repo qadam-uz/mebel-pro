@@ -6,8 +6,8 @@ import { captureApiError } from '@/shared/api/client'
 import { traceLine } from '@/shared/app/errorTrace'
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import { useRolePath } from '@/shared/app/paths'
+import { workshopDashboardAccess } from '@/shared/app/workshopDashboard'
 import { workshopProductionQueueCounts } from '@/shared/app/workshopProduction'
-import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import {
   dashboardFailureLine,
   orderPillClass,
@@ -52,31 +52,27 @@ const CHART_BASELINE = 188
 const CHART_MAX_BAR_HEIGHT = 154
 const CHART_GAP = 4
 
-const financePermissions = [p.manageFinance, p.viewFinanceReports]
-const orderPermissions = [p.viewDashboard, p.manageOrders]
+// Who sees what, and which of those cards may link anywhere — the whole rule
+// lives in one pure function so it can be reasoned about and tested away from
+// the markup (`workshopDashboard.ts`).
+const access = computed(() => workshopDashboardAccess(auth.me, workshop.branches))
 
 const hasAnyGrant = permissions.hasAnyGrant
-const financeBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, financePermissions),
-)
-const orderBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, orderPermissions),
-)
-const productionBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, [p.processProduction]),
-)
-const inventoryBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, [p.manageInventory]),
-)
-const canFinance = computed(() => permissions.isOwner.value || financeBranches.value.length > 0)
-// Debts are the most sensitive numbers in the shop: manage_finance / owner only
-// (view_finance_reports alone does not unlock them).
-const canDebts = computed(() => permissions.isOwner.value || permissions.can(p.manageFinance))
-const canInventory = computed(() => permissions.isOwner.value || inventoryBranches.value.length > 0)
-const canOrders = computed(() => permissions.isOwner.value || orderBranches.value.length > 0)
-const canProduction = computed(
-  () => permissions.isOwner.value || productionBranches.value.length > 0,
-)
+const financeBranches = computed(() => access.value.financeBranches)
+const orderBranches = computed(() => access.value.orderBranches)
+const productionBranches = computed(() => access.value.productionBranches)
+const inventoryBranches = computed(() => access.value.inventoryBranches)
+const canFinance = computed(() => access.value.canFinance)
+const canManageFinance = computed(() => access.value.canManageFinance)
+const canInventory = computed(() => access.value.canInventory)
+const canCatalog = computed(() => access.value.canCatalog)
+const canOrders = computed(() => access.value.canOrders)
+const canProduction = computed(() => access.value.canProduction)
+const hasKpis = computed(() => access.value.hasKpis)
+// A grant that lights up no section (manage_catalog, say) used to fall past the
+// "no grants" empty state into a heading and a refresh button — the empty state
+// has to cover "has grants, none of them surface here" as well (QAD-167).
+const hasVisibleSection = computed(() => access.value.hasVisibleSection)
 const activeOrders = computed(() =>
   orders.workshopOrders.filter((order) => activeWorkshopStatuses.includes(order.status)),
 )
@@ -91,6 +87,29 @@ const showProductionQueue = computed(
   () =>
     canProduction.value && (!permissions.isOwner.value || productionQueueCounts.value.total > 0),
 )
+// A card links only where its viewer can actually go: null means "render this
+// tile, but not as a link" (QAD-170).
+const ordersHref = computed(() =>
+  access.value.canManageOrders ? rolePath('/workshop/orders') : null,
+)
+const incomeHref = computed(() =>
+  canManageFinance.value ? rolePath('/workshop/finance/income') : null,
+)
+const expensesHref = computed(() =>
+  canManageFinance.value ? rolePath('/workshop/finance/expenses') : null,
+)
+const debtsHref = computed(() =>
+  canManageFinance.value ? rolePath('/workshop/finance/debts') : null,
+)
+const inventoryHref = computed(() => (canInventory.value ? rolePath('/workshop/inventory') : null))
+// Branch pages are owner-only, so the per-branch production tiles are links for
+// the owner alone — every other order reader got a dead link.
+const branchesHref = computed(() =>
+  permissions.isOwner.value ? rolePath('/workshop/branches') : null,
+)
+function branchHref(branchId: string) {
+  return permissions.isOwner.value ? rolePath(`/workshop/branches/${branchId}`) : null
+}
 const lowStock = computed(() => workshop.lowStockItems.slice(0, 5))
 const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
 const incomeParts = computed(() => formatTiyinParts(finance.summary?.income_tiyin ?? 0))
@@ -249,7 +268,7 @@ async function loadDashboard() {
   }
   await loadFinanceSummary()
   // Best-effort tiles: a failed debts load must not take the dashboard down.
-  if (canDebts.value) {
+  if (canManageFinance.value) {
     await finance.loadSupplierDebts({ only_with_debt: true }).catch(() => {})
     await finance.loadClientDebts({ only_with_debt: true }).catch(() => {})
   }
@@ -339,21 +358,42 @@ watch(
       <p>Filial va vazifa biriktirilgach, ishingiz shu yerda ko'rinadi.</p>
     </div>
 
+    <div v-else-if="dashboardReady && !hasVisibleSection" class="st-empty">
+      <h3>Bu yerda ko'rsatiladigan ma'lumot yo'q</h3>
+      <p>
+        Sizdagi ruxsatlar asosiy panelda ko'rsatkich chiqarmaydi — ishingiz alohida bo'limlarda
+        turadi.
+      </p>
+      <div v-if="canCatalog" class="mt-4">
+        <RouterLink :to="rolePath('/workshop/catalog')" class="mp-button mp-button-primary">
+          Material katalogi
+        </RouterLink>
+      </div>
+    </div>
+
     <template v-else>
-      <div class="kpis kpis-dash">
-        <RouterLink v-if="canOrders" :to="rolePath('/workshop/orders')" class="kpi no-underline">
+      <div v-if="hasKpis" class="kpis kpis-dash">
+        <component
+          :is="ordersHref ? RouterLink : 'div'"
+          v-if="canOrders"
+          :to="ordersHref"
+          class="kpi"
+          :class="ordersHref ? 'no-underline' : ''"
+        >
           <div class="lbl">Ishlab chiqarishda</div>
           <div class="v num">
             <span v-if="dashboardReady">{{ activeOrders.length }}</span>
             <span v-else class="sk block h-7 w-12"></span>
           </div>
           <div class="d"><span>faol buyurtmalar</span></div>
-        </RouterLink>
+        </component>
 
-        <RouterLink
+        <component
+          :is="incomeHref ? RouterLink : 'div'"
           v-if="canFinance"
-          :to="rolePath('/workshop/finance/income')"
-          class="kpi no-underline"
+          :to="incomeHref"
+          class="kpi"
+          :class="incomeHref ? 'no-underline' : ''"
         >
           <div class="lbl">Tushum</div>
           <div class="v num">
@@ -365,12 +405,14 @@ watch(
           <div class="d">
             <span>so'nggi {{ chartDays }} kun</span>
           </div>
-        </RouterLink>
+        </component>
 
-        <RouterLink
+        <component
+          :is="expensesHref ? RouterLink : 'div'"
           v-if="canFinance"
-          :to="rolePath('/workshop/finance/expenses')"
-          class="kpi no-underline"
+          :to="expensesHref"
+          class="kpi"
+          :class="expensesHref ? 'no-underline' : ''"
         >
           <div class="lbl">Xarajatlar</div>
           <div class="v num">
@@ -382,7 +424,7 @@ watch(
           <div class="d">
             <span>so'nggi {{ chartDays }} kun</span>
           </div>
-        </RouterLink>
+        </component>
 
         <div v-if="canFinance" class="kpi" :class="netPositive ? '' : 'bad'">
           <div class="lbl" :class="netPositive ? 'success-text' : 'danger-text'">Foyda</div>
@@ -396,8 +438,8 @@ watch(
         </div>
 
         <RouterLink
-          v-if="canDebts"
-          :to="rolePath('/workshop/finance/debts')"
+          v-if="debtsHref"
+          :to="debtsHref"
           class="kpi no-underline"
           :class="(finance.supplierDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'warn' : ''"
         >
@@ -414,11 +456,7 @@ watch(
           <div class="d"><span>yetkazmalar − to'lovlar</span></div>
         </RouterLink>
 
-        <RouterLink
-          v-if="canDebts"
-          :to="rolePath('/workshop/finance/debts')"
-          class="kpi no-underline"
-        >
+        <RouterLink v-if="debtsHref" :to="debtsHref" class="kpi no-underline">
           <div class="lbl">Mijozlar qarzi</div>
           <div class="v num">
             <span v-if="dashboardReady" :title="clientDebtParts.full"
@@ -430,8 +468,8 @@ watch(
         </RouterLink>
 
         <RouterLink
-          v-if="canInventory"
-          :to="rolePath('/workshop/inventory')"
+          v-if="inventoryHref"
+          :to="inventoryHref"
           class="kpi no-underline"
           :class="lowStock.length > 0 ? 'warn' : ''"
         >
@@ -444,8 +482,8 @@ watch(
         </RouterLink>
 
         <RouterLink
-          v-if="canInventory && workshop.stockValueTiyin !== null"
-          :to="rolePath('/workshop/inventory')"
+          v-if="inventoryHref && workshop.stockValueTiyin !== null"
+          :to="inventoryHref"
           class="kpi no-underline"
         >
           <div class="lbl">Ombor qiymati</div>
@@ -509,7 +547,7 @@ watch(
         </div>
       </div>
 
-      <div v-if="canFinance || canOrders || canInventory" class="grid gap-[18px]">
+      <div v-if="hasKpis" class="grid gap-[18px]">
         <div v-if="canFinance" class="card">
           <div class="card-h">
             <div>
@@ -598,7 +636,7 @@ watch(
         <div v-if="canOrders" class="card">
           <div class="card-h">
             <h2>Ishlab chiqarish · filiallar bo'yicha</h2>
-            <RouterLink :to="rolePath('/workshop/branches')" class="more">filiallar</RouterLink>
+            <RouterLink v-if="branchesHref" :to="branchesHref" class="more">filiallar</RouterLink>
           </div>
           <div class="card-b">
             <div
@@ -611,12 +649,14 @@ watch(
                   <span class="sk mt-3 block h-3 w-32"></span>
                 </div>
               </template>
-              <RouterLink
+              <component
+                :is="branchHref(branch.id) ? RouterLink : 'div'"
                 v-for="branch in workshop.branches"
                 v-else
                 :key="branch.id"
-                :to="rolePath(`/workshop/branches/${branch.id}`)"
-                class="bg-elevated p-4 no-underline transition hover:bg-sunk"
+                :to="branchHref(branch.id)"
+                class="bg-elevated p-4"
+                :class="branchHref(branch.id) ? 'no-underline transition hover:bg-sunk' : ''"
               >
                 <div class="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-muted">
                   {{ branch.name }}
@@ -628,15 +668,15 @@ watch(
                 <p class="mt-2 font-mono text-[11px] text-ink-muted">
                   {{ branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : branch.address }}
                 </p>
-              </RouterLink>
+              </component>
             </div>
           </div>
         </div>
 
-        <div class="card">
+        <div v-if="canInventory" class="card">
           <div class="card-h">
             <h2>Kam qolgan materiallar</h2>
-            <RouterLink :to="rolePath('/workshop/inventory')" class="more">ombor</RouterLink>
+            <RouterLink v-if="inventoryHref" :to="inventoryHref" class="more">ombor</RouterLink>
           </div>
           <div class="card-b">
             <div v-if="workshop.inventoryLoading" class="grid gap-3">
@@ -689,7 +729,7 @@ watch(
               <h2>So'nggi buyurtmalar</h2>
               <div class="sub">Oxirgi yozuvlar · {{ recentOrders.length }} ta</div>
             </div>
-            <RouterLink :to="rolePath('/workshop/orders')" class="more"
+            <RouterLink v-if="ordersHref" :to="ordersHref" class="more"
               >barchasini ko'rish</RouterLink
             >
           </div>

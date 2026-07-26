@@ -18,6 +18,7 @@ import {
 } from '@/shared/app/workshopPermissions'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 import { useCuttingStore } from '@/shared/stores/cutting'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 export function resolveHistoryBase(
   localBase: string,
@@ -148,6 +149,33 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
     useCuttingStore(pinia).configureScope('workshop')
   }
 
+  // A refused request means the grant set the shell was built from is stale —
+  // the owner revoked something while this tab was open (QAD-172). Re-read the
+  // principal and, for the workshop app, the branch context the sidebar is
+  // built from; if the page the user is on is no longer allowed, send them
+  // home. Server-side enforcement was never fooled; this is the screen catching
+  // up. Serialized so a burst of 403s costs one round-trip.
+  let revalidating: Promise<void> | null = null
+  function revalidateAccess() {
+    if (revalidating) return
+    revalidating = (async () => {
+      await auth.refreshMe()
+      if (!auth.isAuthenticated) return
+      if (roleConfig.role === 'workshop') {
+        await useWorkshopStore(pinia)
+          .loadBranchContext({ force: true })
+          .catch(() => undefined)
+      }
+      const current = router.currentRoute.value
+      if (current.meta.layout === 'auth') return
+      if (!roleRoutePermissionAllowed(roleConfig.role, auth.me, current.meta, current.params)) {
+        void router.replace(roleConfig.homePath)
+      }
+    })().finally(() => {
+      revalidating = null
+    })
+  }
+
   // Transparent 401 handling (CB-08): the API client refreshes silently and
   // retries; if that fails (refreshSession has already cleared auth) it bounces
   // to login with a notice.
@@ -161,6 +189,7 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
         query: { redirect: current.fullPath, reason: 'session_expired' },
       })
     },
+    onForbidden: revalidateAccess,
   })
 
   router.beforeEach(async (to) => {

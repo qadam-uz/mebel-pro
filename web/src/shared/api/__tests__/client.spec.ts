@@ -173,6 +173,32 @@ describe('shared API client', () => {
     expect(withQuery('/m', {})).toBe('/m')
   })
 
+  it('reports a refused authed call so the shell can re-read its grants (QAD-172)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 'forbidden' }, 403))
+    const onForbidden = vi.fn()
+    configureSession({ refresh: vi.fn(), onExpired: vi.fn(), onForbidden })
+
+    await expect(
+      api.get('/workshop/branches/b-1/stock', { accessToken: 'access-1' }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(onForbidden).toHaveBeenCalledTimes(1)
+  })
+
+  it('never reports a refused /auth call, so revalidation cannot recurse (QAD-172)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse({ code: 'forbidden' }, 403),
+    )
+    const onForbidden = vi.fn()
+    configureSession({ refresh: vi.fn(), onExpired: vi.fn(), onForbidden })
+
+    await expect(api.get('/auth/me', { accessToken: 'access-1' })).rejects.toMatchObject({
+      status: 403,
+    })
+    // Unauthenticated calls carry no grant set to revalidate either.
+    await expect(api.get('/workshop/orders')).rejects.toMatchObject({ status: 403 })
+    expect(onForbidden).not.toHaveBeenCalled()
+  })
+
   it('does not attempt a refresh for unauthenticated 401s (CB-08)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ code: 'invalid_code' }, 401))
     const refresh = vi.fn()

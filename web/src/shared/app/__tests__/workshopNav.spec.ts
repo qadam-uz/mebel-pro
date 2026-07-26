@@ -51,11 +51,11 @@ describe('workshop navigation permissions', () => {
     ).toEqual(['Asosiy', 'Ombor'])
   })
 
-  it('does not expose the orders board to dashboard-only staff', () => {
+  it('does not expose the orders board to read-only order staff', () => {
     expect(
       workshopNavItems({
         isOwner: false,
-        branches: [{ id: 'branch-1', permissions: ['view_dashboard'] }],
+        branches: [{ id: 'branch-1', permissions: ['view_orders'] }],
         selectedBranchId: 'branch-1',
         path: identity,
       }).map((item) => item.label),

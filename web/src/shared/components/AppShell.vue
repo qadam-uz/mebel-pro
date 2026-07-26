@@ -145,7 +145,7 @@ const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.p
 const canSearchOrders = computed(
   () =>
     auth.me?.is_owner === true ||
-    searchPermissions.value.has('view_dashboard') ||
+    searchPermissions.value.has('view_orders') ||
     searchPermissions.value.has('manage_orders'),
 )
 const canSearchCatalog = computed(

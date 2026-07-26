@@ -32,7 +32,7 @@ async function ensureWalkInClient(to: RouteLocationNormalized) {
 type WorkshopRouteRecord = RouteRecordRaw & { meta: { branchScope: BranchScope } }
 
 const orderAccess = [p.manageOrders]
-const orderDetailAccess = [p.viewDashboard, p.manageOrders, p.processProduction]
+const orderDetailAccess = [p.viewOrders, p.manageOrders, p.processProduction]
 const productionAccess = [p.processProduction, p.manageOrders]
 const financeAccess = [p.manageFinance, p.viewFinanceReports]
 export const workshopRoutes: WorkshopRouteRecord[] = [

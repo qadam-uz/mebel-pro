@@ -154,19 +154,19 @@ describe('role route matrix', () => {
     ).toBe(true)
   })
 
-  it('keeps dashboard-only staff out of the orders board route', () => {
+  it('keeps read-only order staff out of the orders board route', () => {
     const ordersRoute = workshopRoutes.find((route) => route.path === '/workshop/orders')
-    const dashboardOnly = workshopPrincipal({
-      grants: [{ branch_id: 'branch-1', permission: workshopPermissions.viewDashboard }],
+    const readOnlyOrderStaff = workshopPrincipal({
+      grants: [{ branch_id: 'branch-1', permission: workshopPermissions.viewOrders }],
     })
     const orderManager = workshopPrincipal({
       grants: [{ branch_id: 'branch-1', permission: workshopPermissions.manageOrders }],
     })
 
     expect(ordersRoute?.meta).toBeDefined()
-    expect(roleRoutePermissionAllowed('workshop', dashboardOnly, ordersRoute?.meta ?? {})).toBe(
-      false,
-    )
+    expect(
+      roleRoutePermissionAllowed('workshop', readOnlyOrderStaff, ordersRoute?.meta ?? {}),
+    ).toBe(false)
     expect(roleRoutePermissionAllowed('workshop', orderManager, ordersRoute?.meta ?? {})).toBe(true)
   })
 

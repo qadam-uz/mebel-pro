@@ -51,6 +51,7 @@ vi.mock('@/shared/api/client', () => {
       code: fallback,
       traceId: null,
     })),
+    isPermissionDenied: (error: unknown) => error instanceof ApiError && error.status === 403,
     withQuery: (path: string) => path,
   }
 })

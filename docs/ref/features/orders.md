@@ -429,7 +429,8 @@ Permission names below are the per-branch grants from
   and branch-scoped so it always agrees with the list it links to. Refreshes on shell load,
   on a branch switch, when the tab returns to the foreground, and after any order mutation;
   a failed count renders no badge and never disturbs the shell.
-- **Orders** (`/workshop/orders`, `view_dashboard` to see; `manage_orders` to act) —
+- **Orders** (`/workshop/orders`, `manage_orders`; a `view_orders` holder reads individual
+  orders by link or search, not this board) —
   branch-scoped, two modes:
   - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each
     header has a count; cards: order #, client name + phone, total, item count, age, the

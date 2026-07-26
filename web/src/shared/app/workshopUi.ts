@@ -69,7 +69,7 @@ export function stockTransactionTypeLabel(type: StockTransactionType) {
 export const STOCK_SHORTFALL_MESSAGE = 'Omborda qoldiq yetarli emas'
 
 export const permissionLabels: Record<string, string> = {
-  view_dashboard: 'Asosiy panel',
+  view_orders: "Buyurtmalarni ko'rish (faqat o'qish)",
   manage_orders: 'Buyurtmalar',
   process_production: 'Ishlab chiqarish',
   manage_catalog: 'Material katalogi',

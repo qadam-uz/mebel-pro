@@ -123,6 +123,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Re-read the principal without rotating the session. Grants can be revoked
+  // while a tab is open, and the shell is built from the `me` captured at
+  // sign-in — so a refused request is the app's cue to re-read it (QAD-172).
+  // Concurrent callers (a screen firing several requests at once) share one
+  // round-trip; a failed re-read leaves the last known principal in place
+  // rather than logging a working session out.
+  let meInFlight: Promise<void> | null = null
+  async function refreshMe(): Promise<void> {
+    if (!accessToken.value) return
+    if (!meInFlight) {
+      meInFlight = api
+        .get<MeResponse>('/auth/me', authInit())
+        .then((response) => {
+          me.value = response
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          meInFlight = null
+        })
+    }
+    return meInFlight
+  }
+
   function isAllowedFor(role: RoleKey) {
     return me.value?.principal_type === rolePrincipal[role]
   }
@@ -253,6 +276,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     restore,
     refreshSession,
+    refreshMe,
     isAllowedFor,
     platformLogin,
     workshopLogin,

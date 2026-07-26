@@ -35,7 +35,10 @@ class BranchStatus(StrEnum):
 
 
 class Permission(StrEnum):
-    VIEW_DASHBOARD = "view_dashboard"
+    # Read-only access to the branch's orders. Named for what it actually
+    # admits (QAD-166) — it used to be `view_dashboard`, which read as a
+    # dashboard toggle while granting order reads.
+    VIEW_ORDERS = "view_orders"
     MANAGE_ORDERS = "manage_orders"
     PROCESS_PRODUCTION = "process_production"
     MANAGE_CATALOG = "manage_catalog"

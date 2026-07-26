@@ -89,7 +89,7 @@ from app.modules.workshop.contracts import Branch, Workshop
 PHONE_RE = re.compile(r"^\+998\d{9}$")
 WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
     {
-        Permission.VIEW_DASHBOARD,
+        Permission.VIEW_ORDERS,
         Permission.MANAGE_ORDERS,
     }
 )
