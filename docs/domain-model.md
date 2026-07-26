@@ -2,7 +2,7 @@
 title: Domain model
 status: stable
 owner: shape
-updated: 2026-05-25
+updated: 2026-07-26
 order: 45
 ---
 
@@ -30,7 +30,10 @@ per bounded context.
   cuttable board) or an **edge** (edge-banding tape). Every material names its
   manufacturer. Branches pick which they carry and set their own price.
 - **Stock item** — a branch's on-hand balance for one material. **Supplier** — where
-  stock-in came from (lightweight, added on demand; distinct from manufacturer).
+  stock arrived from (lightweight, added on demand; distinct from manufacturer).
+  **Supplier invoice** — one arrival document grouping the stock-ins that came in on it,
+  carrying the discount the supplier put on the paper; what the workshop owes is folded
+  over these, not over individual arrivals.
 - **Cutting result** — the output of an optimization run; names the winning algorithm.
   Reports panels needed per panel material and edge metres needed per edge material.
 - **Order** — a client's request for panels cut at a branch. Aggregates the parts,

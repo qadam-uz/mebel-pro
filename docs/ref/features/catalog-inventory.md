@@ -35,7 +35,7 @@ operators.
   filter.
 
 Creating a manufacturer is a side-trip from the material-create form (inline-add), the
-same shape as suppliers' inline-add from stock-in.
+same shape as suppliers' inline-add from the arrival form.
 
 ## Materials (platform master catalog)
 
@@ -127,7 +127,7 @@ to the branch's selection.
 ## Suppliers
 
 Who the workshop buys material from. Lightweight and **created on demand**: when
-recording a stock-in the warehouseman picks an existing supplier or adds one inline
+recording an arrival the warehouseman picks an existing supplier or adds one inline
 (name, optional phone / note). Workshop-scoped, never deleted (deactivated if unused).
 Supplier ≠ manufacturer: the supplier is the workshop's buying counterparty, the
 manufacturer is who made the material — a supplier can carry many manufacturers' tape,
@@ -135,7 +135,7 @@ and vice versa.
 
 No purchase-order flow in v1 — the *money* for a purchase is a separate
 [`finance.md`](finance.md) expense the accountant records. The supplier is also a **debt
-counterparty**: its priced deliveries and linked payments fold into a derived balance on
+counterparty**: its invoices and the payments made against them fold into a derived balance on
 the Qarzdorlik page ([`finance.md`](finance.md) → *Debts*).
 
 ## Inventory
@@ -148,15 +148,27 @@ decrements it.
 
 **Operations:**
 
-- **Stock-in** (owner, or `manage_inventory` on the branch) — material (must be in the
-  branch's selection), positive quantity in the material's stock unit, a supplier
-  (existing or added inline), and a **required unit purchase price** (integer tiyin, per
-  panel for panels, per metre for edges). The server stores the price on the transaction
-  row and computes the authoritative total (edges: `quantity_mm × unit price // 1000`,
-  mirroring sale-side edge pricing). `on_hand += qty`. There is no per-row receipt file:
-  stock-ins are flat per-material rows, never grouped under a supplier invoice — a
-  document per money row belongs to [`finance.md`](finance.md) ledgers, not here.
-- **Last price** (same caller) — read-only lookup powering the stock-in form's prefill:
+- **Record an arrival** (owner, or `manage_inventory` on the branch) — one **supplier
+  invoice** ([`inventory.md`](../entities/inventory.md#supplier-invoice)) with a line per
+  material. The header carries the supplier (existing or added inline), the invoice date
+  (today by default, editable), and an auto-assigned `K-…` number; each line carries a
+  material from the branch's selection, a positive quantity in the material's stock unit, and
+  a **required unit purchase price** (integer tiyin, per panel for panels, per metre for
+  edges). The server stores each line's price on its own transaction row and computes the
+  authoritative line total (edges: `quantity_mm × unit price // 1000`, mirroring sale-side
+  edge pricing); the invoice carries the document-level discount and surcharge. The invoice
+  and every line commit **together or not at all** — a failure on line three leaves no invoice
+  and no stock movement. Each line then moves stock exactly as a lone arrival always did:
+  `on_hand += qty`.
+
+  The grouping exists because the accountant negotiates in invoice totals, not in individual
+  arrivals: a supplier's discount lives on the document as a whole, and a per-material row can
+  never carry it. Grouping is what lets the debt fold ([`finance.md`](finance.md) → *Debts*)
+  land on the same number the supplier's own paper says. Invoices are never voided or edited
+  after creation — a wrong arrival is corrected with an *Adjust*, like any other stock mistake.
+- **List arrivals** (same caller) — the branch's invoices, newest first, filterable by
+  supplier, by free text over number / supplier / note, and by derived payment status.
+- **Last price** (same caller) — read-only lookup powering each arrival line's prefill:
   the most recent priced stock-in for the material at this branch, preferring the
   selected supplier's most recent when one exists. Derived from the transaction ledger
   at read time; no stored "latest price" column exists.
@@ -231,18 +243,31 @@ now-redundant branch column:
   treatment to danger — its own chip, its own marker line ("kirim yozilmagan"), and it sorts
   to the top of the table, because it is a state that wants an arrival recorded rather than
   a minus sign to scroll past. The **Ombor qiymati** tile counts negative balances
-  negatively rather than clamping them away. Two page actions each open a modal: **Record
-  stock-in** (qty, unit price, supplier picker with inline add) and **Adjust**
-  (a signed quantity with a **required leading + or −** — "-2" writes off, "+5" adds —
-  live-filtered as typed, plus the mandatory reason; this supersedes the earlier
-  direction-toggle design in favour of one explicit signed entry).
-  The stock-in price field **prefills** with the last price paid — supplier-specific
-  when the picked supplier has priced history, otherwise the material's overall latest —
-  with a provenance hint underneath (price · date · supplier; "birinchi kirim" when no
-  history). A prefill never overwrites a price the user has typed — a later supplier
-  change only updates the hint. A live `quantity × price` total renders under the form
-  so the warehouseman can check it against the invoice in hand; entry time must not grow.
-  **Transactions** — full log: type (`stock_in` /
+  negatively rather than clamping them away. Two page actions each open a modal: **Kirim** (the arrival
+  form, below) and **Adjust** (a signed quantity with a **required leading + or −** — "-2"
+  writes off, "+5" adds — live-filtered as typed, plus the mandatory reason; this supersedes
+  the earlier direction-toggle design in favour of one explicit signed entry).
+- **Kirimlar** (`manage_inventory`) — the branch's arrivals as documents, not as loose rows:
+  `K-0007` · supplier · date · N pozitsiya · total · a payment-status pill
+  (*To'langan* / *Qisman* / *To'lanmagan*, with the outstanding amount beneath a partial).
+  Search and a payment-status filter sit in the toolbar. A row expands to its lines
+  (material, quantity, unit price, line total) with the skidka / ustama and the final total
+  beneath them.
+
+  The **arrival form** is a header — supplier, date, and the `K-…` badge the number will take
+  — over a line table with **+ Material qo'shish**, closing on a totals block:
+  *Oraliq jami* → *Skidka* → *Ustama* → *Jami*. Each line's price field **prefills** with the
+  last price paid — supplier-specific when the picked supplier has priced history, otherwise
+  the material's overall latest — with a provenance hint underneath (price · date · supplier;
+  "birinchi kirim" when no history). A prefill never overwrites a price the user has typed —
+  a later supplier change only updates the hint. A live line total renders in the row so the
+  warehouseman can check each one against the paper in hand; entry time must not grow.
+
+  Two footer actions: **Saqlash**, and **Saqlash va xarajat yozish**, which saves the arrival
+  and opens the expense modal prefilled against it ([`finance.md`](finance.md)). The second
+  button is what makes the link get used — without it staff record the payment separately and
+  never attach it. It appears only for users who could open the finance ledger anyway.
+- **Transactions** (`manage_inventory`) — full log: type (`stock_in` /
   `consume` / `restore` / `adjust`, shown as localized labels), signed quantity,
   balance-after, unit price and total (stock-in rows only), order link (for
   consume/restore), supplier (for stock_in), actor, note, date-time; filtered by the
@@ -251,7 +276,7 @@ now-redundant branch column:
   **Ombor qiymati** tile: on-hand valued at each material's latest purchase price
   (edges: mm × per-metre), derived at read time, summed over the branches in view.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
-  add / edit in a modal dialog · block (reversible). Mostly reached inline from stock-in.
+  add / edit in a modal dialog · block (reversible). Mostly reached inline from the arrival form.
 
 In the **client app** cutting wizard's material steps: the branch's active `panel`
 selection as a searchable grid with manufacturer / type / thickness dropdown filters (name,
@@ -302,7 +327,7 @@ alone; modals manage focus; owner-only controls are visibly gated for non-owners
 - **Cutting or banding done for a material removed from the branch selection** — same: the
   consume is recorded against a stock row created at zero, and the material is **not**
   silently re-added to the branch catalog. Putting it back is a deliberate catalog action.
-- **Stock-in for a branch-deactivated material** — allowed (the selection still
+- **Arrival line for a branch-deactivated material** — allowed (the selection still
   exists); it just won't be offered to clients until reactivated.
 - **`own`-source order** — no inventory interaction at all; an order with only
   `own` panels and `own` edges skips the seam entirely.

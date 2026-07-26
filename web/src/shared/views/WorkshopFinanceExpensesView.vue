@@ -18,6 +18,7 @@ import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import SearchCombobox from '@/shared/components/SearchCombobox.vue'
+import SegmentedToggle from '@/shared/components/SegmentedToggle.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -89,13 +90,18 @@ let orderBalanceRequestId = 0
 // same convention as the inventory modals); payloads coerce before sending.
 // Branch comes from the topbar context — the forms only keep the owner's
 // «Ustaxona darajasida» escape hatch for HQ-level (branchless) expenses.
+// `mode` mirrors the income form's Turi toggle: money out is either against a
+// supplier faktura or it is misc, exactly as money in is against an order or
+// misc. In `invoice` mode the invoice owns supplier and branch.
 const expenseForm = reactive({
+  mode: 'invoice' as string,
   workshopLevel: false,
   category: 'other' as string | null,
   amount: '',
   incurredOn: today,
   vendor: '',
   supplierId: null as string | null,
+  invoiceId: null as string | null,
   description: '',
   receiptFileId: null as string | null,
   receiptName: '',
@@ -113,6 +119,10 @@ const incomeForm = reactive({
 // Editing must never re-stamp a record onto the currently active branch — the
 // original branch is preserved and sent back unchanged.
 const editingExpenseBranchId = ref<string | null>(null)
+// The `K-…` of the faktura an edited expense pays. It comes off the record
+// itself, not the picker: the picker only carries invoices that still owe
+// something, and paying one in full is exactly what drops it out of that list.
+const editingExpenseInvoiceNo = ref<string | null>(null)
 const editingIncomeBranchId = ref<string | null>(null)
 
 // Type-time sanitization (PhoneInput precedent): an invalid character never
@@ -174,6 +184,57 @@ watch(
     if (!supplierId) return
     const supplier = workshop.suppliers.find((row) => row.id === supplierId)
     if (supplier && !expenseForm.vendor.trim()) expenseForm.vendor = supplier.name
+  },
+)
+
+const expenseModes: ChoiceOption[] = [
+  { value: 'invoice', label: "Kirim to'lovi" },
+  { value: 'other', label: 'Boshqa xarajat' },
+]
+const isInvoicePayment = computed(() => expenseForm.mode === 'invoice')
+const payableInvoiceOptions = computed<ChoiceOption[]>(() =>
+  finance.payableInvoices.map((invoice) => ({
+    value: invoice.id,
+    label: `${invoice.invoice_no} · ${invoice.supplier_name ?? 'ta`minotchisiz'}`,
+    meta: `${formatDate(invoice.invoice_date)} · ${invoice.branch_name ?? '—'} · ${invoice.line_count} pozitsiya`,
+  })),
+)
+const selectedInvoice = computed(
+  () => finance.payableInvoices.find((row) => row.id === expenseForm.invoiceId) ?? null,
+)
+// The two fields the invoice takes over, spelled out so nothing is silently
+// decided for the user. Category is deliberately NOT in this strip: the invoice
+// only seeds it (`raw_materials`), and it stays editable above — claiming it
+// came from the faktura next to a live dropdown would read as a lie.
+const invoiceDerivedStrip = computed(() => {
+  const invoice = selectedInvoice.value
+  if (!invoice) return null
+  return `${invoice.supplier_name ?? 'ta`minotchisiz'} · ${invoice.branch_name ?? 'filialsiz'}`
+})
+// Overpayment is allowed on purpose — supplier prepayments are normal, and
+// blocking them pushes staff into inventing workarounds. Warn, don't refuse.
+const overpaysInvoice = computed(() => {
+  const invoice = selectedInvoice.value
+  if (!invoice || expenseAmountTiyin.value === null) return false
+  return expenseAmountTiyin.value > invoice.outstanding_tiyin
+})
+
+// An invoice already implies raw materials; some shops book deliveries as
+// supplies, so the default is a default, not a lock. Seeding only ever applies
+// while writing a new expense — on an edit these same assignments would quietly
+// rewrite a saved record's category, amount and description.
+watch(
+  () => expenseForm.invoiceId,
+  (invoiceId) => {
+    if (!invoiceId || editingExpenseId.value) return
+    if (expenseForm.category === 'other') expenseForm.category = 'raw_materials'
+    const invoice = finance.payableInvoices.find((row) => row.id === invoiceId)
+    if (!invoice) return
+    expenseForm.supplierId = invoice.supplier_id
+    if (!expenseForm.description.trim()) {
+      expenseForm.description = `${invoice.invoice_no} to'lovi`
+    }
+    if (!expenseForm.amount.trim()) expenseForm.amount = moneyInputValue(invoice.outstanding_tiyin)
   },
 )
 const selectedIncomeOrderDetail = computed(() =>
@@ -323,12 +384,15 @@ watch([dateFrom, dateTo, selectedBranchId, expenseCategory, incomeType, statusFi
 function resetExpenseForm() {
   editingExpenseId.value = null
   editingExpenseBranchId.value = null
+  editingExpenseInvoiceNo.value = null
+  expenseForm.mode = 'invoice'
   expenseForm.workshopLevel = false
   expenseForm.category = 'other'
   expenseForm.amount = ''
   expenseForm.incurredOn = today
   expenseForm.vendor = ''
   expenseForm.supplierId = null
+  expenseForm.invoiceId = null
   expenseForm.description = ''
   expenseForm.receiptFileId = null
   expenseForm.receiptName = ''
@@ -362,6 +426,7 @@ function openCreateExpense() {
   resetExpenseForm()
   clearActionError()
   expenseModalOpen.value = true
+  void finance.loadPayableInvoices()
 }
 
 function openCreateIncome() {
@@ -373,6 +438,11 @@ function openCreateIncome() {
 function editExpense(expense: Expense) {
   editingExpenseId.value = expense.id
   editingExpenseBranchId.value = expense.branch_id
+  // The invoice link is fixed once written — an edit tunes the money, never
+  // which faktura the money paid.
+  expenseForm.mode = expense.invoice_id ? 'invoice' : 'other'
+  expenseForm.invoiceId = expense.invoice_id
+  editingExpenseInvoiceNo.value = expense.invoice_no
   expenseForm.workshopLevel = expense.branch_id === null
   expenseForm.category = expense.category
   expenseForm.amount = String(expense.amount_tiyin / 100)
@@ -430,29 +500,51 @@ async function saveExpense() {
     actionTraceId.value = null
     return
   }
+  if (isInvoicePayment.value && !editingExpenseId.value && !expenseForm.invoiceId) {
+    actionError.value = "Kirimni tanlang yoki «Boshqa xarajat»ga o'ting."
+    actionTraceId.value = null
+    return
+  }
   saving.value = true
   actionError.value = null
   actionTraceId.value = null
   try {
     // Create stamps the topbar context branch; edit keeps the record's own
     // branch. The owner's workshop-level checkbox overrides either to null.
-    const payload = {
-      branch_id: expenseForm.workshopLevel
-        ? null
-        : editingExpenseId.value
-          ? (editingExpenseBranchId.value ?? selectedBranchId.value ?? null)
-          : selectedBranchId.value || null,
+    // An invoice payment overrides both — the server takes branch and supplier
+    // from the invoice, so they are left out of the payload entirely.
+    const invoicePayment = isInvoicePayment.value && Boolean(expenseForm.invoiceId)
+    const common = {
       category: (expenseForm.category ?? 'other') as ExpenseCategory,
       amount_tiyin: expenseAmountTiyin.value,
       incurred_on: expenseForm.incurredOn,
       vendor: expenseForm.vendor || null,
-      supplier_id: expenseForm.supplierId,
       description: expenseForm.description,
       receipt_file_id: expenseForm.receiptFileId,
     }
+    // Branch and supplier are sent only when the form owns them. On a faktura
+    // payment the invoice does, and echoing our own copy back would be the one
+    // way the two could drift apart.
+    const owned = invoicePayment
+      ? {}
+      : {
+          branch_id: expenseForm.workshopLevel
+            ? null
+            : editingExpenseId.value
+              ? (editingExpenseBranchId.value ?? selectedBranchId.value ?? null)
+              : selectedBranchId.value || null,
+          supplier_id: expenseForm.supplierId,
+        }
     const wasEditing = Boolean(editingExpenseId.value)
-    if (editingExpenseId.value) await finance.updateExpense(editingExpenseId.value, payload)
-    else await finance.createExpense(payload)
+    if (editingExpenseId.value) {
+      await finance.updateExpense(editingExpenseId.value, { ...common, ...owned })
+    } else {
+      await finance.createExpense({
+        ...common,
+        ...owned,
+        ...(invoicePayment ? { invoice_id: expenseForm.invoiceId } : {}),
+      })
+    }
     closeExpenseModal()
     await refresh()
     toast.success(wasEditing ? 'Xarajat saqlandi.' : 'Xarajat yozildi.')
@@ -592,12 +684,22 @@ onMounted(async () => {
     orders.loadWorkshopOrders({ status: 'active' }).catch(() => undefined),
     refresh(),
   ])
-  // The Qarzdorlik statement's «To'lov qilish» deep-links here with the
-  // counterparty pre-picked; the query is consumed once and cleared.
+  // Two deep-links land here with the modal pre-filled: Qarzdorlik's «To'lov
+  // qilish» (counterparty picked) and Ombor's «Saqlash va xarajat yozish»
+  // (invoice picked). The query is consumed once and cleared.
   if (route.query.create === 'expense') {
     openCreateExpense()
     const supplierId = route.query.supplier_id
-    if (typeof supplierId === 'string') expenseForm.supplierId = supplierId
+    const invoiceId = route.query.invoice_id
+    if (typeof invoiceId === 'string') {
+      // The picker list must be in before the id can resolve to a row.
+      await finance.loadPayableInvoices()
+      expenseForm.mode = 'invoice'
+      expenseForm.invoiceId = invoiceId
+    } else if (typeof supplierId === 'string') {
+      expenseForm.mode = 'other'
+      expenseForm.supplierId = supplierId
+    }
     void router.replace({ path: route.path })
   } else if (route.query.create === 'income') {
     openCreateIncome()
@@ -634,13 +736,80 @@ onMounted(async () => {
         @close="closeExpenseModal"
       >
         <form class="grid gap-3 md:grid-cols-2" @submit.prevent="saveExpense">
+          <SegmentedToggle
+            v-if="!editingExpenseId"
+            v-model="expenseForm.mode"
+            label="Turi"
+            id-prefix="workshop-expense-mode"
+            :options="expenseModes"
+          />
+          <label v-else class="field">
+            <span>Turi</span>
+            <input
+              class="mp-input"
+              :value="expenseForm.invoiceId ? `Kirim to'lovi` : 'Boshqa xarajat'"
+              disabled
+            />
+          </label>
+
+          <!-- Kirim to'lovi: the invoice decides supplier, branch, and what is
+               still owed; the form only asks for money, date, and category. -->
+          <template v-if="isInvoicePayment">
+            <SearchCombobox
+              v-if="!editingExpenseId"
+              v-model="expenseForm.invoiceId"
+              label="Kirim (faktura)"
+              :options="payableInvoiceOptions"
+              placeholder="K-0007 yoki ta`minotchi"
+              no-results-text="To`lanmagan kirim topilmadi"
+              clearable
+            />
+            <label v-else class="field">
+              <span>Kirim (faktura)</span>
+              <input
+                class="mp-input"
+                :value="editingExpenseInvoiceNo ?? selectedInvoice?.invoice_no ?? '—'"
+                disabled
+              />
+            </label>
+            <div
+              v-if="selectedInvoice"
+              class="rounded-md border border-hairline bg-sunk p-3 text-sm md:col-span-2"
+            >
+              <div class="grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
+                <div class="grid gap-1">
+                  <b class="text-base text-danger">
+                    Qoldiq: {{ formatTiyin(selectedInvoice.outstanding_tiyin) }}
+                  </b>
+                  <span class="text-ink-muted">
+                    Jami {{ formatTiyin(selectedInvoice.total_tiyin) }} · to'langan
+                    {{ formatTiyin(selectedInvoice.paid_tiyin) }}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="mp-button mp-button-outline min-h-9 px-3 text-xs"
+                  @click="expenseForm.amount = moneyInputValue(selectedInvoice.outstanding_tiyin)"
+                >
+                  Qoldiq
+                </button>
+              </div>
+            </div>
+            <p
+              v-if="invoiceDerivedStrip"
+              class="rounded-md border border-hairline px-3 py-2 text-sm text-ink-soft md:col-span-2"
+            >
+              Ta'minotchi va filial kirimdan olinadi — {{ invoiceDerivedStrip }}
+            </p>
+          </template>
+
           <FormSelect
             v-model="expenseForm.category"
             label="Kategoriya"
             :options="createCategoryOptions"
           />
           <label
-            v-if="permissions.isOwner.value"
+            v-if="permissions.isOwner.value && !isInvoicePayment"
             class="flex min-h-10 cursor-pointer items-center gap-2 self-end pb-1 text-sm font-bold text-ink-soft"
           >
             <input
@@ -660,13 +829,14 @@ onMounted(async () => {
             />
           </label>
           <SearchCombobox
+            v-if="!isInvoicePayment"
             v-model="expenseForm.supplierId"
             label="Ta'minotchi (qarz uchun)"
             :options="supplierOptions"
             placeholder="ixtiyoriy — qarzga bog'lash"
             clearable
           />
-          <label class="field">
+          <label v-if="!isInvoicePayment" class="field">
             <span>Yetkazib beruvchi</span>
             <input v-model="expenseForm.vendor" class="mp-input" placeholder="ixtiyoriy" />
           </label>
@@ -678,6 +848,10 @@ onMounted(async () => {
             </small>
             <small v-else-if="expenseForm.amount.trim()" class="mp-field-error">
               {{ AMOUNT_HINT }}
+            </small>
+            <!-- Allowed, not blocked: an advance is a real thing that happens. -->
+            <small v-if="overpaysInvoice" class="font-bold text-warning">
+              Summa kirim qoldig'idan oshadi — avans sifatida yoziladi
             </small>
           </label>
           <label class="field">
@@ -911,6 +1085,14 @@ onMounted(async () => {
                 </td>
                 <td>
                   <small class="text-ink-soft">{{ expense.vendor ?? '—' }}</small>
+                  <!-- Which faktura the money paid — the link the whole ticket
+                       exists to make visible. -->
+                  <small
+                    v-if="expense.invoice_no"
+                    class="block font-mono text-[11px] text-ink-muted"
+                  >
+                    {{ expense.invoice_no }}
+                  </small>
                 </td>
                 <td>
                   <span v-if="expense.receipt_file_id" class="pill p-ok">

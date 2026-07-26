@@ -49,6 +49,8 @@ export interface Expense {
   description: string
   vendor: string | null
   supplier_id: string | null
+  invoice_id: string | null
+  invoice_no: string | null
   receipt_file_id: string | null
   status: LedgerStatus
   voided_reason: string | null
@@ -81,9 +83,10 @@ export interface DebtStatementRow {
   amount_tiyin: number
   balance_after_tiyin: number
   note: string | null
-  material_name: string | null
-  quantity: number | null
-  display_unit: string | null
+  invoice_no: string | null
+  line_count: number | null
+  discount_tiyin: number | null
+  surcharge_tiyin: number | null
   category: ExpenseCategory | null
   method: MoneyMethod | null
   order_number: string | null
@@ -168,6 +171,24 @@ export interface WorkerProduction {
   rows: WorkerProductionRow[]
 }
 
+export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+/** A supplier faktura the workshop still owes on — the expense form's picker. */
+export interface PayableInvoice {
+  id: string
+  invoice_no: string
+  invoice_date: string
+  supplier_id: string | null
+  supplier_name: string | null
+  branch_id: string
+  branch_name: string | null
+  line_count: number
+  total_tiyin: number
+  paid_tiyin: number
+  outstanding_tiyin: number
+  payment_status: InvoicePaymentStatus
+}
+
 export const useFinanceStore = defineStore('finance', () => {
   const summary = ref<FinanceSummary | null>(null)
   const incomes = ref<Income[]>([])
@@ -176,6 +197,7 @@ export const useFinanceStore = defineStore('finance', () => {
   const supplierDebts = ref<DebtList | null>(null)
   const clientDebts = ref<DebtList | null>(null)
   const statement = ref<DebtStatement | null>(null)
+  const payableInvoices = ref<PayableInvoice[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -372,6 +394,22 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  // Only unpaid and partially paid invoices come back, newest first — the
+  // picker offers what can still be paid, never a settled faktura.
+  async function loadPayableInvoices(search?: string | null) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      payableInvoices.value = await api.get<PayableInvoice[]>(
+        withQuery('/workshop/finance/payable-invoices', { search: search || undefined }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'payable_invoices_load_failed')
+      payableInvoices.value = []
+    }
+  }
+
   async function loadClientDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
     loading.value = true
     error.value = null
@@ -472,6 +510,7 @@ export const useFinanceStore = defineStore('finance', () => {
     supplierDebts.value = null
     clientDebts.value = null
     statement.value = null
+    payableInvoices.value = []
     loading.value = false
     error.value = null
     traceId.value = null
@@ -487,6 +526,7 @@ export const useFinanceStore = defineStore('finance', () => {
     supplierDebts,
     clientDebts,
     statement,
+    payableInvoices,
     loading,
     error,
     traceId,
@@ -502,6 +542,7 @@ export const useFinanceStore = defineStore('finance', () => {
     updateExpense,
     voidExpense,
     loadSupplierDebts,
+    loadPayableInvoices,
     loadClientDebts,
     loadStatement,
     createAdjustment,

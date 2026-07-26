@@ -25,6 +25,8 @@ from app.modules.inventory.schemas import (
     StockAdjustmentRequest,
     StockInRequest,
     SupplierCreateRequest,
+    SupplierInvoiceCreateRequest,
+    SupplierInvoiceLineInput,
     SupplierPatchRequest,
 )
 from app.modules.support.api import record_action, record_status_change
@@ -305,69 +307,43 @@ async def record_stock_in(
     branch_id: uuid.UUID,
     payload: StockInRequest,
 ) -> TransactionRecord:
-    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
-    if payload.quantity <= 0:
-        raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
-    if payload.unit_price_tiyin < 0:
-        raise APIError("invalid_price", "Price cannot be negative", status_code=400)
-    if payload.supplier_id is not None and payload.supplier is not None:
-        raise APIError(
-            "invalid_supplier",
-            "Choose existing or inline supplier, not both",
-            status_code=400,
-        )
-    if payload.supplier_id is None and payload.supplier is None:
-        raise APIError("supplier_required", "Supplier is required", status_code=400)
-    supplier = (
-        await _supplier_in_scope(db, scope=scope, supplier_id=payload.supplier_id)
-        if payload.supplier_id is not None
-        else await _create_supplier_for_scope(
-            db,
-            principal=principal,
-            scope=scope,
-            name=payload.supplier.name if payload.supplier else "",
-            phone=payload.supplier.phone if payload.supplier else None,
-            note=payload.supplier.note if payload.supplier else None,
-        )
-    )
-    if supplier.status is not SupplierStatus.ACTIVE:
-        raise APIError("supplier_inactive", "Supplier is inactive", status_code=400)
-    item, material = await _stock_item_for_movement(
-        db,
-        scope=scope,
-        material_id=payload.material_id,
-    )
-    transaction = await _apply_stock_delta(
+    """Record a single-material arrival as a one-line invoice.
+
+    Kept as its own use case for callers that hand over one material at a time,
+    but it goes through the same document path as a multi-line faktura: a
+    stock-in without an invoice would silently drop out of the supplier balance,
+    which now folds over invoice totals.
+    """
+
+    # Local import: `invoices` builds on this module's movement helpers, so the
+    # dependency can only be closed at call time.
+    from app.modules.inventory.invoices import create_invoice
+
+    record = await create_invoice(
         db,
         principal=principal,
-        stock_item=item,
-        type_=StockTransactionType.STOCK_IN,
-        quantity=payload.quantity,
-        supplier_id=supplier.id,
-        note=_optional_text(payload.note),
-        unit_price_tiyin=payload.unit_price_tiyin,
-        total_price_tiyin=stock_in_total_tiyin(
-            material.kind, payload.quantity, payload.unit_price_tiyin
+        payload=SupplierInvoiceCreateRequest(
+            branch_id=branch_id,
+            supplier_id=payload.supplier_id,
+            supplier=payload.supplier,
+            note=payload.note,
+            lines=[
+                SupplierInvoiceLineInput(
+                    material_id=payload.material_id,
+                    quantity=payload.quantity,
+                    unit_price_tiyin=payload.unit_price_tiyin,
+                    note=payload.note,
+                )
+            ],
         ),
     )
-    await record_action(
-        db,
-        actor=actor_from_principal(principal),
-        action="inventory.stock_in",
-        entity_type="stock_transaction",
-        entity_id=transaction.id,
-        workshop_id=scope.workshop_id,
-        branch_id=scope.branch_id,
-        summary=f"Recorded stock-in for {material.name}",
-        details={"quantity": payload.quantity, "material_id": str(payload.material_id)},
-    )
-    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
+    line = record.lines[0]
     return TransactionRecord(
-        transaction=transaction,
-        stock_item=item,
-        material=material,
-        supplier=supplier,
-        actor=await db.get(WorkshopUser, principal.principal_id),
+        transaction=line.transaction,
+        stock_item=line.stock_item,
+        material=line.material,
+        supplier=record.supplier,
+        actor=record.recorded_by,
     )
 
 
@@ -543,6 +519,7 @@ async def _apply_stock_delta(
     order_id: uuid.UUID | None = None,
     unit_price_tiyin: int | None = None,
     total_price_tiyin: int | None = None,
+    invoice_id: uuid.UUID | None = None,
 ) -> StockTransaction:
     next_balance = stock_item.on_hand + quantity
     # Only order-driven CONSUME may drive the balance negative: it records
@@ -565,6 +542,7 @@ async def _apply_stock_delta(
         total_price_tiyin=total_price_tiyin,
         order_id=order_id,
         supplier_id=supplier_id,
+        invoice_id=invoice_id,
         actor_user_id=principal.principal_id if principal is not None else None,
         note=note,
         created_at=datetime.now(UTC),

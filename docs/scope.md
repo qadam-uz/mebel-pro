@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-26
 order: 20
 ---
 
@@ -24,8 +24,8 @@ that's a considered substitution.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
-  lightweight supplier labels for stock-in, automatic consumption driven by orders, and
-  low-stock surfacing. There is no reservation balance in v1.
+  arrivals grouped under a supplier invoice carrying the document's discount, automatic
+  consumption driven by orders, and low-stock surfacing. There is no reservation balance in v1.
 - **Optimized cutting** — multiple cutting-optimization algorithms run against the same input
   in one request; the platform returns the best result and **names the winning algorithm**.
   Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a
@@ -68,8 +68,11 @@ that's a considered substitution.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion
   complaints, client ratings.
 - **Multi-currency** — local currency only.
-- **Automatic purchase orders, supplier payables / procurement management, remnant tracking,
-  barcode scanning** — future.
+- **Automatic purchase orders, procurement planning, remnant tracking, barcode scanning** —
+  future. Supplier **payables** are in v1: an arrival is recorded as a supplier invoice, and
+  what the workshop still owes each supplier is derived from those invoices, the expenses paid
+  against them, and manual adjustments. What stays out is everything *upstream* of the arrival
+  — expected deliveries, purchase orders, aging reports.
 
 ## Next
 

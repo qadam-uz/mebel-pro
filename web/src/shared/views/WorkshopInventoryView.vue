@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
@@ -29,6 +29,7 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import { useFinanceStore } from '@/shared/stores/finance'
 import {
   formatDate,
+  formatDateInputValue,
   formatDateTime,
   formatStockQuantity,
   formatStockUnit,
@@ -38,6 +39,7 @@ import {
 } from '@/shared/formatters'
 import {
   useWorkshopStore,
+  type InvoicePaymentStatus,
   type StockItem,
   type StockLastPrice,
   type Supplier,
@@ -49,9 +51,12 @@ const workshop = useWorkshopStore()
 const finance = useFinanceStore()
 const toast = useToast()
 const route = useRoute()
-const activeTab = ref<'stock' | 'tx' | 'suppliers'>('stock')
+const router = useRouter()
+const today = formatDateInputValue(new Date())
+const activeTab = ref<'stock' | 'invoices' | 'tx' | 'suppliers'>('stock')
 const inventoryTabs: ChoiceOption[] = [
   { value: 'stock', label: 'Zaxira' },
+  { value: 'invoices', label: 'Kirimlar' },
   { value: 'tx', label: 'Tranzaksiyalar' },
   { value: 'suppliers', label: 'Yetkazib beruvchilar' },
 ]
@@ -64,37 +69,63 @@ const txDateTo = ref(initialTxRange.to ?? '')
 // Material filter doubles as the price-history view: one material's stock-in
 // rows read as its purchase-price timeline.
 const txMaterialId = ref('all')
-const stockInOpen = ref(false)
+const invoiceOpen = ref(false)
 const adjustmentOpen = ref(false)
 const movementSaving = ref(false)
 const supplierSaving = ref(false)
 const movementError = ref<string | null>(null)
 const supplierError = ref<string | null>(null)
-const stockInMaterialError = ref<string | null>(null)
-const stockInSupplierError = ref<string | null>(null)
-const stockInPriceError = ref<string | null>(null)
+const invoiceSupplierError = ref<string | null>(null)
+const invoiceLinesError = ref<string | null>(null)
+const invoiceDiscountError = ref<string | null>(null)
 const adjustmentMaterialError = ref<string | null>(null)
 const editingSupplierId = ref<string | null>(null)
 const supplierModalOpen = ref(false)
 const stockLoadedKey = ref<string | null>(null)
 const transactionsLoadedKey = ref<string | null>(null)
+const invoicesLoadedKey = ref<string | null>(null)
 const suppliersLoadedBranch = ref<string | null>(null)
+const invoiceSearch = ref('')
+const invoicePaymentFilter = ref<InvoicePaymentStatus | 'all'>('all')
+const expandedInvoiceIds = ref<string[]>([])
 let stockSearchTimer: number | undefined
+let invoiceSearchTimer: number | undefined
 
-const stockInForm = reactive({
-  materialId: null as string | null,
-  quantity: '',
-  unitPrice: '',
+// A faktura is entered as a header plus lines; the lines are local drafts until
+// the whole document is saved in one request.
+interface InvoiceLineDraft {
+  key: number
+  materialId: string | null
+  quantity: string
+  unitPrice: string
+  // A typed price is never overwritten by a later last-price prefill.
+  priceEdited: boolean
+  lastPrice: StockLastPrice | null
+  lastPriceLoaded: boolean
+}
+
+let lineKeySeed = 0
+function blankLine(): InvoiceLineDraft {
+  return {
+    key: ++lineKeySeed,
+    materialId: null,
+    quantity: '',
+    unitPrice: '',
+    priceEdited: false,
+    lastPrice: null,
+    lastPriceLoaded: false,
+  }
+}
+
+const invoiceForm = reactive({
   supplierId: null as string | null,
   inlineSupplierName: '',
+  invoiceDate: today,
+  discount: '',
+  surcharge: '',
   note: '',
 })
-// Prefill state: the latest fetched price (provenance for the hint line) and
-// whether the user has typed into the price field — a typed value is never
-// overwritten by a later prefill, only the hint updates.
-const lastPrice = ref<StockLastPrice | null>(null)
-const lastPriceLoaded = ref(false)
-const priceEdited = ref(false)
+const invoiceLines = ref<InvoiceLineDraft[]>([blankLine()])
 const adjustmentForm = reactive({
   materialId: null as string | null,
   // A signed quantity with a REQUIRED leading + or − ("-2" decreases, "+5"
@@ -162,7 +193,6 @@ const activeSupplierOptions = computed(() => [
       meta: supplier.phone ?? 'faol',
     })),
 ])
-const selectedStockInItem = computed(() => stockItemByMaterial(stockInForm.materialId))
 const selectedAdjustmentItem = computed(() => stockItemByMaterial(adjustmentForm.materialId))
 // The signed field is incomplete (not wrong) until the required prefix arrives —
 // surface a muted nudge while typing; the danger copy is reserved for submit.
@@ -172,13 +202,6 @@ const adjustmentNeedsSign = computed(
 
 // Type-time sanitization (PhoneInput precedent) — invalid characters never stick.
 watch(
-  () => stockInForm.quantity,
-  (value) => {
-    const clean = sanitizeQuantityInput(value)
-    if (clean !== value) stockInForm.quantity = clean
-  },
-)
-watch(
   () => adjustmentForm.quantity,
   (value) => {
     const clean = sanitizeSignedQuantityInput(value)
@@ -186,101 +209,171 @@ watch(
   },
 )
 watch(
-  () => stockInForm.unitPrice,
+  invoiceLines,
+  (lines) => {
+    for (const line of lines) {
+      const quantity = sanitizeQuantityInput(line.quantity)
+      if (quantity !== line.quantity) line.quantity = quantity
+      const price = sanitizeMoneyInput(line.unitPrice)
+      if (price !== line.unitPrice) line.unitPrice = price
+    }
+  },
+  { deep: true },
+)
+watch(
+  () => invoiceForm.discount,
   (value) => {
     const clean = sanitizeMoneyInput(value)
-    if (clean !== value) stockInForm.unitPrice = clean
+    if (clean !== value) invoiceForm.discount = clean
+  },
+)
+watch(
+  () => invoiceForm.surcharge,
+  (value) => {
+    const clean = sanitizeMoneyInput(value)
+    if (clean !== value) invoiceForm.surcharge = clean
   },
 )
 
-// The unit the price is entered per — panel piece for panels, metre for edges.
-const stockInPriceUnit = computed(() => {
-  const item = selectedStockInItem.value
-  if (!item) return null
-  return item.display_unit === 'metre' || item.display_unit === 'm' ? '1 metr' : '1 dona'
-})
+// The unit a line's price is entered per — panel piece for panels, metre for edges.
+function linePriceUnit(line: InvoiceLineDraft) {
+  const item = stockItemByMaterial(line.materialId)
+  if (!item) return "so'm"
+  return isMetreUnit(item.display_unit) ? "1 metr, so'm" : "1 dona, so'm"
+}
 
-const lastPriceHint = computed(() => {
-  if (!stockInForm.materialId || !lastPriceLoaded.value) return null
-  const price = lastPrice.value
+function lineQuantityUnit(line: InvoiceLineDraft) {
+  const item = stockItemByMaterial(line.materialId)
+  return item ? formatStockUnit(item.display_unit) : ''
+}
+
+function lineLastPriceHint(line: InvoiceLineDraft) {
+  if (!line.materialId || !line.lastPriceLoaded) return null
+  const price = line.lastPrice
   if (!price || price.unit_price_tiyin === null) return "Birinchi kirim — avvalgi narx yo'q"
   const parts = [`Oxirgi narx: ${formatTiyin(price.unit_price_tiyin)}`]
   if (price.recorded_at) parts.push(formatDate(price.recorded_at))
   if (price.supplier_name) parts.push(`«${price.supplier_name}»`)
   return parts.join(' · ')
-})
+}
 
-// Live total mirroring the server math exactly: panels multiply, edges take
+function isMetreUnit(displayUnit: string) {
+  return displayUnit === 'metre' || displayUnit === 'm'
+}
+
+// Live line total mirroring the server math exactly: panels multiply, edges take
 // millimetres x per-metre price with floor division (the sale-side mirror).
-const stockInTotalTiyin = computed(() => {
-  const item = selectedStockInItem.value
-  const quantity = validStockInQuantity(item)
-  const price = parseSomToTiyin(stockInForm.unitPrice)
+function lineTotalTiyin(line: InvoiceLineDraft) {
+  const item = stockItemByMaterial(line.materialId)
+  const quantity = validLineQuantity(line, item)
+  const price = parseSomToTiyin(line.unitPrice)
   if (!item || quantity === null || price === null) return null
-  if (item.display_unit === 'metre' || item.display_unit === 'm') {
-    return Math.floor((quantity * price) / 1000)
-  }
-  return quantity * price
-})
+  return isMetreUnit(item.display_unit) ? Math.floor((quantity * price) / 1000) : quantity * price
+}
 
-// A real (non-inline) selected supplier id, for supplier-specific prefill.
-const stockInRealSupplierId = computed(() =>
-  stockInForm.supplierId && stockInForm.supplierId !== 'inline' ? stockInForm.supplierId : null,
+const invoiceSubtotalTiyin = computed(() =>
+  invoiceLines.value.reduce((sum, line) => sum + (lineTotalTiyin(line) ?? 0), 0),
+)
+const invoiceDiscountTiyin = computed(() => parseSomToTiyin(invoiceForm.discount) ?? 0)
+const invoiceSurchargeTiyin = computed(() => parseSomToTiyin(invoiceForm.surcharge) ?? 0)
+const invoiceTotalTiyin = computed(
+  () => invoiceSubtotalTiyin.value - invoiceDiscountTiyin.value + invoiceSurchargeTiyin.value,
+)
+const invoiceDiscountTooBig = computed(
+  () => invoiceDiscountTiyin.value > invoiceSubtotalTiyin.value,
 )
 
-let lastPriceFetchToken = 0
-async function refreshLastPrice() {
-  const materialId = stockInForm.materialId
-  if (!selectedBranchId.value || !materialId) {
-    lastPrice.value = null
-    lastPriceLoaded.value = false
+// A real (non-inline) selected supplier id, for supplier-specific prefill.
+const invoiceRealSupplierId = computed(() =>
+  invoiceForm.supplierId && invoiceForm.supplierId !== 'inline' ? invoiceForm.supplierId : null,
+)
+
+const lastPriceFetchTokens = new Map<number, number>()
+async function refreshLineLastPrice(line: InvoiceLineDraft) {
+  if (!selectedBranchId.value || !line.materialId) {
+    line.lastPrice = null
+    line.lastPriceLoaded = false
     return
   }
-  const token = ++lastPriceFetchToken
+  const token = (lastPriceFetchTokens.get(line.key) ?? 0) + 1
+  lastPriceFetchTokens.set(line.key, token)
   try {
     const fetched = await workshop.fetchMaterialLastPrice(
       selectedBranchId.value,
-      materialId,
-      stockInRealSupplierId.value,
+      line.materialId,
+      invoiceRealSupplierId.value,
     )
-    if (token !== lastPriceFetchToken) return
-    lastPrice.value = fetched
-    lastPriceLoaded.value = true
-    // Prefill only while the user hasn't typed a price — a typed value wins.
-    if (!priceEdited.value) {
-      stockInForm.unitPrice =
+    if (lastPriceFetchTokens.get(line.key) !== token) return
+    line.lastPrice = fetched
+    line.lastPriceLoaded = true
+    // Prefill only into a field the user has not touched — a typed value always
+    // wins. The emptiness check is what makes that race-proof: the fetch is in
+    // flight while the price field is already reachable, and `priceEdited` only
+    // flips on the first input event, so a fast typist could otherwise have the
+    // prefill land on top of half-entered digits.
+    if (!line.priceEdited && !line.unitPrice) {
+      line.unitPrice =
         fetched.unit_price_tiyin !== null && fetched.unit_price_tiyin > 0
           ? String(Math.round(fetched.unit_price_tiyin / 100))
           : ''
     }
   } catch {
-    if (token !== lastPriceFetchToken) return
+    if (lastPriceFetchTokens.get(line.key) !== token) return
     // Prefill is best-effort UX; a failed fetch must never block manual entry.
-    lastPrice.value = null
-    lastPriceLoaded.value = false
+    line.lastPrice = null
+    line.lastPriceLoaded = false
   }
 }
 
-function markPriceEdited() {
-  priceEdited.value = true
+function onLineMaterialChange(line: InvoiceLineDraft) {
+  // A price belongs to a material — switching materials restarts the prefill.
+  line.priceEdited = false
+  line.unitPrice = ''
+  line.lastPriceLoaded = false
+  void refreshLineLastPrice(line)
 }
 
-watch(
-  () => stockInForm.materialId,
-  () => {
-    // A price belongs to a material — switching materials restarts the prefill.
-    priceEdited.value = false
-    stockInForm.unitPrice = ''
-    lastPriceLoaded.value = false
-    void refreshLastPrice()
-  },
-)
+function addInvoiceLine() {
+  invoiceLines.value = [...invoiceLines.value, blankLine()]
+}
 
-watch(stockInRealSupplierId, () => {
-  if (stockInForm.materialId) void refreshLastPrice()
+function removeInvoiceLine(key: number) {
+  const remaining = invoiceLines.value.filter((line) => line.key !== key)
+  invoiceLines.value = remaining.length > 0 ? remaining : [blankLine()]
+}
+
+watch(invoiceRealSupplierId, () => {
+  for (const line of invoiceLines.value) {
+    if (line.materialId) void refreshLineLastPrice(line)
+  }
 })
+
+const paymentStatusFilterOptions: DropdownOption[] = [
+  { value: 'all', label: 'Hamma holatlar' },
+  { value: 'unpaid', label: "To'lanmagan", dot: 'danger' },
+  { value: 'partial', label: 'Qisman', dot: 'warning' },
+  { value: 'paid', label: "To'langan", dot: 'success' },
+]
+
+function paymentStatusPill(status: InvoicePaymentStatus) {
+  if (status === 'paid') return { cls: 'pill p-ok', text: "To'langan" }
+  if (status === 'partial') return { cls: 'pill p-warn', text: 'Qisman' }
+  return { cls: 'pill p-bad', text: "To'lanmagan" }
+}
+
+function isInvoiceExpanded(id: string) {
+  return expandedInvoiceIds.value.includes(id)
+}
+
+function toggleInvoice(id: string) {
+  expandedInvoiceIds.value = isInvoiceExpanded(id)
+    ? expandedInvoiceIds.value.filter((row) => row !== id)
+    : [...expandedInvoiceIds.value, id]
+}
+
 const activeListEmpty = computed(() => {
   if (activeTab.value === 'stock') return workshop.stockItems.length === 0
+  if (activeTab.value === 'invoices') return workshop.supplierInvoices.length === 0
   if (activeTab.value === 'tx') return workshop.stockTransactions.length === 0
   return workshop.suppliers.length === 0
 })
@@ -330,14 +423,20 @@ function stockFilterKey() {
   return [selectedBranchId.value, search.value.trim(), lowOnly.value ? 'low' : 'all'].join(':')
 }
 
+function invoiceFilterKey() {
+  return [selectedBranchId.value, invoiceSearch.value.trim(), invoicePaymentFilter.value].join(':')
+}
+
 async function refreshActiveInventoryTab(options: { force?: boolean; offset?: number } = {}) {
   if (!selectedBranchId.value) return
   const branchId = selectedBranchId.value
   const offset = options.offset ?? 0
   const txKey = transactionFilterKey()
   const stockKey = stockFilterKey()
+  const invoiceKey = invoiceFilterKey()
   if (!options.force && offset === 0) {
     if (activeTab.value === 'stock' && stockLoadedKey.value === stockKey) return
+    if (activeTab.value === 'invoices' && invoicesLoadedKey.value === invoiceKey) return
     if (activeTab.value === 'tx' && transactionsLoadedKey.value === txKey) return
     if (activeTab.value === 'suppliers' && suppliersLoadedBranch.value === branchId) return
   }
@@ -351,6 +450,14 @@ async function refreshActiveInventoryTab(options: { force?: boolean; offset?: nu
         low_stock: lowOnly.value ? true : null,
       })
       stockLoadedKey.value = stockKey
+      return
+    }
+    if (activeTab.value === 'invoices') {
+      await workshop.loadSupplierInvoices(branchId, {
+        search: invoiceSearch.value.trim() || null,
+        payment_status: invoicePaymentFilter.value === 'all' ? null : invoicePaymentFilter.value,
+      })
+      invoicesLoadedKey.value = invoiceKey
       return
     }
     if (activeTab.value === 'tx') {
@@ -394,8 +501,8 @@ async function ensureSuppliersLoaded() {
   }
 }
 
-function validStockInQuantity(item: StockItem | null) {
-  const quantity = parseDisplayQuantity(stockInForm.quantity, item?.display_unit ?? 'piece')
+function validLineQuantity(line: InvoiceLineDraft, item: StockItem | null) {
+  const quantity = parseDisplayQuantity(line.quantity, item?.display_unit ?? 'piece')
   return Number.isFinite(quantity) && quantity > 0 ? quantity : null
 }
 
@@ -409,60 +516,81 @@ function validAdjustmentQuantity(item: StockItem | null) {
   return Number.isFinite(magnitude) && magnitude > 0 ? sign * magnitude : null
 }
 
-async function recordStockIn() {
+// `withExpense` is what makes the invoice→expense link actually get used:
+// without it staff record the payment separately and never attach it.
+async function saveInvoice(withExpense = false) {
   if (!selectedBranchId.value) return
   movementSaving.value = true
   movementError.value = null
-  stockInMaterialError.value = null
-  stockInSupplierError.value = null
-  stockInPriceError.value = null
-  const item = selectedStockInItem.value
-  const quantity = validStockInQuantity(item)
-  if (!item || quantity === null) {
-    stockInMaterialError.value = "Material va musbat miqdorni to'g'ri kiriting."
+  invoiceSupplierError.value = null
+  invoiceLinesError.value = null
+  invoiceDiscountError.value = null
+
+  if (!invoiceForm.supplierId) {
+    invoiceSupplierError.value = 'Ta`minotchini tanlang.'
     movementSaving.value = false
     return
   }
-  const unitPriceTiyin = parseSomToTiyin(stockInForm.unitPrice)
-  if (unitPriceTiyin === null) {
-    stockInPriceError.value = "Kirim narxini kiriting (so'mda)."
+  if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
+    invoiceSupplierError.value = 'Yangi yetkazib beruvchi nomini kiriting.'
     movementSaving.value = false
     return
   }
-  if (stockInForm.supplierId === 'inline' && !stockInForm.inlineSupplierName.trim()) {
-    stockInSupplierError.value = 'Yangi yetkazib beruvchi nomini kiriting.'
-    movementSaving.value = false
-    return
-  }
-  try {
-    await workshop.recordStockIn(selectedBranchId.value, {
+  const lines: Array<{ material_id: string; quantity: number; unit_price_tiyin: number }> = []
+  for (const line of invoiceLines.value) {
+    const item = stockItemByMaterial(line.materialId)
+    const quantity = validLineQuantity(line, item)
+    const unitPriceTiyin = parseSomToTiyin(line.unitPrice)
+    if (!item || quantity === null || unitPriceTiyin === null) {
+      invoiceLinesError.value = "Har bir qatorda material, musbat miqdor va narx bo'lishi kerak."
+      movementSaving.value = false
+      return
+    }
+    lines.push({
       material_id: item.material_id,
       quantity,
       unit_price_tiyin: unitPriceTiyin,
-      supplier_id:
-        stockInForm.supplierId && stockInForm.supplierId !== 'inline'
-          ? stockInForm.supplierId
-          : null,
-      supplier:
-        stockInForm.supplierId === 'inline'
-          ? { name: stockInForm.inlineSupplierName.trim() }
-          : null,
-      note: stockInForm.note || null,
     })
-    resetStockInForm()
-    stockInOpen.value = false
-    toast.success('Kirim yozildi.')
+  }
+  if (invoiceDiscountTooBig.value) {
+    invoiceDiscountError.value = 'Skidka oraliq jamidan katta bo`la olmaydi.'
+    movementSaving.value = false
+    return
+  }
+
+  try {
+    const invoice = await workshop.createSupplierInvoice(selectedBranchId.value, {
+      supplier_id: invoiceForm.supplierId === 'inline' ? null : invoiceForm.supplierId,
+      supplier:
+        invoiceForm.supplierId === 'inline'
+          ? { name: invoiceForm.inlineSupplierName.trim() }
+          : null,
+      invoice_date: invoiceForm.invoiceDate || null,
+      discount_tiyin: invoiceDiscountTiyin.value,
+      surcharge_tiyin: invoiceSurchargeTiyin.value,
+      note: invoiceForm.note || null,
+      lines,
+    })
+    resetInvoiceForm()
+    invoiceOpen.value = false
+    invoicesLoadedKey.value = null
+    toast.success(`Kirim ${invoice.invoice_no} yozildi.`)
+    if (withExpense) {
+      await router.push(
+        rolePath(`/workshop/finance/expenses?create=expense&invoice_id=${invoice.id}`),
+      )
+      return
+    }
+    if (activeTab.value === 'invoices') await refreshActiveInventoryTab({ force: true })
   } catch (errorValue) {
     // A material can hold a (negative) stock row while sitting outside the branch
     // catalog — production records what physically moved regardless (QAD-150).
-    // Stock-in still needs the catalog entry, so name the actual next step
-    // instead of the generic "harakat yozilmadi".
-    if (apiErrorCode(errorValue) === 'branch_material_not_found') {
-      stockInMaterialError.value =
-        "Bu material filial katalogida yo'q. Avval katalogga qo'shing, keyin kirim yozing."
-    } else {
-      movementError.value = 'stock_in_failed'
-    }
+    // An invoice line still needs the catalog entry, so name the actual next
+    // step instead of the generic "kirim yozilmadi".
+    movementError.value =
+      apiErrorCode(errorValue) === 'branch_material_not_found'
+        ? 'branch_material_not_found'
+        : 'invoice_save_failed'
   } finally {
     movementSaving.value = false
   }
@@ -560,19 +688,24 @@ function closeSupplierModal() {
   resetSupplierForm()
 }
 
-function resetStockInForm() {
-  stockInForm.materialId = null
-  stockInForm.quantity = ''
-  stockInForm.unitPrice = ''
-  stockInForm.supplierId = null
-  stockInForm.inlineSupplierName = ''
-  stockInForm.note = ''
-  lastPrice.value = null
-  lastPriceLoaded.value = false
-  priceEdited.value = false
-  stockInMaterialError.value = null
-  stockInSupplierError.value = null
-  stockInPriceError.value = null
+function openInvoiceModal() {
+  resetInvoiceForm()
+  movementError.value = null
+  invoiceOpen.value = true
+  void ensureSuppliersLoaded()
+}
+
+function resetInvoiceForm() {
+  invoiceForm.supplierId = null
+  invoiceForm.inlineSupplierName = ''
+  invoiceForm.invoiceDate = today
+  invoiceForm.discount = ''
+  invoiceForm.surcharge = ''
+  invoiceForm.note = ''
+  invoiceLines.value = [blankLine()]
+  invoiceSupplierError.value = null
+  invoiceLinesError.value = null
+  invoiceDiscountError.value = null
 }
 
 function resetAdjustmentForm() {
@@ -604,7 +737,9 @@ function applyRouteSearch() {
 watch(selectedBranchId, () => {
   stockLoadedKey.value = null
   transactionsLoadedKey.value = null
+  invoicesLoadedKey.value = null
   suppliersLoadedBranch.value = null
+  expandedInvoiceIds.value = []
   workshop.clearInventory()
   void refreshActiveInventoryTab({ force: true })
 })
@@ -637,6 +772,21 @@ watch([search, lowOnly], () => {
   }, 250)
 })
 
+watch([invoiceSearch, invoicePaymentFilter], () => {
+  window.clearTimeout(invoiceSearchTimer)
+  invoiceSearchTimer = window.setTimeout(() => {
+    if (activeTab.value === 'invoices') void refreshActiveInventoryTab({ force: true })
+  }, 250)
+})
+
+// Materials feed the invoice line pickers, suppliers feed its header — both
+// live on the stock/supplier endpoints, so the Kirimlar tab loads them too.
+watch(activeTab, (tab) => {
+  if (tab !== 'invoices' || !selectedBranchId.value) return
+  if (workshop.stockItems.length === 0) void workshop.loadStock(selectedBranchId.value)
+  void ensureSuppliersLoaded()
+})
+
 onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
@@ -645,6 +795,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(stockSearchTimer)
+  window.clearTimeout(invoiceSearchTimer)
 })
 </script>
 
@@ -689,6 +840,25 @@ onBeforeUnmount(() => {
           <span class="mp-filter-chip-dot" aria-hidden="true"></span>
           Kam qolgan materiallar
         </button>
+        <label v-if="activeTab === 'invoices'" class="mp-filter-input">
+          <span>Qidirish</span>
+          <input v-model="invoiceSearch" placeholder="K-0007 yoki ta`minotchi..." />
+        </label>
+        <ProjectDropdown
+          v-if="activeTab === 'invoices'"
+          v-model="invoicePaymentFilter"
+          label="To`lov holati"
+          :options="paymentStatusFilterOptions"
+          top-label
+        />
+        <button
+          v-if="activeTab === 'invoices'"
+          type="button"
+          class="mp-button mp-button-primary"
+          @click="openInvoiceModal"
+        >
+          + Kirim
+        </button>
         <DateRangePicker
           v-if="activeTab === 'tx'"
           v-model:preset="txPreset"
@@ -705,7 +875,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
-        <button type="button" class="mp-button mp-button-primary" @click="stockInOpen = true">
+        <button type="button" class="mp-button mp-button-primary" @click="openInvoiceModal">
           Kirim
         </button>
         <button type="button" class="mp-button mp-button-outline" @click="adjustmentOpen = true">
@@ -713,69 +883,197 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <AppModal :open="stockInOpen" title="Kirim" @close="stockInOpen = false">
-        <form class="grid gap-3" @submit.prevent="recordStockIn">
-          <SearchCombobox
-            v-model="stockInForm.materialId"
-            label="Material"
-            :options="stockOptions"
-            :error="stockInMaterialError"
-          />
-          <label class="field">
-            <span
-              >Miqdor{{
-                selectedStockInItem ? ` (${formatStockUnit(selectedStockInItem.display_unit)})` : ''
-              }}</span
-            >
-            <input v-model="stockInForm.quantity" class="mp-input" inputmode="decimal" required />
-          </label>
-          <label class="field">
-            <span
-              >Kirim narxi{{ stockInPriceUnit ? ` (${stockInPriceUnit}, so'm)` : " (so'm)" }}</span
-            >
-            <input
-              v-model="stockInForm.unitPrice"
-              class="mp-input"
-              inputmode="decimal"
-              required
-              @input="markPriceEdited"
+      <AppModal
+        :open="invoiceOpen"
+        title="Kirim"
+        max-width="max-w-3xl"
+        @close="invoiceOpen = false"
+      >
+        <form class="grid gap-4" @submit.prevent="saveInvoice(false)">
+          <!-- Header: who delivered, when, and the number the document will get. -->
+          <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <FormSelect
+              v-model="invoiceForm.supplierId"
+              label="Ta`minotchi"
+              :options="activeSupplierOptions"
+              :error="invoiceSupplierError"
+              @focusin="ensureSuppliersLoaded"
             />
-            <small v-if="lastPriceHint" class="text-ink-muted">{{ lastPriceHint }}</small>
-            <small v-if="stockInPriceError" class="font-bold text-danger">
-              {{ stockInPriceError }}
-            </small>
-          </label>
-          <FormSelect
-            v-model="stockInForm.supplierId"
-            label="Yetkazib beruvchi"
-            :options="activeSupplierOptions"
-            :error="stockInSupplierError"
-            @focusin="ensureSuppliersLoaded"
-          />
-          <label v-if="stockInForm.supplierId === 'inline'" class="field">
-            <span>Yangi yetkazib beruvchi nomi</span>
-            <input v-model="stockInForm.inlineSupplierName" class="mp-input" required />
-          </label>
-          <label class="field">
-            <span>Izoh</span>
-            <input v-model="stockInForm.note" class="mp-input" />
-          </label>
-          <div
-            v-if="stockInTotalTiyin !== null"
-            class="flex items-center justify-between border-t border-hairline pt-3 text-sm font-bold"
-          >
-            <span>Jami:</span>
-            <span class="num">{{ formatTiyin(stockInTotalTiyin) }}</span>
+            <label class="field">
+              <span>Kirim sanasi</span>
+              <input
+                v-model="invoiceForm.invoiceDate"
+                type="date"
+                class="mp-input"
+                :max="today"
+                required
+              />
+            </label>
+            <div class="field">
+              <span>Raqam</span>
+              <span
+                class="flex min-h-10 items-center rounded-md border border-hairline bg-sunk px-3 font-mono text-sm font-bold text-ink-muted"
+              >
+                K-… avtomatik
+              </span>
+            </div>
           </div>
+          <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
+            <span>Yangi yetkazib beruvchi nomi</span>
+            <input v-model="invoiceForm.inlineSupplierName" class="mp-input" required />
+          </label>
+
+          <div class="grid gap-2">
+            <div class="table-wrap">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th class="right">Miqdor</th>
+                    <th class="right">Narx</th>
+                    <th class="right">Summa</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="line in invoiceLines" :key="line.key">
+                    <td class="min-w-52">
+                      <!-- The column header carries the label on screen; the
+                           bound one stays for screen readers. -->
+                      <SearchCombobox
+                        v-model="line.materialId"
+                        label="Material"
+                        label-class="sr-only"
+                        :options="stockOptions"
+                        compact
+                        @update:model-value="onLineMaterialChange(line)"
+                      />
+                    </td>
+                    <td class="min-w-28">
+                      <input
+                        v-model="line.quantity"
+                        class="mp-input text-right"
+                        inputmode="decimal"
+                        :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
+                        :placeholder="lineQuantityUnit(line) || 'miqdor'"
+                      />
+                    </td>
+                    <td class="min-w-32">
+                      <input
+                        v-model="line.unitPrice"
+                        class="mp-input text-right"
+                        inputmode="decimal"
+                        :aria-label="`Narx ${linePriceUnit(line)}`"
+                        :placeholder="linePriceUnit(line)"
+                        @input="line.priceEdited = true"
+                      />
+                      <small
+                        v-if="lineLastPriceHint(line)"
+                        class="block text-[11px] text-ink-muted"
+                      >
+                        {{ lineLastPriceHint(line) }}
+                      </small>
+                    </td>
+                    <td class="amt">
+                      {{
+                        lineTotalTiyin(line) !== null ? formatTiyin(lineTotalTiyin(line) ?? 0) : '—'
+                      }}
+                    </td>
+                    <td class="right">
+                      <button
+                        type="button"
+                        class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                        :aria-label="`Qatorni o'chirish`"
+                        @click="removeInvoiceLine(line.key)"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <button
+                type="button"
+                class="mp-button mp-button-outline min-h-9 px-3 text-sm"
+                @click="addInvoiceLine"
+              >
+                + Material qo'shish
+              </button>
+            </div>
+            <small v-if="invoiceLinesError" class="mp-field-error">{{ invoiceLinesError }}</small>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <!-- `self-start`: a one-line note must not stretch to the height of
+                 the totals block sitting beside it. -->
+            <label class="field !mb-0 self-start">
+              <span>Izoh</span>
+              <input v-model="invoiceForm.note" class="mp-input" placeholder="ixtiyoriy" />
+            </label>
+            <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-ink-soft">Oraliq jami</span>
+                <span class="num font-bold">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
+              </div>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-ink-soft">Skidka</span>
+                <input
+                  v-model="invoiceForm.discount"
+                  class="mp-input max-w-40 text-right"
+                  inputmode="numeric"
+                  placeholder="0"
+                />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-ink-soft">Ustama</span>
+                <input
+                  v-model="invoiceForm.surcharge"
+                  class="mp-input max-w-40 text-right"
+                  inputmode="numeric"
+                  placeholder="0"
+                />
+              </label>
+              <small v-if="invoiceDiscountError" class="mp-field-error">
+                {{ invoiceDiscountError }}
+              </small>
+              <div
+                class="flex items-center justify-between border-t border-hairline-strong pt-2 font-bold"
+              >
+                <span>Jami</span>
+                <span class="num">{{ formatTiyin(invoiceTotalTiyin) }}</span>
+              </div>
+            </div>
+          </div>
+
           <p
             v-if="movementError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            Ombor harakati yozilmadi.
+            {{
+              movementError === 'branch_material_not_found'
+                ? "Qatorlardagi materiallardan biri filial katalogida yo'q. Avval katalogga qo'shing, keyin kirim yozing."
+                : "Kirim yozilmadi. Qatorlarni tekshirib qayta urinib ko'ring."
+            }}
           </p>
-          <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
-            {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="submit" class="mp-button mp-button-primary" :disabled="movementSaving">
+              {{ movementSaving ? 'Saqlanmoqda' : 'Saqlash' }}
+            </button>
+            <button
+              v-if="canSeeDebts"
+              type="button"
+              class="mp-button mp-button-outline"
+              :disabled="movementSaving"
+              @click="saveInvoice(true)"
+            >
+              Saqlash va xarajat yozish
+            </button>
+            <button type="button" class="mp-button mp-button-outline" @click="invoiceOpen = false">
+              Bekor
+            </button>
+          </div>
         </form>
       </AppModal>
 
@@ -900,6 +1198,161 @@ onBeforeUnmount(() => {
                   <div class="st-empty !border-0 !py-8">
                     <h3>Bu filialga material qo'shilmagan</h3>
                     <p>Katalogdan material qo'shing.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section
+        v-else-if="activeTab === 'invoices'"
+        id="workshop-inventory-invoices-panel"
+        class="card"
+        role="tabpanel"
+        aria-labelledby="workshop-inventory-invoices-tab"
+        tabindex="0"
+      >
+        <div v-if="workshop.inventoryError" class="banner danger m-4">
+          <div class="grow">
+            Kirimlarni yuklashda xato · {{ traceLine(workshop.inventoryTraceId) }}
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Raqam</th>
+                <th>Ta`minotchi</th>
+                <th>Sana</th>
+                <th class="right">Pozitsiya</th>
+                <th class="right">Jami</th>
+                <th>To`lov</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="invoice in workshop.supplierInvoices" :key="invoice.id">
+                <tr>
+                  <td class="nm font-mono">{{ invoice.invoice_no }}</td>
+                  <td>
+                    {{ invoice.supplier_name ?? '—' }}
+                    <small v-if="invoice.note" class="block truncate text-ink-muted">
+                      {{ invoice.note }}
+                    </small>
+                  </td>
+                  <td class="num text-ink-muted">{{ formatDate(invoice.invoice_date) }}</td>
+                  <td class="num right">{{ invoice.line_count }} pozitsiya</td>
+                  <td class="amt">
+                    {{ formatTiyin(invoice.total_tiyin) }}
+                    <small
+                      v-if="invoice.discount_tiyin > 0 || invoice.surcharge_tiyin > 0"
+                      class="block text-[11px] text-ink-muted"
+                    >
+                      <template v-if="invoice.discount_tiyin > 0">
+                        skidka {{ formatTiyin(invoice.discount_tiyin) }}
+                      </template>
+                      <template v-if="invoice.surcharge_tiyin > 0">
+                        ustama {{ formatTiyin(invoice.surcharge_tiyin) }}
+                      </template>
+                    </small>
+                  </td>
+                  <td>
+                    <span :class="paymentStatusPill(invoice.payment_status).cls">
+                      <span class="pd"></span>{{ paymentStatusPill(invoice.payment_status).text }}
+                    </span>
+                    <small
+                      v-if="invoice.outstanding_tiyin > 0 && invoice.paid_tiyin > 0"
+                      class="block text-[11px] text-ink-muted"
+                    >
+                      qoldiq {{ formatTiyin(invoice.outstanding_tiyin) }}
+                    </small>
+                  </td>
+                  <td class="right">
+                    <button
+                      type="button"
+                      class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                      :aria-expanded="isInvoiceExpanded(invoice.id)"
+                      :aria-controls="`invoice-lines-${invoice.id}`"
+                      @click="toggleInvoice(invoice.id)"
+                    >
+                      {{ isInvoiceExpanded(invoice.id) ? 'Yopish' : 'Qatorlar' }}
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="isInvoiceExpanded(invoice.id)" :id="`invoice-lines-${invoice.id}`">
+                  <td colspan="7" class="bg-sunk">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Material</th>
+                          <th class="right">Miqdor</th>
+                          <th class="right">Narx</th>
+                          <th class="right">Summa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="line in invoice.lines" :key="line.transaction_id">
+                          <td class="nm">{{ line.material_name }}</td>
+                          <td class="amt">
+                            {{ formatStockQuantity(line.quantity, line.display_unit) }}
+                          </td>
+                          <td class="amt">
+                            {{
+                              line.unit_price_tiyin !== null
+                                ? formatTiyin(line.unit_price_tiyin)
+                                : '—'
+                            }}
+                          </td>
+                          <td class="amt">
+                            {{
+                              line.total_price_tiyin !== null
+                                ? formatTiyin(line.total_price_tiyin)
+                                : '—'
+                            }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="right text-ink-soft">Oraliq jami</td>
+                          <td class="amt">{{ formatTiyin(invoice.subtotal_tiyin) }}</td>
+                        </tr>
+                        <tr v-if="invoice.discount_tiyin > 0">
+                          <td colspan="3" class="right text-ink-soft">Skidka</td>
+                          <td class="amt danger-text">
+                            −{{ formatTiyin(invoice.discount_tiyin) }}
+                          </td>
+                        </tr>
+                        <tr v-if="invoice.surcharge_tiyin > 0">
+                          <td colspan="3" class="right text-ink-soft">Ustama</td>
+                          <td class="amt">+{{ formatTiyin(invoice.surcharge_tiyin) }}</td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="right font-bold">Jami</td>
+                          <td class="amt font-bold">{{ formatTiyin(invoice.total_tiyin) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="workshop.supplierInvoices.length === 0">
+                <td colspan="7">
+                  <div class="st-empty !border-0 !py-8">
+                    <h3>
+                      {{
+                        invoiceSearch.trim() || invoicePaymentFilter !== 'all'
+                          ? 'Filtr bo`yicha kirim topilmadi'
+                          : 'Hali kirim yozilmagan'
+                      }}
+                    </h3>
+                    <p>
+                      {{
+                        invoiceSearch.trim() || invoicePaymentFilter !== 'all'
+                          ? 'Qidiruv yoki to`lov holatini o`zgartiring.'
+                          : 'Yetkazib beruvchidan kelgan fakturani «+ Kirim» orqali yozing.'
+                      }}
+                    </p>
                   </div>
                 </td>
               </tr>

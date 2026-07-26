@@ -271,20 +271,22 @@ test('owner adds a branch material and records priced stock movement with prefil
 
   await page.goto('/workshop/inventory')
   await expect(page.getByRole('heading', { name: 'Ombor' })).toBeVisible()
+  // An arrival is one supplier invoice with a line per material (QAD-149).
   await page.getByRole('button', { name: 'Kirim', exact: true }).click()
   const stockIn = page.getByRole('dialog', { name: 'Kirim' })
-  await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
-  await page.getByRole('option', { name: new RegExp(material.name) }).click()
-  await stockIn.getByLabel(/Miqdor/).fill('3')
-  // First-ever stock-in: no price history, so the field is empty with the hint.
-  await expect(stockIn.getByText('Birinchi kirim', { exact: false })).toBeVisible()
-  await stockIn.getByLabel(/Kirim narxi/).fill('2000')
-  // The live total mirrors the server math: 3 x 2 000 so'm.
-  await expect(stockIn.getByText('Jami:')).toBeVisible()
-  await stockIn.getByRole('combobox', { name: /Yetkazib beruvchi/ }).click()
+  await stockIn.getByRole('combobox', { name: /Ta.minotchi/ }).click()
   await page.getByRole('option', { name: 'Yangi yetkazib beruvchi' }).click()
   await stockIn.getByLabel('Yangi yetkazib beruvchi nomi').fill(`Supplier ${id}`)
-  await stockIn.getByRole('button', { name: 'Saqlash' }).click()
+  await stockIn.getByRole('combobox', { name: 'Material' }).fill(material.name)
+  await page.getByRole('option', { name: new RegExp(material.name) }).click()
+  await stockIn.getByRole('textbox', { name: /^Miqdor/ }).fill('3')
+  // First-ever stock-in: no price history, so the field is empty with the hint.
+  await expect(stockIn.getByText('Birinchi kirim', { exact: false })).toBeVisible()
+  await stockIn.getByRole('textbox', { name: /^Narx/ }).fill('2000')
+  // The live totals mirror the server math: 3 x 2 000 so'm, no adjustments.
+  await expect(stockIn.getByText('Oraliq jami')).toBeVisible()
+  await stockIn.getByRole('button', { name: 'Saqlash', exact: true }).click()
+  await expect(page.getByText(/Kirim K-\d{4} yozildi\./)).toBeVisible()
   const stockTable = page.getByRole('table').filter({
     has: page.getByRole('columnheader', { name: 'Mavjud' }),
   })
@@ -292,12 +294,23 @@ test('owner adds a branch material and records priced stock movement with prefil
     stockTable.getByRole('row', { name: new RegExp(`${escapeRegExp(material.name)}.*3 panel`) }),
   ).toBeVisible()
 
-  // Reopen: the last price paid prefills the field with provenance underneath.
+  // The arrival is readable as a document: one K-… row carrying one position.
+  await page.getByRole('tab', { name: 'Kirimlar' }).click()
+  const invoiceRow = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: `Supplier ${id}` }) })
+  await expect(invoiceRow).toContainText('1 pozitsiya')
+  await expect(invoiceRow.getByText("To'lanmagan")).toBeVisible()
+  await invoiceRow.getByRole('button', { name: 'Qatorlar' }).click()
+  await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
+  await page.getByRole('tab', { name: 'Zaxira' }).click()
+
+  // Reopen: the last price paid prefills the line with provenance underneath.
   await page.getByRole('button', { name: 'Kirim', exact: true }).click()
   const stockInAgain = page.getByRole('dialog', { name: 'Kirim' })
   await stockInAgain.getByRole('combobox', { name: 'Material' }).fill(material.name)
   await page.getByRole('option', { name: new RegExp(material.name) }).click()
-  await expect(stockInAgain.getByLabel(/Kirim narxi/)).toHaveValue('2000')
+  await expect(stockInAgain.getByRole('textbox', { name: /^Narx/ })).toHaveValue('2000')
   await expect(stockInAgain.getByText('Oxirgi narx', { exact: false })).toBeVisible()
   await expect(stockInAgain.getByText(`Supplier ${id}`, { exact: false })).toBeVisible()
   await page.keyboard.press('Escape')
