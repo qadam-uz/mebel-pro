@@ -1,6 +1,7 @@
 """Catalog routes for platform and workshop branch selection."""
 
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
@@ -11,10 +12,12 @@ from app.modules.catalog.api import (
     BranchMaterialRecord,
     MaterialRecord,
     add_branch_material,
+    add_branch_materials_bulk,
     create_manufacturer,
     create_material,
     get_manufacturer,
     get_material,
+    list_branch_catalog_facets,
     list_branch_catalog_options,
     list_branch_materials,
     list_manufacturers,
@@ -28,7 +31,12 @@ from app.modules.catalog.api import (
     update_material,
 )
 from app.modules.catalog.schemas import (
+    BranchCatalogFiltersResponse,
+    BranchCatalogManufacturerOption,
     BranchCatalogMaterialOption,
+    BranchCatalogOptionsPage,
+    BranchMaterialBulkCreateRequest,
+    BranchMaterialBulkResponse,
     BranchMaterialCreateRequest,
     BranchMaterialPatchRequest,
     BranchMaterialResponse,
@@ -251,7 +259,7 @@ async def platform_materials_deactivate(
 
 @router.get(
     "/workshop/branches/{branch_id}/catalog/materials",
-    response_model=list[BranchCatalogMaterialOption],
+    response_model=BranchCatalogOptionsPage,
 )
 async def workshop_catalog_options_index(
     branch_id: uuid.UUID,
@@ -261,10 +269,11 @@ async def workshop_catalog_options_index(
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
+    thickness_mm: Decimal | None = None,
     limit: int | None = LIMIT_QUERY,
     offset: int = OFFSET_QUERY,
-) -> list[BranchCatalogMaterialOption]:
-    rows = await list_branch_catalog_options(
+) -> BranchCatalogOptionsPage:
+    page = await list_branch_catalog_options(
         db,
         principal=principal,
         branch_id=branch_id,
@@ -272,10 +281,33 @@ async def workshop_catalog_options_index(
         kind=kind,
         manufacturer_id=manufacturer_id,
         material_type=material_type,
+        thickness_mm=thickness_mm,
         limit=limit,
         offset=offset,
     )
-    return [_branch_catalog_option_response(row) for row in rows]
+    return BranchCatalogOptionsPage(
+        items=[_branch_catalog_option_response(row) for row in page.items],
+        total=page.total,
+    )
+
+
+@router.get(
+    "/workshop/branches/{branch_id}/catalog/filters",
+    response_model=BranchCatalogFiltersResponse,
+)
+async def workshop_catalog_filters_show(
+    branch_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> BranchCatalogFiltersResponse:
+    facets = await list_branch_catalog_facets(db, principal=principal, branch_id=branch_id)
+    return BranchCatalogFiltersResponse(
+        manufacturers=[
+            BranchCatalogManufacturerOption(id=row.id, name=row.name)
+            for row in facets.manufacturers
+        ],
+        thicknesses=facets.thicknesses,
+    )
 
 
 @router.get(
@@ -322,6 +354,26 @@ async def workshop_branch_materials_create(
 ) -> BranchMaterialResponse:
     row = await add_branch_material(db, principal=principal, branch_id=branch_id, payload=payload)
     return _branch_material_response(row)
+
+
+@router.post(
+    "/workshop/branches/{branch_id}/materials/bulk",
+    response_model=BranchMaterialBulkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def workshop_branch_materials_bulk_create(
+    branch_id: uuid.UUID,
+    payload: BranchMaterialBulkCreateRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> BranchMaterialBulkResponse:
+    result = await add_branch_materials_bulk(
+        db, principal=principal, branch_id=branch_id, payload=payload
+    )
+    return BranchMaterialBulkResponse(
+        created=[_branch_material_response(row) for row in result.created],
+        skipped_material_ids=result.skipped_material_ids,
+    )
 
 
 @router.patch(
@@ -394,7 +446,6 @@ def _material_response(record: MaterialRecord) -> MaterialResponse:
 def _branch_catalog_option_response(row: BranchCatalogOption) -> BranchCatalogMaterialOption:
     return BranchCatalogMaterialOption(
         material=material_response_from_models(row.material, row.manufacturer),
-        already_selected=row.already_selected,
     )
 
 

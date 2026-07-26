@@ -3,14 +3,19 @@
 from app.modules.catalog.contracts import Manufacturer, Material
 from app.modules.catalog.schemas import MaterialResponse
 from app.modules.catalog.service import (
+    BranchCatalogFacets,
     BranchCatalogOption,
+    BranchCatalogOptionsPage,
+    BranchMaterialBulkResult,
     BranchMaterialRecord,
     MaterialRecord,
     add_branch_material,
+    add_branch_materials_bulk,
     create_manufacturer,
     create_material,
     get_manufacturer,
     get_material,
+    list_branch_catalog_facets,
     list_branch_catalog_options,
     list_branch_materials,
     list_manufacturers,
@@ -54,14 +59,19 @@ def material_response_from_models(
 
 
 __all__ = [
+    "BranchCatalogFacets",
     "BranchCatalogOption",
+    "BranchCatalogOptionsPage",
+    "BranchMaterialBulkResult",
     "BranchMaterialRecord",
     "MaterialRecord",
     "add_branch_material",
+    "add_branch_materials_bulk",
     "create_manufacturer",
     "create_material",
     "get_manufacturer",
     "get_material",
+    "list_branch_catalog_facets",
     "list_branch_catalog_options",
     "list_branch_materials",
     "list_manufacturers",

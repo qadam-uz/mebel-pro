@@ -85,12 +85,12 @@ test("system leads a fresh owner from temp password to an orderable workshop", a
   await page.getByRole("button", { name: "+ Material qo'shish" }).first().click();
   await expect(catalogHint).toHaveCount(0);
 
-  const addMaterial = page.getByRole("dialog", { name: "Material qo'shish" });
-  await addMaterial.getByRole("combobox", { name: "Material" }).fill(panel.name);
-  await page.getByRole("option", { name: new RegExp(panel.name) }).click();
-  await addMaterial.getByLabel(/Narx/).fill("250000");
-  await addMaterial.getByLabel(/Min zaxira/).fill("1");
-  await addMaterial.getByRole("button", { name: "Qo'shish", exact: true }).click();
+  // QAD-159: attaching is a two-step multi-select sheet — pick, then price.
+  const attachSheet = page.getByRole("dialog");
+  await attachSheet.getByRole("checkbox", { name: panel.name }).check();
+  await attachSheet.getByRole("button", { name: /Davom etish/ }).click();
+  await attachSheet.getByLabel(`${panel.name} narxi`).fill("250000");
+  await attachSheet.getByRole("button", { name: /materialni qo'shish/ }).click();
 
   await expect(
     page.getByText("Dastlabki sozlash yakunlandi", { exact: false }),

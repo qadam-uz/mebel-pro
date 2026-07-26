@@ -2,7 +2,7 @@
 title: Catalog
 status: draft
 owner: shape
-updated: 2026-07-12
+updated: 2026-07-26
 order: 25
 ---
 
@@ -88,9 +88,16 @@ catalog; holds the per-branch price and the branch-level visibility flag. The br
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; references a platform [Material](#material) |
 | `price_tiyin` | bigint | per sell unit (per **panel** for a `panel`, per **metre** for an `edge`), integer tiyin, ≥ 0 |
-| `min_stock` | int | low-stock threshold for the branch's stock item, in the material's stock unit (panel count or edge millimetres); ≥ 0 |
+| `min_stock` | int | low-stock alert threshold for the branch's stock item, in the material's stock unit (panel count or edge millimetres); ≥ 0. Column default `0`; the attach UI prefills 5 (panel) / 50 m (edge) — see notes below |
 | `status` | enum | `active` / `inactive` at the branch level (soft delete only) |
 | `created_at` / `updated_at` | timestamp | |
+
+`min_stock` is an **alert threshold, not a stock policy** — nothing stops the branch holding
+less, and nothing reserves the quantity. The branch's low-stock notification fires when
+`on_hand ≤ min_stock`, so `0` warns only once the material is gone. Because that makes a
+prefilled `0` equivalent to no monitoring, the attach UI seeds new rows at 5 (panel) and
+50 m (edge); the values are editable and the column default remains `0`. Existing rows are
+never backfilled — rewriting thresholds on live materials would fire a notification wave.
 
 Order pricing reads `price_tiyin` for **both** kinds: a `panel`'s per-panel price for `shop`
 panel parts, and an `edge`'s per-metre price for every `shop` edge metre. The per-metre edge
