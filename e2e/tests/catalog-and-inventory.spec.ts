@@ -239,12 +239,18 @@ test('owner adds a branch material and records priced stock movement with prefil
   // The trigger appears in the page head and, while the list is empty, again as
   // the empty-state CTA — target the always-present header action.
   await page.getByRole('button', { name: "+ Material qo'shish" }).first().click()
-  const addMaterial = page.getByRole('dialog', { name: "Material qo'shish" })
-  await addMaterial.getByRole('combobox', { name: 'Material' }).fill(material.name)
-  await page.getByRole('option', { name: new RegExp(material.name) }).click()
-  await addMaterial.getByLabel(/Narx/).fill('2500')
-  await addMaterial.getByLabel(/Min zaxira/).fill('2')
-  await addMaterial.getByRole('button', { name: "Qo'shish", exact: true }).click()
+  // QAD-159: attaching is a two-step sheet — multi-select, then price + threshold.
+  const attachSheet = page.getByRole('dialog')
+  await attachSheet.getByRole('checkbox', { name: material.name }).check()
+  await expect(attachSheet.getByText('1 ta tanlandi')).toBeVisible()
+  await attachSheet.getByRole('button', { name: /Davom etish/ }).click()
+  // A panel's low-stock threshold is prefilled at 5 — the old default of 0 meant
+  // the alert only ever fired once stock was already gone.
+  const threshold = attachSheet.getByLabel(`${material.name} kam qoldiq chegarasi`)
+  await expect(threshold).toHaveValue('5')
+  await threshold.fill('2')
+  await attachSheet.getByLabel(`${material.name} narxi`).fill('2500')
+  await attachSheet.getByRole('button', { name: /materialni qo'shish/ }).click()
   // Two cells carry the material name now (the name cell and the Holat switch's
   // accessible name) — the first one is the name cell.
   await expect(page.getByRole('cell', { name: material.name }).first()).toBeVisible()

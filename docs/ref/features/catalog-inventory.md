@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 50
 ---
 
@@ -66,8 +66,8 @@ this catalog. Two **kinds** in v1:
   branch's carried-materials table, and the add-to-branch picker — **pages
   server-side**: filtering and search run on the backend and the list grows by a
   *load-more* control, never a whole-table load. The backend search matches name,
-  colour, decor, and manufacturer, so it stands in for a manufacturer filter where a
-  full-catalog dropdown can't be built.
+  colour, decor, and manufacturer; the add-to-branch picker additionally filters by
+  manufacturer, kind, and thickness.
 
 A platform-level edit never touches existing orders (snapshots —
 [`architecture.md`](../../architecture.md#data-model-invariants)).
@@ -75,20 +75,37 @@ A platform-level edit never touches existing orders (snapshots —
 ## Branch material selection
 
 A branch carries a subset of the catalog. The `(branch, material)` selection holds the
-branch's price (per panel for a `panel`, per metre for an `edge`), its min-stock
+branch's price (per panel for a `panel`, per metre for an `edge`), its low-stock alert
 threshold in the material's stock unit, and the client-visibility flag. Adding a material
 creates the branch's stock item for it (zero on hand).
 
 **Operations (owner, or `manage_catalog` on the branch):**
 
-- **Add a material** — pick a platform-`active` material (a server-side searchable
-  picker over the whole active catalog); set the per-unit price and `min_stock` (≥ 0).
-- **Edit price or min-stock** — never touches existing orders (snapshots).
+- **Attach materials** — a two-step sheet over the platform-`active` catalog. Step one
+  filters (manufacturer, kind, thickness, free-text search — all server-side and
+  combinable) and multi-selects; step two sets each row's price and threshold. Step two
+  cannot be skipped: nothing attaches without a real price.
+- **Edit price or threshold** — never touches existing orders (snapshots).
 - **Activate / deactivate** at the branch level. `inactive` is invisible to clients and
   not selectable in a new cutting; stock and history stay. No delete.
 
 Clients see a material only when it is `active` at **both** the platform and branch
 level.
+
+**Attaching in bulk.** The picker lists only materials the branch does not already
+carry, and reports how many match the current filter; a master checkbox selects that
+whole matching set, not just the loaded page. Attaching is atomic — one invalid row
+rejects the batch and the error names the offending material. A material a concurrent
+attach already linked is skipped rather than rejected, since the picker had excluded it.
+Filter-and-select-all is deliberately the only bulk path: it covers "everything from
+this manufacturer" without a manufacturer-specific feature, and equally covers "every
+16 mm panel from this maker", which a manufacturer-only action could not.
+
+**Threshold defaults.** A new attachment is prefilled with **5** for a panel and
+**50 m** for an edge, editable per row. A threshold of `0` alerts only once the material
+is gone, so a prefilled `0` would leave every attachment effectively unmonitored. The
+column default stays `0` and existing rows are never rewritten — changing thresholds on
+live materials would fire a wave of notifications.
 
 ## Branch pricing
 

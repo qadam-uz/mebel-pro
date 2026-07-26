@@ -2851,6 +2851,39 @@
     }
   }
 
+  /* Opt-in variant for tables whose widest column is free-form prose (branch
+     materials: long decor names). The shared `.tbl` min-width keeps numeric
+     tables from collapsing, but here it forced the page sideways on a phone —
+     so drop the floor, let the header and the name wrap, and rely on the view
+     hiding its low-value columns at narrow widths. Never widen `.tbl` itself:
+     every table in the app shares it. */
+  .tbl-fluid,
+  .tbl-fluid.tbl {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .tbl-fluid th {
+    white-space: normal;
+  }
+
+  /* Only the prose column wraps. A blanket `overflow-wrap: anywhere` on every cell
+     lets `auto` table layout squeeze the short columns to one character and stack
+     a status label letter-per-line — the wrapping belongs on the name cell alone,
+     which carries `break-words` in the template. */
+  .tbl-fluid td.nowrap,
+  .tbl-fluid th.nowrap {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    /* Phone widths: the 12px gutters alone cost ~100px across five columns. */
+    .tbl-fluid th,
+    .tbl-fluid td {
+      padding-inline: 8px;
+    }
+  }
+
   .tbl th {
     position: sticky;
     top: 0;
