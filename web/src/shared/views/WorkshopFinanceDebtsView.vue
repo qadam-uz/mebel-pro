@@ -11,6 +11,7 @@ import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import DateField from '@/shared/components/DateField.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import type { ChoiceOption } from '@/shared/components/controlTypes'
@@ -592,13 +593,7 @@ onBeforeUnmount(() => {
             </label>
             <label class="field">
               <span>Sana</span>
-              <input
-                v-model="adjustmentForm.adjustedOn"
-                type="date"
-                class="mp-input"
-                :max="today"
-                required
-              />
+              <DateField v-model="adjustmentForm.adjustedOn" :max="today" required />
             </label>
             <label class="field">
               <span>Izoh (majburiy)</span>
