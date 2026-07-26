@@ -35,6 +35,7 @@ from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord, JobDefinition, JobRun
 from app.modules.platform.errors import refresh_error_record_counts
+from app.modules.platform.metrics import MetricCounts, count_by_period
 from app.modules.platform.notifications import notify_platform_users
 from app.modules.platform.scheduler import RegisteredJob, registry
 from app.modules.platform.schemas import (
@@ -42,6 +43,7 @@ from app.modules.platform.schemas import (
     PlatformUserPatchRequest,
     ProvisionWorkshopRequest,
 )
+from app.modules.sales.contracts import Order
 from app.modules.support.api import (
     list_action_logs,
     list_status_change_logs,
@@ -90,6 +92,9 @@ class PlatformOverview:
     branches_total: int
     clients_total: int
     platform_users_active: int
+    orders: MetricCounts
+    workshop_signups: MetricCounts
+    client_signups: MetricCounts
 
 
 @dataclass(frozen=True)
@@ -166,6 +171,16 @@ async def get_platform_overview(
         .select_from(PlatformUser)
         .where(PlatformUser.status == UserStatus.ACTIVE)
     )
+    # AB-119: the lifetime totals above answer "how big is the platform"; these
+    # answer "how is it moving". Calendar periods, Tashkent-aligned, counted in
+    # SQL — one extra scan per table, no analytics store (see metrics.py).
+    # Orders are counted as *placed*, cancellations included: the metric is
+    # demand, not fulfilment. Counts only — an operator still never reads order
+    # contents (`docs/scope.md`).
+    now = datetime.now(UTC)
+    orders = await count_by_period(db, Order, Order.created_at, now=now)
+    workshop_signups = await count_by_period(db, Workshop, Workshop.created_at, now=now)
+    client_signups = await count_by_period(db, Client, Client.created_at, now=now)
     return PlatformOverview(
         workshops_total=int(workshops_total or 0),
         workshops_active=int(workshops_active or 0),
@@ -173,6 +188,9 @@ async def get_platform_overview(
         branches_total=int(branches_total or 0),
         clients_total=int(clients_total or 0),
         platform_users_active=int(platform_users_active or 0),
+        orders=orders,
+        workshop_signups=workshop_signups,
+        client_signups=client_signups,
     )
 
 

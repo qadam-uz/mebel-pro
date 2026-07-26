@@ -104,6 +104,8 @@ class PermissionGrant(UUIDPrimaryKey, Base):
 class Client(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "clients"
     __table_args__ = (
+        # AB-119: signup-rate counters on the platform dashboard scan by date.
+        Index("ix_clients_created_at", "created_at"),
         UniqueConstraint("phone", name="uq_clients_phone"),
         CheckConstraint("length(name) >= 1 AND length(name) <= 80", name="ck_clients_name_len"),
     )

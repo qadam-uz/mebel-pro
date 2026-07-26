@@ -115,6 +115,34 @@ class PlatformWorkshopDetail(APIModel):
     block_reason: str | None = None
 
 
+class SignupSpark(APIModel):
+    # Bucket counts, oldest first; the last entry is the current partial period.
+    daily: list[int]
+    monthly: list[int]
+    yearly: list[int]
+
+
+class OrderSpark(SignupSpark):
+    weekly: list[int]
+
+
+class SignupMetrics(APIModel):
+    # Registrations are reported daily / monthly / yearly — a weekly signup rate
+    # is noise at this volume, so it is deliberately absent (orders carry it).
+    daily: int
+    monthly: int
+    yearly: int
+    spark: SignupSpark
+
+
+class OrderMetrics(APIModel):
+    daily: int
+    weekly: int
+    monthly: int
+    yearly: int
+    spark: OrderSpark
+
+
 class PlatformOverviewResponse(APIModel):
     workshops_total: int
     workshops_active: int
@@ -122,6 +150,9 @@ class PlatformOverviewResponse(APIModel):
     branches_total: int
     clients_total: int
     platform_users_active: int
+    orders: OrderMetrics
+    workshop_signups: SignupMetrics
+    client_signups: SignupMetrics
 
 
 class BlockWorkshopRequest(BaseModel):
