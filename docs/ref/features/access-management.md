@@ -270,12 +270,18 @@ permission on every branch implicitly, plus owner-only carve-outs.
 | `process_production`   | the **cutter & edger workspaces** — see orders assigned to this user, view the cutting plan read-only, mark **Cutting done** (→ `edge_banding` or `ready`; stamps the cutter snapshot, decrements panel stock for `shop` panels) and **Banding done** (→ `ready`; stamps the edge snapshot, decrements edge stock per edge material for `shop` sides). Cannot edit, verify, cancel, or revert an order. |
 | `manage_catalog`       | the branch's material selection — add from the platform catalog, set the per-unit price and min-stock, activate / deactivate. (Master materials are platform-side.)                                                                                                                                                                                                                                     |
 | `manage_inventory`     | stock-in (from a supplier; suppliers added on demand), adjust, view stock and transactions.                                                                                                                                                                                                                                                                                                             |
-| `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`). See [`finance.md`](finance.md).                                                                                                                                                                                                                                                            |
+| `manage_finance`       | the money ledger — record / edit / void income (including order payments) and expenses (including `salary`), and **read** the supplier list an expense is attributed to. See [`finance.md`](finance.md).                                                                                                                                                                                                |
 | `view_finance_reports` | read-only access to the home finance summary tiles (income · expenses · net) and the worker-production report. The income / expense ledgers themselves require `manage_finance`. See [`finance.md`](finance.md).                                                                                                                                                                                          |
 
 `process_delivery` is **gated out of v1** — v1 is pickup-only
 ([`scope.md`](../../scope.md)), so there is no driver workspace and the grant is not in the
 catalog; it returns when delivery does.
+
+**A shared lookup is readable by every permission that legitimately needs it.** The supplier
+list is the one case in v1: the warehouseman picks a supplier for an arrival and the accountant
+attributes an expense to one, so both `manage_inventory` and `manage_finance` read it while
+creating and editing a supplier stays with `manage_inventory`. Gating a lookup behind a single
+grant is what leaves the second reader with a field that is offered and cannot work.
 
 A staff user with zero grants can log in but sees nothing actionable. Grants live on the
 user, not the branch: changing a branch's status doesn't touch grants; a grant on an
@@ -296,8 +302,13 @@ that **cannot be delegated to staff in v1**:
 
 - Create staff and grant / revoke their permissions.
 - Create and edit branches; change branch status; set branch pricing.
-- Edit workshop settings (profile).
+- Read and edit workshop settings (profile).
 - View workshop-wide reports.
+
+Reading the settings row is owner-only, but the workshop's **name** is not a secret — every
+workshop surface shows it as the tenant label. It therefore travels on the signed-in principal
+itself, alongside the workshop id, so staff render the real name without asking for a row they
+may not read.
 
 ### Operations (owner)
 
@@ -406,33 +417,38 @@ returning an empty result set.
 
 One probe user per permission, each holding exactly that grant on one branch, driven through
 every workshop route in a browser against the seeded demo world. `pass` means the cell matched
-the tables above; a `D` reference points at a known deviation below.
+the tables above; a `D` reference points at a known deviation below. The table carries the
+state after the same day's D3 / D4 / D6 fixes, each re-driven in the browser.
 
 | Principal                                | Sidebar | Forbidden URL refused | Allowed pages clean | Global search | Empty / partial states |
 | ---------------------------------------- | ------- | --------------------- | ------------------- | ------------- | ---------------------- |
 | owner                                    | pass    | pass (nothing refused) | pass               | pass          | pass                   |
-| `view_dashboard`                         | pass    | pass                  | D2 · D4 · D5        | pass          | D6                     |
-| `manage_orders`                          | pass    | pass                  | D4 · D5             | pass          | D6                     |
-| `process_production`                     | pass    | pass                  | D4                  | pass          | D6                     |
-| `manage_catalog`                         | pass    | pass                  | D4                  | pass          | D1                     |
-| `manage_inventory`                       | pass    | pass                  | D4                  | pass          | pass                   |
-| `manage_finance`                         | pass    | pass                  | D3 · D4 · D5        | pass          | pass                   |
-| `view_finance_reports`                   | pass    | pass                  | D4 · D5             | pass          | pass                   |
-| no grants                                | pass    | pass                  | D4                  | pass          | pass                   |
-| `manage_orders` + `manage_inventory`     | pass    | pass                  | D4                  | pass          | D6                     |
-| `manage_inventory` on the second branch  | pass    | pass                  | D4                  | pass          | pass                   |
+| `view_dashboard`                         | pass    | pass                  | D2 · D5             | pass          | pass                   |
+| `manage_orders`                          | pass    | pass                  | D5                  | pass          | pass                   |
+| `process_production`                     | pass    | pass                  | pass                | pass          | pass                   |
+| `manage_catalog`                         | pass    | pass                  | pass                | pass          | D1                     |
+| `manage_inventory`                       | pass    | pass                  | pass                | pass          | pass                   |
+| `manage_finance`                         | pass    | pass                  | D5                  | pass          | pass                   |
+| `view_finance_reports`                   | pass    | pass                  | D5                  | pass          | pass                   |
+| no grants                                | pass    | pass                  | pass                | pass          | pass                   |
+| `manage_orders` + `manage_inventory`     | pass    | pass                  | pass                | pass          | pass                   |
+| `manage_inventory` on the second branch  | pass    | pass                  | pass                | pass          | pass                   |
 
 Every refused route landed on `/workshop` with no frame of the refused view rendered, and no
 principal saw a nav entry, search section, or owner-only route it was not entitled to. Grants on
-one branch unlocked nothing on the other: the branch picker offers only granted branches, and an
-order in a branch the reader has no grant on answers 404.
+one branch unlocked nothing on the other: the branch picker offers only granted branches, an
+order in a branch the reader has no grant on answers 404, and the order screen names that as an
+authorization outcome rather than a connection problem.
 
 Revoking a grant while the holder is signed in fails closed on the server — the next data request
 from the open tab is refused — but the tab itself keeps the old sidebar until it is reloaded (D7).
 
 ### Known deviations
 
-Each is a defect against the tables above, not a rule.
+Each is a defect against the tables above, not a rule. Identifiers are stable, so a fixed one
+leaves a gap rather than renumbering the rest: **D3** (the finance ledger fetched a supplier list
+`manage_inventory` gated), **D4** (every non-owner took a 403 on their own profile) and **D6**
+(an order the reader is not entitled to reported a network failure) were fixed on 2026-07-26.
 
 - **D1 — `/workshop` renders blank for staff whose grants light up no dashboard section.**
   `WorkshopDashboardView.vue` shows an honest "Sizga hali hech qanday ruxsat berilmagan" state
@@ -447,24 +463,10 @@ Each is a defect against the tables above, not a rule.
   orders, and read the dashboard's order cards. The order screen then 403s on the assignment
   picker (`/workshop/orders/workers`) and renders both workers as "Noma'lum xodim". The name and
   the effect have to be reconciled.
-- **D3 — the finance ledger fetches suppliers it may not read.** The expenses screen loads the
-  branch supplier list, which requires `manage_inventory`
-  (`backend/app/modules/inventory/service.py:608`), so `manage_finance`-only staff take a 403 and
-  a silently empty supplier picker on a page they are entitled to.
-- **D4 — every non-owner takes a 403 on their own profile.** `WorkshopProfileView.vue:102` calls
-  the owner-only workshop-settings read on mount; the workshop name then falls back to the
-  generic tenant label in the page subtitle.
 - **D5 — screens link to routes the viewer cannot open.** The dashboard's low-stock card is
   rendered without a permission check and links to `/workshop/inventory`; its order KPI and
   recent-orders card link to `/workshop/orders` for `view_dashboard` holders, as does the order
   screen's back link. Following any of them bounces off the guard back to `/workshop`.
-- **D6 — an order the reader is not entitled to reports a network failure.** The API answers 404
-  (correctly — no existence oracle) for an order outside the reader's branch, and for
-  `process_production` staff for any order not assigned to them; the order screen renders
-  "Buyurtmani yuklab bo'lmadi — Internet aloqasini tekshirib, qayta urinib ko'ring". The copy
-  blames the connection for an authorization outcome, and for production staff that is the
-  ordinary case, not the edge one — `/workshop/orders/:order_id` admits `process_production`
-  while the data rule behind it admits only the assignee.
 - **D7 — a revoked grant leaves a stale shell.** The shell reads the grant set from the `me`
   response captured at sign-in and never re-reads it, so after the owner revokes a grant the open
   tab keeps the nav entry, keeps the already-loaded rows on screen, and adds a generic load-error

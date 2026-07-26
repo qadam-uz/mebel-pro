@@ -12,6 +12,7 @@ from app.modules.access.authz import (
     can_access_branch,
     require_manage_orders_workshop,
     resolve_branch_scope,
+    resolve_branch_scope_any,
     visible_branch_ids,
     visible_workshop_ids,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "request_otp_code",
     "require_manage_orders_workshop",
     "resolve_branch_scope",
+    "resolve_branch_scope_any",
     "resolve_client_ip",
     "revoke_for_principal",
     "revoke_for_workshop",

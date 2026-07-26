@@ -528,6 +528,52 @@ async def test_branch_scoped_staff_authorization(
     assert stock_in_after_deactivate.status_code == 201
 
 
+async def test_supplier_list_is_readable_by_finance_but_writable_only_by_inventory(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-169: the expense form attributes spending to a supplier, so the
+    accountant must be able to read the names. Only the read opens up."""
+    owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
+    finance_staff = await _staff_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_FINANCE,
+    )
+    catalog_staff = await _staff_access(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    created = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Panel Trade MChJ", "phone": "+998712300010"},
+    )
+    assert created.status_code == 201
+
+    finance_read = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(finance_staff),
+    )
+    finance_write = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(finance_staff),
+        json={"name": "Not mine to add"},
+    )
+    catalog_read = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(catalog_staff),
+    )
+
+    assert finance_read.status_code == 200
+    assert [row["name"] for row in finance_read.json()] == ["Panel Trade MChJ"]
+    assert finance_write.status_code == 403
+    assert catalog_read.status_code == 403
+
+
 async def test_stock_in_pricing_math_last_price_and_validation(
     client: AsyncClient,
     db_session: AsyncSession,

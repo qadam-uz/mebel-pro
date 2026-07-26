@@ -263,7 +263,10 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
       the expense into the supplier's debt fold and fills the vendor text with the supplier's
       name when blank, free-text vendor, description, receipt, and — owner only — an
       *Ustaxona darajasida* checkbox that records the cost workshop-level with no branch, the
-      HQ-rent case.
+      HQ-rent case. Both pickers read for `manage_finance` alone: the supplier list is a shared
+      lookup this page is entitled to
+      ([`access-management.md`](access-management.md#permission-catalog)), not an inventory
+      surface.
 
     Editing never changes which faktura the money paid: the toggle and the picker are
     read-only on an edit. Row actions: Edit (modal) · Void (dialog with a mandatory reason).

@@ -89,6 +89,22 @@ export function grantSummary(
   return `${permissions.size} grant · ${branches.size} filial`
 }
 
+/**
+ * The workshop's own name for chrome that shows the tenant, or `null` when
+ * neither source has one and the caller should fall back to the generic label.
+ *
+ * Two sources, in this order: the owner-only settings row (so a rename shows
+ * without a reload) and the `me` principal, which carries the name for staff —
+ * the settings read 403s for them (QAD-168).
+ */
+export function workshopTenantName(...candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim()
+    if (trimmed) return trimmed
+  }
+  return null
+}
+
 export function initials(name: string | null | undefined, fallback = 'MP') {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return fallback

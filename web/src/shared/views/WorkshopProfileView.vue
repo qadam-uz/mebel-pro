@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
+import { workshopTenantName } from '@/shared/app/workshopUi'
 import { formatDate } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -45,7 +46,8 @@ const scopeLabel = computed(() => {
 })
 const workshopProfileSubtitle = computed(() => {
   const role = auth.me?.is_owner ? 'Rahbar' : 'Xodim'
-  const tenant = workshop.settings?.name?.trim() || config.tenantLabel
+  const tenant =
+    workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? config.tenantLabel
   return `${auth.displayName} · ${role} · ${tenant}`
 })
 const workshopGrantRows = computed(() => {
@@ -99,7 +101,11 @@ async function savePassword() {
 
 onMounted(async () => {
   if (auth.me?.password_reset_required) workshopProfileTab.value = 'password'
-  await Promise.all([loadSessions(), workshop.loadSettings()])
+  // Branch context, not the workshop settings row: this page is open to every
+  // staff member and `/workshop/settings` is owner-only, so the old call 403'd
+  // for all ten non-owner principals. The name now rides on `me`; the context
+  // is what turns each grant's branch id into a branch name (QAD-168).
+  await Promise.all([loadSessions(), workshop.loadBranchContext().catch(() => undefined)])
 })
 </script>
 
