@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { apiErrorCode } from '@/shared/api/client'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
@@ -200,6 +201,9 @@ async function saveProfile() {
     if (profileFieldOrder.some((field) => Boolean(profileFieldErrors[field]))) {
       focusFirstFieldError(profileFieldErrors, profileFieldOrder, profileFieldIds)
     }
+    // The field message already names the problem and the fix; the generic
+    // save-failed banner would only add noise next to it.
+    if (apiErrorCode(caught) === 'login_exists') return
     profileError.value = workshopErrorMessage(workshop.actionError ?? 'user_save_failed')
     profileTraceId.value = workshop.actionTraceId
   } finally {

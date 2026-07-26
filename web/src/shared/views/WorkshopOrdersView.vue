@@ -14,7 +14,12 @@ import {
   type WorkshopOrderListAction,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  STOCK_SHORTFALL_MESSAGE,
+  orderPillClass,
+  workshopErrorMessage,
+  workshopStatusUz,
+} from '@/shared/app/workshopUi'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
@@ -454,6 +459,9 @@ async function confirmListAction() {
   if (!pending) return
   const { action, order } = pending
   let ok = false
+  // Set by the two completion branches when the consume they recorded drove a
+  // branch balance below zero — informational, raised after the success toast.
+  let shortfall = false
   if (action.kind === 'approve') {
     ok = await runListMutation(order, () => orders.approve(order.id, order.version))
   } else if (action.kind === 'start_cutting') {
@@ -467,12 +475,13 @@ async function confirmListAction() {
       listActionTraceId.value = null
       ok = false
     } else {
-      ok = await runListMutation(order, () =>
-        orders.cuttingDone(order.id, {
+      ok = await runListMutation(order, async () => {
+        const updated = await orders.cuttingDone(order.id, {
           version: order.version,
           completed_by_user_id: completedBy,
-        }),
-      )
+        })
+        shortfall = updated.stock_shortfall
+      })
     }
   } else if (action.kind === 'complete_banding') {
     const completedBy = order.assigned_edger_user_id
@@ -481,18 +490,20 @@ async function confirmListAction() {
       listActionTraceId.value = null
       ok = false
     } else {
-      ok = await runListMutation(order, () =>
-        orders.bandingDone(order.id, {
+      ok = await runListMutation(order, async () => {
+        const updated = await orders.bandingDone(order.id, {
           version: order.version,
           completed_by_user_id: completedBy,
-        }),
-      )
+        })
+        shortfall = updated.stock_shortfall
+      })
     }
   } else if (action.kind === 'mark_collected') {
     ok = await runListMutation(order, () => orders.markCollected(order.id, order.version))
   }
   if (ok) {
     toast.success(listActionSuccessMessage(action))
+    if (shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
     pendingConfirmAction.value = null
   }
 }
@@ -540,8 +551,9 @@ watch(status, () => {
 
 watch(
   () => workshop.selectedBranchContext,
-  () => {
+  (value) => {
     applyContextBranch()
+    if (canViewDrafts.value) void cutting.loadWorkshopDrafts(value)
   },
 )
 
@@ -578,8 +590,9 @@ onMounted(async () => {
   // Now that the first load has landed, let user-driven filter edits refresh.
   hydrated.value = true
   // Ambient count for the Chizmalar entry; non-blocking so it never delays the
-  // board/table.
-  if (canViewDrafts.value) void cutting.loadWorkshopDrafts()
+  // board/table. Scoped to the topbar branch so the badge matches what the
+  // drafts page (also branch-scoped) will actually list.
+  if (canViewDrafts.value) void cutting.loadWorkshopDrafts(workshop.selectedBranchContext)
 })
 
 onBeforeUnmount(() => {

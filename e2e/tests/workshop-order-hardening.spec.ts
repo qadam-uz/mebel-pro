@@ -157,8 +157,14 @@ test('owner records order income and standalone expense', async ({ page, request
     .getByRole('combobox', { name: 'Buyurtma', exact: true })
     .fill(placed.order.order_number)
   await page.getByRole('option', { name: new RegExp(placed.order.order_number) }).click()
-  await expect(incomePanel.getByText('Qoldiq:')).toBeVisible()
-  await incomePanel.getByRole('button', { name: 'Qoldiqni kiritish' }).click()
+  // QAD-123: picking an order seeds the amount with its remaining balance, and
+  // refilling it moved out of the old balance panel onto the amount field as a
+  // "Qoldiq" suffix button.
+  const incomeAmount = incomePanel.getByLabel("Summa (to'liq yoki qisman)")
+  await expect(incomeAmount).not.toHaveValue('')
+  await incomeAmount.fill('1000')
+  await incomePanel.getByRole('button', { name: 'Qoldiq', exact: true }).click()
+  await expect(incomeAmount).not.toHaveValue('1000')
   await incomePanel.getByLabel('Izoh').fill('E2E order payment')
   await incomePanel.getByRole('button', { name: 'Yozish' }).click()
   await expect(page.getByText('E2E order payment')).toBeVisible()
@@ -166,6 +172,10 @@ test('owner records order income and standalone expense', async ({ page, request
   await page.getByRole('tab', { name: 'Xarajatlar' }).click()
   await page.getByRole('button', { name: '+ Xarajat' }).click()
   const expensePanel = page.getByRole('dialog', { name: 'Xarajat yozish' })
+  // QAD-149 gave the expense form a Turi toggle that opens on «Kirim to'lovi».
+  // A standalone expense is the other branch of it, so pick it explicitly
+  // rather than relying on whichever side happens to be the default.
+  await expensePanel.getByRole('radio', { name: 'Boshqa xarajat' }).click()
   await expensePanel.getByLabel('Tavsif').fill('E2E standalone expense')
   await expensePanel.getByLabel("Summa (so'm)").fill('1000')
   await expensePanel.getByRole('button', { name: 'Yozish' }).click()

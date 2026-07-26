@@ -60,10 +60,10 @@ Three principal types — three auth surfaces, one per front-end app. They don't
 
 ## The model
 
-- **Workshop users** sign in with login + password. Login remains unique only inside one
-  workshop, so the server resolves the account from the submitted password; a same-login /
-  same-password collision across workshops is rejected as ambiguous. Owners are created by a
-  platform operator during workshop provisioning.
+- **Workshop users** sign in with login + password. Login is unique across the whole platform,
+  so the login alone names the account and the workshop follows from it — a login already in use
+  anywhere is refused at creation. Owners are created by a platform operator during workshop
+  provisioning.
 - **Platform users** sign in with login + password and are seeded via a backend CLI (they're at
   the top of the hierarchy, so no higher principal exists to create them in-app).
 - **Clients** sign in with a **phone number verified by a one-time code sent over Telegram** —

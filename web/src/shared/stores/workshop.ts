@@ -69,6 +69,8 @@ export interface ManagedBranch {
   name: string
   address: string
   phone: string
+  // Extra published numbers in display order; the primary stays `phone` (QAD-158).
+  additional_phones: string[]
   latitude: string | null
   longitude: string | null
   working_hours: Record<string, unknown>
@@ -102,7 +104,24 @@ export interface BranchMaterial {
 
 export interface BranchCatalogOption {
   material: Material
-  already_selected: boolean
+}
+
+// QAD-159: the picker excludes materials the branch already carries, so `total`
+// counts exactly what "Filtrdagi hammasi (N)" would select — page included.
+export interface BranchCatalogOptionsPage {
+  items: BranchCatalogOption[]
+  total: number
+}
+
+export interface BranchCatalogFilters {
+  manufacturers: { id: string; name: string }[]
+  thicknesses: string[]
+}
+
+export interface BranchMaterialBulkItem {
+  material_id: string
+  price_tiyin: number
+  min_stock: number
 }
 
 export interface Supplier {
@@ -150,6 +169,50 @@ export interface StockTransaction {
   created_at: string
 }
 
+export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export interface SupplierInvoiceLine {
+  transaction_id: string
+  material_id: string
+  material_name: string
+  kind: MaterialKind
+  display_unit: string
+  quantity: number
+  unit_price_tiyin: number | null
+  total_price_tiyin: number | null
+  note: string | null
+}
+
+export interface SupplierInvoice {
+  id: string
+  workshop_id: string
+  branch_id: string
+  branch_name: string | null
+  supplier_id: string | null
+  supplier_name: string | null
+  invoice_no: string
+  invoice_date: string
+  subtotal_tiyin: number
+  discount_tiyin: number
+  surcharge_tiyin: number
+  total_tiyin: number
+  note: string | null
+  line_count: number
+  paid_tiyin: number
+  outstanding_tiyin: number
+  payment_status: InvoicePaymentStatus
+  recorded_by_user_id: string
+  recorded_by_name: string | null
+  created_at: string
+  lines: SupplierInvoiceLine[]
+}
+
+export interface SupplierInvoiceFilters {
+  supplier_id?: string | null
+  search?: string | null
+  payment_status?: InvoicePaymentStatus | null
+}
+
 export interface StockLastPrice {
   unit_price_tiyin: number | null
   recorded_at: string | null
@@ -171,7 +234,9 @@ export interface BranchMaterialFilters {
   status?: MaterialStatus | null
   manufacturer_id?: string | null
   material_type?: PanelMaterialType | null
+  thickness_mm?: string | null
   offset?: number
+  limit?: number
 }
 
 export const permissionCatalog = [
@@ -192,6 +257,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const selectedBranch = ref<ManagedBranch | null>(null)
   const selectedBranchPricing = ref<BranchPricing | null>(null)
   const catalogOptions = ref<BranchCatalogOption[]>([])
+  const catalogOptionsTotal = ref(0)
+  const catalogFilters = ref<BranchCatalogFilters>({ manufacturers: [], thicknesses: [] })
   const branchMaterials = ref<BranchMaterial[]>([])
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
@@ -200,6 +267,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
+  const supplierInvoices = ref<SupplierInvoice[]>([])
   const users = ref<WorkshopUser[]>([])
   const selectedUser = ref<WorkshopUser | null>(null)
   const sessions = ref<SessionResponse[]>([])
@@ -351,18 +419,37 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   // The add-material picker is server-searched and capped — never the whole
-  // catalog — so opening the modal on the full material set doesn't freeze.
-  async function loadCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
-    catalogOptions.value = await api.get<BranchCatalogOption[]>(
+  // catalog — so opening the sheet on the full material set doesn't freeze.
+  // Returns the page so callers can page through "select everything in the
+  // filter" without the store holding more than the visible list.
+  async function fetchCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
+    return api.get<BranchCatalogOptionsPage>(
       withQuery(`/workshop/branches/${id}/catalog/materials`, {
         search: filters.search,
         kind: filters.kind,
         manufacturer_id: filters.manufacturer_id,
         material_type: filters.material_type,
-        limit: CATALOG_PICKER_LIMIT,
+        thickness_mm: filters.thickness_mm,
+        limit: filters.limit ?? CATALOG_PICKER_LIMIT,
+        offset: filters.offset,
       }),
       authInit(),
     )
+  }
+
+  async function loadCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
+    const page = await fetchCatalogOptions(id, filters)
+    catalogOptions.value = page.items
+    catalogOptionsTotal.value = page.total
+    return page
+  }
+
+  async function loadCatalogFilters(id: string) {
+    catalogFilters.value = await api.get<BranchCatalogFilters>(
+      `/workshop/branches/${id}/catalog/filters`,
+      authInit(),
+    )
+    return catalogFilters.value
   }
 
   // Paginated with append (offset 0 replaces, higher offset appends the next
@@ -412,6 +499,17 @@ export const useWorkshopStore = defineStore('workshop', () => {
     await loadStock(id).catch(() => undefined)
     await loadCatalogOptions(id).catch(() => undefined)
     return created
+  }
+
+  // Bulk attach is atomic server-side: either every row lands or the call throws
+  // naming the offending material, so there is no partial state to reconcile here.
+  async function addBranchMaterialsBulk(id: string, items: BranchMaterialBulkItem[]) {
+    const result = await api.post<{
+      created: BranchMaterial[]
+      skipped_material_ids: string[]
+    }>(`/workshop/branches/${id}/materials/bulk`, { items }, authInit())
+    await loadStock(id).catch(() => undefined)
+    return result
   }
 
   async function updateBranchMaterial(id: string, branchMaterialId: string, payload: unknown) {
@@ -525,12 +623,25 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
+  async function loadSupplierInvoices(id: string, filters: SupplierInvoiceFilters = {}) {
+    supplierInvoices.value = await api.get<SupplierInvoice[]>(
+      withQuery('/workshop/inventory/invoices', {
+        branch_id: id,
+        supplier_id: filters.supplier_id,
+        search: filters.search,
+        payment_status: filters.payment_status,
+      }),
+      authInit(),
+    )
+  }
+
   function clearInventory() {
     suppliers.value = []
     stockItems.value = []
     lowStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
+    supplierInvoices.value = []
     inventoryError.value = null
     inventoryTraceId.value = null
   }
@@ -580,6 +691,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       }),
       authInit(),
     )
+  }
+
+  // One arrival document and all its lines, committed together server-side.
+  // The stock and transaction views are refreshed after it so the page never
+  // shows a half-applied arrival.
+  async function createSupplierInvoice(id: string, payload: unknown) {
+    const invoice = await api.post<SupplierInvoice>(
+      '/workshop/inventory/invoices',
+      { ...(payload as object), branch_id: id },
+      authInit(),
+    )
+    supplierInvoices.value = [invoice, ...supplierInvoices.value]
+    await loadStock(id).catch(() => undefined)
+    if ((payload as { supplier?: unknown }).supplier) await loadSuppliers(id).catch(() => undefined)
+    return invoice
   }
 
   async function recordStockIn(id: string, payload: unknown) {
@@ -834,6 +960,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranch.value = null
     selectedBranchPricing.value = null
     catalogOptions.value = []
+    catalogOptionsTotal.value = 0
+    catalogFilters.value = { manufacturers: [], thicknesses: [] }
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
@@ -870,6 +998,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranch,
     selectedBranchPricing,
     catalogOptions,
+    catalogOptionsTotal,
+    catalogFilters,
     branchMaterials,
     branchMaterialsHasMore,
     suppliers,
@@ -878,6 +1008,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
+    supplierInvoices,
     users,
     selectedUser,
     sessions,
@@ -907,6 +1038,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
     setBranchStatus,
     updateBranchPricing,
     loadCatalogOptions,
+    fetchCatalogOptions,
+    loadCatalogFilters,
+    addBranchMaterialsBulk,
     loadBranchMaterials,
     addBranchMaterial,
     updateBranchMaterial,
@@ -916,12 +1050,14 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loadStockValue,
     loadStockTransactions,
     loadSuppliers,
+    loadSupplierInvoices,
     loadInventory,
     clearInventory,
     createSupplier,
     updateSupplier,
     setSupplierStatus,
     fetchMaterialLastPrice,
+    createSupplierInvoice,
     recordStockIn,
     recordAdjustment,
     loadUsers,

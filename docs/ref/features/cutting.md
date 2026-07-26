@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-25
+updated: 2026-07-26
 order: 80
 ---
 
@@ -502,7 +502,14 @@ then order summary.
    cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
    available, it asks the user to select one instead of inventing a price.
    - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
-   - **Download PDF** — the print-ready cutting document for the saw operator. It is fixed
+   - **PDF ochish** — the print-ready cutting document for the saw operator, opened in a new
+     browser tab rather than saved to disk: the reader wants to look at or print the plan, and
+     the browser's own viewer already offers both plus a download. Every PDF entry point
+     behaves this way; there is no separate download action. The endpoints are Bearer-authed,
+     so the client fetches the bytes with its access token and hands the tab an object URL —
+     the tab is opened synchronously in the click handler, because a popup opened after an
+     await is blocked. A blocked popup surfaces a message telling the user to allow popups; it
+     never silently falls back to downloading. The document is fixed
      A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
      edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
      identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
@@ -545,12 +552,16 @@ the branch selector is hidden, the branch is locked to the branch the flow was e
 and frozen into the draft at creation (a later topbar branch switch never retargets an
 in-progress draft), and a persistent **identity strip** in the editor header names the
 walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
-just during the continuous create flow), so a re-opened draft still names who it's for.
-Everything else — parts editor, edge picker, optimise, results — is this page, unchanged.
+just during the continuous create flow), so a re-opened draft still names who it's for. A
+draft that somehow carries no branch falls back to the current topbar context rather than
+demanding a fresh pick. Everything else — parts editor, edge picker, optimise, results — is
+this page, unchanged.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
 unfinished walk-in cuttings, reached from a **Chizmalar** entry beside **+ Yangi buyurtma** on
-the Orders screen (the entry carries a count of open drafts). Each row shows the walk-in
+the Orders screen (the entry carries a count of open drafts). The list follows the topbar
+branch context and reloads when it changes — a draft is frozen to one branch, so the page
+shows the branch you're standing in, and the Chizmalar count matches. Each row shows the walk-in
 client (name + phone), the locked branch, part / panel / waste figures, and a **derived status
 label** — *Tayyor — buyurtma berish mumkin* once a result is chosen, else *Tahrirlanmoqda*.
 A draft carries no status column of its own; the label is derived from whether a cutting
@@ -559,7 +570,7 @@ routes on to checkout once a result is picked); a per-row delete discards it wit
 confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via **+ Yangi
 buyurtma**) / error, each recoverable.
 
-An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
+An order's **Cutting** tab embeds the SVG of the order's confirmed result and a button that opens the PDF in a new tab.
 
 ## Edge cases
 

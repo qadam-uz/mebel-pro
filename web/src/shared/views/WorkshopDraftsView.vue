@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { apiErrorCode } from '@/shared/api/client'
@@ -8,6 +8,7 @@ import { workshopDraftStatus, workshopErrorMessage } from '@/shared/app/workshop
 import { formatRelativeUz } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useCuttingStore, type WorkshopDraftSummary } from '@/shared/stores/cutting'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 // The workshop's unfinished walk-in cuttings: staff started them for a walk-in
 // but never placed the order. Saved indefinitely; resume opens the shared editor
@@ -15,6 +16,33 @@ import { useCuttingStore, type WorkshopDraftSummary } from '@/shared/stores/cutt
 const router = useRouter()
 const rolePath = useRolePath()
 const cutting = useCuttingStore()
+const workshop = useWorkshopStore()
+
+// A branch-scoped page (routes.ts declares `branchScope: 'branch'`): a draft is
+// frozen to the branch it was started on, so the list follows the topbar branch
+// exactly as the orders list does.
+function loadDrafts() {
+  return cutting.loadWorkshopDrafts(workshop.selectedBranchContext)
+}
+
+// Named only when the topbar actually offers a choice — a single-branch workshop
+// hides the picker, so calling the branch out would be noise there.
+const contextBranchName = computed(() => {
+  if (workshop.branches.length < 2) return null
+  return (
+    workshop.branches.find((branch) => branch.id === workshop.selectedBranchContext)?.name ?? null
+  )
+})
+const subtitle = computed(() =>
+  contextBranchName.value
+    ? `${contextBranchName.value} — tugallanmagan mijoz chizmalari, davom eting yoki o'chiring.`
+    : "Tugallanmagan mijoz chizmalari — davom eting yoki o'chiring.",
+)
+const emptyMessage = computed(() =>
+  contextBranchName.value
+    ? `${contextBranchName.value} filialida tugallanmagan chizma yo'q. Boshqa filialni topbardan tanlang yoki "+ Yangi buyurtma" orqali chizma boshlang.`
+    : 'Tugallanmagan chizmalar shu yerda saqlanadi. "+ Yangi buyurtma" orqali mijoz uchun chizma boshlang.',
+)
 
 const pendingDelete = ref<WorkshopDraftSummary | null>(null)
 const deleting = ref(false)
@@ -47,7 +75,7 @@ async function confirmDelete() {
   try {
     await cutting.deleteDraft(draft.id)
     pendingDelete.value = null
-    await cutting.loadWorkshopDrafts()
+    await loadDrafts()
   } catch (caught) {
     deleteError.value = workshopErrorMessage(apiErrorCode(caught))
   } finally {
@@ -55,7 +83,14 @@ async function confirmDelete() {
   }
 }
 
-onMounted(() => cutting.loadWorkshopDrafts())
+onMounted(() => loadDrafts())
+
+watch(
+  () => workshop.selectedBranchContext,
+  () => {
+    void loadDrafts()
+  },
+)
 </script>
 
 <template>
@@ -63,7 +98,7 @@ onMounted(() => cutting.loadWorkshopDrafts())
     <div class="page-head">
       <div>
         <h1>Saqlangan chizmalar</h1>
-        <div class="sub">Tugallanmagan mijoz chizmalari — davom eting yoki o'chiring.</div>
+        <div class="sub">{{ subtitle }}</div>
       </div>
       <div class="tools">
         <RouterLink
@@ -95,7 +130,7 @@ onMounted(() => cutting.loadWorkshopDrafts())
       <button
         type="button"
         class="mp-button mp-button-outline mt-4 min-h-11 px-4"
-        @click="cutting.loadWorkshopDrafts()"
+        @click="loadDrafts()"
       >
         Qayta urinish
       </button>
@@ -106,10 +141,7 @@ onMounted(() => cutting.loadWorkshopDrafts())
       class="card grid place-items-center gap-2 p-10 text-center"
     >
       <h3 class="text-base font-bold">Saqlangan chizma yo'q</h3>
-      <p class="max-w-sm text-sm text-ink-soft">
-        Tugallanmagan chizmalar shu yerda saqlanadi. "+ Yangi buyurtma" orqali mijoz uchun chizma
-        boshlang.
-      </p>
+      <p class="max-w-sm text-sm text-ink-soft">{{ emptyMessage }}</p>
       <button
         type="button"
         class="mp-button mp-button-primary mt-2 min-h-10 px-4"

@@ -673,7 +673,9 @@ watch(
                     >
                   </div>
                 </div>
-                <div class="meta warn-text">
+                <!-- A negative balance is an unrecorded arrival, not a low
+                     shelf — it escalates from warn to danger (QAD-150). -->
+                <div class="meta" :class="item.on_hand < 0 ? 'danger-text' : 'warn-text'">
                   {{ formatStockQuantity(item.on_hand, item.display_unit) }}
                 </div>
               </div>

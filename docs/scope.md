@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-26
 order: 20
 ---
 
@@ -24,8 +24,8 @@ that's a considered substitution.
 - **Workshops & branches** — multi-branch workshops; each branch picks what it carries from a
   platform-curated material catalog and sets its own prices, workers, and settings.
 - **Warehouse & inventory** (the ERP core) — per-branch stock with arrivals and adjustments,
-  lightweight supplier labels for stock-in, automatic consumption driven by orders, and
-  low-stock surfacing. There is no reservation balance in v1.
+  arrivals grouped under a supplier invoice carrying the document's discount, automatic
+  consumption driven by orders, and low-stock surfacing. There is no reservation balance in v1.
 - **Optimized cutting** — multiple cutting-optimization algorithms run against the same input
   in one request; the platform returns the best result and **names the winning algorithm**.
   Output includes the per-panel layout, panel count, waste, cut and edge-banding length, and a
@@ -63,13 +63,20 @@ that's a considered substitution.
   viewer only in the superadmin app; workshop owners get no in-app audit screen yet.
 - **Operator browsing of workshop orders** — the platform operator provisions, blocks, and
   monitors; v1 has no cross-workshop order view and operators don't read order contents.
+  **Counts yes, contents no**: platform-wide aggregates over orders — how many were placed
+  today, this week, this month, this year — are in scope and drive the admin dashboard, because
+  a tally carries no client, panel, price, or workshop identity. Anything that resolves an
+  individual order, or breaks a total down per workshop, is not.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
   edits, multiple panel sizes, 3D nesting, CNC paths.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion
   complaints, client ratings.
 - **Multi-currency** — local currency only.
-- **Automatic purchase orders, supplier payables / procurement management, remnant tracking,
-  barcode scanning** — future.
+- **Automatic purchase orders, procurement planning, remnant tracking, barcode scanning** —
+  future. Supplier **payables** are in v1: an arrival is recorded as a supplier invoice, and
+  what the workshop still owes each supplier is derived from those invoices, the expenses paid
+  against them, and manual adjustments. What stays out is everything *upstream* of the arrival
+  — expected deliveries, purchase orders, aging reports.
 
 ## Next
 

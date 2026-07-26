@@ -383,6 +383,143 @@ async def test_owner_can_create_and_clear_branch_without_coordinates(
     assert cleared.json()["longitude"] is None
 
 
+async def test_branch_keeps_up_to_three_additional_phones_alongside_its_primary(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, _branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Chilonzor",
+            "address": "Tashkent, Chilonzor",
+            "phone": "+998901111111",
+            "working_hours": default_working_hours(),
+        },
+    )
+    branch_id = created.json()["id"]
+    filled = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998902222222", "+998903333333", "+998904444444"]},
+    )
+    removed = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998902222222", "+998904444444"]},
+    )
+    untouched = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"name": "Chilonzor 2"},
+    )
+
+    assert created.status_code == 201
+    # An existing branch loads and saves with an empty list — no null, no absence.
+    assert created.json()["additional_phones"] == []
+    assert filled.status_code == 200
+    # Array order is display order, so it survives the round trip verbatim.
+    assert filled.json()["additional_phones"] == [
+        "+998902222222",
+        "+998903333333",
+        "+998904444444",
+    ]
+    assert removed.status_code == 200
+    assert removed.json()["additional_phones"] == ["+998902222222", "+998904444444"]
+    # Removing an extra never disturbs the primary.
+    assert removed.json()["phone"] == "+998901111111"
+    assert untouched.status_code == 200
+    assert untouched.json()["additional_phones"] == ["+998902222222", "+998904444444"]
+    assert untouched.json()["phone"] == "+998901111111"
+
+
+async def test_branch_rejects_a_fourth_additional_phone(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    refused = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={
+            "additional_phones": [
+                "+998902222222",
+                "+998903333333",
+                "+998904444444",
+                "+998905555555",
+            ]
+        },
+    )
+    stored = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "too_many_branch_phones"
+    assert stored.json()["additional_phones"] == []
+
+
+async def test_branch_rejects_badly_formatted_additional_phone(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    refused = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["901234567"]},
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "invalid_phone"
+
+
+async def test_branch_rejects_additional_phone_duplicating_the_primary_or_a_sibling(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, _branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Yunusobod",
+            "address": "Tashkent, Yunusobod",
+            "phone": "+998901111111",
+            "additional_phones": ["+998902222222"],
+            "working_hours": default_working_hours(),
+        },
+    )
+    branch_id = created.json()["id"]
+    same_as_primary = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998901111111"]},
+    )
+    same_as_sibling = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998903333333", "+998903333333"]},
+    )
+    # Promoting an extra to primary would collide with the extra it came from.
+    primary_moved_onto_extra = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"phone": "+998902222222"},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["additional_phones"] == ["+998902222222"]
+    assert same_as_primary.status_code == 400
+    assert same_as_primary.json()["code"] == "duplicate_branch_phone"
+    assert same_as_sibling.status_code == 400
+    assert same_as_sibling.json()["code"] == "duplicate_branch_phone"
+    assert primary_moved_onto_extra.status_code == 400
+    assert primary_moved_onto_extra.json()["code"] == "duplicate_branch_phone"
+
+
 async def test_owner_updates_staff_profile_fields(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -431,6 +568,32 @@ async def test_owner_updates_staff_profile_fields(
     assert null_home_branch.json()["code"] == "home_branch_required"
     assert duplicate.status_code == 409
     assert duplicate.json()["code"] == "login_exists"
+
+
+async def test_staff_login_collides_across_workshops(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Logins are unique platform-wide, so the second workshop to reach for a name
+    # is refused — the owner sees a specific `login_exists`, never a 500.
+    owner_access, branch_id = await _owner_login(client, db_session)
+    await seed_workshop_with_owner(db_session, login="taken")
+
+    collision = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Office Staff",
+            "phone": "+998906060606",
+            "login": "TAKEN",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [],
+        },
+    )
+
+    assert collision.status_code == 409
+    assert collision.json()["code"] == "login_exists"
 
 
 async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(

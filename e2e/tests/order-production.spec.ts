@@ -467,11 +467,10 @@ test("client places an order and workshop completes it through production queues
   await page.getByRole("button", { name: "Buyurtmani tasdiqlash" }).click();
 
   await expect(page.getByText("Buyurtma berildi")).toBeVisible();
-  const orderText = await page
-    .getByText(/ORD-\d{4}-\d{6}/)
-    .first()
-    .textContent();
-  const orderNumber = orderText?.match(/ORD-\d{4}-\d{6}/)?.[0];
+  // `#26-14-0003` — year, branch number, per-branch sequence (sales.md).
+  const numberPattern = /#\d{2}-\d+-\d{4}/;
+  const orderText = await page.getByText(numberPattern).first().textContent();
+  const orderNumber = orderText?.match(numberPattern)?.[0];
   expect(orderNumber).toBeTruthy();
 
   const baseUrl = new URL(page.url()).origin;

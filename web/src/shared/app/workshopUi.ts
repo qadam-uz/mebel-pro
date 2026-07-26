@@ -63,6 +63,11 @@ export function stockTransactionTypeLabel(type: StockTransactionType) {
   return stockTransactionTypeUz[type] ?? type
 }
 
+// The job is done — the books just went below zero because an arrival was never
+// recorded. Informational only: raised as a `warn` toast next to the success
+// one, never as danger, and never in place of completing the transition (QAD-150).
+export const STOCK_SHORTFALL_MESSAGE = 'Omborda qoldiq yetarli emas'
+
 export const permissionLabels: Record<string, string> = {
   view_dashboard: 'Asosiy panel',
   manage_orders: 'Buyurtmalar',
@@ -93,6 +98,29 @@ export function initials(name: string | null | undefined, fallback = 'MP') {
     .join('')
 }
 
+/** Longest slug we prefill; a prefix that eats the field helps nobody. */
+const LOGIN_PREFIX_MAX = 12
+
+/**
+ * Suggest a login prefix from the workshop name — "Mebel Pro" → `mebelpro_`.
+ * Logins are unique across the whole platform, so an unprefixed `admin` is
+ * usually already taken; steering the owner toward a workshop-shaped name
+ * avoids the collision. Purely a suggestion: the field stays fully editable.
+ */
+export function loginPrefix(workshopName: string | null | undefined) {
+  if (!workshopName) return ''
+  const slug = workshopName
+    .toLowerCase()
+    // Decompose so an accented letter keeps its ASCII base once the marks go;
+    // everything else non-alphanumeric (spaces, punctuation, the turned comma
+    // in o‘/g‘) simply drops.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, LOGIN_PREFIX_MAX)
+  return slug ? `${slug}_` : ''
+}
+
 export const workshopErrorMessages: Record<string, string> = {
   permission_denied: "Bu amal uchun ruxsatingiz yo'q.",
   order_action_failed: "Buyurtma amali bajarilmadi. Qayta urinib ko'ring.",
@@ -121,6 +149,30 @@ export const workshopErrorMessages: Record<string, string> = {
   user_unblock_failed: "Xodimni faollashtirib bo'lmadi. Qayta urinib ko'ring.",
   sessions_revoke_failed: "Sessiyalarni yopib bo'lmadi. Qayta urinib ko'ring.",
   session_revoke_failed: "Sessiyani yopib bo'lmadi. Qayta urinib ko'ring.",
+  // Finance ledger codes (QAD-123). The generic fallback is for genuinely
+  // unexpected failures — a rejected save the operator can fix must say what
+  // to fix, in the words the form uses.
+  order_required: "Buyurtma to'lovi uchun buyurtma tanlang.",
+  order_not_allowed: "Faqat buyurtma to'loviga buyurtma biriktiriladi.",
+  scope_mismatch: 'Tushum filiali buyurtma filialiga mos emas.',
+  order_payment_exceeds_total: "Summa buyurtma qoldig'idan oshib ketdi.",
+  order_not_found: "Buyurtma topilmadi — ro'yxatdan qaytadan tanlang.",
+  branch_required: 'Filialni tanlang — yozuv qaysi filialga tegishli ekani kerak.',
+  forbidden: "Bu amal uchun ruxsatingiz yo'q.",
+  invalid_amount: "Summa noldan katta bo'lishi kerak.",
+  invalid_amount_range: 'Eng kichik summa eng kattasidan oshib ketmasin.',
+  invalid_status: "Faqat yozilgan yozuvni o'zgartirish mumkin.",
+  ledger_not_recorded: "Bu yozuv allaqachon bekor qilingan — uni o'zgartirib bo'lmaydi.",
+  future_date_not_allowed: "Sana kelajakda bo'lishi mumkin emas.",
+  description_required: 'Tavsifni yozing.',
+  note_required: 'Izohni yozing — tuzatish sababsiz saqlanmaydi.',
+  reason_required: 'Sababni yozing.',
+  income_not_found: "Tushum topilmadi — ro'yxatni yangilang.",
+  expense_not_found: "Xarajat topilmadi — ro'yxatni yangilang.",
+  supplier_not_found: "Ta'minotchi topilmadi — ro'yxatdan qaytadan tanlang.",
+  client_not_found: "Mijoz topilmadi — ro'yxatdan qaytadan tanlang.",
+  adjustment_not_found: "Tuzatish topilmadi — ro'yxatni yangilang.",
+  invalid_party: "Tuzatish bitta tomonga yoziladi: yo ta'minotchi, yo mijoz.",
 }
 
 export function workshopErrorMessage(code: string | null | undefined) {

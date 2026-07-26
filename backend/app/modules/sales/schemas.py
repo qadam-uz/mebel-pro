@@ -203,6 +203,12 @@ class WorkshopWorkerOption(APIModel):
     home_branch_id: uuid.UUID
 
 
+class NewOrderCountResponse(APIModel):
+    """Ambient count behind the workshop sidebar's `+N` badge."""
+
+    count: int
+
+
 class OrderSummaryResponse(APIModel):
     id: uuid.UUID
     order_number: str
@@ -269,6 +275,10 @@ class OrderDetailResponse(OrderSummaryResponse):
     # The order's open revision draft, surfaced on the workshop detail only —
     # lets the UI offer resume/discard instead of starting a fresh revision.
     revision_draft_id: uuid.UUID | None = None
+    # Set only by the two production-completion endpoints, when the consume they
+    # just recorded drove a branch balance below zero. Informational: the
+    # transition already succeeded (QAD-150).
+    stock_shortfall: bool = False
 
 
 # --- Production terminal (worker-scoped, money-free) -------------------------

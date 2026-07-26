@@ -5,6 +5,7 @@ import {
   expect,
   type APIRequestContext,
   type APIResponse,
+  type Locator,
   type Page,
 } from "@playwright/test";
 
@@ -427,4 +428,42 @@ export async function loginClient(page: Page, phone: string, name?: string) {
     await page.getByRole("button", { name: "Davom etish" }).click();
   }
   await expect(page).toHaveURL(/\/client\/c$/);
+}
+
+/**
+ * Click a control that opens a PDF and assert it opened a **tab**, not a download
+ * (QAD-160).
+ *
+ * The obvious assertion — that the popup's URL is the `blob:` object URL — cannot
+ * be made here: headless Chromium ships no PDF viewer, so navigating the tab to a
+ * PDF blob is abandoned and `popup.url()` stays `about:blank`. It resolves to
+ * `blob:…` in a headed browser. So this asserts what headless *can* see and what
+ * the ticket actually claims: a new tab opened, the authed PDF request succeeded,
+ * and nothing was written to the download directory.
+ */
+export async function expectPdfOpensInTab(
+  page: Page,
+  trigger: Locator,
+  pdfPathPattern: RegExp,
+) {
+  const popupPromise = page.waitForEvent("popup");
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      pdfPathPattern.test(new URL(response.url()).pathname) &&
+      response.request().method() === "GET",
+  );
+  let downloaded = false;
+  page.once("download", () => {
+    downloaded = true;
+  });
+
+  await trigger.click();
+
+  const popup = await popupPromise;
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/pdf");
+  expect(popup.isClosed()).toBe(false);
+  expect(downloaded).toBe(false);
+  return popup;
 }

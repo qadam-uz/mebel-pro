@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   dashboardFailureLine,
+  loginPrefix,
   stockTransactionTypeLabel,
   workshopDraftStatus,
   workshopErrorMessage,
@@ -12,6 +13,19 @@ describe('workshop UI helpers', () => {
     expect(workshopErrorMessage('order_version_conflict')).toContain('Buyurtma boshqa joyda')
     expect(workshopErrorMessage('permission_denied')).not.toContain('permission_denied')
     expect(workshopErrorMessage('expense_save_failed')).not.toContain('expense_save_failed')
+  })
+
+  it('suggests a login prefix from the workshop name', () => {
+    expect(loginPrefix('Mebel Pro')).toBe('mebelpro_')
+    expect(loginPrefix('Mebel Master')).toBe('mebelmaster_')
+    // Non-ASCII letters keep their base; apostrophes and punctuation drop.
+    expect(loginPrefix("O'zbek Mebel")).toBe('ozbekmebel_')
+    expect(loginPrefix('Sätz & Söhne')).toBe('satzsohne_')
+    // Capped, so the suggestion never fills the field on its own.
+    expect(loginPrefix('Toshkent Mebel Fabrikasi')).toBe('toshkentmebe_')
+    // Nothing to slugify → no prefix at all, rather than a bare underscore.
+    expect(loginPrefix('«»')).toBe('')
+    expect(loginPrefix(null)).toBe('')
   })
 
   it('hides unknown raw codes behind a generic recovery message', () => {
@@ -45,6 +59,44 @@ describe('workshop UI helpers', () => {
     const inProgress = workshopDraftStatus(false)
     expect(inProgress.label).toBe('Tahrirlanmoqda')
     expect(inProgress.pill).toBe('pill p-new')
+  })
+
+  // QAD-123: every rejection the finance forms can provoke must name the fix.
+  // The generic fallback is for genuinely unexpected failures only — an
+  // operator who reads "Amal bajarilmadi" learns nothing and retries blind.
+  it('names the fix for every finance ledger rejection', () => {
+    const generic = "Amal bajarilmadi. Qayta urinib ko'ring."
+    const codes = [
+      'order_required',
+      'order_not_allowed',
+      'scope_mismatch',
+      'order_payment_exceeds_total',
+      'order_not_found',
+      'branch_required',
+      'forbidden',
+      'invalid_amount',
+      'invalid_amount_range',
+      'invalid_status',
+      'ledger_not_recorded',
+      'future_date_not_allowed',
+      'description_required',
+      'note_required',
+      'reason_required',
+      'income_not_found',
+      'expense_not_found',
+      'supplier_not_found',
+      'client_not_found',
+      'adjustment_not_found',
+      'invalid_party',
+    ]
+    for (const code of codes) {
+      expect(workshopErrorMessage(code), code).not.toBe(generic)
+      expect(workshopErrorMessage(code), code).not.toContain(code)
+    }
+    expect(workshopErrorMessage('order_required')).toBe("Buyurtma to'lovi uchun buyurtma tanlang.")
+    expect(workshopErrorMessage('order_payment_exceeds_total')).toBe(
+      "Summa buyurtma qoldig'idan oshib ketdi.",
+    )
   })
 
   it('localizes stock transaction types', () => {

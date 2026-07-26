@@ -44,7 +44,7 @@ hold every grant. Uses the workshop app.
 |---|---|---|
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required; the tenant |
-| `login` | text | unique per workshop, case-insensitive |
+| `login` | text | **unique platform-wide**, case-insensitive — the login alone names the account, and the workshop follows from it |
 | `password_hash` / `full_name` / `phone` | text | as above |
 | `is_owner` | bool | **exactly one `true` per workshop** |
 | `home_branch_id` | UUID | the branch the user works at; load-bearing for cutter / edger assignment (a **non-owner** order's `cutter_user_id` / `edger_user_id` must have `home_branch_id = order.branch_id`; the **owner is exempt** — `is_owner` holds `process_production` on every branch and may be assigned regardless of `home_branch_id`); for owner / office staff who span branches, set the branch they sit at |
@@ -58,9 +58,10 @@ There is **no compensation policy** in v1: the system stores no pay rates and co
 salary. A worker's pay is the accountant's manual calculation from the worker-production
 reports, booked as a `salary` expense ([`finance.md`](../features/finance.md)).
 
-Invariants: exactly one owner per workshop (DB / service); `login` unique per workshop; sign-in
-resolves exactly one same-login account by password and rejects same-login / same-password
-cross-workshop ambiguity; `home_branch_id` belongs to the same workshop; blocking the user, or
+Invariants: exactly one owner per workshop (DB / service); `login` unique across every workshop
+(`uq_workshop_users_login_ci` on `lower(login)`); sign-in is a single lookup by that login, so a
+login already taken in another workshop is refused at creation rather than resolved by password;
+`home_branch_id` belongs to the same workshop; blocking the user, or
 blocking its workshop, deletes its sessions; staff with zero grants can log in but has no
 actionable screens; v1 has no owner transfer path after provisioning.
 

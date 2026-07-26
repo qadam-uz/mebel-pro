@@ -2,7 +2,7 @@
 title: Platform operations
 status: draft
 owner: shape
-updated: 2026-07-13
+updated: 2026-07-26
 order: 70
 ---
 
@@ -113,6 +113,26 @@ in-app creation is the path.
   financials** — operators monitor health and incidents, not workshop money
   ([`access-patterns.md`](../../access-patterns.md#platform-operator)); revenue rollups are out of operator scope, so no
   per-workshop or platform revenue figure appears here.
+
+  A **Dinamika** grid adds the time dimension those lifetime totals lack: orders placed, and
+  workshop and client registrations, one row each, over **calendar** periods — orders daily /
+  weekly / monthly / yearly, registrations daily / monthly / yearly. Each number carries a
+  small trend line (14 days · 12 weeks · 12 months · 5 years) that supports the figure without
+  axes, tooltips, or a legend. Counts are platform-wide and include cancelled orders: the
+  metric is demand placed, not demand fulfilled. Registrations are counted per source and are
+  never merged into one "signups" number.
+
+  The periods are **Asia/Tashkent** calendar periods, not UTC ones and not rolling windows.
+  Storage is UTC everywhere, so a naive UTC day would roll over at 05:00 local and file every
+  order taken between midnight and 5am under the previous day. Boundaries are therefore built
+  in local time and converted to UTC for the query, weeks start Monday, and the current period
+  is partial by design — "this month so far" is the number an operator asks for. The zone is a
+  constant, not a setting: v1 is Uzbekistan-only, and it would take a second country to make it
+  configuration.
+
+  This is the one place order data reaches an operator, and it reaches them only as a tally —
+  **counts yes, contents no** ([`scope.md`](../../scope.md)). There is no drill-down, no
+  per-workshop split, and no money metric.
 - **Docs & API reference** — a nav link out to `/docs`, `/api-docs`, `/api-redoc` (the
   live docs site and the OpenAPI references). These remain HTTP-Basic-gated at the edge,
   but the superadmin UI keeps the navigation terse and does not explain that separate
@@ -140,8 +160,8 @@ Under a **Platform** section:
 
 The **Audit** viewer lives in [`workshop.md`](workshop.md) — in v1 it is a **superadmin-only**
 surface, rendered cross-workshop in this app. There is **no cross-workshop orders view** in
-v1: the operator provisions, blocks, and monitors, but does not browse workshops' orders (see
-[`scope.md`](../../scope.md)).
+v1: the operator provisions, blocks, and monitors, but does not browse workshops' orders. The
+dashboard's Dinamika row is a platform-wide tally, not a view — it resolves no single order.
 
 States: loading / empty / error on every page; confirmation on every state-changing action;
 the one-time-secret confirmation after creating a user or resetting a password. Admin pages keep

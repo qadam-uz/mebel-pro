@@ -19,10 +19,8 @@ from app.models.enums import (
     LedgerStatus,
     OrderStatus,
     Permission,
-    StockTransactionType,
 )
 from app.modules.access.contracts import Client
-from app.modules.catalog.contracts import Material
 from app.modules.finance.models import CounterpartyAdjustment, Expense, Income
 from app.modules.finance.schemas import (
     AdjustmentCreateRequest,
@@ -30,6 +28,7 @@ from app.modules.finance.schemas import (
     DebtRow,
     DebtStatementResponse,
     DebtStatementRow,
+    PayableInvoiceResponse,
     VoidLedgerRequest,
 )
 from app.modules.finance.service import (
@@ -38,12 +37,10 @@ from app.modules.finance.service import (
     _required_text,
     _workshop_principal_id,
 )
-from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier
+from app.modules.inventory.api import list_payable_invoices
+from app.modules.inventory.contracts import StockTransaction, Supplier, SupplierInvoice
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action, record_status_change
-
-_PANEL = "panel"
-_METRE = "metre"
 
 # Same-second tiebreak for statement rows. Entry timestamps come from two
 # clocks (app for stock-ins, DB default for ledger rows) whose sub-second
@@ -126,6 +123,39 @@ async def get_supplier_statement(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+async def list_payable_supplier_invoices(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    search: str | None = None,
+) -> list[PayableInvoiceResponse]:
+    """Invoices the workshop still owes on — the expense form's picker.
+
+    Read through the inventory module's public API: invoices group stock
+    movement and belong there; finance only folds money over them.
+    """
+
+    workshop_id = await debts_scope(db, principal=principal)
+    records = await list_payable_invoices(db, workshop_id=workshop_id, search=search)
+    return [
+        PayableInvoiceResponse(
+            id=record.invoice.id,
+            invoice_no=record.invoice.invoice_no,
+            invoice_date=record.invoice.invoice_date,
+            supplier_id=record.invoice.supplier_id,
+            supplier_name=record.supplier.name if record.supplier else None,
+            branch_id=record.invoice.branch_id,
+            branch_name=record.branch_name,
+            line_count=len(record.lines),
+            total_tiyin=record.invoice.total_tiyin,
+            paid_tiyin=record.paid_tiyin,
+            outstanding_tiyin=record.outstanding_tiyin,
+            payment_status=record.payment_status,
+        )
+        for record in records
+    ]
 
 
 async def list_client_debts(
@@ -292,23 +322,26 @@ async def void_adjustment(
 
 
 async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[uuid.UUID, int]:
-    """Per supplier: balance = sum(payments) - sum(deliveries) + sum(adjustments)."""
+    """Per supplier: balance = sum(payments) - sum(deliveries) + sum(adjustments).
+
+    Deliveries fold over invoice totals — post skidka/ustama — so the number the
+    accountant sees is the number the supplier's own document says. Invoices
+    without a supplier (historical arrivals that never had one) take no part.
+    """
 
     deliveries = {
         row[0]: int(row[1])
         for row in (
             await db.execute(
                 select(
-                    StockTransaction.supplier_id,
-                    func.coalesce(func.sum(StockTransaction.total_price_tiyin), 0),
+                    SupplierInvoice.supplier_id,
+                    func.coalesce(func.sum(SupplierInvoice.total_tiyin), 0),
                 )
-                .join(Supplier, Supplier.id == StockTransaction.supplier_id)
                 .where(
-                    Supplier.workshop_id == workshop_id,
-                    StockTransaction.type == StockTransactionType.STOCK_IN,
-                    StockTransaction.total_price_tiyin.is_not(None),
+                    SupplierInvoice.workshop_id == workshop_id,
+                    SupplierInvoice.supplier_id.is_not(None),
                 )
-                .group_by(StockTransaction.supplier_id)
+                .group_by(SupplierInvoice.supplier_id)
             )
         ).all()
         if row[0] is not None
@@ -505,32 +538,29 @@ async def _supplier_terms(
     rows: list[DebtStatementRow] = []
     deliveries = (
         await db.execute(
-            select(StockTransaction, Material)
-            .join(StockItem, StockItem.id == StockTransaction.stock_item_id)
-            .join(Material, Material.id == StockItem.material_id)
+            select(SupplierInvoice, func.count(StockTransaction.id))
+            .outerjoin(StockTransaction, StockTransaction.invoice_id == SupplierInvoice.id)
             .where(
-                StockTransaction.supplier_id == supplier_id,
-                StockTransaction.type == StockTransactionType.STOCK_IN,
-                StockTransaction.total_price_tiyin.is_not(None),
+                SupplierInvoice.workshop_id == workshop_id,
+                SupplierInvoice.supplier_id == supplier_id,
             )
+            .group_by(SupplierInvoice.id)
         )
     ).all()
-    for transaction, material in deliveries:
-        total = transaction.total_price_tiyin
-        if total is None:  # pragma: no cover - filtered in the query
-            continue
+    for invoice, line_count in deliveries:
         rows.append(
             DebtStatementRow(
                 kind="delivery",
-                on=transaction.created_at.date(),
-                at=transaction.created_at,
-                reference_id=transaction.id,
-                amount_tiyin=-total,
+                on=invoice.invoice_date,
+                at=invoice.created_at,
+                reference_id=invoice.id,
+                amount_tiyin=-invoice.total_tiyin,
                 balance_after_tiyin=0,
-                note=transaction.note,
-                material_name=material.name,
-                quantity=transaction.quantity,
-                display_unit=_PANEL if material.kind.value == "panel" else _METRE,
+                note=invoice.note,
+                invoice_no=invoice.invoice_no,
+                line_count=int(line_count),
+                discount_tiyin=invoice.discount_tiyin,
+                surcharge_tiyin=invoice.surcharge_tiyin,
             )
         )
     expenses = (

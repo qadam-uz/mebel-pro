@@ -186,7 +186,7 @@ async def client_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_client_result(db, principal=principal, result_id=result_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
 
 
@@ -239,8 +239,9 @@ async def workshop_cutting_import_map_commit(
 async def workshop_cutting_drafts_index(
     principal: AccountReadyPrincipal,
     db: Session,
+    branch_id: uuid.UUID | None = None,
 ) -> list[WorkshopCuttingDraftSummary]:
-    return await list_workshop_drafts(db, principal=principal)
+    return await list_workshop_drafts(db, principal=principal, branch_id=branch_id)
 
 
 @router.post(
@@ -331,7 +332,7 @@ async def workshop_cutting_results_pdf(
     db: Session,
 ) -> Response:
     result = await get_workshop_result(db, principal=principal, result_id=result_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(render_cutting_pdf(result), media_type="application/pdf", headers=headers)
 
 

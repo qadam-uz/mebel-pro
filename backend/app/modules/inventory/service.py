@@ -25,6 +25,8 @@ from app.modules.inventory.schemas import (
     StockAdjustmentRequest,
     StockInRequest,
     SupplierCreateRequest,
+    SupplierInvoiceCreateRequest,
+    SupplierInvoiceLineInput,
     SupplierPatchRequest,
 )
 from app.modules.support.api import record_action, record_status_change
@@ -115,7 +117,9 @@ async def list_stock(
         .join(Material, Material.id == StockItem.material_id)
         .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
         .where(StockItem.branch_id == scope.branch_id)
-        .order_by(Manufacturer.name, Material.name)
+        # A negative balance is a state that wants resolving — it sorts to the
+        # top so nobody has to scroll past a minus sign to find it (QAD-150).
+        .order_by((StockItem.on_hand < 0).desc(), Manufacturer.name, Material.name)
     )
     normalized = _optional_text(search)
     if normalized:
@@ -303,69 +307,43 @@ async def record_stock_in(
     branch_id: uuid.UUID,
     payload: StockInRequest,
 ) -> TransactionRecord:
-    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
-    if payload.quantity <= 0:
-        raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
-    if payload.unit_price_tiyin < 0:
-        raise APIError("invalid_price", "Price cannot be negative", status_code=400)
-    if payload.supplier_id is not None and payload.supplier is not None:
-        raise APIError(
-            "invalid_supplier",
-            "Choose existing or inline supplier, not both",
-            status_code=400,
-        )
-    if payload.supplier_id is None and payload.supplier is None:
-        raise APIError("supplier_required", "Supplier is required", status_code=400)
-    supplier = (
-        await _supplier_in_scope(db, scope=scope, supplier_id=payload.supplier_id)
-        if payload.supplier_id is not None
-        else await _create_supplier_for_scope(
-            db,
-            principal=principal,
-            scope=scope,
-            name=payload.supplier.name if payload.supplier else "",
-            phone=payload.supplier.phone if payload.supplier else None,
-            note=payload.supplier.note if payload.supplier else None,
-        )
-    )
-    if supplier.status is not SupplierStatus.ACTIVE:
-        raise APIError("supplier_inactive", "Supplier is inactive", status_code=400)
-    item, material = await _stock_item_for_movement(
-        db,
-        scope=scope,
-        material_id=payload.material_id,
-    )
-    transaction = await _apply_stock_delta(
+    """Record a single-material arrival as a one-line invoice.
+
+    Kept as its own use case for callers that hand over one material at a time,
+    but it goes through the same document path as a multi-line faktura: a
+    stock-in without an invoice would silently drop out of the supplier balance,
+    which now folds over invoice totals.
+    """
+
+    # Local import: `invoices` builds on this module's movement helpers, so the
+    # dependency can only be closed at call time.
+    from app.modules.inventory.invoices import create_invoice
+
+    record = await create_invoice(
         db,
         principal=principal,
-        stock_item=item,
-        type_=StockTransactionType.STOCK_IN,
-        quantity=payload.quantity,
-        supplier_id=supplier.id,
-        note=_optional_text(payload.note),
-        unit_price_tiyin=payload.unit_price_tiyin,
-        total_price_tiyin=stock_in_total_tiyin(
-            material.kind, payload.quantity, payload.unit_price_tiyin
+        payload=SupplierInvoiceCreateRequest(
+            branch_id=branch_id,
+            supplier_id=payload.supplier_id,
+            supplier=payload.supplier,
+            note=payload.note,
+            lines=[
+                SupplierInvoiceLineInput(
+                    material_id=payload.material_id,
+                    quantity=payload.quantity,
+                    unit_price_tiyin=payload.unit_price_tiyin,
+                    note=payload.note,
+                )
+            ],
         ),
     )
-    await record_action(
-        db,
-        actor=actor_from_principal(principal),
-        action="inventory.stock_in",
-        entity_type="stock_transaction",
-        entity_id=transaction.id,
-        workshop_id=scope.workshop_id,
-        branch_id=scope.branch_id,
-        summary=f"Recorded stock-in for {material.name}",
-        details={"quantity": payload.quantity, "material_id": str(payload.material_id)},
-    )
-    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
+    line = record.lines[0]
     return TransactionRecord(
-        transaction=transaction,
-        stock_item=item,
-        material=material,
-        supplier=supplier,
-        actor=await db.get(WorkshopUser, principal.principal_id),
+        transaction=line.transaction,
+        stock_item=line.stock_item,
+        material=line.material,
+        supplier=record.supplier,
+        actor=record.recorded_by,
     )
 
 
@@ -474,7 +452,12 @@ async def consume_order_stock(
     if quantity <= 0:
         raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
     scope = await _system_scope_for_branch(db, branch_id=branch_id)
-    item, material = await _stock_item_for_movement(db, scope=scope, material_id=material_id)
+    item, material = await _stock_item_for_movement(
+        db,
+        scope=scope,
+        material_id=material_id,
+        allow_unlisted_material=True,
+    )
     transaction = await _apply_stock_delta(
         db,
         principal=None,
@@ -486,6 +469,8 @@ async def consume_order_stock(
         note=None,
     )
     await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
+    if item.on_hand < 0:
+        await _emit_negative_stock(db, scope=scope, stock_item=item, material=material)
     return transaction
 
 
@@ -502,7 +487,12 @@ async def restore_order_stock(
     if quantity <= 0:
         raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
     scope = await _system_scope_for_branch(db, branch_id=branch_id)
-    item, material = await _stock_item_for_movement(db, scope=scope, material_id=material_id)
+    item, material = await _stock_item_for_movement(
+        db,
+        scope=scope,
+        material_id=material_id,
+        allow_unlisted_material=True,
+    )
     transaction = await _apply_stock_delta(
         db,
         principal=None,
@@ -529,9 +519,17 @@ async def _apply_stock_delta(
     order_id: uuid.UUID | None = None,
     unit_price_tiyin: int | None = None,
     total_price_tiyin: int | None = None,
+    invoice_id: uuid.UUID | None = None,
 ) -> StockTransaction:
     next_balance = stock_item.on_hand + quantity
-    if next_balance < 0:
+    # Only order-driven CONSUME may drive the balance negative: it records
+    # material that physically already moved, and the arrival that was never
+    # entered fixes the balance by itself once someone records it. A human typing
+    # a stock-out that would go negative is almost certainly a typo, so those keep
+    # the guard. Movements that *raise* the balance (stock-in, restore, a positive
+    # adjustment) are always allowed — they heal a negative balance, never deepen
+    # it, so a revert works from below zero too (QAD-150).
+    if next_balance < 0 and quantity < 0 and type_ is not StockTransactionType.CONSUME:
         raise APIError("stock_below_zero", "Stock cannot go below zero", status_code=400)
     stock_item.on_hand = next_balance
     stock_item.updated_at = datetime.now(UTC)
@@ -544,6 +542,7 @@ async def _apply_stock_delta(
         total_price_tiyin=total_price_tiyin,
         order_id=order_id,
         supplier_id=supplier_id,
+        invoice_id=invoice_id,
         actor_user_id=principal.principal_id if principal is not None else None,
         note=note,
         created_at=datetime.now(UTC),
@@ -558,14 +557,24 @@ async def _stock_item_for_movement(
     *,
     scope: BranchScope,
     material_id: uuid.UUID,
+    allow_unlisted_material: bool = False,
 ) -> tuple[StockItem, Material]:
+    """The branch's locked stock row for a material, created at zero if absent.
+
+    `allow_unlisted_material` is for the order-driven paths only. The branch
+    catalog governs what is *offerable to new clients*; it must not govern
+    whether material that already physically moved can be recorded (QAD-150), so
+    consume/restore proceed on a zero-balance row and the material stays out of
+    the catalog. Human-facing movements keep the catalog check.
+    """
+
     branch_material = await db.scalar(
         select(BranchMaterial).where(
             BranchMaterial.branch_id == scope.branch_id,
             BranchMaterial.material_id == material_id,
         )
     )
-    if branch_material is None:
+    if branch_material is None and not allow_unlisted_material:
         raise APIError(
             "branch_material_not_found",
             "Material is not selected in this branch",
@@ -583,7 +592,7 @@ async def _stock_item_for_movement(
             db,
             branch_id=scope.branch_id,
             material_id=material_id,
-            min_stock=branch_material.min_stock,
+            min_stock=branch_material.min_stock if branch_material is not None else 0,
         )
         material = await db.get(Material, material_id)
         if material is None:
@@ -659,8 +668,45 @@ async def _emit_low_stock_if_needed(
     stock_item: StockItem,
     material: Material,
 ) -> None:
+    # `<=` and not `< 0`-aware on purpose: a balance that ran past the threshold
+    # into negative is still low stock, so the alert keeps firing (QAD-150).
     if stock_item.on_hand > stock_item.min_stock:
         return
+    await _notify_inventory_holders(
+        db,
+        scope=scope,
+        stock_item=stock_item,
+        material=material,
+        event_code="inventory.low_stock",
+    )
+
+
+async def _emit_negative_stock(
+    db: AsyncSession,
+    *,
+    scope: BranchScope,
+    stock_item: StockItem,
+    material: Material,
+) -> None:
+    """A consume drove the books negative — nobody is blocked, but it can't be silent."""
+
+    await _notify_inventory_holders(
+        db,
+        scope=scope,
+        stock_item=stock_item,
+        material=material,
+        event_code="inventory.negative_stock",
+    )
+
+
+async def _notify_inventory_holders(
+    db: AsyncSession,
+    *,
+    scope: BranchScope,
+    stock_item: StockItem,
+    material: Material,
+    event_code: str,
+) -> None:
     recipient_ids = set(
         (
             await db.scalars(
@@ -687,7 +733,7 @@ async def _emit_low_stock_if_needed(
             Notification(
                 recipient_type=AuthenticatedPrincipalType.WORKSHOP_USER,
                 recipient_id=recipient_id,
-                event_code="inventory.low_stock",
+                event_code=event_code,
                 entity_type="stock_item",
                 entity_id=stock_item.id,
                 payload={
@@ -714,6 +760,10 @@ async def stock_value(
     Derived at read time like every other money number: per stock item, the most
     recent priced stock-in's unit price times what is physically on hand (edges:
     mm x per-metre // 1000). Items that never had a priced stock-in count zero.
+
+    Negative balances count negatively rather than being clamped away: the figure
+    is what the books say, and hiding an unrecorded arrival would make the total
+    silently too high (QAD-150).
     """
 
     scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
@@ -732,7 +782,7 @@ async def stock_value(
         await db.execute(
             select(StockItem.on_hand, Material.kind, latest_price)
             .join(Material, Material.id == StockItem.material_id)
-            .where(StockItem.branch_id == scope.branch_id, StockItem.on_hand > 0)
+            .where(StockItem.branch_id == scope.branch_id, StockItem.on_hand != 0)
         )
     ).all()
     total = 0

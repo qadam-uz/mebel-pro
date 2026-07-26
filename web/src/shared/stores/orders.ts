@@ -11,7 +11,7 @@ import {
 } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
-import { downloadBlob } from '@/shared/app/downloadBlob'
+import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import type { CuttingDraft, CuttingResult, MaterialSource } from '@/shared/stores/cutting'
 
 export type OrderStatus =
@@ -221,6 +221,9 @@ export interface OrderDetail extends OrderSummary {
   // The order's open revision draft (workshop detail only) — lets the UI offer
   // resume/discard instead of starting a fresh revision.
   revision_draft_id: string | null
+  // True only on a cutting-done / banding-done response whose consume drove a
+  // branch balance below zero. The transition already succeeded (QAD-150).
+  stock_shortfall: boolean
 }
 
 export const activeWorkshopStatuses: OrderStatus[] = [
@@ -239,6 +242,8 @@ export const useOrdersStore = defineStore('orders', () => {
   const workshopOrders = ref<OrderSummary[]>([])
   const recentWorkshopOrders = ref<OrderSummary[]>([])
   const workshopOrdersHasMore = ref(false)
+  const newOrderCount = ref(0)
+  const newOrderCountBranchId = ref<string | null>(null)
   const currentOrder = ref<OrderDetail | null>(null)
   const workerOptions = ref<WorkshopWorkerOption[]>([])
   const loading = ref(false)
@@ -250,8 +255,8 @@ export const useOrdersStore = defineStore('orders', () => {
   // state (the page gates on `error`). Views read these for the inline message.
   const actionError = ref<string | null>(null)
   const actionTraceId = ref<string | null>(null)
-  // PDF download feedback (CB-17): id of the order currently downloading, plus a
-  // transient error + trace for the last failed download.
+  // PDF feedback (CB-17): id of the order whose PDF is being fetched, plus a
+  // transient error + trace for the last failed open.
   const downloadingId = ref<string | null>(null)
   const downloadError = ref<string | null>(null)
   const downloadTraceId = ref<string | null>(null)
@@ -469,6 +474,31 @@ export const useOrdersStore = defineStore('orders', () => {
     }
   }
 
+  // Ambient count behind the sidebar's `Buyurtmalar` badge (QAD-156). Failure is
+  // silent by design: the badge is decoration, and a dead count must never leave
+  // an error banner or a stale number on the shell — it just stops rendering.
+  async function loadNewOrderCount(branchId: string | null = null) {
+    newOrderCountBranchId.value = branchId
+    try {
+      const response = await api.get<{ count: number }>(
+        withQuery('/workshop/orders/new-count', { branch_id: branchId }),
+        authInit(),
+      )
+      // The shell fires an unscoped load on mount and a scoped one as soon as the
+      // branch context resolves; without this guard the slower of the two wins and
+      // the badge shows the wrong branch's number.
+      if (newOrderCountBranchId.value !== branchId) return
+      newOrderCount.value = Math.max(0, response.count)
+    } catch {
+      if (newOrderCountBranchId.value !== branchId) return
+      newOrderCount.value = 0
+    }
+  }
+
+  async function refreshNewOrderCount() {
+    await loadNewOrderCount(newOrderCountBranchId.value)
+  }
+
   async function loadWorkshopOrder(id: string) {
     await loadOrder(`/workshop/orders/${id}`, 'workshop_order_load_failed')
   }
@@ -557,20 +587,12 @@ export const useOrdersStore = defineStore('orders', () => {
     return await mutate(`/workshop/orders/${id}/note`, { note_workshop: note }, 'patch')
   }
 
-  async function downloadClientPdf(orderId: string) {
-    await downloadPdf(
-      `/client/orders/${orderId}/cutting/pdf`,
-      `order-${orderId}-cutting.pdf`,
-      orderId,
-    )
+  async function openClientPdf(orderId: string) {
+    await openPdf(`/client/orders/${orderId}/cutting/pdf`, orderId)
   }
 
-  async function downloadWorkshopPdf(orderId: string) {
-    await downloadPdf(
-      `/workshop/orders/${orderId}/cutting/pdf`,
-      `order-${orderId}-cutting.pdf`,
-      orderId,
-    )
+  async function openWorkshopPdf(orderId: string) {
+    await openPdf(`/workshop/orders/${orderId}/cutting/pdf`, orderId)
   }
 
   async function loadOrder(path: string, fallback: string) {
@@ -603,7 +625,13 @@ export const useOrdersStore = defineStore('orders', () => {
           : await api.patch<OrderDetail>(path, payload, authInit())
       currentOrder.value = order
       if (scope === 'client') patchClientOrder(order)
-      else if (scope === 'workshop') patchWorkshopOrder(order)
+      else if (scope === 'workshop') {
+        patchWorkshopOrder(order)
+        // Confirming or cancelling a NEW order changes the sidebar badge (QAD-156).
+        // Refreshing on every workshop mutation keeps one hook instead of a list of
+        // transitions to keep in sync; it's a `count(*)` and never blocks the caller.
+        void refreshNewOrderCount()
+      }
       return order
     } catch (errorValue) {
       // On an optimistic-concurrency conflict the cached version is stale; refetch
@@ -649,14 +677,17 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders.value = replaceOrPrependOrder(workshopOrders.value, order)
   }
 
-  async function downloadPdf(path: string, filename: string, id: string) {
+  async function openPdf(path: string, id: string) {
     downloadingId.value = id
     downloadError.value = null
     downloadTraceId.value = null
     try {
-      await downloadBlob(path, filename, authInit())
+      await openBlobInNewTab(path, authInit())
     } catch (errorValue) {
-      downloadError.value = "PDF'ni yuklab bo'lmadi. Qayta urinib ko'ring."
+      downloadError.value =
+        errorValue instanceof PopupBlockedError
+          ? "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering."
+          : "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
       downloadTraceId.value = apiTraceId(errorValue)
     } finally {
       downloadingId.value = null
@@ -669,6 +700,8 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders.value = []
     recentWorkshopOrders.value = []
     workshopOrdersHasMore.value = false
+    newOrderCount.value = 0
+    newOrderCountBranchId.value = null
     currentOrder.value = null
     workerOptions.value = []
     loading.value = false
@@ -687,6 +720,7 @@ export const useOrdersStore = defineStore('orders', () => {
     workshopOrders,
     recentWorkshopOrders,
     workshopOrdersHasMore,
+    newOrderCount,
     currentOrder,
     workerOptions,
     loading,
@@ -710,6 +744,8 @@ export const useOrdersStore = defineStore('orders', () => {
     loadWorkshopOrders,
     loadRecentWorkshopOrders,
     loadWorkshopOrder,
+    loadNewOrderCount,
+    refreshNewOrderCount,
     loadWorkers,
     approve,
     assign,
@@ -726,8 +762,8 @@ export const useOrdersStore = defineStore('orders', () => {
     discount,
     surcharge,
     updateNote,
-    downloadClientPdf,
-    downloadWorkshopPdf,
+    openClientPdf,
+    openWorkshopPdf,
     reset,
   }
 })

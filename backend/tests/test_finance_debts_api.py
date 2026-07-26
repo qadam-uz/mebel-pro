@@ -37,8 +37,12 @@ async def _platform_access(db_session: AsyncSession) -> str:
     return tokens.access_token
 
 
-async def _owner_fixture(db_session: AsyncSession) -> tuple[str, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+async def _owner_fixture(
+    db_session: AsyncSession,
+    *,
+    login: str = "owner",
+) -> tuple[str, uuid.UUID, uuid.UUID]:
+    workshop, branch, owner = await seed_workshop_with_owner(db_session, login=login)
     owner.password_reset_required = False
     tokens = await create_session(
         db_session,
@@ -224,9 +228,12 @@ async def test_supplier_debt_fold_statement_and_voids(
         -4_500_000,
         -4_000_000,
     ]
+    # A delivery term is now one invoice, not one stock-in line: same money,
+    # the grain the supplier's own document is written in.
     assert body["rows"][1]["amount_tiyin"] == -10_300_000
-    assert body["rows"][1]["quantity"] == 20
-    assert body["rows"][1]["display_unit"] == "panel"
+    assert body["rows"][1]["invoice_no"] == "K-0001"
+    assert body["rows"][1]["line_count"] == 1
+    assert body["rows"][1]["discount_tiyin"] == 0
     assert body["opening_balance_tiyin"] == 0
     assert body["closing_balance_tiyin"] == -4_000_000
     assert body["current_balance_tiyin"] == -4_000_000
@@ -424,7 +431,7 @@ async def test_adjustment_validation_and_scope(
     db_session: AsyncSession,
 ) -> None:
     owner_access, workshop_id, branch_id = await _owner_fixture(db_session)
-    other_owner_access, _, other_branch_id = await _owner_fixture(db_session)
+    other_owner_access, _, other_branch_id = await _owner_fixture(db_session, login="owner_b")
     supplier = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/suppliers",
         headers=_auth(owner_access),

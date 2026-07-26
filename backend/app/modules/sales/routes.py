@@ -21,6 +21,7 @@ from app.modules.sales.api import (
     cancel_workshop_order,
     complete_banding,
     complete_cutting,
+    count_new_workshop_orders,
     get_client_order,
     get_client_order_cutting_result,
     get_production_job,
@@ -45,6 +46,7 @@ from app.modules.sales.schemas import (
     BatchOrderQuoteRequest,
     BatchOrderQuoteResponse,
     ClientOrderCreateRequest,
+    NewOrderCountResponse,
     OrderDetailResponse,
     OrderQuoteResponse,
     OrderSummaryResponse,
@@ -165,7 +167,7 @@ async def client_order_cutting_pdf(
 ) -> Response:
     order = await get_client_order(db, principal=principal, order_id=order_id)
     result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),
@@ -218,6 +220,17 @@ async def workshop_order_workers(
     db: Session,
 ) -> list[WorkshopWorkerOption]:
     return await list_worker_options(db, principal=principal, branch_id=branch_id)
+
+
+# Ambient count behind the sidebar badge (QAD-156). Declared BEFORE `/{order_id}`
+# so the literal `new-count` segment isn't captured as an order id.
+@router.get("/workshop/orders/new-count", response_model=NewOrderCountResponse)
+async def workshop_orders_new_count(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    branch_id: uuid.UUID | None = None,
+) -> NewOrderCountResponse:
+    return await count_new_workshop_orders(db, principal=principal, branch_id=branch_id)
 
 
 # Staff create + quote for walk-in orders. Declared BEFORE `/{order_id}` so the
@@ -430,7 +443,7 @@ async def workshop_order_cutting_pdf(
 ) -> Response:
     order = await get_workshop_order(db, principal=principal, order_id=order_id)
     result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),

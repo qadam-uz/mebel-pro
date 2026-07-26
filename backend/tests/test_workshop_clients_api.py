@@ -34,8 +34,10 @@ def _auth(access_token: str) -> dict[str, str]:
 
 async def _workshop_owner_access(
     db: AsyncSession,
+    *,
+    login: str = "owner",
 ) -> tuple[str, uuid.UUID, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db)
+    workshop, branch, owner = await seed_workshop_with_owner(db, login=login)
     owner.password_reset_required = False
     tokens = await create_session(
         db,
@@ -317,7 +319,10 @@ async def test_get_workshop_client_requires_a_draft_or_order_with_this_workshop(
     db_session: AsyncSession,
 ) -> None:
     access, workshop_id, branch_id, _ = await _workshop_owner_access(db_session)
-    other_access, other_workshop_id, _, _ = await _workshop_owner_access(db_session)
+    other_access, other_workshop_id, _, _ = await _workshop_owner_access(
+        db_session,
+        login="owner_b",
+    )
 
     drafted = Client(phone="+998901111881", name="Drafted Walk In")
     ordered = Client(phone="+998901111882", name="Ordered Walk In")

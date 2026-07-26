@@ -197,12 +197,25 @@ const revisionOrderId = computed(() => draft.value?.revision_of_order_id ?? null
 // The locked-branch strip names the branch the editor actually operates on. For a
 // resumed walk-in draft that's the draft's frozen branch (which may differ from
 // the topbar the adapter froze at mount); fall back to the topbar name.
+// The app's current branch, read live through the adapter (workshop only) — see
+// the `context` note on CuttingEditorAdapter. Its presence marks "the app owns
+// the branch", which is what keeps the in-editor picker out of the workshop app
+// even before the context has finished loading.
+const contextBranchId = computed(() => adapter.branch.context?.() ?? null)
+const appSuppliesBranch = computed(
+  () => Boolean(fixedBranch.value) || typeof adapter.branch.context === 'function',
+)
+const appBranchName = computed(() => {
+  if (fixedBranch.value) return fixedBranch.value.name
+  const id = contextBranchId.value
+  return id ? (adapter.branchNameById?.(id) ?? null) : null
+})
 const lockedBranchName = computed(() => {
   const draftBranchId = draft.value?.preferred_branch_id
   if (draftBranchId && adapter.branchNameById) {
-    return adapter.branchNameById(draftBranchId) ?? fixedBranch.value?.name ?? null
+    return adapter.branchNameById(draftBranchId) ?? appBranchName.value
   }
-  return fixedBranch.value?.name ?? null
+  return appBranchName.value
 })
 const revisionOrder = ref<OrderDetail | null>(null)
 watch(
@@ -230,11 +243,18 @@ const activeBranchId = computed(() => {
   // workshop draft prefers its own frozen branch — a revision draft is locked
   // to the order's branch, which may differ from the current topbar context.
   if (isNewDraft.value) return fixedBranch.value?.id ?? localBranchId.value
-  return draft.value?.preferred_branch_id ?? fixedBranch.value?.id ?? null
+  return draft.value?.preferred_branch_id ?? fixedBranch.value?.id ?? contextBranchId.value
 })
 const preferredBranch = computed(() =>
   cutting.branchOptions.find((branch) => branch.branch_id === activeBranchId.value),
 )
+// What the in-page picker should start on. A draft already bound to a branch
+// keeps it — the topbar must never retarget an in-progress drawing. Only when
+// nothing is bound do we fall back to the app's branch, instead of demanding a
+// fresh pick the user has already made in the topbar.
+function seededBranchId(preferredBranchId: string | null | undefined): string | null {
+  return preferredBranchId ?? fixedBranch.value?.id ?? contextBranchId.value
+}
 // The edge trim actually in effect for this editor: the saved draft's
 // resolved value first (server-authoritative), then the client-picked branch,
 // then the workshop's fixed branch. Null only when no branch is chosen yet —
@@ -1365,7 +1385,7 @@ watch(
     }
     // Don't clobber a pending pick while the picker is open (e.g. a debounced
     // autosave round-trips mid-selection); mirror the saved preference otherwise.
-    if (!branchPickerOpen.value) selectedBranchId.value = value.preferred_branch_id
+    if (!branchPickerOpen.value) selectedBranchId.value = seededBranchId(value.preferred_branch_id)
   },
   { immediate: true },
 )
@@ -1411,10 +1431,12 @@ onMounted(async () => {
       // A missing/blocked client shouldn't block editing the drawing itself.
     }
   }
-  // Branch options power the picker; in fixed-branch mode there's no picker and
-  // no workshop branch-options endpoint, so skip the load.
-  if (!fixedBranch.value) await cutting.loadBranchOptions()
-  selectedBranchId.value = draft.value?.preferred_branch_id ?? null
+  // Branch options power the picker; when the app supplies the branch there's no
+  // picker and no workshop branch-options endpoint, so skip the load. Keyed on
+  // `appSuppliesBranch`, not `fixedBranch`: on a cold load the frozen branch is
+  // still null here and calling the client-only endpoint would just 404.
+  if (!appSuppliesBranch.value) await cutting.loadBranchOptions()
+  selectedBranchId.value = seededBranchId(draft.value?.preferred_branch_id)
   const recovered = readDraftRecovery()
   if (recovered) {
     autosave.hydrate(() => {
@@ -1422,8 +1444,20 @@ onMounted(async () => {
     })
     void nextTick(() => autosave.schedule())
   }
-  if (!selectedBranchId.value) branchPickerOpen.value = true
+  // Only the client app asks in-editor. In the workshop the branch comes from
+  // the app, and there are no options to show — an empty modal was a dead end.
+  if (!selectedBranchId.value && !appSuppliesBranch.value) branchPickerOpen.value = true
   await loadMaterials()
+})
+
+// Cold load into the editor: the app's branch context arrives after mount, so
+// adopt it as soon as it lands for a draft that has none of its own.
+watch(contextBranchId, (value) => {
+  if (!value || isNewDraft.value || selectedBranchId.value) return
+  if (draft.value?.preferred_branch_id) return
+  selectedBranchId.value = value
+  branchPickerOpen.value = false
+  void loadMaterials()
 })
 
 onBeforeUnmount(() => {
@@ -1587,10 +1621,12 @@ onBeforeRouteLeave(async () => {
           </div>
         </section>
 
-        <!-- Fixed-branch mode: a locked label, no picker (the branch is the app
-             context and can't change mid-draft). -->
+        <!-- App-supplied branch: a locked label, no picker (the branch is the
+             app context and can't change mid-draft). Keyed on
+             `appSuppliesBranch` so a cold load — where the frozen branch is
+             still null — names the branch instead of showing nothing. -->
         <section
-          v-if="fixedBranch"
+          v-if="appSuppliesBranch"
           class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-elevated px-4 py-2.5 text-sm text-ink-soft"
         >
           <span
@@ -1604,7 +1640,7 @@ onBeforeRouteLeave(async () => {
                  draft to its own frozen branch — both may differ from the topbar
                  context the adapter froze at mount. -->
             <b class="text-ink">{{
-              revisionOrder ? revisionOrder.branch_name : (lockedBranchName ?? fixedBranch.name)
+              revisionOrder ? revisionOrder.branch_name : lockedBranchName
             }}</b>
           </div>
         </section>
@@ -1765,7 +1801,6 @@ onBeforeRouteLeave(async () => {
 
           <div v-else-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
-              <div class="client-empty-icon"><Icon name="plus" /></div>
               <h3>Bu chizmada qism yo'q</h3>
               <p>Kesish ro'yxatini boshlash uchun avval materialni tanlang.</p>
               <button
@@ -1854,7 +1889,7 @@ onBeforeRouteLeave(async () => {
                 <button
                   v-if="!isReadOnly"
                   type="button"
-                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline bg-elevated px-3 text-xs font-bold text-ink-muted transition hover:border-accent-tint hover:text-accent"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint hover:text-accent"
                   @click="addGroupRow(group)"
                 >
                   <Icon name="plus" class="size-3.5" />

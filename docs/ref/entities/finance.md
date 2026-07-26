@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 55
 ---
 
@@ -64,6 +64,7 @@ performs no salary calculation).
 | `description` | text | required; short human description |
 | `vendor` | text? | who was paid (optional free text) |
 | `supplier_id` | UUID? | → [supplier](inventory.md#supplier) — optional; a linked expense counts as a **payment to that supplier** in the debt fold, whatever its category. When set and `vendor` is blank, the supplier's name fills `vendor` |
+| `invoice_id` | UUID? | → [supplier invoice](inventory.md#supplier-invoice) — optional; the faktura this payment settles |
 | `receipt_file_id` | UUID? | → [file](support.md#file) — optional scan |
 | `status` | enum | `recorded` / `voided` |
 | `voided_reason` | text? | required when `status = voided` |
@@ -79,6 +80,13 @@ Invariants: `amount_tiyin > 0`; `branch_id` belongs to the same workshop when se
 linkable (debt to a deactivated supplier must remain payable); `incurred_on` not in the
 future; recorded / voided only by users with `manage_finance` on the relevant branch (or
 workshop-wide); voiding requires a reason and a user; never deleted.
+
+When `invoice_id` is set, `supplier_id` and `branch_id` are **copied from the invoice** and
+neither is editable afterwards. That copy is deliberate: it keeps the payments side of the
+supplier balance identical whether the money paid a faktura or went out as a bare advance, so
+there is one fold rather than two. Paying more than the invoice's outstanding balance is
+allowed — supplier prepayments are ordinary, and refusing them would push staff into inventing
+workarounds — and the form warns rather than blocks.
 
 ## Counterparty adjustment
 

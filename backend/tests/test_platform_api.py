@@ -125,6 +125,34 @@ async def test_platform_can_provision_workshop_owner_and_first_branch(
     assert detail.json()["owner"]["login"] == "owner"
 
 
+async def test_provisioning_rejects_an_owner_login_taken_by_another_workshop(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Workshop logins are globally unique — the second workshop reaching for the
+    # same owner login is refused up front instead of tripping the unique index.
+    access_token = await _platform_access_token(client, db_session)
+    first = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json=_provision_payload(),
+    )
+
+    collision = await client.post(
+        "/api/v1/platform/workshops",
+        headers=_auth(access_token),
+        json={
+            **_provision_payload(),
+            "workshop": {"name": "Nur Mebel"},
+            "owner": {"login": "OWNER"},
+        },
+    )
+
+    assert first.status_code == 201
+    assert collision.status_code == 409
+    assert collision.json()["code"] == "login_exists"
+
+
 async def test_platform_overview_reports_provisioning_and_actor_counts(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -167,7 +195,8 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
 
     assert block.status_code == 200
     assert overview.status_code == 200
-    assert overview.json() == {
+    body = overview.json()
+    assert {key: value for key, value in body.items() if isinstance(value, int)} == {
         "workshops_total": 2,
         "workshops_active": 1,
         "workshops_blocked": 1,
@@ -175,6 +204,15 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
         "clients_total": 1,
         "platform_users_active": 1,
     }
+    # AB-119: everything above was created in this test run, so today's numbers
+    # equal the lifetime ones — what this pins is that each metric is wired to
+    # its own table and the three are never conflated.
+    assert body["workshop_signups"]["daily"] == 2
+    assert body["client_signups"]["daily"] == 1
+    assert body["orders"]["daily"] == 0
+    assert body["orders"]["spark"]["weekly"][-1] == 0
+    assert len(body["client_signups"]["spark"]["daily"]) == 14
+    assert "weekly" not in body["client_signups"]
 
 
 async def test_platform_provision_rejects_non_canonical_working_hours(

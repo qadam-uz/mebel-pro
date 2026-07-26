@@ -170,6 +170,7 @@ async def client_branches(
             branch_name=branch.name,
             address=branch.address,
             phone=branch.phone,
+            additional_phones=branch.additional_phones,
             latitude=branch.latitude,
             longitude=branch.longitude,
             working_hours=branch.working_hours,

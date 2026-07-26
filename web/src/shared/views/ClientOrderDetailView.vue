@@ -287,11 +287,23 @@ onMounted(() => {
             type="button"
             class="mp-button mp-button-outline min-h-8 px-3 text-xs"
             :disabled="orders.downloadingId === order.id"
-            @click="orders.downloadClientPdf(order.id)"
+            @click="orders.openClientPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'Chizmani PDF olish' }}
+            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizmani PDF ochish' }}
           </button>
         </div>
+        <!-- The header PDF button is reachable from every tab, so its failure
+             needs a banner here too — the Chizma tab's one isn't on screen. -->
+        <p
+          v-if="orders.downloadError"
+          class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          role="alert"
+        >
+          {{ orders.downloadError }}
+          <span v-if="orders.downloadTraceId" class="block text-xs font-normal opacity-80">
+            trace {{ orders.downloadTraceId }}
+          </span>
+        </p>
       </section>
 
       <div v-if="order.status === 'cancelled'" class="client-banner warn">
@@ -555,9 +567,9 @@ onMounted(() => {
                 type="button"
                 class="text-sm font-bold text-accent"
                 :disabled="orders.downloadingId === order.id"
-                @click="orders.downloadClientPdf(order.id)"
+                @click="orders.openClientPdf(order.id)"
               >
-                {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'PDF olish →' }}
+                {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'PDF ochish →' }}
               </button>
             </div>
             <div class="client-card-b">

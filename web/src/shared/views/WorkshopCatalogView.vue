@@ -9,9 +9,15 @@ import { sanitizeMoneyInput, sanitizeQuantityInput } from '@/shared/app/inputSan
 import { materialSwatchClass } from '@/shared/app/materialSwatches'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import {
+  thresholdUnit,
+  LOW_STOCK_THRESHOLD_COLUMN,
+  LOW_STOCK_THRESHOLD_HINT,
+  LOW_STOCK_THRESHOLD_LABEL,
+} from '@/shared/app/lowStockThreshold'
 import AppModal from '@/shared/components/AppModal.vue'
+import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
-import SearchCombobox from '@/shared/components/SearchCombobox.vue'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
@@ -41,16 +47,15 @@ const rowActionError = ref<string | null>(null)
 const rowActionTraceId = ref<string | null>(null)
 const materialSaving = ref(false)
 const materialError = ref<string | null>(null)
-const materialFieldError = ref<string | null>(null)
 const editingBranchMaterialId = ref<string | null>(null)
 const materialModalOpen = ref(false)
+const attachSheetOpen = ref(false)
 let searchTimer: number | undefined
 const materialForm = reactive({
-  materialId: null as string | null,
   // Deliberately empty, not '0': a pre-filled 0 satisfies `required` and lets a
   // hurried owner publish a 0 so'm material to the client-facing catalog.
   priceTiyin: '',
-  minStock: '0',
+  minStock: '',
 })
 const priceFieldError = ref<string | null>(null)
 const minStockFieldError = ref<string | null>(null)
@@ -77,29 +82,15 @@ const kindOptions: DropdownOption[] = [
   { value: 'panel', label: 'Panel' },
   { value: 'edge', label: 'Kromka' },
 ]
-const availableCatalogOptions = computed(() =>
-  workshop.catalogOptions
-    .filter((option) => !option.already_selected)
-    .map((option) => ({
-      value: option.material.id,
-      label: option.material.name,
-      meta: `${option.material.manufacturer_name} · ${option.material.kind}`,
-    })),
-)
 const editingBranchMaterial = computed(
   () => workshop.branchMaterials.find((row) => row.id === editingBranchMaterialId.value) ?? null,
 )
-const selectedCatalogMaterial = computed(
-  () =>
-    workshop.catalogOptions.find((option) => option.material.id === materialForm.materialId)
-      ?.material ?? null,
-)
-const materialMinStockUnit = computed(() => {
-  const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
-  return material?.kind === 'edge' ? 'm' : 'panel'
+const materialThresholdUnit = computed(() => {
+  const material = editingBranchMaterial.value?.material
+  return material ? thresholdUnit(material.kind) : 'dona'
 })
 const materialPriceUnit = computed(() => {
-  const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
+  const material = editingBranchMaterial.value?.material
   return material ? priceUnit(material.kind) : ''
 })
 function routeSearchValue() {
@@ -122,10 +113,10 @@ function priceUnit(kind: MaterialKind) {
   return kind === 'edge' ? '/ metr' : '/ panel'
 }
 
-// Split "2.5 m" / "12 panel" so the unit can sit on its own muted line and the
+// Split "2.5 m" / "12 dona" so the unit can sit on its own muted line and the
 // digits stay aligned on the column's right edge.
-function minStockParts(row: BranchMaterial) {
-  const text = formatStockQuantity(row.min_stock, row.material.kind === 'edge' ? 'm' : 'panel')
+function thresholdParts(row: BranchMaterial) {
+  const text = formatStockQuantity(row.min_stock, thresholdUnit(row.material.kind))
   const splitAt = text.lastIndexOf(' ')
   return { value: text.slice(0, splitAt), unit: text.slice(splitAt + 1) }
 }
@@ -148,45 +139,25 @@ async function loadBranchTable(offset = 0) {
     .catch(() => undefined)
 }
 
-// The picker searches the whole platform catalog server-side (capped), decoupled
-// from the table's filters — the owner adds any active material regardless of how
-// the table is filtered.
-async function loadPickerOptions(query = '') {
-  if (!selectedBranchId.value) return
-  await workshop
-    .loadCatalogOptions(selectedBranchId.value, { search: query })
-    .catch(() => undefined)
-}
-
-// Full refresh (mount, branch switch, after save): reset the table to page one and
-// refresh the picker, whose already_selected flags change when a material is added.
+// Full refresh (mount, branch switch, after save): reset the table to page one.
+// The attach sheet loads its own options when it opens, against a catalog that
+// now excludes everything this branch already carries.
 function refreshCatalog() {
-  return Promise.all([loadBranchTable(0), loadPickerOptions()])
+  return loadBranchTable(0)
 }
 
 function loadMoreBranchMaterials() {
   void loadBranchTable(workshop.branchMaterials.length)
 }
 
-let pickerSearchTimer: number | undefined
-function onPickerSearch(query: string) {
-  window.clearTimeout(pickerSearchTimer)
-  pickerSearchTimer = window.setTimeout(() => void loadPickerOptions(query), SEARCH_DEBOUNCE_MS)
-}
-
 async function saveBranchMaterial() {
-  if (!selectedBranchId.value) return
+  if (!selectedBranchId.value || !editingBranchMaterialId.value) return
   materialSaving.value = true
   materialError.value = null
-  materialFieldError.value = null
   priceFieldError.value = null
   minStockFieldError.value = null
   try {
-    if (!editingBranchMaterialId.value && !materialForm.materialId) {
-      materialFieldError.value = 'Material tanlang'
-      return
-    }
-    const material = selectedCatalogMaterial.value ?? editingBranchMaterial.value?.material
+    const material = editingBranchMaterial.value?.material
     const minStock = parseDisplayQuantity(
       materialForm.minStock,
       material?.kind === 'edge' ? 'm' : 'pcs',
@@ -200,31 +171,17 @@ async function saveBranchMaterial() {
       return
     }
     if (!Number.isFinite(minStock) || minStock < 0) {
-      minStockFieldError.value = "Min zaxirani to'g'ri kiriting"
+      minStockFieldError.value = `${LOW_STOCK_THRESHOLD_LABEL}ni to'g'ri kiriting`
       return
     }
-    const payload = { price_tiyin: priceTiyin, min_stock: minStock }
-    const wasEditing = Boolean(editingBranchMaterialId.value)
-    if (editingBranchMaterialId.value) {
-      await workshop.updateBranchMaterial(
-        selectedBranchId.value,
-        editingBranchMaterialId.value,
-        payload,
-      )
-    } else {
-      await workshop.addBranchMaterial(selectedBranchId.value, {
-        material_id: materialForm.materialId,
-        ...payload,
-      })
-    }
+    await workshop.updateBranchMaterial(selectedBranchId.value, editingBranchMaterialId.value, {
+      price_tiyin: priceTiyin,
+      min_stock: minStock,
+    })
     resetMaterialForm()
     materialModalOpen.value = false
     await refreshCatalog()
-    if (wasEditing) {
-      toast.success('Material sozlamasi saqlandi.')
-    } else if (!(await notifyProgress())) {
-      toast.success("Material filialga qo'shildi.")
-    }
+    toast.success('Material sozlamasi saqlandi.')
   } catch {
     materialError.value = 'branch_material_save_failed'
   } finally {
@@ -232,16 +189,25 @@ async function saveBranchMaterial() {
   }
 }
 
-function openCreateMaterial() {
-  resetMaterialForm()
-  materialError.value = null
-  materialModalOpen.value = true
+function openAttachSheet() {
+  attachSheetOpen.value = true
+}
+
+async function onMaterialsAttached(count: number) {
+  attachSheetOpen.value = false
+  await refreshCatalog()
+  if (!(await notifyProgress())) {
+    toast.success(
+      count === 1 ? "Material filialga qo'shildi." : `${count} ta material filialga qo'shildi.`,
+    )
+  }
 }
 
 function editBranchMaterial(row: BranchMaterial) {
   editingBranchMaterialId.value = row.id
-  materialForm.materialId = row.material_id
   materialForm.priceTiyin = String(row.price_tiyin / 100)
+  // Existing rows keep whatever threshold they were saved with — the new
+  // per-kind defaults apply to new attachments only (no backfill, QAD-159).
   materialForm.minStock =
     row.material.kind === 'edge' ? String(row.min_stock / 1000) : String(row.min_stock)
   materialError.value = null
@@ -255,10 +221,8 @@ function closeMaterialModal() {
 
 function resetMaterialForm() {
   editingBranchMaterialId.value = null
-  materialForm.materialId = null
   materialForm.priceTiyin = ''
-  materialForm.minStock = '0'
-  materialFieldError.value = null
+  materialForm.minStock = ''
   priceFieldError.value = null
   minStockFieldError.value = null
 }
@@ -314,6 +278,7 @@ watch(
 // the table + picker for the new branch.
 watch(selectedBranchId, () => {
   materialModalOpen.value = false
+  attachSheetOpen.value = false
   resetMaterialForm()
   void refreshCatalog()
 })
@@ -334,7 +299,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.clearTimeout(searchTimer)
-  window.clearTimeout(pickerSearchTimer)
 })
 </script>
 
@@ -368,7 +332,7 @@ onBeforeUnmount(() => {
           type="button"
           class="mp-button mp-button-primary"
           data-onboard="catalog-add"
-          @click="openCreateMaterial"
+          @click="openAttachSheet"
         >
           + Material qo'shish
         </button>
@@ -378,28 +342,22 @@ onBeforeUnmount(() => {
         <div class="grow">{{ rowActionError }}{{ traceSuffix(rowActionTraceId) }}</div>
       </div>
 
-      <AppModal
-        :open="materialModalOpen"
-        :title="editingBranchMaterialId ? 'Materialni tahrirlash' : `Material qo'shish`"
-        @close="closeMaterialModal"
-      >
+      <BranchMaterialAttachSheet
+        :open="attachSheetOpen"
+        :branch-id="selectedBranchId"
+        @close="attachSheetOpen = false"
+        @attached="onMaterialsAttached"
+      />
+
+      <AppModal :open="materialModalOpen" title="Materialni tahrirlash" @close="closeMaterialModal">
         <form class="grid gap-3" @submit.prevent="saveBranchMaterial">
-          <!-- Editing: availableCatalogOptions filters out already-selected materials,
-               so the combobox has no option (and no label) for the edited row — show
-               the name in a plain disabled field instead (finance-modal precedent). -->
-          <label v-if="editingBranchMaterialId" class="field">
+          <!-- The material itself is fixed once attached — show the name in a plain
+               disabled field (finance-modal precedent); price and threshold are the
+               only editable values. -->
+          <label class="field">
             <span>Material</span>
             <input class="mp-input" :value="editingBranchMaterial?.material.name ?? ''" disabled />
           </label>
-          <SearchCombobox
-            v-else
-            v-model="materialForm.materialId"
-            label="Material"
-            :options="availableCatalogOptions"
-            :error="materialFieldError"
-            no-results-text="Qidiruvni aniqlashtiring"
-            @search="onPickerSearch"
-          />
           <label class="field">
             <span>Narx (so'm)</span>
             <input
@@ -416,11 +374,12 @@ onBeforeUnmount(() => {
             </small>
           </label>
           <label class="field">
-            <span>Min zaxira ({{ materialMinStockUnit }})</span>
+            <span>{{ LOW_STOCK_THRESHOLD_LABEL }} ({{ materialThresholdUnit }})</span>
             <input v-model="materialForm.minStock" class="mp-input" inputmode="decimal" required />
             <small v-if="minStockFieldError" class="mp-field-error">
               {{ minStockFieldError }}
             </small>
+            <small v-else class="text-ink-muted">{{ LOW_STOCK_THRESHOLD_HINT }}</small>
           </label>
           <p
             v-if="materialError"
@@ -430,9 +389,7 @@ onBeforeUnmount(() => {
           </p>
           <div class="flex items-center gap-2">
             <button class="mp-button mp-button-primary" type="submit" :disabled="materialSaving">
-              {{
-                materialSaving ? 'Saqlanmoqda' : editingBranchMaterialId ? 'Saqlash' : "Qo'shish"
-              }}
+              {{ materialSaving ? 'Saqlanmoqda' : 'Saqlash' }}
             </button>
             <button type="button" class="mp-button mp-button-outline" @click="closeMaterialModal">
               Bekor
@@ -459,49 +416,67 @@ onBeforeUnmount(() => {
       </section>
 
       <section v-else class="card">
+        <!-- QAD-159: `tbl-fluid` drops the shared 680px floor for this table only —
+             long Russian decor names used to force the whole page sideways. The name
+             wraps instead, and the columns that repeat what the name already says
+             (Tur) or matter least on a phone (Chegara) fall away as width runs out. -->
         <div class="table-wrap">
-          <table class="tbl">
+          <table class="tbl tbl-fluid">
             <thead>
               <tr>
                 <!-- Let the descriptive name column absorb the table's slack so the
-                     narrow type/price/stock/status columns hug their content on the
+                     narrow price/threshold/status columns hug their content on the
                      right instead of drifting apart across the full width. -->
                 <th class="w-full">Material</th>
-                <th>Tur</th>
-                <th class="right">Narx</th>
-                <th class="right">Min zaxira</th>
-                <th>Holat</th>
+                <th class="nowrap hidden lg:table-cell">Tur</th>
+                <th class="nowrap right hidden sm:table-cell">Narx</th>
+                <th class="nowrap right hidden sm:table-cell">{{ LOW_STOCK_THRESHOLD_COLUMN }}</th>
+                <th class="nowrap">Holat</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in workshop.branchMaterials" :key="row.id">
                 <td>
-                  <div class="flex min-w-0 items-center gap-3">
-                    <span class="sw" :class="materialSwatchClass(row.material)"></span>
-                    <span class="min-w-0">
-                      <span class="nm">{{ row.material.name }}</span>
-                      <small class="block truncate text-ink-muted">{{ materialMeta(row) }}</small>
+                  <div class="flex min-w-0 items-start gap-3">
+                    <span
+                      class="sw mt-1 shrink-0"
+                      :class="materialSwatchClass(row.material)"
+                    ></span>
+                    <span class="grid min-w-0 gap-0.5">
+                      <span class="nm break-words">{{ row.material.name }}</span>
+                      <small class="block break-words text-ink-muted">{{
+                        materialMeta(row)
+                      }}</small>
+                      <!-- Below `sm` the Narx and Chegara columns are gone — a phone
+                           cannot hold five columns plus a wrapping decor name without
+                           scrolling sideways. The numbers move here instead of being
+                           dropped. -->
+                      <small class="block text-ink-muted sm:hidden">
+                        {{ formatTiyin(row.price_tiyin) }} {{ priceUnit(row.material.kind) }} ·
+                        {{ LOW_STOCK_THRESHOLD_COLUMN }}: {{ thresholdParts(row).value }}
+                        {{ thresholdParts(row).unit }}
+                      </small>
                     </span>
                   </div>
                 </td>
-                <td>
+                <td class="nowrap hidden lg:table-cell">
                   <span :class="row.material.kind === 'edge' ? 'pill p-eb' : 'pill p-cut'">
                     <span class="pd"></span
                     >{{ row.material.kind === 'edge' ? 'Kromka (metr)' : 'Panel' }}
                   </span>
                 </td>
-                <td class="amt">
+                <td class="amt nowrap hidden sm:table-cell">
                   {{ formatTiyin(row.price_tiyin) }}
                   <small class="block font-normal text-ink-muted">
                     {{ priceUnit(row.material.kind) }}
                   </small>
                 </td>
-                <td class="amt muted">
-                  {{ minStockParts(row).value }}
-                  <small class="block font-normal">{{ minStockParts(row).unit }}</small>
+                <td class="amt muted nowrap hidden sm:table-cell">
+                  {{ thresholdParts(row).value }}
+                  <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
                 </td>
-                <td>
+                <td class="nowrap">
                   <button
                     type="button"
                     role="switch"
@@ -522,15 +497,17 @@ onBeforeUnmount(() => {
                         :class="row.status === 'active' ? 'translate-x-4' : 'translate-x-0'"
                       ></span>
                     </span>
+                    <!-- The switch carries its own accessible name, so below `sm`
+                         the visible label can go rather than wrap one letter per line. -->
                     <span
-                      class="text-xs font-bold"
+                      class="hidden text-xs font-bold sm:inline"
                       :class="row.status === 'active' ? 'text-ink' : 'text-ink-muted'"
                     >
                       {{ row.status === 'active' ? 'Faol' : 'Faol emas' }}
                     </span>
                   </button>
                 </td>
-                <td class="right">
+                <td class="nowrap right">
                   <button
                     type="button"
                     class="mp-button mp-button-outline min-h-8 px-2 text-xs"
@@ -548,7 +525,7 @@ onBeforeUnmount(() => {
                     <button
                       type="button"
                       class="mp-button mp-button-primary mt-3"
-                      @click="openCreateMaterial"
+                      @click="openAttachSheet"
                     >
                       + Material qo'shish
                     </button>

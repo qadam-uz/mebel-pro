@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -16,6 +16,9 @@ from app.models.enums import ActorType, Currency, MaterialSource, OrderStatus, e
 class Order(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "orders"
     __table_args__ = (
+        # AB-119: the platform dashboard counts orders per calendar period —
+        # a bounded range scan rather than a seq scan over the whole table.
+        Index("ix_orders_created_at", "created_at"),
         UniqueConstraint("order_number", name="uq_orders_order_number"),
         UniqueConstraint("cutting_result_id", name="uq_orders_cutting_result"),
         CheckConstraint("version >= 1", name="ck_orders_version_positive"),

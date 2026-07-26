@@ -204,7 +204,16 @@ touching them; don't add new off-scale values.
   The primitive matches the app surface: crisp radius, elevated popover, visible focus
   ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
   arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
-  textareas, checkboxes, radios, and file inputs until a project primitive exists.
+  textareas, checkboxes, radios, and file inputs until a project primitive exists —
+  but **never `<input type="date">`**, which renders in the browser's OS locale
+  (`07/19/2026` on en-US) and so can't hold the app's date convention.
+- **Server-backed pickers** — when the candidate set is too large or too live to preload, the
+  combobox queries the server instead of filtering a page it already holds (`SearchCombobox`
+  with `serverFiltered` + `loading` + `searchDebounceMs`). Non-negotiable: the query is
+  **debounced** (never a request per keystroke), the panel shows a loading row and a
+  no-results row, an explicit clear skips the debounce, and a standing footer hint names what
+  the list contains and what it searches. Rich rows go through the `#option` slot — the plain
+  label still drives the input's text.
 - **Modals** — create/edit forms open in `AppModal` dialogs, never as inline on-page cards;
   reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
   the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
@@ -221,8 +230,13 @@ touching them; don't add new off-scale values.
 - **Image upload** — the shared preview primitive: framed preview, native file input
   triggered by labelled buttons, upload/error state in the field, a remove action when an
   image is set.
-- **Date ranges** — the shared date-range picker: one trigger opening a popover with preset
-  shortcuts and a calendar; selections auto-apply (no apply button).
+- **Dates** — one calendar serves the whole app (`CalendarMonths`: Monday-first grid, arrow
+  keys, `PageUp`/`PageDown` by month, `Esc` closes and returns focus). Two hosts wrap it:
+  `DateRangePicker` for filters — one trigger opening a popover with preset shortcuts and the
+  calendar, selections auto-apply (no apply button) — and `DateField` for a single date on a
+  form, which types and displays **dd.mm.yyyy** in every locale while speaking the API's
+  `yyyy-mm-dd`, honours `min`/`max` (out-of-range days are unclickable, a typed one blocks
+  submit), and drops into the usual `<label class="field">` wrapper.
 - **Filter bars** (`.mp-filters`) — filters **auto-apply** (debounced for text) with no apply
   button, and because auto-apply is invisible by itself, the bar must prove it worked: while
   any filter is active, a `role="status"` line under the bar shows the live result count
@@ -234,6 +248,12 @@ touching them; don't add new off-scale values.
   active filter on, because with one filter active it would duplicate that filter's own clear
   sitting right beside it. **No two visible controls may do the same thing.** Filtered-empty
   keeps the no-results empty state, never first-run copy.
+- **Segmented control** (`SegmentedControl`) — a **closed set of two or three** form choices,
+  all visible at once on a `sunk` track, selected segment filled `accent-soft` with
+  `accent-deep` text. A dropdown for two options is a click that reveals nothing; past three
+  or four segments the row stops fitting and it goes back to `FormSelect`. Keyboard contract
+  is the radiogroup one: `role="radiogroup"` + `role="radio"`/`aria-checked`, one tab stop
+  with a roving tabindex, arrows wrap, `Home`/`End` jump, focus follows the selection.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.
@@ -270,12 +290,19 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   results), loading (skeletons sized like the real content — reserve space so nothing jumps),
   error (named cause + retry), success. Every load that can hang gets a timeout → error path;
   no infinite spinners.
+- **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
+  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
+  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
+  reads as a control and gets clicked.
 - **The keyboard reaches and operates everything** a mouse can, in an order matching the
   layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
   nothing in its place. Modals trap focus and return it to the trigger on close.
 - **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
   Errors sit next to their field, name the fix in plain language, and never clear the form.
-  Validate on blur or submit, not per keystroke.
+  Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
+  the danger border, `aria-invalid`, and an `aria-describedby` message — and the message stays
+  **readable**: a field that opens a popover anchors it clear of its own error text, because a
+  message the operator can't see is the same as no message.
 - **Every action gives visible feedback within ~100ms**; submit buttons disable + show
   progress during async work so they can't double-fire. Destructive actions name their
   consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.

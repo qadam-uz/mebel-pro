@@ -1681,6 +1681,32 @@
     box-shadow: 0 2px 8px -3px color-mix(in srgb, var(--color-accent) 28%, transparent);
   }
 
+  /* `+N` pill on Buyurtmalar (QAD-156) — how many orders still wait in NEW.
+     Rendered only for a non-zero count, so it never shows a bare 0. */
+  .workshop-nav-badge {
+    display: inline-flex;
+    min-width: 20px;
+    min-height: 18px;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    border-radius: 999px;
+    background: var(--color-danger);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.65625rem;
+    font-weight: 800;
+    line-height: 1;
+    padding: 1px 6px;
+  }
+
+  .workshop-nav-item.on .workshop-nav-badge,
+  .workshop-nav-item.router-link-active .workshop-nav-badge {
+    /* On the active (accent) row a flat danger fill muddies; a hairline ring
+       keeps the red legible against it. */
+    box-shadow: 0 0 0 1.5px rgb(255 255 255 / 55%);
+  }
+
   .workshop-nav-icon {
     display: grid;
     width: 18px;
@@ -1789,8 +1815,29 @@
     .workshop-app.nav-collapsed .workshop-user-name,
     .workshop-app.nav-collapsed .workshop-user-meta,
     .workshop-app.nav-collapsed .workshop-nav-label,
-    .workshop-app.nav-collapsed .workshop-nav-item > span:not(.workshop-nav-icon) {
+    .workshop-app.nav-collapsed
+      .workshop-nav-item
+      > span:not(.workshop-nav-icon):not(.workshop-nav-badge) {
       display: none;
+    }
+
+    /* The rail hides labels, but the badge is the whole point — pin it to the
+       icon's top-right corner so the count survives the collapse. */
+    .workshop-app.nav-collapsed .workshop-nav-item {
+      position: relative;
+    }
+
+    .workshop-app.nav-collapsed .workshop-nav-badge {
+      position: absolute;
+      top: 0;
+      right: 2px;
+      min-width: 16px;
+      min-height: 15px;
+      margin-left: 0;
+      border: 1.5px solid var(--color-elevated);
+      font-size: 0.5625rem;
+      padding: 0 4px;
+      box-shadow: none;
     }
 
     .workshop-app.nav-collapsed .workshop-tenant,
@@ -2851,6 +2898,39 @@
     }
   }
 
+  /* Opt-in variant for tables whose widest column is free-form prose (branch
+     materials: long decor names). The shared `.tbl` min-width keeps numeric
+     tables from collapsing, but here it forced the page sideways on a phone —
+     so drop the floor, let the header and the name wrap, and rely on the view
+     hiding its low-value columns at narrow widths. Never widen `.tbl` itself:
+     every table in the app shares it. */
+  .tbl-fluid,
+  .tbl-fluid.tbl {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .tbl-fluid th {
+    white-space: normal;
+  }
+
+  /* Only the prose column wraps. A blanket `overflow-wrap: anywhere` on every cell
+     lets `auto` table layout squeeze the short columns to one character and stack
+     a status label letter-per-line — the wrapping belongs on the name cell alone,
+     which carries `break-words` in the template. */
+  .tbl-fluid td.nowrap,
+  .tbl-fluid th.nowrap {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    /* Phone widths: the 12px gutters alone cost ~100px across five columns. */
+    .tbl-fluid th,
+    .tbl-fluid td {
+      padding-inline: 8px;
+    }
+  }
+
   .tbl th {
     position: sticky;
     top: 0;
@@ -3809,9 +3889,10 @@
     font-weight: 800;
   }
 
-  /* :not(.mp-field-error) — the error span lives inside the label too, and the
-     label rule would otherwise repaint it bold black (specificity trap). */
-  .field > span:not(.mp-field-error) {
+  /* :not(.mp-field-error, .mp-field-hint) — the error and hint spans live inside
+     the label too, and the label rule would otherwise repaint them bold black
+     (specificity trap). */
+  .field > span:not(.mp-field-error, .mp-field-hint) {
     color: var(--color-ink);
     font-size: 0.8125rem;
     font-weight: 800;
@@ -3838,6 +3919,14 @@
     color: var(--color-danger);
     font-size: 0.75rem;
     font-weight: 750;
+    line-height: 1.25;
+  }
+
+  /* Advisory copy under a field — quieter than the label, quieter than an error. */
+  .mp-field-hint {
+    color: var(--color-ink-soft);
+    font-size: 0.75rem;
+    font-weight: 600;
     line-height: 1.25;
   }
 
@@ -4817,6 +4906,73 @@
     font-weight: 500;
   }
 
+  /* AB-119: dashboard trend grid — one row per metric, one column per calendar
+     period, each cell a number with its sparkline. Dense on purpose: every
+     period is readable at once, with no mode switch to hide half the data. */
+  .admin-trend-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .admin-trend-head small {
+    color: var(--color-ink-muted);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  .admin-trend-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .admin-trend-value {
+    min-width: 3ch;
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .admin-trend-void {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+  }
+
+  .admin-spark {
+    display: block;
+    flex: none;
+    overflow: visible;
+  }
+
+  .admin-spark-line {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .admin-spark-area {
+    fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    stroke: none;
+  }
+
+  .admin-spark-tip {
+    fill: var(--color-accent);
+  }
+
+  /* Nothing has happened yet — a baseline rule reads as an empty axis, where an
+     auto-scaled line would invent a trend out of zeroes. */
+  .admin-spark.flat .admin-spark-line {
+    stroke: var(--color-hairline-strong);
+  }
+
   .admin-material-thumb {
     position: relative;
     display: grid;
@@ -4997,6 +5153,20 @@
     font-weight: 850;
     line-height: 1.2;
     text-transform: uppercase;
+  }
+
+  /* Why a ProjectDropdown is inert — sits BESIDE the disabled trigger (workshop
+     topbar on pages the branch context doesn't reach) so the row keeps its
+     height and the topbar doesn't jump between routes. Clamped so a long hint
+     can't crowd out the search field next to it. */
+  .mp-dd-hint {
+    max-width: 15rem;
+    overflow: hidden;
+    color: var(--color-ink-muted);
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Toggle chip used as a boolean filter (e.g. low-stock only). Sits in a
@@ -5643,10 +5813,17 @@
     .workshop-branch-dd {
       order: 3;
       flex-basis: 100%;
+      flex-wrap: wrap;
     }
 
     .workshop-branch-dd > button {
       width: 100%;
+    }
+
+    /* The phone topbar already stacks, so the scope hint drops under the
+       full-width trigger instead of competing with it for the row. */
+    .workshop-branch-dd > .mp-dd-hint {
+      max-width: 100%;
     }
 
     .workshop-search-wrap {

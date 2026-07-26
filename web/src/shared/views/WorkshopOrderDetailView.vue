@@ -12,7 +12,12 @@ import {
   type WorkshopAdjustmentKind,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  STOCK_SHORTFALL_MESSAGE,
+  orderPillClass,
+  workshopErrorMessage,
+  workshopStatusUz,
+} from '@/shared/app/workshopUi'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -543,7 +548,7 @@ async function completeCutting() {
     actionTraceId.value = null
     return
   }
-  await run(
+  const ok = await run(
     () =>
       orders.cuttingDone(current.id, {
         version: current.version,
@@ -552,6 +557,7 @@ async function completeCutting() {
     'Kesish yakunlandi.',
     'completeCutting',
   )
+  if (ok) warnOnStockShortfall()
 }
 
 async function completeBanding() {
@@ -563,7 +569,7 @@ async function completeBanding() {
     actionTraceId.value = null
     return
   }
-  await run(
+  const ok = await run(
     () =>
       orders.bandingDone(current.id, {
         version: current.version,
@@ -572,6 +578,14 @@ async function completeBanding() {
     'Kromka yakunlandi.',
     'completeBanding',
   )
+  if (ok) warnOnStockShortfall()
+}
+
+// The completion mutation stores the fresh order on the store, so the shortfall
+// flag rides along with it — a warn toast next to the success one, never in
+// place of it (QAD-150).
+function warnOnStockShortfall() {
+  if (orders.currentOrder?.stock_shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
 }
 
 async function markCollected() {
@@ -1433,9 +1447,9 @@ onBeforeUnmount(() => {
             type="button"
             class="mp-button mp-button-outline w-full"
             :disabled="orders.downloadingId === order.id"
-            @click="orders.downloadWorkshopPdf(order.id)"
+            @click="orders.openWorkshopPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Yuklanmoqda' : 'Chizma (PDF)' }}
+            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizma (PDF)' }}
           </button>
         </template>
         <div v-else class="st-empty !border-0 !py-6">

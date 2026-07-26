@@ -1,6 +1,7 @@
 """Finance ledger and report use cases."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -28,15 +29,24 @@ from app.modules.finance.schemas import (
     FinanceDailyIncome,
     FinanceSummaryResponse,
     IncomeCreateRequest,
+    IncomeOrderRef,
     IncomePatchRequest,
+    IncomeResponse,
     VoidLedgerRequest,
     WorkerProductionEdgeLine,
     WorkerProductionResponse,
     WorkerProductionRow,
     WorkerProductionThicknessLine,
 )
-from app.modules.inventory.contracts import Supplier
-from app.modules.sales.api import get_order_finance_target, list_worker_production_records
+from app.modules.inventory.api import invoice_for_payment
+from app.modules.inventory.contracts import Supplier, SupplierInvoice
+from app.modules.sales.api import (
+    PayableOrder,
+    get_order_finance_target,
+    list_order_settlements,
+    list_worker_production_records,
+)
+from app.modules.sales.api import list_payable_orders as list_sales_payable_orders
 from app.modules.support.api import (
     RECEIPT_CONTENT_TYPES,
     attach_file,
@@ -98,6 +108,81 @@ async def list_incomes(
     if max_amount_tiyin is not None:
         query = query.where(Income.amount_tiyin <= max_amount_tiyin)
     return list((await db.scalars(query)).all())
+
+
+async def income_responses(
+    db: AsyncSession,
+    *,
+    incomes: Sequence[Income],
+) -> list[IncomeResponse]:
+    """Ledger rows with their order resolved — one extra query for the page.
+
+    The resolution is a set-based join over the listed rows, not a lookup per
+    row: `list_incomes` returns a whole period and a query per income would be
+    an N+1 on the busiest finance screen.
+    """
+    refs = await _income_order_refs(db, incomes=incomes)
+    rows: list[IncomeResponse] = []
+    for income in incomes:
+        response = IncomeResponse.model_validate(income)
+        response.order = refs.get(income.order_id) if income.order_id is not None else None
+        rows.append(response)
+    return rows
+
+
+async def income_response(db: AsyncSession, *, income: Income) -> IncomeResponse:
+    """One ledger row, shaped exactly like a row of the list."""
+    return (await income_responses(db, incomes=[income]))[0]
+
+
+async def _income_order_refs(
+    db: AsyncSession,
+    *,
+    incomes: Sequence[Income],
+) -> dict[uuid.UUID, IncomeOrderRef]:
+    order_ids = frozenset(row.order_id for row in incomes if row.order_id is not None)
+    if not order_ids:
+        return {}
+    settlements = await list_order_settlements(
+        db,
+        workshop_ids=frozenset(row.workshop_id for row in incomes),
+        order_ids=order_ids,
+    )
+    return {
+        row.order_id: IncomeOrderRef(
+            order_id=row.order_id,
+            order_number=row.order_number,
+            contact_name=row.contact_name,
+            total_tiyin=row.total_tiyin,
+            recorded_tiyin=row.recorded_tiyin,
+            balance_tiyin=row.balance_tiyin,
+        )
+        for row in settlements
+    }
+
+
+async def list_payable_orders(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
+    search: str | None = None,
+    limit: int = 20,
+) -> list[PayableOrder]:
+    """Candidate orders for an order-payment income.
+
+    A finance use case, so it lives here and composes sales through its public
+    API — the picker must offer exactly what `create_income` would accept, and
+    that pairing is finance's to keep.
+    """
+    scope = await _lookup_scope(db, principal=principal, branch_id=branch_id)
+    return await list_sales_payable_orders(
+        db,
+        workshop_id=scope.workshop_id,
+        branch_ids=scope.branch_ids,
+        search=search,
+        limit=limit,
+    )
 
 
 async def create_income(
@@ -325,13 +410,28 @@ async def create_expense(
 ) -> Expense:
     _positive_amount(payload.amount_tiyin)
     _not_future(payload.incurred_on)
-    scope = await _write_scope(db, principal=principal, branch_id=payload.branch_id)
+    # An invoice payment takes its supplier and branch from the document; the
+    # caller only chooses the category, the amount, and the date. Overpayment is
+    # deliberately allowed — supplier advances are normal, and blocking them
+    # would push staff into inventing workarounds.
+    invoice = (
+        await invoice_for_payment(
+            db,
+            workshop_id=_workshop_principal_id(principal),
+            invoice_id=payload.invoice_id,
+        )
+        if payload.invoice_id is not None
+        else None
+    )
+    branch_id = invoice.branch_id if invoice is not None else payload.branch_id
+    supplier_id = invoice.supplier_id if invoice is not None else payload.supplier_id
+    scope = await _write_scope(db, principal=principal, branch_id=branch_id)
     supplier = await _supplier_in_workshop(
-        db, workshop_id=scope.workshop_id, supplier_id=payload.supplier_id
+        db, workshop_id=scope.workshop_id, supplier_id=supplier_id
     )
     expense = Expense(
         workshop_id=scope.workshop_id,
-        branch_id=payload.branch_id,
+        branch_id=branch_id,
         category=payload.category,
         amount_tiyin=payload.amount_tiyin,
         incurred_on=payload.incurred_on,
@@ -339,7 +439,8 @@ async def create_expense(
         # A supplier-linked expense keeps the supplier's name as the vendor text
         # unless the caller wrote something more specific.
         vendor=_optional_text(payload.vendor) or (supplier.name if supplier else None),
-        supplier_id=payload.supplier_id,
+        supplier_id=supplier_id,
+        invoice_id=invoice.id if invoice is not None else None,
         receipt_file_id=payload.receipt_file_id,
         status=LedgerStatus.RECORDED,
         recorded_by_user_id=principal.principal_id,
@@ -363,7 +464,10 @@ async def create_expense(
         workshop_id=expense.workshop_id,
         branch_id=expense.branch_id,
         summary=f"Recorded expense {expense.amount_tiyin}",
-        details={"category": expense.category.value},
+        details={
+            "category": expense.category.value,
+            "invoice_no": invoice.invoice_no if invoice is not None else None,
+        },
     )
     await db.refresh(expense)
     return expense
@@ -378,6 +482,16 @@ async def update_expense(
 ) -> Expense:
     expense = await _expense_in_scope(db, principal=principal, expense_id=expense_id, mutate=True)
     _require_recorded(expense.status)
+    # The invoice owns the supplier and the branch of a faktura payment; letting
+    # an edit drift either would break the link the balance is folded over.
+    # Echoing the current values back is fine — only a real change is refused.
+    if expense.invoice_id is not None and (
+        ("branch_id" in payload.model_fields_set and payload.branch_id != expense.branch_id)
+        or (
+            "supplier_id" in payload.model_fields_set and payload.supplier_id != expense.supplier_id
+        )
+    ):
+        raise APIError("invoice_expense_locked", "Branch and supplier come from the invoice")
     if "branch_id" in payload.model_fields_set:
         await _write_scope(db, principal=principal, branch_id=payload.branch_id)
         expense.branch_id = payload.branch_id
@@ -464,6 +578,26 @@ async def void_expense(
     await db.flush()
     await db.refresh(expense)
     return expense
+
+
+async def invoice_numbers_for(
+    db: AsyncSession,
+    *,
+    expenses: list[Expense],
+) -> dict[uuid.UUID, str]:
+    """`K-…` labels for whatever subset of the given expenses pays a faktura."""
+
+    invoice_ids = {row.invoice_id for row in expenses if row.invoice_id is not None}
+    if not invoice_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(SupplierInvoice.id, SupplierInvoice.invoice_no).where(
+                SupplierInvoice.id.in_(invoice_ids)
+            )
+        )
+    ).all()
+    return {row[0]: row[1] for row in rows}
 
 
 async def finance_summary(
@@ -624,7 +758,13 @@ async def _read_scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
 ) -> FinanceScope:
-    return await _scope(db, principal=principal, branch_id=branch_id, permissions=READ_PERMISSIONS)
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=READ_PERMISSIONS,
+        require_branch=False,
+    )
 
 
 async def _write_scope(
@@ -633,7 +773,34 @@ async def _write_scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
 ) -> FinanceScope:
-    return await _scope(db, principal=principal, branch_id=branch_id, permissions=WRITE_PERMISSIONS)
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=WRITE_PERMISSIONS,
+        require_branch=True,
+    )
+
+
+async def _lookup_scope(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None,
+) -> FinanceScope:
+    """`manage_finance` reach for a read-only lookup that precedes a write.
+
+    Same permission as recording the entry, but no single branch is required:
+    a picker with no branch context offers every branch the user could record
+    in, where a ledger row has to land in exactly one.
+    """
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=WRITE_PERMISSIONS,
+        require_branch=False,
+    )
 
 
 async def _scope(
@@ -642,6 +809,7 @@ async def _scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
     permissions: frozenset[Permission],
+    require_branch: bool,
 ) -> FinanceScope:
     workshop_id = _workshop_principal_id(principal)
     if principal.is_owner:
@@ -674,7 +842,7 @@ async def _scope(
         return FinanceScope(workshop_id=branch_scope.workshop_id, branch_ids=frozenset({branch_id}))
     if not allowed:
         raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
-    if permissions == WRITE_PERMISSIONS:
+    if require_branch:
         raise APIError("branch_required", "Branch is required for staff finance entries")
     return FinanceScope(workshop_id=workshop_id, branch_ids=allowed)
 

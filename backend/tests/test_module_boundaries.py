@@ -37,7 +37,7 @@ MODULE_ROUTE_FILES = {
     "client_portal": {"routes.py"},
     "cutting": {"routes.py"},
     "finance": {"routes.py"},
-    "inventory": {"routes.py"},
+    "inventory": {"invoice_routes.py", "routes.py"},
     "platform": {"routes.py"},
     "sales": {"routes.py"},
     "support": {"files_routes.py", "notifications_routes.py"},
