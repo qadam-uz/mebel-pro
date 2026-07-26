@@ -193,6 +193,7 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
             await setup.flush()
             branch = Branch(
                 workshop_id=workshop_id,
+                branch_no=await next_branch_no(setup),
                 name="Main",
                 address="Tashkent",
                 phone="+998902222223",

@@ -20,6 +20,7 @@ from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufac
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order, OrderStatusEvent
+from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -565,6 +566,7 @@ async def test_workshop_saved_drafts_index_filters_by_branch(
     access, workshop_id, chilonzor, _ = await _priced_workshop(db_session)
     yunusobod = Branch(
         workshop_id=workshop_id,
+        branch_no=await next_branch_no(db_session),
         name="Yunusobod-2",
         address="Tashkent, Yunusobod",
         phone="+998904444444",

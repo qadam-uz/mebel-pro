@@ -25,6 +25,7 @@ from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.finance.contracts import Income
 from app.modules.sales.contracts import Order
+from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import event
@@ -55,6 +56,7 @@ async def _owner_fixture(db_session: AsyncSession) -> tuple[str, uuid.UUID, uuid
 async def _extra_branch(db_session: AsyncSession, *, workshop_id: uuid.UUID) -> uuid.UUID:
     branch = Branch(
         workshop_id=workshop_id,
+        branch_no=await next_branch_no(db_session),
         name="Chilonzor",
         address="Tashkent, Chilonzor",
         phone="+998904444444",
@@ -351,7 +353,7 @@ async def test_payable_orders_scope_by_branch_permission_and_tenant(
 ) -> None:
     owner_access, workshop_id, branch_id, _ = await _owner_fixture(db_session)
     other_branch_id = await _extra_branch(db_session, workshop_id=workshop_id)
-    _, rival_branch, _ = await seed_workshop_with_owner(db_session)
+    _, rival_branch, _ = await seed_workshop_with_owner(db_session, login="rival-owner")
     buyer = await _client_row(db_session, phone="+998901112233", name="Aziza Karimova")
 
     home = await _order(

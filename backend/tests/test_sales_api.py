@@ -23,6 +23,7 @@ from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.sales.contracts import Order, OrderItem
 from app.modules.support.contracts import Notification
+from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select
@@ -1267,6 +1268,7 @@ async def test_workshop_new_order_count_is_branch_scoped_and_tenant_isolated(
     # A branch with no orders of its own reports zero, not the workshop total.
     other_branch = Branch(
         workshop_id=workshop_id,
+        branch_no=await next_branch_no(db_session),
         name="Chilonzor",
         address="Tashkent, Chilonzor",
         phone="+998902222333",
@@ -1288,7 +1290,7 @@ async def test_workshop_new_order_count_is_branch_scoped_and_tenant_isolated(
     assert await count(worker_tokens.access_token) == 0
 
     # A different workshop never sees these orders in its own count.
-    outsider_access, _, _, _ = await _workshop_setup(db_session)
+    outsider_access, _, _, _ = await _workshop_setup(db_session, login="outsider-owner")
     assert await count(outsider_access) == 0
 
     # Confirming the order takes it out of NEW, and the count falls on its own.

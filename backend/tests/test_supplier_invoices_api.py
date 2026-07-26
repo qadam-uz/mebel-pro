@@ -32,8 +32,14 @@ async def _platform_access(db_session: AsyncSession) -> str:
     return tokens.access_token
 
 
-async def _owner_fixture(db_session: AsyncSession) -> tuple[str, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+async def _owner_fixture(
+    db_session: AsyncSession,
+    *,
+    login: str = "owner",
+) -> tuple[str, uuid.UUID, uuid.UUID]:
+    """Logins are globally unique (QAD-157) — a test seeding a second workshop
+    must pass a distinct `login`."""
+    workshop, branch, owner = await seed_workshop_with_owner(db_session, login=login)
     owner.password_reset_required = False
     tokens = await create_session(
         db_session,
@@ -468,7 +474,7 @@ async def test_invoices_are_invisible_to_another_workshop(
     )
     invoice_id = invoice.json()["id"]
 
-    outsider_access, _, outsider_branch = await _owner_fixture(db_session)
+    outsider_access, _, outsider_branch = await _owner_fixture(db_session, login="rival-owner")
     assert (
         await client.get(
             f"/api/v1/workshop/inventory/invoices/{invoice_id}",
