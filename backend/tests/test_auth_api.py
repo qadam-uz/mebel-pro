@@ -1,8 +1,10 @@
+from datetime import UTC, datetime
 from http.cookies import SimpleCookie
 
 import pytest
 from app.core.security import hash_password
-from app.models.enums import UserStatus
+from app.models.enums import Permission, UserStatus
+from app.modules.access.contracts import PermissionGrant, WorkshopUser
 from app.modules.access.routes import REFRESH_COOKIE_NAME
 from httpx import AsyncClient
 from sqlalchemy.exc import IntegrityError
@@ -47,6 +49,7 @@ async def test_platform_login_sets_refresh_cookie_and_returns_me(
         "session_id": body["me"]["session_id"],
         "password_reset_required": True,
         "workshop_id": None,
+        "workshop_name": None,
         "is_owner": False,
         "grants": [],
         "login": "admin-auth",
@@ -88,6 +91,52 @@ async def test_workshop_login_resolves_by_login_and_password(
     assert {grant["branch_id"] for grant in me["grants"]} == {str(branch.id)}
     assert wrong.status_code == 401
     assert wrong.json()["code"] == "invalid_credentials"
+
+
+async def test_staff_me_carries_the_workshop_name_they_cannot_read_from_settings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-168: every workshop surface shows the tenant's name, but
+    `/workshop/settings` is owner-only — so the name rides on the principal."""
+    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+    workshop.name = "Mebel Master"
+    staff = WorkshopUser(
+        workshop_id=workshop.id,
+        login="staff-tenant-name",
+        password_hash=hash_password("Staff123"),
+        full_name="Order Desk",
+        phone="+998904444444",
+        is_owner=False,
+        home_branch_id=branch.id,
+        password_reset_required=False,
+    )
+    db_session.add(staff)
+    await db_session.flush()
+    db_session.add(
+        PermissionGrant(
+            workshop_user_id=staff.id,
+            permission=Permission.MANAGE_ORDERS,
+            branch_id=branch.id,
+            granted_by_user_id=owner.id,
+            granted_at=datetime.now(UTC),
+        )
+    )
+    await db_session.flush()
+
+    login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "staff-tenant-name", "password": "Staff123"},
+    )
+    assert login.status_code == 200
+    access_token = login.json()["access_token"]
+    me = await client.get("/api/v1/auth/me", headers=_auth(access_token))
+    settings = await client.get("/api/v1/workshop/settings", headers=_auth(access_token))
+
+    assert login.json()["me"]["workshop_name"] == "Mebel Master"
+    assert me.status_code == 200
+    assert me.json()["workshop_name"] == "Mebel Master"
+    assert settings.status_code == 403
 
 
 async def test_workshop_login_is_globally_unique(db_session: AsyncSession) -> None:

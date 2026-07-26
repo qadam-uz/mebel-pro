@@ -45,6 +45,7 @@ from app.modules.access.schemas import (
     TokenResponse,
     WorkshopLoginRequest,
 )
+from app.modules.workshop.contracts import Workshop
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -336,12 +337,16 @@ async def _me_response(db: AsyncSession, principal: AuthenticatedPrincipal) -> M
             "Authentication required",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
+    workshop = (
+        await db.get(Workshop, principal.workshop_id) if principal.workshop_id is not None else None
+    )
     return MeResponse(
         principal_type=principal.principal_type,
         principal_id=principal.principal_id,
         session_id=principal.session_id,
         password_reset_required=workshop_user.password_reset_required,
         workshop_id=principal.workshop_id,
+        workshop_name=workshop.name if workshop is not None else None,
         is_owner=principal.is_owner,
         grants=[
             PermissionGrantResponse(permission=grant.permission, branch_id=grant.branch_id)

@@ -507,6 +507,14 @@ Permission names below are the per-branch grants from
   surface here — recording and correcting money is the finance module; the summary is a
   read-only mirror.
 
+  **An order the reader may not open is not a loading failure.** The route admits
+  `process_production`, but the data rule behind it admits only the assignee, and an order in
+  another branch answers 404 rather than confirming it exists. Both land on their own state —
+  "Bu buyurtmaga ruxsatingiz yo'q", explaining that the order belongs to another branch, is not
+  assigned to this user, or does not exist — with no retry button, because the request that was
+  refused will be refused again. The connection-failure state with its retry stays for a
+  genuine transport error.
+
 - **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
   `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar
   pages** (replacing the tabbed "Ishlarim" workspace, whose URL redirects to Kesish). Each

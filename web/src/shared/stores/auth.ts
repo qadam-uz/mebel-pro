@@ -18,6 +18,9 @@ export interface MeResponse {
   session_id: string
   password_reset_required: boolean
   workshop_id: string | null
+  // The tenant's display name, served to every workshop principal — staff can't
+  // read `/workshop/settings`, which is owner-only (QAD-168).
+  workshop_name: string | null
   is_owner: boolean
   grants: PermissionGrant[]
   login: string | null

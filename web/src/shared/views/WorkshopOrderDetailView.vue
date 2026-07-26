@@ -83,6 +83,14 @@ const noteInput = ref<HTMLTextAreaElement | null>(null)
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
+// An authorization outcome is not a transport failure (QAD-171). The API answers
+// 404 for an order outside the reader's branches — deliberately, so the id is no
+// existence oracle — and the same 404 reaches `process_production` staff for any
+// order not assigned to them, which is their ordinary case, not an edge one.
+// Retrying a connection that is working never turns either into a 200.
+const orderOutOfReach = computed(
+  () => orders.error === 'order_not_found' || orders.error === 'permission_denied',
+)
 const canManageOrders = computed(() =>
   permissions.canOnBranch(p.manageOrders, order.value?.branch_id),
 )
@@ -835,6 +843,13 @@ onBeforeUnmount(() => {
           </div>
         </section>
       </div>
+    </section>
+    <section v-else-if="orderOutOfReach" class="st-empty">
+      <h3>Bu buyurtmaga ruxsatingiz yo'q</h3>
+      <p>
+        Buyurtma boshqa filialga tegishli, sizga biriktirilmagan yoki mavjud emas. Ro'yxatdan
+        o'zingizga tegishlisini oching.
+      </p>
     </section>
     <section v-else-if="orders.error" class="st-error" role="alert">
       <h3>Buyurtmani yuklab bo'lmadi</h3>

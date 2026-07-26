@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
+import { permissionLabels, workshopTenantName } from '@/shared/app/workshopUi'
 import { formatDate } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -45,7 +46,8 @@ const scopeLabel = computed(() => {
 })
 const workshopProfileSubtitle = computed(() => {
   const role = auth.me?.is_owner ? 'Rahbar' : 'Xodim'
-  const tenant = workshop.settings?.name?.trim() || config.tenantLabel
+  const tenant =
+    workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? config.tenantLabel
   return `${auth.displayName} · ${role} · ${tenant}`
 })
 const workshopGrantRows = computed(() => {
@@ -60,17 +62,12 @@ const workshopGrantRows = computed(() => {
   }))
 })
 
+// One label map, in `workshopUi`. This view used to keep a private copy, which
+// silently went stale the moment a permission was renamed — `view_dashboard`
+// became `view_orders` (QAD-166) and the Ruxsatlar panel started printing the
+// raw code. A duplicate that only breaks on rename is worse than no duplicate.
 function workshopPermissionLabel(permission: string) {
-  const labels: Record<string, string> = {
-    view_dashboard: 'Dashboard',
-    manage_orders: 'Buyurtmalarni boshqarish',
-    process_production: 'Ishlab chiqarish',
-    manage_inventory: 'Ombor',
-    manage_catalog: 'Katalog',
-    manage_finance: 'Moliya yozuvlari',
-    view_finance_reports: 'Moliya hisobotlari',
-  }
-  return labels[permission] ?? permission
+  return permissionLabels[permission] ?? permission
 }
 
 async function savePassword() {
@@ -99,7 +96,11 @@ async function savePassword() {
 
 onMounted(async () => {
   if (auth.me?.password_reset_required) workshopProfileTab.value = 'password'
-  await Promise.all([loadSessions(), workshop.loadSettings()])
+  // Branch context, not the workshop settings row: this page is open to every
+  // staff member and `/workshop/settings` is owner-only, so the old call 403'd
+  // for all ten non-owner principals. The name now rides on `me`; the context
+  // is what turns each grant's branch id into a branch name (QAD-168).
+  await Promise.all([loadSessions(), workshop.loadBranchContext().catch(() => undefined)])
 })
 </script>
 

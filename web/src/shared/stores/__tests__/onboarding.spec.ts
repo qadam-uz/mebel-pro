@@ -42,6 +42,7 @@ function me(overrides: Partial<MeResponse> = {}): MeResponse {
     session_id: 'session-1',
     password_reset_required: false,
     workshop_id: 'workshop-1',
+    workshop_name: 'Mebel Master',
     is_owner: true,
     grants: [],
     login: 'owner',

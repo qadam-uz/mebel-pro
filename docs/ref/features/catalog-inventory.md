@@ -277,6 +277,8 @@ now-redundant branch column:
   (edges: mm × per-metre), derived at read time, summed over the branches in view.
 - **Suppliers** (`manage_inventory`) — simple list (name, phone, note, status);
   add / edit in a modal dialog · block (reversible). Mostly reached inline from the arrival form.
+  The list itself is a shared lookup that `manage_finance` may also **read**, because the
+  expense form attributes spending to a supplier; creating and editing one stays here.
 
 In the **client app** cutting wizard's material steps: the branch's active `panel`
 selection as a searchable grid with manufacturer / type / thickness dropdown filters (name,
