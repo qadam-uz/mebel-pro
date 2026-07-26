@@ -8,10 +8,9 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { expectOk } from "./helpers";
+import { databaseUrl, expectOk } from "./helpers";
 
 const execFileAsync = promisify(execFile);
-const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
 const ownerReadyPassword = "OwnerReady123";
 const staffReadyPassword = "StaffReady123";
@@ -318,8 +317,19 @@ test("owner manages branches from a simple system table and detail view", async 
   await page.getByRole("button", { name: continueButton }).click();
   await expect(page.getByRole("heading", { name: "Asosiy" })).toBeVisible();
 
+  // QAD-176: `branch_no` is the middle segment of every order number and
+  // cutting map this branch prints (`#26-1-0003`); the owner must be able to
+  // look it up somewhere, and these two screens are that somewhere.
+  const branchNo = String(setup.branch.branch_no);
+
   await page.goto("/workshop/branches");
   await expect(page.getByRole("heading", { name: "Filiallar" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Raqam" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("row", { name: new RegExp(`Branch ${id}`) })
+      .getByRole("cell", { name: branchNo, exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("columnheader", { name: "Filial" }),
   ).toBeVisible();
@@ -341,6 +351,14 @@ test("owner manages branches from a simple system table and detail view", async 
   );
   await expect(
     page.getByRole("heading", { name: `Branch ${id}` }),
+  ).toBeVisible();
+  // The detail header spells out what the number means, so a deep link to one
+  // branch is enough to decode a printed order number.
+  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+  await expect(
+    page.getByText(
+      new RegExp(`Filial raqami\\s*${branchNo}.*#${yy}-${branchNo}-`),
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Filial ma'lumotlari" }),

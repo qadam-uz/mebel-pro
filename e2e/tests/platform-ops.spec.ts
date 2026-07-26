@@ -3,11 +3,12 @@ import { promisify } from 'node:util'
 
 import { expect, test, type Page } from '@playwright/test'
 
+import { databaseUrl } from './helpers'
+
 // Self-contained platform-operator journeys (AB-06 / AB-07 / AB-30): the
 // privileged platform-user registry and the jobs surface, driven through the
 // admin SPA. Mirrors the seeding pattern in access-and-provisioning.spec.ts.
 const execFileAsync = promisify(execFile)
-const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 
 function runId(testInfo: { workerIndex: number; title: string }) {

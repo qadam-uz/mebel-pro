@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import {
   createRouter,
   createWebHistory,
+  type NavigationGuardNext,
+  type NavigationGuardWithThis,
   type RouteLocationRaw,
   type RouteRecordRaw,
 } from 'vue-router'
@@ -66,6 +68,47 @@ function normalizeRedirect(
   return redirect
 }
 
+// A `beforeEnter` guard that bounces elsewhere returns a route target as well,
+// and it is written against the same absolute, role-prefixed paths as the route
+// records around it. Without this it was the one target the dev-base stripping
+// missed, so the guard sent the browser to a path that no longer existed and
+// the navigation landed on nothing (QAD-178).
+function normalizeGuard(
+  guard: NavigationGuardWithThis<undefined>,
+  localBase: string,
+  historyBase: string,
+): NavigationGuardWithThis<undefined> {
+  // vue-router reads a guard's arity: one declaring the third `next` parameter
+  // drives navigation through that callback instead of a return value, so there
+  // is nothing to normalize and re-wrapping it would change how it is called.
+  if (guard.length >= 3) return guard
+  // Unreachable by the arity check above — a guard that ignores `next` in its
+  // signature has no way to call it.
+  const next: NavigationGuardNext = () => {
+    throw new Error('Route guard called next() without declaring it')
+  }
+
+  // Exactly two declared parameters: vue-router must keep treating the return
+  // value, not a `next` call, as this guard's verdict.
+  return async function (this: undefined, to, from) {
+    const result = await guard.call(this, to, from, next)
+    if (result == null || typeof result === 'boolean' || result instanceof Error) return result
+    return normalizeRedirectTarget(result, localBase, historyBase)
+  }
+}
+
+function normalizeBeforeEnter(
+  beforeEnter: RouteRecordRaw['beforeEnter'],
+  localBase: string,
+  historyBase: string,
+): RouteRecordRaw['beforeEnter'] {
+  if (!beforeEnter) return beforeEnter
+  if (Array.isArray(beforeEnter)) {
+    return beforeEnter.map((guard) => normalizeGuard(guard, localBase, historyBase))
+  }
+  return normalizeGuard(beforeEnter, localBase, historyBase)
+}
+
 export function normalizeRoleRoutes(
   routes: RouteRecordRaw[],
   localBase: string,
@@ -76,6 +119,7 @@ export function normalizeRoleRoutes(
       ...route,
       path: normalizeRolePath(route.path, localBase, historyBase),
       redirect: normalizeRedirect(route.redirect, localBase, historyBase),
+      beforeEnter: normalizeBeforeEnter(route.beforeEnter, localBase, historyBase),
     } as RouteRecordRaw & { children?: RouteRecordRaw[] }
 
     if (route.children) {

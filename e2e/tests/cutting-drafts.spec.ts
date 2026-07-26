@@ -3,10 +3,9 @@ import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { expectOk, expectPdfOpensInTab } from './helpers'
+import { databaseUrl, expectOk, expectPdfOpensInTab } from './helpers'
 
 const execFileAsync = promisify(execFile)
-const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 const ownerReadyPassword = 'OwnerReady123'
 const passwordLabel = /^(Password|Parol)$/
