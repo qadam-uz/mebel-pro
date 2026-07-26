@@ -100,21 +100,29 @@ async def list_workshop_drafts(
     db: AsyncSession,
     *,
     principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
 ) -> list[WorkshopCuttingDraftSummary]:
     """This workshop's unfinished walk-in drafts (cutting.md#workshop-side): the
     staff scratchpads that were saved but never turned into an order. Ordered
     drafts are deleted on placement, so every row here is genuinely in-progress.
     Revision scratchpads (revision_of_order_id set) belong to an order, not the
-    saved-drafts surface, so they're excluded."""
+    saved-drafts surface, so they're excluded.
+
+    ``branch_id`` narrows to the caller's current branch context — a draft is
+    frozen to the branch it was started on, so the filter is a plain equality on
+    the stored branch, never a client-supplied override."""
     workshop_id = require_manage_orders_workshop(principal)
+    filters = [
+        CuttingDraft.created_via_workshop_id == workshop_id,
+        CuttingDraft.revision_of_order_id.is_(None),
+    ]
+    if branch_id is not None:
+        filters.append(CuttingDraft.preferred_branch_id == branch_id)
     drafts = (
         (
             await db.execute(
                 select(CuttingDraft)
-                .where(
-                    CuttingDraft.created_via_workshop_id == workshop_id,
-                    CuttingDraft.revision_of_order_id.is_(None),
-                )
+                .where(*filters)
                 .order_by(CuttingDraft.updated_at.desc(), CuttingDraft.created_at.desc())
             )
         )

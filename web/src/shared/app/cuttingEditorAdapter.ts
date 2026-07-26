@@ -38,7 +38,20 @@ export interface CuttingEditorAdapter {
    * `kerfMm`/`edgeTrimMm` are the fixed branch's own cutting settings (no
    * platform-wide default exists client-side — see cutting.md).
    */
-  branch: { fixed?: { id: string; name: string; kerfMm: number; edgeTrimMm: number } }
+  branch: {
+    fixed?: { id: string; name: string; kerfMm: number; edgeTrimMm: number }
+    /**
+     * The app's CURRENT branch context, read **live** on every call (workshop
+     * only). Distinct from `fixed`, which is frozen at mount so a topbar switch
+     * can't retarget an in-progress drawing: this one exists solely to seed a
+     * draft that has *no* branch of its own, and it has to stay live because on
+     * a cold load the context resolves after this view mounts — `fixed` would
+     * be frozen null and the editor would demand a branch the user already
+     * picked in the topbar. Its presence also marks "the app supplies the
+     * branch", which is what suppresses the in-editor picker.
+     */
+    context?: () => string | null
+  }
   /**
    * Resolve a branch label by id (workshop only). A resumed walk-in draft carries
    * its own frozen branch, which may differ from the topbar the adapter froze at

@@ -10,6 +10,7 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
+import { branchScopeHints, branchScopeOf } from '@/shared/app/branchScope'
 import {
   adminInitials,
   adminNavMetrics,
@@ -126,6 +127,16 @@ const selectedWorkshopBranch = computed(() =>
 // selector on every screen and let the pages use that one branch silently.
 const showBranchSwitcher = computed(
   () => config.role === 'workshop' && workshop.branches.length > 1,
+)
+// Not every page reads the branch context: some are workshop-wide by design
+// (debts, settings, branches, notifications, profile), others take their branch
+// from the record being viewed. Each route declares which it is; on the two
+// non-branch kinds the picker renders disabled with a hint rather than sitting
+// there looking live and silently doing nothing.
+const branchScope = computed(() => branchScopeOf(route.meta.branchScope))
+const branchPickerDisabled = computed(() => branchScope.value !== 'branch')
+const branchPickerHint = computed(() =>
+  branchScope.value === 'branch' ? null : branchScopeHints[branchScope.value],
 )
 const normalizedSearchBranchId = computed(() => selectedWorkshopBranch.value?.id ?? null)
 const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.permissions ?? []))
@@ -627,6 +638,8 @@ onBeforeUnmount(() => {
           class="workshop-branch-dd"
           :label="config.dropdownLabel"
           :options="dropdownOptions"
+          :disabled="branchPickerDisabled"
+          :hint="branchPickerHint"
           hide-label
         />
 

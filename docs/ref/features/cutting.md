@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-25
+updated: 2026-07-26
 order: 80
 ---
 
@@ -545,12 +545,16 @@ the branch selector is hidden, the branch is locked to the branch the flow was e
 and frozen into the draft at creation (a later topbar branch switch never retargets an
 in-progress draft), and a persistent **identity strip** in the editor header names the
 walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
-just during the continuous create flow), so a re-opened draft still names who it's for.
-Everything else — parts editor, edge picker, optimise, results — is this page, unchanged.
+just during the continuous create flow), so a re-opened draft still names who it's for. A
+draft that somehow carries no branch falls back to the current topbar context rather than
+demanding a fresh pick. Everything else — parts editor, edge picker, optimise, results — is
+this page, unchanged.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
 unfinished walk-in cuttings, reached from a **Chizmalar** entry beside **+ Yangi buyurtma** on
-the Orders screen (the entry carries a count of open drafts). Each row shows the walk-in
+the Orders screen (the entry carries a count of open drafts). The list follows the topbar
+branch context and reloads when it changes — a draft is frozen to one branch, so the page
+shows the branch you're standing in, and the Chizmalar count matches. Each row shows the walk-in
 client (name + phone), the locked branch, part / panel / waste figures, and a **derived status
 label** — *Tayyor — buyurtma berish mumkin* once a result is chosen, else *Tahrirlanmoqda*.
 A draft carries no status column of its own; the label is derived from whether a cutting

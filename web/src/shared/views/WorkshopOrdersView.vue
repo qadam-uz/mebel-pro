@@ -540,8 +540,9 @@ watch(status, () => {
 
 watch(
   () => workshop.selectedBranchContext,
-  () => {
+  (value) => {
     applyContextBranch()
+    if (canViewDrafts.value) void cutting.loadWorkshopDrafts(value)
   },
 )
 
@@ -578,8 +579,9 @@ onMounted(async () => {
   // Now that the first load has landed, let user-driven filter edits refresh.
   hydrated.value = true
   // Ambient count for the Chizmalar entry; non-blocking so it never delays the
-  // board/table.
-  if (canViewDrafts.value) void cutting.loadWorkshopDrafts()
+  // board/table. Scoped to the topbar branch so the badge matches what the
+  // drafts page (also branch-scoped) will actually list.
+  if (canViewDrafts.value) void cutting.loadWorkshopDrafts(workshop.selectedBranchContext)
 })
 
 onBeforeUnmount(() => {

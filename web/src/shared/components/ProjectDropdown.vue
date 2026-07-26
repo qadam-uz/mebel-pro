@@ -19,6 +19,12 @@ const props = defineProps<{
   // the topbar: a one-line trigger (icon tile + label, topbar height) whose
   // option rows keep the meta line and status dots.
   topLabel?: boolean
+  // Inert mode: the selection still reads as the current context but cannot be
+  // changed here. Used by the workshop topbar on pages the branch context does
+  // not apply to — chrome that disappears between routes is more confusing than
+  // chrome that says why it is inactive. `hint` explains the why.
+  disabled?: boolean
+  hint?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -93,7 +99,10 @@ function updatePopoverPosition() {
   }
 }
 
+const hintId = `${listboxId}-hint`
+
 async function openList() {
+  if (props.disabled) return
   activeIndex.value = Math.max(
     0,
     props.options.findIndex((option) => option.value === selected.value.value),
@@ -110,7 +119,7 @@ function closeList({ returnFocus = false } = {}) {
 }
 
 function choose(option: DropdownOption) {
-  if (!option.value) return
+  if (props.disabled || !option.value) return
   emit('update:modelValue', option.value)
   closeList({ returnFocus: true })
 }
@@ -127,6 +136,7 @@ function move(delta: number) {
 }
 
 function onButtonKeydown(event: KeyboardEvent) {
+  if (props.disabled) return
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     if (open.value) {
@@ -176,28 +186,39 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative" :class="topLabel ? 'flex flex-col gap-1' : 'inline-flex'">
+  <!-- The hint sits BESIDE the trigger, not under it: stacking it would grow the
+       host row (the workshop topbar) on scoped routes only, so the chrome would
+       jump between pages — the exact thing keeping the picker visible avoids. -->
+  <div
+    class="relative"
+    :class="topLabel ? 'flex flex-col gap-1' : 'inline-flex items-center gap-2.5'"
+  >
     <span v-if="topLabel" class="mp-filter-dd-label" aria-hidden="true">{{ label }}</span>
     <button
       ref="buttonRef"
       type="button"
-      :class="
+      :disabled="disabled"
+      :class="[
         topLabel
           ? [
               'flex min-h-10 items-center gap-2 rounded-lg border bg-elevated px-3 text-left transition',
               open ? 'border-accent' : 'border-hairline-strong hover:bg-sunk',
             ]
-          : 'mp-surface flex h-10 min-w-52 items-center gap-2.5 rounded-[7px] border-hairline-strong px-3 text-left shadow-none transition'
-      "
-      :aria-expanded="open"
-      :aria-controls="listboxId"
-      aria-haspopup="listbox"
+          : 'mp-surface flex h-10 min-w-52 items-center gap-2.5 rounded-[7px] border-hairline-strong px-3 text-left shadow-none transition',
+        disabled ? 'cursor-not-allowed bg-sunk opacity-60' : '',
+      ]"
+      :aria-expanded="disabled ? undefined : open"
+      :aria-controls="disabled ? undefined : listboxId"
+      :aria-haspopup="disabled ? undefined : 'listbox'"
+      :aria-describedby="hint ? hintId : undefined"
+      :title="hint ?? undefined"
       @click="open ? closeList() : openList()"
       @keydown="onButtonKeydown"
     >
       <span
         v-if="!topLabel"
-        class="grid size-7 place-items-center rounded-md bg-accent-soft text-accent"
+        class="grid size-7 place-items-center rounded-md"
+        :class="disabled ? 'bg-sunk text-ink-muted' : 'bg-accent-soft text-accent'"
         aria-hidden="true"
       >
         <span class="mp-dot"></span>
@@ -240,9 +261,11 @@ onBeforeUnmount(() => {
       </svg>
     </button>
 
+    <span v-if="hint" :id="hintId" class="mp-dd-hint">{{ hint }}</span>
+
     <Teleport to="body">
       <ul
-        v-if="open"
+        v-if="open && !disabled"
         :id="listboxId"
         ref="listboxRef"
         role="listbox"
