@@ -20,6 +20,7 @@ from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufac
 from app.modules.inventory.api import record_adjustment
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.inventory.schemas import StockAdjustmentRequest
+from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -54,6 +55,7 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
             await setup.flush()
             branch = Branch(
                 workshop_id=workshop.id,
+                branch_no=await next_branch_no(setup),
                 name="Main",
                 address="Tashkent",
                 phone="+998902222222",

@@ -75,6 +75,7 @@ class WorkshopListItem(WorkshopSummary):
 class BranchSummary(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    branch_no: int
     name: str
     address: str
     phone: str

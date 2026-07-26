@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-07-24
+updated: 2026-07-26
 order: 50
 ---
 
@@ -27,7 +27,7 @@ Material source is **per item** for the panel and **per side** for each edge —
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `order_number` | text | human-readable, `ORD-2026-000123` (per-year sequence); unique |
+| `order_number` | text | human-readable, `#26-14-0003` — 2-digit year · the branch's `branch_no` · a per-branch, per-year sequence (4 digits, resets each January); globally unique |
 | `client_id` | UUID | the client the order belongs to — its placer, or the walk-in it was placed for |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
@@ -36,6 +36,18 @@ Material source is **per item** for the panel and **per side** for each edge —
 | `contact_name` / `contact_phone` | text | the checkout contact shared with the workshop; copied from the client profile by default but frozen from the checkout form |
 | `note_client` / `note_workshop` | text? | client and staff notes |
 | `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
+
+**Order number** — `#26-14-0003` is the third 2026 order of branch 14. The sequence is scoped
+to the branch because a client orders from a branch, and that is the unit staff count in; the
+`branch_no` segment ([`workshop.md`](workshop.md)) carries both the branch's identity and the
+number's platform-wide uniqueness, so there is no workshop segment. `branch_no` is never
+zero-padded and the prefix keeps its trailing dash, which is what stops branch 1's numbers
+from being read as branch 14's. Numbers are minted under an advisory lock and counted from
+existing rows — safe only because orders are never deleted.
+
+*Legacy era:* orders placed before this format keep their `ORD-2026-000123` numbers — clients
+hold screenshots and printed cutting maps of them. The two formats coexist permanently; order
+search is a substring match, so both stay findable.
 
 **Pricing snapshot** (frozen at creation against the chosen branch's rates; there is no
 post-placement modification, so it is never re-priced)

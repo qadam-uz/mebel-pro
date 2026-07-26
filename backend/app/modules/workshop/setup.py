@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
@@ -30,6 +30,23 @@ from app.modules.workshop.schemas import (
     dump_working_hours,
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
+
+_BRANCH_NO_LOCK_KEY = "branches:branch_no"
+
+
+async def next_branch_no(db: AsyncSession) -> int:
+    """Allocate the next platform-wide branch number.
+
+    `max(branch_no) + 1` under an advisory lock held for the rest of the
+    transaction — never a row count, because a count would reuse a number the
+    moment the sequence is read concurrently, and `branch_no` is baked into
+    every order number the branch ever prints (workshop.md).
+    """
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(_BRANCH_NO_LOCK_KEY))))
+    highest = await db.scalar(select(func.max(Branch.branch_no)))
+    return int(highest or 0) + 1
 
 
 async def get_settings(
@@ -101,6 +118,7 @@ async def create_branch(
     _validate_coordinates(payload.latitude, payload.longitude)
     branch = Branch(
         workshop_id=workshop_id,
+        branch_no=await next_branch_no(db),
         name=_required_text(payload.name, "branch_name_required"),
         address=_required_text(payload.address, "branch_address_required"),
         phone=normalize_uz_phone(payload.phone),

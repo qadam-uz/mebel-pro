@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from app.core.security import hash_password
 from app.modules.access.contracts import PlatformUser, WorkshopUser
+from app.modules.workshop.api import next_branch_no
 from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +53,7 @@ async def seed_workshop_with_owner(db: AsyncSession) -> tuple[Workshop, Branch, 
     await db.flush()
     branch = Branch(
         workshop_id=workshop.id,
+        branch_no=await next_branch_no(db),
         name="Yunusobod",
         address="Tashkent, Yunusobod",
         phone="+998902222222",

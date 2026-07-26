@@ -145,6 +145,8 @@ class BranchStatusRequest(BaseModel):
 class BranchResponse(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    # Read-only: assigned once at creation, never patchable (workshop.md).
+    branch_no: int
     name: str
     address: str
     phone: str

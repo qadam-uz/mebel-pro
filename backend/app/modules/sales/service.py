@@ -175,7 +175,7 @@ async def place_client_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now),
+        order_number=await _next_order_number(db, now, branch.branch_no),
         client_id=client.id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -390,7 +390,7 @@ async def place_workshop_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now),
+        order_number=await _next_order_number(db, now, branch.branch_no),
         client_id=draft.client_id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -3097,15 +3097,27 @@ def _bump_order(order: Order) -> None:
     order.updated_at = datetime.now(UTC)
 
 
-async def _next_order_number(db: AsyncSession, now: datetime) -> str:
-    prefix = f"ORD-{now.year}-"
+async def _next_order_number(db: AsyncSession, now: datetime, branch_no: int) -> str:
+    """`#26-14-0003` — 2-digit year, branch number, per-branch/per-year sequence.
+
+    The sequence is scoped to one branch so a workshop's numbers have no holes:
+    branch 14's third order of 2026 is `#26-14-0003` no matter how busy the rest
+    of the platform is. The trailing dash in the prefix is load-bearing — without
+    it `#26-1-` would also match branch 14's numbers.
+
+    Counting rows is only safe because orders are never deleted (architecture.md);
+    the advisory lock is what makes concurrent creation in the same branch safe.
+    Orders placed before this format keep their legacy `ORD-2026-000123` numbers
+    and are excluded by the prefix (sales.md).
+    """
+    prefix = f"#{now.year % 100:02d}-{branch_no}-"
     bind = db.get_bind()
     if bind.dialect.name == "postgresql":
         await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"orders:{prefix}"))))
     count = await db.scalar(
         select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
     )
-    return f"{prefix}{int(count or 0) + 1:06d}"
+    return f"{prefix}{int(count or 0) + 1:04d}"
 
 
 def _pre_discount_total(order: Order) -> int:
