@@ -254,11 +254,6 @@ watch(
     if (!expenseForm.amount.trim()) expenseForm.amount = moneyInputValue(invoice.outstanding_tiyin)
   },
 )
-const selectedIncomeOrderDetail = computed(() =>
-  orders.currentOrder?.id === incomeForm.orderId ? orders.currentOrder : null,
-)
-const selectedIncomeSettlement = computed(() => selectedIncomeOrderDetail.value?.settlement ?? null)
-
 // Two sources, one shape, neither of them an order read. Creating: the picked
 // picker row already carries the settlement. Editing: the income row carries
 // its own order — the order it points at may long since have left the picker.
