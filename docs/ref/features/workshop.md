@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-07-25
+updated: 2026-07-26
 order: 40
 ---
 
@@ -56,7 +56,11 @@ reference), but the branch UI does not collect it — the API/DB fields stay for
 
 After platform provisioning creates the first branch, branch operations are **owner only**:
 
-- **Create / edit a branch** — name, address, phone, per-weekday working hours.
+- **Create / edit a branch** — name, address, phones, per-weekday working hours. A branch
+  publishes one **primary** phone plus up to **three additional** numbers (landline, director's
+  mobile, WhatsApp). The primary is the number order records and every compact surface carry;
+  the additional numbers appear only on the client-facing branch page. Extras follow the
+  primary's format rule and may not duplicate it or each other.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material selection is built up.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
@@ -74,10 +78,11 @@ Visibility for read operations:
 
 ### UX
 
-- **Branches list** (`/workshop/branches`) — simple table: name, address, phone, status badge,
-  action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
-- **Branch create dialog** — modal form: name, address, phone, working-hours grid (per weekday
-  open / close, with a "closed this day" toggle).
+- **Branches list** (`/workshop/branches`) — simple table: name, address, primary phone, status
+  badge, action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
+- **Branch create dialog** — modal form: name, primary phone, address, an add/remove list for
+  the additional phones (capped at three, with the cap explained when reached), working-hours
+  grid (per weekday open / close, with a "closed this day" toggle).
 - **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
   working hours, pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), and
   status controls. It does not duplicate materials, stock, staff, or order management; those

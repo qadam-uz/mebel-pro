@@ -19,7 +19,9 @@ export interface ClientBranch {
   workshop_logo_file_id: string | null
   branch_name: string
   address: string
+  // The primary number, then the branch's extras in display order (QAD-158).
   phone: string
+  additional_phones: string[]
   latitude: string | null
   longitude: string | null
   working_hours: Record<string, unknown>

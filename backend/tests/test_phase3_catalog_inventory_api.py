@@ -705,7 +705,13 @@ async def test_client_catalog_is_public_shape_and_visibility_filtered(
     )
 
     assert branches.status_code == 200
-    assert branches.json()[0]["branch_id"] == str(branch_id)
+    branch_row = branches.json()[0]
+    assert branch_row["branch_id"] == str(branch_id)
+    # The client branch page publishes the full contact block: address, the
+    # primary number, and the extras (QAD-158).
+    assert branch_row["address"]
+    assert branch_row["phone"]
+    assert branch_row["additional_phones"] == []
     assert materials.status_code == 200
     material = materials.json()[0]
     assert material["id"] == material_id

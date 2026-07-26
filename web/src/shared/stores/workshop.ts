@@ -69,6 +69,8 @@ export interface ManagedBranch {
   name: string
   address: string
   phone: string
+  // Extra published numbers in display order; the primary stays `phone` (QAD-158).
+  additional_phones: string[]
   latitude: string | null
   longitude: string | null
   working_hours: Record<string, unknown>

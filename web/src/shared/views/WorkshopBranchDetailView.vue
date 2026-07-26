@@ -11,10 +11,12 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { additionalPhoneErrors } from '@/shared/app/branchPhones'
 import { traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
@@ -33,6 +35,7 @@ type BranchField =
   | 'name'
   | 'address'
   | 'phone'
+  | 'phones'
   | 'cuttingRate'
   | 'edgeBandingRate'
   | 'kerfMm'
@@ -64,6 +67,13 @@ const branchForm = reactive({
   kerfMm: '',
   edgeTrimMm: '',
 })
+const additionalPhones = ref<string[]>([])
+// Per-row phone errors surface from the first save attempt on, then stay live so
+// fixing or removing a row clears its message.
+const phonesValidated = ref(false)
+const phoneRowErrors = computed(() =>
+  phonesValidated.value ? additionalPhoneErrors(additionalPhones.value, branchForm.phone) : [],
+)
 // Integers only — kerf/trim are millimetres, never fractional (bounds mirror
 // the backend CheckConstraints: kerf 1-20, trim 0-50).
 const KERF_MM_MIN = 1
@@ -114,6 +124,7 @@ const branchFieldOrder: BranchField[] = [
   'name',
   'address',
   'phone',
+  'phones',
   'cuttingRate',
   'edgeBandingRate',
   'kerfMm',
@@ -123,6 +134,7 @@ const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
   address: 'branch-detail-address',
   phone: 'branch-detail-phone',
+  phones: 'branch-detail-additional-phone-0',
   cuttingRate: 'branch-detail-cutting-rate',
   edgeBandingRate: 'branch-detail-edge-rate',
   kerfMm: 'branch-detail-kerf-mm',
@@ -159,6 +171,7 @@ function workingHoursPayload() {
 
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
+  phonesValidated.value = true
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
@@ -182,7 +195,11 @@ function validateBranchForm() {
       : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
-  return !hasErrors
+  const firstPhoneRowError = phoneRowErrors.value.findIndex(Boolean)
+  if (!hasErrors && firstPhoneRowError >= 0) {
+    document.getElementById(`branch-detail-additional-phone-${firstPhoneRowError}`)?.focus()
+  }
+  return !hasErrors && firstPhoneRowError < 0
 }
 
 function validateStatusForm() {
@@ -201,6 +218,8 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
+  additionalPhones.value = [...branch.additional_phones]
+  phonesValidated.value = false
   branchForm.kerfMm = String(branch.kerf_mm)
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
   statusForm.status = branch.status
@@ -252,6 +271,7 @@ async function saveBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
+      additional_phones: additionalPhones.value,
       working_hours: workingHoursPayload(),
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
@@ -271,11 +291,14 @@ async function saveBranch() {
           branch_name_required: 'name',
           branch_address_required: 'address',
           invalid_phone: 'phone',
+          too_many_branch_phones: 'phones',
+          duplicate_branch_phone: 'phones',
         },
         {
           name: 'name',
           address: 'address',
           phone: 'phone',
+          additional_phones: 'phones',
           kerf_mm: 'kerfMm',
           edge_trim_mm: 'edgeTrimMm',
         },
@@ -432,14 +455,19 @@ onMounted(refreshBranch)
             </label>
           </div>
           <label class="field" for="branch-detail-phone">
-            <span>Telefon</span>
+            <span>Asosiy telefon</span>
             <PhoneInput
               id="branch-detail-phone"
               v-model="branchForm.phone"
               required
               :aria-invalid="!!branchFieldErrors.phone"
-              :aria-describedby="branchFieldErrors.phone ? 'branch-detail-phone-error' : undefined"
+              :aria-describedby="
+                branchFieldErrors.phone ? 'branch-detail-phone-error' : 'branch-detail-phone-hint'
+              "
             />
+            <small id="branch-detail-phone-hint" class="text-ink-muted">
+              Mijozlar buyurtmalarida shu raqam ko'rinadi.
+            </small>
             <span
               v-if="branchFieldErrors.phone"
               id="branch-detail-phone-error"
@@ -448,6 +476,14 @@ onMounted(refreshBranch)
               {{ branchFieldErrors.phone }}
             </span>
           </label>
+          <BranchPhonesField
+            v-model="additionalPhones"
+            id-prefix="branch-detail-additional-phone"
+            :errors="phoneRowErrors"
+          />
+          <p v-if="branchFieldErrors.phones" class="mp-field-error">
+            {{ branchFieldErrors.phones }}
+          </p>
           <fieldset>
             <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
             <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">

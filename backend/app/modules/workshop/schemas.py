@@ -106,6 +106,7 @@ class BranchCreateRequest(BaseModel):
     name: str
     address: str
     phone: str
+    additional_phones: list[str] = Field(default_factory=list)
     latitude: Decimal | None = None
     longitude: Decimal | None = None
     working_hours: WorkingHours
@@ -123,6 +124,7 @@ class BranchPatchRequest(BaseModel):
     name: str | None = None
     address: str | None = None
     phone: str | None = None
+    additional_phones: list[str] | None = None
     latitude: Decimal | None = None
     longitude: Decimal | None = None
     working_hours: WorkingHours | None = None
@@ -148,6 +150,7 @@ class BranchResponse(APIModel):
     name: str
     address: str
     phone: str
+    additional_phones: list[str]
     latitude: Decimal | None
     longitude: Decimal | None
     working_hours: dict[str, Any]

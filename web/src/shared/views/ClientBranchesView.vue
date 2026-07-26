@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
+import { formatPhone } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -16,6 +17,11 @@ async function refreshBranches() {
   // One request now — the branch payload carries an inline material preview
   // (CB-13), so the old per-branch materials N+1 is gone.
   await catalog.loadBranches(search.value)
+}
+
+/** Every published number, primary first — all of them tap-to-call (QAD-158). */
+function phones(branch: ClientBranch) {
+  return [branch.phone, ...(branch.additional_phones ?? [])]
 }
 
 function hours(branch: ClientBranch) {
@@ -117,7 +123,23 @@ onMounted(refreshBranches)
             {{ branch.workshop_name }} · {{ branch.branch_name }}
           </h2>
           <p class="mt-1 font-mono text-xs text-ink-muted">
-            {{ branch.address }} · {{ hours(branch) }} · {{ branch.phone }}
+            {{ branch.address }} · {{ hours(branch) }}
+          </p>
+          <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a
+              v-for="(phone, index) in phones(branch)"
+              :key="phone"
+              class="inline-flex min-h-11 items-center font-mono text-xs font-bold text-accent underline underline-offset-2"
+              :href="`tel:${phone}`"
+            >
+              {{ formatPhone(phone) }}
+              <span
+                v-if="index === 0 && phones(branch).length > 1"
+                class="ml-1 font-sans text-[11px] text-ink-muted"
+              >
+                (asosiy)
+              </span>
+            </a>
           </p>
           <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
             {{ branch.closed_reason ?? 'Vaqtincha yopiq' }}

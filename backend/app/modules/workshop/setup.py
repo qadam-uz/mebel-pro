@@ -31,6 +31,9 @@ from app.modules.workshop.schemas import (
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
 
+# A branch publishes one primary number plus at most this many extras (4 total).
+MAX_ADDITIONAL_BRANCH_PHONES = 3
+
 
 async def get_settings(
     db: AsyncSession,
@@ -99,11 +102,13 @@ async def create_branch(
 ) -> Branch:
     workshop_id = require_workshop_owner(principal)
     _validate_coordinates(payload.latitude, payload.longitude)
+    phone = normalize_uz_phone(payload.phone)
     branch = Branch(
         workshop_id=workshop_id,
         name=_required_text(payload.name, "branch_name_required"),
         address=_required_text(payload.address, "branch_address_required"),
-        phone=normalize_uz_phone(payload.phone),
+        phone=phone,
+        additional_phones=_normalized_additional_phones(payload.additional_phones, primary=phone),
         latitude=payload.latitude,
         longitude=payload.longitude,
         working_hours=dump_working_hours(payload.working_hours),
@@ -167,8 +172,16 @@ async def update_branch(
         branch.name = _required_text(payload.name, "branch_name_required")
     if "address" in payload.model_fields_set and payload.address is not None:
         branch.address = _required_text(payload.address, "branch_address_required")
+    # Primary and extras are validated as one set: changing either can collide
+    # with the other, so the effective final list is what gets checked.
+    phone = branch.phone
     if "phone" in payload.model_fields_set and payload.phone is not None:
-        branch.phone = normalize_uz_phone(payload.phone)
+        phone = normalize_uz_phone(payload.phone)
+    additional = branch.additional_phones
+    if "additional_phones" in payload.model_fields_set and payload.additional_phones is not None:
+        additional = payload.additional_phones
+    branch.additional_phones = _normalized_additional_phones(additional, primary=phone)
+    branch.phone = phone
     if "latitude" in payload.model_fields_set:
         branch.latitude = latitude
     if "longitude" in payload.model_fields_set:
@@ -333,6 +346,31 @@ async def _owner_branch(
     if branch is None or branch.workshop_id != workshop_id:
         raise APIError("branch_not_found", "Branch not found", status_code=404)
     return branch
+
+
+def _normalized_additional_phones(values: list[str], *, primary: str) -> list[str]:
+    """Validate the extra published numbers against the primary and each other.
+
+    Array order is display order, so it is preserved as given. Every entry goes
+    through the same ``+998XXXXXXXXX`` rule as the primary number.
+    """
+    if len(values) > MAX_ADDITIONAL_BRANCH_PHONES:
+        raise APIError(
+            "too_many_branch_phones",
+            f"A branch can have at most {MAX_ADDITIONAL_BRANCH_PHONES} additional phone numbers",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    normalized: list[str] = []
+    for value in values:
+        phone = normalize_uz_phone(value)
+        if phone == primary or phone in normalized:
+            raise APIError(
+                "duplicate_branch_phone",
+                f"Phone number {phone} is already listed for this branch",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        normalized.append(phone)
+    return normalized
 
 
 def _validate_coordinates(latitude: Decimal | None, longitude: Decimal | None) -> None:
