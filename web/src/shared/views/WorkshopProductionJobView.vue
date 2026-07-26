@@ -19,7 +19,7 @@ import {
   deriveSnapshotEdgeRegistry,
   edgeRegistryEntryByMaterial,
 } from '@/shared/app/cuttingResultsDisplay'
-import { workshopErrorMessage } from '@/shared/app/workshopUi'
+import { STOCK_SHORTFALL_MESSAGE, workshopErrorMessage } from '@/shared/app/workshopUi'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -256,11 +256,15 @@ async function confirmComplete() {
   }
   try {
     const payload = { version: current.version, completed_by_user_id: completedBy }
-    if (station.value === 'cutting') await orders.cuttingDone(current.id, payload)
-    else await orders.bandingDone(current.id, payload)
+    const updated =
+      station.value === 'cutting'
+        ? await orders.cuttingDone(current.id, payload)
+        : await orders.bandingDone(current.id, payload)
     completeOpen.value = false
     clearPanelMarks(current.id)
     toast.success(`${current.order_number} yakunlandi.`)
+    // The books went negative — say so, but only after the job is marked done.
+    if (updated.stock_shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
     void router.push(stationListPath.value)
   } catch {
     actionError.value = workshopErrorMessage(orders.actionError ?? 'order_action_failed')

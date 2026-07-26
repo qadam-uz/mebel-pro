@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 50
 ---
 
@@ -143,8 +143,9 @@ decrements it.
   the most recent priced stock-in for the material at this branch, preferring the
   selected supplier's most recent when one exists. Derived from the transaction ledger
   at read time; no stored "latest price" column exists.
-- **Adjust** (same caller) — signed delta with a **mandatory note**; `on_hand` can't
-  go below 0. The single tool for stock-takes and **waste write-offs** of every kind
+- **Adjust** (same caller) — signed delta with a **mandatory note**; a *decrease* can't
+  take `on_hand` below 0 (a typed stock-out that would go negative is almost certainly a
+  typo); an increase is always allowed, including out of a negative balance. The single tool for stock-takes and **waste write-offs** of every kind
   — damage and accidents, a master's production error, an edge-roll remnant too short
   to band, or material a cancelled-mid-production order physically consumed. Waste is
   recorded as a quantity correction, not classified by cause (cause analytics is
@@ -158,6 +159,16 @@ millimetres**, per edge material, when **Banding done** is marked. A revert re-i
 exactly what its step decremented. `own`-source panels and `own`-source edge sides never
 touch stock.
 
+The seam **never blocks the worker**. The panels are already cut when *Cutting done* is
+marked, so the consume records history, not intent — it proceeds even when the balance
+goes negative, and even when the material was dropped from the branch selection after the
+order was placed (in which case the branch's stock row is created at zero and the material
+stays **out** of the catalog: what is offerable to new clients is a different question from
+what physically moved). The worker sees an informational **warning** — *"Omborda qoldiq
+yetarli emas"* — and the transition completes. See
+[`inventory.md`](../entities/inventory.md) for why negative is the honest state and how it
+heals.
+
 **Projected balance & the verify warning.** There is no reservation, so a meaningful
 "will we have enough?" needs the demand already in flight. For a material at a branch:
 
@@ -170,8 +181,12 @@ an order ([`orders.md`](orders.md)), a `shop` material whose projected balance w
 cover this order raises a **warning** so they can prompt the warehouseman — it
 **never blocks** approval (some workshops buy per order).
 
-**Low-stock.** When `on_hand ≤ min_stock` after any change, a notification fires to
-the branch's `manage_inventory` grantees and the owner; the daily summary repeats it.
+**Low-stock and negative balances.** When `on_hand ≤ min_stock` after any change, a
+notification fires to the branch's `manage_inventory` grantees and the owner; the daily
+summary repeats it. A balance that ran past the threshold into negative still qualifies, so
+the alert keeps firing. A `consume` that leaves the balance below zero fires an additional
+negative-balance notification to the same recipients — nobody is blocked, but the books
+going negative must not be silent.
 
 ## UX (workshop app)
 
@@ -195,7 +210,11 @@ now-redundant branch column:
   not a branch setting.
 - **Stock** (`manage_inventory`) — table: material (name + image + manufacturer
   chip), on-hand, min-stock, unit; low-stock rows highlighted (chip + colour), and a
-  "low-stock only" toggle chip. Two page actions each open a modal: **Record
+  "low-stock only" toggle chip. A **negative** balance escalates from the low-stock warning
+  treatment to danger — its own chip, its own marker line ("kirim yozilmagan"), and it sorts
+  to the top of the table, because it is a state that wants an arrival recorded rather than
+  a minus sign to scroll past. The **Ombor qiymati** tile counts negative balances
+  negatively rather than clamping them away. Two page actions each open a modal: **Record
   stock-in** (qty, unit price, supplier picker with inline add) and **Adjust**
   (a signed quantity with a **required leading + or −** — "-2" writes off, "+5" adds —
   live-filtered as typed, plus the mandatory reason; this supersedes the earlier
@@ -256,8 +275,16 @@ alone; modals manage focus; owner-only controls are visibly gated for non-owners
   **absorbed by the workshop** — never billed.
 - **Operator reverts a completed job** — the system `restore`s exactly the quantity
   that step consumed; for edges, one restore per edge material the step had
-  consumed.
-- **Adjust below 0** — rejected.
+  consumed. This works from a negative balance too — a restore only raises it.
+- **Adjust below 0** — rejected. Only the order-driven `consume` may take a balance
+  negative; a human typing a stock-out that would is corrected, not recorded.
+- **Cutting or banding done with nothing on the shelf** — the transition **succeeds** and
+  the balance goes negative by the consumed quantity; the worker gets a warning toast, the
+  branch's `manage_inventory` grantees get a notification. Recording the arrival afterwards
+  returns the balance to the correct positive number with no manual adjustment.
+- **Cutting or banding done for a material removed from the branch selection** — same: the
+  consume is recorded against a stock row created at zero, and the material is **not**
+  silently re-added to the branch catalog. Putting it back is a deliberate catalog action.
 - **Stock-in for a branch-deactivated material** — allowed (the selection still
   exists); it just won't be offered to clients until reactivated.
 - **`own`-source order** — no inventory interaction at all; an order with only

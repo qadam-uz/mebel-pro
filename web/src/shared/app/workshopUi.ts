@@ -63,6 +63,11 @@ export function stockTransactionTypeLabel(type: StockTransactionType) {
   return stockTransactionTypeUz[type] ?? type
 }
 
+// The job is done — the books just went below zero because an arrival was never
+// recorded. Informational only: raised as a `warn` toast next to the success
+// one, never as danger, and never in place of completing the transition (QAD-150).
+export const STOCK_SHORTFALL_MESSAGE = 'Omborda qoldiq yetarli emas'
+
 export const permissionLabels: Record<string, string> = {
   view_dashboard: 'Asosiy panel',
   manage_orders: 'Buyurtmalar',

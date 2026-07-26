@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { apiTraceId } from '@/shared/api/client'
+import { apiErrorCode, apiTraceId } from '@/shared/api/client'
 import { INVENTORY_TX_PAGE_LIMIT } from '@/shared/app/constants'
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
 import { traceLine } from '@/shared/app/errorTrace'
@@ -142,7 +142,10 @@ const stockOptions = computed(() =>
   workshop.stockItems.map((item) => ({
     value: item.material_id,
     label: item.material.name,
-    meta: `${formatStockQuantity(item.on_hand, item.display_unit)} mavjud`,
+    meta:
+      item.on_hand < 0
+        ? `${formatStockQuantity(-item.on_hand, item.display_unit)} yetishmaydi`
+        : `${formatStockQuantity(item.on_hand, item.display_unit)} mavjud`,
   })),
 )
 const txMaterialOptions = computed<DropdownOption[]>(() => [
@@ -284,6 +287,14 @@ const activeListEmpty = computed(() => {
 
 function stockItemByMaterial(materialId: string | null): StockItem | null {
   return workshop.stockItems.find((item) => item.material_id === materialId) ?? null
+}
+
+// A negative balance means production consumed material whose arrival was never
+// recorded (QAD-150). It is not "low" — it is a bookkeeping gap that wants an
+// arrival entered, so it gets the danger treatment and the backend sorts it to
+// the top of the list.
+function isNegative(item: StockItem) {
+  return item.on_hand < 0
 }
 
 function materialMeta(item: (typeof workshop.stockItems)[number]) {
@@ -441,8 +452,17 @@ async function recordStockIn() {
     resetStockInForm()
     stockInOpen.value = false
     toast.success('Kirim yozildi.')
-  } catch {
-    movementError.value = 'stock_in_failed'
+  } catch (errorValue) {
+    // A material can hold a (negative) stock row while sitting outside the branch
+    // catalog — production records what physically moved regardless (QAD-150).
+    // Stock-in still needs the catalog entry, so name the actual next step
+    // instead of the generic "harakat yozilmadi".
+    if (apiErrorCode(errorValue) === 'branch_material_not_found') {
+      stockInMaterialError.value =
+        "Bu material filial katalogida yo'q. Avval katalogga qo'shing, keyin kirim yozing."
+    } else {
+      movementError.value = 'stock_in_failed'
+    }
   } finally {
     movementSaving.value = false
   }
@@ -843,18 +863,35 @@ onBeforeUnmount(() => {
                     </span>
                   </div>
                 </td>
-                <td class="amt" :class="{ 'warn-text': item.is_low_stock }">
+                <td
+                  class="amt"
+                  :class="
+                    isNegative(item) ? 'danger-text' : item.is_low_stock ? 'warn-text' : undefined
+                  "
+                >
                   {{ formatStockQuantity(item.on_hand, item.display_unit) }}
-                  <small v-if="item.is_low_stock" class="block text-[11px] font-extrabold">
-                    Kam qolgan
+                  <small
+                    v-if="isNegative(item) || item.is_low_stock"
+                    class="block text-[11px] font-extrabold"
+                  >
+                    {{ isNegative(item) ? 'Kirim yozilmagan' : 'Kam qolgan' }}
                   </small>
                 </td>
                 <td class="amt muted">
                   {{ formatStockQuantity(item.min_stock, item.display_unit) }}
                 </td>
                 <td>
-                  <span :class="item.is_low_stock ? 'pill p-warn' : 'pill p-ok'">
-                    <span class="pd"></span>{{ item.is_low_stock ? 'Kam' : 'OK' }}
+                  <span
+                    :class="
+                      isNegative(item)
+                        ? 'pill p-bad'
+                        : item.is_low_stock
+                          ? 'pill p-warn'
+                          : 'pill p-ok'
+                    "
+                  >
+                    <span class="pd"></span
+                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'OK' }}
                   </span>
                 </td>
               </tr>

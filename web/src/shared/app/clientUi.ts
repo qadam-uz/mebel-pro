@@ -240,6 +240,7 @@ export function clientIconPath(name: string): string {
 // with the order.* events the backend will add (CB-02).
 const NOTIFICATION_TITLES: Record<string, string> = {
   'inventory.low_stock': 'Zaxira tugayapti',
+  'inventory.negative_stock': 'Ombor qoldig‘i manfiy',
   'order.placed': 'Buyurtma joylandi',
   'order.confirmed': 'Buyurtma tasdiqlandi',
   'order.status_changed': "Buyurtma holati o'zgardi",
@@ -271,7 +272,10 @@ export function clientNotificationBody(item: NotificationItem): string | null {
   // Order events (CB-02) carry a denormalized order_number but no prose body —
   // surface it so the row identifies which order changed, not just that one did.
   const orderNumber = payloadString(item.payload, ['order_number'])
-  return orderNumber ? `Buyurtma № ${orderNumber}` : null
+  if (orderNumber) return `Buyurtma № ${orderNumber}`
+  // Inventory events carry the material the balance belongs to — same reason.
+  const materialName = payloadString(item.payload, ['material_name'])
+  return materialName ? `Material: ${materialName}` : null
 }
 
 export function clientNotificationIconName(item: NotificationItem): string {

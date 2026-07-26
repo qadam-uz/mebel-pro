@@ -1493,14 +1493,16 @@ async def complete_cutting(
     )
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
+    shortfall = False
     for material_id, quantity in panel_demands.items():
-        await consume_order_stock(
+        transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
             material_id=material_id,
             order_id=order.id,
             quantity=quantity,
         )
+        shortfall = shortfall or transaction.balance_after < 0
     order.cutter_user_id = worker_id
     order.cut_completed_at = datetime.now(UTC)
     order.panels_used_snapshot = sum(
@@ -1521,7 +1523,9 @@ async def complete_cutting(
             "panel_demands": {str(key): value for key, value in panel_demands.items()},
         },
     )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
 
 
 async def complete_banding(
@@ -1544,14 +1548,16 @@ async def complete_banding(
     )
     result = await _order_result(db, order)
     edge_demands = _edge_stock_demands(result)
+    shortfall = False
     for material_id, quantity in edge_demands.items():
-        await consume_order_stock(
+        transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
             material_id=material_id,
             order_id=order.id,
             quantity=quantity,
         )
+        shortfall = shortfall or transaction.balance_after < 0
     order.edger_user_id = worker_id
     order.edge_completed_at = datetime.now(UTC)
     order.edge_length_snapshot = {str(key): value for key, value in edge_demands.items()}
@@ -1566,7 +1572,9 @@ async def complete_banding(
             "edge_demands": {str(key): value for key, value in edge_demands.items()},
         },
     )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
 
 
 async def mark_collected(

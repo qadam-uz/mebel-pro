@@ -2,7 +2,7 @@
 title: Inventory
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-26
 order: 30
 ---
 
@@ -25,25 +25,39 @@ material per branch.
 | `id` | UUID | PK |
 | `branch_id` | UUID | required |
 | `material_id` | UUID | required; `(branch_id, material_id)` unique |
-| `on_hand` | int | quantity physically in the warehouse, in the material's stock unit; ≥ 0 |
+| `on_hand` | int | the branch's book balance for the material, in its stock unit; **may be negative** — see below |
 | `min_stock` | int | low-stock alert threshold in the same unit; ≥ 0 |
 | `updated_at` | timestamp | |
 
 Operations (all atomic; the row is locked `FOR UPDATE` for the duration):
 
 - `stock_in(qty)`: `on_hand += qty` (warehouseman; from a supplier).
-- `adjust(delta)`: `on_hand += delta` (stock-take / write-off; bounded ≥ 0; reason note
-  required).
-- `consume(qty)`: `on_hand -= qty` — system, driven by the order state machine.
+- `adjust(delta)`: `on_hand += delta` (stock-take / write-off; a *decrease* is bounded ≥ 0;
+  reason note required).
+- `consume(qty)`: `on_hand -= qty` — system, driven by the order state machine; **not**
+  bounded at 0.
 - `restore(qty)`: `on_hand += qty` — system, an operator revert of a consumed step.
 
-Invariants: `on_hand ≥ 0` always; `(branch_id, material_id)` unique; stock changes only via
-the inventory module's operations (never raw SQL from elsewhere); `consume` / `restore`
-carry the `order_id` and no actor (system); `stock_in` / `adjust` carry an
-actor. When `on_hand ≤ min_stock` after a change, a low-stock notification fires to the
-branch's `manage_inventory` grantees and the owner. The verify-time "projected balance"
-warning ([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time
-computation, not a stored field.
+**A negative balance is legal, and only `consume` can create one.** `consume` records
+material that physically already moved: if a worker cut 20 panels and only 5 were ever
+booked in, the branch *is* at −15, and that is a true statement about the books. Refusing
+the consume would block a worker over bookkeeping, and skipping it would leave stock
+permanently too high — silently wrong inventory is the worse failure. The state is
+self-healing: recording the missing arrival (+20) lands the balance at 5 with no manual
+correction. Every human-facing path that *lowers* a balance keeps the ≥ 0 guard — a typed
+stock-out that would go negative is almost certainly a typo. Movements that *raise* a
+balance are always allowed, so a revert works from below zero too.
+
+Invariants: `(branch_id, material_id)` unique; stock changes only via the inventory
+module's operations (never raw SQL from elsewhere); `consume` / `restore` carry the
+`order_id` and no actor (system); `stock_in` / `adjust` carry an actor. When
+`on_hand ≤ min_stock` after a change, a low-stock notification fires to the branch's
+`manage_inventory` grantees and the owner — a balance that ran *past* the threshold into
+negative still qualifies, so the alert never goes quiet. A `consume` that leaves `on_hand`
+below zero additionally fires a negative-balance notification to the same recipients.
+The verify-time "projected balance" warning
+([`catalog-inventory.md`](../features/catalog-inventory.md)) is a read-time computation,
+not a stored field.
 
 Edge `consume` / `restore` is keyed by **edge material id** (not by thickness): an
 `edge_banding → ready` transition fires one `consume` per `shop` edge material that the
@@ -60,7 +74,7 @@ One audit row for one change to a stock item. Append-only.
 | `stock_item_id` | UUID | required |
 | `type` | enum | `stock_in` / `consume` / `restore` / `adjust` |
 | `quantity` | int | signed change, non-zero, in the material's stock unit |
-| `balance_after` | int | `on_hand` after the change |
+| `balance_after` | int | `on_hand` after the change; may be negative on a `consume` row |
 | `unit_price_tiyin` | bigint? | purchase price per display unit (per panel / per metre), integer tiyin, ≥ 0; `stock_in` only, null otherwise |
 | `total_price_tiyin` | bigint? | authoritative purchase total for the row; panels `quantity × unit price`, edges `quantity_mm × unit price // 1000` (the sale-side per-metre mirror); `stock_in` only |
 | `order_id` | UUID? | for `consume` / `restore`; null otherwise |
