@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-23
+updated: 2026-07-26
 order: 20
 ---
 
@@ -337,6 +337,141 @@ Under **Settings → Users** (owner-only nav item):
   - **Sessions** — list with current marker; revoke one / all.
 - Row / detail actions: Edit · Reset password (→ one-time-secret confirmation) · Block /
   Unblock (block warns sessions are revoked) · Revoke sessions.
+
+## Workshop app access matrix
+
+The workshop SPA gates in two independent places; the server is the backstop behind both.
+
+- **The sidebar** (`web/src/shared/app/workshopNav.ts`) is built from the grants the user holds
+  **on the branch currently selected** in the branch picker.
+- **The router guard** (route `meta.workshopAccess` in `web/src/apps/workshop/routes.ts`,
+  evaluated by `canAccessWorkshopRoute`) tests the **whole grant set, branch-blind** — no
+  workshop route declares `branchParam` today. A refused route redirects to `/workshop`, and the
+  guard resolves before the target view mounts, so none of the refused page paints first.
+
+The two predicates are deliberately different: a nav entry is an invitation, a route requirement
+is a floor. Every place they diverge is listed below.
+
+### What each permission unlocks in the sidebar
+
+| Permission             | Sidebar entries (group)                                                   |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `view_dashboard`       | none                                                                      |
+| `manage_orders`        | Buyurtmalar (Boshqaruv)                                                   |
+| `process_production`   | Kesish · Krom (Ishlab chiqarish)                                          |
+| `manage_inventory`     | Ombor (Resurslar)                                                         |
+| `manage_catalog`       | Material katalogi (Resurslar)                                             |
+| `manage_finance`       | Tushum va xarajat · Qarzdorlik · Xodimlar mehnati (Moliya)                |
+| `view_finance_reports` | Xodimlar mehnati (Moliya)                                                 |
+| `is_owner`             | all of the above, plus Filiallar · Xodimlar · Sozlamalar (Tizim)          |
+
+**Asosiy** (Boshqaruv) is shown to every signed-in workshop user, zero-grant staff included. It
+is the app's home path and the redirect target for every refused route, so it cannot be gated
+without first giving each principal its own landing page.
+
+The collapsed icon rail renders the same item list — collapsing hides labels in CSS only — so a
+permission-hidden entry stays hidden and no tooltip names a page the user cannot open.
+
+### What each route requires
+
+| Route                                                                                                                                                        | Requirement                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `/workshop`                                                                                                                                                  | none                                                   |
+| `/workshop/profile` · `/workshop/notifications`                                                                                                              | none — account surfaces stay open to zero-grant staff  |
+| `/workshop/orders` · `/orders/new` · `/orders/new/cutting` · `/orders/cutting/:id` · `/orders/cutting/:id/result` · `/orders/new/:draft_id/checkout` · `/orders/drafts` · `/orders/edit/:draft_id/review` | `manage_orders`                                        |
+| `/workshop/orders/:order_id`                                                                                                                                 | `view_dashboard` · `manage_orders` · `process_production` |
+| `/workshop/cutting` · `/workshop/banding` · `/workshop/production/:order_id` (`/workshop/production` redirects into them)                                     | `process_production` · `manage_orders`                 |
+| `/workshop/inventory`                                                                                                                                        | `manage_inventory`                                     |
+| `/workshop/catalog`                                                                                                                                          | `manage_catalog`                                       |
+| `/workshop/finance/income` · `/finance/expenses` · `/finance/debts`                                                                                          | `manage_finance`                                       |
+| `/workshop/finance/production`                                                                                                                               | `manage_finance` · `view_finance_reports`              |
+| `/workshop/settings` · `/settings/users` · `/settings/users/:user_id` · `/branches` · `/branches/:branch_id`                                                  | owner only                                             |
+
+The station pages accept `manage_orders` as well as `process_production`, but the sidebar offers
+them only on `process_production` — an order manager reaches Kesish / Krom by URL and finds the
+"no work assigned to you" state, which is the intended read.
+
+### What the global search returns
+
+| Grant on the **selected** branch          | Search section    |
+| ----------------------------------------- | ----------------- |
+| `view_dashboard` or `manage_orders`       | Buyurtmalar       |
+| `manage_catalog`                          | Material katalogi |
+| `manage_inventory`                        | Ombor             |
+| owner only                                | Xodimlar          |
+
+Search reads the selected branch's grants, so it is branch-scoped where the router guard is not.
+With none of them the panel says "Bu filial bo'yicha qidiruv uchun ruxsat yo'q" rather than
+returning an empty result set.
+
+### Verified — 2026-07-26
+
+One probe user per permission, each holding exactly that grant on one branch, driven through
+every workshop route in a browser against the seeded demo world. `pass` means the cell matched
+the tables above; a `D` reference points at a known deviation below.
+
+| Principal                                | Sidebar | Forbidden URL refused | Allowed pages clean | Global search | Empty / partial states |
+| ---------------------------------------- | ------- | --------------------- | ------------------- | ------------- | ---------------------- |
+| owner                                    | pass    | pass (nothing refused) | pass               | pass          | pass                   |
+| `view_dashboard`                         | pass    | pass                  | D2 · D4 · D5        | pass          | D6                     |
+| `manage_orders`                          | pass    | pass                  | D4 · D5             | pass          | D6                     |
+| `process_production`                     | pass    | pass                  | D4                  | pass          | D6                     |
+| `manage_catalog`                         | pass    | pass                  | D4                  | pass          | D1                     |
+| `manage_inventory`                       | pass    | pass                  | D4                  | pass          | pass                   |
+| `manage_finance`                         | pass    | pass                  | D3 · D4 · D5        | pass          | pass                   |
+| `view_finance_reports`                   | pass    | pass                  | D4 · D5             | pass          | pass                   |
+| no grants                                | pass    | pass                  | D4                  | pass          | pass                   |
+| `manage_orders` + `manage_inventory`     | pass    | pass                  | D4                  | pass          | D6                     |
+| `manage_inventory` on the second branch  | pass    | pass                  | D4                  | pass          | pass                   |
+
+Every refused route landed on `/workshop` with no frame of the refused view rendered, and no
+principal saw a nav entry, search section, or owner-only route it was not entitled to. Grants on
+one branch unlocked nothing on the other: the branch picker offers only granted branches, and an
+order in a branch the reader has no grant on answers 404.
+
+Revoking a grant while the holder is signed in fails closed on the server — the next data request
+from the open tab is refused — but the tab itself keeps the old sidebar until it is reloaded (D7).
+
+### Known deviations
+
+Each is a defect against the tables above, not a rule.
+
+- **D1 — `/workshop` renders blank for staff whose grants light up no dashboard section.**
+  `WorkshopDashboardView.vue` shows an honest "Sizga hali hech qanday ruxsat berilmagan" state
+  only when the grant set is empty; a user holding `manage_catalog` alone falls past it into the
+  granted branch, where every card is behind a `can*` flag that is false. The page is a heading
+  and a refresh button. The empty state should cover "has grants, none of them shown here".
+- **D2 — `view_dashboard` is an order-read grant, not a dashboard grant.** Its only backend use
+  is `WORKSHOP_ORDER_VIEW_PERMISSIONS` (`backend/app/modules/sales/service.py:89`), which admits
+  the holder to workshop order reads; the frontend labels it "Asosiy panel"
+  (`web/src/shared/app/workshopUi.ts:66`). A holder gets no sidebar entry but can open any order
+  in the branch by URL — client name and phone, prices, materials, production stamps — search
+  orders, and read the dashboard's order cards. The order screen then 403s on the assignment
+  picker (`/workshop/orders/workers`) and renders both workers as "Noma'lum xodim". The name and
+  the effect have to be reconciled.
+- **D3 — the finance ledger fetches suppliers it may not read.** The expenses screen loads the
+  branch supplier list, which requires `manage_inventory`
+  (`backend/app/modules/inventory/service.py:608`), so `manage_finance`-only staff take a 403 and
+  a silently empty supplier picker on a page they are entitled to.
+- **D4 — every non-owner takes a 403 on their own profile.** `WorkshopProfileView.vue:102` calls
+  the owner-only workshop-settings read on mount; the workshop name then falls back to the
+  generic tenant label in the page subtitle.
+- **D5 — screens link to routes the viewer cannot open.** The dashboard's low-stock card is
+  rendered without a permission check and links to `/workshop/inventory`; its order KPI and
+  recent-orders card link to `/workshop/orders` for `view_dashboard` holders, as does the order
+  screen's back link. Following any of them bounces off the guard back to `/workshop`.
+- **D6 — an order the reader is not entitled to reports a network failure.** The API answers 404
+  (correctly — no existence oracle) for an order outside the reader's branch, and for
+  `process_production` staff for any order not assigned to them; the order screen renders
+  "Buyurtmani yuklab bo'lmadi — Internet aloqasini tekshirib, qayta urinib ko'ring". The copy
+  blames the connection for an authorization outcome, and for production staff that is the
+  ordinary case, not the edge one — `/workshop/orders/:order_id` admits `process_production`
+  while the data rule behind it admits only the assignee.
+- **D7 — a revoked grant leaves a stale shell.** The shell reads the grant set from the `me`
+  response captured at sign-in and never re-reads it, so after the owner revokes a grant the open
+  tab keeps the nav entry, keeps the already-loaded rows on screen, and adds a generic load-error
+  line when the next fetch is refused. Only a reload collapses the sidebar and lands the user on
+  the no-permission state. The server is not fooled; the screen is.
 
 ## Branch context (workshop app)
 
