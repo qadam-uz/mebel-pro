@@ -204,7 +204,9 @@ touching them; don't add new off-scale values.
   The primitive matches the app surface: crisp radius, elevated popover, visible focus
   ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
   arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
-  textareas, checkboxes, radios, and file inputs until a project primitive exists.
+  textareas, checkboxes, radios, and file inputs until a project primitive exists —
+  but **never `<input type="date">`**, which renders in the browser's OS locale
+  (`07/19/2026` on en-US) and so can't hold the app's date convention.
 - **Modals** — create/edit forms open in `AppModal` dialogs, never as inline on-page cards;
   reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
   the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
@@ -221,8 +223,13 @@ touching them; don't add new off-scale values.
 - **Image upload** — the shared preview primitive: framed preview, native file input
   triggered by labelled buttons, upload/error state in the field, a remove action when an
   image is set.
-- **Date ranges** — the shared date-range picker: one trigger opening a popover with preset
-  shortcuts and a calendar; selections auto-apply (no apply button).
+- **Dates** — one calendar serves the whole app (`CalendarMonths`: Monday-first grid, arrow
+  keys, `PageUp`/`PageDown` by month, `Esc` closes and returns focus). Two hosts wrap it:
+  `DateRangePicker` for filters — one trigger opening a popover with preset shortcuts and the
+  calendar, selections auto-apply (no apply button) — and `DateField` for a single date on a
+  form, which types and displays **dd.mm.yyyy** in every locale while speaking the API's
+  `yyyy-mm-dd`, honours `min`/`max` (out-of-range days are unclickable, a typed one blocks
+  submit), and drops into the usual `<label class="field">` wrapper.
 - **Filter bars** (`.mp-filters`) — filters **auto-apply** (debounced for text) with no apply
   button, and because auto-apply is invisible by itself, the bar must prove it worked: while
   any filter is active, a `role="status"` line under the bar shows the live result count
