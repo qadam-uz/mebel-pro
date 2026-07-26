@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import type { OrderStatus } from '@/shared/stores/orders'
 
 export type IncomeType = 'order_payment' | 'other'
 export type MoneyMethod = 'cash' | 'bank_transfer' | 'other'
@@ -18,6 +19,21 @@ export type ExpenseCategory =
   | 'taxes_and_fees'
   | 'salary'
   | 'other'
+
+/**
+ * The order an order-payment income points at, resolved by the server onto the
+ * income row itself. Nothing in the finance views reads an order back through
+ * the sales API: that read is permission-gated away from the accountant, and a
+ * settled order never returns to the payable-orders picker.
+ */
+export interface IncomeOrderRef {
+  order_id: string
+  order_number: string
+  contact_name: string
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
+}
 
 export interface Income {
   id: string
@@ -37,6 +53,7 @@ export interface Income {
   voided_at: string | null
   created_at: string
   updated_at: string
+  order: IncomeOrderRef | null
 }
 
 export interface Expense {
@@ -121,6 +138,19 @@ export interface CounterpartyAdjustment {
   updated_at: string
 }
 
+/** An order that still owes money — a candidate for an order-payment income. */
+export interface PayableOrder {
+  order_id: string
+  order_number: string
+  contact_name: string
+  contact_phone: string
+  status: OrderStatus
+  created_at: string
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
+}
+
 export interface FinanceBranchSummary {
   branch_id: string | null
   income_tiyin: number
@@ -198,6 +228,8 @@ export const useFinanceStore = defineStore('finance', () => {
   const clientDebts = ref<DebtList | null>(null)
   const statement = ref<DebtStatement | null>(null)
   const payableInvoices = ref<PayableInvoice[]>([])
+  const payableOrders = ref<PayableOrder[]>([])
+  const payableOrdersLoading = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -482,6 +514,38 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  // The order picker searches server-side, so answers can land out of order
+  // when a slow early query resolves after a fast later one. Only the newest
+  // request may write — a stale list under a newer query is a wrong list.
+  let payableRequestId = 0
+
+  async function loadPayableOrders(
+    filters: { branch_id?: string | null; search?: string | null; limit?: number } = {},
+  ) {
+    const requestId = ++payableRequestId
+    payableOrdersLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const rows = await api.get<PayableOrder[]>(
+        withQuery('/workshop/finance/payable-orders', {
+          branch_id: filters.branch_id || undefined,
+          search: filters.search || undefined,
+          limit: filters.limit,
+        }),
+        authInit(),
+      )
+      if (requestId !== payableRequestId) return
+      payableOrders.value = rows
+    } catch (errorValue) {
+      if (requestId !== payableRequestId) return
+      payableOrders.value = []
+      captureAction(errorValue, 'payable_orders_load_failed')
+    } finally {
+      if (requestId === payableRequestId) payableOrdersLoading.value = false
+    }
+  }
+
   async function loadProduction(filters: {
     date_from?: string
     date_to?: string
@@ -511,6 +575,8 @@ export const useFinanceStore = defineStore('finance', () => {
     clientDebts.value = null
     statement.value = null
     payableInvoices.value = []
+    payableOrders.value = []
+    payableOrdersLoading.value = false
     loading.value = false
     error.value = null
     traceId.value = null
@@ -527,6 +593,8 @@ export const useFinanceStore = defineStore('finance', () => {
     clientDebts,
     statement,
     payableInvoices,
+    payableOrders,
+    payableOrdersLoading,
     loading,
     error,
     traceId,
@@ -547,6 +615,7 @@ export const useFinanceStore = defineStore('finance', () => {
     loadStatement,
     createAdjustment,
     voidAdjustment,
+    loadPayableOrders,
     loadProduction,
     reset,
   }

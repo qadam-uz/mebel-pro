@@ -1,6 +1,7 @@
 """Finance ledger and report use cases."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -28,7 +29,9 @@ from app.modules.finance.schemas import (
     FinanceDailyIncome,
     FinanceSummaryResponse,
     IncomeCreateRequest,
+    IncomeOrderRef,
     IncomePatchRequest,
+    IncomeResponse,
     VoidLedgerRequest,
     WorkerProductionEdgeLine,
     WorkerProductionResponse,
@@ -37,7 +40,13 @@ from app.modules.finance.schemas import (
 )
 from app.modules.inventory.api import invoice_for_payment
 from app.modules.inventory.contracts import Supplier, SupplierInvoice
-from app.modules.sales.api import get_order_finance_target, list_worker_production_records
+from app.modules.sales.api import (
+    PayableOrder,
+    get_order_finance_target,
+    list_order_settlements,
+    list_worker_production_records,
+)
+from app.modules.sales.api import list_payable_orders as list_sales_payable_orders
 from app.modules.support.api import (
     RECEIPT_CONTENT_TYPES,
     attach_file,
@@ -99,6 +108,81 @@ async def list_incomes(
     if max_amount_tiyin is not None:
         query = query.where(Income.amount_tiyin <= max_amount_tiyin)
     return list((await db.scalars(query)).all())
+
+
+async def income_responses(
+    db: AsyncSession,
+    *,
+    incomes: Sequence[Income],
+) -> list[IncomeResponse]:
+    """Ledger rows with their order resolved — one extra query for the page.
+
+    The resolution is a set-based join over the listed rows, not a lookup per
+    row: `list_incomes` returns a whole period and a query per income would be
+    an N+1 on the busiest finance screen.
+    """
+    refs = await _income_order_refs(db, incomes=incomes)
+    rows: list[IncomeResponse] = []
+    for income in incomes:
+        response = IncomeResponse.model_validate(income)
+        response.order = refs.get(income.order_id) if income.order_id is not None else None
+        rows.append(response)
+    return rows
+
+
+async def income_response(db: AsyncSession, *, income: Income) -> IncomeResponse:
+    """One ledger row, shaped exactly like a row of the list."""
+    return (await income_responses(db, incomes=[income]))[0]
+
+
+async def _income_order_refs(
+    db: AsyncSession,
+    *,
+    incomes: Sequence[Income],
+) -> dict[uuid.UUID, IncomeOrderRef]:
+    order_ids = frozenset(row.order_id for row in incomes if row.order_id is not None)
+    if not order_ids:
+        return {}
+    settlements = await list_order_settlements(
+        db,
+        workshop_ids=frozenset(row.workshop_id for row in incomes),
+        order_ids=order_ids,
+    )
+    return {
+        row.order_id: IncomeOrderRef(
+            order_id=row.order_id,
+            order_number=row.order_number,
+            contact_name=row.contact_name,
+            total_tiyin=row.total_tiyin,
+            recorded_tiyin=row.recorded_tiyin,
+            balance_tiyin=row.balance_tiyin,
+        )
+        for row in settlements
+    }
+
+
+async def list_payable_orders(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
+    search: str | None = None,
+    limit: int = 20,
+) -> list[PayableOrder]:
+    """Candidate orders for an order-payment income.
+
+    A finance use case, so it lives here and composes sales through its public
+    API — the picker must offer exactly what `create_income` would accept, and
+    that pairing is finance's to keep.
+    """
+    scope = await _lookup_scope(db, principal=principal, branch_id=branch_id)
+    return await list_sales_payable_orders(
+        db,
+        workshop_id=scope.workshop_id,
+        branch_ids=scope.branch_ids,
+        search=search,
+        limit=limit,
+    )
 
 
 async def create_income(
@@ -674,7 +758,13 @@ async def _read_scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
 ) -> FinanceScope:
-    return await _scope(db, principal=principal, branch_id=branch_id, permissions=READ_PERMISSIONS)
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=READ_PERMISSIONS,
+        require_branch=False,
+    )
 
 
 async def _write_scope(
@@ -683,7 +773,34 @@ async def _write_scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
 ) -> FinanceScope:
-    return await _scope(db, principal=principal, branch_id=branch_id, permissions=WRITE_PERMISSIONS)
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=WRITE_PERMISSIONS,
+        require_branch=True,
+    )
+
+
+async def _lookup_scope(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None,
+) -> FinanceScope:
+    """`manage_finance` reach for a read-only lookup that precedes a write.
+
+    Same permission as recording the entry, but no single branch is required:
+    a picker with no branch context offers every branch the user could record
+    in, where a ledger row has to land in exactly one.
+    """
+    return await _scope(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        permissions=WRITE_PERMISSIONS,
+        require_branch=False,
+    )
 
 
 async def _scope(
@@ -692,6 +809,7 @@ async def _scope(
     principal: AuthenticatedPrincipal,
     branch_id: uuid.UUID | None,
     permissions: frozenset[Permission],
+    require_branch: bool,
 ) -> FinanceScope:
     workshop_id = _workshop_principal_id(principal)
     if principal.is_owner:
@@ -724,7 +842,7 @@ async def _scope(
         return FinanceScope(workshop_id=branch_scope.workshop_id, branch_ids=frozenset({branch_id}))
     if not allowed:
         raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
-    if permissions == WRITE_PERMISSIONS:
+    if require_branch:
         raise APIError("branch_required", "Branch is required for staff finance entries")
     return FinanceScope(workshop_id=workshop_id, branch_ids=allowed)
 

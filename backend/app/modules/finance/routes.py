@@ -15,10 +15,13 @@ from app.modules.finance.api import (
     finance_summary,
     get_client_statement,
     get_supplier_statement,
+    income_response,
+    income_responses,
     invoice_numbers_for,
     list_client_debts,
     list_expenses,
     list_incomes,
+    list_payable_orders,
     list_payable_supplier_invoices,
     list_supplier_debts,
     update_expense,
@@ -42,6 +45,7 @@ from app.modules.finance.schemas import (
     IncomePatchRequest,
     IncomeResponse,
     PayableInvoiceResponse,
+    PayableOrderResponse,
     VoidLedgerRequest,
     WorkerProductionResponse,
 )
@@ -95,7 +99,25 @@ async def income_index(
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
-    return [IncomeResponse.model_validate(row) for row in rows]
+    return await income_responses(db, incomes=rows)
+
+
+@router.get("/payable-orders", response_model=list[PayableOrderResponse])
+async def payable_orders_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    branch_id: uuid.UUID | None = None,
+    search: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[PayableOrderResponse]:
+    rows = await list_payable_orders(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        search=search,
+        limit=limit,
+    )
+    return [PayableOrderResponse.model_validate(row) for row in rows]
 
 
 @router.post("/income", response_model=IncomeResponse, status_code=status.HTTP_201_CREATED)
@@ -105,7 +127,7 @@ async def income_create(
     db: Session,
 ) -> IncomeResponse:
     row = await create_income(db, principal=principal, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.patch("/income/{income_id}", response_model=IncomeResponse)
@@ -116,7 +138,7 @@ async def income_update(
     db: Session,
 ) -> IncomeResponse:
     row = await update_income(db, principal=principal, income_id=income_id, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.post("/income/{income_id}/void", response_model=IncomeResponse)
@@ -127,7 +149,7 @@ async def income_void(
     db: Session,
 ) -> IncomeResponse:
     row = await void_income(db, principal=principal, income_id=income_id, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.get("/expenses", response_model=list[ExpenseResponse])

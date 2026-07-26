@@ -157,8 +157,14 @@ test('owner records order income and standalone expense', async ({ page, request
     .getByRole('combobox', { name: 'Buyurtma', exact: true })
     .fill(placed.order.order_number)
   await page.getByRole('option', { name: new RegExp(placed.order.order_number) }).click()
-  await expect(incomePanel.getByText('Qoldiq:')).toBeVisible()
-  await incomePanel.getByRole('button', { name: 'Qoldiqni kiritish' }).click()
+  // QAD-123: picking an order seeds the amount with its remaining balance, and
+  // refilling it moved out of the old balance panel onto the amount field as a
+  // "Qoldiq" suffix button.
+  const incomeAmount = incomePanel.getByLabel("Summa (to'liq yoki qisman)")
+  await expect(incomeAmount).not.toHaveValue('')
+  await incomeAmount.fill('1000')
+  await incomePanel.getByRole('button', { name: 'Qoldiq', exact: true }).click()
+  await expect(incomeAmount).not.toHaveValue('1000')
   await incomePanel.getByLabel('Izoh').fill('E2E order payment')
   await incomePanel.getByRole('button', { name: 'Yozish' }).click()
   await expect(page.getByText('E2E order payment')).toBeVisible()

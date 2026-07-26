@@ -2,6 +2,8 @@
 
 from app.modules.sales.service import (
     FinanceOrderTarget,
+    OrderSettlementRef,
+    PayableOrder,
     PricedPart,
     PricingSnapshot,
     WorkerProductionRecord,
@@ -23,6 +25,8 @@ from app.modules.sales.service import (
     get_workshop_order,
     get_workshop_order_cutting_result,
     list_client_orders,
+    list_order_settlements,
+    list_payable_orders,
     list_production_queue,
     list_worker_options,
     list_worker_production_records,
@@ -41,6 +45,8 @@ from app.modules.sales.service import (
 
 __all__ = [
     "FinanceOrderTarget",
+    "OrderSettlementRef",
+    "PayableOrder",
     "PricedPart",
     "PricingSnapshot",
     "WorkerProductionRecord",
@@ -62,6 +68,8 @@ __all__ = [
     "get_workshop_order",
     "get_workshop_order_cutting_result",
     "list_client_orders",
+    "list_order_settlements",
+    "list_payable_orders",
     "list_production_queue",
     "list_worker_options",
     "list_worker_production_records",

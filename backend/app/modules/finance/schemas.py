@@ -12,6 +12,7 @@ from app.models.enums import (
     InvoicePaymentStatus,
     LedgerStatus,
     MoneyMethod,
+    OrderStatus,
 )
 from app.schemas.common import APIModel
 
@@ -66,6 +67,23 @@ class VoidLedgerRequest(BaseModel):
     reason: str
 
 
+class IncomeOrderRef(APIModel):
+    """The order an order-payment income points at, resolved on the income row.
+
+    Carried here so the ledger and the edit form never read the order back
+    through `sales`: that read is gated on order permissions the accountant
+    doesn't hold, and a settled order can never reappear in the payable-orders
+    picker to supply its own label.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
+
+
 class IncomeResponse(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
@@ -84,6 +102,9 @@ class IncomeResponse(APIModel):
     voided_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Null for a non-order income, and for the (unreachable) case of an order
+    # that no longer resolves — the client falls back to the raw id there.
+    order: IncomeOrderRef | None = None
 
 
 class ExpenseResponse(APIModel):
@@ -123,6 +144,24 @@ class PayableInvoiceResponse(APIModel):
     paid_tiyin: int
     outstanding_tiyin: int
     payment_status: InvoicePaymentStatus
+
+
+class PayableOrderResponse(APIModel):
+    """One order-payment candidate, with its settlement already folded in.
+
+    `balance_tiyin` is the number the operator acts on; `total` and `recorded`
+    are shown beside it so the figure can be checked without opening the order.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    contact_phone: str
+    status: OrderStatus
+    created_at: datetime
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
 
 
 class FinanceBranchSummary(APIModel):

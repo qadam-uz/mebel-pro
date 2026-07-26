@@ -3936,42 +3936,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Segmented choice (SegmentedToggle): a sunk track whose selected segment
-     lifts onto the elevated surface — the same depth step as the rest of the
-     system, at input height so it lines up in a form grid. */
-  .mp-segment {
-    display: grid;
-    min-height: 40px;
-    grid-auto-columns: 1fr;
-    grid-auto-flow: column;
-    gap: 2px;
-    padding: 3px;
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 6px;
-    background: var(--color-sunk);
-  }
-
-  .mp-segment-option {
-    border: 0;
-    border-radius: 4px;
-    background: none;
-    color: var(--color-ink-soft);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .mp-segment-option.on {
-    background: var(--color-elevated);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 12%, transparent);
-    color: var(--color-ink);
-  }
-
-  .mp-segment-option:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-
   .matrix {
     width: 100%;
     min-width: 720px;
