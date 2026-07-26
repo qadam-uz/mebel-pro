@@ -80,6 +80,10 @@ function apiValidationMessage(code: string | null): string {
       return "Bu maydonni to'ldiring."
     case 'invalid_phone':
       return '+998XXXXXXXXX formatida kiriting.'
+    case 'too_many_branch_phones':
+      return "Eng ko'pi 3 ta qo'shimcha raqam qo'shiladi."
+    case 'duplicate_branch_phone':
+      return "Bu raqam ro'yxatda allaqachon bor."
     case 'invalid_coordinates':
       return 'Lat va Lng birga kiritiladi.'
     case 'invalid_latitude':

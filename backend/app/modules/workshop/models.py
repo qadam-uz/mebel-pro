@@ -63,6 +63,15 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     name: Mapped[str] = mapped_column(nullable=False)
     address: Mapped[str] = mapped_column(nullable=False)
     phone: Mapped[str] = mapped_column(nullable=False)
+    # Extra published numbers (landline, director's mobile, WhatsApp …), in
+    # display order. `phone` stays the single primary number every compact
+    # surface and every order record uses; this list is additive only.
+    additional_phones: Mapped[list[str]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
     latitude: Mapped[Decimal | None]
     longitude: Mapped[Decimal | None]
     # Physical properties of this branch's saw — how the cutting optimiser

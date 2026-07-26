@@ -57,7 +57,8 @@ whether clients see it and order from it.
 | `id` | UUID | PK |
 | `workshop_id` | UUID | required |
 | `branch_no` | int | platform-wide unique, assigned at creation as `max + 1` under an advisory lock. **Immutable** — it is the middle segment of every order number the branch prints ([`sales.md`](sales.md)), so changing it would orphan printed cutting maps. Not settable or patchable through any API |
-| `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX` |
+| `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX`. `phone` is the **primary** number — the one compact surfaces (order card, order detail, PDF) and every order record carry |
+| `additional_phones` | json | ordered list of extra published numbers, 0–3; same `+998XXXXXXXXX` rule; no duplicates, including against `phone`. Array order is display order. Shown alongside the primary on the client-facing branch page only |
 | `latitude` / `longitude` | numeric? | optional coordinate pair (no geocoder in v1; **not collected via the UI** in v1, but the columns/API fields remain); both are null when unknown |
 | `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |

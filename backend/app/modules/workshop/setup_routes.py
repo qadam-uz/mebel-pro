@@ -141,6 +141,7 @@ def _branch_response(row: Branch) -> BranchResponse:
         name=row.name,
         address=row.address,
         phone=row.phone,
+        additional_phones=row.additional_phones,
         latitude=row.latitude,
         longitude=row.longitude,
         working_hours=row.working_hours,

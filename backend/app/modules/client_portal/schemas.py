@@ -50,7 +50,9 @@ class ClientBranchResponse(APIModel):
     workshop_logo_file_id: uuid.UUID | None
     branch_name: str
     address: str
+    # The primary number first, then the branch's extras in display order.
     phone: str
+    additional_phones: list[str]
     latitude: Decimal | None
     longitude: Decimal | None
     working_hours: dict[str, object]
