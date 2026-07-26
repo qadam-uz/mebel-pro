@@ -270,6 +270,10 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   results), loading (skeletons sized like the real content — reserve space so nothing jumps),
   error (named cause + retry), success. Every load that can hang gets a timeout → error path;
   no infinite spinners.
+- **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
+  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
+  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
+  reads as a control and gets clicked.
 - **The keyboard reaches and operates everything** a mouse can, in an order matching the
   layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
   nothing in its place. Modals trap focus and return it to the trigger on close.

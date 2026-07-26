@@ -1765,7 +1765,6 @@ onBeforeRouteLeave(async () => {
 
           <div v-else-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
-              <div class="client-empty-icon"><Icon name="plus" /></div>
               <h3>Bu chizmada qism yo'q</h3>
               <p>Kesish ro'yxatini boshlash uchun avval materialni tanlang.</p>
               <button
@@ -1854,7 +1853,7 @@ onBeforeRouteLeave(async () => {
                 <button
                   v-if="!isReadOnly"
                   type="button"
-                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline bg-elevated px-3 text-xs font-bold text-ink-muted transition hover:border-accent-tint hover:text-accent"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-hairline-strong bg-sunk px-3 text-xs font-bold text-ink transition hover:border-accent-tint hover:text-accent"
                   @click="addGroupRow(group)"
                 >
                   <Icon name="plus" class="size-3.5" />

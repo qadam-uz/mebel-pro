@@ -129,7 +129,10 @@ describe('CuttingEdgePickerModal arming', () => {
 
     expect(wrapper.find('[aria-label="Kromka qidirish"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Hammasi')
-    await wrapper.get('[aria-label="Orqaga"]').trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Orqaga'))!
+      .trigger('click')
 
     expect(wrapper.text()).toContain('Avval kromka tanlang — keyin tomonlarni bosing.')
     expect(wrapper.get('button[aria-label^="Yuqori tomon"]').attributes('disabled')).toBeDefined()
@@ -250,7 +253,13 @@ describe('CuttingEdgePickerModal arming', () => {
         edge_right: { material_id: decorEdge.id },
       },
     })
-    expect(wrapper.text()).not.toContain('Tayyor')
+
+    // Edges are written live, so the footer's `Tayyor` only closes — the sides
+    // above are already applied by the time it is pressed (QAD-153).
+    const done = wrapper.findAll('button').find((button) => button.text() === 'Tayyor')!
+    expect(done.exists()).toBe(true)
+    await done.trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
   it('filters the catalog, excludes draft tapes, and returns a new tape armed', async () => {
@@ -271,7 +280,7 @@ describe('CuttingEdgePickerModal arming', () => {
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text().includes("Yana kromka qo'shish"))!
+      .find((button) => button.text().includes('Yana kromka'))!
       .trigger('click')
 
     expect(wrapper.text()).toContain("Shu panelga mos · Panel bo'yicha")
