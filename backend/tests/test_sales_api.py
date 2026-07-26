@@ -1233,3 +1233,107 @@ async def test_client_order_with_indivisible_panel_price_and_quantity(
     # and the order's authoritative material subtotal stays the exact, un-floored cost.
     assert order.subtotal_materials_tiyin % 3 != 0
     assert item.unit_material_price_tiyin == order.subtotal_materials_tiyin // 3
+
+
+async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-150: the panels are cut; a bookkeeping gap must not refuse to record it."""
+
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    # The two blocking states at once: nothing on the shelf, and the material was
+    # dropped from the branch catalog after the order was placed.
+    panel_item = await db_session.scalar(
+        select(StockItem)
+        .join(Material, Material.id == StockItem.material_id)
+        .where(StockItem.branch_id == branch_id, Material.kind == MaterialKind.PANEL)
+    )
+    assert panel_item is not None
+    panel_item.on_hand = 0
+    panel_branch_material = await db_session.scalar(
+        select(BranchMaterial).where(
+            BranchMaterial.branch_id == branch_id,
+            BranchMaterial.material_id == panel_item.material_id,
+        )
+    )
+    assert panel_branch_material is not None
+    await db_session.delete(panel_branch_material)
+    await db_session.flush()
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+
+    assert cut_done.status_code == 200
+    assert cut_done.json()["status"] == "edge_banding"
+    # Informational, not a failure — the worker gets a warning toast, not an error.
+    assert cut_done.json()["stock_shortfall"] is True
+    await db_session.refresh(panel_item)
+    assert panel_item.on_hand == -1
+    # The material is NOT silently re-added to the branch catalog.
+    assert (
+        await db_session.scalar(
+            select(BranchMaterial).where(
+                BranchMaterial.branch_id == branch_id,
+                BranchMaterial.material_id == panel_item.material_id,
+            )
+        )
+        is None
+    )
+
+    # Recording the arrival afterwards lands the balance on the right number with
+    # no manual adjustment: 1 was consumed, 4 arrive, 3 remain.
+    supplier = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Late Arrival Supplier"},
+    )
+    assert supplier.status_code == 201
+    # Stock-in still needs the material in the branch catalog, so put it back the
+    # way a human would — deliberately, through the catalog.
+    db_session.add(
+        BranchMaterial(
+            branch_id=branch_id,
+            material_id=panel_item.material_id,
+            price_tiyin=250_000,
+            min_stock=1,
+        )
+    )
+    await db_session.flush()
+    stock_in = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": str(panel_item.material_id),
+            "quantity": 4,
+            "unit_price_tiyin": 100_000,
+            "supplier_id": supplier.json()["id"],
+        },
+    )
+    assert stock_in.status_code == 201
+    assert stock_in.json()["balance_after"] == 3

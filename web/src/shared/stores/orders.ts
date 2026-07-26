@@ -221,6 +221,9 @@ export interface OrderDetail extends OrderSummary {
   // The order's open revision draft (workshop detail only) — lets the UI offer
   // resume/discard instead of starting a fresh revision.
   revision_draft_id: string | null
+  // True only on a cutting-done / banding-done response whose consume drove a
+  // branch balance below zero. The transition already succeeded (QAD-150).
+  stock_shortfall: boolean
 }
 
 export const activeWorkshopStatuses: OrderStatus[] = [

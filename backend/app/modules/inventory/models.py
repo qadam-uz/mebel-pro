@@ -14,9 +14,12 @@ class StockItem(UUIDPrimaryKey, Base):
     __tablename__ = "stock_items"
     __table_args__ = (
         UniqueConstraint("branch_id", "material_id", name="uq_stock_items_branch_material"),
-        CheckConstraint("on_hand >= 0", name="ck_stock_items_on_hand_nonnegative"),
         CheckConstraint("min_stock >= 0", name="ck_stock_items_min_stock_nonnegative"),
     )
+    # `on_hand` is deliberately unbounded below: order-driven `consume` records
+    # material that physically already moved, so the books may go negative when
+    # the matching arrival was never entered (QAD-150). Manual paths still guard
+    # in the service layer.
 
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
     material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
@@ -29,7 +32,7 @@ class StockTransaction(UUIDPrimaryKey, Base):
     __tablename__ = "stock_transactions"
     __table_args__ = (
         CheckConstraint("quantity <> 0", name="ck_stock_transactions_quantity_nonzero"),
-        CheckConstraint("balance_after >= 0", name="ck_stock_transactions_balance_nonnegative"),
+        # No `balance_after >= 0` CHECK — see StockItem.on_hand (QAD-150).
         CheckConstraint(
             "type = 'stock_in' OR (unit_price_tiyin IS NULL AND total_price_tiyin IS NULL)",
             name="ck_stock_transactions_price_stock_in_only",
