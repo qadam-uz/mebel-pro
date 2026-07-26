@@ -43,7 +43,16 @@ export interface ProvisionWorkshopResponse {
 
 export interface PlatformWorkshopDetail {
   workshop: WorkshopSummary
-  branches: Array<{ id: string; name: string; status: string; address: string; phone: string }>
+  // `branch_no` is the immutable middle segment of the branch's order numbers
+  // (`#26-1-0003`) — read-only, and the only way to decode a printed document.
+  branches: Array<{
+    id: string
+    branch_no: number
+    name: string
+    status: string
+    address: string
+    phone: string
+  }>
   owner: { id: string; login: string }
   // AB-20: the reason captured when the workshop was blocked (null when active).
   block_reason: string | null

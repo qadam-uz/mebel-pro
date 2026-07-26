@@ -66,6 +66,10 @@ export interface WorkshopSettings {
 export interface ManagedBranch {
   id: string
   workshop_id: string
+  // Platform-wide branch number, assigned at creation and immutable — it is the
+  // middle segment of every order number the branch prints, `#26-1-0003`
+  // (QAD-146). Read-only: it is never sent back in a create or patch payload.
+  branch_no: number
   name: string
   address: string
   phone: string

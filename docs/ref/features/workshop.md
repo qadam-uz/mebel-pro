@@ -36,7 +36,8 @@ editing settings.
   **+ Workshop** (provisioning is in access-management). Empty: "No workshops yet." The owner
   is identified by login here — the stable operational handle.
 - **Workshop detail** — header (name, status, created); tabs: **Profile** (read-only name,
-  owner login, created date, status), **Branches** (read-only list), **Block** (block / unblock
+  owner login, created date, status), **Branches** (read-only list, branch number first —
+  support traces a reported order number back to a branch here), **Block** (block / unblock
   with a mandatory reason;
   destructive-styled; warns that staff sessions are revoked and open orders freeze). When the
   workshop is blocked, the detail shows the **reason captured at block time** in the danger
@@ -63,6 +64,11 @@ After platform provisioning creates the first branch, branch operations are **ow
   primary's format rule and may not duplicate it or each other.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material selection is built up.
+- **Read the branch number** — creation assigns a permanent `branch_no` that becomes the middle
+  segment of every order number and cutting map the branch prints
+  ([`sales.md`](../entities/sales.md)). It is shown, never edited: an owner holding a printed
+  `#26-1-0003` has to be able to find out which branch the `1` is, and the number is the only
+  part of that document that identifies one.
 - **Change status** — `active` ↔ `temporarily_closed` ↔ `inactive`. `temporarily_closed` may
   carry an optional reason. **Status changes do not revoke staff sessions or grants** — a
   staff grant on an `inactive` branch just stays inert until the branch is reactivated. A
@@ -78,12 +84,15 @@ Visibility for read operations:
 
 ### UX
 
-- **Branches list** (`/workshop/branches`) — simple table: name, address, primary phone, status
-  badge, action. **+ Branch** (owner). Empty: "No branches yet — add one to start taking orders."
+- **Branches list** (`/workshop/branches`) — simple table: branch number (leading, monospace),
+  name, address, primary phone, status badge, action. **+ Branch** (owner). Empty: "No branches
+  yet — add one to start taking orders."
 - **Branch create dialog** — modal form: name, primary phone, address, an add/remove list for
   the additional phones (capped at three, with the cap explained when reached), working-hours
   grid (per weekday open / close, with a "closed this day" toggle).
-- **Branch detail** (`/workshop/branches/:id`) — owner-only editable branch form: branch contact,
+- **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number together
+  with the order-number prefix it produces (`#26-1-…`), so one branch page is enough to decode a
+  printed document. Below it, an owner-only editable branch form: branch contact,
   working hours, pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), and
   status controls. It does not duplicate materials, stock, staff, or order management; those
   stay in their own sidebar sections.

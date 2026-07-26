@@ -2,7 +2,14 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
+import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
+import type {
+  NavigationGuardNext,
+  RouteLocationNormalized,
+  RouteLocationNormalizedLoaded,
+  RouteRecordRaw,
+} from 'vue-router'
 
 import { adminRoutes } from '@/apps/admin/routes'
 import { clientRoutes } from '@/apps/client/routes'
@@ -446,5 +453,80 @@ describe('role route matrix', () => {
     const devResolve = devRedirect as (to: { query: Record<string, unknown> }) => unknown
     expect(devResolve({ query: {} })).toEqual({ path: '/cutting' })
     expect(devResolve({ query: { station: 'banding' } })).toEqual({ path: '/banding' })
+  })
+
+  // QAD-178: a `beforeEnter` guard bounces to a route path just like a
+  // `redirect` does, and is written with the same absolute role-prefixed
+  // literals — so it needs the same dev-base stripping. Without it, entering
+  // /workshop/orders/new/cutting directly in dev redirected to a path that no
+  // longer existed under the stripped base and rendered nothing.
+  describe('beforeEnter guard targets', () => {
+    async function runGuard(
+      guard: RouteRecordRaw['beforeEnter'],
+      to: Partial<RouteLocationNormalized> = {},
+    ) {
+      if (typeof guard !== 'function') throw new Error('expected a single guard function')
+      return await guard.call(
+        undefined,
+        { query: {}, ...to } as RouteLocationNormalized,
+        {} as RouteLocationNormalizedLoaded,
+        (() => {}) as NavigationGuardNext,
+      )
+    }
+
+    it('strips the dev base from the walk-in guard redirect', async () => {
+      setActivePinia(createPinia())
+      const normalized = normalizeRoleRoutes(workshopRoutes, '/workshop', '/workshop/')
+      const guard = normalized.find((r) => r.path === '/orders/new/cutting')?.beforeEnter
+      expect(await runGuard(guard)).toEqual({ path: '/orders/new' })
+
+      // The route it lands on must exist under the same stripped base.
+      expect(routePaths(normalized)).toContain('/orders/new')
+    })
+
+    it('leaves the production target untouched', async () => {
+      setActivePinia(createPinia())
+      const normalized = normalizeRoleRoutes(workshopRoutes, '/workshop', '/')
+      const guard = normalized.find((r) => r.path === '/workshop/orders/new/cutting')?.beforeEnter
+      expect(await runGuard(guard)).toEqual({ path: '/workshop/orders/new' })
+    })
+
+    it('normalizes every guard in an array and passes non-redirect verdicts through', async () => {
+      const routes = [
+        {
+          path: '/workshop/gated',
+          component: {},
+          beforeEnter: [
+            () => ({ path: '/workshop/elsewhere' }),
+            () => true,
+            () => undefined,
+            () => ({ name: 'workshop-home' }),
+          ],
+        },
+      ] as unknown as RouteRecordRaw[]
+      const guards = normalizeRoleRoutes(routes, '/workshop', '/workshop/')[0]?.beforeEnter
+      if (!Array.isArray(guards)) throw new Error('expected an array of guards')
+
+      expect(await runGuard(guards[0])).toEqual({ path: '/elsewhere' })
+      expect(await runGuard(guards[1])).toBe(true)
+      expect(await runGuard(guards[2])).toBeUndefined()
+      // Named targets are base-independent and must survive unchanged.
+      expect(await runGuard(guards[3])).toEqual({ name: 'workshop-home' })
+    })
+
+    it('leaves a next()-style guard alone', () => {
+      const nextStyle = (
+        _to: RouteLocationNormalized,
+        _from: RouteLocationNormalizedLoaded,
+        next: NavigationGuardNext,
+      ) => next()
+      const routes = [
+        { path: '/workshop/gated', component: {}, beforeEnter: nextStyle },
+      ] as unknown as RouteRecordRaw[]
+
+      // Re-wrapping would change the arity vue-router reads to decide whether
+      // the guard reports through `next` or through its return value.
+      expect(normalizeRoleRoutes(routes, '/workshop', '/workshop/')[0]?.beforeEnter).toBe(nextStyle)
+    })
   })
 })

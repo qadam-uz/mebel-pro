@@ -308,6 +308,10 @@ onMounted(() => {
           <table class="tbl">
             <thead>
               <tr>
+                <!-- The number printed in the middle of this branch's order
+                     numbers (#26-1-0003). First and mono so an owner holding a
+                     cutting map can scan straight down it. -->
+                <th>Raqam</th>
                 <th>Filial</th>
                 <th>Manzil</th>
                 <th>Telefon</th>
@@ -317,6 +321,7 @@ onMounted(() => {
             </thead>
             <tbody>
               <tr v-for="branch in workshop.managedBranches" :key="branch.id">
+                <td class="id">{{ branch.branch_no }}</td>
                 <td class="nm">{{ branch.name }}</td>
                 <td>{{ branch.address }}</td>
                 <td class="num">{{ branch.phone }}</td>

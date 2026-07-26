@@ -9,10 +9,14 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { databaseUrl } from "../env";
+
 const execFileAsync = promisify(execFile);
 
-export const databaseUrl =
-  "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
+// Re-exported so specs reach the stack's DSN through the helper module they
+// already import; `../env` is the single place it is declared.
+export { databaseUrl };
+
 export const adminPassword = "AdminPass123";
 export const ownerReadyPassword = "OwnerReady123";
 export const passwordLabel = /^(Password|Parol)$/;
