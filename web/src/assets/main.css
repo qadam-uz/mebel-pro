@@ -4817,6 +4817,73 @@
     font-weight: 500;
   }
 
+  /* AB-119: dashboard trend grid — one row per metric, one column per calendar
+     period, each cell a number with its sparkline. Dense on purpose: every
+     period is readable at once, with no mode switch to hide half the data. */
+  .admin-trend-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .admin-trend-head small {
+    color: var(--color-ink-muted);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  .admin-trend-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .admin-trend-value {
+    min-width: 3ch;
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+
+  .admin-trend-void {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+  }
+
+  .admin-spark {
+    display: block;
+    flex: none;
+    overflow: visible;
+  }
+
+  .admin-spark-line {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .admin-spark-area {
+    fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    stroke: none;
+  }
+
+  .admin-spark-tip {
+    fill: var(--color-accent);
+  }
+
+  /* Nothing has happened yet — a baseline rule reads as an empty axis, where an
+     auto-scaled line would invent a trend out of zeroes. */
+  .admin-spark.flat .admin-spark-line {
+    stroke: var(--color-hairline-strong);
+  }
+
   .admin-material-thumb {
     position: relative;
     display: grid;

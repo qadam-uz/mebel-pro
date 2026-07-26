@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -17,6 +17,8 @@ from app.models.enums import BranchStatus, Currency, WorkshopStatus, enum_type
 class Workshop(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "workshops"
     __table_args__ = (
+        # AB-119: signup-rate counters on the platform dashboard scan by date.
+        Index("ix_workshops_created_at", "created_at"),
         ForeignKeyConstraint(
             ["owner_user_id", "id"],
             ["workshop_users.id", "workshop_users.workshop_id"],

@@ -2,7 +2,7 @@
 title: Scope
 status: stable
 owner: shape
-updated: 2026-07-08
+updated: 2026-07-26
 order: 20
 ---
 
@@ -63,6 +63,10 @@ that's a considered substitution.
   viewer only in the superadmin app; workshop owners get no in-app audit screen yet.
 - **Operator browsing of workshop orders** — the platform operator provisions, blocks, and
   monitors; v1 has no cross-workshop order view and operators don't read order contents.
+  **Counts yes, contents no**: platform-wide aggregates over orders — how many were placed
+  today, this week, this month, this year — are in scope and drive the admin dashboard, because
+  a tally carries no client, panel, price, or workshop identity. Anything that resolves an
+  individual order, or breaks a total down per workshop, is not.
 - **Advanced cutting** — alternative results, async mode for very large jobs, manual layout
   edits, multiple panel sizes, 3D nesting, CNC paths.
 - **Advanced orders** — batching, reorder, templates, partial fulfilment, post-completion

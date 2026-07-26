@@ -249,6 +249,12 @@ export function materialKindLabel(kind: MaterialKind | null | undefined) {
   return 'Hammasi'
 }
 
+// AB-119: dashboard counters are plain tallies — grouped for readability, never
+// abbreviated. An operator comparing "1 204" to "1 198" needs the exact digits.
+export function adminCount(value: number) {
+  return new Intl.NumberFormat('uz-UZ').format(value)
+}
+
 export function adminDate(value: string | null | undefined) {
   if (!value) return '-'
   const date = new Date(value)

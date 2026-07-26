@@ -167,7 +167,8 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
 
     assert block.status_code == 200
     assert overview.status_code == 200
-    assert overview.json() == {
+    body = overview.json()
+    assert {key: value for key, value in body.items() if isinstance(value, int)} == {
         "workshops_total": 2,
         "workshops_active": 1,
         "workshops_blocked": 1,
@@ -175,6 +176,15 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
         "clients_total": 1,
         "platform_users_active": 1,
     }
+    # AB-119: everything above was created in this test run, so today's numbers
+    # equal the lifetime ones — what this pins is that each metric is wired to
+    # its own table and the three are never conflated.
+    assert body["workshop_signups"]["daily"] == 2
+    assert body["client_signups"]["daily"] == 1
+    assert body["orders"]["daily"] == 0
+    assert body["orders"]["spark"]["weekly"][-1] == 0
+    assert len(body["client_signups"]["spark"]["daily"]) == 14
+    assert "weekly" not in body["client_signups"]
 
 
 async def test_platform_provision_rejects_non_canonical_working_hours(

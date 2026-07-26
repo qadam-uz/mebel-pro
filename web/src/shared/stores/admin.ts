@@ -54,6 +54,30 @@ export interface WorkshopOwnerTempPasswordResponse {
   temp_password: string
 }
 
+// AB-119: bucket counts, oldest first; the last entry is the current, partial
+// period. Registrations carry no weekly rate — orders alone are weekly.
+export interface SignupSpark {
+  daily: number[]
+  monthly: number[]
+  yearly: number[]
+}
+
+export interface OrderSpark extends SignupSpark {
+  weekly: number[]
+}
+
+export interface SignupMetrics {
+  daily: number
+  monthly: number
+  yearly: number
+  spark: SignupSpark
+}
+
+export interface OrderMetrics extends SignupMetrics {
+  weekly: number
+  spark: OrderSpark
+}
+
 export interface PlatformOverview {
   workshops_total: number
   workshops_active: number
@@ -61,6 +85,9 @@ export interface PlatformOverview {
   branches_total: number
   clients_total: number
   platform_users_active: number
+  orders: OrderMetrics
+  workshop_signups: SignupMetrics
+  client_signups: SignupMetrics
 }
 
 export interface Manufacturer {
