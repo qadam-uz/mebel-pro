@@ -137,6 +137,7 @@ def _branch_response(row: Branch) -> BranchResponse:
     return BranchResponse(
         id=row.id,
         workshop_id=row.workshop_id,
+        branch_no=row.branch_no,
         name=row.name,
         address=row.address,
         phone=row.phone,

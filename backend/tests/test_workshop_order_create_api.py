@@ -20,6 +20,7 @@ from app.modules.catalog.contracts import BranchMaterial, BranchPricing, Manufac
 from app.modules.cutting.contracts import CuttingDraft
 from app.modules.inventory.contracts import StockItem
 from app.modules.sales.contracts import Order, OrderStatusEvent
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -242,6 +243,9 @@ async def test_staff_creates_and_auto_confirms_order_for_walk_in(
     assert order["status"] == "confirmed"
     row = await db_session.get(Order, order_id)
     assert row is not None
+    # First order of this branch this year — `#26-1-0001` (sales.md).
+    branch_no = await db_session.scalar(select(Branch.branch_no).where(Branch.id == branch_id))
+    assert order["order_number"] == f"#{datetime.now(UTC).year % 100:02d}-{branch_no}-0001"
     assert row.confirmed_at is not None
     assert row.client_id == uuid.UUID(client_id)
 

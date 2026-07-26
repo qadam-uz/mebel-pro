@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -45,6 +45,8 @@ class Workshop(UUIDPrimaryKey, Timestamped, Base):
 class Branch(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "branches"
     __table_args__ = (
+        UniqueConstraint("branch_no", name="uq_branches_branch_no"),
+        CheckConstraint("branch_no >= 1", name="ck_branches_branch_no_positive"),
         CheckConstraint("latitude >= -90 AND latitude <= 90", name="ck_branches_latitude"),
         CheckConstraint("longitude >= -180 AND longitude <= 180", name="ck_branches_longitude"),
         CheckConstraint("kerf_mm >= 1 AND kerf_mm <= 20", name="ck_branches_kerf_mm"),
@@ -54,6 +56,10 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     )
 
     workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
+    # Platform-wide branch number, assigned once at creation and never changed —
+    # it is the middle segment of every order number this branch ever prints
+    # (`#26-14-0003`), so rewriting it would orphan printed cutting maps.
+    branch_no: Mapped[int] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(nullable=False)
     address: Mapped[str] = mapped_column(nullable=False)
     phone: Mapped[str] = mapped_column(nullable=False)

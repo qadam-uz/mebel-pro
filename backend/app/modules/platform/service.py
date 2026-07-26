@@ -232,6 +232,10 @@ async def provision_workshop(
     principal: AuthenticatedPrincipal,
     payload: ProvisionWorkshopRequest,
 ) -> ProvisionedWorkshop:
+    # Imported inside the function: `workshop.api` reaches back into
+    # `platform.api` at import time, so a module-level import would cycle.
+    from app.modules.workshop.api import next_branch_no
+
     require_platform_operator(principal)
     temp_password = payload.temp_password or generate_temp_password()
     try:
@@ -257,6 +261,7 @@ async def provision_workshop(
 
     branch = Branch(
         workshop_id=workshop.id,
+        branch_no=await next_branch_no(db),
         name=_required_text(payload.branch.name, "branch_name_required"),
         address=_required_text(payload.branch.address, "branch_address_required"),
         phone=normalize_uz_phone(payload.branch.phone),
