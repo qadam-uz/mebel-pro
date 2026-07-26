@@ -302,7 +302,9 @@ test('owner adds a branch material and records priced stock movement with prefil
   await expect(invoiceRow).toContainText('1 pozitsiya')
   await expect(invoiceRow.getByText("To'lanmagan")).toBeVisible()
   await invoiceRow.getByRole('button', { name: 'Qatorlar' }).click()
-  await expect(page.getByRole('cell', { name: material.name })).toBeVisible()
+  // `exact` matters: the expanded-lines container is itself a cell whose
+  // accessible name contains the material name, so a loose match hits two.
+  await expect(page.getByRole('cell', { name: material.name, exact: true })).toBeVisible()
   await page.getByRole('tab', { name: 'Zaxira' }).click()
 
   // Reopen: the last price paid prefills the line with provenance underneath.

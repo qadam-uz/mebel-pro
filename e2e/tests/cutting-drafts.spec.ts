@@ -3,7 +3,7 @@ import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { expectOk } from './helpers'
+import { expectOk, expectPdfOpensInTab } from './helpers'
 
 const execFileAsync = promisify(execFile)
 const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
@@ -371,7 +371,7 @@ async function chooseEdgeBanding(page: Page, edgeName: string) {
   await dialog.getByRole('button', { name: 'Kromka oynasini yopish' }).click()
 }
 
-test('client signs in with Telegram OTP, optimizes a cutting draft, and downloads PDF', async ({
+test('client signs in with Telegram OTP, optimizes a cutting draft, and opens the PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -443,11 +443,12 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
 
-  // QAD-160: the PDF opens in a new tab (blob URL) instead of downloading.
-  const popup = page.waitForEvent('popup')
-  await page.getByRole('button', { name: 'PDF ochish' }).click()
-  const pdfTab = await popup
-  await expect.poll(() => pdfTab.url()).toMatch(/^blob:/)
+  // QAD-160: the PDF opens in a new tab instead of downloading.
+  await expectPdfOpensInTab(
+    page,
+    page.getByRole('button', { name: 'PDF ochish' }),
+    /\/cutting-results\/[0-9a-f-]+\/pdf$/,
+  )
 })
 
 test('client resumes a saved cutting draft after reload and from the drafts list', async ({
@@ -537,7 +538,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByRole('button', { name: 'Davom etish' })).toHaveCount(1)
 })
 
-test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
+test('workshop opens a confirmed order cutting plan and opens the PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -579,7 +580,11 @@ test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   await expect(chizmaDialog.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
   await expect(chizmaDialog.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
 
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Chizma (PDF)' }).click()
-  expect((await download).suggestedFilename()).toMatch(/^order-[0-9a-f-]+-cutting\.pdf$/)
+  // QAD-160 changed every PDF entry point, including this one, from a download
+  // to a new tab.
+  await expectPdfOpensInTab(
+    page,
+    page.getByRole('button', { name: 'Chizma (PDF)' }),
+    /\/workshop\/orders\/[0-9a-f-]+\/cutting\/pdf$/,
+  )
 })
