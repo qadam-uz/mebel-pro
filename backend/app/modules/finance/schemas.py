@@ -261,12 +261,26 @@ class DebtStatementRow(APIModel):
 
 
 class DebtStatementResponse(APIModel):
+    """An akt sverka: both parties, the period, and the fold that spans it.
+
+    Sign convention throughout: positive = they owe us. `period_increase_tiyin`
+    sums the in-range terms that grew their debt, `period_decrease_tiyin` the
+    absolute value of those that shrank it — the two turnover columns of the
+    document, before either side's wording is applied to them.
+    """
+
     counterparty_id: uuid.UUID
     name: str
     phone: str | None
+    # Our side of the reconciliation. A statement is workshop-level, so the
+    # phone is the primary branch's — the workshop record carries no number.
+    workshop_name: str
+    workshop_phone: str | None
     date_from: date | None
     date_to: date | None
     opening_balance_tiyin: int
+    period_increase_tiyin: int
+    period_decrease_tiyin: int
     closing_balance_tiyin: int
     current_balance_tiyin: int
     rows: list[DebtStatementRow]

@@ -25,8 +25,13 @@ from app.modules.finance.service import (
     void_income,
     worker_production,
 )
+from app.modules.finance.statement_pdf import (
+    StatementPdfContext,
+    render_statement_pdf,
+)
 
 __all__ = [
+    "StatementPdfContext",
     "create_adjustment",
     "create_expense",
     "create_income",
@@ -42,6 +47,7 @@ __all__ = [
     "list_payable_orders",
     "list_payable_supplier_invoices",
     "list_supplier_debts",
+    "render_statement_pdf",
     "update_expense",
     "update_income",
     "void_adjustment",

@@ -2954,10 +2954,26 @@
   }
 
   @media (max-width: 640px) {
-    /* Phone widths: the 12px gutters alone cost ~100px across five columns. */
-    .tbl-fluid th,
-    .tbl-fluid td {
+    /* Phone widths: the 12px gutters alone cost ~100px across five columns.
+       Selector carries both classes deliberately: `.tbl th` sets the `padding`
+       shorthand further down this file at equal specificity, so a `.tbl-fluid`
+       rule would lose on source order and this override would silently do
+       nothing. */
+    .tbl.tbl-fluid th,
+    .tbl.tbl-fluid td {
       padding-inline: 8px;
+    }
+  }
+
+  @media (max-width: 400px) {
+    /* The money columns are `nowrap` — a full balance like `182,762,207` sets a
+       hard floor no layout mode can shrink past, so the gutter is the only give
+       left. At 375px (the DESIGN.md floor) 8px gutters overflowed the wrapper by
+       7px; 5px clears it with room to spare and stays above the 4px at which
+       adjacent figures start reading as one number. */
+    .tbl.tbl-fluid th,
+    .tbl.tbl-fluid td {
+      padding-inline: 5px;
     }
   }
 
@@ -6151,11 +6167,241 @@
       font-size: 1rem;
     }
   }
+
+  /* ── Figure row (QAD-164) ────────────────────────────────────────────────
+     A page's headline numbers without card chrome: hairline above and below,
+     hairline rules between, colour on the figure only. `.kpi` stays as it is —
+     other pages depend on it; this is the lighter treatment for a page whose
+     numbers are context, not the subject. ── */
+  .figs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .figs .fig {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+  }
+
+  .figs .fig + .fig {
+    border-left: 1px solid var(--color-hairline);
+  }
+
+  .figs .fig-l {
+    color: var(--color-ink-muted);
+    font-size: 0.8125rem;
+  }
+
+  .figs .fig-v {
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 1.375rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  /* Compound selectors so the state tints out-specify the base colour, the
+     same trap `.kpi .v` and `.tbl .amt` already carry. */
+  .figs .fig-v.success-text {
+    color: var(--color-success);
+  }
+
+  .figs .fig-v.danger-text {
+    color: var(--color-danger);
+  }
+
+  .figs .fig-v small {
+    color: var(--color-ink-soft);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .figs .fig-note {
+    color: var(--color-ink-muted);
+    font-size: 0.71875rem;
+  }
+
+  .figs-meta {
+    color: var(--color-ink-muted);
+    font-size: 0.75rem;
+    margin: 8px 0 20px;
+  }
+
+  @media (max-width: 640px) {
+    .figs {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .figs .fig + .fig {
+      border-top: 1px solid var(--color-hairline);
+      border-left: 0;
+    }
+  }
+
+  /* ── Akt sverka (QAD-164) ────────────────────────────────────────────────
+     The one screen whose output leaves the building, so the card is laid out
+     as a document: title, both parties, movements, totals, signatures. ── */
+  .akt-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 16px 12px;
+  }
+
+  .akt-title {
+    color: var(--color-ink);
+    font-size: 0.9375rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .akt-meta {
+    color: var(--color-ink-muted);
+    font-size: 0.78125rem;
+    margin-top: 4px;
+  }
+
+  .akt-parties {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--color-hairline);
+    border-bottom: 1px solid var(--color-hairline-strong);
+  }
+
+  .akt-party {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 16px;
+  }
+
+  .akt-party + .akt-party {
+    border-left: 1px solid var(--color-hairline);
+  }
+
+  .akt-role {
+    color: var(--color-ink-muted);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .akt-party b {
+    color: var(--color-ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .akt-party small {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 640px) {
+    .akt-parties {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .akt-party + .akt-party {
+      border-top: 1px solid var(--color-hairline);
+      border-left: 0;
+    }
+  }
+
+  /* The convention, stated once in the column that carries it. */
+  .akt-tbl th small {
+    display: block;
+    color: var(--color-ink-muted);
+    font-size: 0.65625rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* Direction word beside a balance — printed only where the sign flips. */
+  .akt-tbl .akt-dir {
+    display: block;
+    color: var(--color-ink-muted);
+    font-family: var(--font-sans);
+    font-size: 0.6875rem;
+    font-weight: 500;
+  }
+
+  .akt-tbl .akt-opening .nm {
+    color: var(--color-ink-soft);
+  }
+
+  .akt-tbl tfoot .akt-turnover td {
+    border-top: 1px solid var(--color-hairline-strong);
+    border-bottom: 0;
+    padding-top: 12px;
+  }
+
+  .akt-tbl tfoot .akt-closing td {
+    border-bottom: 0;
+    padding-top: 2px;
+  }
+
+  .akt-tbl tfoot .akt-closing .nm,
+  .akt-tbl tfoot .akt-closing .amt {
+    font-size: 0.9375rem;
+    font-weight: 800;
+  }
+
+  /* Narrow viewports drop the date and the split debit/credit pair for one
+     signed amount — six money columns cannot fit a phone without scrolling
+     the document sideways, and a statement you scroll is one you misread. */
+  .akt-tbl .akt-narrow,
+  /* Out-specifies `.tbl .nm small`, which makes every caption a block. */
+  .akt-tbl .nm small.akt-narrow-date {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .akt-tbl .akt-wide {
+      display: none;
+    }
+
+    .akt-tbl td.akt-narrow,
+    .akt-tbl th.akt-narrow {
+      display: table-cell;
+    }
+
+    .akt-tbl .nm small.akt-narrow-date {
+      display: block;
+    }
+  }
+
+  /* Signatures belong on paper only — nobody signs a screen. */
+  .akt-sign {
+    display: none;
+  }
 }
 
-/* ── Print: an akt sverka statement prints as a clean paper document.
-   The app chrome, filters, and row actions disappear; only the page's card
-   content (statement header + table) reaches the paper. ── */
+/* ── Print: an akt sverka prints as a signable paper document (QAD-164).
+   App chrome, filters and row actions disappear; what reaches the paper is the
+   title, both parties, the period, every movement, the turnover, the closing
+   balance and a two-column signature block. The table header repeats on every
+   sheet. Page numbers are the one thing CSS cannot supply — no browser
+   implements `@page` margin boxes — so the server-rendered PDF ("PDF" beside
+   "Chop etish") carries them. ── */
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
 @media print {
   .workshop-sidebar,
   .workshop-topbar,
@@ -6164,7 +6410,11 @@
   .tabs,
   .mp-filters,
   .kpis,
-  .card .mp-button {
+  .figs,
+  .figs-meta,
+  .card .mp-button,
+  .akt-live,
+  .mp-toast-host {
     display: none !important;
   }
   .workshop-app {
@@ -6181,5 +6431,72 @@
   }
   .table-wrap {
     overflow: visible;
+  }
+
+  /* Paper is wider than the phone breakpoint, but the page box is not a
+     viewport — pin the wide layout so a printed statement never silently
+     collapses to the one-column phone form. */
+  .akt-tbl .akt-wide {
+    display: table-cell !important;
+  }
+  .akt-tbl .akt-narrow,
+  .akt-tbl .nm small.akt-narrow-date {
+    display: none !important;
+  }
+
+  /* The header repeats on page 2+; a headerless continuation is unreadable. */
+  .akt-tbl thead {
+    display: table-header-group;
+  }
+  .akt-tbl tfoot {
+    /* Totals follow the last row once, rather than repeating per sheet. */
+    display: table-row-group;
+  }
+  .akt-tbl th {
+    position: static;
+    background: transparent;
+    border-bottom: 1px solid var(--color-ink-soft);
+    color: var(--color-ink);
+  }
+  .akt-tbl tr,
+  .akt-parties,
+  .akt-sign {
+    break-inside: avoid;
+  }
+
+  .akt-sign {
+    display: block;
+    margin-top: 22px;
+    padding: 0 16px;
+  }
+  .akt-sign-lead {
+    color: var(--color-ink-muted);
+    font-size: 0.78125rem;
+  }
+  .akt-sign-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 32px;
+    margin-top: 14px;
+  }
+  .akt-sign-grid b {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+  .akt-sign-grid small {
+    display: block;
+    color: var(--color-ink-muted);
+    font-size: 0.75rem;
+    margin-bottom: 10px;
+  }
+  /* Each line is a label with a rule to write on. */
+  .akt-sign-grid span {
+    display: block;
+    border-bottom: 1px solid var(--color-hairline-strong);
+    color: var(--color-ink-muted);
+    font-size: 0.6875rem;
+    padding-bottom: 2px;
+    margin-top: 18px;
   }
 }

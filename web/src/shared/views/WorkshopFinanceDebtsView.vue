@@ -3,6 +3,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
+import {
+  balanceDirection,
+  directionLabel,
+  periodTurnover,
+  statementLines,
+  type DebtSide,
+} from '@/shared/app/debtStatement'
 import { traceLine } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
@@ -20,13 +27,12 @@ import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissi
 import {
   formatDate,
   formatDateInputValue,
+  formatSom,
   formatTiyin,
   formatTiyinParts,
   parseSomToTiyin,
 } from '@/shared/formatters'
 import { useFinanceStore, type DebtRow, type DebtStatementRow } from '@/shared/stores/finance'
-
-type DebtSide = 'suppliers' | 'clients'
 
 const router = useRouter()
 const rolePath = useRolePath()
@@ -99,6 +105,20 @@ const activeDebts = computed(() =>
 )
 const weOweParts = computed(() => formatTiyinParts(activeDebts.value?.we_owe_total_tiyin ?? 0))
 const theyOweParts = computed(() => formatTiyinParts(activeDebts.value?.they_owe_total_tiyin ?? 0))
+// Where we stand overall: receivables minus payables, in the ledger's own
+// convention (positive = they owe us).
+const netTiyin = computed(
+  () =>
+    (activeDebts.value?.they_owe_total_tiyin ?? 0) - (activeDebts.value?.we_owe_total_tiyin ?? 0),
+)
+const netParts = computed(() => formatTiyinParts(Math.abs(netTiyin.value)))
+// Counts the rows actually listed, so it always agrees with the table below it.
+const listedCountLabel = computed(() => {
+  const count = activeDebts.value?.rows.length ?? 0
+  return activeTab.value === 'suppliers'
+    ? `Ro'yxatda ${count} ta ta'minotchi`
+    : `Ro'yxatda ${count} ta mijoz`
+})
 
 const statementName = computed(
   () =>
@@ -106,6 +126,43 @@ const statementName = computed(
     activeDebts.value?.rows.find((row) => row.counterparty_id === selectedId.value)?.name ??
     '',
 )
+
+// ── The statement as a document ────────────────────────────────────────────
+// Column wording is per side; the sign convention behind it is derived once in
+// shared/app/debtStatement.ts and mirrored by the server's PDF.
+const columnHeaders = computed(() =>
+  activeTab.value === 'suppliers'
+    ? { debit: 'Qarzimiz +', credit: 'Qarzimiz −' }
+    : { debit: 'Qarzi +', credit: 'Qarzi −' },
+)
+const counterpartyRole = computed(() => (activeTab.value === 'suppliers' ? "Ta'minotchi" : 'Mijoz'))
+
+const lines = computed(() =>
+  finance.statement
+    ? statementLines<DebtStatementRow>(
+        finance.statement.rows,
+        activeTab.value,
+        finance.statement.opening_balance_tiyin,
+      )
+    : [],
+)
+const turnover = computed(() =>
+  finance.statement ? periodTurnover(finance.statement, activeTab.value) : { debit: 0, credit: 0 },
+)
+const periodText = computed(() => {
+  const statement = finance.statement
+  if (!statement) return ''
+  if (statement.date_from && statement.date_to) {
+    return `${formatDate(statement.date_from)} — ${formatDate(statement.date_to)}`
+  }
+  if (statement.date_from) return `${formatDate(statement.date_from)} dan`
+  if (statement.date_to) return `${formatDate(statement.date_to)} gacha`
+  return 'butun tarix'
+})
+
+function balanceWord(balanceTiyin: number) {
+  return directionLabel(balanceDirection(balanceTiyin))
+}
 
 // Positive balance = they owe us; negative = we owe them. Words, never bare signs.
 function balanceChip(balance: number) {
@@ -177,8 +234,24 @@ function payCounterparty() {
 }
 
 function printStatement() {
-  // The print stylesheet strips the app chrome — only the statement card prints.
+  // The print stylesheet strips the app chrome and lays the card out as a
+  // document: title, both parties, period, totals, signature block.
   window.print()
+}
+
+async function downloadStatementPdf() {
+  if (!selectedId.value || !finance.statement) return
+  const stamp = finance.statement.date_to ?? formatDateInputValue(new Date())
+  try {
+    await finance.downloadStatementPdf(
+      activeTab.value,
+      selectedId.value,
+      { date_from: dateFrom.value || null, date_to: dateTo.value || null },
+      `akt-sverka-${statementName.value}-${stamp}.pdf`.replace(/\s+/g, '-'),
+    )
+  } catch {
+    toast.danger(workshopErrorMessage(finance.actionError ?? 'statement_pdf_failed'))
+  }
 }
 
 function openAdjustment() {
@@ -293,40 +366,40 @@ onBeforeUnmount(() => {
 
       <!-- List mode: every counterparty with a live derived balance. -->
       <template v-if="!selectedId">
-        <div class="kpis kpis-dash">
-          <div class="kpi" :class="(activeDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'bad' : ''">
-            <div class="lbl danger-text">
-              {{ activeTab === 'suppliers' ? "Ta'minotchilarga qarzimiz" : 'Mijozlarga qarzimiz' }}
-            </div>
-            <div class="v num danger-text">
-              <span :title="weOweParts.full"
-                >{{ weOweParts.amount }} <small>{{ weOweParts.unit }}</small></span
-              >
-            </div>
-            <div class="d">
-              <span>{{
-                activeTab === 'suppliers' ? "to'lanmagan yetkazmalar" : 'avans va qaytimlar'
-              }}</span>
-            </div>
+        <!-- Statistics: figures on hairlines, no card chrome. Colour lands on
+             the number only — the label already says which way it points. -->
+        <div class="figs">
+          <div class="fig">
+            <span class="fig-l">Qarzimiz</span>
+            <span
+              class="fig-v"
+              :class="(activeDebts?.we_owe_total_tiyin ?? 0) > 0 ? 'danger-text' : ''"
+              :title="weOweParts.full"
+              >{{ weOweParts.amount }} <small>{{ weOweParts.unit }}</small></span
+            >
           </div>
-          <div class="kpi">
-            <div class="lbl success-text">
-              {{
-                activeTab === 'suppliers' ? "Ta'minotchilarning bizga qarzi" : 'Mijozlarning qarzi'
-              }}
-            </div>
-            <div class="v num success-text">
-              <span :title="theyOweParts.full"
-                >{{ theyOweParts.amount }} <small>{{ theyOweParts.unit }}</small></span
-              >
-            </div>
-            <div class="d">
-              <span>{{
-                activeTab === 'suppliers' ? 'avans va qaytimlar' : "to'lanmagan buyurtmalar"
-              }}</span>
-            </div>
+          <div class="fig">
+            <span class="fig-l">Bizga qarz</span>
+            <span
+              class="fig-v"
+              :class="(activeDebts?.they_owe_total_tiyin ?? 0) > 0 ? 'success-text' : ''"
+              :title="theyOweParts.full"
+              >{{ theyOweParts.amount }} <small>{{ theyOweParts.unit }}</small></span
+            >
+          </div>
+          <div class="fig">
+            <span class="fig-l">Sof holat</span>
+            <span
+              class="fig-v"
+              :class="netTiyin > 0 ? 'success-text' : netTiyin < 0 ? 'danger-text' : ''"
+              :title="netParts.full"
+              ><template v-if="netTiyin < 0">−</template>{{ netParts.amount }}
+              <small>{{ netParts.unit }}</small></span
+            >
+            <span class="fig-note">{{ balanceWord(netTiyin) || 'balans nolda' }}</span>
           </div>
         </div>
+        <p class="figs-meta">{{ listedCountLabel }}</p>
 
         <div class="mp-filters">
           <label class="mp-filter-input">
@@ -435,6 +508,14 @@ onBeforeUnmount(() => {
           <button type="button" class="mp-button mp-button-outline" @click="printStatement">
             Chop etish
           </button>
+          <button
+            type="button"
+            class="mp-button mp-button-outline"
+            :disabled="finance.statementPdfLoading"
+            @click="downloadStatementPdf"
+          >
+            {{ finance.statementPdfLoading ? 'Tayyorlanmoqda' : 'PDF' }}
+          </button>
           <button type="button" class="mp-button mp-button-outline" @click="openAdjustment">
             Tuzatish kiritish
           </button>
@@ -454,122 +535,175 @@ onBeforeUnmount(() => {
         <section v-else-if="finance.error" class="st-error">
           <h3>Akt sverkani yuklab bo'lmadi</h3>
           <p>{{ traceLine(finance.traceId) }}</p>
+          <button type="button" class="mp-button mp-button-outline" @click="refreshStatement">
+            Qayta urinish
+          </button>
         </section>
 
-        <section v-else-if="finance.statement" class="card">
-          <div
-            class="flex flex-wrap items-center justify-between gap-2 border-b border-hairline p-4"
-          >
-            <div class="flex min-w-0 items-center gap-3">
-              <b class="truncate">{{ statementName }} — akt sverka</b>
-              <span :class="balanceChip(finance.statement.current_balance_tiyin).cls">
-                <span class="pd"></span
-                >{{ balanceChip(finance.statement.current_balance_tiyin).text }}
-              </span>
+        <section v-else-if="finance.statement" class="card akt">
+          <!-- Document head: what a signed akt sverka must state up front —
+               the title, the period, and both parties by name and number. -->
+          <header class="akt-head">
+            <div>
+              <h2 class="akt-title">Akt sverka</h2>
+              <p class="akt-meta">{{ periodText }} · summalar so'mda</p>
             </div>
-            <small v-if="finance.statement.phone" class="text-ink-muted">
-              {{ finance.statement.phone }}
-            </small>
+            <span
+              class="akt-live"
+              :class="balanceChip(finance.statement.current_balance_tiyin).cls"
+            >
+              <span class="pd"></span
+              >{{ balanceChip(finance.statement.current_balance_tiyin).text }}
+            </span>
+          </header>
+          <div class="akt-parties">
+            <div class="akt-party">
+              <span class="akt-role">Ustaxona</span>
+              <b>{{ finance.statement.workshop_name }}</b>
+              <small>{{ finance.statement.workshop_phone ?? "telefon ko'rsatilmagan" }}</small>
+            </div>
+            <div class="akt-party">
+              <span class="akt-role">{{ counterpartyRole }}</span>
+              <b>{{ finance.statement.name }}</b>
+              <small>{{ finance.statement.phone ?? "telefon ko'rsatilmagan" }}</small>
+            </div>
           </div>
           <div class="table-wrap">
-            <table class="tbl">
+            <table class="tbl tbl-fluid akt-tbl">
               <thead>
                 <tr>
-                  <th>Sana</th>
+                  <th class="nowrap akt-wide">Sana</th>
                   <th>Hujjat</th>
-                  <th class="right">
-                    {{ activeTab === 'suppliers' ? 'Qarzimiz +' : 'Qarzi +' }}
+                  <th class="right nowrap akt-wide">{{ columnHeaders.debit }}</th>
+                  <th class="right nowrap akt-wide">{{ columnHeaders.credit }}</th>
+                  <th class="right nowrap akt-narrow">Summa</th>
+                  <th class="right nowrap">
+                    Qoldiq
+                    <small>+ bizga qarzi · − qarzimiz</small>
                   </th>
-                  <th class="right">
-                    {{ activeTab === 'suppliers' ? 'Qarzimiz −' : "To'lov −" }}
-                  </th>
-                  <th class="right">Qoldiq</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="finance.statement.date_from">
-                  <td class="num text-ink-muted">{{ formatDate(finance.statement.date_from) }}</td>
-                  <td class="nm">Boshlang'ich qoldiq</td>
-                  <td class="amt muted">—</td>
-                  <td class="amt muted">—</td>
+                <!-- The opening balance opens the document with or without a
+                     period: without one it is the all-time opening. -->
+                <tr class="akt-opening">
+                  <td class="num akt-wide text-ink-muted">
+                    {{
+                      finance.statement.date_from ? formatDate(finance.statement.date_from) : '—'
+                    }}
+                  </td>
+                  <td class="nm break-words">
+                    Boshlang'ich qoldiq
+                    <small v-if="!finance.statement.date_from">butun tarix boshida</small>
+                  </td>
+                  <td class="amt akt-wide"></td>
+                  <td class="amt akt-wide"></td>
+                  <td class="amt akt-narrow"></td>
                   <td class="amt">
-                    {{ formatTiyin(Math.abs(finance.statement.opening_balance_tiyin)) }}
+                    {{ formatSom(Math.abs(finance.statement.opening_balance_tiyin)) }}
                     <small
-                      v-if="finance.statement.opening_balance_tiyin !== 0"
-                      class="block text-[11px] text-ink-muted"
-                      >{{
-                        finance.statement.opening_balance_tiyin > 0 ? 'bizga qarzi' : 'qarzimiz'
-                      }}</small
+                      v-if="balanceWord(finance.statement.opening_balance_tiyin)"
+                      class="akt-dir"
+                      >{{ balanceWord(finance.statement.opening_balance_tiyin) }}</small
                     >
                   </td>
-                  <td></td>
                 </tr>
-                <tr v-for="row in finance.statement.rows" :key="row.reference_id">
-                  <td class="num text-ink-muted">{{ formatDate(row.on) }}</td>
-                  <td class="nm">{{ statementRowLabel(row) }}</td>
-                  <td
-                    class="amt"
-                    :class="
-                      (activeTab === 'suppliers' ? row.amount_tiyin < 0 : row.amount_tiyin > 0)
-                        ? 'danger-text'
-                        : 'muted'
-                    "
-                  >
-                    {{
-                      activeTab === 'suppliers'
-                        ? row.amount_tiyin < 0
-                          ? formatTiyin(-row.amount_tiyin)
-                          : '—'
-                        : row.amount_tiyin > 0
-                          ? formatTiyin(row.amount_tiyin)
-                          : '—'
-                    }}
-                  </td>
-                  <td
-                    class="amt"
-                    :class="
-                      (activeTab === 'suppliers' ? row.amount_tiyin > 0 : row.amount_tiyin < 0)
-                        ? 'success-text'
-                        : 'muted'
-                    "
-                  >
-                    {{
-                      activeTab === 'suppliers'
-                        ? row.amount_tiyin > 0
-                          ? formatTiyin(row.amount_tiyin)
-                          : '—'
-                        : row.amount_tiyin < 0
-                          ? formatTiyin(-row.amount_tiyin)
-                          : '—'
-                    }}
-                  </td>
-                  <td class="amt">
-                    {{ formatTiyin(Math.abs(row.balance_after_tiyin)) }}
-                    <small
-                      v-if="row.balance_after_tiyin !== 0"
-                      class="block text-[11px] text-ink-muted"
-                      >{{ row.balance_after_tiyin > 0 ? 'bizga qarzi' : 'qarzimiz' }}</small
-                    >
-                  </td>
-                  <td class="right">
+                <tr v-for="line in lines" :key="line.row.reference_id">
+                  <td class="num akt-wide text-ink-muted">{{ formatDate(line.row.on) }}</td>
+                  <td class="nm break-words">
+                    {{ statementRowLabel(line.row) }}
+                    <small class="akt-narrow-date">{{ formatDate(line.row.on) }}</small>
                     <button
-                      v-if="row.kind === 'adjustment'"
+                      v-if="line.row.kind === 'adjustment'"
                       type="button"
-                      class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                      @click="openVoid(row)"
+                      class="mp-button mp-button-outline mt-1 min-h-8 px-2 text-xs"
+                      @click="openVoid(line.row)"
                     >
                       Bekor qilish
                     </button>
                   </td>
+                  <td class="amt akt-wide" :class="line.debit !== null ? 'danger-text' : ''">
+                    {{ line.debit !== null ? formatSom(line.debit) : '' }}
+                  </td>
+                  <td class="amt akt-wide" :class="line.credit !== null ? 'success-text' : ''">
+                    {{ line.credit !== null ? formatSom(line.credit) : '' }}
+                  </td>
+                  <td
+                    class="amt akt-narrow"
+                    :class="line.debit !== null ? 'danger-text' : 'success-text'"
+                  >
+                    {{
+                      line.debit !== null
+                        ? `+${formatSom(line.debit)}`
+                        : `−${formatSom(line.credit ?? 0)}`
+                    }}
+                  </td>
+                  <td class="amt">
+                    {{ formatSom(line.balance) }}
+                    <small v-if="line.directionChanged && line.balance" class="akt-dir">{{
+                      directionLabel(line.direction)
+                    }}</small>
+                  </td>
                 </tr>
                 <tr v-if="finance.statement.rows.length === 0">
                   <td colspan="6">
-                    <div class="st-empty !border-0 !py-8"><h3>Bu davrda harakat yo'q</h3></div>
+                    <div class="st-empty !border-0 !py-8">
+                      <h3>Bu davrda harakat yo'q</h3>
+                      <p>Boshlang'ich va yopilish qoldig'i bir xil.</p>
+                    </div>
                   </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr class="akt-turnover">
+                  <td class="akt-wide"></td>
+                  <td class="nm">
+                    Davr aylanmasi
+                    <small class="akt-narrow-date"
+                      >+{{ formatSom(turnover.debit) }} · −{{ formatSom(turnover.credit) }}</small
+                    >
+                  </td>
+                  <td class="amt akt-wide">{{ formatSom(turnover.debit) }}</td>
+                  <td class="amt akt-wide">{{ formatSom(turnover.credit) }}</td>
+                  <td class="amt akt-narrow"></td>
+                  <td class="amt"></td>
+                </tr>
+                <tr class="akt-closing">
+                  <td class="akt-wide"></td>
+                  <td class="nm">Yopilish qoldig'i</td>
+                  <td class="amt akt-wide"></td>
+                  <td class="amt akt-wide"></td>
+                  <td class="amt akt-narrow"></td>
+                  <td class="amt">
+                    {{ formatSom(Math.abs(finance.statement.closing_balance_tiyin)) }}
+                    <small class="akt-dir">{{
+                      balanceWord(finance.statement.closing_balance_tiyin) || "qarz yo'q"
+                    }}</small>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
+          </div>
+
+          <!-- Print only: the two signatures that make this a document. -->
+          <div class="akt-sign">
+            <p class="akt-sign-lead">Yuqoridagi hisob-kitob tomonlar tomonidan tasdiqlandi.</p>
+            <div class="akt-sign-grid">
+              <div>
+                <b>Ustaxona nomidan</b>
+                <small>{{ finance.statement.workshop_name }}</small>
+                <span>F.I.Sh.</span>
+                <span>Imzo</span>
+                <span>Sana</span>
+              </div>
+              <div>
+                <b>Kontragent nomidan</b>
+                <small>{{ finance.statement.name }}</small>
+                <span>F.I.Sh.</span>
+                <span>Imzo</span>
+                <span>Sana</span>
+              </div>
+            </div>
           </div>
         </section>
 
