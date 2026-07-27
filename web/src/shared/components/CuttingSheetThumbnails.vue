@@ -111,7 +111,7 @@ function panelGroups(result: CuttingResult) {
               />
             </svg>
             <span
-              class="absolute bottom-1 right-1 rounded bg-elevated/95 px-1 py-0.5 font-mono text-[9px] font-black text-ink shadow-sm"
+              class="absolute bottom-1 right-1 rounded bg-elevated/95 px-1 py-0.5 font-mono text-[10.5px] font-black text-ink shadow-sm"
             >
               {{ panelFillPercent(result, panel) }}
             </span>

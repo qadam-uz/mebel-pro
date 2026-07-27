@@ -18,6 +18,7 @@ import { useRolePath } from '@/shared/app/paths'
 import { useToast } from '@/shared/composables/useToast'
 import Icon from '@/shared/components/AppIcon.vue'
 import CuttingPanelSvg from '@/shared/components/CuttingPanelSvg.vue'
+import CuttingPartsList from '@/shared/components/CuttingPartsList.vue'
 import CuttingSheetThumbnails from '@/shared/components/CuttingSheetThumbnails.vue'
 import {
   metres,
@@ -59,6 +60,11 @@ const toast = useToast()
 
 const activePartRef = ref<string | null>(null)
 const activePlacementId = ref<string | null>(null)
+// Carries a selection across a sheet switch: picking a row from another sheet
+// in the narrow-viewport parts list changes the active panel, and the
+// panel watcher below would otherwise wipe the selection it was made for.
+const pendingPartRef = ref<string | null>(null)
+const drawingCard = ref<HTMLElement | null>(null)
 
 const chosenResult = computed(() => {
   const draft = props.draft
@@ -183,6 +189,12 @@ watch(
 watch(
   () => activePanel.value?.id,
   () => {
+    if (pendingPartRef.value) {
+      activePartRef.value = pendingPartRef.value
+      activePlacementId.value = null
+      pendingPartRef.value = null
+      return
+    }
     clearSelection()
   },
 )
@@ -202,10 +214,22 @@ function panelCaption(result: CuttingResult, panel: CuttingPanel) {
 function selectPlacement(placement: CuttingPlacement) {
   activePlacementId.value = placement.id
   activePartRef.value = placement.part_ref
+  const panelId = activePanel.value?.id
   void nextTick(() => {
+    // Both rails carry the part: the desktop per-sheet rail and the narrow
+    // parts list. Only one of them is displayed at a time — scrollIntoView on
+    // the hidden one is a no-op, so scrolling both keeps this breakpoint-free.
+    // The desktop rail scrolls inside the page beside the drawing, so
+    // 'nearest' is right there; the narrow list scrolls the page itself, where
+    // 'nearest' would leave the row pinned to the very bottom edge.
     document
       .querySelector<HTMLElement>(`[data-panel-part-ref="${placement.part_ref}"]`)
       ?.scrollIntoView({ block: 'nearest' })
+    if (panelId) {
+      document
+        .querySelector<HTMLElement>(`[data-parts-row="${panelId}:${placement.part_ref}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    }
   })
 }
 
@@ -216,6 +240,33 @@ function selectPartGroup(partRef: string) {
   }
   activePartRef.value = partRef
   activePlacementId.value = null
+}
+
+// A parts-list row can point at a sheet the drawing isn't showing: switch the
+// sheet first, then let the panel watcher apply the pending selection.
+function selectListPart(target: { panelId: string; partRef: string }) {
+  if (target.panelId === activePanel.value?.id) {
+    selectPartGroup(target.partRef)
+  } else {
+    pendingPartRef.value = target.partRef
+    emit('update:activePanelId', target.panelId)
+  }
+  revealDrawing()
+}
+
+// The list sits below the drawing, so a row tapped near the bottom of a long
+// result would highlight a sheet that is off-screen — the tap would look like
+// it did nothing. Centring is deliberate over `block: 'start'`: both shells
+// stack a tall sticky header on narrow viewports (189px in the workshop one),
+// which would swallow a top-aligned card. It is also idempotent, so tapping
+// row after row settles the drawing in one place instead of drifting.
+// `behavior: 'auto'` rather than a smooth scroll: the sheet switch re-lays out
+// the drawing mid-animation and cancels it part-way, and an instant move needs
+// no `prefers-reduced-motion` exemption.
+function revealDrawing() {
+  void nextTick(() => {
+    drawingCard.value?.scrollIntoView({ block: 'center', behavior: 'auto' })
+  })
 }
 
 function clearSelection() {
@@ -315,7 +366,7 @@ async function choose(result: CuttingResult) {
             />
           </section>
 
-          <section class="rounded-lg border border-hairline bg-elevated p-4">
+          <section ref="drawingCard" class="rounded-lg border border-hairline bg-elevated p-4">
             <p v-if="activePanel" class="mb-3 text-sm font-extrabold text-ink">
               {{ panelCaption(chosenResult, activePanel) }}
             </p>
@@ -334,6 +385,18 @@ async function choose(result: CuttingResult) {
               {{ chosenResult.edge_trim_mm }} mm
             </p>
           </section>
+
+          <!-- QAD-177: below `md` the drawing is an overview only — a 2800 mm
+               sheet renders ~7× reduced and its labels cannot be read. The
+               numbers move into this text list; at `md` and up the drawing is
+               legible and the per-sheet rail in the aside carries the detail. -->
+          <CuttingPartsList
+            class="md:hidden"
+            :result="chosenResult"
+            :active-panel-id="activePanel?.id ?? null"
+            :active-part-ref="activePartRef"
+            @select="selectListPart"
+          />
         </div>
 
         <aside
@@ -384,7 +447,10 @@ async function choose(result: CuttingResult) {
             </template>
             <p v-else class="mt-2 text-sm text-ink-soft">Kromka ishlatilmagan.</p>
           </div>
-          <div v-if="activePanel" class="rounded-lg border border-hairline p-4">
+          <!-- Superseded below `md` by CuttingPartsList, which covers every
+               sheet instead of only the active one. Two rails doing the same
+               job on one screen is exactly what the design system forbids. -->
+          <div v-if="activePanel" class="rounded-lg border border-hairline p-4 max-md:hidden">
             <h3 class="text-sm font-extrabold text-ink">
               Detallar — List {{ panelDisplayIndex(chosenResult, activePanel) }}
             </h3>
