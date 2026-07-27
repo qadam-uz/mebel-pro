@@ -186,6 +186,14 @@ positioned straight from a measured rect therefore lands at 90% of its anchor. M
 `overlayRect()` / `overlayViewport()` (`shared/app/overlayGeometry.ts`) — never
 `getBoundingClientRect()` directly — so the whole calculation stays in one unit.
 
+Viewport units have the same split and no helper can hide it: `100dvh` / `100vw` resolve
+against the **unzoomed** viewport and the result is then scaled by the zoom, so a `100dvh`
+panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--app-vw`**
+tokens (`assets/main.css`, declared beside the `zoom` rule) instead of raw viewport units —
+they carry the compensation, and the ratio behind it (`--app-zoom`) is written down once.
+Raw `vh` / `vw` are still fine for a *cap* that only needs to stay under the viewport
+(`max-height: min(90vh, …)` on a modal).
+
 ## Shapes
 
 Radius scale: **6px** for buttons and inputs, **8px** for cards and popover items, **12px**
