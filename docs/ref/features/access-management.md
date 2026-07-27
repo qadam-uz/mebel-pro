@@ -2,7 +2,7 @@
 title: Identity & access
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-27
 order: 20
 ---
 
@@ -282,6 +282,11 @@ list is the one case in v1: the warehouseman picks a supplier for an arrival and
 attributes an expense to one, so both `manage_inventory` and `manage_finance` read it while
 creating and editing a supplier stays with `manage_inventory`. Gating a lookup behind a single
 grant is what leaves the second reader with a field that is offered and cannot work.
+
+The converse holds too: **a screen must not fetch a lookup its viewer cannot read.** The
+assignable-worker list is `manage_orders` only, and the order screen also admits `view_orders`
+and `process_production` — so it asks for that list only when the viewer could act on it.
+Fetching it regardless buys those readers nothing but a refusal on a page they are entitled to.
 
 A staff user with zero grants can log in but sees nothing actionable. Grants live on the
 user, not the branch: changing a branch's status doesn't touch grants; a grant on an
