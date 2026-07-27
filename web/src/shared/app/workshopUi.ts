@@ -157,6 +157,7 @@ export const workshopErrorMessages: Record<string, string> = {
   expense_save_failed: "Xarajatni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
   income_save_failed: "Tushumni yozib bo'lmadi. Ma'lumotlarni tekshirib, qayta urinib ko'ring.",
   ledger_void_failed: "Yozuvni bekor qilib bo'lmadi. Qayta urinib ko'ring.",
+  statement_pdf_failed: "Akt sverkani yuklab bo'lmadi. Qayta urinib ko'ring.",
   grants_save_failed: "Ruxsatlarni saqlab bo'lmadi. Qayta urinib ko'ring.",
   password_reset_failed: "Parolni qaytarib bo'lmadi. Qayta urinib ko'ring.",
   user_save_failed:

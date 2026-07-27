@@ -1,14 +1,17 @@
 """Workshop finance ledger and report routes."""
 
+import re
+import unicodedata
 import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import ExpenseCategory, IncomeType, LedgerStatus, MoneyMethod
 from app.modules.finance.api import (
+    StatementPdfContext,
     create_adjustment,
     create_expense,
     create_income,
@@ -24,6 +27,7 @@ from app.modules.finance.api import (
     list_payable_orders,
     list_payable_supplier_invoices,
     list_supplier_debts,
+    render_statement_pdf,
     update_expense,
     update_income,
     void_adjustment,
@@ -49,6 +53,7 @@ from app.modules.finance.schemas import (
     VoidLedgerRequest,
     WorkerProductionResponse,
 )
+from app.modules.finance.statement_pdf import StatementSide
 
 router = APIRouter(prefix="/workshop/finance", tags=["finance"])
 IncomeTypeQuery = Annotated[IncomeType | None, Query(alias="type")]
@@ -252,6 +257,24 @@ async def supplier_debt_statement(
     )
 
 
+@router.get("/debts/suppliers/{supplier_id}/statement.pdf")
+async def supplier_debt_statement_pdf(
+    supplier_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> Response:
+    statement = await get_supplier_statement(
+        db,
+        principal=principal,
+        supplier_id=supplier_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return _statement_pdf_response(statement, side="suppliers")
+
+
 @router.get("/debts/clients", response_model=DebtListResponse)
 async def client_debts_index(
     principal: AccountReadyPrincipal,
@@ -282,6 +305,24 @@ async def client_debt_statement(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+@router.get("/debts/clients/{client_id}/statement.pdf")
+async def client_debt_statement_pdf(
+    client_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> Response:
+    statement = await get_client_statement(
+        db,
+        principal=principal,
+        client_id=client_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return _statement_pdf_response(statement, side="clients")
 
 
 @router.post(
@@ -333,6 +374,26 @@ async def production_show(
         date_to=end,
         branch_id=branch_id,
     )
+
+
+def _statement_pdf_response(statement: DebtStatementResponse, *, side: StatementSide) -> Response:
+    """The akt sverka as a file. Rendered in-process, same as the cutting maps."""
+
+    slug = _ascii_slug(statement.name) or statement.counterparty_id.hex[:8]
+    filename = f"akt-sverka-{slug}.pdf"
+    return Response(
+        render_statement_pdf(statement, StatementPdfContext(side=side)),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def _ascii_slug(value: str) -> str:
+    """A filename-safe stem. Uzbek names carry apostrophes and non-ASCII letters,
+    which a bare `filename=` header cannot express — those characters drop out."""
+
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()[:40]
 
 
 async def _expense_responses(db: Session, rows: list[Expense]) -> list[ExpenseResponse]:

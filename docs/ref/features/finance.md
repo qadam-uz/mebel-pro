@@ -178,12 +178,21 @@ Three sources feed the supplier side:
   distinctly: *Zaxira tuzatish* (quantity) vs *Qarz tuzatish* (money).
 
 **The statement (akt sverka).** Per counterparty, any date range: chronological rows —
-deliveries, payments, adjustments — each with the running balance after it, plus an
-opening balance folding everything before the range. This is the reconciliation ritual
-Uzbek businesses already run on paper, rendered live; any disputed number resolves by
-reading the statement line by line, never by "the system says so". Within one day, rows
-order by entry time; same-second entries fall back to the natural business order (goods,
-then money, then corrections).
+deliveries, payments, adjustments — each with the running balance after it, an opening
+balance folding everything before the range, and a closing balance with the period's
+turnover in both directions. This is the reconciliation ritual Uzbek businesses already
+run on paper, rendered live; any disputed number resolves by reading the statement line
+by line, never by "the system says so". Within one day, rows order by entry time;
+same-second entries fall back to the natural business order (goods, then money, then
+corrections).
+
+It is a **document, not a screen**: it states both parties (the workshop, reachable on its
+primary branch's number, and the counterparty), the period, the opening and closing
+balances, and it is signed. The opening row renders with **and** without a date filter —
+with no period it is the all-time opening, which is zero and says so; a running balance
+starting from an unexplained number is the fastest way to lose an accountant's trust.
+Both sides read one stored sign convention, so the two amount columns invert between them:
+a payment always shrinks the debt the document is about, whichever tab you are on.
 
 **Accounting model — hybrid on purpose.** The finance summary stays **cash-basis**; debts
 are an **accrual overlay**. A delivery of materials is *not* an expense — the expense
@@ -200,6 +209,12 @@ existing report semantics.
   filters, sorted most-they-owe first (receivables are what the accountant chases).
 - **Read a statement** — the akt sverka above, for any date range, on either side.
   Client statements show order rows (dated by confirmation) against payment rows.
+- **Take the statement away** — the same document as a PDF, rendered server-side in the
+  same in-process way as the cutting maps, so the file a counterparty keeps is identical
+  whoever generated it: title, both parties, period, opening balance, every movement,
+  turnover, closing balance, a two-column signature block, a table header repeated on
+  every page, and page numbers. Browser printing produces the same document from the page
+  itself; only the page numbering is beyond a print stylesheet's reach.
 - **Record an adjustment** — party (one supplier or one client), amount, business date
   (backdating allowed, future rejected), **mandatory note**. The form asks the direction
   in words (*Qarzimiz oshadi* / *Qarzimiz kamayadi*); the system derives the sign.
@@ -279,20 +294,27 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
 - **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page.
   Unlike the ledger above it is **workshop-wide**: a counterparty's balance spans every
   branch, so the topbar picker renders inert here and says so. Two tabs:
-  **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
-  directions), search, the "only with debt" toggle (default on), and per-row balances in
-  words + color. A row opens the **statement** (akt sverka): date range via the shared
-  picker, chronological rows with a running balance and an opening-balance row when a
-  range is set — supplier statements show deliveries against payments, client statements
-  show order rows against payments. Statement actions: **To'lov qilish** (deep-links to
-  the ledger page — the expense modal with the supplier pre-picked, or the income modal
-  on the client side) and **Tuzatish kiritish** (the adjustment form — direction in
-  words per side, amount, date, mandatory note); adjustment rows carry their own void
-  action, and **Chop etish** prints the statement as a clean paper akt sverka (a print
-  stylesheet strips the app chrome — the ritual ends with a document handed across the
-  table). The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
-  tiles, and the Ombor suppliers tab shows each supplier's balance to users who could
-  open this page anyway.
+  **Ta'minotchilar** and **Mijozlar**. Each tab opens on three figures on hairlines —
+  *Qarzimiz* · *Bizga qarz* · *Sof holat*, the tab supplying the rest of each label — with
+  a muted count of the counterparties actually listed beneath. No card chrome and no
+  background tint: colour lands on the figure alone, and the net figure carries its
+  direction in words so colour is never the only signal. Then search, the "only with debt"
+  toggle (default on), and per-row balances in words + color.
+
+  A row opens the **statement** (akt sverka), laid out as the document it is: title,
+  period, both parties, then the movement table — date, document, the two amount columns,
+  and the running balance whose convention the column header states once. The direction
+  word appears inline only where the sign flips, an inapplicable amount cell is left blank
+  rather than filled with a dash, and a `<tfoot>` closes the period with its turnover and
+  the emphasised **Yopilish qoldig'i**. Narrow viewports fold the date into the document
+  cell and the two amount columns into one signed column, so the statement never scrolls
+  sideways. Statement actions: **To'lov qilish** (deep-links to the ledger page — the
+  expense modal with the supplier pre-picked, or the income modal on the client side),
+  **Tuzatish kiritish** (the adjustment form — direction in words per side, amount, date,
+  mandatory note; adjustment rows carry their own void action), **Chop etish** (browser
+  print) and **PDF** (the file to hand over). The dashboard adds *Ta'minotchilarga
+  qarzimiz* and *Mijozlar qarzi* KPI tiles, and the Ombor suppliers tab shows each
+  supplier's balance to users who could open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per

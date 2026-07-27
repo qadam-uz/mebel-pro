@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { downloadBlob } from '@/shared/app/downloadBlob'
 import type { OrderStatus } from '@/shared/stores/orders'
 
 export type IncomeType = 'order_payment' | 'other'
@@ -113,9 +114,15 @@ export interface DebtStatement {
   counterparty_id: string
   name: string
   phone: string | null
+  /** Our side of the reconciliation — the document names both parties. */
+  workshop_name: string
+  workshop_phone: string | null
   date_from: string | null
   date_to: string | null
   opening_balance_tiyin: number
+  /** In-period movements that grew their debt / shrank it (stored convention). */
+  period_increase_tiyin: number
+  period_decrease_tiyin: number
   closing_balance_tiyin: number
   current_balance_tiyin: number
   rows: DebtStatementRow[]
@@ -227,6 +234,7 @@ export const useFinanceStore = defineStore('finance', () => {
   const supplierDebts = ref<DebtList | null>(null)
   const clientDebts = ref<DebtList | null>(null)
   const statement = ref<DebtStatement | null>(null)
+  const statementPdfLoading = ref(false)
   const payableInvoices = ref<PayableInvoice[]>([])
   const payableOrders = ref<PayableOrder[]>([])
   const payableOrdersLoading = ref(false)
@@ -484,6 +492,34 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  // The signed document itself, rendered by the server so the file a
+  // counterparty keeps is identical whoever generated it.
+  async function downloadStatementPdf(
+    side: 'suppliers' | 'clients',
+    counterpartyId: string,
+    filters: { date_from?: string | null; date_to?: string | null } = {},
+    filename = 'akt-sverka.pdf',
+  ) {
+    statementPdfLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      await downloadBlob(
+        withQuery(`/workshop/finance/debts/${side}/${counterpartyId}/statement.pdf`, {
+          date_from: filters.date_from || undefined,
+          date_to: filters.date_to || undefined,
+        }),
+        filename,
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'statement_pdf_failed')
+      throw errorValue
+    } finally {
+      statementPdfLoading.value = false
+    }
+  }
+
   async function createAdjustment(payload: unknown) {
     actionError.value = null
     actionTraceId.value = null
@@ -577,6 +613,7 @@ export const useFinanceStore = defineStore('finance', () => {
     payableInvoices.value = []
     payableOrders.value = []
     payableOrdersLoading.value = false
+    statementPdfLoading.value = false
     loading.value = false
     error.value = null
     traceId.value = null
@@ -592,6 +629,7 @@ export const useFinanceStore = defineStore('finance', () => {
     supplierDebts,
     clientDebts,
     statement,
+    statementPdfLoading,
     payableInvoices,
     payableOrders,
     payableOrdersLoading,
@@ -613,6 +651,7 @@ export const useFinanceStore = defineStore('finance', () => {
     loadPayableInvoices,
     loadClientDebts,
     loadStatement,
+    downloadStatementPdf,
     createAdjustment,
     voidAdjustment,
     loadPayableOrders,

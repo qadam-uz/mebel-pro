@@ -268,6 +268,16 @@ touching them; don't add new off-scale values.
 - **Icons** — `AppIcon` (one SVG set); icon-only buttons always carry an accessible name.
 - **Cursor honesty** — pointer cursor and row hover belong only on clickable controls or
   clickable rows; static table rows stay visually still with the default cursor.
+- **Headline figures** — two treatments, and the page picks by weight. `.kpi` cards are for a
+  dashboard, where the numbers *are* the page. `.figs` is the lighter row for a page whose
+  numbers are context above a table: no border, radius, shadow or background tint — hairlines
+  above, below and between, sentence-case labels at normal weight, and the value in mono
+  ~22px with tabular numerals. **Colour lands on the figure only**; the label stays
+  `ink-muted`, and a figure whose colour carries meaning also states it in words.
+- **Documents that leave the building** (the akt sverka today) are laid out on screen the way
+  they print — title, both parties, period, totals — so print is a restyle of the same DOM,
+  not a second implementation. A print stylesheet cannot number pages (no browser implements
+  `@page` margin boxes); when page numbers matter, the file comes from the server renderer.
 
 ## Do's and Don'ts
 

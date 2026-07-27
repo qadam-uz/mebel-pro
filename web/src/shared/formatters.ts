@@ -1,12 +1,18 @@
+// The bare grouped figure, no unit. For columns of money where the unit is
+// stated once in the header — repeating "so'm" on every cell of a statement
+// costs the width that pushed the akt sverka sideways on a laptop.
+export function formatSom(value: number): string {
+  return new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(
+    Math.round(value / 100),
+  )
+}
+
 export function formatTiyin(value: number): string {
   // Pin the suffix to "so'm" deterministically rather than using the currency
   // formatter, whose ICU tables can render the English-looking code "UZS" on
   // trimmed/older builds. This keeps currency identical on every runtime and
   // matches the Uzbek SPA's own labels (Narx (so'm), Summa (so'm)).
-  const amount = new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(
-    Math.round(value / 100),
-  )
-  return `${amount} so'm`
+  return `${formatSom(value)} so'm`
 }
 
 // Parse a human-entered so'm amount into integer tiyin. Accepts the formats the

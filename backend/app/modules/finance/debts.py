@@ -7,6 +7,7 @@ adjustments). Sign convention everywhere: positive = they owe us.
 
 import uuid
 from datetime import UTC, date, datetime
+from typing import NamedTuple
 
 from fastapi import status
 from sqlalchemy import func, select
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import (
+    BranchStatus,
     IncomeType,
     LedgerStatus,
     OrderStatus,
@@ -41,6 +43,7 @@ from app.modules.inventory.api import list_payable_invoices
 from app.modules.inventory.contracts import StockTransaction, Supplier, SupplierInvoice
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action, record_status_change
+from app.modules.workshop.contracts import Branch, Workshop
 
 # Same-second tiebreak for statement rows. Entry timestamps come from two
 # clocks (app for stock-ins, DB default for ledger rows) whose sub-second
@@ -120,6 +123,7 @@ async def get_supplier_statement(
         counterparty_id=supplier.id,
         name=supplier.name,
         phone=supplier.phone,
+        party=await _workshop_party(db, workshop_id=workshop_id),
         date_from=date_from,
         date_to=date_to,
     )
@@ -216,6 +220,7 @@ async def get_client_statement(
         counterparty_id=client.id,
         name=client.name,
         phone=client.phone,
+        party=await _workshop_party(db, workshop_id=workshop_id),
         date_from=date_from,
         date_to=date_to,
     )
@@ -609,12 +614,40 @@ async def _supplier_terms(
     return rows
 
 
+class WorkshopParty(NamedTuple):
+    """Our side of a reconciliation: the workshop, reachable on a branch number."""
+
+    name: str
+    phone: str | None
+
+
+async def _workshop_party(db: AsyncSession, *, workshop_id: uuid.UUID) -> WorkshopParty:
+    """The workshop as the document names it — its name and one phone to call.
+
+    A statement spans the whole workshop, but only branches carry a phone, so
+    the primary (lowest-numbered) active branch supplies it; an all-closed
+    workshop falls back to its lowest-numbered branch, and a workshop with no
+    branch at all prints without a number rather than failing the statement.
+    """
+
+    workshop = await db.get(Workshop, workshop_id)
+    name = workshop.name if workshop is not None else "—"
+    phone = await db.scalar(
+        select(Branch.phone)
+        .where(Branch.workshop_id == workshop_id)
+        .order_by((Branch.status != BranchStatus.ACTIVE), Branch.branch_no)
+        .limit(1)
+    )
+    return WorkshopParty(name=name, phone=phone)
+
+
 def _build_statement(
     terms: list[DebtStatementRow],
     *,
     counterparty_id: uuid.UUID,
     name: str,
     phone: str | None,
+    party: WorkshopParty,
     date_from: date | None,
     date_to: date | None,
 ) -> DebtStatementResponse:
@@ -641,9 +674,16 @@ def _build_statement(
         counterparty_id=counterparty_id,
         name=name,
         phone=phone,
+        workshop_name=party.name,
+        workshop_phone=party.phone,
         date_from=date_from,
         date_to=date_to,
         opening_balance_tiyin=opening,
+        # Period turnover: the two document columns, stated in the stored sign
+        # convention. Which one a side calls "debit" is a wording question the
+        # reader's tab answers, never an arithmetic one.
+        period_increase_tiyin=sum(row.amount_tiyin for row in in_range if row.amount_tiyin > 0),
+        period_decrease_tiyin=sum(-row.amount_tiyin for row in in_range if row.amount_tiyin < 0),
         closing_balance_tiyin=balance,
         current_balance_tiyin=current,
         rows=threaded,
