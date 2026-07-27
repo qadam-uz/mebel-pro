@@ -112,6 +112,21 @@ jcall() { # method url token [json-body] -> prints response body, dies on non-2x
 
 dc() { ( cd "$SCRIPT_DIR" && docker compose "$@" ); }
 
+# `compose.yaml` hardcodes `name: mebel-pro`, and COMPOSE_PROJECT_NAME overrides
+# it — so without that variable set, a checkout *anywhere* (including a git
+# worktree) drives the one shared stack. Two sessions running in parallel then
+# seed, reset and migrate each other's database without either noticing. Say
+# which project this run will touch, so that is a visible choice and not a
+# silent one; `--reset` gets a louder warning because it destroys volumes.
+COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-mebel-pro}"
+if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
+  info "Compose project: ${COMPOSE_PROJECT} (isolated via COMPOSE_PROJECT_NAME)"
+else
+  info "Compose project: ${COMPOSE_PROJECT} — the shared default."
+  info "  Working on a branch alongside another session? Re-run with"
+  info "  COMPOSE_PROJECT_NAME=<something-unique> and a ports override."
+fi
+
 # ─── Preflight ───────────────────────────────────────────────────────────────
 command -v curl >/dev/null || die "curl is required"
 command -v jq   >/dev/null || die "jq is required"
