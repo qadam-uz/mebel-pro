@@ -128,6 +128,8 @@ class PanelResult:
     material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
+    cut_count: int | None
+    cut_length_mm: int | None
     offcuts: list[OffcutResult]
     placements: list[PlacementResult]
 
@@ -240,11 +242,16 @@ def _run_best_engine_result(
                         rotated=placement.rotated,
                     )
                 )
+            cut_length_mm = sum(
+                abs(cut.x2 - cut.x1) + abs(cut.y2 - cut.y1) for cut in sheet_result.cuts
+            )
             panels.append(
                 PanelResult(
                     material_id=material_id,
                     panel_index=sheet_result.index,
                     waste_area_mm2=material.usable_area_mm2 - used_area,
+                    cut_count=len(sheet_result.cuts),
+                    cut_length_mm=cut_length_mm,
                     offcuts=[
                         OffcutResult(
                             x_mm=offcut.x,
@@ -258,9 +265,7 @@ def _run_best_engine_result(
                     placements=placements,
                 )
             )
-            total_cut_length += sum(
-                abs(cut.x2 - cut.x1) + abs(cut.y2 - cut.y1) for cut in sheet_result.cuts
-            )
+            total_cut_length += cut_length_mm
 
         if time.monotonic() > deadline:
             raise OptimizerError("optimization_timeout", "Optimization timed out")

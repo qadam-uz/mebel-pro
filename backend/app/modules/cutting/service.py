@@ -464,6 +464,8 @@ async def _apply_optimize(
                 material_id=panel.material_id,
                 panel_index=panel.panel_index,
                 waste_area_mm2=panel.waste_area_mm2,
+                cut_count=panel.cut_count,
+                cut_length_mm=panel.cut_length_mm,
                 offcuts=[offcut.__dict__ for offcut in panel.offcuts],
             )
             db.add(panel_row)
@@ -875,6 +877,8 @@ async def _create_imported_map_result(
                 material_id=material_id,
                 panel_index=panel_index,
                 waste_area_mm2=max(0, sheet_area - used_area),
+                cut_count=None,
+                cut_length_mm=None,
                 offcuts=offcuts,
                 placements=placements,
             )
@@ -916,6 +920,8 @@ async def _create_imported_map_result(
             material_id=panel.material_id,
             panel_index=panel.panel_index,
             waste_area_mm2=panel.waste_area_mm2,
+            cut_count=panel.cut_count,
+            cut_length_mm=panel.cut_length_mm,
             offcuts=[offcut.__dict__ for offcut in panel.offcuts],
         )
         db.add(panel_row)
@@ -1342,6 +1348,8 @@ async def _result_response(
                 material_id=panel.material_id,
                 panel_index=panel.panel_index,
                 waste_area_mm2=panel.waste_area_mm2,
+                cut_count=panel.cut_count,
+                cut_length_mm=panel.cut_length_mm,
                 offcuts=panel.offcuts or [],
                 placements=[
                     CuttingPlacementResponse.model_validate(placement)

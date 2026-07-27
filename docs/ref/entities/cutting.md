@@ -2,11 +2,7 @@
 title: Cutting
 status: draft
 owner: shape
-<<<<<<< HEAD
 updated: 2026-07-23
-=======
-updated: 2026-07-22
->>>>>>> f66940058b2441e3e5baf8f9323998cc096126dd
 order: 40
 ---
 
@@ -109,6 +105,8 @@ much waste it has.
 | `material_id`       | UUID   | required — which `panel` material this panel is, and which panel-size + grain rules govern its placements                                                                                                                                                    |
 | `panel_index`       | int    | 1, 2, 3, … **within the result's panels of this material**; unique per (result, material); 1..the material's count in `panels_used_by_material`                                                                                                              |
 | `waste_area_mm2`    | bigint | ≥ 0                                                                                                                                                                                                                                                          |
+| `cut_count`         | int?   | exact number of engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows, whose cut path is not known.                                                                                                                          |
+| `cut_length_mm`     | int?   | exact Manhattan sum of the engine cuts on this sheet; ≥ 0 when known. `null` for imported MAP and legacy rows.                                                                                                                                            |
 | `offcuts`           | json?  | display-only rectangles left by the optimiser or imported MAP layout: `{ x_mm, y_mm, length_mm, width_mm, usable }`. Old rows may store null; API responses expose `[]`. Usable offcuts are shown as customer-retained remainders, non-usable ones as waste. |
 
 Invariants: `panel_index` contiguous from 1 to the material's count for that result;

@@ -155,6 +155,11 @@ class CuttingPanel(UUIDPrimaryKey, Base):
         ),
         CheckConstraint("panel_index >= 1", name="ck_cutting_panels_index_positive"),
         CheckConstraint("waste_area_mm2 >= 0", name="ck_cutting_panels_waste_nonnegative"),
+        CheckConstraint("cut_count IS NULL OR cut_count >= 0", name="ck_cutting_panels_cut_count"),
+        CheckConstraint(
+            "cut_length_mm IS NULL OR cut_length_mm >= 0",
+            name="ck_cutting_panels_cut_length",
+        ),
     )
 
     cutting_result_id: Mapped[uuid.UUID] = mapped_column(
@@ -163,6 +168,9 @@ class CuttingPanel(UUIDPrimaryKey, Base):
     material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("materials.id"), nullable=False)
     panel_index: Mapped[int] = mapped_column(nullable=False)
     waste_area_mm2: Mapped[int] = mapped_column(nullable=False)
+    # Imported MAP and pre-migration rows deliberately retain unknown cut metrics.
+    cut_count: Mapped[int | None]
+    cut_length_mm: Mapped[int | None]
     offcuts: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"),
         nullable=True,

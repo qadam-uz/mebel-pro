@@ -330,6 +330,12 @@ async def test_client_cutting_draft_crud_optimize_choose_and_render(
     assert first_result["parts_snapshot"][0]["quantity"] == 2
     assert first_result["parts_snapshot"][0]["name"] == "Shelf"
     assert first_result["panels"][0]["offcuts"]
+    assert all(panel_row["cut_count"] is not None for panel_row in first_result["panels"])
+    assert all(panel_row["cut_length_mm"] is not None for panel_row in first_result["panels"])
+    assert (
+        sum(panel_row["cut_length_mm"] for panel_row in first_result["panels"])
+        == first_result["total_cut_length_mm"]
+    )
     assert str(panel.id) in first_result["material_snapshots"]
     assert first_result["edge_length_shop_by_material"] == {str(edge.id): 440}
     assert first_result["edge_length_own_by_material"] == {str(edge.id): 240}
@@ -612,6 +618,8 @@ async def test_client_map_import_commit_keeps_a_single_result_lifecycle(
     assert imported_result["panels_used_by_material"] == {str(panel.id): 1}
     assert imported_result["total_cut_length_mm"] == expected_cut_length
     assert len(imported_result["panels"]) == 1
+    assert imported_result["panels"][0]["cut_count"] is None
+    assert imported_result["panels"][0]["cut_length_mm"] is None
     assert len(imported_result["panels"][0]["placements"]) == 6
     assert any(offcut["usable"] for offcut in imported_result["panels"][0]["offcuts"])
     assert imported_result["parts_snapshot"][0]["name"]

@@ -2,11 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-<<<<<<< HEAD
 updated: 2026-07-23
-=======
-updated: 2026-07-22
->>>>>>> f66940058b2441e3e5baf8f9323998cc096126dd
 order: 80
 ---
 
@@ -501,18 +497,23 @@ then order summary.
    cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
    available, it asks the user to select one instead of inventing a price.
    - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
-   - **Download PDF** — the print-ready cutting document for the saw operator. It is fixed
-     A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
-     edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
-     identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
-     include every physical sheet.
+   - **Download PDF** — the print-ready cutting document for the saw operator. It starts on
+     one or more A4 portrait **Xulosa** pages: drawing/order identity, client, branch, date,
+     total sheets/details/cut/edge length, per-panel-material KIM stats, edge-tape
+     specification, and usable-offcut inventory. Sections paginate at rows with their heading
+     repeated. Consecutive identical layouts remain one `List 1–2 · 2 dona` layout unit while
+     summary counts include every physical sheet.
    - The PDF carries two area-derived KIM figures. `KIM` is parts area divided by sheet
      area; `KIM (qoldiq bilan)` adds usable offcut area before dividing. The sheet stat
      line shows `To'ldirish`, detail area, usable offcut area, and waste area.
-   - Each sheet page has the map panel plus a parts table for that layout:
-     `# · Nomi · O'lcham (mm) · Dona · Д1 · Д2 · Ш1 · Ш2 · Tekstura`. The `#` matches
-     the map label (`#3 Polka 1500×800`) and the row number in `parts_snapshot`; edge
-     columns use the same registry numbers as the editor/result side panel.
+   - Work cards are planned for print before drawing: two eligible layout units stack on an
+     A4 portrait page; an odd eligible unit stays in the top slot. A unit whose map or complete
+     side register would fall below 7 pt/0.8 pt tick readability receives its own A4 landscape
+     page. Each card keeps a proportional map beside its compact `# · detal · o'lcham · dona ·
+     D1 · D2 · Sh1 · Sh2` register; overflow rows go to landscape `Detallar (davomi)` pages,
+     never by clipping a row or splitting the map. Every page is numbered. Per-sheet stats
+     include fill/detail/offcut/waste and exact `Kesishlar: N · uzunligi X m` when the engine
+     recorded them; imported MAP and legacy rows say that cut information is unavailable.
    - The PDF parity contract is intentionally narrow: the **map panel inside the PDF**
      mirrors the web sheet visualiser's geometry, label fitting, offcut overlays, and
      banding ticks. The surrounding summary, title blocks, stats and tables are PDF-own.

@@ -2,6 +2,7 @@
 
 # ruff: noqa: RUF001 -- expected report labels use Uzbek copy.
 
+import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -22,15 +23,23 @@ EDGE_A_ID = uuid.UUID("00000000-0000-0000-0000-0000000000a1")
 EDGE_B_ID = uuid.UUID("00000000-0000-0000-0000-0000000000b1")
 
 
-def _placement(part_ref: str, x: int, y: int, *, index: int = 1) -> CuttingPlacementResponse:
+def _placement(
+    part_ref: str,
+    x: int,
+    y: int,
+    *,
+    index: int = 1,
+    length: int = 400,
+    width: int = 200,
+) -> CuttingPlacementResponse:
     return CuttingPlacementResponse(
         id=uuid.uuid4(),
         part_ref=part_ref,
         part_quantity_index=index,
         x_mm=x,
         y_mm=y,
-        length_mm=400,
-        width_mm=200,
+        length_mm=length,
+        width_mm=width,
         rotated=False,
     )
 
@@ -41,12 +50,16 @@ def _panel(
     panel_index: int,
     placements: list[CuttingPlacementResponse],
     offcuts: list[CuttingOffcutResponse] | None = None,
+    cut_count: int | None = None,
+    cut_length_mm: int | None = None,
 ) -> CuttingPanelResponse:
     return CuttingPanelResponse(
         id=uuid.uuid4(),
         material_id=panel_id,
         panel_index=panel_index,
         waste_area_mm2=0,
+        cut_count=cut_count,
+        cut_length_mm=cut_length_mm,
         placements=placements,
         offcuts=offcuts or [],
     )
@@ -266,3 +279,158 @@ def test_render_pdf_smoke_uses_a4_portrait_and_summary_plus_sheet_pages() -> Non
     assert pdf.startswith(b"%PDF")
     assert pdf.count(b"/Type /Page") >= 2
     assert b"/MediaBox [ 0 0 595.2756 841.8898 ]" in pdf
+
+
+def _layout_units(result: CuttingResultResponse) -> list[pdf_document.LayoutUnit]:
+    registry = pdf_document._derive_edge_registry(result.parts_snapshot)
+    return [
+        pdf_document.LayoutUnit(
+            group, pdf_document._panel_part_rows(result, group.panels[0], registry)
+        )
+        for group in pdf_document._group_identical_sheets(result)
+    ]
+
+
+def _dense_result(row_count: int) -> CuttingResultResponse:
+    parts = [
+        _part(part_ref=f"part-{index}", name=f"Detail {index}", length_mm=100, width_mm=100)
+        for index in range(row_count)
+    ]
+    placements = [
+        _placement(
+            f"part-{index}",
+            (index % 9) * 100,
+            (index // 9) * 100,
+            length=100,
+            width=100,
+        )
+        for index in range(row_count)
+    ]
+    return _result(parts=parts, panels=[_panel(PANEL_ID, panel_index=1, placements=placements)])
+
+
+def _standard_sheet_result() -> CuttingResultResponse:
+    parts = [
+        _part(part_ref="tall", name="Yon panel", length_mm=350, width_mm=1288),
+        _part(part_ref="wide", name="Tokcha", length_mm=900, width_mm=350),
+        _part(part_ref="square", name="Eshik", length_mm=668, width_mm=600),
+        _part(part_ref="narrow", name="Tasma", length_mm=120, width_mm=524),
+        _part(part_ref="thin", name="Qirra", length_mm=80, width_mm=468),
+    ]
+    first = [
+        _placement("tall", 0, 0, length=350, width=1288),
+        _placement("wide", 350, 0, length=900, width=350),
+        _placement("square", 1250, 0, length=668, width=600),
+        _placement("narrow", 1918, 0, length=120, width=524),
+        _placement("thin", 2038, 0, length=80, width=468),
+    ]
+    second = [
+        _placement("tall", 10, 0, length=350, width=1288),
+        _placement("wide", 360, 0, length=900, width=350),
+        _placement("square", 1260, 0, length=668, width=600),
+        _placement("narrow", 1928, 0, length=120, width=524),
+        _placement("thin", 2048, 0, length=80, width=468),
+    ]
+    result = _result(
+        parts=parts,
+        panels=[
+            _panel(PANEL_ID, panel_index=1, placements=first, cut_count=14, cut_length_mm=12_480),
+            _panel(PANEL_ID, panel_index=2, placements=second, cut_count=14, cut_length_mm=12_480),
+        ],
+    )
+    result.material_snapshots[str(PANEL_ID)]["panel_length_mm"] = 2750
+    result.material_snapshots[str(PANEL_ID)]["panel_width_mm"] = 1830
+    return result
+
+
+def test_work_page_planner_puts_two_eligible_units_on_one_portrait_page() -> None:
+    result = _result(
+        parts=[_part()],
+        panels=[
+            _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)]),
+            _panel(PANEL_ID, panel_index=2, placements=[_placement("part-a", 500, 0)]),
+        ],
+    )
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 2)]
+
+
+def test_standard_2750_by_1830_sheet_uses_two_up_portrait_with_fixed_7pt_fallbacks() -> None:
+    result = _standard_sheet_result()
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 2)]
+
+
+def test_unlabelable_map_uses_landscape_even_when_its_register_fits() -> None:
+    result = _result(
+        parts=[_part(length_mm=20, width_mm=20)],
+        panels=[
+            _panel(
+                PANEL_ID,
+                panel_index=1,
+                placements=[_placement("part-a", 0, 0, length=20, width=20)],
+            )
+        ],
+    )
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert [page.orientation for page in pages] == ["landscape"]
+
+
+def test_cut_metrics_remain_on_their_own_work_card_line() -> None:
+    result = _standard_sheet_result()
+
+    assert pdf_document._cut_metric_text(result.panels[0]) == "Kesishlar: 14 · uzunligi 12.48 m"
+
+
+def test_work_page_planner_keeps_an_odd_eligible_unit_in_portrait_top_slot() -> None:
+    result = _result(
+        parts=[_part()],
+        panels=[_panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])],
+    )
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert [(page.orientation, len(page.units)) for page in pages] == [("portrait", 1)]
+
+
+def test_work_page_planner_flushes_pending_portrait_before_dense_landscape() -> None:
+    simple = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
+    dense = _dense_result(90)
+    result = _result(parts=[_part(), *dense.parts_snapshot], panels=[simple, *dense.panels])
+
+    pages = pdf_document._plan_work_pages(result, _layout_units(result))
+
+    assert pages[0].orientation == "portrait"
+    assert len(pages[0].units) == 1
+    assert pages[1].orientation == "landscape"
+    assert any(page.orientation == "landscape_continuation" for page in pages[2:])
+    rendered_rows = sum(
+        (page.row_end or 0) - page.row_start
+        for page in pages
+        if page.orientation.startswith("landscape")
+    )
+    assert rendered_rows == 90
+
+
+def test_adaptive_pdf_smoke_mixes_portrait_and_landscape_and_embeds_font() -> None:
+    simple = _panel(PANEL_ID, panel_index=1, placements=[_placement("part-a", 0, 0)])
+    dense = _dense_result(36)
+    result = _result(parts=[_part(), *dense.parts_snapshot], panels=[simple, *dense.panels])
+
+    pdf = pdf_document.render_cutting_pdf(result)
+    sizes = [
+        (float(width), float(height))
+        for width, height in re.findall(rb"/MediaBox \[ 0 0 ([0-9.]+) ([0-9.]+) \]", pdf)
+    ]
+
+    assert pdf.startswith(b"%PDF")
+    assert b"/FontFile2" in pdf
+    assert sizes[0][0] < sizes[0][1]  # summary is always portrait
+    assert any(width < height for width, height in sizes[1:])
+    assert any(width > height for width, height in sizes)

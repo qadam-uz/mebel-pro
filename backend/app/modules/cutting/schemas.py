@@ -150,6 +150,8 @@ class CuttingPanelResponse(APIModel):
     material_id: uuid.UUID
     panel_index: int
     waste_area_mm2: int
+    cut_count: int | None = None
+    cut_length_mm: int | None = None
     offcuts: list[CuttingOffcutResponse] = Field(default_factory=list)
     placements: list[CuttingPlacementResponse]
 

@@ -109,6 +109,9 @@ def draw_sheet_map(
     result: CuttingResultResponse,
     panel: CuttingPanelResponse,
     parts_by_ref: dict[str, tuple[dict[str, Any], int]] | None = None,
+    *,
+    min_text_pt: float = 7.0,
+    min_edge_stroke_pt: float = 0.8,
 ) -> None:
     """Draw only the sheet map into `(x, y, width, height)` PDF points."""
     _register_fonts()
@@ -125,7 +128,7 @@ def draw_sheet_map(
         origin_y=box.y,
     )
     norm_scale = _NORM_WIDTH / panel_length
-    label_font_pt = (_LABEL_FONT / norm_scale) * scale
+    label_font_pt = max(min_text_pt, (_LABEL_FONT / norm_scale) * scale)
 
     pdf.setLineWidth(2 * scale)
     pdf.setStrokeGray(0.2)
@@ -150,7 +153,7 @@ def draw_sheet_map(
         offcut_label = _offcut_label_mode(offcut, norm_scale)
         if offcut_label is not None:
             pdf.setFillColor(_SUCCESS if offcut.usable else _INK_MUTED)
-            pdf.setFont(_FONT_REGULAR, label_font_pt)
+            pdf.setFont(_FONT_REGULAR, max(min_text_pt, label_font_pt))
             if offcut_label.orientation == "vertical":
                 pdf.saveState()
                 pdf.translate(x + w / 2, y + h / 2)
@@ -186,7 +189,7 @@ def draw_sheet_map(
             if ticks:
                 pdf.saveState()
                 pdf.setLineCap(1)
-                pdf.setLineWidth((_BAND_STROKE / norm_scale) * scale)
+                pdf.setLineWidth(max(min_edge_stroke_pt, (_BAND_STROKE / norm_scale) * scale))
                 pdf.setStrokeGray(0.15)
                 for x1, y1, x2, y2 in ticks:
                     pdf.line(
@@ -197,14 +200,18 @@ def draw_sheet_map(
                     )
                 pdf.restoreState()
 
-        if _label_fits(placement.length_mm, placement.width_mm, norm_scale):
+        label = _placement_label_mode(placement, parts, label_font_pt, w, h)
+        if label is not None:
             pdf.setFillColor(_INK_SOFT)
             pdf.setFont(_FONT_REGULAR, label_font_pt)
-            pdf.drawCentredString(
-                x + w / 2,
-                y + h / 2 - 0.36 * label_font_pt,
-                _placement_label(placement, parts),
-            )
+            if label.orientation == "vertical":
+                pdf.saveState()
+                pdf.translate(x + w / 2, y + h / 2)
+                pdf.rotate(90)
+                pdf.drawCentredString(0, -0.36 * label_font_pt, label.text)
+                pdf.restoreState()
+            else:
+                pdf.drawCentredString(x + w / 2, y + h / 2 - 0.36 * label_font_pt, label.text)
 
 
 def _rect_points(
@@ -261,6 +268,38 @@ def _placement_label(
     rotated = " ↻" if placement.rotated else ""
     number = f"#{index + 1} " if row is not None else ""
     return f"{number}{name} {placement.length_mm}×{placement.width_mm}{rotated}"
+
+
+def _placement_label_mode(
+    placement: CuttingPlacementResponse,
+    parts_by_ref: dict[str, tuple[dict[str, Any], int]],
+    font_pt: float,
+    width_pt: float,
+    height_pt: float,
+) -> _OffcutLabelMode | None:
+    """Deterministic print fallback: full label, dimensions, row number, none.
+
+    The right-side register always carries dimensions and quantity, so omitting a
+    label here is safe only after all readable alternatives have failed.
+    """
+    full = _placement_label(placement, parts_by_ref)
+    row = parts_by_ref.get(placement.part_ref)
+    dims = f"{placement.length_mm}×{placement.width_mm}"
+    number = f"#{row[1] + 1}" if row is not None else placement.part_ref
+    for text in (full, dims, number):
+        if _printed_text_fits(text, font_pt, width_pt, height_pt):
+            return _OffcutLabelMode(text, "horizontal")
+    for text in (full, dims, number):
+        if _printed_text_fits(text, font_pt, height_pt, width_pt):
+            return _OffcutLabelMode(text, "vertical")
+    return None
+
+
+def _printed_text_fits(text: str, font_pt: float, width_pt: float, height_pt: float) -> bool:
+    return (
+        pdfmetrics.stringWidth(text, _FONT_REGULAR, font_pt) + 4 <= width_pt
+        and font_pt * 1.35 <= height_pt
+    )
 
 
 def _offcut_label_mode(offcut: CuttingOffcutResponse, norm_scale: float) -> _OffcutLabelMode | None:

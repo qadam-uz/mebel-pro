@@ -82,6 +82,18 @@ def test_cutting_engine_places_every_instance_without_overlap() -> None:
             _assert_no_overlap(panel_result.placements)
 
 
+def test_optimizer_records_exact_per_sheet_cut_count_and_manhattan_length() -> None:
+    panel = _panel()
+
+    result = run_all_algorithms([_part(material_id=panel.material_id)], {panel.material_id: panel})[
+        0
+    ]
+
+    assert all(row.cut_count is not None and row.cut_count >= 0 for row in result.panels)
+    assert all(row.cut_length_mm is not None and row.cut_length_mm >= 0 for row in result.panels)
+    assert sum(row.cut_length_mm or 0 for row in result.panels) == result.total_cut_length_mm
+
+
 def test_rejects_more_than_300_parts_before_optimizing() -> None:
     panel = _panel()
     part = _part(material_id=panel.material_id, quantity=301)
