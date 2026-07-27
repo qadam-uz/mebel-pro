@@ -530,11 +530,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="isAuthRoute" class="min-h-screen bg-bg text-ink">
+  <div v-if="isAuthRoute" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <RouterView />
   </div>
 
-  <div v-else-if="config.role === 'client'" class="min-h-screen bg-bg text-ink">
+  <div v-else-if="config.role === 'client'" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <header class="client-header">
       <div class="client-container client-header-row">
         <RouterLink :to="config.homePath" class="client-brand" aria-label="Bosh sahifa">

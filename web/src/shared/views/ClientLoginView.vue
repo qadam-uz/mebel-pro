@@ -145,7 +145,7 @@ async function resendOtp() {
 </script>
 
 <template>
-  <main class="grid min-h-screen place-items-center bg-bg px-4 py-8">
+  <main class="grid min-h-[var(--app-vh)] place-items-center bg-bg px-4 py-8">
     <section
       class="client-card w-[min(100%,420px)] p-8 shadow-[0_18px_44px_-16px_rgb(15_27_45_/_35%)]"
     >
