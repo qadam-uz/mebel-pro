@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { reactive } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
@@ -10,7 +10,15 @@ import {
 } from '@/shared/app/adminValidation'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 
-const { config, login, password, isSubmitting, error, submit: submitLogin } = useStaffLogin()
+const {
+  config,
+  login,
+  password,
+  isSubmitting,
+  error,
+  errorText,
+  submit: submitLogin,
+} = useStaffLogin()
 type LoginField = 'login' | 'password'
 const fieldErrors = reactive<FieldErrors<LoginField>>({})
 const fieldIds: Record<LoginField, string> = {
@@ -19,19 +27,9 @@ const fieldIds: Record<LoginField, string> = {
 }
 const fieldOrder: LoginField[] = ['login', 'password']
 
-// AB-13: useStaffLogin is shared with the workshop login, so map the error CODE
-// to Uzbek locally here rather than translating the shared English text map
-// (which would change the colleague-owned workshop SPA's copy).
-const ADMIN_LOGIN_ERROR_UZ: Record<string, string> = {
-  invalid_credentials: "Login yoki parol noto'g'ri.",
-  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
-  account_blocked: 'Hisob bloklangan.',
-  login_rate_limited: "Juda ko'p urinish. Birozdan so'ng urinib ko'ring.",
-  network_error: "Server bilan bog'lanib bo'lmadi.",
-}
-const errorText = computed(() =>
-  error.value ? (ADMIN_LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
-)
+// AB-13 kept a local Uzbek map here because the shared composable's own map was
+// English. QAD-163 moved the Uzbek copy into the composable, so both sign-in
+// screens now read from one source and this duplicate is gone.
 
 function clearLoginField(field: LoginField) {
   delete fieldErrors[field]

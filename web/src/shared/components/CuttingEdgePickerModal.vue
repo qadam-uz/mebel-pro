@@ -818,7 +818,7 @@ onBeforeUnmount(() => {
             v-model="edgePickerSearch"
             class="mp-input"
             type="search"
-            placeholder="Kromka qidirish…"
+            placeholder="Kromka nomi yoki dekor kodi"
             aria-label="Kromka qidirish"
           />
 

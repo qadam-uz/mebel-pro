@@ -345,7 +345,7 @@ function sanitizeRowThreshold(row: SelectedRow) {
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label class="field">
           <span>Qidirish</span>
-          <input v-model="search" class="mp-input" placeholder="Material qidirish..." />
+          <input v-model="search" class="mp-input" placeholder="Material nomi yoki dekor kodi" />
         </label>
         <FormSelect
           v-model="manufacturerFilter"

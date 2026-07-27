@@ -32,10 +32,8 @@ const isClient = computed(() => roleConfig.role === 'client')
 const isWorkshop = computed(() => roleConfig.role === 'workshop')
 const isAdmin = computed(() => roleConfig.role === 'admin')
 // Accessible name for the dropdown + its header (notifications.md: a proper menu
-// with a descriptive name), localized for the Uzbek-facing client/workshop apps.
-const menuLabel = computed(() =>
-  isClient.value || isWorkshop.value || isAdmin.value ? 'Bildirishnomalar' : 'Notifications',
-)
+// with a descriptive name). Uzbek is the only shipped locale in all three apps.
+const menuLabel = 'Bildirishnomalar'
 const menuPositionClass = computed(() =>
   isAdmin.value
     ? 'fixed inset-x-4 top-16 mt-0 w-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(360px,calc(100vw-2rem))]'
@@ -211,7 +209,7 @@ onBeforeUnmount(() => {
       :class="isClient ? 'client-icon-button' : isWorkshop ? 'workshop-bell' : 'admin-icon-button'"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :aria-label="`Bildirishnomalar - ${notifications.unread} o'qilmagan`"
+      :aria-label="`Bildirishnomalar — ${notifications.unread} o'qilmagan`"
       @click="toggle"
     >
       <template v-if="isClient || isWorkshop || isAdmin">
@@ -259,27 +257,17 @@ onBeforeUnmount(() => {
           :disabled="notifications.unread === 0"
           @click="markAllRead"
         >
-          {{
-            isClient || isWorkshop || isAdmin ? "Hammasini o'qilgan deb belgilash" : 'Mark all read'
-          }}
+          Hammasini o'qilgan deb belgilash
         </button>
       </div>
       <div v-if="notifications.loading" class="px-4 py-5 text-sm font-bold text-ink-soft">
-        {{
-          isClient || isWorkshop || isAdmin
-            ? 'Bildirishnomalar yuklanmoqda'
-            : 'Loading notifications'
-        }}
+        Bildirishnomalar yuklanmoqda…
       </div>
       <div v-else-if="notifications.error" class="px-4 py-5 text-sm font-bold text-danger">
-        {{
-          isClient || isWorkshop || isAdmin
-            ? "Bildirishnomalarni yuklab bo'lmadi."
-            : 'Notifications could not be loaded.'
-        }}
+        Bildirishnomalarni yuklab bo'lmadi. Qayta urinib ko'ring.
       </div>
       <div v-else-if="notifications.items.length === 0" class="px-4 py-5 text-sm text-ink-soft">
-        {{ isClient || isWorkshop || isAdmin ? "Bildirishnoma yo'q." : 'Nothing new.' }}
+        Bildirishnoma yo'q — buyurtma va ombor hodisalari shu yerda chiqadi.
       </div>
       <template v-else>
         <button

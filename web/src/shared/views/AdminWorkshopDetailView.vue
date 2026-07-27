@@ -10,10 +10,12 @@ import {
 } from '@/shared/app/adminValidation'
 import {
   adminDate,
+  adminErrorMessage,
   branchStatusLabel,
   workshopStatusLabel,
   workshopStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -70,7 +72,7 @@ async function block() {
       focusFirstFieldError(blockFieldErrors, ['reason'], { reason: 'block-reason' })
     } else {
       actionError.value = 'workshop_block_failed'
-      toast.danger("Ustaxonani bloklab bo'lmadi")
+      toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani bloklab bo'lmadi."))
     }
   } finally {
     acting.value = false
@@ -84,9 +86,9 @@ async function unblock() {
   try {
     await admin.unblockWorkshop(admin.detail.workshop.id)
     toast.success('Ustaxona blokdan chiqarildi')
-  } catch {
+  } catch (error) {
     actionError.value = 'workshop_unblock_failed'
-    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani blokdan chiqarib bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -119,9 +121,9 @@ async function confirmOwnerReset() {
     await admin.resetWorkshopOwnerPassword(admin.detail.workshop.id)
     resetConfirmOpen.value = false
     secretOpen.value = true
-  } catch {
+  } catch (error) {
     resetConfirmOpen.value = false
-    toast.danger("Rahbarning parolini tiklab bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Rahbarning parolini tiklab bo'lmadi."))
   } finally {
     resetting.value = false
   }

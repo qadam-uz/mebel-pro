@@ -44,7 +44,7 @@ const localFileName = ref('')
 const hasImage = computed(() => Boolean(localPreviewUrl.value || props.fileId))
 const chooseLabel = computed(() => (hasImage.value ? 'Rasmni almashtirish' : 'Rasm tanlash'))
 const statusText = computed(() => {
-  if (props.uploading) return 'Rasm yuklanmoqda...'
+  if (props.uploading) return 'Rasm yuklanmoqda…'
   if (localFileName.value) return localFileName.value
   if (props.fileId) return 'Saqlangan rasm'
   return props.helper || 'PNG, JPG yoki WEBP rasm tanlang.'

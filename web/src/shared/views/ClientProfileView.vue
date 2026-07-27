@@ -200,7 +200,7 @@ onMounted(reloadProfile)
         </div>
         <div class="client-card-b">
           <div v-if="sessions.length === 0" class="text-sm text-ink-muted">
-            Faol sessiya topilmadi.
+            Faol sessiya yo'q — joriy sessiya keyingi yangilashda ko'rinadi.
           </div>
           <template v-else>
             <div v-for="session in sessions" :key="session.id" class="client-row-item">

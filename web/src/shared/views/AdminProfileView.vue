@@ -325,7 +325,7 @@ onMounted(loadSessions)
           <button type="button" class="ml-2 underline" @click="loadSessions">Qayta urinish</button>
         </p>
         <div v-else-if="sessions.length === 0" class="admin-empty">
-          <h3>Sessiya topilmadi</h3>
+          <h3>Faol sessiya yo'q</h3>
           <p>Joriy sessiya keyingi yangilashda ko'rinadi.</p>
         </div>
         <div v-else class="admin-row-list">

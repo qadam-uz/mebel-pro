@@ -91,7 +91,7 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
     pdf.showPage()
 
     if not result.panels:
-        _draw_title(pdf, "Kesish xujjati")
+        _draw_title(pdf, "Kesish hujjati")
         _draw_text(pdf, _MARGIN, _PAGE_H - 36 * mm, "Listlar yo'q", 11)
         pdf.showPage()
     else:
@@ -128,7 +128,7 @@ def _draw_summary_title_block(
     box_h = 70
     pdf.setStrokeGray(_HAIRLINE)
     pdf.rect(_MARGIN, y - box_h, _CONTENT_W, box_h)
-    _draw_text(pdf, _MARGIN + 8, y - 17, "Mebel Pro — kesish xujjati", 14, bold=True)
+    _draw_text(pdf, _MARGIN + 8, y - 17, "Mebel Pro — kesish hujjati", 14, bold=True)
     order = context.order_number or f"chizma {_draft_short_id(result)}"
     date_text = (context.generated_at or datetime.now()).strftime("%d.%m.%Y")
     pieces = sum(_part_quantity(part) for part in result.parts_snapshot)
@@ -362,7 +362,7 @@ def _draw_table_row(
 
 def _setup_page(pdf: canvas.Canvas) -> None:
     pdf.setPageSize(A4)
-    pdf.setTitle("Mebel Pro — kesish xujjati")
+    pdf.setTitle("Mebel Pro — kesish hujjati")
     pdf.setAuthor("Mebel Pro")
 
 

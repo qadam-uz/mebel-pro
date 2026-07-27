@@ -15,11 +15,13 @@ import {
   type FieldErrors,
 } from '@/shared/app/adminValidation'
 import {
+  adminErrorMessage,
   dropdownOption,
   materialKindLabel,
   materialStatusLabel,
   materialStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -308,10 +310,17 @@ async function onMaterialFile(file: File) {
     const uploaded = await files.upload(file)
     form.imageFileId = uploaded.id
     toast.success('Rasm yuklandi')
-  } catch {
-    uploadError.value = "Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring."
+  } catch (error) {
+    // The upload endpoint names its own refusals (wrong type, too large, storage
+    // down); an operator who is told "rasmni yuklab bo'lmadi" retries the same
+    // file forever (QAD-163).
+    const message = adminErrorMessage(
+      apiErrorCode(error),
+      "Rasmni yuklab bo'lmadi. Boshqa fayl bilan qayta urinib ko'ring.",
+    )
+    uploadError.value = message
     imageUploadResetKey.value += 1
-    toast.danger("Rasmni yuklab bo'lmadi")
+    toast.danger(message)
   }
 }
 
@@ -419,8 +428,8 @@ async function confirmStatus() {
   try {
     await admin.setMaterialStatus(target.row.id, target.status)
     toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
-  } catch {
-    toast.danger('Amal bajarilmadi')
+  } catch (error) {
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Material holatini o'zgartirib bo'lmadi."))
   } finally {
     actionId.value = null
   }
@@ -445,7 +454,7 @@ onMounted(async () => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidirish</span>
-        <input v-model="search" placeholder="Material nomi" />
+        <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
       </label>
       <FormSelect
         v-model="kindFilter"

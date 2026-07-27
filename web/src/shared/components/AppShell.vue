@@ -575,7 +575,7 @@ onBeforeUnmount(() => {
     class="workshop-app"
     :class="{ 'nav-collapsed': sidebarCollapsed }"
   >
-    <aside class="workshop-sidebar" aria-label="Workshop navigation">
+    <aside class="workshop-sidebar" aria-label="Ustaxona navigatsiyasi">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="workshop-brand-mark" />
         <span class="workshop-brand-copy">
@@ -717,7 +717,7 @@ onBeforeUnmount(() => {
               id="workshop-global-search"
               ref="workshopSearchInputRef"
               v-model="workshopSearchQuery"
-              placeholder="Buyurtma, mijoz, xodim yoki material..."
+              placeholder="Buyurtma, mijoz, xodim yoki material"
               autocomplete="off"
               :aria-expanded="workshopSearchOpen"
               aria-controls="workshop-global-search-panel"
@@ -742,7 +742,7 @@ onBeforeUnmount(() => {
               Kamida 2 ta belgi kiriting.
             </div>
             <div v-else-if="workshopSearch.loading" class="workshop-search-empty">
-              Qidirilmoqda...
+              Qidirilmoqda…
             </div>
             <template v-else>
               <p v-if="workshopSearch.error" class="workshop-search-error">
@@ -876,7 +876,7 @@ onBeforeUnmount(() => {
 
   <div v-else class="admin-app">
     <a class="admin-skip-link" href="#admin-content">Kontentga o'tish</a>
-    <aside class="admin-sidebar" aria-label="Superadmin navigation">
+    <aside class="admin-sidebar" aria-label="Platforma navigatsiyasi">
       <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="admin-brand-mark" />
         <span class="admin-brand-copy">
@@ -1070,7 +1070,7 @@ onBeforeUnmount(() => {
           @click="openMobileNav"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
-          Menu
+          Menyu
         </button>
 
         <div class="admin-top-actions">

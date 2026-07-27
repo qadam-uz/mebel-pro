@@ -13,6 +13,7 @@ import {
 } from '@/shared/app/adminValidation'
 import {
   adminDateTime,
+  adminErrorMessage,
   platformUserStatusLabel,
   platformUserStatusTone,
 } from '@/shared/app/adminUi'
@@ -177,7 +178,7 @@ async function saveUser() {
       focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
     } else {
       actionError.value = 'platform_user_save_failed'
-      toast.danger('Admin amali bajarilmadi')
+      toast.danger(adminErrorMessage(apiErrorCode(error), 'Admin saqlanmadi.'))
     }
   } finally {
     saving.value = false
@@ -198,9 +199,9 @@ async function confirmReset() {
     resetTarget.value = null
     secretOpen.value = true
     toast.success('Yangi vaqtinchalik parol yaratildi')
-  } catch {
+  } catch (error) {
     actionError.value = 'platform_user_reset_failed'
-    toast.danger("Parolni qaytarib bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Parolni tiklab bo'lmadi."))
   } finally {
     actionId.value = null
   }
@@ -237,11 +238,7 @@ async function confirmBlock() {
       focusFirstFieldError(blockFieldErrors, ['blockReason'], { blockReason: 'op-block-reason' })
     } else {
       actionError.value = 'platform_user_block_failed'
-      toast.danger(
-        apiErrorCode(blockErr) === 'last_platform_operator'
-          ? "Oxirgi faol adminni bloklab bo'lmaydi"
-          : "Adminni bloklab bo'lmadi",
-      )
+      toast.danger(adminErrorMessage(apiErrorCode(blockErr), "Adminni bloklab bo'lmadi."))
     }
   } finally {
     actionId.value = null
@@ -254,9 +251,9 @@ async function unblock(id: string) {
   try {
     await admin.unblockPlatformUser(id)
     toast.success('Admin blokdan chiqarildi')
-  } catch {
+  } catch (error) {
     actionError.value = 'platform_user_unblock_failed'
-    toast.danger("Adminni blokdan chiqarib bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Adminni blokdan chiqarib bo'lmadi."))
   } finally {
     actionId.value = null
   }

@@ -316,6 +316,56 @@ export function adminNotificationDestination(item: NotificationItem) {
   return '/admin/notifications'
 }
 
+/**
+ * Backend `APIError` codes an operator can trigger from the platform app, in the
+ * words the screen uses (QAD-163). The admin SPA had no such map: every failed
+ * action landed on a per-call-site literal like `Amal bajarilmadi`, which is the
+ * exact failure QAD-123 found in the workshop finance forms — four distinct,
+ * individually explainable refusals wearing one shrug.
+ *
+ * Field-level rejections stay with `apiValidationMessage` in `adminValidation.ts`;
+ * this map is for the action-level failures that surface as a toast.
+ */
+const ADMIN_ERROR_MESSAGES: Record<string, string> = {
+  // Refusals
+  permission_denied: "Bu amal uchun ruxsatingiz yo'q.",
+  forbidden: "Bu amal uchun ruxsatingiz yo'q.",
+  // Platform operators
+  cannot_block_self: "O'z hisobingizni bloklab bo'lmaydi.",
+  last_platform_operator: "Oxirgi faol adminni bloklab bo'lmaydi — avval boshqasini qo'shing.",
+  user_not_found: "Admin topilmadi — ro'yxatni yangilang.",
+  login_exists: 'Bu login band. Boshqa login tanlang.',
+  weak_password: 'Parol yetarlicha kuchli emas — katta/kichik harf va raqam ishlating.',
+  // Workshops
+  workshop_not_found: "Ustaxona topilmadi — ro'yxatni yangilang.",
+  invalid_status: "Bu holat allaqachon qo'yilgan.",
+  reason_required: 'Sababni yozing.',
+  // Catalog
+  manufacturer_not_found: "Ishlab chiqaruvchi topilmadi — ro'yxatni yangilang.",
+  manufacturer_name_exists: 'Bu ishlab chiqaruvchi allaqachon bor.',
+  material_not_found: "Material topilmadi — ro'yxatni yangilang.",
+  // Platform monitor
+  error_not_found: "Xatolik yozuvi topilmadi — ro'yxatni yangilang.",
+  job_not_found: "Bunday fon vazifa ro'yxatdan o'tmagan.",
+  notification_not_found: "Bildirishnoma topilmadi — ro'yxatni yangilang.",
+  // File upload (material images)
+  unsupported_file_type: "Bu fayl turini yuklab bo'lmaydi — JPEG yoki PNG tanlang.",
+  invalid_file_type: 'Bu fayl turi rasm sifatida biriktirilmaydi.',
+  file_too_large: 'Fayl juda katta — kichikroq rasm tanlang.',
+  file_not_found: 'Fayl topilmadi — rasmni qaytadan yuklang.',
+  file_storage_unavailable: "Fayl ombori javob bermayapti. Birozdan so'ng qayta urinib ko'ring.",
+}
+
+/**
+ * Uzbek copy for a backend error code. `fallback` is the call site's own
+ * specific message — the one that names the action that failed — so an unmapped
+ * code still says more than "something went wrong".
+ */
+export function adminErrorMessage(code: string | null | undefined, fallback: string): string {
+  if (!code) return fallback
+  return ADMIN_ERROR_MESSAGES[code] ?? fallback
+}
+
 export const allOption: DropdownOption = {
   value: 'all',
   label: 'Hammasi',

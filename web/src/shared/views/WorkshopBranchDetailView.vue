@@ -148,7 +148,7 @@ const statusFieldIds: Record<StatusField, string> = {
 }
 const statusOptions = [
   { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
-  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: 'sabab bilan ko`rinadi' },
+  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: "sabab bilan ko'rinadi" },
   { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
 ]
 
