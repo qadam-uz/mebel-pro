@@ -50,25 +50,6 @@ const branchFieldIds: Record<BranchField, string> = {
   address: 'branch-address',
   phones: 'branch-additional-phone-0',
 }
-const hours = reactive([
-  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
-  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
-  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
-  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
-  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
-  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
-  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
-])
-
-function workingHoursPayload() {
-  return Object.fromEntries(
-    hours.map((day) => [
-      day.key,
-      day.open ? { open: day.from, close: day.to } : { open: null, close: null },
-    ]),
-  )
-}
-
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
   phonesValidated.value = true
@@ -94,7 +75,6 @@ async function createBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       additional_phones: additionalPhones.value,
-      working_hours: workingHoursPayload(),
     })
     branchForm.name = ''
     branchForm.address = ''
@@ -233,35 +213,6 @@ onMounted(() => {
           <p v-if="branchFieldErrors.phones" class="mp-field-error">
             {{ branchFieldErrors.phones }}
           </p>
-          <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2">
-              <div
-                v-for="day in hours"
-                :key="day.key"
-                class="rounded-md border border-hairline bg-sunk p-3"
-              >
-                <label class="flex items-center gap-2 text-sm font-extrabold text-ink">
-                  <input v-model="day.open" type="checkbox" class="size-4 accent-accent" />
-                  {{ day.label }}
-                </label>
-                <div class="mt-2 grid grid-cols-2 gap-2">
-                  <input
-                    v-model="day.from"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                  <input
-                    v-model="day.to"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="branchError" class="text-sm font-bold text-danger">Filial qo'shilmadi.</p>
             <button type="button" class="mp-button mp-button-outline" @click="showCreate = false">

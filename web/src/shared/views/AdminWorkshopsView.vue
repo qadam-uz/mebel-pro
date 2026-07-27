@@ -28,7 +28,6 @@ import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
-type WorkingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 type ProvisionField =
   | 'name'
   | 'branchName'
@@ -36,8 +35,6 @@ type ProvisionField =
   | 'branchPhone'
   | 'ownerLogin'
   | 'tempPassword'
-
-type WorkingHoursForm = Record<WorkingDay, { open: string; close: string }>
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
@@ -157,25 +154,6 @@ const provisionApiLocMap: Partial<Record<string, ProvisionField>> = {
   'body.owner.login': 'ownerLogin',
   'body.temp_password': 'tempPassword',
 }
-const workingHours = reactive<WorkingHoursForm>({
-  monday: { open: '09:00', close: '18:00' },
-  tuesday: { open: '09:00', close: '18:00' },
-  wednesday: { open: '09:00', close: '18:00' },
-  thursday: { open: '09:00', close: '18:00' },
-  friday: { open: '09:00', close: '18:00' },
-  saturday: { open: '10:00', close: '16:00' },
-  sunday: { open: '', close: '' },
-})
-const workingDayOptions: Array<{ key: WorkingDay; label: string }> = [
-  { key: 'monday', label: 'Dushanba' },
-  { key: 'tuesday', label: 'Seshanba' },
-  { key: 'wednesday', label: 'Chorshanba' },
-  { key: 'thursday', label: 'Payshanba' },
-  { key: 'friday', label: 'Juma' },
-  { key: 'saturday', label: 'Shanba' },
-  { key: 'sunday', label: 'Yakshanba' },
-]
-
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
   dropdownOption('active', 'Faol', 'kirish mumkin'),
@@ -190,35 +168,6 @@ const filtered = computed(() => {
   })
 })
 
-function resetWorkingHours() {
-  workingHours.monday.open = '09:00'
-  workingHours.monday.close = '18:00'
-  workingHours.tuesday.open = '09:00'
-  workingHours.tuesday.close = '18:00'
-  workingHours.wednesday.open = '09:00'
-  workingHours.wednesday.close = '18:00'
-  workingHours.thursday.open = '09:00'
-  workingHours.thursday.close = '18:00'
-  workingHours.friday.open = '09:00'
-  workingHours.friday.close = '18:00'
-  workingHours.saturday.open = '10:00'
-  workingHours.saturday.close = '16:00'
-  workingHours.sunday.open = ''
-  workingHours.sunday.close = ''
-}
-
-function workingHoursPayload() {
-  return Object.fromEntries(
-    workingDayOptions.map(({ key }) => [
-      key,
-      {
-        open: workingHours[key].open || null,
-        close: workingHours[key].close || null,
-      },
-    ]),
-  )
-}
-
 function resetForm() {
   form.name = ''
   form.branchName = ''
@@ -226,7 +175,6 @@ function resetForm() {
   form.branchPhone = ''
   form.ownerLogin = ''
   form.tempPassword = ''
-  resetWorkingHours()
   clearFieldErrors(provisionFieldErrors)
   createError.value = null
 }
@@ -262,7 +210,6 @@ async function createWorkshop() {
         name: form.branchName,
         address: form.branchAddress,
         phone: form.branchPhone,
-        working_hours: workingHoursPayload(),
       },
       owner: {
         login: form.ownerLogin,
@@ -544,34 +491,6 @@ onMounted(async () => {
                   {{ provisionFieldErrors.tempPassword }}
                 </span>
               </label>
-              <fieldset class="admin-full admin-working-hours">
-                <legend>Birinchi filial ish vaqti</legend>
-                <div class="admin-working-hours-grid">
-                  <div
-                    v-for="day in workingDayOptions"
-                    :key="day.key"
-                    class="admin-working-hours-row"
-                  >
-                    <span>{{ day.label }}</span>
-                    <label :for="`hours-${day.key}-open`">
-                      <span class="sr-only">{{ day.label }} ochilish vaqti</span>
-                      <input
-                        :id="`hours-${day.key}-open`"
-                        v-model="workingHours[day.key].open"
-                        type="time"
-                      />
-                    </label>
-                    <label :for="`hours-${day.key}-close`">
-                      <span class="sr-only">{{ day.label }} yopilish vaqti</span>
-                      <input
-                        :id="`hours-${day.key}-close`"
-                        v-model="workingHours[day.key].close"
-                        type="time"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </fieldset>
             </div>
             <p
               v-if="createError"

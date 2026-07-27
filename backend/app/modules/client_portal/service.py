@@ -120,7 +120,6 @@ async def branch_options(
             address=branch.address,
             status=branch.status,
             closed_reason=branch.closed_reason,
-            today_hours=branch.today_hours(),
             kerf_mm=branch.kerf_mm,
             edge_trim_mm=branch.edge_trim_mm,
         )
@@ -173,7 +172,6 @@ async def client_branches(
             additional_phones=branch.additional_phones,
             latitude=branch.latitude,
             longitude=branch.longitude,
-            working_hours=branch.working_hours,
             status=branch.status,
             closed_reason=branch.closed_reason,
             materials_preview=previews.get(branch.id, []),

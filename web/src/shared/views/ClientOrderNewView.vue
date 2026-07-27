@@ -6,7 +6,6 @@ import {
   clientErrorLabel,
   formatPercent,
   formatPhone,
-  formatTodayHours,
   isUzPhone,
   normalizeUzPhone,
   pluralUz,
@@ -221,9 +220,6 @@ onMounted(async () => {
             <div class="font-serif text-lg font-semibold text-ink">{{ quote.branch_name }}</div>
             <div class="font-mono text-xs text-ink-muted">
               {{ quote.branch_address }} · {{ formatPhone(quote.branch_phone) }}
-            </div>
-            <div class="text-xs text-ink-soft">
-              Bugun: {{ formatTodayHours(quote.today_hours) }}
             </div>
           </div>
           <div v-else-if="quoteLoading" class="client-skeleton h-20"></div>

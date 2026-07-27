@@ -27,7 +27,6 @@ from app.modules.workshop.schemas import (
     BranchStatusRequest,
     WorkshopOnboardingResponse,
     WorkshopSettingsPatchRequest,
-    dump_working_hours,
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
 
@@ -129,7 +128,6 @@ async def create_branch(
         additional_phones=_normalized_additional_phones(payload.additional_phones, primary=phone),
         latitude=payload.latitude,
         longitude=payload.longitude,
-        working_hours=dump_working_hours(payload.working_hours),
         status=BranchStatus.ACTIVE,
         kerf_mm=payload.kerf_mm,
         edge_trim_mm=payload.edge_trim_mm,
@@ -204,8 +202,6 @@ async def update_branch(
         branch.latitude = latitude
     if "longitude" in payload.model_fields_set:
         branch.longitude = longitude
-    if "working_hours" in payload.model_fields_set and payload.working_hours is not None:
-        branch.working_hours = dump_working_hours(payload.working_hours)
     if "kerf_mm" in payload.model_fields_set and payload.kerf_mm is not None:
         branch.kerf_mm = payload.kerf_mm
     if "edge_trim_mm" in payload.model_fields_set and payload.edge_trim_mm is not None:

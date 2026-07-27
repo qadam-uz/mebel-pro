@@ -51,7 +51,6 @@ from app.modules.support.api import (
     record_status_change,
 )
 from app.modules.workshop.contracts import Branch, Workshop
-from app.modules.workshop.schemas import dump_working_hours
 
 JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
 PLATFORM_SCHEDULER_POLL_SECONDS = 60.0
@@ -287,7 +286,6 @@ async def provision_workshop(
         phone=normalize_uz_phone(payload.branch.phone),
         latitude=None,
         longitude=None,
-        working_hours=dump_working_hours(payload.branch.working_hours),
         status=BranchStatus.ACTIVE,
     )
     db.add(branch)

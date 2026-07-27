@@ -10,7 +10,6 @@ import {
   clientStatusPillClass,
   formatPercent,
   formatRelativeDate,
-  formatTodayHours,
 } from '@/shared/app/clientUi'
 import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
 import { orphanPartIndexByRef } from '@/shared/app/cuttingResultsDisplay'
@@ -522,9 +521,6 @@ onMounted(() => {
                       {{ order.workshop_name }} · {{ order.branch_name }}
                     </div>
                     <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
-                    <div class="mt-1 text-sm text-ink-soft">
-                      Bugun: {{ formatTodayHours(order.today_hours) }}
-                    </div>
                   </div>
                   <div class="client-row-meta">{{ order.branch_phone }}</div>
                 </div>

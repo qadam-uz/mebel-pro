@@ -24,13 +24,6 @@ import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-type WorkingDay = {
-  key: string
-  label: string
-  open: boolean
-  from: string
-  to: string
-}
 type BranchField =
   | 'name'
   | 'address'
@@ -145,29 +138,11 @@ const statusFieldOrder: StatusField[] = ['reason']
 const statusFieldIds: Record<StatusField, string> = {
   reason: 'branch-status-reason',
 }
-const hours = reactive<WorkingDay[]>([
-  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
-  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
-  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
-  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
-  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
-  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
-  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
-])
 const statusOptions = [
   { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
   { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: 'sabab bilan ko`rinadi' },
   { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
 ]
-
-function workingHoursPayload() {
-  return Object.fromEntries(
-    hours.map((day) => [
-      day.key,
-      day.open ? { open: day.from, close: day.to } : { open: null, close: null },
-    ]),
-  )
-}
 
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
@@ -224,15 +199,6 @@ function syncForms() {
   branchForm.edgeTrimMm = String(branch.edge_trim_mm)
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
-  for (const day of hours) {
-    const raw = branch.working_hours[day.key]
-    const entry = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
-    const open = typeof entry?.open === 'string' ? entry.open : ''
-    const close = typeof entry?.close === 'string' ? entry.close : ''
-    day.open = Boolean(open && close)
-    if (open) day.from = open
-    if (close) day.to = close
-  }
   // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
   // tiyin). Show so'm on load; convert back on submit.
   const pricing = workshop.selectedBranchPricing
@@ -272,7 +238,6 @@ async function saveBranch() {
       address: branchForm.address,
       phone: branchForm.phone,
       additional_phones: additionalPhones.value,
-      working_hours: workingHoursPayload(),
       kerf_mm: kerfMmValue.value,
       edge_trim_mm: edgeTrimMmValue.value,
     })
@@ -484,35 +449,6 @@ onMounted(refreshBranch)
           <p v-if="branchFieldErrors.phones" class="mp-field-error">
             {{ branchFieldErrors.phones }}
           </p>
-          <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              <div
-                v-for="day in hours"
-                :key="day.key"
-                class="rounded-md border border-hairline bg-sunk p-3"
-              >
-                <label class="flex items-center gap-2 text-sm font-extrabold text-ink">
-                  <input v-model="day.open" type="checkbox" class="size-4 accent-accent" />
-                  {{ day.label }}
-                </label>
-                <div class="mt-2 grid grid-cols-2 gap-2">
-                  <input
-                    v-model="day.from"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                  <input
-                    v-model="day.to"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
           <div class="grid gap-3 md:grid-cols-2" data-onboard="branch-pricing">
             <label class="field" for="branch-detail-cutting-rate">
               <span>Kesish narxi (so'm)</span>

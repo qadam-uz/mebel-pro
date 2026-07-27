@@ -11,7 +11,7 @@ from app.modules.access.api import create_session
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_platform_user, seed_workshop_with_owner
+from tests.factories import seed_platform_user, seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -292,7 +292,6 @@ async def test_invoice_numbers_run_per_workshop_not_per_branch(
             "phone": "+998901010101",
             "latitude": "41.28",
             "longitude": "69.20",
-            "working_hours": default_working_hours(),
         },
     )
     assert second.status_code == 201

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { formatTodayHours } from '@/shared/app/clientUi'
 import { formatTiyin } from '@/shared/formatters'
 import type { ClientBranchOption } from '@/shared/stores/cutting'
 defineProps<{
@@ -40,8 +39,7 @@ defineEmits<{ select: [] }>()
           "
           >{{ branch.status === 'temporarily_closed' ? 'vaqtincha yopiq' : 'faol' }}</span
         ></span
-      ><span class="mt-1 block text-xs text-ink-muted"
-        >{{ branch.address }} · Bugun: {{ formatTodayHours(branch.today_hours) }}</span
+      ><span class="mt-1 block text-xs text-ink-muted">{{ branch.address }}</span
       ><span
         v-if="branch.closed_reason && branch.status === 'temporarily_closed'"
         class="block text-xs text-warning"

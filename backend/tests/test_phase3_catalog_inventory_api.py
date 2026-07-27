@@ -20,18 +20,6 @@ def _auth(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-def _default_working_hours() -> dict[str, dict[str, str | None]]:
-    return {
-        "monday": {"open": "09:00", "close": "18:00"},
-        "tuesday": {"open": "09:00", "close": "18:00"},
-        "wednesday": {"open": "09:00", "close": "18:00"},
-        "thursday": {"open": "09:00", "close": "18:00"},
-        "friday": {"open": "09:00", "close": "18:00"},
-        "saturday": {"open": "10:00", "close": "16:00"},
-        "sunday": {"open": None, "close": None},
-    }
-
-
 async def _platform_access(db_session: AsyncSession) -> str:
     platform = await seed_platform_user(
         db_session,
@@ -301,22 +289,6 @@ async def test_owner_branch_setup_pricing_status_and_logo_upload(
             "phone": "+998901010101",
             "latitude": "41.28",
             "longitude": "69.20",
-            "working_hours": _default_working_hours(),
-        },
-    )
-    bad_hours = await client.post(
-        "/api/v1/workshop/branches",
-        headers=_auth(owner_access),
-        json={
-            "name": "Bad hours",
-            "address": "Tashkent",
-            "phone": "+998901010102",
-            "latitude": "41.28",
-            "longitude": "69.20",
-            "working_hours": {
-                **_default_working_hours(),
-                "monday": {"open": "18:00", "close": "09:00"},
-            },
         },
     )
     pricing = await client.put(
@@ -348,10 +320,8 @@ async def test_owner_branch_setup_pricing_status_and_logo_upload(
     assert old_logo.entity_type is None
     assert old_logo.entity_id is None
     assert created.status_code == 201
-    assert created.json()["working_hours"]["sunday"] == {"open": None, "close": None}
     for key in ["active_orders_count", "material_count", "low_stock_count", "staff_count"]:
         assert key not in created.json()
-    assert bad_hours.status_code == 422
     assert pricing.status_code == 200
     assert pricing.json()["cutting_rate_tiyin"] == 120000
     assert bad_status.status_code == 400

@@ -5302,39 +5302,6 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
   }
 
-  .admin-working-hours {
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
-    padding: 12px;
-  }
-
-  .admin-working-hours legend {
-    padding: 0 6px;
-    color: var(--color-ink-muted);
-    font-size: 0.71875rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-
-  .admin-working-hours-grid {
-    display: grid;
-    gap: 8px;
-  }
-
-  .admin-working-hours-row {
-    display: grid;
-    grid-template-columns: minmax(94px, 1fr) minmax(0, 112px) minmax(0, 112px);
-    align-items: center;
-    gap: 8px;
-  }
-
-  .admin-working-hours-row > span {
-    color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 800;
-  }
-
   .admin-form-grid {
     display: grid;
     gap: 14px;
@@ -6056,14 +6023,6 @@
     .admin-form-grid,
     .admin-form-grid.three {
       grid-template-columns: 1fr;
-    }
-
-    .admin-working-hours-row {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .admin-working-hours-row > span {
-      grid-column: 1 / -1;
     }
 
     .admin-top-actions {

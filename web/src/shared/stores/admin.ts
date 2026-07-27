@@ -256,7 +256,6 @@ export interface ProvisionWorkshopRequest {
     name: string
     address: string
     phone: string
-    working_hours: Record<string, { open: string | null; close: string | null }>
   }
   owner: { login: string }
   temp_password?: string

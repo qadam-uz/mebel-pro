@@ -24,7 +24,6 @@ export interface ClientBranch {
   additional_phones: string[]
   latitude: string | null
   longitude: string | null
-  working_hours: Record<string, unknown>
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
   // Inline material preview (CB-13) — the branches list is one request now.

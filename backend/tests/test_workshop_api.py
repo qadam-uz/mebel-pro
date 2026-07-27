@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -123,7 +123,6 @@ async def test_staff_branch_context_includes_multiple_active_grant_branches(
             "phone": "+998904040404",
             "latitude": "41.28",
             "longitude": "69.20",
-            "working_hours": default_working_hours(),
         },
     )
     second_branch_id = second_branch.json()["id"]
@@ -260,7 +259,6 @@ async def test_owner_filters_users_and_sees_last_login(
             "phone": "+998906262600",
             "latitude": "41.22",
             "longitude": "69.22",
-            "working_hours": default_working_hours(),
         },
     )
     assert second_branch.status_code == 201
@@ -343,7 +341,6 @@ async def test_owner_can_create_and_clear_branch_without_coordinates(
             "name": "Optional Coords",
             "address": "Tashkent, Optional",
             "phone": "+998907777777",
-            "working_hours": default_working_hours(),
         },
     )
     branch_id = created.json()["id"]
@@ -395,7 +392,6 @@ async def test_branch_keeps_up_to_three_additional_phones_alongside_its_primary(
             "name": "Chilonzor",
             "address": "Tashkent, Chilonzor",
             "phone": "+998901111111",
-            "working_hours": default_working_hours(),
         },
     )
     branch_id = created.json()["id"]
@@ -489,7 +485,6 @@ async def test_branch_rejects_additional_phone_duplicating_the_primary_or_a_sibl
             "address": "Tashkent, Yunusobod",
             "phone": "+998901111111",
             "additional_phones": ["+998902222222"],
-            "working_hours": default_working_hours(),
         },
     )
     branch_id = created.json()["id"]
