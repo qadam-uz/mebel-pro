@@ -172,9 +172,9 @@ test('owner records order income and standalone expense', async ({ page, request
   await page.getByRole('tab', { name: 'Xarajatlar' }).click()
   await page.getByRole('button', { name: '+ Xarajat' }).click()
   const expensePanel = page.getByRole('dialog', { name: 'Xarajat yozish' })
-  // QAD-149 gave the expense form a Turi toggle that opens on «Kirim to'lovi».
-  // A standalone expense is the other branch of it, so pick it explicitly
-  // rather than relying on whichever side happens to be the default.
+  // QAD-149 gave the expense form a Turi toggle. A standalone expense is one
+  // branch of it, so pick it explicitly rather than relying on whichever side
+  // happens to be the default (which is «Boshqa xarajat» today).
   await expensePanel.getByRole('radio', { name: 'Boshqa xarajat' }).click()
   await expensePanel.getByLabel('Tavsif').fill('E2E standalone expense')
   await expensePanel.getByLabel("Summa (so'm)").fill('1000')
