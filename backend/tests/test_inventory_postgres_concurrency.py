@@ -35,8 +35,6 @@ from app.modules.workshop.contracts import Branch, Workshop
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from tests.factories import default_working_hours
-
 import_all_models()
 
 pytestmark = pytest.mark.skipif(
@@ -71,7 +69,6 @@ async def test_postgres_stock_adjustments_serialize_on_stock_item_lock() -> None
                 phone="+998902222222",
                 latitude=Decimal("41.3"),
                 longitude=Decimal("69.2"),
-                working_hours=default_working_hours(),
             )
             setup.add(branch)
             await setup.flush()
@@ -199,7 +196,6 @@ async def test_postgres_concurrent_invoices_never_share_a_number() -> None:
                 phone="+998902222223",
                 latitude=Decimal("41.3"),
                 longitude=Decimal("69.2"),
-                working_hours=default_working_hours(),
             )
             setup.add(branch)
             await setup.flush()

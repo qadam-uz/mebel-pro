@@ -144,7 +144,6 @@ def _branch_response(row: Branch) -> BranchResponse:
         additional_phones=row.additional_phones,
         latitude=row.latitude,
         longitude=row.longitude,
-        working_hours=row.working_hours,
         status=row.status,
         closed_reason=row.closed_reason,
         kerf_mm=row.kerf_mm,

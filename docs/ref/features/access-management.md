@@ -205,9 +205,8 @@ the phone the client already typed when stepping forward or back:
 A platform operator provisions a workshop atomically with its first user and first branch:
 
 - **Create a workshop, first branch, and owner — atomically.** Input: workshop `name`
-  (`currency` defaults to `UZS`) + first branch fields (`name`, `address`, `phone`,
-  `working_hours`) + the owner's `login`, plus an auto-generated temp password (manual
-  override).
+  (`currency` defaults to `UZS`) + first branch fields (`name`, `address`, `phone`) + the
+  owner's `login`, plus an auto-generated temp password (manual override).
   The same transaction creates the `workshop` row, an `active` first `branch` row with empty
   `branch_pricing`, and a `workshop_user` row with `is_owner = true`,
   `home_branch_id = first_branch.id`, and `password_reset_required = true`. Returns the summary

@@ -22,18 +22,6 @@ def _auth(access_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
-def _default_working_hours() -> dict[str, dict[str, str | None]]:
-    return {
-        "monday": {"open": "09:00", "close": "18:00"},
-        "tuesday": {"open": "09:00", "close": "18:00"},
-        "wednesday": {"open": "09:00", "close": "18:00"},
-        "thursday": {"open": "09:00", "close": "18:00"},
-        "friday": {"open": "09:00", "close": "18:00"},
-        "saturday": {"open": "10:00", "close": "16:00"},
-        "sunday": {"open": None, "close": None},
-    }
-
-
 async def _platform_access_token(client: AsyncClient, db_session: AsyncSession) -> str:
     await seed_platform_user(
         db_session,
@@ -58,7 +46,6 @@ def _provision_payload() -> dict[str, object]:
             "name": "Main",
             "address": "Tashkent, Chilonzor",
             "phone": "+998902020202",
-            "working_hours": _default_working_hours(),
         },
         "owner": {
             "login": "owner",
@@ -215,43 +202,7 @@ async def test_platform_overview_reports_provisioning_and_actor_counts(
     assert "weekly" not in body["client_signups"]
 
 
-async def test_platform_provision_rejects_non_canonical_working_hours(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    access_token = await _platform_access_token(client, db_session)
-
-    missing_days = await client.post(
-        "/api/v1/platform/workshops",
-        headers=_auth(access_token),
-        json={
-            **_provision_payload(),
-            "branch": {
-                **_provision_payload()["branch"],
-                "working_hours": {"monday": {"open": "09:00", "close": "18:00"}},
-            },
-        },
-    )
-    bad_range = await client.post(
-        "/api/v1/platform/workshops",
-        headers=_auth(access_token),
-        json={
-            **_provision_payload(),
-            "branch": {
-                **_provision_payload()["branch"],
-                "working_hours": {
-                    **_default_working_hours(),
-                    "monday": {"open": "18:00", "close": "09:00"},
-                },
-            },
-        },
-    )
-
-    assert missing_days.status_code == 422
-    assert bad_range.status_code == 422
-
-
-async def test_platform_provision_rejects_removed_workshop_owner_and_coordinate_fields(
+async def test_platform_provision_rejects_removed_workshop_owner_coordinate_and_hours_fields(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -272,6 +223,8 @@ async def test_platform_provision_rejects_removed_workshop_owner_and_coordinate_
                 **_provision_payload()["branch"],
                 "latitude": "41.2995",
                 "longitude": "69.2401",
+                # QAD-179: working hours are gone; the payload must be rejected.
+                "working_hours": {"monday": {"open": "09:00", "close": "18:00"}},
             },
             "owner": {
                 **_provision_payload()["owner"],

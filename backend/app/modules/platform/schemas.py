@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import (
     ActorType,
@@ -16,7 +16,6 @@ from app.models.enums import (
     UserStatus,
     WorkshopStatus,
 )
-from app.modules.workshop.schemas import WorkingHours, validate_working_hours
 from app.schemas.common import APIModel
 
 
@@ -33,12 +32,6 @@ class FirstBranchInput(BaseModel):
     name: str
     address: str
     phone: str
-    working_hours: WorkingHours
-
-    @field_validator("working_hours")
-    @classmethod
-    def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
-        return validate_working_hours(value)
 
 
 class OwnerInput(BaseModel):
@@ -81,7 +74,6 @@ class BranchSummary(APIModel):
     phone: str
     latitude: Decimal | None
     longitude: Decimal | None
-    working_hours: dict[str, Any]
     status: BranchStatus
     closed_reason: str | None
     created_at: datetime

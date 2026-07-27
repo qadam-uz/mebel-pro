@@ -2,7 +2,7 @@
 title: Workshop
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-27
 order: 20
 ---
 
@@ -60,7 +60,6 @@ whether clients see it and order from it.
 | `name` / `address` / `phone` | text | required; phone `+998XXXXXXXXX`. `phone` is the **primary** number — the one compact surfaces (order card, order detail, PDF) and every order record carry |
 | `additional_phones` | json | ordered list of extra published numbers, 0–3; same `+998XXXXXXXXX` rule; no duplicates, including against `phone`. Array order is display order. Shown alongside the primary on the client-facing branch page only |
 | `latitude` / `longitude` | numeric? | optional coordinate pair (no geocoder in v1; **not collected via the UI** in v1, but the columns/API fields remain); both are null when unknown |
-| `working_hours` | json | seven weekday keys, each `{ open, close }`; closed day is `{ open: null, close: null }` |
 | `status` | enum | `active` / `temporarily_closed` / `inactive` (default `active`) |
 | `closed_reason` | text? | shown when `temporarily_closed` |
 | `kerf_mm` | int | the branch saw's kerf width; 1–20 mm; default `4`. Resolved into every cutting optimisation run scoped to this branch ([`cutting.md`](../features/cutting.md)) |

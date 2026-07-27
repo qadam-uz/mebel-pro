@@ -30,7 +30,6 @@ export interface OrderQuote {
   branch_name: string
   branch_address: string
   branch_phone: string
-  today_hours: { open: string | null; close: string | null }
   subtotal_cutting_tiyin: number
   subtotal_materials_tiyin: number
   subtotal_edge_banding_tiyin: number
@@ -170,7 +169,6 @@ export interface OrderSummary {
   branch_name: string
   branch_address: string
   branch_phone: string
-  today_hours: { open: string | null; close: string | null }
   cutting_result_id: string
   status: OrderStatus
   version: number

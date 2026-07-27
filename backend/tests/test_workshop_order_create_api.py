@@ -26,7 +26,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -572,7 +572,6 @@ async def test_workshop_saved_drafts_index_filters_by_branch(
         phone="+998904444444",
         latitude=Decimal("41.365"),
         longitude=Decimal("69.285"),
-        working_hours=default_working_hours(),
     )
     db_session.add(yunusobod)
     await db_session.flush()

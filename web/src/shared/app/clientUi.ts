@@ -192,14 +192,6 @@ export function pluralUz(count: number, label: string): string {
   return `${new Intl.NumberFormat('uz-UZ').format(count)} ${label}`
 }
 
-/** Today's "09:00–18:00" working window, or "Bugun yopiq" when closed (CB-112). */
-export function formatTodayHours(
-  hours: { open: string | null; close: string | null } | null | undefined,
-): string {
-  if (!hours || !hours.open || !hours.close) return 'Bugun yopiq'
-  return `${hours.open}–${hours.close}`
-}
-
 const CLIENT_ICON_PATHS: Record<string, string> = {
   alert: '<path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/>',
   box: '<path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',

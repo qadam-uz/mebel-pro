@@ -1,9 +1,7 @@
 """Workshop tenant and branch models."""
 
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -87,41 +85,9 @@ class Branch(UUIDPrimaryKey, Timestamped, Base):
     # Platform defaults: kerf 4 mm, edge trim 5 mm.
     kerf_mm: Mapped[int] = mapped_column(nullable=False, default=4, server_default="4")
     edge_trim_mm: Mapped[int] = mapped_column(nullable=False, default=5, server_default="5")
-    working_hours: Mapped[dict[str, Any]] = mapped_column(
-        JSON().with_variant(JSONB, "postgresql"),
-        nullable=False,
-        default=dict,
-    )
     status: Mapped[BranchStatus] = mapped_column(
         enum_type(BranchStatus, "branch_status"),
         default=BranchStatus.ACTIVE,
         nullable=False,
     )
     closed_reason: Mapped[str | None]
-
-    _WEEKDAYS = (
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    )
-
-    def today_hours(self, *, now: datetime | None = None) -> dict[str, str | None]:
-        """Today's open/close from the per-weekday ``working_hours`` map (CB-112).
-
-        Returns ``{"open": None, "close": None}`` when the branch has no entry for
-        today (closed). Pure/derived — no extra column or migration.
-        """
-        moment = now or datetime.now(UTC)
-        entry = self.working_hours.get(self._WEEKDAYS[moment.weekday()])
-        if not isinstance(entry, dict):
-            return {"open": None, "close": None}
-        open_at = entry.get("open")
-        close_at = entry.get("close")
-        return {
-            "open": open_at if isinstance(open_at, str) else None,
-            "close": close_at if isinstance(close_at, str) else None,
-        }

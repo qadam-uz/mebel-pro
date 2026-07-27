@@ -2,7 +2,7 @@
 title: Workshop administration
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-27
 order: 40
 ---
 
@@ -50,18 +50,20 @@ editing settings.
 
 ## Branches
 
-A workshop owns one or more branches. Each branch has a physical address, working hours, and a
-`status` — semantics in [`access-patterns.md`](../../access-patterns.md#tenancy). The data model
+A workshop owns one or more branches. Each branch has a physical address, published phone
+numbers, and a `status` — semantics in [`access-patterns.md`](../../access-patterns.md#tenancy).
+A branch publishes **no opening schedule**: `status` plus `closed_reason` is the single
+availability answer, and a timetable nobody maintains was a weaker second one. The data model
 still keeps an optional `(lat, lng)` coordinate pair (no geocoder in v1; see the entity
 reference), but the branch UI does not collect it — the API/DB fields stay for future use.
 
 After platform provisioning creates the first branch, branch operations are **owner only**:
 
-- **Create / edit a branch** — name, address, phones, per-weekday working hours. A branch
-  publishes one **primary** phone plus up to **three additional** numbers (landline, director's
-  mobile, WhatsApp). The primary is the number order records and every compact surface carry;
-  the additional numbers appear only on the client-facing branch page. Extras follow the
-  primary's format rule and may not duplicate it or each other.
+- **Create / edit a branch** — name, address, phones. A branch publishes one **primary** phone
+  plus up to **three additional** numbers (landline, director's mobile, WhatsApp). The primary
+  is the number order records and every compact surface carry; the additional numbers appear
+  only on the client-facing branch page. Extras follow the primary's format rule and may not
+  duplicate it or each other.
   Creating a branch also creates an empty `branch_pricing` row; stock items appear as the
   branch's material selection is built up.
 - **Read the branch number** — creation assigns a permanent `branch_no` that becomes the middle
@@ -88,14 +90,13 @@ Visibility for read operations:
   name, address, primary phone, status badge, action. **+ Branch** (owner). Empty: "No branches
   yet — add one to start taking orders."
 - **Branch create dialog** — modal form: name, primary phone, address, an add/remove list for
-  the additional phones (capped at three, with the cap explained when reached), working-hours
-  grid (per weekday open / close, with a "closed this day" toggle).
+  the additional phones (capped at three, with the cap explained when reached).
 - **Branch detail** (`/workshop/branches/:id`) — the header carries the branch number together
   with the order-number prefix it produces (`#26-1-…`), so one branch page is enough to decode a
-  printed document. Below it, an owner-only editable branch form: branch contact,
-  working hours, pricing (entered in so'm), cutting settings (kerf + edge trim, in mm), and
-  status controls. It does not duplicate materials, stock, staff, or order management; those
-  stay in their own sidebar sections.
+  printed document. Below it, an owner-only editable branch form: branch contact, pricing
+  (entered in so'm), cutting settings (kerf + edge trim, in mm), and status controls. It does
+  not duplicate materials, stock, staff, or order management; those stay in their own sidebar
+  sections.
 - A `temporarily_closed` branch shows a banner with the reason; an `inactive` branch shows an
   inactive banner.
 

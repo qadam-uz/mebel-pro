@@ -55,7 +55,6 @@ class OrderQuoteResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
-    today_hours: dict[str, str | None]
     subtotal_cutting_tiyin: int
     subtotal_materials_tiyin: int
     subtotal_edge_banding_tiyin: int
@@ -223,7 +222,6 @@ class OrderSummaryResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
-    today_hours: dict[str, str | None]
     cutting_result_id: uuid.UUID
     status: OrderStatus
     version: int

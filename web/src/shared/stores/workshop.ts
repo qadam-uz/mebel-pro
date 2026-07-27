@@ -83,7 +83,6 @@ export interface ManagedBranch {
   additional_phones: string[]
   latitude: string | null
   longitude: string | null
-  working_hours: Record<string, unknown>
   status: BranchStatus
   closed_reason: string | null
   kerf_mm: number
