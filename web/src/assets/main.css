@@ -2954,10 +2954,26 @@
   }
 
   @media (max-width: 640px) {
-    /* Phone widths: the 12px gutters alone cost ~100px across five columns. */
-    .tbl-fluid th,
-    .tbl-fluid td {
+    /* Phone widths: the 12px gutters alone cost ~100px across five columns.
+       Selector carries both classes deliberately: `.tbl th` sets the `padding`
+       shorthand further down this file at equal specificity, so a `.tbl-fluid`
+       rule would lose on source order and this override would silently do
+       nothing. */
+    .tbl.tbl-fluid th,
+    .tbl.tbl-fluid td {
       padding-inline: 8px;
+    }
+  }
+
+  @media (max-width: 400px) {
+    /* The money columns are `nowrap` — a full balance like `182,762,207` sets a
+       hard floor no layout mode can shrink past, so the gutter is the only give
+       left. At 375px (the DESIGN.md floor) 8px gutters overflowed the wrapper by
+       7px; 5px clears it with room to spare and stays above the 4px at which
+       adjacent figures start reading as one number. */
+    .tbl.tbl-fluid th,
+    .tbl.tbl-fluid td {
+      padding-inline: 5px;
     }
   }
 
