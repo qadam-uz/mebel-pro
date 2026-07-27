@@ -460,7 +460,13 @@ function selectPlacement(placement: CuttingPlacement) {
 async function loadDetail() {
   await orders.loadWorkshopOrder(orderId.value)
   const current = orders.currentOrder
-  if (current) await orders.loadWorkers(current.branch_id).catch(() => undefined)
+  // The worker list feeds the assignment pickers, and the endpoint behind it is
+  // gated on `manage_orders` for the branch. This page also admits `view_orders`
+  // and `process_production` — asking for the list as one of those bought them
+  // nothing but a 403 on a page they are entitled to (QAD-173).
+  if (current && permissions.canOnBranch(p.manageOrders, current.branch_id)) {
+    await orders.loadWorkers(current.branch_id).catch(() => undefined)
+  }
 }
 
 async function run(action: () => Promise<unknown>, successMessage?: string, key?: string) {

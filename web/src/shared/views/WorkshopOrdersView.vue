@@ -119,9 +119,15 @@ const boardColumns = computed(() =>
   })),
 )
 const terminalStatus = computed(() => ['completed', 'cancelled'].includes(status.value))
-const visibleOrderBranchIds = computed(() => [
-  ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
-])
+// Branches whose worker list this reader may actually fetch. The board admits
+// anyone with `manage_orders` *somewhere*, and then lists orders from every
+// branch they can read — so a `view_orders`-only branch would otherwise have its
+// worker lookup requested and refused (QAD-173).
+const visibleOrderBranchIds = computed(() =>
+  [...new Set(orders.workshopOrders.map((order) => order.branch_id))].filter((branchId) =>
+    permissions.canOnBranch(p.manageOrders, branchId),
+  ),
+)
 // Branch and search are driven by the topbar (context + global search), so the
 // in-page reset only counts the status / date / phone controls.
 const activeFilterCount = computed(
