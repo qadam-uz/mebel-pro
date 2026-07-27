@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-27
 order: 55
 ---
 
@@ -252,7 +252,12 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     form opening on a **Turi** toggle, *Kirim to'lovi* | *Boshqa xarajat*, mirroring the
     income form's *Buyurtma to'lovi* | *Boshqa tushum*. Both sides of the ledger then read
     the same way: money in is against an order or it's misc, money out is against an invoice
-    or it's misc.
+    or it's misc. The toggle mirrors the income form; the **default does not** — a fresh
+    expense opens on *Boshqa xarajat*. Seven of the ten categories can never be a faktura
+    payment, the invoice side has its own warm entry point (Ombor's *Saqlash va xarajat
+    yozish*, which deep-links the faktura pre-picked), and only the invoice default can
+    dead-end a user — it rejects an already filled-in misc expense at save time, whereas
+    the misc default costs one click and loses no input.
     - *Kirim to'lovi* — an invoice picker offering only unpaid and partial fakturas, each
       row showing number · supplier · date · branch · position count, with the **outstanding
       balance prominent in the danger colour** and the invoice total demoted beneath it.

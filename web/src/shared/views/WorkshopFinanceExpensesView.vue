@@ -99,8 +99,18 @@ const statusFilter = ref<LedgerStatus | 'all'>('recorded')
 // `mode` mirrors the income form's Turi toggle: money out is either against a
 // supplier faktura or it is misc, exactly as money in is against an order or
 // misc. In `invoice` mode the invoice owns supplier and branch.
+// The toggle mirrors the income form; the default deliberately does not. Seven
+// of the ten expense categories can never be a faktura payment (salary alone is
+// booked by hand, monthly, per worker), and the invoice path has its own warm
+// entry point — Ombor's «Saqlash va xarajat yozish» deep-links with
+// `invoice_id` and forces `invoice` below, regardless of this default (as
+// Qarzdorlik's «To'lov qilish» forces `other` with its `supplier_id`). Whoever
+// reaches the cold «+ Xarajat» button is precisely the population that did not
+// come from an invoice. The failure costs are asymmetric too: an invoice default
+// dead-ends a filled-in misc expense at save time, while a misc default costs
+// one click and loses nothing, since picking an invoice only adds.
 const expenseForm = reactive({
-  mode: 'invoice' as string,
+  mode: 'other' as string,
   workshopLevel: false,
   category: 'other' as string | null,
   amount: '',
@@ -455,7 +465,7 @@ function resetExpenseForm() {
   editingExpenseId.value = null
   editingExpenseBranchId.value = null
   editingExpenseInvoiceNo.value = null
-  expenseForm.mode = 'invoice'
+  expenseForm.mode = 'other'
   expenseForm.workshopLevel = false
   expenseForm.category = 'other'
   expenseForm.amount = ''
