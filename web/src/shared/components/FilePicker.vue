@@ -70,7 +70,7 @@ function onRemove() {
       class="min-w-0 flex-1 truncate text-sm"
       :class="uploading || displayName ? 'text-ink' : 'text-ink-muted'"
     >
-      {{ uploading ? 'Yuklanmoqda...' : displayName || placeholder }}
+      {{ uploading ? 'Yuklanmoqda…' : displayName || placeholder }}
     </span>
     <button
       v-if="removable && displayName && !uploading"

@@ -333,7 +333,7 @@ test.describe('workshop permission matrix', () => {
 
       // 2. The sidebar is exactly what the grant unlocks — no more, no fewer.
       const nav = page
-        .locator('aside[aria-label="Workshop navigation"]')
+        .locator('aside[aria-label="Ustaxona navigatsiyasi"]')
         .getByRole('navigation', { name: 'Asosiy navigatsiya' })
       const navLinks = nav.getByRole('link')
       await expect(navLinks).toHaveCount(persona.sidebar.length)

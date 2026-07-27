@@ -59,7 +59,7 @@ onMounted(refreshBranches)
         v-model="search"
         class="mp-input pl-10"
         aria-label="Ustaxona yoki shahar nomi"
-        placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..."
+        placeholder="Ustaxona yoki shahar nomi"
       />
     </div>
 

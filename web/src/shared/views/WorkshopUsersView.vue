@@ -437,7 +437,7 @@ onBeforeUnmount(() => {
                 v-model="form.tempPassword"
                 class="mp-input"
                 autocomplete="new-password"
-                placeholder="bo'sh qoldirilsa avtomatik yaratiladi"
+                placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
                 :aria-invalid="!!staffFieldErrors.tempPassword"
                 :aria-describedby="
                   staffFieldErrors.tempPassword ? 'staff-temp-password-error' : undefined
@@ -538,7 +538,7 @@ onBeforeUnmount(() => {
       <div class="mp-filters">
         <label class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" placeholder="Ism yoki login..." />
+          <input v-model="search" placeholder="Ism yoki login" />
         </label>
         <ProjectDropdown
           v-model="branchFilter"
@@ -617,7 +617,16 @@ onBeforeUnmount(() => {
               </tr>
               <tr v-if="workshop.users.length === 0">
                 <td colspan="7">
-                  <div class="st-empty !border-0 !py-8"><h3>Mos xodim topilmadi</h3></div>
+                  <div class="st-empty !border-0 !py-8">
+                    <h3>{{ search.trim() ? 'Mos xodim topilmadi' : "Hali xodim yo'q" }}</h3>
+                    <p>
+                      {{
+                        search.trim()
+                          ? "Ism yoki login bo'yicha qidiruvni o'zgartiring."
+                          : "«+ Yangi xodim» orqali birinchi xodimni qo'shing."
+                      }}
+                    </p>
+                  </div>
                 </td>
               </tr>
             </tbody>

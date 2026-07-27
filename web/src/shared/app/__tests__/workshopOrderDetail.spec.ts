@@ -38,7 +38,7 @@ describe('workshop order detail helpers', () => {
     })
   })
 
-  it('converts a fixed adjustment from so’m to tiyin, grouping included', () => {
+  it("converts a fixed adjustment from so'm to tiyin, grouping included", () => {
     // "25 000" so'm → 2 500 000 tiyin; the grouping space that sanitizeMoneyInput
     // allows must not break the parse (the old Number() path returned NaN here).
     expect(parseOrderAdjustmentDraft('fixed', '25 000', 'Round down')).toEqual({

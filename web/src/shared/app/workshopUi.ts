@@ -12,13 +12,13 @@ export const workshopStatusUz: Record<OrderStatus, string> = {
 }
 
 export const workshopStatusHint: Record<OrderStatus, string> = {
-  new: 'koʻrib chiqish kerak',
+  new: "ko'rib chiqish kerak",
   confirmed: 'kesuvchi kutilmoqda',
   cutting: 'arra oldida',
   edge_banding: 'kromka yopishtirilmoqda',
   ready: 'olib ketishni kutmoqda',
   completed: 'mijoz olib ketgan',
-  cancelled: 'toʻxtatilgan',
+  cancelled: "to'xtatilgan",
 }
 
 export function orderPillClass(status: OrderStatus) {

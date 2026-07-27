@@ -126,7 +126,7 @@ onMounted(() => {
       <FormSelect v-model="status" label="Holat" :options="statusOptions" />
       <label class="grid gap-1 text-sm font-bold text-ink">
         Qidirish
-        <input v-model="search" class="mp-input" placeholder="Buyurtma raqami..." />
+        <input v-model="search" class="mp-input" placeholder="#26-14-0003" />
       </label>
     </div>
 

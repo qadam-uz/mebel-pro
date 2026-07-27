@@ -196,9 +196,9 @@ function listFilters() {
 // "{item_count} qism", so returning the count here too double-printed it.
 function assignedText(order: OrderSummary) {
   if (order.status === 'cutting')
-    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : 'kesuvchi yo‘q'
+    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : "kesuvchi yo'q"
   if (order.status === 'edge_banding')
-    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : 'kromka ustasi yo‘q'
+    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : "kromka ustasi yo'q"
   if (order.status === 'confirmed') return 'tayinlash kerak'
   return ''
 }
@@ -323,14 +323,14 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
   if (to < from) {
     const revert = list.find((action) => action.kind === 'revert')
     if (!revert) {
-      toast.danger('Bu buyurtmani orqaga qaytarib bo‘lmaydi.')
+      toast.danger("Bu buyurtmani orqaga qaytarib bo'lmaydi.")
       return
     }
     startListAction(revert, order)
     return
   }
   if (to > from + 1) {
-    toast.danger('Faqat keyingi bosqichga o‘tkazish mumkin.')
+    toast.danger("Faqat keyingi bosqichga o'tkazish mumkin.")
     return
   }
   // Forward one stage: the order's primary forward action, falling back to
@@ -339,7 +339,7 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
     list.find((item) => item.kind === FORWARD_ACTION_KIND[order.status]) ??
     list.find((item) => item.kind === 'assign')
   if (!action) {
-    toast.danger('Bu o‘tishni hozir bajarib bo‘lmaydi (ruxsat yoki tayinlash kerak).')
+    toast.danger("Bu o'tishni hozir bajarib bo'lmaydi — ruxsat yoki tayinlash kerak.")
     return
   }
   if (action.kind === 'assign') {
@@ -794,9 +794,17 @@ onBeforeUnmount(() => {
       <p>Filial biriktirilgach, buyurtmalar shu yerda ko'rinadi.</p>
     </section>
 
+    <!-- Filtered-empty and first-run are different situations and get different
+         copy: "change the filter" is useless advice when no order exists yet. -->
     <section v-else-if="orders.workshopOrders.length === 0" class="st-empty">
-      <h3>Buyurtma mavjud emas</h3>
-      <p>Tanlangan filtrlarga mos buyurtma topilmadi</p>
+      <h3>{{ hasActiveFilters ? 'Filtrga mos buyurtma topilmadi' : "Hali buyurtma yo'q" }}</h3>
+      <p>
+        {{
+          hasActiveFilters
+            ? "Filtrlarni o'zgartiring yoki tozalang."
+            : "Mijoz buyurtma bergach yoki «+ Yangi buyurtma» orqali yozilgach shu yerda ko'rinadi."
+        }}
+      </p>
     </section>
 
     <template v-else>

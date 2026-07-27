@@ -1,27 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Icon from '@/shared/components/AppIcon.vue'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
 import workshopSceneUrl from '@/assets/login-workshop-scene.svg'
 
-const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
+// The shared composable owns the Uzbek sign-in copy (QAD-163) — this view used
+// to re-declare a byte-identical map of its own.
+const { config, login, password, isSubmitting, errorText, submit } = useStaffLogin()
 
 const showPassword = ref(false)
-
-// useStaffLogin keeps backend error codes in English; map them to Uzbek locally
-// so the workshop SPA stays fully Uzbek.
-const LOGIN_ERROR_UZ: Record<string, string> = {
-  invalid_credentials: "Login yoki parol noto'g'ri.",
-  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
-  account_blocked: 'Hisob bloklangan.',
-  login_rate_limited: "Juda ko'p urinish. Birozdan so'ng urinib ko'ring.",
-  network_error: "Server bilan bog'lanib bo'lmadi.",
-}
-const errorText = computed(() =>
-  error.value ? (LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
-)
 
 const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va moliya']
 </script>

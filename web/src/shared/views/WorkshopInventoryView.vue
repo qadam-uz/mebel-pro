@@ -527,7 +527,7 @@ async function saveInvoice(withExpense = false) {
   invoiceDiscountError.value = null
 
   if (!invoiceForm.supplierId) {
-    invoiceSupplierError.value = 'Ta`minotchini tanlang.'
+    invoiceSupplierError.value = "Ta'minotchini tanlang."
     movementSaving.value = false
     return
   }
@@ -553,7 +553,7 @@ async function saveInvoice(withExpense = false) {
     })
   }
   if (invoiceDiscountTooBig.value) {
-    invoiceDiscountError.value = 'Skidka oraliq jamidan katta bo`la olmaydi.'
+    invoiceDiscountError.value = "Chegirma oraliq jamidan katta bo'la olmaydi."
     movementSaving.value = false
     return
   }
@@ -828,7 +828,7 @@ onBeforeUnmount(() => {
       <div v-if="activeTab !== 'suppliers'" class="mp-filters">
         <label v-if="activeTab === 'stock'" class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" placeholder="Material qidirish..." />
+          <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
         </label>
         <button
           v-if="activeTab === 'stock'"
@@ -842,12 +842,12 @@ onBeforeUnmount(() => {
         </button>
         <label v-if="activeTab === 'invoices'" class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="invoiceSearch" placeholder="K-0007 yoki ta`minotchi..." />
+          <input v-model="invoiceSearch" placeholder="K-0007 yoki ta'minotchi" />
         </label>
         <ProjectDropdown
           v-if="activeTab === 'invoices'"
           v-model="invoicePaymentFilter"
-          label="To`lov holati"
+          label="To'lov holati"
           :options="paymentStatusFilterOptions"
           top-label
         />
@@ -894,7 +894,7 @@ onBeforeUnmount(() => {
           <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <FormSelect
               v-model="invoiceForm.supplierId"
-              label="Ta`minotchi"
+              label="Ta'minotchi"
               :options="activeSupplierOptions"
               :error="invoiceSupplierError"
               @focusin="ensureSuppliersLoaded"
@@ -1010,7 +1010,11 @@ onBeforeUnmount(() => {
                  the totals block sitting beside it. -->
             <label class="field !mb-0 self-start">
               <span>Izoh</span>
-              <input v-model="invoiceForm.note" class="mp-input" placeholder="ixtiyoriy" />
+              <input
+                v-model="invoiceForm.note"
+                class="mp-input"
+                placeholder="Masalan: yuk mashinasi bilan keldi"
+              />
             </label>
             <div class="grid gap-2 rounded-md border border-hairline bg-sunk p-3 text-sm">
               <div class="flex items-center justify-between">
@@ -1018,7 +1022,7 @@ onBeforeUnmount(() => {
                 <span class="num font-bold">{{ formatTiyin(invoiceSubtotalTiyin) }}</span>
               </div>
               <label class="flex items-center justify-between gap-3">
-                <span class="text-ink-soft">Skidka</span>
+                <span class="text-ink-soft">Chegirma</span>
                 <input
                   v-model="invoiceForm.discount"
                   class="mp-input max-w-40 text-right"
@@ -1224,11 +1228,11 @@ onBeforeUnmount(() => {
             <thead>
               <tr>
                 <th>Raqam</th>
-                <th>Ta`minotchi</th>
+                <th>Ta'minotchi</th>
                 <th>Sana</th>
                 <th class="right">Pozitsiya</th>
                 <th class="right">Jami</th>
-                <th>To`lov</th>
+                <th>To'lov</th>
                 <th></th>
               </tr>
             </thead>
@@ -1251,7 +1255,7 @@ onBeforeUnmount(() => {
                       class="block text-[11px] text-ink-muted"
                     >
                       <template v-if="invoice.discount_tiyin > 0">
-                        skidka {{ formatTiyin(invoice.discount_tiyin) }}
+                        chegirma {{ formatTiyin(invoice.discount_tiyin) }}
                       </template>
                       <template v-if="invoice.surcharge_tiyin > 0">
                         ustama {{ formatTiyin(invoice.surcharge_tiyin) }}
@@ -1318,7 +1322,7 @@ onBeforeUnmount(() => {
                           <td class="amt">{{ formatTiyin(invoice.subtotal_tiyin) }}</td>
                         </tr>
                         <tr v-if="invoice.discount_tiyin > 0">
-                          <td colspan="3" class="right text-ink-soft">Skidka</td>
+                          <td colspan="3" class="right text-ink-soft">Chegirma</td>
                           <td class="amt danger-text">
                             −{{ formatTiyin(invoice.discount_tiyin) }}
                           </td>
@@ -1342,14 +1346,14 @@ onBeforeUnmount(() => {
                     <h3>
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
-                          ? 'Filtr bo`yicha kirim topilmadi'
+                          ? 'Filtrga mos kirim topilmadi'
                           : 'Hali kirim yozilmagan'
                       }}
                     </h3>
                     <p>
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
-                          ? 'Qidiruv yoki to`lov holatini o`zgartiring.'
+                          ? "Qidiruvni yoki to'lov holatini o'zgartiring."
                           : 'Yetkazib beruvchidan kelgan fakturani «+ Kirim» orqali yozing.'
                       }}
                     </p>
@@ -1446,7 +1450,10 @@ onBeforeUnmount(() => {
               </tr>
               <tr v-if="workshop.stockTransactions.length === 0">
                 <td colspan="11">
-                  <div class="st-empty !border-0 !py-8"><h3>Tranzaksiya yo'q</h3></div>
+                  <div class="st-empty !border-0 !py-8">
+                    <h3>Ombor harakati yo'q</h3>
+                    <p>Kirim, sarf va tuzatishlar shu yerda ro'yxatga tushadi.</p>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1569,7 +1576,10 @@ onBeforeUnmount(() => {
                 </tr>
                 <tr v-if="workshop.suppliers.length === 0">
                   <td :colspan="canSeeDebts ? 6 : 5">
-                    <div class="st-empty !border-0 !py-8"><h3>Yetkazib beruvchi yo'q</h3></div>
+                    <div class="st-empty !border-0 !py-8">
+                      <h3>Yetkazib beruvchi yo'q</h3>
+                      <p>«+ Yangi yetkazib beruvchi» orqali birinchisini qo'shing.</p>
+                    </div>
                   </td>
                 </tr>
               </tbody>

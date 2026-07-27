@@ -232,7 +232,7 @@ export function clientIconPath(name: string): string {
 // with the order.* events the backend will add (CB-02).
 const NOTIFICATION_TITLES: Record<string, string> = {
   'inventory.low_stock': 'Zaxira tugayapti',
-  'inventory.negative_stock': 'Ombor qoldig‘i manfiy',
+  'inventory.negative_stock': "Ombor qoldig'i manfiy",
   'order.placed': 'Buyurtma joylandi',
   'order.confirmed': 'Buyurtma tasdiqlandi',
   'order.status_changed': "Buyurtma holati o'zgardi",

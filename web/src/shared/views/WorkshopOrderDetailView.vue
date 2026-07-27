@@ -382,7 +382,7 @@ function edgeSideDetails(item: OrderItem) {
       const thickness =
         snapshot.thickness_mm || snapshot.thickness || snapshot.size_mm
           ? `${snapshot.thickness_mm ?? snapshot.thickness ?? snapshot.size_mm} mm`
-          : 'qalinlik yo‘q'
+          : "qalinlik yo'q"
       const color =
         typeof snapshot.color === 'string' && snapshot.color ? ` · ${snapshot.color}` : ''
       const material =
@@ -1536,7 +1536,7 @@ onBeforeUnmount(() => {
             <div>
               <div class="nm">{{ line.material_label }}</div>
               <small class="text-ink-muted">
-                {{ line.thickness_mm ? `${line.thickness_mm} mm` : 'qalinlik yo‘q' }}
+                {{ line.thickness_mm ? `${line.thickness_mm} mm` : "qalinlik yo'q" }}
                 <span v-if="line.color"> · {{ line.color }}</span>
               </small>
             </div>

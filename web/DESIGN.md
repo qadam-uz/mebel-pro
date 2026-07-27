@@ -279,6 +279,86 @@ touching them; don't add new off-scale values.
   not a second implementation. A print stylesheet cannot number pages (no browser implements
   `@page` margin boxes); when page numbers matter, the file comes from the server renderer.
 
+## Copy
+
+Uzbek (Latin) is the only shipped locale. Copy is part of the design contract, not a
+finishing touch: one failure explained two different ways is the same defect as two
+different button radii. The rules below are the standard; the glossary under them is the
+whole vocabulary.
+
+**1. Say what happened, then what to do.** One sentence where it fits.
+`Summa buyurtma qoldig'idan oshib ketdi.` beats `Amal bajarilmadi.` A message the operator
+cannot act on is a log line, not copy.
+
+**2. No generic fallback where a specific message is possible.** Every `APIError` code a
+user can realistically trigger gets its own entry in the role's error map —
+`workshopErrorMessages` (`app/workshopUi.ts`), `CLIENT_ERROR_LABELS` (`app/clientUi.ts`),
+`ADMIN_ERROR_MESSAGES` (`app/adminUi.ts`), plus the field-level `apiValidationMessage`
+(`app/adminValidation.ts`) and `cuttingImportErrorLabel` (`stores/cuttingImport.ts`). The
+generic string is reserved for genuinely unexpected failures — unhandled 500s, transport
+errors. A code that reaches the fallback is a missing entry, not a shrug. When a call site
+catches an error, it passes `apiErrorCode(error)` through the map and keeps its own
+action-specific sentence as the fallback; a bare `catch {}` that throws the code away is
+the bug QAD-123 found and QAD-163 swept.
+
+**3. No blame, no apology, no filler.** No `Iltimos`, no exclamation marks, no
+`muvaffaqiyatli` — a success toast *is* the success, so it states the outcome
+(`Kirim K-0007 yozildi.`), never the fact that something worked.
+
+**4. Verb-first, sentence case.** Buttons are actions: `Buyurtma yaratish`, never
+`Yaratish uchun bosing`. Sentence case everywhere — never ALL CAPS, never Title Case; only
+the first word and proper nouns are capitalised. A destructive confirm names its
+consequence rather than saying `OK`.
+
+**5. Empty states invite, not apologise.** Name the space, then offer the action:
+`Bu chizmada qism yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
+state, and a body that restates its own title is not a body. **First-run and
+filtered-empty are different copy** — "change the filter" is useless advice when nothing
+exists yet, so a list that can be filtered branches on whether a filter is active.
+
+**6. Placeholders show a real example**, not a repeat of the label: `+998 90 123 45 67`,
+not `Telefon raqamini kiriting`. Search inputs are the one exception — their placeholder
+names what the search covers (`Ism yoki login`) and carries **no trailing ellipsis**.
+
+**7. One term per concept.** The glossary below is the list. When a new concept needs a
+word, it goes in the glossary in the same commit that introduces it.
+
+**8. Uzbek Latin orthography.** The tutuq belgisi is the **ASCII apostrophe `'`** (U+0027)
+throughout — `bo'ladi`, `yo'q`, `to'lov`, `ta'minotchi`. Never a backtick (`` ` ``), never
+a curly `'`/`'`, never the modifier letters `ʻ`/`ʼ`; they render as visibly different
+glyphs and there is no reason for a screen to show four of them. Ellipsis is the single
+character `…` and belongs only to progress labels (`Saqlanmoqda…`). Separators are `—` (em
+dash) between clauses and `·` between fields, never a hyphen. No Russian transliteration
+(`chegirma`, not `skidka`) and no developer shorthand in anything a user can see.
+
+### Glossary
+
+One term per concept, across client, workshop and admin.
+
+| Concept                                | Term                | Not                       |
+| -------------------------------------- | ------------------- | ------------------------- |
+| A client's cutting order               | `buyurtma`          | `zakaz`                   |
+| A cut piece on a drawing               | `qism` / `detal`    | — _owner's ruling pending_ |
+| A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
+| A panel sheet                          | `list`              | `plita`                   |
+| Edge tape (the material)               | `kromka`            | `krom`                    |
+| The edge-banding station / stage       | `Krom` / `Kromka`   | — _owner's ruling pending_ |
+| A workshop location                    | `filial`            | `bo'lim` (= a UI section) |
+| A supplier                             | `ta'minotchi` / `yetkazib beruvchi` | `postavshik` — _owner's ruling pending_ |
+| Goods arriving into stock (a faktura)  | `kirim` (`K-…`)     | `tushum`                  |
+| Money coming in (the finance ledger)   | `tushum`            | `kirim`                   |
+| Money going out                        | `xarajat`           | `rasxod`                  |
+| A price reduction                      | `chegirma`          | `skidka`                  |
+| A price addition                       | `ustama`            | `nadbavka`                |
+| A background job                       | `fon vazifa`        | `ish`, `scheduler`        |
+| A signed statement of account          | `akt sverka`        | —                         |
+| A printed/served document              | `hujjat`            | `xujjat`                  |
+
+`kirim` and `tushum` are **not** synonyms and must never be unified: `Kirim` is a stock
+arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
+income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
+of the interface) are different words for different things.
+
 ## Do's and Don'ts
 
 **Do**
@@ -295,6 +375,8 @@ touching them; don't add new off-scale values.
 - Don't hardcode hex — no raw colors outside `@theme`.
 - Don't use native `<select>` as visible UI, or `ProjectDropdown` inside a modal.
 - Don't use placeholders as labels, or clear a form on a validation error.
+- Don't swallow an error code in a bare `catch {}`, or ship a string with a backtick
+  apostrophe, an English fallback, or a term that isn't in the glossary.
 - Don't put hover/pointer affordances on non-clickable rows.
 - Don't use serif for operational UI, or add font sizes below 10.5px.
 - Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.

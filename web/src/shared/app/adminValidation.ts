@@ -71,7 +71,8 @@ function apiValidationMessage(code: string | null): string {
     case 'login_required':
     case 'owner_login_required':
     case 'manufacturer_name_required':
-    case 'material_name_required':
+    // `material_name_required` was here too; the backend never raises it — a
+    // material's name is derived, not typed (QAD-163 cross-check).
     case 'material_color_required':
     case 'workshop_name_required':
     case 'branch_name_required':

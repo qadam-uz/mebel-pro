@@ -81,7 +81,7 @@ const directionOptions = computed<ChoiceOption[]>(() =>
         { value: 'debt_shrinks', label: 'Qarzimiz kamayadi', meta: 'chegirma, qaytarish, boshqa' },
       ]
     : [
-        { value: 'debt_grows', label: 'Mijozning qarzi oshadi', meta: 'daftar qarzi, qo`shimcha' },
+        { value: 'debt_grows', label: 'Mijozning qarzi oshadi', meta: "daftar qarzi, qo'shimcha" },
         { value: 'debt_shrinks', label: 'Mijozning qarzi kamayadi', meta: 'chegirma, kechirilgan' },
       ],
 )
@@ -168,16 +168,16 @@ function balanceWord(balanceTiyin: number) {
 function balanceChip(balance: number) {
   if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
   if (balance < 0) return { cls: 'pill p-bad', text: `Bizning qarzimiz: ${formatTiyin(-balance)}` }
-  return { cls: 'pill p-dn', text: 'Qarz yo`q' }
+  return { cls: 'pill p-dn', text: "Qarz yo'q" }
 }
 
 function statementRowLabel(row: DebtStatementRow) {
   if (row.kind === 'delivery') {
     // A delivery term is one faktura, at the grain the supplier quotes: its
-    // number, how many positions it carried, and any skidka/ustama on it.
+    // number, how many positions it carried, and any chegirma/ustama on it.
     const parts = [`Kirim · ${row.invoice_no ?? 'faktura'}`]
     if (row.line_count !== null) parts.push(`${row.line_count} pozitsiya`)
-    if (row.discount_tiyin) parts.push(`skidka ${formatTiyin(row.discount_tiyin)}`)
+    if (row.discount_tiyin) parts.push(`chegirma ${formatTiyin(row.discount_tiyin)}`)
     if (row.surcharge_tiyin) parts.push(`ustama ${formatTiyin(row.surcharge_tiyin)}`)
     return parts.join(' · ')
   }
@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
             <input
               v-model="search"
               :placeholder="
-                activeTab === 'suppliers' ? `Ta'minotchi nomi...` : 'Mijoz nomi yoki telefoni...'
+                activeTab === 'suppliers' ? `Ta'minotchi nomi` : 'Mijoz nomi yoki telefoni'
               "
             />
           </label>

@@ -53,8 +53,8 @@ const selected = computed(
   () =>
     props.options.find((option) => option.value === props.modelValue) ?? {
       value: '',
-      label: 'No context',
-      meta: 'empty',
+      label: 'Tanlanmagan',
+      meta: '',
       status: 'pending' as const,
       dot: undefined,
     },

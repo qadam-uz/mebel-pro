@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
       <div class="mp-filters">
         <label class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" placeholder="Material qidirish..." />
+          <input v-model="search" placeholder="Material nomi yoki dekor kodi" />
         </label>
         <ProjectDropdown v-model="kindFilter" label="Tur" :options="kindOptions" top-label />
         <ProjectDropdown v-model="statusFilter" label="Holat" :options="statusOptions" top-label />

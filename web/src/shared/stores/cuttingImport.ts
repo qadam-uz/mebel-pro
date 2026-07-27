@@ -362,16 +362,24 @@ export function cuttingImportErrorLabel(error: unknown): string {
       ? (error.body as { details?: { total_pieces?: unknown } }).details
       : undefined
   if (code === 'unsupported_format') {
-    return "Bu fayl turi qo'llab-quvvatlanmaydi - faqat CSV, XML yoki MAP. БАЗИС-Мебельщик'da «Спецификация в CSV/XML», 2D-Place'da esa MAP orqali saqlang."
+    return "Bu fayl turi qo'llab-quvvatlanmaydi — faqat CSV, XML yoki MAP. БАЗИС-Мебельщик'da «Спецификация в CSV/XML», 2D-Place'da esa MAP orqali saqlang."
   }
-  if (code === 'file_too_large') return 'Fayl 1 MB dan katta'
-  if (code === 'empty_file') return "Fayl bo'sh"
-  if (code === 'invalid_mapping') return "Ustunlar mosligi noto'g'ri"
+  if (code === 'file_too_large') return "Fayl 1 MB dan katta — faylni bo'lib yuklang."
+  if (code === 'empty_file') return "Faylda qator yo'q — to'ldirilgan faylni tanlang."
+  if (code === 'invalid_mapping') return "Ustunlar mosligi noto'g'ri — ustunlarni qayta belgilang."
+  // The parser names the file it could not read; without these the operator gets
+  // the generic "import qilib bo'lmadi" and no idea which file to fix (QAD-163).
+  if (code === 'invalid_file') return "Faylni o'qib bo'lmadi — XML buzilgan yoki to'liq emas."
+  if (code === 'invalid_map_file') return "2D-Place MAP faylni o'qib bo'lmadi."
+  // `detal` (not `qism`) deliberately: the import wizard speaks the file's own
+  // vocabulary throughout, and which of the two wins app-wide is the owner's
+  // call, not this sweep's (QAD-163 → docs-review "Needs your ruling").
+  if (code === 'invalid_map_part') return 'MAP faylda 50 mm dan kichik detal bor.'
   if (code === 'too_many_parts') {
     const total = typeof details?.total_pieces === 'number' ? details.total_pieces : null
     return total
-      ? `Faylda ${total} dona detal - bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang`
-      : "Faylda detal ko'p - bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang"
+      ? `Faylda ${total} dona detal — bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang.`
+      : "Faylda detal ko'p — bir optimallashtirishga eng ko'pi 300 dona. Faylni bo'lib yuklang."
   }
   return fallback
 }

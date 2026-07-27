@@ -6,11 +6,13 @@ import {
   adminCount,
   adminDate,
   adminDateTime,
+  adminErrorMessage,
   adminJobNameLabel,
   errorStatusLabel,
   errorStatusTone,
   workshopStatusLabel,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -119,9 +121,9 @@ async function rerun(name: string) {
     const run = await admin.runJob(name)
     if (run.status === 'skipped')
       toast.warn("Fon vazifa allaqachon ishlamoqda — o'tkazib yuborildi")
-    else toast.success('Ish qayta ishga tushirildi')
-  } catch {
-    toast.danger('Ish ishga tushmadi')
+    else toast.success('Fon vazifa qayta ishga tushirildi')
+  } catch (error) {
+    toast.danger(adminErrorMessage(apiErrorCode(error), 'Fon vazifa ishga tushmadi.'))
   } finally {
     running.value = false
   }
@@ -330,7 +332,7 @@ onMounted(loadAll)
             <div class="admin-card-b">
               <div v-if="failedJobs.length === 0" class="admin-empty">
                 <h3>Muvaffaqiyatsiz vazifa yo'q</h3>
-                <p>Scheduler oxirgi natijalari normal.</p>
+                <p>Oxirgi ishga tushirishlar xatoliksiz tugagan.</p>
               </div>
               <article
                 v-for="job in failedJobs"

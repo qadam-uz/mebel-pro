@@ -17,9 +17,11 @@ const props = withDefaults(
     confirmDisabled?: boolean
   }>(),
   {
-    confirmLabel: 'Confirm',
-    cancelLabel: 'Cancel',
-    busyLabel: 'Working',
+    // Uzbek is the only shipped locale: a call site that forgets to pass a label
+    // must still render Uzbek, never an English placeholder (QAD-163).
+    confirmLabel: 'Tasdiqlash',
+    cancelLabel: 'Bekor qilish',
+    busyLabel: 'Bajarilmoqda…',
     danger: false,
     busy: false,
     confirmDisabled: false,

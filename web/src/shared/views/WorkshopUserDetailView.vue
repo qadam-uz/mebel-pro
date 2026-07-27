@@ -639,6 +639,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         <div class="card-b">
           <div v-if="workshop.sessions.length === 0" class="st-empty !border-0 !py-8">
             <h3>Faol sessiya yo'q</h3>
+            <p>Xodim tizimga kirgach sessiyalari shu yerda ko'rinadi.</p>
           </div>
           <div v-for="session in workshop.sessions" v-else :key="session.id" class="row-item">
             <div>

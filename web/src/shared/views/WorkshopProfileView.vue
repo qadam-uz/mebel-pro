@@ -298,7 +298,7 @@ onMounted(async () => {
       </div>
       <div class="card-b">
         <div v-if="sessions.length === 0" class="client-empty">
-          <h3>Sessiya topilmadi</h3>
+          <h3>Faol sessiya yo'q</h3>
           <p>Joriy sessiya keyingi yangilashda ko'rinadi.</p>
         </div>
         <div v-else class="divide-y divide-hairline">

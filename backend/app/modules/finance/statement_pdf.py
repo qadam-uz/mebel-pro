@@ -204,7 +204,7 @@ def _row_label(row: DebtStatementRow) -> str:
         if row.line_count is not None:
             parts.append(f"{row.line_count} pozitsiya")
         if row.discount_tiyin:
-            parts.append(f"skidka {_money(row.discount_tiyin)}")
+            parts.append(f"chegirma {_money(row.discount_tiyin)}")
         if row.surcharge_tiyin:
             parts.append(f"ustama {_money(row.surcharge_tiyin)}")
         return " · ".join(parts)

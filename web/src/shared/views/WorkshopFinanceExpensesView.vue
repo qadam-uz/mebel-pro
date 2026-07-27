@@ -222,7 +222,7 @@ const isInvoicePayment = computed(() => expenseForm.mode === 'invoice')
 const payableInvoiceOptions = computed<ChoiceOption[]>(() =>
   finance.payableInvoices.map((invoice) => ({
     value: invoice.id,
-    label: `${invoice.invoice_no} · ${invoice.supplier_name ?? 'ta`minotchisiz'}`,
+    label: `${invoice.invoice_no} · ${invoice.supplier_name ?? "ta'minotchisiz"}`,
     meta: `${formatDate(invoice.invoice_date)} · ${invoice.branch_name ?? '—'} · ${invoice.line_count} pozitsiya`,
   })),
 )
@@ -236,7 +236,7 @@ const selectedInvoice = computed(
 const invoiceDerivedStrip = computed(() => {
   const invoice = selectedInvoice.value
   if (!invoice) return null
-  return `${invoice.supplier_name ?? 'ta`minotchisiz'} · ${invoice.branch_name ?? 'filialsiz'}`
+  return `${invoice.supplier_name ?? "ta'minotchisiz"} · ${invoice.branch_name ?? 'filialsiz'}`
 })
 // Overpayment is allowed on purpose — supplier prepayments are normal, and
 // blocking them pushes staff into inventing workarounds. Warn, don't refuse.
@@ -281,19 +281,19 @@ const categoryOptions: ChoiceOption[] = [
   { value: 'rent', label: 'Ijara', meta: 'joy xarajati' },
   { value: 'utilities', label: 'Kommunal', meta: 'elektr/gaz/suv' },
   { value: 'raw_materials', label: 'Xom ashyo', meta: 'material xaridi' },
-  { value: 'supplies', label: 'Aksessuar', meta: 'mayda ta`minot' },
-  { value: 'transport', label: 'Transport', meta: 'yetkazish/yo`l' },
+  { value: 'supplies', label: 'Aksessuar', meta: "mayda ta'minot" },
+  { value: 'transport', label: 'Transport', meta: "yetkazish/yo'l" },
   { value: 'equipment', label: 'Texnika', meta: 'uskuna' },
   { value: 'marketing', label: 'Marketing', meta: 'reklama' },
-  { value: 'taxes_and_fees', label: 'Soliqlar', meta: 'majburiy to`lovlar' },
-  { value: 'salary', label: 'Maosh', meta: 'xodim to`lovi' },
+  { value: 'taxes_and_fees', label: 'Soliqlar', meta: "majburiy to'lovlar" },
+  { value: 'salary', label: 'Maosh', meta: "xodim to'lovi" },
   { value: 'other', label: 'Boshqalar', meta: 'tasniflanmagan' },
 ]
 const createCategoryOptions = categoryOptions.filter((option) => option.value !== 'all')
 const incomeTypeOptions: ChoiceOption[] = [
   { value: 'all', label: 'Hamma turlar', meta: 'filtr' },
-  { value: 'order_payment', label: "Buyurtma to'lovi", meta: 'buyurtmaga bog`langan' },
-  { value: 'other', label: 'Boshqa tushum', meta: 'qo`lda yozuv' },
+  { value: 'order_payment', label: "Buyurtma to'lovi", meta: "buyurtmaga bog'langan" },
+  { value: 'other', label: 'Boshqa tushum', meta: "qo'lda yozuv" },
 ]
 const createIncomeTypeOptions = incomeTypeOptions.filter((option) => option.value !== 'all')
 // One word per method. The three sit in a half-width segmented row, and
@@ -301,7 +301,7 @@ const createIncomeTypeOptions = incomeTypeOptions.filter((option) => option.valu
 // read is not a visible choice. The card/terminal case lives in the meta line.
 const methodOptions: ChoiceOption[] = [
   { value: 'cash', label: 'Naqd', meta: 'kassa' },
-  { value: 'bank_transfer', label: 'Bank', meta: 'o`tkazma yoki karta' },
+  { value: 'bank_transfer', label: 'Bank', meta: "o'tkazma yoki karta" },
   { value: 'other', label: 'Boshqa', meta: 'izohda yoziladi' },
 ]
 const statusOptions: DropdownOption[] = [
@@ -856,8 +856,8 @@ onMounted(async () => {
               v-model="expenseForm.invoiceId"
               label="Kirim (faktura)"
               :options="payableInvoiceOptions"
-              placeholder="K-0007 yoki ta`minotchi"
-              no-results-text="To`lanmagan kirim topilmadi"
+              placeholder="K-0007 yoki ta'minotchi"
+              no-results-text="To'lanmagan kirim topilmadi"
               clearable
             />
             <label v-else class="field">
@@ -934,7 +934,11 @@ onMounted(async () => {
           />
           <label v-if="!isInvoicePayment" class="field">
             <span>Yetkazib beruvchi</span>
-            <input v-model="expenseForm.vendor" class="mp-input" placeholder="ixtiyoriy" />
+            <input
+              v-model="expenseForm.vendor"
+              class="mp-input"
+              placeholder="Masalan: Oq Mramor MChJ"
+            />
           </label>
           <label class="field">
             <span>Summa (so'm)</span>
@@ -1110,7 +1114,11 @@ onMounted(async () => {
           </label>
           <label class="field md:col-span-2">
             <span>Izoh</span>
-            <input v-model="incomeForm.note" class="mp-input" placeholder="kassa yoki bank izohi" />
+            <input
+              v-model="incomeForm.note"
+              class="mp-input"
+              placeholder="Masalan: Kapital bank, kassa 2"
+            />
           </label>
           <label class="field md:col-span-2">
             <span>Chek</span>

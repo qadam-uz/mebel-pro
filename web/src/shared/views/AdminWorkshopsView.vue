@@ -13,10 +13,12 @@ import {
 } from '@/shared/app/adminValidation'
 import {
   adminDate,
+  adminErrorMessage,
   dropdownOption,
   workshopStatusLabel,
   workshopStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -75,7 +77,7 @@ async function confirmBlock() {
       blockFieldErrors,
       fieldErrorsFromApi<'blockReason'>(error, { reason_required: 'blockReason' }),
     )
-    toast.danger("Ustaxonani bloklab bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani bloklab bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -88,8 +90,8 @@ async function confirmUnblock() {
     await admin.unblockWorkshop(unblockTarget.value.id)
     toast.success('Ustaxona blokdan chiqarildi')
     unblockTarget.value = null
-  } catch {
-    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+  } catch (error) {
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani blokdan chiqarib bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -232,7 +234,7 @@ async function createWorkshop() {
       focusFirstFieldError(provisionFieldErrors, provisionFieldOrder, provisionFieldIds)
     } else {
       createError.value = 'workshop_create_failed'
-      toast.danger("Ustaxona qo'shilmadi")
+      toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxona qo'shilmadi."))
     }
   } finally {
     creating.value = false
