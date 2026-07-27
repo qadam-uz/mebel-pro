@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
+import { permissionLabels } from '@/shared/app/workshopUi'
 import { formatDate } from '@/shared/formatters'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -53,25 +54,19 @@ const workshopGrantRows = computed(() => {
   return auth.me.grants.map((grant) => ({
     key: `${grant.permission}-${grant.branch_id}`,
     permission: grant.permission,
-    label: workshopPermissionLabel(grant.permission),
+    // Read from the one permission-label map (`workshopUi.ts`) that every grant
+    // surface reads. This view used to carry its own copy of it, and a private
+    // copy has a failure mode the shared map does not: renaming or relabelling a
+    // permission anywhere else leaves the copy behind silently — nothing breaks,
+    // no type complains, the profile just keeps showing wording no other screen
+    // uses. It had already drifted (`manage_catalog` read "Katalog" here and
+    // "Material katalogi" everywhere else) before it was noticed.
+    label: permissionLabels[grant.permission] ?? grant.permission,
     branch:
       workshop.branches.find((branch) => branch.id === grant.branch_id)?.name ??
       grant.branch_id.slice(0, 8),
   }))
 })
-
-function workshopPermissionLabel(permission: string) {
-  const labels: Record<string, string> = {
-    view_dashboard: 'Dashboard',
-    manage_orders: 'Buyurtmalarni boshqarish',
-    process_production: 'Ishlab chiqarish',
-    manage_inventory: 'Ombor',
-    manage_catalog: 'Katalog',
-    manage_finance: 'Moliya yozuvlari',
-    view_finance_reports: 'Moliya hisobotlari',
-  }
-  return labels[permission] ?? permission
-}
 
 async function savePassword() {
   error.value = null
@@ -232,7 +227,14 @@ onMounted(async () => {
             >
               <div>
                 <div class="nm">{{ grant.label }}</div>
-                <small class="font-mono text-[11px] text-ink-muted">{{ grant.permission }}</small>
+                <!-- The mono code is the second line only when it says something
+                     the label doesn't; an unlabelled permission falls back to the
+                     code, and printing it twice reads as a rendering bug. -->
+                <small
+                  v-if="grant.label !== grant.permission"
+                  class="font-mono text-[11px] text-ink-muted"
+                  >{{ grant.permission }}</small
+                >
               </div>
               <div class="meta">{{ grant.branch }}</div>
             </div>
