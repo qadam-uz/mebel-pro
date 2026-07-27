@@ -173,7 +173,6 @@ export interface ClientBranchOption {
   address: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
-  today_hours: { open: string | null; close: string | null }
   kerf_mm: number
   edge_trim_mm: number
 }

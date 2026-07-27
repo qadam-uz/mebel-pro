@@ -5,6 +5,7 @@ import {
   groupPanelPlacements,
   offcutLabelMode,
   panelDisplayIndex,
+  resultSheetPartGroups,
   snapshotShortLabel,
 } from '@/shared/app/cuttingResultsDisplay'
 import type { CuttingPanel, CuttingPart, CuttingResult } from '@/shared/stores/cutting'
@@ -144,6 +145,58 @@ describe('cutting results display helpers', () => {
         count: 2,
         rotatedCount: 1,
       },
+    ])
+  })
+
+  it('attributes every part group to its own sheet across a multi-sheet result', () => {
+    const placement = (id: string, partRef: string) => ({
+      id,
+      part_ref: partRef,
+      part_quantity_index: 1,
+      x_mm: 0,
+      y_mm: 0,
+      length_mm: 300,
+      width_mm: 200,
+      rotated: false,
+    })
+    const sheetOne: CuttingPanel = {
+      id: 'sheet-one',
+      material_id: 'panel-a',
+      panel_index: 1,
+      waste_area_mm2: 0,
+      offcuts: [],
+      // Placed b-then-a: the list must still read in parts_snapshot order.
+      placements: [placement('p1', 'part-b'), placement('p2', 'part-a'), placement('p3', 'part-a')],
+    }
+    const sheetTwo: CuttingPanel = {
+      id: 'sheet-two',
+      material_id: 'panel-b',
+      panel_index: 1,
+      waste_area_mm2: 0,
+      offcuts: [],
+      placements: [placement('p4', 'part-b')],
+    }
+    const cuttingResult = result({
+      panels: [sheetOne, sheetTwo],
+      parts_snapshot: [
+        part({ part_ref: 'part-a', name: 'Shelf' }),
+        part({ part_ref: 'part-b', name: 'Door', material_id: 'panel-b' }),
+      ],
+      material_snapshots: {
+        'panel-a': { name: 'Aloqa', panel_length_mm: 2800, panel_width_mm: 2070 },
+        'panel-b': { name: 'Bemor', panel_length_mm: 2800, panel_width_mm: 2070 },
+      },
+    })
+
+    expect(
+      resultSheetPartGroups(cuttingResult).map((sheet) => [
+        sheet.panelId,
+        sheet.sheetLabel,
+        sheet.groups.map((group) => `${group.name}×${group.count}`),
+      ]),
+    ).toEqual([
+      ['sheet-one', 'List 1', ['Shelf×2', 'Door×1']],
+      ['sheet-two', 'List 2', ['Door×1']],
     ])
   })
 

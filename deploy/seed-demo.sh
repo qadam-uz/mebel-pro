@@ -78,8 +78,6 @@ AZIZA_PHONE="+998901234455";   AZIZA_NAME="Aziza"
 B1_PHONE="+998712001212"   # Chilonzor filiali
 B2_PHONE="+998712007878"   # Yunusobod filiali
 
-WORKING_HOURS='{"monday":{"open":"09:00","close":"18:00"},"tuesday":{"open":"09:00","close":"18:00"},"wednesday":{"open":"09:00","close":"18:00"},"thursday":{"open":"09:00","close":"18:00"},"friday":{"open":"09:00","close":"18:00"},"saturday":{"open":"10:00","close":"16:00"},"sunday":{"open":null,"close":null}}'
-
 RESET=0
 [ "${1-}" = "--reset" ] && RESET=1
 
@@ -113,6 +111,21 @@ jcall() { # method url token [json-body] -> prints response body, dies on non-2x
 }
 
 dc() { ( cd "$SCRIPT_DIR" && docker compose "$@" ); }
+
+# `compose.yaml` hardcodes `name: mebel-pro`, and COMPOSE_PROJECT_NAME overrides
+# it — so without that variable set, a checkout *anywhere* (including a git
+# worktree) drives the one shared stack. Two sessions running in parallel then
+# seed, reset and migrate each other's database without either noticing. Say
+# which project this run will touch, so that is a visible choice and not a
+# silent one; `--reset` gets a louder warning because it destroys volumes.
+COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-mebel-pro}"
+if [ -n "${COMPOSE_PROJECT_NAME:-}" ]; then
+  info "Compose project: ${COMPOSE_PROJECT} (isolated via COMPOSE_PROJECT_NAME)"
+else
+  info "Compose project: ${COMPOSE_PROJECT} — the shared default."
+  info "  Working on a branch alongside another session? Re-run with"
+  info "  COMPOSE_PROJECT_NAME=<something-unique> and a ports override."
+fi
 
 # ─── Preflight ───────────────────────────────────────────────────────────────
 command -v curl >/dev/null || die "curl is required"
@@ -298,9 +311,8 @@ H3734_P="$(mat_id h3734 panel)"; H3734_E="$(mat_id h3734 edge)"
 say "5 · Provision workshop 'Mebel Master' + owner + 2 branches"
 PROV="$(jcall POST "$API/platform/workshops" "$TOKEN" "$(jq -nc \
   --arg b1phone "$B1_PHONE" --arg owner "$OWNER_LOGIN" --arg temp "$OWNER_TEMP" \
-  --argjson wh "$WORKING_HOURS" \
   '{workshop:{name:"Mebel Master"},
-    branch:{name:"Chilonzor filiali",address:"Toshkent, Chilonzor tumani, Bunyodkor ko‘chasi 12",phone:$b1phone,working_hours:$wh},
+    branch:{name:"Chilonzor filiali",address:"Toshkent, Chilonzor tumani, Bunyodkor ko‘chasi 12",phone:$b1phone},
     owner:{login:$owner},temp_password:$temp}')")"
 WORKSHOP_ID="$(printf '%s' "$PROV" | jq -r .workshop.id)"
 BRANCH1_ID="$(printf '%s'  "$PROV" | jq -r .branch.id)"
@@ -314,8 +326,8 @@ jcall POST "$API/auth/password/change" "$OWNER_TOKEN" \
 ok "owner ready ($OWNER_LOGIN / $OWNER_PW)"
 
 BRANCH2_ID="$(jcall POST "$API/workshop/branches" "$OWNER_TOKEN" "$(jq -nc \
-  --arg b2phone "$B2_PHONE" --argjson wh "$WORKING_HOURS" \
-  '{name:"Yunusobod filiali",address:"Toshkent, Yunusobod tumani, Amir Temur ko‘chasi 108",phone:$b2phone,working_hours:$wh}')" | jq -r .id)"
+  --arg b2phone "$B2_PHONE" \
+  '{name:"Yunusobod filiali",address:"Toshkent, Yunusobod tumani, Amir Temur ko‘chasi 108",phone:$b2phone}')" | jq -r .id)"
 ok "branch 2 created (Yunusobod filiali)"
 
 branch_id_for() { case "$1" in B1) echo "$BRANCH1_ID";; B2) echo "$BRANCH2_ID";; esac; }
@@ -438,8 +450,8 @@ say "9 · 2 skeleton workshops (Atlas Mebel, Nur Mebel)"
 skeleton() { # name owner_login branch address phone
   jcall POST "$API/platform/workshops" "$TOKEN" "$(jq -nc \
     --arg name "$1" --arg owner "$2" --arg bn "$3" --arg addr "$4" --arg phone "$5" \
-    --arg temp "SkeletonTmp123" --argjson wh "$WORKING_HOURS" \
-    '{workshop:{name:$name},branch:{name:$bn,address:$addr,phone:$phone,working_hours:$wh},
+    --arg temp "SkeletonTmp123" \
+    '{workshop:{name:$name},branch:{name:$bn,address:$addr,phone:$phone},
       owner:{login:$owner},temp_password:$temp}')" >/dev/null
 }
 skeleton "Atlas Mebel" "owner-atlas" "Sergeli filiali" "Toshkent, Sergeli tumani, Yangi Sergeli 7" "+998712400050"

@@ -32,7 +32,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 PAYABLE_ORDERS_URL = "/api/v1/workshop/finance/payable-orders"
 INCOME_URL = "/api/v1/workshop/finance/income"
@@ -60,7 +60,6 @@ async def _extra_branch(db_session: AsyncSession, *, workshop_id: uuid.UUID) -> 
         name="Chilonzor",
         address="Tashkent, Chilonzor",
         phone="+998904444444",
-        working_hours=default_working_hours(),
     )
     db_session.add(branch)
     await db_session.flush()

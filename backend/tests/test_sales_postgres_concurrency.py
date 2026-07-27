@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 import_all_models()
 
@@ -49,7 +49,6 @@ async def _add_branch(db: AsyncSession, *, workshop_id: uuid.UUID, name: str) ->
         name=name,
         address="Tashkent",
         phone="+998902222222",
-        working_hours=default_working_hours(),
     )
     db.add(branch)
     await db.flush()

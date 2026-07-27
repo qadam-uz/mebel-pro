@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -59,7 +59,6 @@ async def _branch(db: AsyncSession, *, workshop_id: uuid.UUID, branch_no: int) -
         name=f"Branch {branch_no}",
         address="Tashkent",
         phone="+998901111111",
-        working_hours=default_working_hours(),
     )
     db.add(branch)
     await db.flush()
@@ -164,7 +163,6 @@ async def test_created_branches_get_distinct_platform_wide_numbers(
         "name": "Chilonzor",
         "address": "Tashkent, Chilonzor",
         "phone": "+998901234599",
-        "working_hours": default_working_hours(),
     }
 
     first = await client.post(

@@ -26,7 +26,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -383,7 +383,6 @@ async def test_optimize_resolves_kerf_and_trim_from_the_draft_branch(
             "name": "Second branch",
             "address": "Tashkent, Second",
             "phone": "+998907654321",
-            "working_hours": default_working_hours(),
         },
     )
     assert branch2.status_code == 201

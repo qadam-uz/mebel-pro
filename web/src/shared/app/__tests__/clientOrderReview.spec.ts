@@ -40,7 +40,6 @@ function quote(overrides: Partial<OrderQuote> = {}): OrderQuote {
     branch_name: 'Chilonzor filiali',
     branch_address: 'Bunyodkor 12',
     branch_phone: '+998901112233',
-    today_hours: { open: '09:00', close: '18:00' },
     subtotal_cutting_tiyin: 5 * 45_000_00,
     subtotal_materials_tiyin: 3 * 250_000_00 + 2 * 180_000_00,
     subtotal_edge_banding_tiyin: 12_500_00,

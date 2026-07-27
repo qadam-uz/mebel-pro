@@ -63,7 +63,6 @@ function quote(branchId: string): OrderQuote {
     branch_name: `Branch ${branchId}`,
     branch_address: 'Tashkent',
     branch_phone: '+998901234567',
-    today_hours: { open: '09:00', close: '18:00' },
     subtotal_cutting_tiyin: 1,
     subtotal_materials_tiyin: 2,
     subtotal_edge_banding_tiyin: 3,

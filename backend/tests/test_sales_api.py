@@ -29,7 +29,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -1316,7 +1316,6 @@ async def test_workshop_new_order_count_is_branch_scoped_and_tenant_isolated(
         phone="+998902222333",
         latitude=Decimal("41.28"),
         longitude=Decimal("69.20"),
-        working_hours=default_working_hours(),
     )
     db_session.add(other_branch)
     await db_session.flush()

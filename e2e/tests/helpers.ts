@@ -60,18 +60,6 @@ export function phoneFor(id: string, offset: number) {
   return `+99890${String(hash).padStart(7, "0")}`;
 }
 
-export function defaultWorkingHours() {
-  return {
-    monday: { open: "09:00", close: "18:00" },
-    tuesday: { open: "09:00", close: "18:00" },
-    wednesday: { open: "09:00", close: "18:00" },
-    thursday: { open: "09:00", close: "18:00" },
-    friday: { open: "09:00", close: "18:00" },
-    saturday: { open: "10:00", close: "16:00" },
-    sunday: { open: null, close: null },
-  };
-}
-
 export async function seedPlatform(login: string) {
   await execFileAsync(
     "uv",
@@ -130,7 +118,6 @@ export async function provisionWorkshop(
         name: `Order Branch ${id}`,
         address: "Tashkent, Test",
         phone: phoneFor(id, 3),
-        working_hours: defaultWorkingHours(),
       },
       owner: {
         login: ownerLogin,

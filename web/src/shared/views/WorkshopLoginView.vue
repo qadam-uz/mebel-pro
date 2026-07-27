@@ -27,7 +27,7 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
 </script>
 
 <template>
-  <main class="grid min-h-screen text-ink lg:grid-cols-[1.05fr_1fr]">
+  <main class="grid min-h-[var(--app-vh)] text-ink lg:grid-cols-[1.05fr_1fr]">
     <!-- Brand panel — hidden below lg; the form carries the brand on mobile. -->
     <section
       class="relative hidden flex-col overflow-hidden bg-accent px-12 py-12 text-white lg:flex xl:px-16"

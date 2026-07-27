@@ -45,6 +45,15 @@
 }
 
 @layer base {
+  /* The viewport box a full-bleed surface should actually occupy. Phones get
+     the plain units — no zoom is applied below 769px; the desktop tier
+     overrides them below. `dvh` (not `vh`) so mobile browser chrome sliding in
+     and out doesn't leave a panel taller than the screen. */
+  :root {
+    --app-vh: 100dvh;
+    --app-vw: 100vw;
+  }
+
   /* Bakes in the 90% density the design was tuned at, so the app reads right
      at the browser's actual 100% zoom — `zoom` (not a root font-size or
      transform) because it scales spacing/borders/icons along with type,
@@ -54,6 +63,20 @@
   @media (min-width: 769px) {
     html {
       zoom: 90%;
+    }
+
+    /* Viewport units do NOT participate in `zoom`: `100dvh` / `100vw` resolve
+       against the unzoomed viewport and the *result* is then scaled by the 90%
+       above, so a full-bleed panel paints 90% of the screen and leaves a strip
+       of page background beside it. Dividing by the same ratio cancels that
+       out. `--app-zoom` is the ratio behind the `zoom` declaration right above
+       — the one place it is written down, so the compensation can never drift
+       from the density it compensates for. Surfaces use `var(--app-vh)` /
+       `var(--app-vw)`; none of them repeats the ratio. */
+    :root {
+      --app-zoom: 0.9;
+      --app-vh: calc(100dvh / var(--app-zoom));
+      --app-vw: calc(100vw / var(--app-zoom));
     }
   }
 
@@ -1471,7 +1494,7 @@
 
   .workshop-app {
     display: grid;
-    min-height: 100vh;
+    min-height: var(--app-vh);
     grid-template-columns: 248px minmax(0, 1fr);
     background: var(--color-bg);
     color: var(--color-ink);
@@ -1481,7 +1504,7 @@
     position: sticky;
     top: 0;
     display: flex;
-    height: 100vh;
+    height: var(--app-vh);
     flex-direction: column;
     overflow: hidden;
     border-right: 1px solid var(--color-hairline);
@@ -1603,8 +1626,15 @@
     gap: 14px;
   }
 
+  /* The sidebar is a fixed full-height column with `overflow: hidden`, so the
+     nav between the pinned brand header and the pinned user card is the only
+     thing allowed to scroll — otherwise the last groups are clipped and
+     unreachable on short screens (~700px of viewport on a 13" laptop, where an
+     owner has the most entries). `overscroll-behavior` keeps a nav flick from
+     running on into the page behind it. */
   .workshop-sidebar > .workshop-nav {
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding-right: 4px;
     scrollbar-color: var(--color-hairline-strong) transparent;
     scrollbar-width: thin;
@@ -4107,8 +4137,8 @@
   .admin-app {
     display: grid;
     width: 100%;
-    max-width: 100vw;
-    min-height: 100vh;
+    max-width: var(--app-vw);
+    min-height: var(--app-vh);
     grid-template-columns: 248px minmax(0, 1fr);
     overflow-x: clip;
     background: var(--color-bg);
@@ -4143,7 +4173,7 @@
     position: sticky;
     top: 0;
     display: flex;
-    height: 100vh;
+    height: var(--app-vh);
     flex-direction: column;
     overflow: hidden;
     border-right: 1px solid var(--color-hairline);
@@ -4258,8 +4288,11 @@
     gap: 2px;
   }
 
+  /* Same scroller contract as `.workshop-sidebar > .workshop-nav`: brand header
+     and user card stay pinned, the nav in between is what scrolls. */
   .admin-sidebar > .admin-nav {
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding-right: 4px;
     scrollbar-color: var(--color-hairline-strong) transparent;
     scrollbar-width: thin;
@@ -5302,39 +5335,6 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 28%, transparent);
   }
 
-  .admin-working-hours {
-    border: 1px solid var(--color-hairline-strong);
-    border-radius: 7px;
-    padding: 12px;
-  }
-
-  .admin-working-hours legend {
-    padding: 0 6px;
-    color: var(--color-ink-muted);
-    font-size: 0.71875rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    text-transform: uppercase;
-  }
-
-  .admin-working-hours-grid {
-    display: grid;
-    gap: 8px;
-  }
-
-  .admin-working-hours-row {
-    display: grid;
-    grid-template-columns: minmax(94px, 1fr) minmax(0, 112px) minmax(0, 112px);
-    align-items: center;
-    gap: 8px;
-  }
-
-  .admin-working-hours-row > span {
-    color: var(--color-ink);
-    font-size: 0.8125rem;
-    font-weight: 800;
-  }
-
   .admin-form-grid {
     display: grid;
     gap: 14px;
@@ -5734,7 +5734,7 @@
 
   .admin-auth-wrap {
     display: grid;
-    min-height: 100vh;
+    min-height: var(--app-vh);
     place-items: center;
     background:
       radial-gradient(110% 70% at 50% -10%, var(--color-accent-soft), transparent 60%),
@@ -6056,14 +6056,6 @@
     .admin-form-grid,
     .admin-form-grid.three {
       grid-template-columns: 1fr;
-    }
-
-    .admin-working-hours-row {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .admin-working-hours-row > span {
-      grid-column: 1 / -1;
     }
 
     .admin-top-actions {

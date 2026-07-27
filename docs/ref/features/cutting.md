@@ -2,7 +2,7 @@
 title: Cutting optimization
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-27
 order: 80
 ---
 
@@ -467,15 +467,25 @@ The result stage has three desktop columns: materials and details at left, the l
 in the centre, and **Buyurtmangiz** alone at right. Narrow screens stack the visualiser, details,
 then order summary.
 
+**768px is the line between the two readings of a result.** A 2800 mm sheet inside a 390 px
+viewport draws at roughly a 7× reduction, where no part label and no dimension in the drawing
+survives — that is the fitting thresholds working as designed, not a rendering defect, and no
+sizing change wins it back. So below 768px the drawing demotes to a navigational overview and a
+text parts list beneath it carries the numbers; from 768px up the drawing is legible and the
+per-sheet rail beside it carries the detail. The two never show together: one screen, one
+authoritative reading of the result. 768px is the app's own desktop boundary (the root paints
+at `zoom: 90%` from 769px), so the switch lands where the layout already changes character
+rather than inventing a third regime.
+
 1. **Panel layout visualiser.**
    - The result header shows the imported-layout and placement state. Only the chosen result is
      shown; legacy or previous candidates are not offered as variants.
    - A sheet thumbnail strip grouped by panel material. Each group header shows the material
      type, fuller material label, and that material's sheet count; compact thumbnails below
      it show drawing-wide `List N` numbering and a bottom-right fill badge.
-   - The active panel renders as an interactive SVG (pan / zoom on mobile); each placed
-     part carries one centred label — display name + dimensions + a `↻` marker when the
-     placement is rotated (e.g. `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
+   - The active panel renders as an interactive SVG; each placed part carries one centred
+     label — display name + dimensions + a `↻` marker when the placement is rotated (e.g.
+     `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
      hide on placements too small to carry them. Offcut rectangles overlay as dashed
      outlines: green with a `Qoldiq …×…` label when usable, red `chiqit` when waste.
      Offcut labels use the same fitting ladder in SVG and PDF: horizontal label, rotated
@@ -489,13 +499,25 @@ then order summary.
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
      a rotated placement maps them 90° clockwise. Tick inset, length and weight are
      normalised, so banding reads the same on a large and a small panel.
-   - The left rail is grouped by part for the active sheet (`Detallar — List N`), showing
-     name, dimensions, quantity, and rotated count. Result data is frozen from that result's
-     `parts_snapshot`, so it remains self-contained after later editor changes.
+   - From 768px up, the left rail is grouped by part for the active sheet
+     (`Detallar — List N`), showing name, dimensions, quantity, and rotated count. Result data
+     is frozen from that result's `parts_snapshot`, so it remains self-contained after later
+     editor changes.
    - The left rail first lists every panel material and its sheet count with a plain bullet,
      then its Kromka block shows a dot in the same colour as the drawing, fuller material label
      such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed metres. These two cards have
      border-only surfaces.
+   - Below 768px the per-sheet rail is replaced by a **`Detallar` parts list directly beneath
+     the drawing**, covering the whole result rather than only the active sheet: one `List N`
+     group per sheet — the material label printed once per run of sheets that share it — and
+     one row per part carrying name, `length × width mm`, and quantity, plus a rotated count
+     where there is one. Rows read in `parts_snapshot` order (the editor's and the PDF's `#`
+     order), not the optimizer's placement order, so a screen reader walks the parts the way
+     the user wrote them. It is ordinary selectable text — the point is that these numbers can
+     be read and copied when the drawing's cannot. Tapping a row selects that part, switching
+     the drawing to its sheet first when the row belongs to another one, and centres the
+     drawing so the highlight is on screen; tapping a placement in the drawing scrolls its row
+     into view and selects it.
 
 2. **Buyurtmangiz.** The dedicated right-side card shows the orderable chosen result's panel
    count, consumed edge length, and the active branch quote split into

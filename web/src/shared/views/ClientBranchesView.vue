@@ -24,13 +24,6 @@ function phones(branch: ClientBranch) {
   return [branch.phone, ...(branch.additional_phones ?? [])]
 }
 
-function hours(branch: ClientBranch) {
-  const values = Object.values(branch.working_hours ?? {}).filter(
-    (value): value is string => typeof value === 'string' && value.trim().length > 0,
-  )
-  return values[0] ?? "Ish vaqti ko'rsatilmagan"
-}
-
 watch(search, () => {
   window.clearTimeout(searchTimer)
   searchTimer = window.setTimeout(() => void refreshBranches(), SEARCH_DEBOUNCE_MS)
@@ -122,9 +115,7 @@ onMounted(refreshBranches)
           <h2 class="m-0 truncate font-serif text-lg font-semibold text-ink">
             {{ branch.workshop_name }} · {{ branch.branch_name }}
           </h2>
-          <p class="mt-1 font-mono text-xs text-ink-muted">
-            {{ branch.address }} · {{ hours(branch) }}
-          </p>
+          <p class="mt-1 font-mono text-xs text-ink-muted">{{ branch.address }}</p>
           <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <a
               v-for="(phone, index) in phones(branch)"
