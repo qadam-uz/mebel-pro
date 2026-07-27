@@ -359,16 +359,16 @@ create_staff() { # full_name login phone home_branch grants_json final_pw -> ech
 }
 
 MANAGER_ID="$(create_staff "Alisher Karimov" "manager" "+998911002030" "$BRANCH1_ID" \
-  "[$(g view_dashboard "$BRANCH1_ID"),$(g manage_orders "$BRANCH1_ID"),$(g manage_catalog "$BRANCH1_ID"),$(g manage_inventory "$BRANCH1_ID")]" \
+  "[$(g view_orders "$BRANCH1_ID"),$(g manage_orders "$BRANCH1_ID"),$(g manage_catalog "$BRANCH1_ID"),$(g manage_inventory "$BRANCH1_ID")]" \
   "ManagerDemo123")"; ok "manager (Filial menejeri @ B1)"
 CUTTER_ID="$(create_staff "Sardor Yo'ldoshev" "cutter" "+998911002031" "$BRANCH1_ID" \
-  "[$(g view_dashboard "$BRANCH1_ID"),$(g process_production "$BRANCH1_ID")]" \
+  "[$(g view_orders "$BRANCH1_ID"),$(g process_production "$BRANCH1_ID")]" \
   "CutterDemo123")"; ok "cutter (Usta kesish @ B1)"
 EDGER_ID="$(create_staff "Jamshid Rahimov" "edger" "+998911002032" "$BRANCH1_ID" \
   "[$(g process_production "$BRANCH1_ID"),$(g process_production "$BRANCH2_ID")]" \
   "EdgerDemo123")"; ok "edger (Usta kromka @ B1 + B2)"
 USTA2_ID="$(create_staff "Bekzod Tursunov" "usta2" "+998911002033" "$BRANCH2_ID" \
-  "[$(g view_dashboard "$BRANCH2_ID"),$(g process_production "$BRANCH2_ID"),$(g manage_inventory "$BRANCH2_ID")]" \
+  "[$(g view_orders "$BRANCH2_ID"),$(g process_production "$BRANCH2_ID"),$(g manage_inventory "$BRANCH2_ID")]" \
   "Usta2Demo123")"; ok "usta2 (Yunusobod ustasi @ B2, home @ B2)"
 ACCOUNTANT_ID="$(create_staff "Nigora Saidova" "accountant" "+998911002034" "$BRANCH1_ID" \
   "[$(g manage_finance "$BRANCH1_ID"),$(g manage_finance "$BRANCH2_ID"),$(g view_finance_reports "$BRANCH1_ID"),$(g view_finance_reports "$BRANCH2_ID")]" \

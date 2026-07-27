@@ -429,7 +429,8 @@ Permission names below are the per-branch grants from
   and branch-scoped so it always agrees with the list it links to. Refreshes on shell load,
   on a branch switch, when the tab returns to the foreground, and after any order mutation;
   a failed count renders no badge and never disturbs the shell.
-- **Orders** (`/workshop/orders`, `view_dashboard` to see; `manage_orders` to act) —
+- **Orders** (`/workshop/orders`, `manage_orders`; a `view_orders` holder reads individual
+  orders by link or search, not this board) —
   branch-scoped, two modes:
   - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each
     header has a count; cards: order #, client name + phone, total, item count, age, the
@@ -505,6 +506,14 @@ Permission names below are the per-branch grants from
   a `shop` material is short) sits above the cards. There is **no** Payments or Refunds
   surface here — recording and correcting money is the finance module; the summary is a
   read-only mirror.
+
+  **An order the reader may not open is not a loading failure.** The route admits
+  `process_production`, but the data rule behind it admits only the assignee, and an order in
+  another branch answers 404 rather than confirming it exists. Both land on their own state —
+  "Bu buyurtmaga ruxsatingiz yo'q", explaining that the order belongs to another branch, is not
+  assigned to this user, or does not exist — with no retry button, because the request that was
+  refused will be refused again. The connection-failure state with its retry stays for a
+  genuine transport error.
 
 - **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
   `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar

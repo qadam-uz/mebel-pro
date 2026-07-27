@@ -69,7 +69,7 @@ export function stockTransactionTypeLabel(type: StockTransactionType) {
 export const STOCK_SHORTFALL_MESSAGE = 'Omborda qoldiq yetarli emas'
 
 export const permissionLabels: Record<string, string> = {
-  view_dashboard: 'Asosiy panel',
+  view_orders: "Buyurtmalarni ko'rish (faqat o'qish)",
   manage_orders: 'Buyurtmalar',
   process_production: 'Ishlab chiqarish',
   manage_catalog: 'Material katalogi',
@@ -87,6 +87,22 @@ export function grantSummary(
   const branches = new Set(grants.map((grant) => grant.branch_id))
   const permissions = new Set(grants.map((grant) => grant.permission))
   return `${permissions.size} grant · ${branches.size} filial`
+}
+
+/**
+ * The workshop's own name for chrome that shows the tenant, or `null` when
+ * neither source has one and the caller should fall back to the generic label.
+ *
+ * Two sources, in this order: the owner-only settings row (so a rename shows
+ * without a reload) and the `me` principal, which carries the name for staff —
+ * the settings read 403s for them (QAD-168).
+ */
+export function workshopTenantName(...candidates: Array<string | null | undefined>) {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim()
+    if (trimmed) return trimmed
+  }
+  return null
 }
 
 export function initials(name: string | null | undefined, fallback = 'MP') {

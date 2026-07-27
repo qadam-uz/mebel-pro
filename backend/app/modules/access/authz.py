@@ -1,6 +1,7 @@
 """Tenant-scope helpers for workshop/branch access checks."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from fastapi import status
@@ -90,6 +91,31 @@ async def resolve_branch_scope(
     permission: Permission,
     claimed_workshop_id: uuid.UUID | None = None,
 ) -> BranchScope:
+    return await resolve_branch_scope_any(
+        db,
+        principal,
+        branch_id=branch_id,
+        permissions=(permission,),
+        claimed_workshop_id=claimed_workshop_id,
+    )
+
+
+async def resolve_branch_scope_any(
+    db: AsyncSession,
+    principal: AuthenticatedPrincipal,
+    *,
+    branch_id: uuid.UUID,
+    permissions: Sequence[Permission],
+    claimed_workshop_id: uuid.UUID | None = None,
+) -> BranchScope:
+    """Resolve a branch scope that **any one** of ``permissions`` unlocks.
+
+    A few reads are shared lookups rather than one grant's private data — the
+    supplier list is both the warehouseman's arrival counterparty and the
+    accountant's expense counterparty (QAD-169). Naming every permission that
+    legitimately reads them keeps the alternative honest: a single-permission
+    gate that the second reader has to work around.
+    """
     branch = await db.get(Branch, branch_id)
     if branch is None or branch.status is BranchStatus.INACTIVE:
         raise APIError(
@@ -101,11 +127,14 @@ async def resolve_branch_scope(
             "Branch does not belong to the requested workshop",
             status_code=status.HTTP_403_FORBIDDEN,
         )
-    if not can_access_branch(
-        principal,
-        workshop_id=branch.workshop_id,
-        branch_id=branch.id,
-        permission=permission,
+    if not any(
+        can_access_branch(
+            principal,
+            workshop_id=branch.workshop_id,
+            branch_id=branch.id,
+            permission=permission,
+        )
+        for permission in permissions
     ):
         raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     return BranchScope(workshop_id=branch.workshop_id, branch_id=branch.id)

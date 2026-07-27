@@ -6,6 +6,7 @@ import {
   stockTransactionTypeLabel,
   workshopDraftStatus,
   workshopErrorMessage,
+  workshopTenantName,
 } from '@/shared/app/workshopUi'
 
 describe('workshop UI helpers', () => {
@@ -13,6 +14,16 @@ describe('workshop UI helpers', () => {
     expect(workshopErrorMessage('order_version_conflict')).toContain('Buyurtma boshqa joyda')
     expect(workshopErrorMessage('permission_denied')).not.toContain('permission_denied')
     expect(workshopErrorMessage('expense_save_failed')).not.toContain('expense_save_failed')
+  })
+
+  it('resolves the tenant name from settings first, then the principal (QAD-168)', () => {
+    // The owner has both; the settings row wins so a rename shows without a reload.
+    expect(workshopTenantName('Mebel Master (yangi)', 'Mebel Master')).toBe('Mebel Master (yangi)')
+    // Staff never load the owner-only settings row — `me` is the source they have.
+    expect(workshopTenantName(undefined, 'Mebel Master')).toBe('Mebel Master')
+    // Blank is not a name: it must fall through, not win as an empty label.
+    expect(workshopTenantName('   ', 'Mebel Master')).toBe('Mebel Master')
+    expect(workshopTenantName(undefined, null)).toBeNull()
   })
 
   it('suggests a login prefix from the workshop name', () => {

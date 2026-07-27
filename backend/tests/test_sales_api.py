@@ -78,6 +78,7 @@ async def _staff(
     *,
     workshop_id: uuid.UUID,
     branch_id: uuid.UUID,
+    permission: Permission = Permission.PROCESS_PRODUCTION,
 ) -> WorkshopUser:
     staff = WorkshopUser(
         workshop_id=workshop_id,
@@ -95,7 +96,7 @@ async def _staff(
     db.add(
         PermissionGrant(
             workshop_user_id=staff.id,
-            permission=Permission.PROCESS_PRODUCTION,
+            permission=permission,
             branch_id=branch_id,
             granted_by_user_id=staff.id,
             granted_at=datetime.now(UTC),
@@ -999,6 +1000,47 @@ async def test_client_orders_active_filter_expands_to_status_union(
     # Once cancelled it drops out of active and appears under the cancelled tab.
     assert order_id not in _ids(await _list("active"))
     assert order_id in _ids(await _list("cancelled"))
+
+
+async def test_view_orders_grant_reads_the_branch_orders_but_cannot_act(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-166: `view_orders` is exactly what its name says — read access to the
+    branch's orders, including the client contact and the money on them, and no
+    office action. The grant was called `view_dashboard` while doing this, so an
+    owner ticking it thought they were unlocking a KPI page.
+    """
+    order, _, _, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    reader = await _staff(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.VIEW_ORDERS,
+    )
+    tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=reader.id,
+    )
+    reader_access = tokens.access_token
+
+    listed = await client.get("/api/v1/workshop/orders", headers=_auth(reader_access))
+    detail = await client.get(
+        f"/api/v1/workshop/orders/{order['id']}",
+        headers=_auth(reader_access),
+    )
+    approve = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(reader_access),
+        json={"version": order["version"]},
+    )
+
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [order["id"]]
+    assert detail.status_code == 200
+    assert detail.json()["contact_phone"] == "+998901555222"
+    assert approve.status_code == 403
 
 
 async def test_workshop_orders_date_filter(

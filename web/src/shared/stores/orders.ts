@@ -7,6 +7,7 @@ import {
   apiErrorCode,
   apiTraceId,
   captureApiError,
+  isPermissionDenied,
   withQuery,
 } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
@@ -442,6 +443,13 @@ export const useOrdersStore = defineStore('orders', () => {
       workshopOrdersHasMore.value = page.length === limit
     } catch (errorValue) {
       captureError(errorValue, 'workshop_orders_load_failed')
+      // A refused read means the grant behind these rows is gone — drop them
+      // rather than leaving an error line over data the server just said this
+      // reader may not see (QAD-172).
+      if (isPermissionDenied(errorValue)) {
+        workshopOrders.value = []
+        workshopOrdersHasMore.value = false
+      }
     } finally {
       loading.value = false
     }

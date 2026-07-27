@@ -5,6 +5,8 @@ import { createApp } from 'vue'
 import {
   createRouter,
   createWebHistory,
+  type NavigationGuardNext,
+  type NavigationGuardWithThis,
   type RouteLocationRaw,
   type RouteRecordRaw,
 } from 'vue-router'
@@ -18,6 +20,7 @@ import {
 } from '@/shared/app/workshopPermissions'
 import { useAuthStore, type MeResponse } from '@/shared/stores/auth'
 import { useCuttingStore } from '@/shared/stores/cutting'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 export function resolveHistoryBase(
   localBase: string,
@@ -65,6 +68,47 @@ function normalizeRedirect(
   return redirect
 }
 
+// A `beforeEnter` guard that bounces elsewhere returns a route target as well,
+// and it is written against the same absolute, role-prefixed paths as the route
+// records around it. Without this it was the one target the dev-base stripping
+// missed, so the guard sent the browser to a path that no longer existed and
+// the navigation landed on nothing (QAD-178).
+function normalizeGuard(
+  guard: NavigationGuardWithThis<undefined>,
+  localBase: string,
+  historyBase: string,
+): NavigationGuardWithThis<undefined> {
+  // vue-router reads a guard's arity: one declaring the third `next` parameter
+  // drives navigation through that callback instead of a return value, so there
+  // is nothing to normalize and re-wrapping it would change how it is called.
+  if (guard.length >= 3) return guard
+  // Unreachable by the arity check above — a guard that ignores `next` in its
+  // signature has no way to call it.
+  const next: NavigationGuardNext = () => {
+    throw new Error('Route guard called next() without declaring it')
+  }
+
+  // Exactly two declared parameters: vue-router must keep treating the return
+  // value, not a `next` call, as this guard's verdict.
+  return async function (this: undefined, to, from) {
+    const result = await guard.call(this, to, from, next)
+    if (result == null || typeof result === 'boolean' || result instanceof Error) return result
+    return normalizeRedirectTarget(result, localBase, historyBase)
+  }
+}
+
+function normalizeBeforeEnter(
+  beforeEnter: RouteRecordRaw['beforeEnter'],
+  localBase: string,
+  historyBase: string,
+): RouteRecordRaw['beforeEnter'] {
+  if (!beforeEnter) return beforeEnter
+  if (Array.isArray(beforeEnter)) {
+    return beforeEnter.map((guard) => normalizeGuard(guard, localBase, historyBase))
+  }
+  return normalizeGuard(beforeEnter, localBase, historyBase)
+}
+
 export function normalizeRoleRoutes(
   routes: RouteRecordRaw[],
   localBase: string,
@@ -75,6 +119,7 @@ export function normalizeRoleRoutes(
       ...route,
       path: normalizeRolePath(route.path, localBase, historyBase),
       redirect: normalizeRedirect(route.redirect, localBase, historyBase),
+      beforeEnter: normalizeBeforeEnter(route.beforeEnter, localBase, historyBase),
     } as RouteRecordRaw & { children?: RouteRecordRaw[] }
 
     if (route.children) {
@@ -148,6 +193,33 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
     useCuttingStore(pinia).configureScope('workshop')
   }
 
+  // A refused request means the grant set the shell was built from is stale —
+  // the owner revoked something while this tab was open (QAD-172). Re-read the
+  // principal and, for the workshop app, the branch context the sidebar is
+  // built from; if the page the user is on is no longer allowed, send them
+  // home. Server-side enforcement was never fooled; this is the screen catching
+  // up. Serialized so a burst of 403s costs one round-trip.
+  let revalidating: Promise<void> | null = null
+  function revalidateAccess() {
+    if (revalidating) return
+    revalidating = (async () => {
+      await auth.refreshMe()
+      if (!auth.isAuthenticated) return
+      if (roleConfig.role === 'workshop') {
+        await useWorkshopStore(pinia)
+          .loadBranchContext({ force: true })
+          .catch(() => undefined)
+      }
+      const current = router.currentRoute.value
+      if (current.meta.layout === 'auth') return
+      if (!roleRoutePermissionAllowed(roleConfig.role, auth.me, current.meta, current.params)) {
+        void router.replace(roleConfig.homePath)
+      }
+    })().finally(() => {
+      revalidating = null
+    })
+  }
+
   // Transparent 401 handling (CB-08): the API client refreshes silently and
   // retries; if that fails (refreshSession has already cleared auth) it bounces
   // to login with a notice.
@@ -161,6 +233,7 @@ export function mountRoleApp(config: RoleConfig, routes: RouteRecordRaw[], local
         query: { redirect: current.fullPath, reason: 'session_expired' },
       })
     },
+    onForbidden: revalidateAccess,
   })
 
   router.beforeEach(async (to) => {

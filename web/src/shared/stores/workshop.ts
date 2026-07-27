@@ -1,7 +1,13 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import {
+  api,
+  apiTraceId,
+  captureApiError,
+  isPermissionDenied,
+  withQuery,
+} from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import {
   CATALOG_PICKER_LIMIT,
@@ -66,6 +72,10 @@ export interface WorkshopSettings {
 export interface ManagedBranch {
   id: string
   workshop_id: string
+  // Platform-wide branch number, assigned at creation and immutable — it is the
+  // middle segment of every order number the branch prints, `#26-1-0003`
+  // (QAD-146). Read-only: it is never sent back in a create or patch payload.
+  branch_no: number
   name: string
   address: string
   phone: string
@@ -240,7 +250,7 @@ export interface BranchMaterialFilters {
 }
 
 export const permissionCatalog = [
-  'view_dashboard',
+  'view_orders',
   'manage_orders',
   'process_production',
   'manage_catalog',
@@ -299,6 +309,22 @@ export const useWorkshopStore = defineStore('workshop', () => {
     const captured = captureApiError(errorValue, fallback)
     actionError.value = captured.code
     actionTraceId.value = captured.traceId
+  }
+
+  /**
+   * A refused read means the grant behind the rows on screen is gone. Drop them
+   * instead of leaving them under an error line — a table the server just said
+   * you may not read has no business staying visible (QAD-172). Other failures
+   * (offline, 5xx) keep the last good rows: the data is still the viewer's, it
+   * merely failed to refresh.
+   */
+  async function readOrDrop<T>(read: () => Promise<T>, drop: () => void): Promise<T> {
+    try {
+      return await read()
+    } catch (errorValue) {
+      if (isPermissionDenied(errorValue)) drop()
+      throw errorValue
+    }
   }
 
   function setSelectedBranchContext(value: string | null) {
@@ -482,6 +508,10 @@ export const useWorkshopStore = defineStore('workshop', () => {
       if (requestId === catalogLoadRequestId) {
         catalogError.value = 'catalog_load_failed'
         catalogTraceId.value = apiTraceId(errorValue)
+        if (isPermissionDenied(errorValue)) {
+          branchMaterials.value = []
+          branchMaterialsHasMore.value = false
+        }
       }
       throw errorValue
     } finally {
@@ -543,12 +573,18 @@ export const useWorkshopStore = defineStore('workshop', () => {
     id: string,
     filters: { search?: string; low_stock?: boolean | null } = {},
   ) {
-    stockItems.value = await api.get<StockItem[]>(
-      withQuery(`/workshop/branches/${id}/stock`, {
-        search: filters.search,
-        low_stock: filters.low_stock ? true : undefined,
-      }),
-      authInit(),
+    stockItems.value = await readOrDrop(
+      () =>
+        api.get<StockItem[]>(
+          withQuery(`/workshop/branches/${id}/stock`, {
+            search: filters.search,
+            low_stock: filters.low_stock ? true : undefined,
+          }),
+          authInit(),
+        ),
+      () => {
+        stockItems.value = []
+      },
     )
   }
 
@@ -557,15 +593,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       lowStockItems.value = []
       return
     }
-    const pages = await Promise.all(
-      [...new Set(branchIds)].map((id) =>
-        api.get<StockItem[]>(
-          withQuery(`/workshop/branches/${id}/stock`, {
-            low_stock: true,
-          }),
-          authInit(),
+    const pages = await readOrDrop(
+      () =>
+        Promise.all(
+          [...new Set(branchIds)].map((id) =>
+            api.get<StockItem[]>(
+              withQuery(`/workshop/branches/${id}/stock`, {
+                low_stock: true,
+              }),
+              authInit(),
+            ),
+          ),
         ),
-      ),
+      () => {
+        lowStockItems.value = []
+      },
     )
     lowStockItems.value = pages.flat()
   }
@@ -577,10 +619,16 @@ export const useWorkshopStore = defineStore('workshop', () => {
       stockValueTiyin.value = null
       return
     }
-    const values = await Promise.all(
-      [...new Set(branchIds)].map((id) =>
-        api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
-      ),
+    const values = await readOrDrop(
+      () =>
+        Promise.all(
+          [...new Set(branchIds)].map((id) =>
+            api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
+          ),
+        ),
+      () => {
+        stockValueTiyin.value = null
+      },
     )
     stockValueTiyin.value = values.reduce((sum, row) => sum + row.value_tiyin, 0)
   }
@@ -588,24 +636,37 @@ export const useWorkshopStore = defineStore('workshop', () => {
   async function loadStockTransactions(id: string, filters: StockTransactionFilters = {}) {
     const limit = filters.limit ?? INVENTORY_TX_PAGE_LIMIT
     const offset = filters.offset ?? 0
-    const page = await api.get<StockTransaction[]>(
-      withQuery(`/workshop/branches/${id}/stock-transactions`, {
-        material_id: filters.material_id,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
-        limit,
-        offset,
-      }),
-      authInit(),
+    const page = await readOrDrop(
+      () =>
+        api.get<StockTransaction[]>(
+          withQuery(`/workshop/branches/${id}/stock-transactions`, {
+            material_id: filters.material_id,
+            date_from: filters.date_from,
+            date_to: filters.date_to,
+            limit,
+            offset,
+          }),
+          authInit(),
+        ),
+      () => {
+        stockTransactions.value = []
+        stockTransactionsHasMore.value = false
+      },
     )
     stockTransactions.value = offset === 0 ? page : [...stockTransactions.value, ...page]
     stockTransactionsHasMore.value = page.length === limit
   }
 
   async function loadSuppliers(id: string, status?: SupplierStatus | null) {
-    suppliers.value = await api.get<Supplier[]>(
-      withQuery(`/workshop/branches/${id}/suppliers`, { status }),
-      authInit(),
+    suppliers.value = await readOrDrop(
+      () =>
+        api.get<Supplier[]>(
+          withQuery(`/workshop/branches/${id}/suppliers`, { status }),
+          authInit(),
+        ),
+      () => {
+        suppliers.value = []
+      },
     )
   }
 
@@ -624,14 +685,20 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   async function loadSupplierInvoices(id: string, filters: SupplierInvoiceFilters = {}) {
-    supplierInvoices.value = await api.get<SupplierInvoice[]>(
-      withQuery('/workshop/inventory/invoices', {
-        branch_id: id,
-        supplier_id: filters.supplier_id,
-        search: filters.search,
-        payment_status: filters.payment_status,
-      }),
-      authInit(),
+    supplierInvoices.value = await readOrDrop(
+      () =>
+        api.get<SupplierInvoice[]>(
+          withQuery('/workshop/inventory/invoices', {
+            branch_id: id,
+            supplier_id: filters.supplier_id,
+            search: filters.search,
+            payment_status: filters.payment_status,
+          }),
+          authInit(),
+        ),
+      () => {
+        supplierInvoices.value = []
+      },
     )
   }
 

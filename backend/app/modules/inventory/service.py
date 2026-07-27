@@ -17,7 +17,7 @@ from app.models.enums import (
     StockTransactionType,
     SupplierStatus,
 )
-from app.modules.access.api import BranchScope, resolve_branch_scope
+from app.modules.access.api import BranchScope, resolve_branch_scope, resolve_branch_scope_any
 from app.modules.access.contracts import PermissionGrant, WorkshopUser
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.inventory.contracts import StockItem, StockTransaction, Supplier
@@ -190,7 +190,7 @@ async def list_suppliers(
     branch_id: uuid.UUID,
     status_filter: SupplierStatus | None = None,
 ) -> list[Supplier]:
-    scope = await _inventory_scope(db, principal=principal, branch_id=branch_id)
+    scope = await _supplier_read_scope(db, principal=principal, branch_id=branch_id)
     query = (
         select(Supplier)
         .where(Supplier.workshop_id == scope.workshop_id)
@@ -615,6 +615,30 @@ async def _inventory_scope(
         principal,
         branch_id=branch_id,
         permission=Permission.MANAGE_INVENTORY,
+    )
+
+
+async def _supplier_read_scope(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> BranchScope:
+    """Read scope for the supplier lookup list — inventory **or** finance.
+
+    The list names counterparties, not stock: Ombor picks one for an arrival and
+    the finance ledger attributes an expense to one. `manage_finance` already
+    reads and writes supplier money workshop-wide (debts, invoice payments), so
+    gating the names behind `manage_inventory` gave the accountant an empty
+    picker on the page built for them (QAD-169). Writes stay inventory-only.
+    """
+    if principal.principal_type is not AuthenticatedPrincipalType.WORKSHOP_USER:
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    return await resolve_branch_scope_any(
+        db,
+        principal,
+        branch_id=branch_id,
+        permissions=(Permission.MANAGE_INVENTORY, Permission.MANAGE_FINANCE),
     )
 
 

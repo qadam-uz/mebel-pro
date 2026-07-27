@@ -17,7 +17,12 @@ import {
   groupedNav,
   iconPath as adminIconPath,
 } from '@/shared/app/adminUi'
-import { grantSummary, initials, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  grantSummary,
+  initials,
+  workshopStatusUz,
+  workshopTenantName,
+} from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
@@ -72,7 +77,12 @@ const profileSubtitle = computed(() =>
   auth.me?.password_reset_required ? "parolni o'zgartirish kerak" : auth.displayName,
 )
 const tenantLabel = computed(() => {
-  if (config.role === 'workshop') return workshop.settings?.name ?? config.tenantLabel
+  // Settings first so an owner's rename shows without a reload; `me` is the
+  // source everyone else has, because `/workshop/settings` is owner-only and
+  // staff used to fall through to the generic label (QAD-168).
+  if (config.role === 'workshop') {
+    return workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? config.tenantLabel
+  }
   if (config.role === 'client' && auth.isAllowedFor('client')) return auth.displayName
   return config.tenantLabel
 })
@@ -145,7 +155,7 @@ const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.p
 const canSearchOrders = computed(
   () =>
     auth.me?.is_owner === true ||
-    searchPermissions.value.has('view_dashboard') ||
+    searchPermissions.value.has('view_orders') ||
     searchPermissions.value.has('manage_orders'),
 )
 const canSearchCatalog = computed(

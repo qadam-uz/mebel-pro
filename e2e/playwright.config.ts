@@ -1,14 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// Base URL of the app under test. Override to point at a deployed environment;
-// when unset, Playwright boots the local dev stack via `webServer` below.
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
-const useLocalServers = !process.env.E2E_BASE_URL
-const E2E_DATABASE_URL = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
+import { baseUrl, databaseName, databaseUrl, databaseUser, usesLocalServers } from './env'
+
 const composeCommand = 'docker compose --env-file ../deploy/.env.dev.example -f ../deploy/compose.yaml'
+// The contract the backend under test must satisfy. Playwright can only apply
+// it to the server it boots itself — an external stack (`E2E_BASE_URL`) owns its
+// own process, so the same settings have to be set there. Chief among them is
+// `OTP_RATE_LIMITS_ENABLED=false`: with the production budget in force the
+// suite's client logins exhaust the per-IP send allowance and fail. See
+// `e2e/AGENTS.md`.
 const backendEnv = [
   'ENV=test',
-  `DATABASE_URL=${E2E_DATABASE_URL}`,
+  `DATABASE_URL=${databaseUrl}`,
   'MINIO_ENDPOINT_URL=http://localhost:9000',
   'MINIO_REGION=us-east-1',
   'MINIO_ACCESS_KEY_ID=mebel',
@@ -28,7 +31,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
   use: {
-    baseURL: BASE_URL,
+    baseURL: baseUrl,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -43,18 +46,18 @@ export default defineConfig({
   // Boot the dev stack for local runs: data services first, then migrated
   // backend, then Vite. The Docker data services are required because the
   // backend readiness and file-storage contract depend on real Postgres/MinIO.
-  webServer: useLocalServers
+  webServer: usesLocalServers
     ? [
         {
           command:
-            `${composeCommand} up -d --wait postgres minio && ${composeCommand} run --rm createbuckets && ${composeCommand} exec -T postgres psql -U mebel -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS mebel_e2e WITH (FORCE);" -c "CREATE DATABASE mebel_e2e;" && ${backendEnv} uv --directory ../backend run alembic upgrade head && ${backendEnv} uv --directory ../backend run fastapi dev app/main.py --port 8000`,
+            `${composeCommand} up -d --wait postgres minio && ${composeCommand} run --rm createbuckets && ${composeCommand} exec -T postgres psql -U ${databaseUser} -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE);" -c "CREATE DATABASE ${databaseName};" && ${backendEnv} uv --directory ../backend run alembic upgrade head && ${backendEnv} uv --directory ../backend run fastapi dev app/main.py --port 8000`,
           url: 'http://localhost:8000/api/v1/healthz',
           reuseExistingServer: !process.env.CI,
           timeout: 90_000,
         },
         {
           command: 'pnpm --dir ../web dev',
-          url: BASE_URL,
+          url: baseUrl,
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },

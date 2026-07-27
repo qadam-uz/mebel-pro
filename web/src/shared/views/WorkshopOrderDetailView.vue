@@ -83,11 +83,29 @@ const noteInput = ref<HTMLTextAreaElement | null>(null)
 
 const order = computed(() => orders.currentOrder)
 const result = computed(() => order.value?.cutting_result ?? null)
+// An authorization outcome is not a transport failure (QAD-171). The API answers
+// 404 for an order outside the reader's branches — deliberately, so the id is no
+// existence oracle — and the same 404 reaches `process_production` staff for any
+// order not assigned to them, which is their ordinary case, not an edge one.
+// Retrying a connection that is working never turns either into a 200.
+const orderOutOfReach = computed(
+  () => orders.error === 'order_not_found' || orders.error === 'permission_denied',
+)
 const canManageOrders = computed(() =>
   permissions.canOnBranch(p.manageOrders, order.value?.branch_id),
 )
 const canProcessProduction = computed(() =>
   permissions.canOnBranch(p.processProduction, order.value?.branch_id),
+)
+// The back link goes where the reader can actually go. This page admits
+// `view_orders` and `process_production`, but the orders board itself requires
+// `manage_orders` — the fixed link bounced everyone else off the router guard
+// (QAD-170). Branch-blind, like the guard it has to agree with, and independent
+// of `order` so it doesn't change under the loading and error states.
+const backLink = computed(() =>
+  permissions.can(p.manageOrders)
+    ? { to: rolePath('/workshop/orders'), label: '← Buyurtmalar' }
+    : { to: rolePath('/workshop'), label: '← Asosiy' },
 )
 const canCompleteCutting = computed(() => {
   const current = order.value
@@ -804,7 +822,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="od-page">
-    <RouterLink :to="rolePath('/workshop/orders')" class="back">← Buyurtmalar</RouterLink>
+    <RouterLink :to="backLink.to" class="back">{{ backLink.label }}</RouterLink>
 
     <section v-if="orders.loading" aria-busy="true" aria-live="polite" class="od-fill">
       <div class="od-head">
@@ -825,6 +843,13 @@ onBeforeUnmount(() => {
           </div>
         </section>
       </div>
+    </section>
+    <section v-else-if="orderOutOfReach" class="st-empty">
+      <h3>Bu buyurtmaga ruxsatingiz yo'q</h3>
+      <p>
+        Buyurtma boshqa filialga tegishli, sizga biriktirilmagan yoki mavjud emas. Ro'yxatdan
+        o'zingizga tegishlisini oching.
+      </p>
     </section>
     <section v-else-if="orders.error" class="st-error" role="alert">
       <h3>Buyurtmani yuklab bo'lmadi</h3>

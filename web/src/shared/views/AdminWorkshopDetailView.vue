@@ -281,6 +281,9 @@ onMounted(() => admin.loadWorkshop(workshopId))
           <table class="admin-table">
             <thead>
               <tr>
+                <!-- Middle segment of every order number this branch prints
+                     (#26-1-0003) — what support needs to trace a document. -->
+                <th>Raqam</th>
                 <th>Filial</th>
                 <th>Telefon</th>
                 <th>Manzil</th>
@@ -289,6 +292,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </thead>
             <tbody>
               <tr v-for="branch in admin.detail.branches" :key="branch.id">
+                <td class="admin-mono text-ink-muted">{{ branch.branch_no }}</td>
                 <td class="nm">
                   {{ branch.name }}
                   <small>{{ branch.id.slice(0, 8) }}</small>
