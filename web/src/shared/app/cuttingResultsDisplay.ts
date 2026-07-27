@@ -1,4 +1,4 @@
-import { snapshotShortLabel } from '@/shared/app/cuttingDisplay'
+import { snapshotMaterialLabel, snapshotShortLabel } from '@/shared/app/cuttingDisplay'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
@@ -138,6 +138,41 @@ export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel)
     if (placement.rotated) group.rotatedCount += 1
   }
   return groups
+}
+
+export interface ResultSheetPartGroups {
+  panelId: string
+  sheetLabel: string
+  materialLabel: string
+  groups: PanelPartGroup[]
+}
+
+// QAD-177: the whole result as text, sheet by sheet. The narrow-viewport parts
+// list is the authoritative reading of a result — the drawing shrinks past
+// legibility on a phone, so every sheet's parts must be reachable without
+// switching the drawing first. Sheet order follows `panelDisplayIndex`, the
+// same drawing-wide numbering the thumbnails and the PDF use; within a sheet
+// the rows follow `parts_snapshot` order (the editor's and the PDF's `#`
+// order) rather than the optimizer's placement order, so D1 precedes D4 and a
+// screen reader walks the parts the way the user wrote them.
+export function resultSheetPartGroups(result: CuttingResult): ResultSheetPartGroups[] {
+  const snapshotOrder = new Map(
+    (result.parts_snapshot ?? []).map((part, index) => [part.part_ref, index]),
+  )
+  const orphanOrder = orphanPartIndexByRef(result)
+  const rank = (partRef: string) =>
+    snapshotOrder.get(partRef) ?? orphanOrder.get(partRef) ?? Number.MAX_SAFE_INTEGER
+  return result.panels.map((panel) => ({
+    panelId: panel.id,
+    sheetLabel: `List ${panelDisplayIndex(result, panel)}`,
+    materialLabel: snapshotMaterialLabel(
+      result.material_snapshots[panel.material_id],
+      panel.material_id.slice(0, 8),
+    ),
+    groups: groupPanelPlacements(result, panel).sort(
+      (left, right) => rank(left.partRef) - rank(right.partRef),
+    ),
+  }))
 }
 
 export function edgeRegistryEntryByMaterial(
