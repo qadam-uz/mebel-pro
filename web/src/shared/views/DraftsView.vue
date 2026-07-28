@@ -172,7 +172,7 @@ onMounted(() => {
           </span>
           <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span
-              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> qism</span
+              ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
             >
             <span
               ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> panel</span
@@ -211,7 +211,7 @@ onMounted(() => {
     <ConfirmDialog
       :open="Boolean(draftPendingDelete)"
       title="Chizmani o'chirish"
-      :message="`${pendingDeletePartCount} qismli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
+      :message="`${pendingDeletePartCount} detalli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`"
       confirm-label="O'chirish"
       cancel-label="Bekor qilish"
       danger

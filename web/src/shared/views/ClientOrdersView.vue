@@ -185,7 +185,7 @@ onMounted(() => {
             </h2>
             <p class="text-sm text-ink-soft">
               {{ order.workshop_name }} · {{ formatRelativeDate(order.created_at) }} ·
-              <b class="font-semibold text-ink">{{ order.item_count }} qism</b>
+              <b class="font-semibold text-ink">{{ order.item_count }} detal</b>
             </p>
           </div>
           <span :class="clientStatusPillClass(order.status)">

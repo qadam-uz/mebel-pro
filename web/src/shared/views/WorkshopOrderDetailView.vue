@@ -1526,7 +1526,7 @@ onBeforeUnmount(() => {
             </div>
           </details>
           <div v-if="order.items.length === 0" class="st-empty !border-0 !py-6">
-            <h3>Chizma qismi yo'q</h3>
+            <h3>Chizmada detal yo'q</h3>
           </div>
         </div>
 

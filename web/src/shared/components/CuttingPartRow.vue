@@ -222,7 +222,7 @@ function focusNumericFromPointer(event: MouseEvent) {
           <button
             type="button"
             class="mp-action-icon-button size-8 min-h-0"
-            :aria-label="`Qism #${index + 1} amallari`"
+            :aria-label="`Detal #${index + 1} amallari`"
             title="Amallar"
             @click="actionsOpen = !actionsOpen"
           >

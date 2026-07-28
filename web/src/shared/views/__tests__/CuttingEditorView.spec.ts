@@ -176,7 +176,7 @@ describe('CuttingEditorView draft deletion', () => {
     const remove = vi.spyOn(cutting, 'deleteDraft').mockResolvedValue()
 
     await wrapper.get('[aria-label="Chizmani o\'chirish"]').trigger('click')
-    expect(wrapper.get('[role="dialog"]').text()).toContain('«Oshxona» — 0 qismli chizma')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('«Oshxona» — 0 detalli chizma')
 
     await wrapper.get('[role="dialog"] button').trigger('click')
     await flushPromises()

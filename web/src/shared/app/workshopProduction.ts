@@ -21,7 +21,7 @@ export interface WorkshopProductionQueueOrder {
 
 export function workshopQueuePartsLine(order: WorkshopQueuePanelSummary) {
   const panels = order.planned_panels || order.panels_used_snapshot
-  return `${order.item_count} qism${panels ? ` · ${panels} panel` : ''}`
+  return `${order.item_count} detal${panels ? ` · ${panels} panel` : ''}`
 }
 
 export function workshopProductionQueueCounts(
@@ -118,5 +118,5 @@ export function productionJobMetaLine(job: ProductionStationJob, station: Produc
   if (station !== 'banding') return counts
   const totalMm = job.planned_edge_lines.reduce((sum, line) => sum + line.consumed_mm, 0)
   if (totalMm <= 0) return counts
-  return `${formatStockQuantity(totalMm, 'm')} krom · ${job.item_count} qism`
+  return `${formatStockQuantity(totalMm, 'm')} krom · ${job.item_count} detal`
 }

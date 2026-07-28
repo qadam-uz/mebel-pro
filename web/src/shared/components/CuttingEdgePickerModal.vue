@@ -34,7 +34,7 @@ const props = defineProps<{
   preferredEdgeId: string | null
   preferredBranchId: string | null
   preferredBranchName: string
-  // Overrides the "qism #N" part of the title — used for bulk apply ("N qismga").
+  // Overrides the "detal #N" part of the title — used for bulk apply ("N detalga").
   titleSuffix?: string
   edgeRegistry: EdgeRegistryEntry[]
   edgeAssignmentEntries: Array<[string, number]>
@@ -207,7 +207,7 @@ function orderedTapeIds() {
 }
 
 function originMeta(materialId: string, count: number) {
-  if (count > 0) return `Shu qismda ${count} tomonga`
+  if (count > 0) return `Shu detalda ${count} tomonga`
   if (props.groupEdgeIds.includes(materialId)) return 'Shu guruhda ishlatilgan'
   if (props.otherGroupEdgeIds.includes(materialId)) return 'Chizmaning boshqa guruhida'
   return 'Yangi'

@@ -10,7 +10,7 @@ export interface ActionMenuItem {
 const props = withDefaults(
   defineProps<{
     items: ActionMenuItem[]
-    // Accessible name for the trigger (e.g. "Qism #2 amallari").
+    // Accessible name for the trigger (e.g. "Detal #2 amallari").
     label?: string
     triggerClass?: string
   }>(),
