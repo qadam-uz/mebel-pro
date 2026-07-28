@@ -168,7 +168,7 @@ watch(
           <span class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
             <span v-if="draft.branch_name" class="text-ink-soft">{{ draft.branch_name }}</span>
             <span
-              ><b class="font-mono text-ink">{{ draft.part_count }}</b> qism</span
+              ><b class="font-mono text-ink">{{ draft.part_count }}</b> detal</span
             >
             <span v-if="draft.has_result">
               <b class="font-mono text-ink">{{ draft.panel_count || '—' }}</b> panel

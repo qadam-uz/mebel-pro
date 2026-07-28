@@ -620,7 +620,7 @@ onMounted(() => {
                     @select-placement="selectPlacement"
                   />
                   <aside v-if="activePanel">
-                    <h3 class="mb-3 text-xs font-bold uppercase text-ink-muted">Qismlar</h3>
+                    <h3 class="mb-3 text-xs font-bold uppercase text-ink-muted">Detallar</h3>
                     <div class="grid gap-2">
                       <button
                         v-for="placement in activePanel.placements"
@@ -774,7 +774,7 @@ onMounted(() => {
           </section>
 
           <section class="client-card">
-            <div class="client-card-h"><h2 class="!text-base">Qismlar</h2></div>
+            <div class="client-card-h"><h2 class="!text-base">Detallar</h2></div>
             <div class="client-card-b">
               <div v-for="(item, index) in order.items" :key="item.id" class="client-row-item">
                 <div>

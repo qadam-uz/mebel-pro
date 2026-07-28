@@ -337,7 +337,7 @@ onMounted(async () => {
         <div class="client-card-b grid gap-4">
           <div class="grid gap-2 text-sm">
             <div class="flex justify-between gap-4">
-              <span class="text-ink-soft">Qismlar</span
+              <span class="text-ink-soft">Detallar</span
               ><span class="font-mono font-bold text-ink">{{ totalQuantity }}</span>
             </div>
             <div class="flex justify-between gap-4">

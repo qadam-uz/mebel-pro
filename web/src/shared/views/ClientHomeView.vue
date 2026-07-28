@@ -161,7 +161,7 @@ onMounted(() => {
       <div class="client-empty-icon"><Icon name="scissors" /></div>
       <h3>Birinchi chizmangizdan boshlang</h3>
       <p>
-        Qism o'lchamlarini kiriting — tizim panellarga optimal joylashtiradi va ustaxona narxini
+        Detal o'lchamlarini kiriting — tizim panellarga optimal joylashtiradi va ustaxona narxini
         hisoblaydi.
       </p>
       <button type="button" class="mp-button mp-button-primary mt-4" @click="newCutting">
@@ -381,7 +381,7 @@ onMounted(() => {
               </div>
               <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted">
                 <span
-                  ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> qism</span
+                  ><b class="font-mono text-ink">{{ draftParts(draft) }}</b> detal</span
                 >
                 <span
                   ><b class="font-mono text-ink">{{ draftPanels(draft) || '—' }}</b> panel</span

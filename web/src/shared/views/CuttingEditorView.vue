@@ -355,7 +355,7 @@ const canOptimize = computed(
 const optimizeDisabledHint = computed(() => {
   if (isReadOnly.value) return 'Bu chizma buyurtmaga biriktirilgan'
   if (!activeBranchId.value) return 'Avval ustaxona tanlang'
-  if (parts.value.length === 0) return "Avval qism qo'shing"
+  if (parts.value.length === 0) return "Avval detal qo'shing"
   if (!hasPersistableParts.value) return "To'ldirilmagan qatorlarni to'ldiring"
   if (totalQuantity.value > MAX_PARTS) return `${MAX_PARTS} donadan oshib ketdi`
   return ''
@@ -563,8 +563,8 @@ function partSizeError(part: CuttingPart): string | null {
   const usableLength = panel.panel_length_mm - 2 * trimMm
   const usableWidth = panel.panel_width_mm - 2 * trimMm
   if (code === 'impossible_grain')
-    return `Tekstura yo'nalishi qat'iy — qism ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
-  return `Qism panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${trimMm} mm chetki qirqim).`
+    return `Tekstura yo'nalishi qat'iy — detal ${usableLength}×${usableWidth} mm ichiga sig'ishi kerak (aylantirib bo'lmaydi).`
+  return `Detal panelga sig'maydi — maksimal ${usableLength}×${usableWidth} mm (panel − 2×${trimMm} mm chetki qirqim).`
 }
 
 // A chosen panel id that no longer resolves in the loaded catalog — e.g. the
@@ -591,9 +591,9 @@ function partIsInvalid(part: CuttingPart) {
 
 function optimizeRowMessage(code: string | undefined): string {
   if (code === 'part_too_large')
-    return "Bu qism panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
+    return "Bu detal panelga sig'maydi — o'lchamini kichraytiring yoki boshqa panel tanlang."
   if (code === 'impossible_grain')
-    return "Tekstura yo'nalishi bu qismni joylashtirishga to'sqinlik qiladi."
+    return "Tekstura yo'nalishi bu detalni joylashtirishga to'sqinlik qiladi."
   if (code === 'material_not_found')
     return "Bu qatordagi material endi katalogda yo'q — boshqasini tanlang."
   return "Bu qatorni optimallashtirib bo'lmadi."
@@ -1510,7 +1510,7 @@ onBeforeRouteLeave(async () => {
       <div>
         <h1>Chizma</h1>
         <p class="sub">
-          Qismlarni kiriting, ustaxona katalogi bo'yicha tekshiring va kesish natijasini oling.
+          Detallarni kiriting, ustaxona katalogi bo'yicha tekshiring va kesish natijasini oling.
         </p>
       </div>
       <div v-if="!isReadOnly" class="flex flex-wrap items-center gap-2">
@@ -1763,7 +1763,7 @@ onBeforeRouteLeave(async () => {
           <div
             v-if="selectedParts.length > 0"
             role="group"
-            :aria-label="`${selectedParts.length} qism tanlandi — guruh amallari`"
+            :aria-label="`${selectedParts.length} detal tanlandi — guruh amallari`"
             class="hidden flex-wrap items-center gap-x-5 gap-y-2 border-b border-accent-tint bg-accent-soft px-5 py-3 text-sm font-bold lg:flex"
           >
             <button type="button" class="text-accent hover:underline" @click="openBulkEdge">
@@ -1801,7 +1801,7 @@ onBeforeRouteLeave(async () => {
 
           <div v-else-if="parts.length === 0" class="client-card-b">
             <div class="client-empty">
-              <h3>Bu chizmada qism yo'q</h3>
+              <h3>Bu chizmada detal yo'q</h3>
               <p>Kesish ro'yxatini boshlash uchun avval materialni tanlang.</p>
               <button
                 type="button"
@@ -2007,7 +2007,7 @@ onBeforeRouteLeave(async () => {
       title="Chizmani o'chirish"
       :message="
         draft
-          ? `«${draftDisplayName(draft)}» — ${totalQuantity} qismli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`
+          ? `«${draftDisplayName(draft)}» — ${totalQuantity} detalli chizma butunlay o'chiriladi. Bu amal qaytarilmaydi.`
           : ''
       "
       confirm-label="O'chirish"
@@ -2051,7 +2051,7 @@ onBeforeRouteLeave(async () => {
 
     <ConfirmDialog
       :open="importReplaceConfirmOpen"
-      title="Qismlarni almashtirish"
+      title="Detallarni almashtirish"
       :message="`Hozirgi ${parts.length} qator import qilingan ro'yxat bilan almashtirilsinmi? Bu amalni qaytarib bo'lmaydi.`"
       confirm-label="Almashtirish"
       cancel-label="Bekor qilish"
@@ -2074,7 +2074,7 @@ onBeforeRouteLeave(async () => {
       :part="edgePickerPart"
       :initial-side="edgePickerInitialSide"
       :part-number="edgePickerPart ? parts.indexOf(edgePickerPart) + 1 : 0"
-      :title-suffix="bulkEdgeMode ? `${selectedParts.length} qismga` : undefined"
+      :title-suffix="bulkEdgeMode ? `${selectedParts.length} detalga` : undefined"
       :preferred-edge-id="edgePickerPart ? preferredEdgeId(edgePickerPart) : null"
       :edge-registry="edgeRegistry"
       :edge-assignment-entries="edgeAssignmentEntries"

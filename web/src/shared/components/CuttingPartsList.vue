@@ -48,7 +48,7 @@ function isSelected(panelId: string, partRef: string) {
     <p class="mt-1 text-xs text-ink-muted">Chizmada ko'rish uchun qatorni bosing.</p>
 
     <p v-if="!sheets.length" class="mt-3 text-sm text-ink-soft">
-      Bu natijada joylashtirilgan qism yo'q.
+      Bu natijada joylashtirilgan detal yo'q.
     </p>
 
     <div v-else class="mt-3 grid gap-4">

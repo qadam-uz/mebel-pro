@@ -305,7 +305,7 @@ the first word and proper nouns are capitalised. A destructive confirm names its
 consequence rather than saying `OK`.
 
 **5. Empty states invite, not apologise.** Name the space, then offer the action:
-`Bu chizmada qism yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
+`Bu chizmada detal yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
 state, and a body that restates its own title is not a body. **First-run and
 filtered-empty are different copy** — "change the filter" is useless advice when nothing
 exists yet, so a list that can be filtered branches on whether a filter is active.
@@ -332,7 +332,7 @@ One term per concept, across client, workshop and admin.
 | Concept                                | Term                | Not                       |
 | -------------------------------------- | ------------------- | ------------------------- |
 | A client's cutting order               | `buyurtma`          | `zakaz`                   |
-| A cut piece on a drawing               | `qism` / `detal`    | — _owner's ruling pending_ |
+| A cut piece on a drawing               | `detal`             | `qism`, `part`            |
 | A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
 | A panel sheet                          | `list`              | `plita`                   |
 | Edge tape (the material)               | `kromka`            | `krom`                    |

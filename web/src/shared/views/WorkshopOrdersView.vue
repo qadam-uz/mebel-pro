@@ -193,7 +193,7 @@ function listFilters() {
 }
 
 // Assignment STATUS only (never a piece count). The board meta already prints
-// "{item_count} qism", so returning the count here too double-printed it.
+// "{item_count} detal", so returning the count here too double-printed it.
 function assignedText(order: OrderSummary) {
   if (order.status === 'cutting')
     return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : "kesuvchi yo'q"
@@ -858,7 +858,7 @@ onBeforeUnmount(() => {
               </span>
               <span class="who">{{ order.contact_name }}</span>
               <span class="meta">
-                <span>{{ order.item_count }} qism</span>
+                <span>{{ order.item_count }} detal</span>
                 <span v-if="branchId === 'all'">{{ order.branch_name }}</span>
                 <span :title="formatDate(order.created_at)">{{
                   formatRelativeUz(order.created_at)
