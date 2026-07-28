@@ -3249,6 +3249,14 @@
     padding: 5px;
   }
 
+  /* Flipped up when the panel would not fit below the trigger — on the last row
+     of a table it otherwise opens into the scroll container's hidden overflow
+     and only its top few pixels are visible (QAD-184). */
+  .mp-action-menu.is-above {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+
   .mp-action-menu-item {
     display: flex;
     width: 100%;
