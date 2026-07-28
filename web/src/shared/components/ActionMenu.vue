@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import AppIcon from '@/shared/components/AppIcon.vue'
 
 export interface ActionMenuItem {
   label: string
+  // `AppIcon` name shown before the label. The word still carries the meaning —
+  // the glyph is what keeps a danger item from being red text alone (QAD-184).
+  icon?: string
   danger?: boolean
   disabled?: boolean
 }
@@ -82,6 +86,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
         :disabled="item.disabled"
         @click="onSelect(index)"
       >
+        <AppIcon v-if="item.icon" :name="item.icon" />
         {{ item.label }}
       </button>
     </div>

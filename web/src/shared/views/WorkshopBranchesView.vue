@@ -267,27 +267,27 @@ onMounted(() => {
                 <th>Manzil</th>
                 <th>Telefon</th>
                 <th>Holat</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="branch in workshop.managedBranches" :key="branch.id">
+              <tr v-for="branch in workshop.managedBranches" :key="branch.id" class="row-clickable">
                 <td class="id">{{ branch.branch_no }}</td>
-                <td class="nm">{{ branch.name }}</td>
+                <!-- The name is the link, stretched over the row (QAD-184): the
+                     whole row opens the filial, and ⌘-click still opens a tab. -->
+                <td class="nm">
+                  <RouterLink
+                    :to="rolePath(`/workshop/branches/${branch.id}`)"
+                    class="row-open row-open-text"
+                  >
+                    {{ branch.name }}
+                  </RouterLink>
+                </td>
                 <td>{{ branch.address }}</td>
                 <td class="num">{{ branch.phone }}</td>
                 <td>
                   <span :class="branchPillClass(branch.status)">
                     <span class="pd"></span>{{ branchStatusUz[branch.status] }}
                   </span>
-                </td>
-                <td class="right">
-                  <RouterLink
-                    :to="rolePath(`/workshop/branches/${branch.id}`)"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                  >
-                    Ochish
-                  </RouterLink>
                 </td>
               </tr>
             </tbody>

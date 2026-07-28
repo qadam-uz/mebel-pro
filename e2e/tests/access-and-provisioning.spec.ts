@@ -224,9 +224,11 @@ test("owner changes temp password, creates staff, and saves a grant", async ({
   await staffForm.getByLabel("Vaqtinchalik parol").fill("StaffTemp123");
   await staffForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
   await expect(page.getByText("StaffTemp123")).toBeVisible();
+  // QAD-184: the row is the affordance — the staff name is the link that opens
+  // the detail page, so there is no separate "Ochish" button to click.
   await page
     .getByRole("row", { name: /E2E Staff/ })
-    .getByRole("link", { name: "Ochish" })
+    .getByRole("link", { name: "E2E Staff" })
     .click();
   await page.getByRole("tab", { name: "Ruxsatlar" }).click();
   await page.getByRole("checkbox").first().check();
@@ -328,9 +330,11 @@ test("owner manages branches from a simple system table and detail view", async 
   ).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Holat" })).toBeVisible();
   await expect(page.getByText("Faol buyurtma")).toHaveCount(0);
+  // QAD-184: the branch name is the link that opens the filial — the row's own
+  // click target, with no separate "Ochish" button beside it.
   await page
     .getByRole("row", { name: new RegExp(`Branch ${id}`) })
-    .getByRole("link", { name: "Ochish" })
+    .getByRole("link", { name: new RegExp(`Branch ${id}`) })
     .click();
 
   await expect(page).toHaveURL(

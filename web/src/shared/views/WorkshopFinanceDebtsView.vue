@@ -478,13 +478,25 @@ onBeforeUnmount(() => {
                   <th>{{ activeTab === 'suppliers' ? "Ta'minotchi" : 'Mijoz' }}</th>
                   <th>Telefon</th>
                   <th class="right">Balans, so'm</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in activeDebts?.rows ?? []" :key="row.counterparty_id">
+                <tr
+                  v-for="row in activeDebts?.rows ?? []"
+                  :key="row.counterparty_id"
+                  class="row-clickable"
+                >
                   <td class="nm">
-                    {{ row.name }}
+                    <!-- The name opens the akt sverka, stretched over the row
+                         (QAD-184) — the row no longer ends in a button column. -->
+                    <button
+                      type="button"
+                      class="row-open row-open-text"
+                      :aria-label="`${row.name} — akt sverka`"
+                      @click="openStatement(row)"
+                    >
+                      {{ row.name }}
+                    </button>
                     <small v-if="row.inactive" class="block text-[11px] text-ink-muted">
                       faol emas
                     </small>
@@ -498,18 +510,9 @@ onBeforeUnmount(() => {
                       {{ balanceWord(row.balance_tiyin) || "qarz yo'q" }}
                     </small>
                   </td>
-                  <td class="right">
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                      @click="openStatement(row)"
-                    >
-                      Akt sverka
-                    </button>
-                  </td>
                 </tr>
                 <tr v-if="(activeDebts?.rows ?? []).length === 0">
-                  <td colspan="4">
+                  <td colspan="3">
                     <div class="st-empty !border-0 !py-8">
                       <h3>
                         {{

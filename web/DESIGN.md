@@ -259,9 +259,21 @@ touching them; don't add new off-scale values.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.
-- **Icons** — `AppIcon` (one SVG set); icon-only buttons always carry an accessible name.
+- **Icons** — `AppIcon` (one SVG set, 24×24 stroke grid); icon-only buttons always carry an
+  accessible name that says the action *and* the row it acts on
+  (`Beton bo'yoq — tahrirlash`). One glyph per concept: expand/collapse is `chevron-down`
+  rotated 180°, and voiding a row is `ban` — a circle with a diagonal, never `trash`, because
+  nothing here is ever deleted.
 - **Cursor honesty** — pointer cursor and row hover belong only on clickable controls or
   clickable rows; static table rows stay visually still with the default cursor.
+- **Clickable rows** — where a table row has one obvious primary action, the row runs it and
+  the action column goes away. The control stays a real `RouterLink` or `<button>` in the
+  row's identifying cell and is stretched across the row by a pseudo-element (`.row-clickable`
+  + `.row-open`), so the row keeps a tab stop, `Enter`, and ⌘-/middle-click on a navigating
+  row. `<tr @click>` has none of those and is not the pattern. A second action moves into the
+  row's `⋯` menu and keeps its word — a destructive action is never a bare glyph. Anything
+  that stays independently clickable inside the row (a status switch, the `⋯` trigger) sits
+  above the stretched layer with `.row-above`, never on the cell holding `.row-open`.
 - **Headline figures** — two treatments, and the page picks by weight. `.kpi` cards are for a
   dashboard, where the numbers *are* the page. `.figs` is the lighter row for a page whose
   numbers are context above a table: no border, radius, shadow or background tint — hairlines
