@@ -358,7 +358,7 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Xodimlar</h1>
+        <h1>Xodimlar ro'yxati</h1>
       </div>
     </div>
 

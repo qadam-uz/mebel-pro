@@ -53,6 +53,31 @@ export function formatTiyinParts(value: number): { amount: string; unit: string;
   return { amount: format(som, 0), unit: "so'm", full: formatTiyin(value) }
 }
 
+// One unit for a whole row of figures. `formatTiyinParts` decides per figure, so
+// a KPI row could show "540 855 so'm" beside "11,6 mln so'm" for the same period
+// — two numbers you cannot compare without counting zeros (QAD-182). Scale is
+// picked from the largest magnitude present and applied to every member, so the
+// row reads as one ruler.
+export function formatTiyinRow(values: number[]): Array<{
+  amount: string
+  unit: string
+  full: string
+}> {
+  const peak = Math.max(0, ...values.map((value) => Math.abs(Math.round(value / 100))))
+  const divisor = peak >= 1_000_000_000 ? 1_000_000_000 : peak >= 1_000_000 ? 1_000_000 : 1
+  const unit = divisor === 1_000_000_000 ? "mlrd so'm" : divisor === 1_000_000 ? "mln so'm" : "so'm"
+  // Two decimals once scaled, none at so'm: "0,54 mln" keeps a small figure
+  // legible next to a large one instead of collapsing it to "1 mln".
+  const maximumFractionDigits = divisor === 1 ? 0 : 2
+  return values.map((value) => ({
+    amount: new Intl.NumberFormat('uz-UZ', { maximumFractionDigits }).format(
+      Math.round(value / 100) / divisor,
+    ),
+    unit,
+    full: formatTiyin(value),
+  }))
+}
+
 // Date-only strings ("2026-07-05") parse as UTC midnight via `new Date`, which
 // shifts a calendar day for users west of Greenwich once local getters read it —
 // build a local date from the parts instead. Full ISO datetimes carry an offset

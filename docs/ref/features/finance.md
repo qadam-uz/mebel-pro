@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-27
+updated: 2026-07-28
 order: 55
 ---
 
@@ -232,7 +232,7 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   branch filter, no branch field in the forms, and no branch column in the tables. New
   records stamp the context branch; editing preserves the record's original branch.
   Workshop-level rows (`branch_id` null) stay visible to the owner in every branch
-  context, labelled *ustaxona-keng* — scoping must not hide HQ costs. The date range is
+  context, labelled *Barcha filiallar* — scoping must not hide HQ costs. The date range is
   the app-wide date-range picker: one trigger opening preset shortcuts (today / last
   7 days / this month / last month / last 30 days / all) beside a calendar for custom
   spans; every filter auto-applies — there is no separate apply button.
@@ -292,8 +292,8 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
     read-only on an edit. Row actions: Edit (modal) · Void (dialog with a mandatory reason).
     No Delete.
 - **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page.
-  Unlike the ledger above it is **workshop-wide**: a counterparty's balance spans every
-  branch, so the topbar picker renders inert here and says so. Two tabs:
+  Branch-scoped like the ledger above it: every term in the fold names a branch, so a
+  branch's balance is a real number and the branches sum to the workshop. Two tabs:
   **Ta'minotchilar** and **Mijozlar**. Each tab opens on three figures on hairlines —
   *Qarzimiz* · *Bizga qarz* · *Sof holat*, the tab supplying the rest of each label — with
   a muted count of the counterparties actually listed beneath. No card chrome and no

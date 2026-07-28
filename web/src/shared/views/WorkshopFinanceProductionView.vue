@@ -24,6 +24,16 @@ const dateTo = ref(initialRange.to ?? '')
 const financePermissions = [p.manageFinance, p.viewFinanceReports]
 const canViewFinance = computed(() => permissions.canAny(financePermissions))
 
+// What the whole workshop produced in the period, under the per-worker rows.
+const productionTotals = computed(() => {
+  const rows = finance.production?.rows ?? []
+  return {
+    panelsCut: rows.reduce((sum, row) => sum + row.panels_cut, 0),
+    cutCount: rows.reduce((sum, row) => sum + row.cut_count, 0),
+    ordersBanded: rows.reduce((sum, row) => sum + row.orders_banded, 0),
+  }
+})
+
 // One entry per edge material / thickness so the cell can stack them as lines
 // (label left, metres right) instead of one unreadable `·`-joined string.
 interface EdgeCellLine {
@@ -136,9 +146,9 @@ watch([dateFrom, dateTo], () => {
           <thead class="bg-sunk text-xs uppercase text-ink-muted">
             <tr>
               <th class="px-5 py-3">Xodim</th>
-              <th class="px-5 py-3">Kesilgan panel</th>
-              <th class="px-5 py-3">Kesimlar</th>
-              <th class="px-5 py-3">Kromka qilingan buyurtma</th>
+              <th class="px-5 py-3 text-right">Kesilgan panel</th>
+              <th class="px-5 py-3 text-right">Kesimlar</th>
+              <th class="px-5 py-3 text-right">Kromka qilingan buyurtma</th>
               <th class="px-5 py-3">Kromka metri</th>
               <th class="px-5 py-3">Qalinlik jamlanmasi</th>
             </tr>
@@ -146,9 +156,15 @@ watch([dateFrom, dateTo], () => {
           <tbody class="divide-y divide-hairline">
             <tr v-for="row in finance.production.rows" :key="row.user_id">
               <td class="px-5 py-3 font-bold text-ink">{{ row.full_name }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.panels_cut }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.cut_count }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.orders_banded }}</td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.panels_cut }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.cut_count }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.orders_banded }}
+              </td>
               <td class="px-5 py-3 text-xs">
                 <span v-if="edgeLengthLines(row).length === 0" class="text-ink-muted">
                   Kromka metri yo'q
@@ -181,6 +197,22 @@ watch([dateFrom, dateTo], () => {
               </td>
             </tr>
           </tbody>
+          <tfoot v-if="finance.production.rows.length > 1" class="border-t border-hairline-strong">
+            <tr class="bg-sunk">
+              <td class="px-5 py-3 font-bold text-ink">Jami</td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.panelsCut }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.cutCount }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.ordersBanded }}
+              </td>
+              <td class="px-5 py-3"></td>
+              <td class="px-5 py-3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>

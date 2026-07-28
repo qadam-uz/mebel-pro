@@ -135,7 +135,6 @@ onMounted(() => {
     </div>
 
     <form v-else class="card max-w-[720px]" novalidate @submit.prevent="save">
-      <div class="card-h"><h2>Ustaxona profili</h2></div>
       <div class="card-b">
         <label class="field" for="workshop-settings-name">
           <span>Ustaxona nomi</span>

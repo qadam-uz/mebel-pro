@@ -5800,10 +5800,11 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    /* Dashboard runs 5 KPIs — one balanced row instead of the default 4-col
-       grid (which would orphan the 5th card onto a second row). */
+    /* The dashboard grew to eight KPIs for an owner, and the old five-column
+       rule left a two-card hole on the second row. Four columns fills two rows
+       exactly (QAD-182). */
     .kpis-dash {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .admin-kpis {

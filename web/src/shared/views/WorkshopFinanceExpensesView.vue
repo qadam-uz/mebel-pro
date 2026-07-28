@@ -97,6 +97,9 @@ const statusFilter = ref<LedgerStatus | 'all'>('recorded')
 // every category, recorded rows. Those defaults are the resting state, so they
 // must not make the status line claim a filter is on (QAD-182).
 const DEFAULT_STATUS: LedgerStatus | 'all' = 'recorded'
+// With the status filter pinned to one value, every row's Holat cell says the
+// same word — a column restating the filter above it (QAD-182).
+const showStatusColumn = computed(() => statusFilter.value === 'all')
 const narrowingFilters = computed(() => {
   const applied: string[] = []
   if (datePreset.value !== 'month') applied.push('date')
@@ -965,7 +968,7 @@ onMounted(async () => {
             clearable
           />
           <label v-if="!isInvoicePayment" class="field">
-            <span>Yetkazib beruvchi</span>
+            <span>Ta'minotchi</span>
             <input
               v-model="expenseForm.vendor"
               class="mp-input"
@@ -1255,10 +1258,9 @@ onMounted(async () => {
                 <th>Sana</th>
                 <th>Kategoriya</th>
                 <th>Tavsif</th>
-                <th>Yetkazib beruvchi</th>
-                <th>Chek</th>
+                <th>Ta'minotchi</th>
                 <th class="right">Summa</th>
-                <th>Holat</th>
+                <th v-if="showStatusColumn">Holat</th>
                 <th></th>
               </tr>
             </thead>
@@ -1283,6 +1285,9 @@ onMounted(async () => {
                 <td class="nm">
                   {{ expense.description }}
                   <small v-if="expense.voided_reason">bekor: {{ expense.voided_reason }}</small>
+                  <small v-if="expense.receipt_file_id" class="block text-[11px] text-ink-muted">
+                    Chek biriktirilgan
+                  </small>
                 </td>
                 <td>
                   <small class="text-ink-soft">{{ expense.vendor ?? '—' }}</small>
@@ -1295,14 +1300,8 @@ onMounted(async () => {
                     {{ expense.invoice_no }}
                   </small>
                 </td>
-                <td>
-                  <span v-if="expense.receipt_file_id" class="pill p-ok">
-                    <span class="pd"></span>Bor
-                  </span>
-                  <span v-else class="text-ink-muted">—</span>
-                </td>
                 <td class="amt">{{ formatTiyin(expense.amount_tiyin) }}</td>
-                <td>
+                <td v-if="showStatusColumn">
                   <span :class="expense.status === 'recorded' ? 'pill p-ok' : 'pill p-dn'">
                     <span class="pd"></span
                     >{{ expense.status === 'recorded' ? 'Yozilgan' : 'Bekor qilingan' }}
@@ -1328,7 +1327,7 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="finance.expenses.length === 0">
-                <td colspan="8">
+                <td :colspan="showStatusColumn ? 6 : 5">
                   <div class="st-empty !border-0 !py-8">
                     <h3 v-if="narrowingFilters.length">Filtrga mos xarajat topilmadi</h3>
                     <h3 v-else>Bu davrda xarajat yo'q</h3>
@@ -1358,9 +1357,8 @@ onMounted(async () => {
                 <th>Buyurtma</th>
                 <th>Usul</th>
                 <th>Izoh</th>
-                <th>Chek</th>
                 <th class="right">Summa</th>
-                <th>Holat</th>
+                <th v-if="showStatusColumn">Holat</th>
                 <th></th>
               </tr>
             </thead>
@@ -1392,15 +1390,15 @@ onMounted(async () => {
                   <small class="text-ink-soft">{{
                     income.note ?? income.voided_reason ?? '—'
                   }}</small>
-                </td>
-                <td>
-                  <span v-if="income.receipt_file_id" class="pill p-ok">
-                    <span class="pd"></span>Bor
-                  </span>
-                  <span v-else class="text-ink-muted">—</span>
+                  <!-- A whole column for a boolean that is empty on most rows
+                       pushed Summa off a phone screen (QAD-182); the receipt
+                       says so beside the note it belongs to. -->
+                  <small v-if="income.receipt_file_id" class="block text-[11px] text-ink-muted">
+                    Chek biriktirilgan
+                  </small>
                 </td>
                 <td class="amt success-text">{{ formatTiyin(income.amount_tiyin) }}</td>
-                <td>
+                <td v-if="showStatusColumn">
                   <span :class="income.status === 'recorded' ? 'pill p-ok' : 'pill p-dn'">
                     <span class="pd"></span
                     >{{ income.status === 'recorded' ? 'Yozilgan' : 'Bekor qilingan' }}
@@ -1426,7 +1424,7 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="finance.incomes.length === 0">
-                <td colspan="9">
+                <td :colspan="showStatusColumn ? 7 : 6">
                   <div class="st-empty !border-0 !py-8">
                     <h3 v-if="narrowingFilters.length">Filtrga mos tushum topilmadi</h3>
                     <h3 v-else>Bu davrda tushum yo'q</h3>

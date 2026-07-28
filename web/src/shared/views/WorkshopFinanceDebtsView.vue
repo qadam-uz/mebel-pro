@@ -166,11 +166,23 @@ function balanceWord(balanceTiyin: number) {
   return directionLabel(balanceDirection(balanceTiyin))
 }
 
-// Positive balance = they owe us; negative = we owe them. Words, never bare signs.
+// Positive balance = they owe us; negative = we owe them. Words, never bare
+// signs — but the word goes under the figure, so a column of balances stays a
+// column of numbers you can compare down (QAD-182).
 function balanceChip(balance: number) {
   if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
   if (balance < 0) return { cls: 'pill p-bad', text: `Bizning qarzimiz: ${formatTiyin(-balance)}` }
   return { cls: 'pill p-dn', text: "Qarz yo'q" }
+}
+
+function balanceToneClass(balance: number) {
+  if (balance > 0) return 'success-text'
+  if (balance < 0) return 'danger-text'
+  return 'text-ink-muted'
+}
+
+function balanceTitle(balance: number) {
+  return balanceChip(balance).text
 }
 
 function statementRowLabel(row: DebtStatementRow) {
@@ -465,7 +477,7 @@ onBeforeUnmount(() => {
                 <tr>
                   <th>{{ activeTab === 'suppliers' ? "Ta'minotchi" : 'Mijoz' }}</th>
                   <th>Telefon</th>
-                  <th class="right">Balans</th>
+                  <th class="right">Balans, so'm</th>
                   <th></th>
                 </tr>
               </thead>
@@ -478,10 +490,13 @@ onBeforeUnmount(() => {
                     </small>
                   </td>
                   <td class="num">{{ row.phone ?? '—' }}</td>
-                  <td class="right">
-                    <span :class="balanceChip(row.balance_tiyin).cls">
-                      <span class="pd"></span>{{ balanceChip(row.balance_tiyin).text }}
-                    </span>
+                  <td class="amt" :title="balanceTitle(row.balance_tiyin)">
+                    <b :class="balanceToneClass(row.balance_tiyin)">
+                      {{ formatSom(Math.abs(row.balance_tiyin)) }}
+                    </b>
+                    <small class="block text-[11px] text-ink-muted">
+                      {{ balanceWord(row.balance_tiyin) || "qarz yo'q" }}
+                    </small>
                   </td>
                   <td class="right">
                     <button

@@ -86,20 +86,20 @@ onMounted(() => {
       <div>
         <h1>Bildirishnomalar</h1>
       </div>
-      <div class="tools">
-        <button
-          class="mp-button mp-button-outline"
-          type="button"
-          :disabled="notifications.unread === 0"
-          @click="markAll"
-        >
-          Hammasini o'qilgan deb belgilash
-        </button>
-      </div>
     </div>
 
     <div class="mp-filters">
       <ProjectDropdown v-model="filter" label="Tur" :options="filterOptions" top-label />
+      <!-- Page heads are title-only; a bulk action lives at the right end of the
+           filter row like every create button (DESIGN.md, QAD-182). -->
+      <button
+        class="mp-button mp-button-outline"
+        type="button"
+        :disabled="notifications.unread === 0"
+        @click="markAll"
+      >
+        Hammasini o'qilgan deb belgilash
+      </button>
     </div>
 
     <div v-if="notifications.loading" class="card max-w-[800px] p-5" aria-live="polite">

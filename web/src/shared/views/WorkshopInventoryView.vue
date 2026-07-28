@@ -60,7 +60,7 @@ const inventoryTabs: ChoiceOption[] = [
   { value: 'stock', label: 'Zaxira' },
   { value: 'invoices', label: 'Kirimlar' },
   { value: 'tx', label: 'Tranzaksiyalar' },
-  { value: 'suppliers', label: 'Yetkazib beruvchilar' },
+  { value: 'suppliers', label: "Ta'minotchilar" },
 ]
 const search = ref('')
 const lowOnly = ref(false)
@@ -191,7 +191,7 @@ const txMaterialOptions = computed<DropdownOption[]>(() => [
   ...workshop.stockItems.map((item) => ({ value: item.material_id, label: item.material.name })),
 ])
 const activeSupplierOptions = computed(() => [
-  { value: 'inline', label: 'Yangi yetkazib beruvchi', meta: 'kirim bilan yaratiladi' },
+  { value: 'inline', label: "Yangi ta'minotchi", meta: 'kirim bilan yaratiladi' },
   ...workshop.suppliers
     .filter((supplier) => supplier.status === 'active')
     .map((supplier) => ({
@@ -542,7 +542,7 @@ async function saveInvoice(withExpense = false) {
     return
   }
   if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
-    invoiceSupplierError.value = 'Yangi yetkazib beruvchi nomini kiriting.'
+    invoiceSupplierError.value = "Yangi ta'minotchi nomini kiriting."
     movementSaving.value = false
     return
   }
@@ -652,7 +652,7 @@ async function saveSupplier() {
     }
     resetSupplierForm()
     supplierModalOpen.value = false
-    toast.success(wasEditing ? 'Yetkazib beruvchi saqlandi.' : "Yetkazib beruvchi qo'shildi.")
+    toast.success(wasEditing ? "Ta'minotchi saqlandi." : "Ta'minotchi qo'shildi.")
   } catch {
     supplierError.value = 'supplier_save_failed'
   } finally {
@@ -670,7 +670,7 @@ async function toggleSupplierStatus(supplier: Supplier) {
       supplier.id,
       supplier.status === 'active' ? 'inactive' : 'active',
     )
-    toast.success("Yetkazib beruvchi holati o'zgartirildi.")
+    toast.success("Ta'minotchi holati o'zgartirildi.")
   } catch {
     supplierError.value = 'supplier_status_failed'
   } finally {
@@ -942,7 +942,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
-            <span>Yangi yetkazib beruvchi nomi</span>
+            <span>Yangi ta'minotchi nomi</span>
             <input v-model="invoiceForm.inlineSupplierName" class="mp-input" required />
           </label>
 
@@ -1393,7 +1393,7 @@ onBeforeUnmount(() => {
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
                           ? "Qidiruvni yoki to'lov holatini o'zgartiring."
-                          : 'Yetkazib beruvchidan kelgan fakturani «+ Kirim» orqali yozing.'
+                          : "Ta'minotchidan kelgan fakturani «+ Kirim» orqali yozing."
                       }}
                     </p>
                   </div>
@@ -1429,7 +1429,7 @@ onBeforeUnmount(() => {
                 <th class="right">Narx</th>
                 <th class="right">Summa</th>
                 <th>Buyurtma</th>
-                <th>Yetkazib beruvchi</th>
+                <th>Ta'minotchi</th>
                 <th>Kim qildi</th>
                 <th>Izoh</th>
               </tr>
@@ -1522,13 +1522,13 @@ onBeforeUnmount(() => {
       >
         <div class="mp-filters">
           <button type="button" class="mp-button mp-button-primary" @click="openCreateSupplier">
-            + Yangi yetkazib beruvchi
+            + Yangi ta'minotchi
           </button>
         </div>
 
         <AppModal
           :open="supplierModalOpen"
-          :title="editingSupplierId ? 'Yetkazib beruvchini tahrirlash' : 'Yangi yetkazib beruvchi'"
+          :title="editingSupplierId ? `Ta'minotchini tahrirlash` : `Yangi ta'minotchi`"
           @close="closeSupplierModal"
         >
           <form class="grid gap-3" @submit.prevent="saveSupplier">
@@ -1548,7 +1548,7 @@ onBeforeUnmount(() => {
               v-if="supplierError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Yetkazib beruvchi saqlanmadi.
+              Ta'minotchi saqlanmadi.
             </p>
             <div class="flex items-center gap-2">
               <button type="submit" class="mp-button mp-button-primary" :disabled="supplierSaving">
@@ -1616,8 +1616,8 @@ onBeforeUnmount(() => {
                 <tr v-if="workshop.suppliers.length === 0">
                   <td :colspan="canSeeDebts ? 6 : 5">
                     <div class="st-empty !border-0 !py-8">
-                      <h3>Yetkazib beruvchi yo'q</h3>
-                      <p>«+ Yangi yetkazib beruvchi» orqali birinchisini qo'shing.</p>
+                      <h3>Ta'minotchi yo'q</h3>
+                      <p>«+ Yangi ta'minotchi» orqali birinchisini qo'shing.</p>
                     </div>
                   </td>
                 </tr>

@@ -20,7 +20,7 @@ import {
   formatDateInputValue,
   formatRelativeUz,
   formatTiyin,
-  formatTiyinParts,
+  formatTiyinRow,
   formatStockQuantity,
 } from '@/shared/formatters'
 import AuthFileImage from '@/shared/components/AuthFileImage.vue'
@@ -112,16 +112,24 @@ function branchHref(branchId: string) {
 }
 const lowStock = computed(() => workshop.lowStockItems.slice(0, 5))
 const netPositive = computed(() => (finance.summary?.net_tiyin ?? 0) >= 0)
-const incomeParts = computed(() => formatTiyinParts(finance.summary?.income_tiyin ?? 0))
-const expenseParts = computed(() => formatTiyinParts(finance.summary?.expense_tiyin ?? 0))
-const netParts = computed(() => formatTiyinParts(finance.summary?.net_tiyin ?? 0))
-const supplierDebtParts = computed(() =>
-  formatTiyinParts(finance.supplierDebts?.we_owe_total_tiyin ?? 0),
+// Every money KPI on the page shares one scale, so the row can be read across
+// instead of figure by figure (QAD-182).
+const moneyKpis = computed(() =>
+  formatTiyinRow([
+    finance.summary?.income_tiyin ?? 0,
+    finance.summary?.expense_tiyin ?? 0,
+    finance.summary?.net_tiyin ?? 0,
+    finance.supplierDebts?.we_owe_total_tiyin ?? 0,
+    finance.clientDebts?.they_owe_total_tiyin ?? 0,
+    workshop.stockValueTiyin ?? 0,
+  ]),
 )
-const clientDebtParts = computed(() =>
-  formatTiyinParts(finance.clientDebts?.they_owe_total_tiyin ?? 0),
-)
-const stockValueParts = computed(() => formatTiyinParts(workshop.stockValueTiyin ?? 0))
+const incomeParts = computed(() => moneyKpis.value[0])
+const expenseParts = computed(() => moneyKpis.value[1])
+const netParts = computed(() => moneyKpis.value[2])
+const supplierDebtParts = computed(() => moneyKpis.value[3])
+const clientDebtParts = computed(() => moneyKpis.value[4])
+const stockValueParts = computed(() => moneyKpis.value[5])
 const chartRows = computed(() => finance.summary?.daily_income ?? [])
 const chartMax = computed(() => Math.max(1, ...chartRows.value.map((row) => row.income_tiyin)))
 const hasIncome = computed(() => chartRows.value.some((row) => row.income_tiyin > 0))
@@ -321,16 +329,11 @@ watch(
           }}
         </div>
       </div>
-      <div class="tools">
-        <button
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-          type="button"
-          :disabled="dashboardLoading"
-          @click="loadDashboard"
-        >
-          {{ dashboardLoading ? 'Yuklanmoqda' : 'Yangilash' }}
-        </button>
-      </div>
+      <!-- No «Yangilash». Page heads are title-only (DESIGN.md), the dashboard
+           already refetches on mount and on a branch switch, and on a phone the
+           button became the most prominent thing on the screen (QAD-182). The
+           error banner below still offers a retry, which is when a manual
+           refresh is actually the answer. -->
     </div>
 
     <OnboardingChecklist />
