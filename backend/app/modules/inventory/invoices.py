@@ -34,7 +34,6 @@ from app.modules.inventory.schemas import SupplierInvoiceCreateRequest, Supplier
 from app.modules.inventory.service import (
     _apply_stock_delta,
     _create_supplier_for_scope,
-    _emit_low_stock_if_needed,
     _inventory_scope,
     _optional_text,
     _stock_item_for_movement,
@@ -198,12 +197,6 @@ async def create_invoice(
         summary=f"Recorded arrival {invoice.invoice_no}",
         details={"lines": len(lines), "total_tiyin": invoice.total_tiyin},
     )
-    # One notification per stock item, not per line: the same material twice on
-    # one faktura is a single low-stock fact.
-    for item in {line.stock_item.id: line.stock_item for line in lines}.values():
-        material = next(row.material for row in lines if row.stock_item.id == item.id)
-        await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
-
     return InvoiceRecord(
         invoice=invoice,
         supplier=supplier,

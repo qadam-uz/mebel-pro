@@ -204,7 +204,14 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/settings/users',
     name: 'workshop-users',
     component: () => import('@/shared/views/WorkshopUsersView.vue'),
-    meta: { title: 'Xodimlar', workshopAccess: { ownerOnly: true }, branchScope: 'branch' },
+    meta: {
+      // A Tizim page, so it is workshop-wide and the topbar picker steps aside
+      // (QAD-182). The page keeps its own Filial filter — on a workshop-scoped
+      // page that is the only branch control, not a second one.
+      title: "Xodimlar ro'yxati",
+      workshopAccess: { ownerOnly: true },
+      branchScope: 'workshop',
+    },
   },
   {
     path: '/workshop/settings',
@@ -248,11 +255,12 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     path: '/workshop/finance/debts',
     name: 'workshop-finance-debts',
     component: () => import('@/shared/views/WorkshopFinanceDebtsView.vue'),
-    // Debt scope is workshop-wide in the finance module, by design.
     meta: {
+      // Every term in the debt fold names a branch now (QAD-182), so the page
+      // follows the picker like the rest of the finance module.
       title: 'Qarzdorlik',
       workshopAccess: { any: [p.manageFinance] },
-      branchScope: 'workshop',
+      branchScope: 'branch',
     },
   },
   {
@@ -260,7 +268,10 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-finance-production',
     component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),
     meta: {
-      title: 'Ishlab chiqarish hisobotlari',
+      // One name in the nav, the tab title and the heading (QAD-182). Branch
+      // scope like the rest of the finance module — the picker governs, and the
+      // page carries no branch control of its own.
+      title: 'Xodimlar mehnati',
       workshopAccess: { any: financeAccess },
       branchScope: 'branch',
     },

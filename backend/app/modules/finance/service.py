@@ -425,6 +425,14 @@ async def create_expense(
     )
     branch_id = invoice.branch_id if invoice is not None else payload.branch_id
     supplier_id = invoice.supplier_id if invoice is not None else payload.supplier_id
+    # Money that moves against a counterparty is a term in that counterparty's
+    # per-branch balance (QAD-182), so it must name a branch. Refuse it here
+    # with a code the form can explain rather than letting the CHECK 500.
+    if supplier_id is not None and branch_id is None:
+        raise APIError(
+            "branch_required_for_supplier_expense",
+            "A supplier-linked expense must name a branch",
+        )
     scope = await _write_scope(db, principal=principal, branch_id=branch_id)
     supplier = await _supplier_in_workshop(
         db, workshop_id=scope.workshop_id, supplier_id=supplier_id
@@ -512,6 +520,13 @@ async def update_expense(
             db, workshop_id=expense.workshop_id, supplier_id=payload.supplier_id
         )
         expense.supplier_id = payload.supplier_id
+    # Re-check after both fields have settled: an edit can attach a supplier, or
+    # clear the branch, and either one alone would break the per-branch fold.
+    if expense.supplier_id is not None and expense.branch_id is None:
+        raise APIError(
+            "branch_required_for_supplier_expense",
+            "A supplier-linked expense must name a branch",
+        )
     if "receipt_file_id" in payload.model_fields_set:
         expense.receipt_file_id = await replace_attached_file(
             db,

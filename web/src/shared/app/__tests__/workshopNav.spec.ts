@@ -24,7 +24,7 @@ describe('workshop navigation permissions', () => {
       'Qarzdorlik',
       'Xodimlar mehnati',
       'Filiallar',
-      'Xodimlar',
+      "Xodimlar ro'yxati",
       'Sozlamalar',
     ])
   })

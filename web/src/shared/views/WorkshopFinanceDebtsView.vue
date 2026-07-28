@@ -33,11 +33,13 @@ import {
   parseSomToTiyin,
 } from '@/shared/formatters'
 import { useFinanceStore, type DebtRow, type DebtStatementRow } from '@/shared/stores/finance'
+import { useWorkshopStore } from '@/shared/stores/workshop'
 
 const router = useRouter()
 const rolePath = useRolePath()
 const permissions = useWorkshopPermissions()
 const finance = useFinanceStore()
+const workshop = useWorkshopStore()
 const toast = useToast()
 const today = formatDateInputValue(new Date())
 
@@ -164,11 +166,23 @@ function balanceWord(balanceTiyin: number) {
   return directionLabel(balanceDirection(balanceTiyin))
 }
 
-// Positive balance = they owe us; negative = we owe them. Words, never bare signs.
+// Positive balance = they owe us; negative = we owe them. Words, never bare
+// signs — but the word goes under the figure, so a column of balances stays a
+// column of numbers you can compare down (QAD-182).
 function balanceChip(balance: number) {
   if (balance > 0) return { cls: 'pill p-ok', text: `Bizga qarzi: ${formatTiyin(balance)}` }
   if (balance < 0) return { cls: 'pill p-bad', text: `Bizning qarzimiz: ${formatTiyin(-balance)}` }
   return { cls: 'pill p-dn', text: "Qarz yo'q" }
+}
+
+function balanceToneClass(balance: number) {
+  if (balance > 0) return 'success-text'
+  if (balance < 0) return 'danger-text'
+  return 'text-ink-muted'
+}
+
+function balanceTitle(balance: number) {
+  return balanceChip(balance).text
 }
 
 function statementRowLabel(row: DebtStatementRow) {
@@ -189,10 +203,16 @@ function statementRowLabel(row: DebtStatementRow) {
   return `Qarz tuzatish · ${row.note ?? ''}`.trim()
 }
 
+// Debts follow the topbar picker like the rest of the finance module
+// (QAD-182). A null branch is the workshop total, which is exactly the sum of
+// its branches — every term in the fold names one.
+const activeBranchId = computed(() => workshop.selectedBranchContext ?? null)
+
 async function refreshList() {
   const filters = {
     search: search.value.trim() || undefined,
     only_with_debt: onlyWithDebt.value,
+    branch_id: activeBranchId.value,
   }
   if (activeTab.value === 'suppliers') await finance.loadSupplierDebts(filters)
   else await finance.loadClientDebts(filters)
@@ -203,6 +223,7 @@ async function refreshStatement() {
   await finance.loadStatement(activeTab.value, selectedId.value, {
     date_from: dateFrom.value || null,
     date_to: dateTo.value || null,
+    branch_id: activeBranchId.value,
   })
 }
 
@@ -246,7 +267,11 @@ async function downloadStatementPdf() {
     await finance.downloadStatementPdf(
       activeTab.value,
       selectedId.value,
-      { date_from: dateFrom.value || null, date_to: dateTo.value || null },
+      {
+        date_from: dateFrom.value || null,
+        date_to: dateTo.value || null,
+        branch_id: activeBranchId.value,
+      },
       `akt-sverka-${statementName.value}-${stamp}.pdf`.replace(/\s+/g, '-'),
     )
   } catch {
@@ -278,6 +303,7 @@ async function saveAdjustment() {
     const grows = adjustmentForm.direction === 'debt_grows'
     const sign = activeTab.value === 'suppliers' ? (grows ? -1 : 1) : grows ? 1 : -1
     await finance.createAdjustment({
+      branch_id: activeBranchId.value,
       supplier_id: activeTab.value === 'suppliers' ? selectedId.value : null,
       client_id: activeTab.value === 'clients' ? selectedId.value : null,
       amount_tiyin: sign * adjustmentAmountTiyin.value,
@@ -333,8 +359,17 @@ watch([dateFrom, dateTo], () => {
   if (selectedId.value) void refreshStatement()
 })
 
-onMounted(() => {
+// Switching branch in the topbar reloads whichever surface is open — the list
+// or the statement — so the figures never lag behind the picker above them.
+watch(activeBranchId, () => {
   if (!canManageFinance.value) return
+  if (selectedId.value) void refreshStatement()
+  else void refreshList()
+})
+
+onMounted(async () => {
+  if (!canManageFinance.value) return
+  await workshop.loadBranchContext().catch(() => undefined)
   void refreshList()
 })
 
@@ -442,7 +477,7 @@ onBeforeUnmount(() => {
                 <tr>
                   <th>{{ activeTab === 'suppliers' ? "Ta'minotchi" : 'Mijoz' }}</th>
                   <th>Telefon</th>
-                  <th class="right">Balans</th>
+                  <th class="right">Balans, so'm</th>
                   <th></th>
                 </tr>
               </thead>
@@ -455,10 +490,13 @@ onBeforeUnmount(() => {
                     </small>
                   </td>
                   <td class="num">{{ row.phone ?? '—' }}</td>
-                  <td class="right">
-                    <span :class="balanceChip(row.balance_tiyin).cls">
-                      <span class="pd"></span>{{ balanceChip(row.balance_tiyin).text }}
-                    </span>
+                  <td class="amt" :title="balanceTitle(row.balance_tiyin)">
+                    <b :class="balanceToneClass(row.balance_tiyin)">
+                      {{ formatSom(Math.abs(row.balance_tiyin)) }}
+                    </b>
+                    <small class="block text-[11px] text-ink-muted">
+                      {{ balanceWord(row.balance_tiyin) || "qarz yo'q" }}
+                    </small>
                   </td>
                   <td class="right">
                     <button

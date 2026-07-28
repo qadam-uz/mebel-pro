@@ -18,6 +18,8 @@ import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import DateField from '@/shared/components/DateField.vue'
+import FilterStatus from '@/shared/components/FilterStatus.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -58,10 +60,15 @@ const inventoryTabs: ChoiceOption[] = [
   { value: 'stock', label: 'Zaxira' },
   { value: 'invoices', label: 'Kirimlar' },
   { value: 'tx', label: 'Tranzaksiyalar' },
-  { value: 'suppliers', label: 'Yetkazib beruvchilar' },
+  { value: 'suppliers', label: "Ta'minotchilar" },
 ]
 const search = ref('')
 const lowOnly = ref(false)
+
+// A branch with 30 materials told the operator it had none, because the empty
+// state did not know a search was active (QAD-182). First-run and
+// filtered-empty are different facts and get different copy.
+const stockFiltered = computed(() => search.value.trim().length > 0 || lowOnly.value)
 const txPreset = ref<DateRangePreset>('days30')
 const initialTxRange = presetRange('days30')
 const txDateFrom = ref(initialTxRange.from ?? '')
@@ -184,7 +191,7 @@ const txMaterialOptions = computed<DropdownOption[]>(() => [
   ...workshop.stockItems.map((item) => ({ value: item.material_id, label: item.material.name })),
 ])
 const activeSupplierOptions = computed(() => [
-  { value: 'inline', label: 'Yangi yetkazib beruvchi', meta: 'kirim bilan yaratiladi' },
+  { value: 'inline', label: "Yangi ta'minotchi", meta: 'kirim bilan yaratiladi' },
   ...workshop.suppliers
     .filter((supplier) => supplier.status === 'active')
     .map((supplier) => ({
@@ -235,11 +242,14 @@ watch(
   },
 )
 
-// The unit a line's price is entered per — panel piece for panels, metre for edges.
+// The unit a line's price is entered per — one panel for panels, one metre for
+// edges. Rendered as a persistent suffix inside the field, never as a
+// placeholder: the difference between 18 so'm/m and 1 800 so'm/m is the whole
+// cost base, and a hint that disappears when you type is not a label (QAD-182).
 function linePriceUnit(line: InvoiceLineDraft) {
   const item = stockItemByMaterial(line.materialId)
   if (!item) return "so'm"
-  return isMetreUnit(item.display_unit) ? "1 metr, so'm" : "1 dona, so'm"
+  return isMetreUnit(item.display_unit) ? "so'm/m" : "so'm/panel"
 }
 
 function lineQuantityUnit(line: InvoiceLineDraft) {
@@ -532,7 +542,7 @@ async function saveInvoice(withExpense = false) {
     return
   }
   if (invoiceForm.supplierId === 'inline' && !invoiceForm.inlineSupplierName.trim()) {
-    invoiceSupplierError.value = 'Yangi yetkazib beruvchi nomini kiriting.'
+    invoiceSupplierError.value = "Yangi ta'minotchi nomini kiriting."
     movementSaving.value = false
     return
   }
@@ -642,7 +652,7 @@ async function saveSupplier() {
     }
     resetSupplierForm()
     supplierModalOpen.value = false
-    toast.success(wasEditing ? 'Yetkazib beruvchi saqlandi.' : "Yetkazib beruvchi qo'shildi.")
+    toast.success(wasEditing ? "Ta'minotchi saqlandi." : "Ta'minotchi qo'shildi.")
   } catch {
     supplierError.value = 'supplier_save_failed'
   } finally {
@@ -660,7 +670,7 @@ async function toggleSupplierStatus(supplier: Supplier) {
       supplier.id,
       supplier.status === 'active' ? 'inactive' : 'active',
     )
-    toast.success("Yetkazib beruvchi holati o'zgartirildi.")
+    toast.success("Ta'minotchi holati o'zgartirildi.")
   } catch {
     supplierError.value = 'supplier_status_failed'
   } finally {
@@ -874,6 +884,22 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <FilterStatus
+        v-if="activeTab === 'stock'"
+        :active="stockFiltered"
+        :loading="workshop.loading"
+        :count="workshop.stockItems.length"
+        noun="material"
+        :on-reset="
+          search.trim() && lowOnly
+            ? () => {
+                search = ''
+                lowOnly = false
+              }
+            : null
+        "
+      />
+
       <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
         <button type="button" class="mp-button mp-button-primary" @click="openInvoiceModal">
           Kirim
@@ -901,13 +927,10 @@ onBeforeUnmount(() => {
             />
             <label class="field">
               <span>Kirim sanasi</span>
-              <input
-                v-model="invoiceForm.invoiceDate"
-                type="date"
-                class="mp-input"
-                :max="today"
-                required
-              />
+              <!-- The last native date input in the app (QAD-182). It rendered
+                   in the browser's OS locale, so the same faktura read
+                   28/07/2026 here and 07/28/2026 on an en-US machine. -->
+              <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
             </label>
             <div class="field">
               <span>Raqam</span>
@@ -919,7 +942,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <label v-if="invoiceForm.supplierId === 'inline'" class="field !mb-0">
-            <span>Yangi yetkazib beruvchi nomi</span>
+            <span>Yangi ta'minotchi nomi</span>
             <input v-model="invoiceForm.inlineSupplierName" class="mp-input" required />
           </label>
 
@@ -950,23 +973,33 @@ onBeforeUnmount(() => {
                       />
                     </td>
                     <td class="min-w-28">
-                      <input
-                        v-model="line.quantity"
-                        class="mp-input text-right"
-                        inputmode="decimal"
-                        :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
-                        :placeholder="lineQuantityUnit(line) || 'miqdor'"
-                      />
+                      <span class="mp-unit-field">
+                        <input
+                          v-model="line.quantity"
+                          class="mp-input text-right"
+                          inputmode="decimal"
+                          :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
+                          placeholder="0"
+                        />
+                        <span class="mp-unit-suffix" aria-hidden="true">{{
+                          lineQuantityUnit(line)
+                        }}</span>
+                      </span>
                     </td>
                     <td class="min-w-32">
-                      <input
-                        v-model="line.unitPrice"
-                        class="mp-input text-right"
-                        inputmode="decimal"
-                        :aria-label="`Narx ${linePriceUnit(line)}`"
-                        :placeholder="linePriceUnit(line)"
-                        @input="line.priceEdited = true"
-                      />
+                      <span class="mp-unit-field">
+                        <input
+                          v-model="line.unitPrice"
+                          class="mp-input text-right"
+                          inputmode="decimal"
+                          :aria-label="`Narx ${linePriceUnit(line)}`"
+                          placeholder="0"
+                          @input="line.priceEdited = true"
+                        />
+                        <span class="mp-unit-suffix" aria-hidden="true">{{
+                          linePriceUnit(line)
+                        }}</span>
+                      </span>
                       <small
                         v-if="lineLastPriceHint(line)"
                         class="block text-[11px] text-ink-muted"
@@ -1193,15 +1226,21 @@ onBeforeUnmount(() => {
                     "
                   >
                     <span class="pd"></span
-                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'OK' }}
+                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'Yetarli' }}
                   </span>
                 </td>
               </tr>
               <tr v-if="workshop.stockItems.length === 0">
                 <td colspan="4">
                   <div class="st-empty !border-0 !py-8">
-                    <h3>Bu filialga material qo'shilmagan</h3>
-                    <p>Katalogdan material qo'shing.</p>
+                    <template v-if="stockFiltered">
+                      <h3>Filtrga mos material topilmadi</h3>
+                      <p>Qidiruvni o'zgartiring yoki tozalang.</p>
+                    </template>
+                    <template v-else>
+                      <h3>Bu filialga material qo'shilmagan</h3>
+                      <p>Katalogdan material qo'shing.</p>
+                    </template>
                   </div>
                 </td>
               </tr>
@@ -1354,7 +1393,7 @@ onBeforeUnmount(() => {
                       {{
                         invoiceSearch.trim() || invoicePaymentFilter !== 'all'
                           ? "Qidiruvni yoki to'lov holatini o'zgartiring."
-                          : 'Yetkazib beruvchidan kelgan fakturani «+ Kirim» orqali yozing.'
+                          : "Ta'minotchidan kelgan fakturani «+ Kirim» orqali yozing."
                       }}
                     </p>
                   </div>
@@ -1390,7 +1429,7 @@ onBeforeUnmount(() => {
                 <th class="right">Narx</th>
                 <th class="right">Summa</th>
                 <th>Buyurtma</th>
-                <th>Yetkazib beruvchi</th>
+                <th>Ta'minotchi</th>
                 <th>Kim qildi</th>
                 <th>Izoh</th>
               </tr>
@@ -1483,13 +1522,13 @@ onBeforeUnmount(() => {
       >
         <div class="mp-filters">
           <button type="button" class="mp-button mp-button-primary" @click="openCreateSupplier">
-            + Yangi yetkazib beruvchi
+            + Yangi ta'minotchi
           </button>
         </div>
 
         <AppModal
           :open="supplierModalOpen"
-          :title="editingSupplierId ? 'Yetkazib beruvchini tahrirlash' : 'Yangi yetkazib beruvchi'"
+          :title="editingSupplierId ? `Ta'minotchini tahrirlash` : `Yangi ta'minotchi`"
           @close="closeSupplierModal"
         >
           <form class="grid gap-3" @submit.prevent="saveSupplier">
@@ -1509,7 +1548,7 @@ onBeforeUnmount(() => {
               v-if="supplierError"
               class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
             >
-              Yetkazib beruvchi saqlanmadi.
+              Ta'minotchi saqlanmadi.
             </p>
             <div class="flex items-center gap-2">
               <button type="submit" class="mp-button mp-button-primary" :disabled="supplierSaving">
@@ -1577,8 +1616,8 @@ onBeforeUnmount(() => {
                 <tr v-if="workshop.suppliers.length === 0">
                   <td :colspan="canSeeDebts ? 6 : 5">
                     <div class="st-empty !border-0 !py-8">
-                      <h3>Yetkazib beruvchi yo'q</h3>
-                      <p>«+ Yangi yetkazib beruvchi» orqali birinchisini qo'shing.</p>
+                      <h3>Ta'minotchi yo'q</h3>
+                      <p>«+ Yangi ta'minotchi» orqali birinchisini qo'shing.</p>
                     </div>
                   </td>
                 </tr>

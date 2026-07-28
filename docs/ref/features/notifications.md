@@ -2,7 +2,7 @@
 title: Notifications inbox
 status: draft
 owner: shape
-updated: 2026-06-20
+updated: 2026-07-28
 order: 60
 ---
 
@@ -40,8 +40,8 @@ In all three apps (client / workshop / superadmin), in the top bar:
   and marks it read. The dropdown has "mark all as read" and a "see all" link to a full
   notifications page (paginated, with a read/unread filter).
 - **Toasts** for the critical events, in addition to the badge — for the client, an order
-  status change; for workshop staff, a new order; for the owner, live low stock; for the
-  platform operator, an error spike or a failed job.
+  status change; for workshop staff, a new order; for the platform operator, an error spike
+  or a failed job.
 - **States** — bell with zero unread (no badge); dropdown loading; dropdown empty ("Nothing
   new"); the notifications page has loading / empty / error. If the notifications endpoint is
   down the bell shows no badge but the underlying data is still reachable on the relevant
@@ -56,7 +56,9 @@ In all three apps (client / workshop / superadmin), in the top bar:
   the relevant pages.
 - **A workshop-wide event** — fans out one row per staff member; each has their own unread
   count.
-- **Low-stock flood** — v1 has live inventory notifications only; there is no scheduled digest.
+- **Low stock does not notify** — it is a state the Ombor row and the dashboard already show,
+  not an event; sending it to the bell on every movement past the threshold read as noise. Only
+  a balance going *negative* notifies (docs/ref/features/catalog-inventory.md).
 - **A notification linking to an entity the principal can no longer see** (scope changed since
   the event) — the link resolves to a "not available" state rather than leaking. Rare.
 

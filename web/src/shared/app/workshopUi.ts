@@ -86,7 +86,7 @@ export function grantSummary(
   if (grants.length === 0) return 'Ruxsat berilmagan'
   const branches = new Set(grants.map((grant) => grant.branch_id))
   const permissions = new Set(grants.map((grant) => grant.permission))
-  return `${permissions.size} grant · ${branches.size} filial`
+  return `${permissions.size} ruxsat · ${branches.size} filial`
 }
 
 /**

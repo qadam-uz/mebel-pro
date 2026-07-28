@@ -17,6 +17,7 @@ import {
 } from '@/shared/app/lowStockThreshold'
 import AppModal from '@/shared/components/AppModal.vue'
 import BranchMaterialAttachSheet from '@/shared/components/BranchMaterialAttachSheet.vue'
+import FilterStatus from '@/shared/components/FilterStatus.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
@@ -42,6 +43,28 @@ const { notifyProgress } = useOnboardingContinuation()
 const statusFilter = ref<'all' | MaterialStatus>('all')
 const kindFilter = ref<'all' | MaterialKind>('all')
 const search = ref('')
+
+// Same defect as Ombor (QAD-182): with a search on, the branch reported it held
+// no materials at all — and offered an add button that would not have helped.
+const catalogFiltered = computed(
+  () =>
+    search.value.trim().length > 0 || kindFilter.value !== 'all' || statusFilter.value !== 'all',
+)
+
+// The bar-level reset appears from the second active filter on: with one, it
+// would sit next to that filter's own clear and do the same thing.
+const activeCatalogFilterCount = computed(
+  () =>
+    (search.value.trim() ? 1 : 0) +
+    (kindFilter.value === 'all' ? 0 : 1) +
+    (statusFilter.value === 'all' ? 0 : 1),
+)
+
+function resetCatalogFilters() {
+  search.value = ''
+  kindFilter.value = 'all'
+  statusFilter.value = 'all'
+}
 const rowActionId = ref<string | null>(null)
 const rowActionError = ref<string | null>(null)
 const rowActionTraceId = ref<string | null>(null)
@@ -338,6 +361,14 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <FilterStatus
+        :active="catalogFiltered"
+        :loading="workshop.loading"
+        :count="workshop.branchMaterials.length"
+        noun="material"
+        :on-reset="activeCatalogFilterCount > 1 ? resetCatalogFilters : null"
+      />
+
       <div v-if="rowActionError" class="banner danger mb-4">
         <div class="grow">{{ rowActionError }}{{ traceSuffix(rowActionTraceId) }}</div>
       </div>
@@ -520,15 +551,23 @@ onBeforeUnmount(() => {
               <tr v-if="workshop.branchMaterials.length === 0">
                 <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
-                    <h3>Bu filialga material qo'shilmagan</h3>
-                    <p>Platforma katalogidan material qo'shing.</p>
-                    <button
-                      type="button"
-                      class="mp-button mp-button-primary mt-3"
-                      @click="openAttachSheet"
-                    >
-                      + Material qo'shish
-                    </button>
+                    <template v-if="catalogFiltered">
+                      <h3>Filtrga mos material topilmadi</h3>
+                      <p>Filtrni o'zgartiring yoki tozalang.</p>
+                    </template>
+                    <template v-else>
+                      <h3>Bu filialga material qo'shilmagan</h3>
+                      <p>Platforma katalogidan material qo'shing.</p>
+                      <!-- Only on first run: with a filter on, this button is a
+                           second copy of the one in the bar above (QAD-182). -->
+                      <button
+                        type="button"
+                        class="mp-button mp-button-primary mt-3"
+                        @click="openAttachSheet"
+                      >
+                        + Material qo'shish
+                      </button>
+                    </template>
                   </div>
                 </td>
               </tr>

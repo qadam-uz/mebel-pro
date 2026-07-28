@@ -47,7 +47,16 @@ class Income(UUIDPrimaryKey, Timestamped, Base):
 
 class Expense(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "expenses"
-    __table_args__ = (CheckConstraint("amount_tiyin > 0", name="ck_expenses_amount_positive"),)
+    __table_args__ = (
+        CheckConstraint("amount_tiyin > 0", name="ck_expenses_amount_positive"),
+        # A supplier-linked expense is a term in that supplier's per-branch
+        # balance (QAD-182), so it has to name the branch it settles. Expenses
+        # with no counterparty — rent, tax, salary — stay workshop-wide.
+        CheckConstraint(
+            "supplier_id IS NULL OR branch_id IS NOT NULL",
+            name="ck_expenses_supplier_requires_branch",
+        ),
+    )
 
     workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
     branch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("branches.id"))
@@ -98,6 +107,9 @@ class CounterpartyAdjustment(UUIDPrimaryKey, Timestamped, Base):
     )
 
     workshop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workshops.id"), nullable=False)
+    # Debts are held per branch (QAD-182): an adjustment corrects one branch's
+    # balance with a counterparty, never the workshop's in the abstract.
+    branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), nullable=False)
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id"))
     client_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("clients.id"))
     # Signed, sign convention everywhere: positive = they owe us more.

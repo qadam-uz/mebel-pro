@@ -89,7 +89,7 @@ const personas: Persona[] = [
       'Qarzdorlik',
       'Xodimlar mehnati',
       'Filiallar',
-      'Xodimlar',
+      "Xodimlar ro'yxati",
       'Sozlamalar',
     ],
     refused: null,
@@ -117,7 +117,7 @@ const personas: Persona[] = [
   {
     key: 'manage_inventory',
     sidebar: ['Asosiy', 'Ombor'],
-    refused: { path: '/workshop/settings/users', heading: 'Xodimlar' },
+    refused: { path: '/workshop/settings/users', heading: "Xodimlar ro'yxati" },
   },
   {
     key: 'manage_catalog',

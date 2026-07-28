@@ -26,6 +26,7 @@ import {
 import AppModal from '@/shared/components/AppModal.vue'
 import MultiSelectFilter from '@/shared/components/MultiSelectFilter.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
+import FilterStatus from '@/shared/components/FilterStatus.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { formatDate } from '@/shared/formatters'
@@ -46,6 +47,21 @@ const createTraceId = ref<string | null>(null)
 const search = ref('')
 const branchFilter = ref('all')
 const statusFilter = ref('all')
+
+// The reset-all appears from the second active filter on — with one, it would
+// duplicate that filter's own clear sitting right beside it (DESIGN.md).
+const activeUserFilterCount = computed(
+  () =>
+    (search.value.trim() ? 1 : 0) +
+    (branchFilter.value === 'all' ? 0 : 1) +
+    (statusFilter.value === 'all' ? 0 : 1),
+)
+
+function resetUserFilters() {
+  search.value = ''
+  branchFilter.value = 'all'
+  statusFilter.value = 'all'
+}
 const selected = ref<Set<string>>(new Set())
 const createdTempPassword = ref<string | null>(null)
 const copiedTempPassword = ref(false)
@@ -342,7 +358,7 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-head">
       <div>
-        <h1>Xodimlar</h1>
+        <h1>Xodimlar ro'yxati</h1>
       </div>
     </div>
 
@@ -551,6 +567,14 @@ onBeforeUnmount(() => {
           + Yangi xodim
         </button>
       </div>
+
+      <FilterStatus
+        :active="activeUserFilterCount > 0"
+        :loading="workshop.loading"
+        :count="workshop.users.length"
+        noun="xodim"
+        :on-reset="activeUserFilterCount > 1 ? resetUserFilters : null"
+      />
 
       <section v-if="workshop.loading" class="card p-5" aria-live="polite">
         <div class="grid gap-3">

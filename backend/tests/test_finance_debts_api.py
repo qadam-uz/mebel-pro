@@ -13,6 +13,8 @@ from app.models.enums import (
 from app.modules.access.api import create_session
 from app.modules.access.contracts import Client, PermissionGrant, WorkshopUser
 from app.modules.sales.contracts import Order
+from app.modules.workshop.api import next_branch_no
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,6 +151,7 @@ async def test_supplier_debt_fold_statement_and_voids(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "amount_tiyin": -4_200_000,
             "adjusted_on": "2026-06-01",
@@ -172,6 +175,7 @@ async def test_supplier_debt_fold_statement_and_voids(
         "/api/v1/workshop/finance/expenses",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "category": "raw_materials",
             "amount_tiyin": 10_000_000,
             "incurred_on": today,
@@ -186,6 +190,7 @@ async def test_supplier_debt_fold_statement_and_voids(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "amount_tiyin": 500_000,
             "adjusted_on": today,
@@ -385,6 +390,7 @@ async def test_client_debt_fold_statement_and_cancelled_advance(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "client_id": str(aziza.id),
             "amount_tiyin": 250_000,
             "adjusted_on": "2026-06-13",
@@ -474,6 +480,7 @@ async def test_adjustment_validation_and_scope(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "client_id": str(client_row.id),
             "amount_tiyin": 1000,
@@ -484,12 +491,18 @@ async def test_adjustment_validation_and_scope(
     no_party = await client.post(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
-        json={"amount_tiyin": 1000, "adjusted_on": "2026-06-01", "note": "invalid"},
+        json={
+            "branch_id": str(branch_id),
+            "amount_tiyin": 1000,
+            "adjusted_on": "2026-06-01",
+            "note": "invalid",
+        },
     )
     zero_amount = await client.post(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "amount_tiyin": 0,
             "adjusted_on": "2026-06-01",
@@ -500,6 +513,7 @@ async def test_adjustment_validation_and_scope(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "supplier_id": supplier_id,
             "amount_tiyin": 1000,
             "adjusted_on": "2026-06-01",
@@ -510,6 +524,7 @@ async def test_adjustment_validation_and_scope(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "client_id": str(uuid.uuid4()),
             "amount_tiyin": 1000,
             "adjusted_on": "2026-06-01",
@@ -517,10 +532,13 @@ async def test_adjustment_validation_and_scope(
         },
     )
     # A supplier from another workshop is invisible to this workshop's fold.
+    # The branch has to be the *other* owner's own, or the branch scope refuses
+    # the write before the supplier lookup ever runs.
     foreign_supplier = await client.post(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(other_owner_access),
         json={
+            "branch_id": str(other_branch_id),
             "supplier_id": supplier_id,
             "amount_tiyin": 1000,
             "adjusted_on": "2026-06-01",
@@ -531,6 +549,7 @@ async def test_adjustment_validation_and_scope(
         "/api/v1/workshop/finance/debts/adjustments",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "client_id": str(client_row.id),
             "amount_tiyin": 250_000,
             "adjusted_on": "2026-06-01",
@@ -580,3 +599,84 @@ async def test_adjustment_validation_and_scope(
     )
     assert foreign_statement.status_code == 404
     assert other_branch_id is not None
+
+
+async def test_per_branch_debt_balances_sum_to_the_workshop_total(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The invariant behind branch-scoped debts (QAD-182).
+
+    Every term in the fold names a branch, so asking for one branch and asking
+    for the workshop must never disagree: the parts add up to the whole. Without
+    that, an accountant reconciling per branch would be chasing money the
+    workshop view says exists and no branch claims.
+    """
+
+    owner_access, workshop_id, branch_one = await _owner_fixture(db_session)
+    second = Branch(
+        workshop_id=workshop_id,
+        branch_no=await next_branch_no(db_session),
+        name="Chilonzor",
+        address="Tashkent, Chilonzor",
+        phone="+998904444444",
+    )
+    db_session.add(second)
+    await db_session.flush()
+    branch_two = second.id
+
+    supplier = await client.post(
+        f"/api/v1/workshop/branches/{branch_one}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Ikki Filial Ta'minot"},
+    )
+    assert supplier.status_code == 201
+    supplier_id = supplier.json()["id"]
+
+    # One adjustment in each branch, deliberately different amounts and signs.
+    for branch_id, amount in ((branch_one, -1_500_000), (branch_two, 400_000)):
+        created = await client.post(
+            "/api/v1/workshop/finance/debts/adjustments",
+            headers=_auth(owner_access),
+            json={
+                "branch_id": str(branch_id),
+                "supplier_id": supplier_id,
+                "amount_tiyin": amount,
+                "adjusted_on": "2026-06-01",
+                "note": "ochilish qoldig'i",
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["branch_id"] == str(branch_id)
+
+    async def balance(branch_id: uuid.UUID | None) -> int:
+        query = "" if branch_id is None else f"?branch_id={branch_id}"
+        response = await client.get(
+            f"/api/v1/workshop/finance/debts/suppliers{query}",
+            headers=_auth(owner_access),
+        )
+        assert response.status_code == 200
+        rows = response.json()["rows"]
+        return sum(row["balance_tiyin"] for row in rows)
+
+    first_total = await balance(branch_one)
+    second_total = await balance(branch_two)
+    whole = await balance(None)
+
+    assert first_total == -1_500_000
+    assert second_total == 400_000
+    assert whole == first_total + second_total == -1_100_000
+
+    # The statement obeys the same split: one row per branch, both workshop-wide.
+    async def statement_rows(branch_id: uuid.UUID | None) -> int:
+        query = "" if branch_id is None else f"?branch_id={branch_id}"
+        response = await client.get(
+            f"/api/v1/workshop/finance/debts/suppliers/{supplier_id}/statement{query}",
+            headers=_auth(owner_access),
+        )
+        assert response.status_code == 200
+        return len(response.json()["rows"])
+
+    assert await statement_rows(branch_one) == 1
+    assert await statement_rows(branch_two) == 1
+    assert await statement_rows(None) == 2

@@ -429,7 +429,6 @@ async def record_adjustment(
         summary=f"Adjusted stock for {material.name}",
         details={"quantity": payload.quantity, "material_id": str(payload.material_id)},
     )
-    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
     return TransactionRecord(
         transaction=transaction,
         stock_item=item,
@@ -468,7 +467,6 @@ async def consume_order_stock(
         order_id=order_id,
         note=None,
     )
-    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
     if item.on_hand < 0:
         await _emit_negative_stock(db, scope=scope, stock_item=item, material=material)
     return transaction
@@ -487,7 +485,9 @@ async def restore_order_stock(
     if quantity <= 0:
         raise APIError("invalid_quantity", "Quantity must be positive", status_code=400)
     scope = await _system_scope_for_branch(db, branch_id=branch_id)
-    item, material = await _stock_item_for_movement(
+    # A restore raises the balance, so nothing here needs to notify: the
+    # material is looked up only to create/validate the stock row.
+    item, _ = await _stock_item_for_movement(
         db,
         scope=scope,
         material_id=material_id,
@@ -503,7 +503,6 @@ async def restore_order_stock(
         order_id=order_id,
         note=None,
     )
-    await _emit_low_stock_if_needed(db, scope=scope, stock_item=item, material=material)
     return transaction
 
 
@@ -683,26 +682,6 @@ async def _create_supplier_for_scope(
     db.add(row)
     await db.flush()
     return row
-
-
-async def _emit_low_stock_if_needed(
-    db: AsyncSession,
-    *,
-    scope: BranchScope,
-    stock_item: StockItem,
-    material: Material,
-) -> None:
-    # `<=` and not `< 0`-aware on purpose: a balance that ran past the threshold
-    # into negative is still low stock, so the alert keeps firing (QAD-150).
-    if stock_item.on_hand > stock_item.min_stock:
-        return
-    await _notify_inventory_holders(
-        db,
-        scope=scope,
-        stock_item=stock_item,
-        material=material,
-        event_code="inventory.low_stock",
-    )
 
 
 async def _emit_negative_stock(

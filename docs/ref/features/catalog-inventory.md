@@ -2,7 +2,7 @@
 title: Catalog & inventory
 status: draft
 owner: shape
-updated: 2026-07-26
+updated: 2026-07-28
 order: 50
 ---
 
@@ -104,8 +104,7 @@ this manufacturer" without a manufacturer-specific feature, and equally covers "
 **Threshold defaults.** A new attachment is prefilled with **5** for a panel and
 **50 m** for an edge, editable per row. A threshold of `0` alerts only once the material
 is gone, so a prefilled `0` would leave every attachment effectively unmonitored. The
-column default stays `0` and existing rows are never rewritten — changing thresholds on
-live materials would fire a wave of notifications.
+column default stays `0` and existing rows are never rewritten.
 
 ## Branch pricing
 
@@ -210,12 +209,14 @@ an order ([`orders.md`](orders.md)), a `shop` material whose projected balance w
 cover this order raises a **warning** so they can prompt the warehouseman — it
 **never blocks** approval (some workshops buy per order).
 
-**Low-stock and negative balances.** When `on_hand ≤ min_stock` after any change, a
-notification fires to the branch's `manage_inventory` grantees and the owner; the daily
-summary repeats it. A balance that ran past the threshold into negative still qualifies, so
-the alert keeps firing. A `consume` that leaves the balance below zero fires an additional
-negative-balance notification to the same recipients — nobody is blocked, but the books
-going negative must not be silent.
+**Low-stock and negative balances.** Low stock is a **state on the row, not an event**: the
+Ombor row marks itself and the «Kam qolgan materiallar» filter collects them, and the Asosiy
+dashboard counts them. It raises no notification — the alert fired on every movement past the
+threshold and read as noise rather than news, so the workshop asked for it gone (QAD-182).
+
+Going **negative** is different: it is a discrete thing that happened, not a level. A `consume`
+that drives the balance below zero fires a notification to the branch's `manage_inventory`
+grantees and the owner — nobody is blocked, but the books going negative must not be silent.
 
 ## UX (workshop app)
 
