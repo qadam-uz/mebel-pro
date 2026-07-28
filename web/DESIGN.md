@@ -92,11 +92,15 @@ components:
 
 # Mebel Pro — design system
 
-This file is the deterministic design contract for the three Vue SPAs. The frontmatter tokens
-are the machine-readable source; they mirror `@theme` in `src/assets/main.css` one-to-one
-(`colors.accent` → `--color-accent`). Change a value there and here together. Shared
-primitives live under `src/shared/components/`. The static landing (`web/landing/`) styles
-itself and is out of scope.
+This file is the **design system** for the three Vue SPAs and nothing else — tokens, surfaces,
+type, components, and the words the product uses. How to build against it, and the bar a screen
+has to clear before it ships, are working instructions and live in
+[`AGENTS.md`](./AGENTS.md).
+
+The frontmatter tokens are the machine-readable source; they mirror `@theme` in
+`src/assets/main.css` one-to-one (`colors.accent` → `--color-accent`). Change a value there and
+here together. Shared primitives live under `src/shared/components/`. The static landing
+(`web/landing/`) styles itself and is out of scope.
 
 ## Overview
 
@@ -179,20 +183,10 @@ Two overlay layers, and the order matters: dropdown/popover panels teleport at *
 the modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS
 Safari can't scroll behind).
 
-Desktop paints at `zoom: 90%` on the root (≥769px), which splits the units the DOM reports:
-`getBoundingClientRect()` and `window.inner*` are **painted** pixels, while `offsetHeight` and
-anything written into `style.top/left` are **local** pixels the browser then scales. An overlay
-positioned straight from a measured rect therefore lands at 90% of its anchor. Measure through
-`overlayRect()` / `overlayViewport()` (`shared/app/overlayGeometry.ts`) — never
-`getBoundingClientRect()` directly — so the whole calculation stays in one unit.
-
-Viewport units have the same split and no helper can hide it: `100dvh` / `100vw` resolve
-against the **unzoomed** viewport and the result is then scaled by the zoom, so a `100dvh`
-panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--app-vw`**
-tokens (`assets/main.css`, declared beside the `zoom` rule) instead of raw viewport units —
-they carry the compensation, and the ratio behind it (`--app-zoom`) is written down once.
-Raw `vh` / `vw` are still fine for a *cap* that only needs to stay under the viewport
-(`max-height: min(90vh, …)` on a modal).
+Desktop paints at `zoom: 90%` on the root (≥769px) — the density the back-office is designed
+for. Full-bleed surfaces size from the **`--app-vh` / `--app-vw`** tokens rather than raw
+viewport units, which do not participate in the zoom. Measuring and positioning under it is an
+implementation concern: see [`AGENTS.md`](./AGENTS.md).
 
 ## Shapes
 
@@ -311,7 +305,7 @@ the first word and proper nouns are capitalised. A destructive confirm names its
 consequence rather than saying `OK`.
 
 **5. Empty states invite, not apologise.** Name the space, then offer the action:
-`Bu chizmada qism yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
+`Bu chizmada detal yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
 state, and a body that restates its own title is not a body. **First-run and
 filtered-empty are different copy** — "change the filter" is useless advice when nothing
 exists yet, so a list that can be filtered branches on whether a filter is active.
@@ -338,13 +332,15 @@ One term per concept, across client, workshop and admin.
 | Concept                                | Term                | Not                       |
 | -------------------------------------- | ------------------- | ------------------------- |
 | A client's cutting order               | `buyurtma`          | `zakaz`                   |
-| A cut piece on a drawing               | `qism` / `detal`    | — _owner's ruling pending_ |
+| A cut piece on a drawing               | `detal`             | `qism`, `part`            |
 | A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
 | A panel sheet                          | `list`              | `plita`                   |
 | Edge tape (the material)               | `kromka`            | `krom`                    |
 | The edge-banding station / stage       | `Krom` / `Kromka`   | — _owner's ruling pending_ |
 | A workshop location                    | `filial`            | `bo'lim` (= a UI section) |
-| A supplier                             | `ta'minotchi` / `yetkazib beruvchi` | `postavshik` — _owner's ruling pending_ |
+| A permission a staff member holds      | `ruxsat`            | `grant`                   |
+| Everything, across branches            | `Barcha filiallar`  | `ustaxona-keng`           |
+| A supplier                             | `ta'minotchi`       | `yetkazib beruvchi`, `postavshik` |
 | Goods arriving into stock (a faktura)  | `kirim` (`K-…`)     | `tushum`                  |
 | Money coming in (the finance ledger)   | `tushum`            | `kirim`                   |
 | Money going out                        | `xarajat`           | `rasxod`                  |
@@ -380,36 +376,3 @@ of the interface) are different words for different things.
 - Don't put hover/pointer affordances on non-clickable rows.
 - Don't use serif for operational UI, or add font sizes below 10.5px.
 - Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.
-
-## UX bar — every screen clears these
-
-Structure before skin: know the user's job, the screen's states, and the keyboard path before
-choosing components or colors. Never polish a screen whose structure is wrong.
-
-- **Every state is designed, not just the populated one**: empty (first-run), empty (no
-  results), loading (skeletons sized like the real content — reserve space so nothing jumps),
-  error (named cause + retry), success. Every load that can hang gets a timeout → error path;
-  no infinite spinners.
-- **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
-  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
-  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
-  reads as a control and gets clicked.
-- **The keyboard reaches and operates everything** a mouse can, in an order matching the
-  layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
-  nothing in its place. Modals trap focus and return it to the trigger on close.
-- **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
-  Errors sit next to their field, name the fix in plain language, and never clear the form.
-  Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
-  the danger border, `aria-invalid`, and an `aria-describedby` message — and the message stays
-  **readable**: a field that opens a popover anchors it clear of its own error text, because a
-  message the operator can't see is the same as no message.
-- **Every action gives visible feedback within ~100ms**; submit buttons disable + show
-  progress during async work so they can't double-fire. Destructive actions name their
-  consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.
-- **Color is never the only signal** (pair with text/icon/position); text contrast ≥ 4.5:1
-  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area.
-- **One primary action per screen**, visually dominant. Body text stays at the 14px base
-  (dense back-office by design); captions never below 10.5px. No horizontal page scroll on
-  any viewport (self-contained scrollable tables excepted).
-- **Motion is cause-and-effect, not decoration**: ~150–300ms, `transform`/`opacity` only,
-  gone under `prefers-reduced-motion` (the global CSS already honors it).

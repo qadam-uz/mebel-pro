@@ -24,10 +24,12 @@ import {
   workshopTenantName,
 } from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
+import ActionMenu from '@/shared/components/ActionMenu.vue'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
 import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import ToastHost from '@/shared/components/ToastHost.vue'
+import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useOnboardingStore } from '@/shared/stores/onboarding'
@@ -44,6 +46,33 @@ const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
+
+// Profile / sessions / log out — the three things an avatar is expected to
+// offer. No confirm on the way out: logging out is not destructive, and
+// DESIGN.md prefers undo over a nag (QAD-182).
+const accountMenuItems = computed(() => [
+  { label: 'Mening profilim' },
+  { label: 'Sessiyalar' },
+  { label: 'Chiqib ketish', danger: true },
+])
+
+async function onAccountMenuSelect(index: number) {
+  if (index === 0) {
+    void router.push(config.profilePath)
+    return
+  }
+  if (index === 1) {
+    void router.push({ path: config.profilePath, query: { tab: 'sessions' } })
+    return
+  }
+  try {
+    await auth.logoutCurrent()
+    await router.replace(config.loginPath)
+  } catch {
+    toast.danger("Chiqib bo'lmadi. Qayta urinib ko'ring.")
+  }
+}
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const mobileNavOpen = ref(false)
@@ -73,9 +102,13 @@ const contextStorageKey = computed(() =>
     ? workshopContextStorageKey(auth.me.principal_id, auth.me.session_id)
     : null,
 )
-const profileSubtitle = computed(() =>
-  auth.me?.password_reset_required ? "parolni o'zgartirish kerak" : auth.displayName,
-)
+// The card's second line was `auth.displayName` again — the same string the
+// line above it already shows (QAD-182). The login is what belongs there: it is
+// the one thing about themselves a staff member occasionally has to read out.
+const profileSubtitle = computed(() => {
+  if (auth.me?.password_reset_required) return "parolni o'zgartirish kerak"
+  return auth.me?.login ?? ''
+})
 const tenantLabel = computed(() => {
   // Settings first so an owner's rename shows without a reload; `me` is the
   // source everyone else has, because `/workshop/settings` is owner-only and
@@ -860,10 +893,22 @@ onBeforeUnmount(() => {
 
         <div class="workshop-top-actions">
           <NotificationsMenu />
-          <RouterLink :to="config.profilePath" class="workshop-top-user">
-            <span class="workshop-user-avatar" aria-hidden="true">{{ workshopUserInitials }}</span>
-            <span class="workshop-top-user-text">{{ auth.displayName }}</span>
-          </RouterLink>
+          <!-- Logging out used to mean: click the avatar, wait for the profile
+               page, find the button in its head, confirm. The most expected
+               account action was three steps and a page load away (QAD-182). -->
+          <ActionMenu
+            :items="accountMenuItems"
+            :label="`${auth.displayName} — hisob menyusi`"
+            trigger-class="workshop-top-user"
+            @select="onAccountMenuSelect"
+          >
+            <template #trigger>
+              <span class="workshop-user-avatar" aria-hidden="true">{{
+                workshopUserInitials
+              }}</span>
+              <span class="workshop-top-user-text">{{ auth.displayName }}</span>
+            </template>
+          </ActionMenu>
         </div>
       </header>
 

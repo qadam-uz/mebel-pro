@@ -37,7 +37,11 @@ export function workshopNavItems(input: WorkshopNavInput): NavItem[] {
       item('Xodimlar mehnati', input.path('/workshop/finance/production'), 'Moliya', 'users'),
     )
     nav.push(item('Filiallar', input.path('/workshop/branches'), 'Tizim', 'store'))
-    nav.push(item('Xodimlar', input.path('/workshop/settings/users'), 'Tizim', 'users'))
+    nav.push(
+      // «Xodimlar ro'yxati», not «Xodimlar»: «Xodimlar mehnati» sits two groups
+      // above it and the two labels were indistinguishable at a glance (QAD-182).
+      item("Xodimlar ro'yxati", input.path('/workshop/settings/users'), 'Tizim', 'users'),
+    )
     nav.push(item('Sozlamalar', input.path('/workshop/settings'), 'Tizim', 'settings'))
     return nav
   }

@@ -181,8 +181,9 @@ async def test_consume_goes_negative_and_a_later_arrival_heals_it(db_session: As
         ).all()
     )
     assert "inventory.negative_stock" in codes
-    # The low-stock alert keeps firing past the threshold rather than going quiet.
-    assert "inventory.low_stock" in codes
+    # Low stock is not a notification any more (QAD-182) — the Ombor badge and
+    # the «Kam qolgan materiallar» filter carry that signal instead.
+    assert "inventory.low_stock" not in codes
 
 
 async def test_consume_works_for_a_material_dropped_from_the_branch_catalog(

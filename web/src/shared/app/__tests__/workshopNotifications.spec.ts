@@ -11,7 +11,7 @@ function notification(overrides: Partial<NotificationItem>): NotificationItem {
     id: 'notification-1',
     recipient_type: 'workshop_user',
     recipient_id: 'user-1',
-    event_code: 'inventory.low_stock',
+    event_code: 'inventory.negative_stock',
     entity_type: 'stock_item',
     entity_id: 'stock-1',
     payload: {},
@@ -31,7 +31,7 @@ describe('workshop notifications', () => {
     ).toBe(true)
     expect(
       workshopNotificationMatchesFilter(
-        notification({ event_code: 'inventory.low_stock', entity_type: 'stock_item' }),
+        notification({ event_code: 'inventory.negative_stock', entity_type: 'stock_item' }),
         'inventory',
       ),
     ).toBe(true)

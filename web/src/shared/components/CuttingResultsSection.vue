@@ -325,7 +325,7 @@ async function choose(result: CuttingResult) {
       <div class="client-empty">
         <div class="client-empty-icon"><Icon name="layers" /></div>
         <h3>Optimizer natijasi yo'q</h3>
-        <p>Qismlar saqlangach optimallashtirishni ishga tushiring.</p>
+        <p>Detallar saqlangach optimallashtirishni ishga tushiring.</p>
       </div>
     </div>
 
@@ -339,7 +339,7 @@ async function choose(result: CuttingResult) {
           <div v-if="chosenResult.status === 'invalidated'" class="client-banner warn">
             <span class="font-mono font-black">!</span>
             <span
-              >Qismlar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
+              >Detallar o'zgargani uchun bu natija eskirgan. Yangi optimallashtirishni ishga
               tushiring.</span
             >
           </div>
@@ -353,7 +353,7 @@ async function choose(result: CuttingResult) {
           <div v-if="!allPlaced" class="client-banner danger" role="alert">
             <span class="font-mono font-black">!</span>
             <span>
-              {{ requestedCount - placedCount }} ta qism panelga joylashmadi — qism o'lchamini
+              {{ requestedCount - placedCount }} ta detal panelga joylashmadi — detal o'lchamini
               kichraytiring yoki boshqa panel tanlang.
             </span>
           </div>

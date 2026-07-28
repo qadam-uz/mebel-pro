@@ -10,10 +10,11 @@ export interface ActionMenuItem {
 const props = withDefaults(
   defineProps<{
     items: ActionMenuItem[]
-    // Accessible name for the trigger (e.g. "Qism #2 amallari").
+    // Accessible name for the trigger (e.g. "Detal #2 amallari").
     label?: string
+    triggerClass?: string
   }>(),
-  { label: 'Amallar' },
+  { label: 'Amallar', triggerClass: 'mp-action-icon-button' },
 )
 const emit = defineEmits<{ select: [index: number] }>()
 
@@ -56,16 +57,19 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
 
 <template>
   <div ref="wrapRef" class="mp-action-menu-wrap" @keydown.esc.stop.prevent="close(true)">
+    <!-- Default trigger is the row's `⋯`. The slot lets a caller wear something
+         else — the topbar wraps the avatar with it (QAD-182) — without
+         reimplementing the outside-click, focus and Esc handling. -->
     <button
       ref="buttonRef"
       type="button"
-      class="mp-action-icon-button"
+      :class="triggerClass"
       :aria-expanded="open"
       aria-haspopup="menu"
       :aria-label="label"
       @click="toggle"
     >
-      <span aria-hidden="true">⋯</span>
+      <slot name="trigger"><span aria-hidden="true">⋯</span></slot>
     </button>
     <div v-if="open" ref="menuRef" class="mp-action-menu" role="menu">
       <button

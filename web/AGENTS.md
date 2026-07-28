@@ -117,7 +117,70 @@ The backend is the FastAPI service in `../backend` — REST JSON under `/api/v1`
 
 ## Design system
 
-[`DESIGN.md`](./DESIGN.md) is the deterministic design system contract — tokens, primitives,
-and the UX bar every screen must clear. Read it before designing or reviewing UI. For frontend
+[`DESIGN.md`](./DESIGN.md) is the design system itself — tokens, surfaces, type, components,
+copy rules, and the glossary. It describes **what the system is**; the rules for building
+against it are below, so the two do not drift into one document that is half specification and
+half instruction. Read `DESIGN.md` before designing or reviewing UI. For frontend
 implementation polish use the **frontend-design** skill (when your harness provides it); for
 where a test belongs, **testing-practices**.
+
+## UX bar — every screen clears these
+
+Structure before skin: know the user's job, the screen's states, and the keyboard path before
+choosing components or colors. Never polish a screen whose structure is wrong.
+
+- **Every state is designed, not just the populated one**: empty (first-run), empty (no
+  results), loading (skeletons sized like the real content — reserve space so nothing jumps),
+  error (named cause + retry), success. Every load that can hang gets a timeout → error path;
+  no infinite spinners.
+- **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
+  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
+  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
+  reads as a control and gets clicked.
+- **The keyboard reaches and operates everything** a mouse can, in an order matching the
+  layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
+  nothing in its place. Modals trap focus and return it to the trigger on close.
+- **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
+  Errors sit next to their field, name the fix in plain language, and never clear the form.
+  Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
+  the danger border, `aria-invalid`, and an `aria-describedby` message — and the message stays
+  **readable**: a field that opens a popover anchors it clear of its own error text, because a
+  message the operator can't see is the same as no message.
+- **Every action gives visible feedback within ~100ms**; submit buttons disable + show
+  progress during async work so they can't double-fire. Destructive actions name their
+  consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.
+- **Color is never the only signal** (pair with text/icon/position); text contrast ≥ 4.5:1
+  (≥3:1 for large text and UI marks). Touch targets ≥ 44×44 px of hittable area.
+- **One primary action per screen**, visually dominant. Body text stays at the 14px base
+  (dense back-office by design); captions never below 10.5px. No horizontal page scroll on
+  any viewport (self-contained scrollable tables excepted).
+- **Motion is cause-and-effect, not decoration**: ~150–300ms, `transform`/`opacity` only,
+  gone under `prefers-reduced-motion` (the global CSS already honors it).
+
+## Building against the system
+
+### Measuring under the root zoom
+
+Desktop paints at `zoom: 90%` on the root (≥769px), which splits the units the DOM reports:
+`getBoundingClientRect()` and `window.inner*` are **painted** pixels, while `offsetHeight` and
+anything written into `style.top/left` are **local** pixels the browser then scales. An overlay
+positioned straight from a measured rect lands at 90% of its anchor. Measure through
+`overlayRect()` / `overlayViewport()` (`shared/app/overlayGeometry.ts`) — never
+`getBoundingClientRect()` directly — so the whole calculation stays in one unit.
+
+Viewport units have the same split and no helper can hide it: `100dvh` / `100vw` resolve
+against the **unzoomed** viewport and the result is then scaled by the zoom, so a `100dvh`
+panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--app-vw`** tokens
+(`assets/main.css`, declared beside the `zoom` rule) instead of raw viewport units — they carry
+the compensation, and the ratio behind it (`--app-zoom`) is written down once. Raw `vh` / `vw`
+are still fine for a *cap* that only needs to stay under the viewport
+(`max-height: min(90vh, …)` on a modal).
+
+### Verifying UI work
+
+The check gates are necessary, not sufficient. Run the app, seed realistic data
+(`bash deploy/seed-demo.sh`), and drive the affected flow in a browser before calling it done —
+a green test run never shows a wrong layout, a broken empty state, or mangled copy. Where CSS
+is the subject, a screenshot confirms intent but only the computed or rendered value confirms
+effect: read `getComputedStyle` / the measured rect, not the picture.
+

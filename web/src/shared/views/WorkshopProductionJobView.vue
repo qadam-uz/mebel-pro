@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
               <b>{{ job.client_first_name }}</b>
             </span>
             <span class="prod-stat"
-              >Qismlar <b class="font-mono">{{ job.item_count }}</b></span
+              >Detallar <b class="font-mono">{{ job.item_count }}</b></span
             >
             <span v-if="job.planned_panels > 0" class="prod-stat">
               Panellar <b class="font-mono">{{ job.planned_panels }}</b>
@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
       <!-- Parts with per-side banding: the glyph mirrors the text for eyes,
            the text carries it for screen readers. -->
       <section class="card mt-4">
-        <div class="card-h"><h2>Qismlar</h2></div>
+        <div class="card-h"><h2>Detallar</h2></div>
         <div class="card-b !p-0">
           <div
             v-for="(item, index) in job.items"

@@ -195,6 +195,7 @@ class AdjustmentCreateRequest(BaseModel):
     Sign convention: positive = they owe us more, negative = we owe them more.
     """
 
+    branch_id: uuid.UUID
     supplier_id: uuid.UUID | None = None
     client_id: uuid.UUID | None = None
     amount_tiyin: int
@@ -205,6 +206,7 @@ class AdjustmentCreateRequest(BaseModel):
 class CounterpartyAdjustmentResponse(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    branch_id: uuid.UUID
     supplier_id: uuid.UUID | None
     client_id: uuid.UUID | None
     amount_tiyin: int

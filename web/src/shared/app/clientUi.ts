@@ -162,8 +162,8 @@ const CLIENT_ERROR_LABELS: Record<string, string> = {
   missing_cutting_rate: 'Ustaxona kesish narxini hali kiritmagan.',
   missing_edge_banding_rate: 'Ustaxona kromka yopishtirish narxini hali kiritmagan.',
   cutting_result_not_usable: "Bu natijadan hozircha buyurtma berib bo'lmaydi.",
-  part_too_large: 'Qism panel uchun juda katta.',
-  part_too_small: 'Qism juda kichik.',
+  part_too_large: 'Detal panel uchun juda katta.',
+  part_too_small: 'Detal juda kichik.',
   draft_limit_exceeded: `Saqlangan chizmalar chegarasi (${DRAFT_LIMIT}) to'ldi — eskisini o'chiring.`,
   invalid_name: 'Ismingizni kiriting.',
   profile_update_failed: "Profilni saqlab bo'lmadi. Qayta urinib ko'ring.",
@@ -231,7 +231,6 @@ export function clientIconPath(name: string): string {
 // title, so the bell never shows a raw snake/dotted event_code. Forward-compatible
 // with the order.* events the backend will add (CB-02).
 const NOTIFICATION_TITLES: Record<string, string> = {
-  'inventory.low_stock': 'Zaxira tugayapti',
   'inventory.negative_stock': "Ombor qoldig'i manfiy",
   'order.placed': 'Buyurtma joylandi',
   'order.confirmed': 'Buyurtma tasdiqlandi',

@@ -231,12 +231,14 @@ async def supplier_debts_index(
     db: Session,
     search: str | None = None,
     only_with_debt: bool = True,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtListResponse:
     return await list_supplier_debts(
         db,
         principal=principal,
         search=search,
         only_with_debt=only_with_debt,
+        branch_id=branch_id,
     )
 
 
@@ -247,6 +249,7 @@ async def supplier_debt_statement(
     db: Session,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtStatementResponse:
     return await get_supplier_statement(
         db,
@@ -254,6 +257,7 @@ async def supplier_debt_statement(
         supplier_id=supplier_id,
         date_from=date_from,
         date_to=date_to,
+        branch_id=branch_id,
     )
 
 
@@ -264,6 +268,7 @@ async def supplier_debt_statement_pdf(
     db: Session,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> Response:
     statement = await get_supplier_statement(
         db,
@@ -271,6 +276,7 @@ async def supplier_debt_statement_pdf(
         supplier_id=supplier_id,
         date_from=date_from,
         date_to=date_to,
+        branch_id=branch_id,
     )
     return _statement_pdf_response(statement, side="suppliers")
 
@@ -281,12 +287,14 @@ async def client_debts_index(
     db: Session,
     search: str | None = None,
     only_with_debt: bool = True,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtListResponse:
     return await list_client_debts(
         db,
         principal=principal,
         search=search,
         only_with_debt=only_with_debt,
+        branch_id=branch_id,
     )
 
 
@@ -297,6 +305,7 @@ async def client_debt_statement(
     db: Session,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtStatementResponse:
     return await get_client_statement(
         db,
@@ -304,6 +313,7 @@ async def client_debt_statement(
         client_id=client_id,
         date_from=date_from,
         date_to=date_to,
+        branch_id=branch_id,
     )
 
 
@@ -314,6 +324,7 @@ async def client_debt_statement_pdf(
     db: Session,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> Response:
     statement = await get_client_statement(
         db,
@@ -321,6 +332,7 @@ async def client_debt_statement_pdf(
         client_id=client_id,
         date_from=date_from,
         date_to=date_to,
+        branch_id=branch_id,
     )
     return _statement_pdf_response(statement, side="clients")
 

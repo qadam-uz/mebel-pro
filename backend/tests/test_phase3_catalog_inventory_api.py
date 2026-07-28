@@ -413,7 +413,10 @@ async def test_inventory_stock_in_adjustment_notifications_and_pricing(
     assert [row["type"] for row in transactions_today.json()] == ["adjust", "stock_in"]
     assert transactions_before_today.status_code == 200
     assert transactions_before_today.json() == []
-    assert notification_count == 1
+    # Stock movement raises no notification of its own any more: low stock is a
+    # badge on the Ombor row, not a bell entry (QAD-182). Only a balance that
+    # actually went negative still notifies.
+    assert notification_count == 0
     assert supplier_count == 1
     assert transaction_count == 2
     assert action_count >= 3

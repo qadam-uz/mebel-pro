@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { clientErrorLabel } from '@/shared/app/clientUi'
 import { useRoleConfig } from '@/shared/app/roleConfig'
@@ -16,16 +16,15 @@ const config = useRoleConfig()
 const auth = useAuthStore()
 const toast = useToast()
 const workshop = useWorkshopStore()
+const route = useRoute()
 const router = useRouter()
 const {
   sessions,
-  logoutCurrentOpen,
   logoutEverywhereOpen,
   loggingOut,
   loadSessions,
   deviceLabel,
   revokeRow,
-  logoutCurrent,
   logoutEverywhere,
 } = useSessions()
 
@@ -37,12 +36,13 @@ const error = ref<string | null>(null)
 const isSaving = ref(false)
 
 const accountLabel = computed(() => auth.displayName)
-const scopeLabel = computed(() => {
-  if (auth.me?.principal_type === 'workshop_user') {
-    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : `${auth.me.grants.length} ruxsat`
-  }
-  if (auth.me?.principal_type === 'platform_user') return 'Platforma operatori'
-  return auth.me?.preferred_branch_id ? 'Afzal filial tanlangan' : 'Afzal filial tanlanmagan'
+// The API's own words never reach the screen (QAD-182): `active` is a value in
+// a column, «Faol» is what a person reads.
+const accountStatusLabel = computed(() => {
+  const status = auth.me?.status ?? 'active'
+  if (status === 'active') return 'Faol'
+  if (status === 'blocked') return 'Bloklangan'
+  return status
 })
 const workshopProfileSubtitle = computed(() => {
   const role = auth.me?.is_owner ? 'Rahbar' : 'Xodim'
@@ -95,6 +95,9 @@ async function savePassword() {
 }
 
 onMounted(async () => {
+  // The topbar account menu deep-links here (QAD-182); a forced password change
+  // still wins, because that is the only thing the user can act on.
+  if (route.query.tab === 'sessions') workshopProfileTab.value = 'sessions'
   if (auth.me?.password_reset_required) workshopProfileTab.value = 'password'
   // Branch context, not the workshop settings row: this page is open to every
   // staff member and `/workshop/settings` is owner-only, so the old call 403'd
@@ -111,13 +114,6 @@ onMounted(async () => {
         <h1>Mening profilim</h1>
         <p class="sub">{{ workshopProfileSubtitle }}</p>
       </div>
-      <button
-        type="button"
-        class="mp-button mp-button-outline text-danger"
-        @click="logoutCurrentOpen = true"
-      >
-        Chiqib ketish
-      </button>
     </div>
 
     <div v-if="auth.me?.password_reset_required" class="client-banner warn">
@@ -199,15 +195,9 @@ onMounted(async () => {
           </div>
           <div class="row-item">
             <div>
-              <div class="nm">Scope</div>
+              <div class="nm">Holat</div>
             </div>
-            <div class="meta">{{ scopeLabel }}</div>
-          </div>
-          <div class="row-item">
-            <div>
-              <div class="nm">Status</div>
-            </div>
-            <div class="meta">{{ auth.me?.status ?? 'active' }}</div>
+            <div class="meta">{{ accountStatusLabel }}</div>
           </div>
         </div>
       </div>
@@ -330,18 +320,6 @@ onMounted(async () => {
       </div>
     </section>
 
-    <ConfirmDialog
-      :open="logoutCurrentOpen"
-      title="Chiqib ketish"
-      message="Ustaxona kabinetidan chiqasiz."
-      confirm-label="Chiqish"
-      cancel-label="Bekor qilish"
-      busy-label="Chiqilmoqda"
-      danger
-      :busy="loggingOut"
-      @cancel="logoutCurrentOpen = false"
-      @confirm="logoutCurrent"
-    />
     <ConfirmDialog
       :open="logoutEverywhereOpen"
       title="Hammasi chiqsin"

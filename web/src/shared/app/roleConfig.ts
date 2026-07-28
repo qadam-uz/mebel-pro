@@ -122,7 +122,7 @@ export const workshopConfig: RoleConfig = {
       icon: 'wallet',
     },
     { label: 'Filiallar', to: '/workshop/branches', group: 'Tizim', icon: 'store' },
-    { label: 'Xodimlar', to: '/workshop/settings/users', group: 'Tizim', icon: 'users' },
+    { label: "Xodimlar ro'yxati", to: '/workshop/settings/users', group: 'Tizim', icon: 'users' },
     { label: 'Sozlamalar', to: '/workshop/settings', group: 'Tizim', icon: 'settings' },
   ],
 }

@@ -2,10 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
-import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatStockQuantity } from '@/shared/formatters'
 import {
@@ -23,25 +21,23 @@ const initialRange = presetRange('month', today)
 const datePreset = ref<DateRangePreset>('month')
 const dateFrom = ref(initialRange.from ?? '')
 const dateTo = ref(initialRange.to ?? '')
-const branchId = ref('all')
-
 const financePermissions = [p.manageFinance, p.viewFinanceReports]
 const canViewFinance = computed(() => permissions.canAny(financePermissions))
-const accessibleBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, financePermissions),
-)
 
-const branchOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: 'Barcha filiallar' },
-  ...accessibleBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
-])
+// The topbar picker is the only branch control on the page (QAD-182): the
+// duplicate page dropdown is gone, and the report reads the same context every
+// other branch-scoped page reads.
+const activeBranchId = computed(() => workshop.selectedBranchContext ?? null)
 
-function applyContextBranch() {
-  const contextBranchId = workshop.selectedBranchContext
-  if (!contextBranchId) return
-  if (!accessibleBranches.value.some((branch) => branch.id === contextBranchId)) return
-  branchId.value = contextBranchId
-}
+// What this branch produced in the period, under the per-worker rows.
+const productionTotals = computed(() => {
+  const rows = finance.production?.rows ?? []
+  return {
+    panelsCut: rows.reduce((sum, row) => sum + row.panels_cut, 0),
+    cutCount: rows.reduce((sum, row) => sum + row.cut_count, 0),
+    ordersBanded: rows.reduce((sum, row) => sum + row.orders_banded, 0),
+  }
+})
 
 // One entry per edge material / thickness so the cell can stack them as lines
 // (label left, metres right) instead of one unreadable `·`-joined string.
@@ -81,20 +77,18 @@ async function refresh() {
   await finance.loadProduction({
     date_from: dateFrom.value,
     date_to: dateTo.value,
-    branch_id: branchId.value === 'all' ? null : branchId.value,
+    branch_id: activeBranchId.value,
   })
 }
 
 onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
-  applyContextBranch()
   if (canViewFinance.value) await refresh()
 })
 
-watch(branchId, (value) => {
-  if (value !== 'all') workshop.setSelectedBranchContext(value)
-  void refresh()
-})
+// Switching branch in the topbar reloads the report — the figures must never
+// lag behind the picker above them.
+watch(activeBranchId, () => void refresh())
 
 // Date range auto-applies now that the explicit "Qo'llash" button is gone.
 let dateTimer: number | undefined
@@ -102,13 +96,6 @@ watch([dateFrom, dateTo], () => {
   window.clearTimeout(dateTimer)
   dateTimer = window.setTimeout(() => void refresh(), 250)
 })
-
-watch(
-  () => workshop.selectedBranchContext,
-  () => {
-    applyContextBranch()
-  },
-)
 </script>
 
 <template>
@@ -126,7 +113,6 @@ watch(
     <!-- Bare filter row on the page background, like every other page — this was
          the only view wrapping its filters in a surface card. -->
     <div v-else class="mp-filters">
-      <ProjectDropdown v-model="branchId" label="Filial" :options="branchOptions" top-label />
       <DateRangePicker
         v-model:preset="datePreset"
         v-model:date-from="dateFrom"
@@ -167,9 +153,9 @@ watch(
           <thead class="bg-sunk text-xs uppercase text-ink-muted">
             <tr>
               <th class="px-5 py-3">Xodim</th>
-              <th class="px-5 py-3">Kesilgan panel</th>
-              <th class="px-5 py-3">Kesimlar</th>
-              <th class="px-5 py-3">Kromka qilingan buyurtma</th>
+              <th class="px-5 py-3 text-right">Kesilgan panel</th>
+              <th class="px-5 py-3 text-right">Kesimlar</th>
+              <th class="px-5 py-3 text-right">Kromka qilingan buyurtma</th>
               <th class="px-5 py-3">Kromka metri</th>
               <th class="px-5 py-3">Qalinlik jamlanmasi</th>
             </tr>
@@ -177,9 +163,15 @@ watch(
           <tbody class="divide-y divide-hairline">
             <tr v-for="row in finance.production.rows" :key="row.user_id">
               <td class="px-5 py-3 font-bold text-ink">{{ row.full_name }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.panels_cut }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.cut_count }}</td>
-              <td class="px-5 py-3 font-mono text-xs">{{ row.orders_banded }}</td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.panels_cut }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.cut_count }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs tabular-nums">
+                {{ row.orders_banded }}
+              </td>
               <td class="px-5 py-3 text-xs">
                 <span v-if="edgeLengthLines(row).length === 0" class="text-ink-muted">
                   Kromka metri yo'q
@@ -212,6 +204,22 @@ watch(
               </td>
             </tr>
           </tbody>
+          <tfoot v-if="finance.production.rows.length > 1" class="border-t border-hairline-strong">
+            <tr class="bg-sunk">
+              <td class="px-5 py-3 font-bold text-ink">Jami</td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.panelsCut }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.cutCount }}
+              </td>
+              <td class="px-5 py-3 text-right font-mono text-xs font-bold tabular-nums">
+                {{ productionTotals.ordersBanded }}
+              </td>
+              <td class="px-5 py-3"></td>
+              <td class="px-5 py-3"></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>
