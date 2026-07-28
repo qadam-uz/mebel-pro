@@ -8,7 +8,13 @@ import {
   requiredText,
   type FieldErrors,
 } from '@/shared/app/adminValidation'
-import { dropdownOption, materialStatusLabel, materialStatusTone } from '@/shared/app/adminUi'
+import {
+  adminErrorMessage,
+  dropdownOption,
+  materialStatusLabel,
+  materialStatusTone,
+} from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -121,7 +127,7 @@ async function save() {
       focusFirstFieldError(fieldErrors, fieldOrder, fieldIds)
     } else {
       saveError.value = 'manufacturer_save_failed'
-      toast.danger('Ishlab chiqaruvchi saqlanmadi')
+      toast.danger(adminErrorMessage(apiErrorCode(error), 'Ishlab chiqaruvchi saqlanmadi.'))
     }
   } finally {
     saving.value = false
@@ -140,8 +146,10 @@ async function confirmStatus() {
   try {
     await admin.setManufacturerStatus(target.row.id, target.status)
     toast.success(target.status === 'active' ? 'Faollashtirildi' : 'Faol emas qilindi')
-  } catch {
-    toast.danger('Amal bajarilmadi')
+  } catch (error) {
+    toast.danger(
+      adminErrorMessage(apiErrorCode(error), "Ishlab chiqaruvchi holatini o'zgartirib bo'lmadi."),
+    )
   } finally {
     actionId.value = null
   }
@@ -319,7 +327,7 @@ onMounted(async () => {
                 <textarea
                   id="mfr-note"
                   v-model="form.note"
-                  placeholder="LDSP . asosiy brand"
+                  placeholder="LDSP · asosiy brend"
                 ></textarea>
               </label>
             </div>

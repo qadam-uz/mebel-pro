@@ -2,7 +2,11 @@
 title: Cutting
 status: draft
 owner: shape
+<<<<<<< HEAD
 updated: 2026-07-23
+=======
+updated: 2026-07-25
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
 order: 40
 ---
 
@@ -62,8 +66,13 @@ is stamped for audit; replacing a solver later doesn't touch past results.
 | `draft_id`                                                         | UUID?      | the draft this result came from; null once `confirmed` (the draft is gone, the result outlives it via `order_id`)                                                                    |
 | `algorithm_name` / `algorithm_version`                             | text       | internal audit stamp: `cutting-engine/native`, `cutting-engine/packingsolver`, or `cutting-engine/hybrid` plus engine/provider version; `imported-2dplace-map` / `map-1` for MAP imports. Not a client-visible choice |
 | `source`                                                           | enum       | `optimizer` for generated layouts · `imported_map` for a 2D-Place MAP layout committed from import                                                                                   |
+<<<<<<< HEAD
 | `status`                                                           | enum       | `candidate` (the draft's current result) · `confirmed` (chosen and bound to an order)                                                                                                |
 | `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the global constants at run time; imported MAP results store `0` / `0` because the external layout is kept as-is                                                         |
+=======
+| `status`                                                           | enum       | `candidate` (one of N from an optimise run) · `confirmed` (chosen and bound to an order)                                                                                             |
+| `kerf_mm` / `edge_trim_mm`                                         | int        | snapshot of the draft's branch settings (or the platform defaults for a branch-less draft) at run time; imported MAP results store `0` / `0` because the external layout is kept as-is |
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
 | `panels_used_by_material`                                          | json       | `{ "<material_id>": 3, "<material_id>": 1 }` — total panels needed per `panel` material in this result (≤ 20 per material)                                                           |
 | `waste_percentage`                                                 | numeric    | 0.0–1.0; weighted across all panel materials in the result                                                                                                                           |
 | `total_cut_length_mm` / `total_edge_length_mm`                     | int        | feed pricing metrics                                                                                                                                                                 |

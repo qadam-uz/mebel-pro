@@ -248,14 +248,25 @@ async def test_revision_apply_rebinds_result_items_and_price(
     old_result_id = uuid.UUID(str(order["cutting_result_id"]))
     old_total = int(str(order["total_tiyin"]))
 
-    # A discount that must NOT survive the revision.
+    # A discount and a surcharge that must NOT survive the revision.
     discounted = await client.post(
         f"/api/v1/workshop/orders/{order['id']}/discount",
         headers=_auth(access),
         json={"version": order["version"], "kind": "fixed", "value": 10_000, "reason": "loyal"},
     )
     assert discounted.status_code == 200, discounted.text
-    version = discounted.json()["version"]
+    surcharged = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/surcharge",
+        headers=_auth(access),
+        json={
+            "version": discounted.json()["version"],
+            "kind": "fixed",
+            "value": 6_000,
+            "reason": "rush",
+        },
+    )
+    assert surcharged.status_code == 200, surcharged.text
+    version = surcharged.json()["version"]
 
     await _revised_draft(
         client,
@@ -276,6 +287,8 @@ async def test_revision_apply_rebinds_result_items_and_price(
     assert updated["cutting_result_id"] != str(old_result_id)
     assert updated["discount_tiyin"] == 0
     assert updated["discount_reason"] is None
+    assert updated["surcharge_tiyin"] == 0
+    assert updated["surcharge_reason"] is None
     assert updated["total_tiyin"] > old_total
     assert [item["quantity"] for item in updated["items"]] == [3]
 
@@ -291,9 +304,11 @@ async def test_revision_apply_rebinds_result_items_and_price(
     assert event["to_status"] == "confirmed"
     assert event["actor_user_id"] == str(owner_id)
     assert event["reason"] == "client asked for one more"
-    # The captured previous total is the discounted one the client last saw.
-    assert event["metadata"]["previous_total_tiyin"] == old_total - 10_000
+    # The captured previous total is the adjusted one the client last saw
+    # (old_total - 10_000 discount + 6_000 surcharge).
+    assert event["metadata"]["previous_total_tiyin"] == old_total - 10_000 + 6_000
     assert event["metadata"]["discount_cleared_tiyin"] == 10_000
+    assert event["metadata"]["surcharge_cleared_tiyin"] == 6_000
 
     # The superseded result and the revision draft are gone; the new result is
     # confirmed and bound.
@@ -321,7 +336,7 @@ async def test_revision_apply_rebinds_result_items_and_price(
         )
     )
     assert notification is not None
-    assert notification.payload["previous_total_tiyin"] == old_total - 10_000
+    assert notification.payload["previous_total_tiyin"] == old_total - 10_000 + 6_000
 
     detail = await client.get(f"/api/v1/workshop/orders/{order['id']}", headers=_auth(access))
     assert detail.json()["revision_draft_id"] is None

@@ -8,10 +8,9 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { expectOk } from "./helpers";
+import { databaseUrl, expectOk } from "./helpers";
 
 const execFileAsync = promisify(execFile);
-const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
 const ownerReadyPassword = "OwnerReady123";
 const passwordLabel = /^(Password|Parol)$/;
@@ -46,18 +45,6 @@ function phoneFor(id: string, offset: number) {
   let hash = offset;
   for (const char of id) hash = (hash * 33 + char.charCodeAt(0)) % 10_000_000;
   return `+99890${String(hash).padStart(7, "0")}`;
-}
-
-function defaultWorkingHours() {
-  return {
-    monday: { open: "09:00", close: "18:00" },
-    tuesday: { open: "09:00", close: "18:00" },
-    wednesday: { open: "09:00", close: "18:00" },
-    thursday: { open: "09:00", close: "18:00" },
-    friday: { open: "09:00", close: "18:00" },
-    saturday: { open: "10:00", close: "16:00" },
-    sunday: { open: null, close: null },
-  };
 }
 
 async function seedPlatform(login: string) {
@@ -118,7 +105,6 @@ async function provisionWorkshop(
         name: `Order Branch ${id}`,
         address: "Tashkent, Test",
         phone: phoneFor(id, 3),
-        working_hours: defaultWorkingHours(),
       },
       owner: {
         login: ownerLogin,
@@ -467,11 +453,10 @@ test("client places an order and workshop completes it through production queues
   await page.getByRole("button", { name: "Buyurtmani tasdiqlash" }).click();
 
   await expect(page.getByText("Buyurtma berildi")).toBeVisible();
-  const orderText = await page
-    .getByText(/ORD-\d{4}-\d{6}/)
-    .first()
-    .textContent();
-  const orderNumber = orderText?.match(/ORD-\d{4}-\d{6}/)?.[0];
+  // `#26-14-0003` — year, branch number, per-branch sequence (sales.md).
+  const numberPattern = /#\d{2}-\d+-\d{4}/;
+  const orderText = await page.getByText(numberPattern).first().textContent();
+  const orderNumber = orderText?.match(numberPattern)?.[0];
   expect(orderNumber).toBeTruthy();
 
   const baseUrl = new URL(page.url()).origin;
@@ -494,8 +479,8 @@ test("client places an order and workshop completes it through production queues
   const workshopOrderRow = workshopPage.getByRole("row", {
     name: new RegExp(orderNumber as string),
   });
-  // The table row itself opens the order detail (the kebab is only for status
-  // actions); click the order-number cell to navigate.
+  // The table row itself opens the order detail (status actions now live only
+  // on the detail page); click the order-number cell to navigate.
   await workshopOrderRow.getByText(orderNumber as string).click();
 
   await expect(
@@ -507,18 +492,19 @@ test("client places an order and workshop completes it through production queues
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
 
-  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
-  await chooseOption(
-    workshopPage,
-    /Kromka yopishtiruvchi/,
-    new RegExp(setup.ownerLogin),
+  // Picking a worker applies the assignment immediately — no separate save tap.
+  const cutterAssigned = workshopPage.waitForResponse(
+    (response) => response.url().includes("/assign") && response.ok(),
   );
-  // Assignment is metadata now — the order stays confirmed (queued in the
-  // master's station) until the job is actually started.
-  await workshopPage.getByRole("button", { name: "Tayinlash", exact: true }).click();
+  await chooseOption(workshopPage, /Kesuvchi/, new RegExp(setup.ownerLogin));
+  await cutterAssigned;
+  // Assignment is metadata — the order stays confirmed (queued in the
+  // master's station) until the job is actually started. The edger slot may
+  // stay open: cutting starts on a cutter-only assignment; the edger gate
+  // lives at the banding start.
   await expect(
     workshopPage.getByRole("button", { name: "Kesishni boshlash" }),
-  ).toBeVisible();
+  ).toBeEnabled();
   await expect(
     workshopPage.getByText("Tasdiqlangan", { exact: true }).first(),
   ).toBeVisible();
@@ -526,6 +512,21 @@ test("client places an order and workshop completes it through production queues
   await expect(
     workshopPage.getByText("Kesilmoqda", { exact: true }).first(),
   ).toBeVisible();
+
+  // The open edger slot carries a nudge while the saw runs; filling it mid-cut
+  // is the supported path (the edger locks only once banding starts).
+  await expect(
+    workshopPage.getByText(/kromka boshlanishidan oldin tanlang/i),
+  ).toBeVisible();
+  const edgerAssigned = workshopPage.waitForResponse(
+    (response) => response.url().includes("/assign") && response.ok(),
+  );
+  await chooseOption(
+    workshopPage,
+    /Kromka yopishtiruvchi/,
+    new RegExp(setup.ownerLogin),
+  );
+  await edgerAssigned;
 
   // The station terminal: the started job sits pinned as "Hozirgi ish" with
   // the worker's Tugatdim action behind a plain success confirm.

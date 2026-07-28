@@ -40,12 +40,9 @@ class PlatformUser(UUIDPrimaryKey, Timestamped, Base):
 class WorkshopUser(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "workshop_users"
     __table_args__ = (
-        Index(
-            "uq_workshop_users_workshop_login_ci",
-            "workshop_id",
-            func.lower(text("login")),
-            unique=True,
-        ),
+        # Globally unique, not per workshop: the login alone must name exactly one
+        # account, so sign-in is a single lookup and the per-account lockout holds.
+        Index("uq_workshop_users_login_ci", func.lower(text("login")), unique=True),
         Index(
             "uq_workshop_users_one_owner_per_workshop",
             "workshop_id",
@@ -107,6 +104,8 @@ class PermissionGrant(UUIDPrimaryKey, Base):
 class Client(UUIDPrimaryKey, Timestamped, Base):
     __tablename__ = "clients"
     __table_args__ = (
+        # AB-119: signup-rate counters on the platform dashboard scan by date.
+        Index("ix_clients_created_at", "created_at"),
         UniqueConstraint("phone", name="uq_clients_phone"),
         CheckConstraint("length(name) >= 1 AND length(name) <= 80", name="ck_clients_name_len"),
     )

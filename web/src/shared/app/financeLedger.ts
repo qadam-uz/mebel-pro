@@ -1,25 +1,78 @@
 export type FinanceLedgerTab = 'expense' | 'income'
 
-export interface FinanceOrderReference {
-  id: string
-  order_number: string
-  contact_name?: string | null
-}
-
 export function financeLedgerTabFromPath(path: string): FinanceLedgerTab {
   return path.endsWith('/income') ? 'income' : 'expense'
 }
 
-export function financeOrderReferenceLabel(
+export interface OrderSettlementView {
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
+}
+
+/** The order an income points at, as the income row itself carries it. */
+export interface FinanceIncomeOrder extends OrderSettlementView {
+  order_number: string
+  contact_name: string
+}
+
+/**
+ * The settlement as the income form must frame it.
+ *
+ * When editing, the income's own amount already sits inside the order's
+ * `recorded_tiyin`, so the stored balance answers a question nobody is asking
+ * ("what is left if this payment stands untouched?"). Pulling the row back out
+ * gives the frame the operator is actually in: what the other records cover,
+ * and how much this one may take. Pass null when creating and the settlement
+ * comes through unchanged.
+ */
+export function incomeSettlementView(
+  settlement: OrderSettlementView | null | undefined,
+  editingAmountTiyin: number | null,
+): OrderSettlementView | null {
+  if (!settlement) return null
+  const own = editingAmountTiyin ?? 0
+  return {
+    total_tiyin: settlement.total_tiyin,
+    recorded_tiyin: Math.max(settlement.recorded_tiyin - own, 0),
+    balance_tiyin: settlement.balance_tiyin + own,
+  }
+}
+
+/**
+ * The largest order payment still accepted, or null when nothing caps it
+ * (other income, or no order picked yet).
+ *
+ * Deliberately the same number the form shows as «Qoldiq» — one formula, so
+ * the summary line and the fill button can never disagree. It reproduces the
+ * server's `exclude_income_id` cap exactly.
+ */
+export function orderPaymentCeilingTiyin(
+  settlement: OrderSettlementView | null | undefined,
+  editingAmountTiyin: number | null,
+): number | null {
+  return incomeSettlementView(settlement, editingAmountTiyin)?.balance_tiyin ?? null
+}
+
+/** Whether the typed amount is over what the order can still take. */
+export function exceedsOrderBalance(
+  amountTiyin: number | null,
+  ceilingTiyin: number | null,
+): boolean {
+  if (ceilingTiyin === null || amountTiyin === null) return false
+  return amountTiyin > ceilingTiyin
+}
+
+/**
+ * The ledger's BUYURTMA cell. The order travels on the income row, so no order
+ * lookup can fail here — the raw-id fallback only survives for an income whose
+ * order the server could not resolve at all.
+ */
+export function financeIncomeOrderLabel(
   orderId: string | null,
-  orders: FinanceOrderReference[],
-  currentOrder?: FinanceOrderReference | null,
-) {
+  order: FinanceIncomeOrder | null | undefined,
+): string {
   if (!orderId) return '—'
-  const order =
-    currentOrder?.id === orderId
-      ? currentOrder
-      : orders.find((candidate) => candidate.id === orderId)
   if (!order) return orderId
-  return order.contact_name ? `${order.order_number} · ${order.contact_name}` : order.order_number
+  return `${order.order_number} · ${order.contact_name}`
 }

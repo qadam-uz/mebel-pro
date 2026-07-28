@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 
 import {
   adminDateTime,
+  adminErrorMessage,
   adminNotificationDestination,
   adminNotificationTitle,
   dropdownOption,
@@ -44,7 +45,14 @@ async function markRead(id: string) {
   markingId.value = id
   try {
     await notifications.markRead(id)
-    if (notifications.actionError) toast.danger("Belgilab bo'lmadi")
+    if (notifications.actionError) {
+      toast.danger(
+        adminErrorMessage(
+          notifications.actionError,
+          "Bildirishnomani o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.",
+        ),
+      )
+    }
   } finally {
     markingId.value = null
   }
@@ -56,8 +64,14 @@ function markOpened(item: NotificationItem) {
 
 async function markAll() {
   await notifications.markAllRead()
-  if (notifications.actionError) toast.danger("Belgilab bo'lmadi")
-  else toast.success("Hammasi o'qilgan deb belgilandi")
+  if (notifications.actionError) {
+    toast.danger(
+      adminErrorMessage(
+        notifications.actionError,
+        "Hammasini o'qilgan deb belgilab bo'lmadi. Qayta urinib ko'ring.",
+      ),
+    )
+  } else toast.success("Hammasi o'qilgan deb belgilandi")
 }
 
 function loadFirstPage() {

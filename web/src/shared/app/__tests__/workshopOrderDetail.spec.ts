@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  discountDraftFromOrder,
   isRevisionEvent,
   orderPhaseSteps,
   orderReworkCount,
-  parseDiscountDraft,
+  parseOrderAdjustmentDraft,
   productionTimelineDetails,
   revisionTimelineDetails,
   workshopOrderListActions,
@@ -32,41 +31,46 @@ describe('workshop order detail helpers', () => {
     banding_started_at: null,
   }
 
-  it('does not prefill a discount form from the computed discount amount', () => {
-    expect(
-      discountDraftFromOrder({
-        discount_reason: 'Loyal customer',
-      }),
-    ).toEqual({ kind: 'fixed', value: '', reason: 'Loyal customer' })
-  })
-
-  it('parses a deliberate percent/fixed discount draft', () => {
-    expect(parseDiscountDraft('percent', '10', 'Promo')).toEqual({
+  it('parses a percent adjustment as a whole percent', () => {
+    expect(parseOrderAdjustmentDraft('percent', '10', 'Promo')).toEqual({
       ok: true,
       payload: { kind: 'percent', value: 10, reason: 'Promo' },
     })
-    expect(parseDiscountDraft('fixed', '25000', 'Round down')).toEqual({
+  })
+
+  it("converts a fixed adjustment from so'm to tiyin, grouping included", () => {
+    // "25 000" so'm → 2 500 000 tiyin; the grouping space that sanitizeMoneyInput
+    // allows must not break the parse (the old Number() path returned NaN here).
+    expect(parseOrderAdjustmentDraft('fixed', '25 000', 'Round down')).toEqual({
       ok: true,
-      payload: { kind: 'fixed', value: 25000, reason: 'Round down' },
+      payload: { kind: 'fixed', value: 2_500_000, reason: 'Round down' },
     })
-    expect(parseDiscountDraft('fixed', '0', 'Remove discount')).toEqual({
+    expect(parseOrderAdjustmentDraft('fixed', '50000', 'Rush')).toEqual({
       ok: true,
-      payload: { kind: 'fixed', value: 0, reason: 'Remove discount' },
+      payload: { kind: 'fixed', value: 5_000_000, reason: 'Rush' },
     })
   })
 
-  it('rejects invalid discount drafts with localized copy', () => {
-    expect(parseDiscountDraft('fixed', '-1', 'Reason')).toEqual({
+  it('rejects invalid adjustment drafts with localized copy', () => {
+    expect(parseOrderAdjustmentDraft('fixed', '0', 'Reason')).toEqual({
       ok: false,
-      message: "Chegirma qiymatini manfiy bo'lmagan butun son qilib kiriting.",
+      message: "Qiymatni to'g'ri kiriting — masalan: 50 000.",
     })
-    expect(parseDiscountDraft('fixed', '1000', '   ')).toEqual({
+    expect(parseOrderAdjustmentDraft('fixed', '', 'Reason')).toEqual({
       ok: false,
-      message: 'Chegirma sababini kiriting.',
+      message: "Qiymatni to'g'ri kiriting — masalan: 50 000.",
     })
-    expect(parseDiscountDraft('percent', '120', 'Promo')).toEqual({
+    expect(parseOrderAdjustmentDraft('fixed', '1000', '   ')).toEqual({
       ok: false,
-      message: "Foiz 0 dan 100 gacha bo'lishi kerak.",
+      message: 'Sababni kiriting.',
+    })
+    expect(parseOrderAdjustmentDraft('percent', '120', 'Promo')).toEqual({
+      ok: false,
+      message: 'Foizni 1 dan 100 gacha butun son qilib kiriting.',
+    })
+    expect(parseOrderAdjustmentDraft('percent', '0', 'Promo')).toEqual({
+      ok: false,
+      message: 'Foizni 1 dan 100 gacha butun son qilib kiriting.',
     })
   })
 

@@ -2,7 +2,7 @@
 title: Finance
 status: draft
 owner: shape
-updated: 2026-07-18
+updated: 2026-07-27
 order: 55
 ---
 
@@ -30,6 +30,13 @@ Money the workshop received. Recorded by a user with `manage_finance`. Every inc
 **type**; one type is **`order_payment`** and carries the order it settles, the rest
 (`other`) carry none.
 
+An order-payment income **carries its order's number, contact name, and settlement**
+(total · recorded · balance) on the record itself. Finance therefore never reads the order
+back to name or price it — the accountant who keys the payments holds no order permission,
+and a settled order has already left the payable set, so both of the obvious sources fail
+exactly when the ledger needs them. The figures are resolved for the whole listed page in
+one aggregate, not per row.
+
 ### Operations (`manage_finance`)
 
 - **Record an income** — `type`; `order_id` (**required iff `order_payment`**, must be an
@@ -40,6 +47,14 @@ separate `card` method); `received_on` (date);
   optional `note` (bank reference / receipt id) and receipt scan. The recording user is
   logged. Several order payments may be recorded for one order (advance then balance); their
   running sum is validated **≤ the order's `total_tiyin`**.
+- **List payable orders** — the candidate set an order payment may name: every order of the
+  workshop (branch-scoped, searchable by order number, contact name, or contact phone) whose
+  **balance is still above zero**, newest first. Deliberately **not** filtered by production
+  status — money most often changes hands at pickup, so a `completed` order is the likeliest
+  target. Only two exclusions: a fully-paid order (offering it invites a double payment the
+  cap would reject anyway) and a **cancelled** order (v1 has no refund flow — see the edge
+  cases below). Each candidate carries its own total, recorded sum, and balance, so the form
+  can show what is owed without opening the order. Same permission as recording the income.
 - **Edit an income** — only while `recorded`; audited.
 - **Void an income** — `status = voided` with a **mandatory reason** (used to correct a
   mistake, e.g. a client disputes "I paid, it's not marked"). A voided income doesn't appear
@@ -67,6 +82,15 @@ Money the workshop spent — rent, utilities, consumables it buys, and **staff s
 - **Record an expense** — `branch_id` (nullable; a workshop-level cost like HQ rent has no
   branch), `category`, `amount_tiyin`, `incurred_on`, `description`, optional `vendor`,
   optional receipt scan. The recording user is logged.
+- **Record an invoice payment** — the same operation with a
+  [supplier invoice](../entities/inventory.md#supplier-invoice) named instead of a branch and
+  a supplier: both are taken from the invoice. Category defaults to `raw_materials` and stays
+  editable — invoices almost always carry materials, but some shops book deliveries as
+  `supplies`, and forcing it would be worse than defaulting it. Paying more than the
+  outstanding balance succeeds; the caller is warned, not blocked.
+- **List payable invoices** — unpaid and partially paid invoices across the workshop's
+  branches, newest first, searchable by invoice number and supplier name. This is what the
+  expense form's picker reads.
 - **Edit an expense** — only while `recorded`; audited.
 - **Void an expense** — `status = voided` with a **mandatory reason**. Voided expenses are
   excluded from reports. No delete.
@@ -118,7 +142,7 @@ paired with text.
 The two folds:
 
 > supplier balance = Σ payments (recorded expenses linked to the supplier)
-> − Σ deliveries (priced stock-ins from the supplier)
+> − Σ deliveries (supplier invoice totals, post discount and surcharge)
 > ± Σ adjustments (recorded, signed)
 >
 > client balance = Σ order totals (status `confirmed` → `completed`, never `new` or `cancelled`)
@@ -136,11 +160,16 @@ trust the numbers).
 
 Three sources feed the supplier side:
 
-- **Deliveries** — `stock_in` transactions carrying a purchase total
-  ([`inventory.md`](../entities/inventory.md)). Pre-pricing history rows carry no price
-  and contribute zero — a supplier's true position on go-live day is entered as one
-  opening-balance adjustment, not backfilled.
-- **Payments** — any `recorded` expense with a `supplier_id`, whatever its category.
+- **Deliveries** — [supplier invoices](../entities/inventory.md#supplier-invoice), folded at
+  `total_tiyin`, i.e. **after** the discount the supplier put on the document. This is the
+  grain the conversation actually happens in: an accountant negotiates in invoice totals, and
+  summing raw line prices can never see a document-level discount, so the number here and the
+  number the supplier quotes would never agree. An invoice with no supplier takes no part.
+  Arrivals recorded before pricing shipped total zero — a supplier's true position on go-live
+  day is entered as one opening-balance adjustment, not backfilled.
+- **Payments** — any `recorded` expense with a `supplier_id`, whatever its category. That
+  covers both ways of paying a supplier, because an invoice payment copies the supplier from
+  the invoice: against a specific faktura, or as a bare advance.
 - **Adjustments** — the signed
   [counterparty adjustment](../entities/finance.md#counterparty-adjustment): opening
   balances and events that are neither a delivery nor a payment (discounts, returns,
@@ -149,16 +178,25 @@ Three sources feed the supplier side:
   distinctly: *Zaxira tuzatish* (quantity) vs *Qarz tuzatish* (money).
 
 **The statement (akt sverka).** Per counterparty, any date range: chronological rows —
-deliveries, payments, adjustments — each with the running balance after it, plus an
-opening balance folding everything before the range. This is the reconciliation ritual
-Uzbek businesses already run on paper, rendered live; any disputed number resolves by
-reading the statement line by line, never by "the system says so". Within one day, rows
-order by entry time; same-second entries fall back to the natural business order (goods,
-then money, then corrections).
+deliveries, payments, adjustments — each with the running balance after it, an opening
+balance folding everything before the range, and a closing balance with the period's
+turnover in both directions. This is the reconciliation ritual Uzbek businesses already
+run on paper, rendered live; any disputed number resolves by reading the statement line
+by line, never by "the system says so". Within one day, rows order by entry time;
+same-second entries fall back to the natural business order (goods, then money, then
+corrections).
+
+It is a **document, not a screen**: it states both parties (the workshop, reachable on its
+primary branch's number, and the counterparty), the period, the opening and closing
+balances, and it is signed. The opening row renders with **and** without a date filter —
+with no period it is the all-time opening, which is zero and says so; a running balance
+starting from an unexplained number is the fastest way to lose an accountant's trust.
+Both sides read one stored sign convention, so the two amount columns invert between them:
+a payment always shrinks the debt the document is about, whichever tab you are on.
 
 **Accounting model — hybrid on purpose.** The finance summary stays **cash-basis**; debts
 are an **accrual overlay**. A delivery of materials is *not* an expense — the expense
-happens when cash leaves. Nothing double-counts: a stock-in's value feeds only the debt
+happens when cash leaves. Nothing double-counts: an invoice's value feeds only the debt
 fold; a payment feeds both the expense summary and the fold. Shipping debts changes zero
 existing report semantics.
 
@@ -171,6 +209,12 @@ existing report semantics.
   filters, sorted most-they-owe first (receivables are what the accountant chases).
 - **Read a statement** — the akt sverka above, for any date range, on either side.
   Client statements show order rows (dated by confirmation) against payment rows.
+- **Take the statement away** — the same document as a PDF, rendered server-side in the
+  same in-process way as the cutting maps, so the file a counterparty keeps is identical
+  whoever generated it: title, both parties, period, opening balance, every movement,
+  turnover, closing balance, a two-column signature block, a table header repeated on
+  every page, and page numbers. Browser printing produces the same document from the page
+  itself; only the page numbering is beyond a print stylesheet's reach.
 - **Record an adjustment** — party (one supplier or one client), amount, business date
   (backdating allowed, future rejected), **mandatory note**. The form asks the direction
   in words (*Qarzimiz oshadi* / *Qarzimiz kamayadi*); the system derives the sign.
@@ -198,33 +242,79 @@ page of its own — it lives on the workshop home (**Asosiy**) dashboard as KPI 
   record shows when it was actually keyed in.
   - *Income* — table: date, type, order # (when `order_payment`), method, amount, note,
     status, action menu. Filters: date range, type, method, status, min / max
-    amount. **+ Income** → modal form (type → if `order_payment`, a searchable order
-    picker scoped to the context branch; amount; method; date; note; receipt). An
-    order payment derives its branch from the picked order server-side. Row actions: Edit
+    amount. **+ Income** → modal form. Type and method are two- and three-way segmented
+    toggles sharing one row — with a closed set this small a dropdown is a click that
+    reveals nothing. If the type is `order_payment`, an **order picker** searches the
+    payable-orders set above server-side (debounced, so a burst of typing is one query, not
+    one per character); each row shows the order number and contact (the contact wraps to
+    its own line when the screen is too narrow to keep it legible), phone · date · status
+    beneath, and the **balance in the danger colour** — with the order total demoted under
+    it **only when the two differ**, since the numbers are easy to confuse and printing one
+    figure twice reads as a fault. Submitting with no order picked errors the picker itself
+    and returns focus to it. Picking one collapses to a single *Jami · Yozilgan · Qoldiq*
+    line and seeds the amount with the remaining balance; a **Qoldiq** button on the amount
+    field refills it after a part payment is typed. An amount above the balance errors on
+    the field and blocks submit before the round trip — the server's cap stays the
+    authority. **While editing**, the income's own amount is lifted back out of the recorded
+    sum (*Boshqa yozuvlar*) and into *Qoldiq*, so the summary shows the headroom this row
+    actually has — the same number the Qoldiq button fills and the same one the server's cap
+    computes. Two different figures may not share the word.
+    An order payment derives its branch from the picked order server-side. Row actions: Edit
     (modal) · Void (dialog with a mandatory reason). No Delete.
-  - *Expenses* — table: date, category, vendor, amount, description (first 60
-    chars), receipt indicator, status, action menu. Filters: date range, category,
-    status, min / max amount. **+ Expense** → modal form (category, amount, date,
-    an optional **supplier picker** that links the expense into the supplier's debt fold
-    and fills the vendor text with the supplier's name when blank, free-text vendor,
-    description, receipt, and — owner only — an *Ustaxona darajasida* checkbox
-    that records the cost workshop-level with no branch, the HQ-rent case). Row actions:
-    Edit (modal) · Void (dialog with a mandatory reason). No Delete.
-- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page,
-  two tabs: **Ta'minotchilar** and **Mijozlar**. Each tab: two summary tiles (both debt
-  directions), search, the "only with debt" toggle (default on), and per-row balances in
-  words + color. A row opens the **statement** (akt sverka): date range via the shared
-  picker, chronological rows with a running balance and an opening-balance row when a
-  range is set — supplier statements show deliveries against payments, client statements
-  show order rows against payments. Statement actions: **To'lov qilish** (deep-links to
-  the ledger page — the expense modal with the supplier pre-picked, or the income modal
-  on the client side) and **Tuzatish kiritish** (the adjustment form — direction in
-  words per side, amount, date, mandatory note); adjustment rows carry their own void
-  action, and **Chop etish** prints the statement as a clean paper akt sverka (a print
-  stylesheet strips the app chrome — the ritual ends with a document handed across the
-  table). The dashboard adds *Ta'minotchilarga qarzimiz* and *Mijozlar qarzi* KPI
-  tiles, and the Ombor suppliers tab shows each supplier's balance to users who could
-  open this page anyway.
+  - *Expenses* — table: date, category, vendor (with the `K-…` of the invoice paid, when
+    there is one), amount, description (first 60 chars), receipt indicator, status, action
+    menu. Filters: date range, category, status, min / max amount. **+ Expense** → modal
+    form opening on a **Turi** toggle, *Kirim to'lovi* | *Boshqa xarajat*, mirroring the
+    income form's *Buyurtma to'lovi* | *Boshqa tushum*. Both sides of the ledger then read
+    the same way: money in is against an order or it's misc, money out is against an invoice
+    or it's misc. The toggle mirrors the income form; the **default does not** — a fresh
+    expense opens on *Boshqa xarajat*. Seven of the ten categories can never be a faktura
+    payment, the invoice side has its own warm entry point (Ombor's *Saqlash va xarajat
+    yozish*, which deep-links the faktura pre-picked), and only the invoice default can
+    dead-end a user — it rejects an already filled-in misc expense at save time, whereas
+    the misc default costs one click and loses no input.
+    - *Kirim to'lovi* — an invoice picker offering only unpaid and partial fakturas, each
+      row showing number · supplier · date · branch · position count, with the **outstanding
+      balance prominent in the danger colour** and the invoice total demoted beneath it.
+      Supplier and branch leave the form and are shown as a read-only strip; category, amount
+      and date remain. A **Qoldiq** button fills the amount with the remaining balance, and an
+      amount above it raises an inline advance warning without blocking the save.
+    - *Boshqa xarajat* — category, amount, date, an optional **supplier picker** that links
+      the expense into the supplier's debt fold and fills the vendor text with the supplier's
+      name when blank, free-text vendor, description, receipt, and — owner only — an
+      *Ustaxona darajasida* checkbox that records the cost workshop-level with no branch, the
+      HQ-rent case. Both pickers read for `manage_finance` alone: the supplier list is a shared
+      lookup this page is entitled to
+      ([`access-management.md`](access-management.md#permission-catalog)), not an inventory
+      surface.
+
+    Editing never changes which faktura the money paid: the toggle and the picker are
+    read-only on an edit. Row actions: Edit (modal) · Void (dialog with a mandatory reason).
+    No Delete.
+- **Debts** (`/workshop/finance/debts`; owner or `manage_finance`) — the Qarzdorlik page.
+  Unlike the ledger above it is **workshop-wide**: a counterparty's balance spans every
+  branch, so the topbar picker renders inert here and says so. Two tabs:
+  **Ta'minotchilar** and **Mijozlar**. Each tab opens on three figures on hairlines —
+  *Qarzimiz* · *Bizga qarz* · *Sof holat*, the tab supplying the rest of each label — with
+  a muted count of the counterparties actually listed beneath. No card chrome and no
+  background tint: colour lands on the figure alone, and the net figure carries its
+  direction in words so colour is never the only signal. Then search, the "only with debt"
+  toggle (default on), and per-row balances in words + color.
+
+  A row opens the **statement** (akt sverka), laid out as the document it is: title,
+  period, both parties, then the movement table — date, document, the two amount columns,
+  and the running balance whose convention the column header states once. The direction
+  word appears inline only where the sign flips, an inapplicable amount cell is left blank
+  rather than filled with a dash, and a `<tfoot>` closes the period with its turnover and
+  the emphasised **Yopilish qoldig'i**. Narrow viewports fold the date into the document
+  cell and the two amount columns into one signed column, so the statement never scrolls
+  sideways. Statement actions: **To'lov qilish** (deep-links to the ledger page — the
+  expense modal with the supplier pre-picked, or the income modal on the client side),
+  **Tuzatish kiritish** (the adjustment form — direction in words per side, amount, date,
+  mandatory note; adjustment rows carry their own void action), **Chop etish** (browser
+  print) and **PDF** (the file to hand over). The dashboard adds *Ta'minotchilarga
+  qarzimiz* and *Mijozlar qarzi* KPI tiles, and the Ombor suppliers tab shows each
+  supplier's balance to users who could open this page anyway.
 - **Worker production** (`/workshop/finance/production`, `view_finance_reports` or
   `manage_finance`) — the shared date-range picker + branch picker (auto-applied); table
   per worker (panels, cuts, orders banded, metres per edge material listed one line per

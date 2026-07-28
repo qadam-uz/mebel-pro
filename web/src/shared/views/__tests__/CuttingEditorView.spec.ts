@@ -1,10 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref, type Ref } from 'vue'
 
 import { ApiError } from '@/shared/api/client'
-import { clientConfig, roleConfigKey } from '@/shared/app/roleConfig'
+import type { CuttingEditorAdapter } from '@/shared/app/cuttingEditorAdapter'
+import { clientConfig, roleConfigKey, workshopConfig } from '@/shared/app/roleConfig'
 import CuttingEditorView from '@/shared/views/CuttingEditorView.vue'
 import { useCuttingStore, type CuttingDraft, type CuttingPart } from '@/shared/stores/cutting'
 
@@ -26,6 +28,8 @@ function draft(overrides: Partial<CuttingDraft> = {}): CuttingDraft {
     client_id: 'client-1',
     name: 'Oshxona',
     preferred_branch_id: null,
+    kerf_mm: 4,
+    edge_trim_mm: 5,
     parts_snapshot: [],
     chosen_result_id: null,
     revision_of_order_id: null,
@@ -192,7 +196,7 @@ describe('CuttingEditorView draft deletion', () => {
     await flushPromises()
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    expect(wrapper.get('[role="dialog"]').text()).toContain('trace trace-delete-1')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('trace_id: trace-delete-1')
   })
 
   it('opens a current result but never optimizes a read-only drawing', async () => {
@@ -353,5 +357,105 @@ describe('CuttingEditorView imported layout guard', () => {
 
     expect(wrapper.get('[role="dialog"]').text()).toContain('Import qilingan joylashuv')
     expect(update).not.toHaveBeenCalled()
+  })
+})
+
+// QAD-148: in the workshop app the branch comes from the app, not from an
+// in-editor pick. On a cold load the app's context resolves *after* this view
+// mounts, so a branch frozen at mount is null and the editor used to fall back
+// to the client path — an empty "Filialni tanlang" modal with nothing to pick.
+describe('CuttingEditorView app-supplied branch', () => {
+  const branchNames: Record<string, string> = {
+    'branch-1': 'Chilonzor filiali',
+    'branch-2': 'Yunusobod filiali',
+  }
+
+  async function mountWorkshopEditor(options: {
+    preferredBranchId: string | null
+    context: Ref<string | null>
+  }) {
+    const adapter: CuttingEditorAdapter = {
+      newRouteName: 'workshop-cutting-new',
+      paths: {
+        drafts: '/workshop/orders/drafts',
+        editor: (id) => `/workshop/orders/cutting/${id}`,
+        result: (id) => `/workshop/orders/cutting/${id}/result`,
+        checkout: (id) => `/workshop/orders/new/${id}/checkout`,
+        orderDetail: (id) => `/workshop/orders/${id}`,
+      },
+      // No `fixed`: exactly the cold-load shape, where the app context has not
+      // landed by the time the adapter factory runs.
+      branch: { context: () => options.context.value },
+      branchNameById: (id) => branchNames[id] ?? null,
+      quoteForDraft: () => Promise.reject(new Error('unused')),
+    }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/workshop/orders/cutting/:id',
+          name: 'workshop-cutting-editor',
+          component: { template: '<div />' },
+          meta: { cuttingEditorAdapter: () => adapter },
+        },
+      ],
+    })
+    await router.push('/workshop/orders/cutting/draft-1')
+    await router.isReady()
+
+    const cutting = useCuttingStore()
+    cutting.currentDraft = draft({ preferred_branch_id: options.preferredBranchId })
+    const loadBranchOptions = vi.spyOn(cutting, 'loadBranchOptions').mockResolvedValue()
+    vi.spyOn(cutting, 'loadMaterials').mockResolvedValue([])
+
+    const wrapper = mount(CuttingEditorView, {
+      global: {
+        plugins: [router],
+        provide: { [roleConfigKey as symbol]: workshopConfig },
+        stubs: { AppModal: true, CuttingBranchPicker: true, CuttingPartRow: true },
+      },
+    })
+    await flushPromises()
+    return { wrapper, loadBranchOptions }
+  }
+
+  function branchPickerOpen(wrapper: VueWrapper) {
+    return wrapper
+      .findAllComponents({ name: 'AppModal' })
+      .some((modal) => modal.props('title') === 'Filialni tanlang' && modal.props('open') === true)
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('seeds an unbound draft from the app context that lands after mount', async () => {
+    const context = ref<string | null>(null)
+    const { wrapper, loadBranchOptions } = await mountWorkshopEditor({
+      preferredBranchId: null,
+      context,
+    })
+    // Nothing bound and no context yet — but never the client's dead-end modal,
+    // and never the client-only branch-options endpoint.
+    expect(branchPickerOpen(wrapper)).toBe(false)
+    expect(loadBranchOptions).not.toHaveBeenCalled()
+
+    context.value = 'branch-1'
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Chilonzor filiali')
+    expect(branchPickerOpen(wrapper)).toBe(false)
+  })
+
+  it('keeps a bound draft on its own branch when the app context differs', async () => {
+    const context = ref<string | null>('branch-2')
+    const { wrapper } = await mountWorkshopEditor({ preferredBranchId: 'branch-1', context })
+
+    expect(wrapper.text()).toContain('Chilonzor filiali')
+    expect(wrapper.text()).not.toContain('Yunusobod filiali')
   })
 })

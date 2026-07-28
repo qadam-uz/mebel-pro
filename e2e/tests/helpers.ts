@@ -5,13 +5,18 @@ import {
   expect,
   type APIRequestContext,
   type APIResponse,
+  type Locator,
   type Page,
 } from "@playwright/test";
 
+import { databaseUrl } from "../env";
+
 const execFileAsync = promisify(execFile);
 
-export const databaseUrl =
-  "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
+// Re-exported so specs reach the stack's DSN through the helper module they
+// already import; `../env` is the single place it is declared.
+export { databaseUrl };
+
 export const adminPassword = "AdminPass123";
 export const ownerReadyPassword = "OwnerReady123";
 export const passwordLabel = /^(Password|Parol)$/;
@@ -53,18 +58,6 @@ export function phoneFor(id: string, offset: number) {
   let hash = offset;
   for (const char of id) hash = (hash * 33 + char.charCodeAt(0)) % 10_000_000;
   return `+99890${String(hash).padStart(7, "0")}`;
-}
-
-export function defaultWorkingHours() {
-  return {
-    monday: { open: "09:00", close: "18:00" },
-    tuesday: { open: "09:00", close: "18:00" },
-    wednesday: { open: "09:00", close: "18:00" },
-    thursday: { open: "09:00", close: "18:00" },
-    friday: { open: "09:00", close: "18:00" },
-    saturday: { open: "10:00", close: "16:00" },
-    sunday: { open: null, close: null },
-  };
 }
 
 export async function seedPlatform(login: string) {
@@ -125,7 +118,6 @@ export async function provisionWorkshop(
         name: `Order Branch ${id}`,
         address: "Tashkent, Test",
         phone: phoneFor(id, 3),
-        working_hours: defaultWorkingHours(),
       },
       owner: {
         login: ownerLogin,
@@ -427,4 +419,42 @@ export async function loginClient(page: Page, phone: string, name?: string) {
     await page.getByRole("button", { name: "Davom etish" }).click();
   }
   await expect(page).toHaveURL(/\/client\/c$/);
+}
+
+/**
+ * Click a control that opens a PDF and assert it opened a **tab**, not a download
+ * (QAD-160).
+ *
+ * The obvious assertion — that the popup's URL is the `blob:` object URL — cannot
+ * be made here: headless Chromium ships no PDF viewer, so navigating the tab to a
+ * PDF blob is abandoned and `popup.url()` stays `about:blank`. It resolves to
+ * `blob:…` in a headed browser. So this asserts what headless *can* see and what
+ * the ticket actually claims: a new tab opened, the authed PDF request succeeded,
+ * and nothing was written to the download directory.
+ */
+export async function expectPdfOpensInTab(
+  page: Page,
+  trigger: Locator,
+  pdfPathPattern: RegExp,
+) {
+  const popupPromise = page.waitForEvent("popup");
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      pdfPathPattern.test(new URL(response.url()).pathname) &&
+      response.request().method() === "GET",
+  );
+  let downloaded = false;
+  page.once("download", () => {
+    downloaded = true;
+  });
+
+  await trigger.click();
+
+  const popup = await popupPromise;
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/pdf");
+  expect(popup.isClosed()).toBe(false);
+  expect(downloaded).toBe(false);
+  return popup;
 }

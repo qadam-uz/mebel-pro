@@ -127,6 +127,7 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
     work_pages = _plan_work_pages(result, units)
     page_count = len(summary_pages) + len(work_pages)
 
+<<<<<<< HEAD
     for number, summary_page in enumerate(summary_pages, start=1):
         _draw_adaptive_summary_page(pdf, result, ctx, summary_page, number, page_count)
         pdf.showPage()
@@ -137,6 +138,11 @@ def render_cutting_pdf(result: CuttingResultResponse, context: PdfContext | None
         pdf.showPage()
     for index, page in enumerate(work_pages, start=len(summary_pages) + 1):
         _draw_work_page(pdf, result, ctx, registry, page, index, page_count)
+=======
+    if not result.panels:
+        _draw_title(pdf, "Kesish hujjati")
+        _draw_text(pdf, _MARGIN, _PAGE_H - 36 * mm, "Listlar yo'q", 11)
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
         pdf.showPage()
 
     pdf.save()

@@ -1,4 +1,4 @@
-import { snapshotShortLabel } from '@/shared/app/cuttingDisplay'
+import { snapshotMaterialLabel, snapshotShortLabel } from '@/shared/app/cuttingDisplay'
 import {
   deriveEdgeRegistry,
   edgeRegistryKey,
@@ -94,10 +94,25 @@ export interface PanelPartGroup {
   rotatedCount: number
 }
 
+// Placements whose part_ref is missing from parts_snapshot (older results)
+// still get a stable D-number continuing after the snapshot, in placement
+// order across the whole result — the raw part_ref uuid never renders.
+export function orphanPartIndexByRef(result: CuttingResult): Map<string, number> {
+  const known = new Set((result.parts_snapshot ?? []).map((part) => part.part_ref))
+  const orphans = new Map<string, number>()
+  let next = known.size
+  for (const panel of result.panels)
+    for (const placement of panel.placements)
+      if (!known.has(placement.part_ref) && !orphans.has(placement.part_ref))
+        orphans.set(placement.part_ref, next++)
+  return orphans
+}
+
 export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel): PanelPartGroup[] {
   const partsByRef = new Map<string, { part: CuttingPart; index: number }>(
     (result.parts_snapshot ?? []).map((part, index) => [part.part_ref, { part, index }]),
   )
+  const orphanIndex = orphanPartIndexByRef(result)
   const groups: PanelPartGroup[] = []
   const indexByRef = new Map<string, number>()
   for (const placement of panel.placements) {
@@ -108,7 +123,9 @@ export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel)
       const part = row?.part
       group = {
         partRef: placement.part_ref,
-        name: row ? partDisplayName(row.part, row.index) : placement.part_ref,
+        name: row
+          ? partDisplayName(row.part, row.index)
+          : `D${(orphanIndex.get(placement.part_ref) ?? 0) + 1}`,
         length_mm: part?.length_mm ?? placement.length_mm,
         width_mm: part?.width_mm ?? placement.width_mm,
         count: 0,
@@ -121,6 +138,41 @@ export function groupPanelPlacements(result: CuttingResult, panel: CuttingPanel)
     if (placement.rotated) group.rotatedCount += 1
   }
   return groups
+}
+
+export interface ResultSheetPartGroups {
+  panelId: string
+  sheetLabel: string
+  materialLabel: string
+  groups: PanelPartGroup[]
+}
+
+// QAD-177: the whole result as text, sheet by sheet. The narrow-viewport parts
+// list is the authoritative reading of a result — the drawing shrinks past
+// legibility on a phone, so every sheet's parts must be reachable without
+// switching the drawing first. Sheet order follows `panelDisplayIndex`, the
+// same drawing-wide numbering the thumbnails and the PDF use; within a sheet
+// the rows follow `parts_snapshot` order (the editor's and the PDF's `#`
+// order) rather than the optimizer's placement order, so D1 precedes D4 and a
+// screen reader walks the parts the way the user wrote them.
+export function resultSheetPartGroups(result: CuttingResult): ResultSheetPartGroups[] {
+  const snapshotOrder = new Map(
+    (result.parts_snapshot ?? []).map((part, index) => [part.part_ref, index]),
+  )
+  const orphanOrder = orphanPartIndexByRef(result)
+  const rank = (partRef: string) =>
+    snapshotOrder.get(partRef) ?? orphanOrder.get(partRef) ?? Number.MAX_SAFE_INTEGER
+  return result.panels.map((panel) => ({
+    panelId: panel.id,
+    sheetLabel: `List ${panelDisplayIndex(result, panel)}`,
+    materialLabel: snapshotMaterialLabel(
+      result.material_snapshots[panel.material_id],
+      panel.material_id.slice(0, 8),
+    ),
+    groups: groupPanelPlacements(result, panel).sort(
+      (left, right) => rank(left.partRef) - rank(right.partRef),
+    ),
+  }))
 }
 
 export function edgeRegistryEntryByMaterial(

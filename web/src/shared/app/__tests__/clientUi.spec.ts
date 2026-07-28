@@ -162,11 +162,22 @@ describe('client UI helpers', () => {
     // an explicit body wins over the order-number fallback
     expect(
       clientNotificationBody(
-        notification({ payload: { order_number: 'A-1023', body: 'Tayyor bo`ldi' } }),
+        notification({ payload: { order_number: 'A-1023', body: "Tayyor bo'ldi" } }),
       ),
-    ).toBe('Tayyor bo`ldi')
-    // no body and no order_number → null (row shows title only)
+    ).toBe("Tayyor bo'ldi")
+    // inventory events name the material the balance belongs to (QAD-150)
+    expect(
+      clientNotificationBody(notification({ payload: { material_name: 'LDSP Egger H1145' } })),
+    ).toBe('Material: LDSP Egger H1145')
+    // no body, no order_number, no material → null (row shows title only)
     expect(clientNotificationBody(notification({ payload: {} }))).toBeNull()
+
+    // a consume that drove the books below zero gets its own title, not a raw code
+    expect(
+      clientNotificationTitle(
+        notification({ event_code: 'inventory.negative_stock', entity_type: 'stock_item' }),
+      ),
+    ).toBe("Ombor qoldig'i manfiy")
 
     // icon family resolves from the event code / entity
     expect(clientNotificationIconName(notification({ event_code: 'order.ready' }))).toBe('box')

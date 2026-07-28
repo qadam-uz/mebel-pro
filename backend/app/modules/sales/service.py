@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from fastapi import status
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import Select, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -55,9 +55,11 @@ from app.modules.sales.schemas import (
     ClientOrderCreateRequest,
     EdgePriceLine,
     MaterialPriceLine,
+    NewOrderCountResponse,
     OrderDetailResponse,
     OrderEdgeMaterialDemand,
     OrderItemResponse,
+    OrderPriceLine,
     OrderQuoteResponse,
     OrderSettlementResponse,
     OrderStatusEventResponse,
@@ -77,6 +79,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderDiscountRequest,
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
+    WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
 from app.modules.support.api import record_action, record_status_change
@@ -86,7 +89,7 @@ from app.modules.workshop.contracts import Branch, Workshop
 PHONE_RE = re.compile(r"^\+998\d{9}$")
 WORKSHOP_ORDER_VIEW_PERMISSIONS = frozenset(
     {
-        Permission.VIEW_DASHBOARD,
+        Permission.VIEW_ORDERS,
         Permission.MANAGE_ORDERS,
     }
 )
@@ -137,6 +140,39 @@ class FinanceOrderTarget:
 
 
 @dataclass(frozen=True)
+class PayableOrder:
+    """An order that still owes money, with its settlement already folded in."""
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    contact_phone: str
+    status: OrderStatus
+    created_at: datetime
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
+
+
+@dataclass(frozen=True)
+class OrderSettlementRef:
+    """One order's identity and settlement, for a caller that already has its id.
+
+    Same three money figures as `PayableOrder`, but no candidacy rules: an
+    income keeps pointing at its order long after that order stops being a
+    payment candidate (settled, or cancelled), and the ledger still has to name
+    it.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
+
+
+@dataclass(frozen=True)
 class EdgeMaterialProductionLine:
     material_id: uuid.UUID
     material_label: str
@@ -173,7 +209,7 @@ async def place_client_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now),
+        order_number=await _next_order_number(db, now, branch.branch_no),
         client_id=client.id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -187,6 +223,7 @@ async def place_client_order(
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         discount_tiyin=0,
+        surcharge_tiyin=0,
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
@@ -387,7 +424,7 @@ async def place_workshop_order(
     pricing = await _price_result(db, branch_id=branch.id, result=result)
     now = datetime.now(UTC)
     order = Order(
-        order_number=await _next_order_number(db, now),
+        order_number=await _next_order_number(db, now, branch.branch_no),
         client_id=draft.client_id,
         workshop_id=workshop.id,
         branch_id=branch.id,
@@ -401,6 +438,7 @@ async def place_workshop_order(
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
         discount_tiyin=0,
+        surcharge_tiyin=0,
         total_tiyin=pricing.total_tiyin,
         currency=Currency.UZS,
     )
@@ -543,6 +581,7 @@ async def apply_order_edit(
     old_result = await _order_result(db, order)
     previous_total = order.total_tiyin
     previous_discount = order.discount_tiyin
+    previous_surcharge = order.surcharge_tiyin
     previous_result_id = str(old_result.id)
     # The superseded result must release the unique order binding
     # (uq_cutting_results_order is immediate) before the new one takes it.
@@ -564,9 +603,13 @@ async def apply_order_edit(
     _add_order_items(db, order=order, pricing=pricing)
 
     discount_cleared = previous_discount > 0
+    surcharge_cleared = previous_surcharge > 0
     order.discount_tiyin = 0
     order.discount_reason = None
     order.discount_applied_by_user_id = None
+    order.surcharge_tiyin = 0
+    order.surcharge_reason = None
+    order.surcharge_applied_by_user_id = None
     order.subtotal_cutting_tiyin = pricing.subtotal_cutting_tiyin
     order.subtotal_materials_tiyin = pricing.subtotal_materials_tiyin
     order.subtotal_edge_banding_tiyin = pricing.subtotal_edge_banding_tiyin
@@ -588,6 +631,8 @@ async def apply_order_edit(
     }
     if discount_cleared:
         metadata["discount_cleared_tiyin"] = previous_discount
+    if surcharge_cleared:
+        metadata["surcharge_cleared_tiyin"] = previous_surcharge
     if edger_cleared:
         metadata["edger_assignment_cleared"] = True
     await _append_order_event(
@@ -641,7 +686,6 @@ def _build_quote_response(
         branch_name=branch.name,
         branch_address=branch.address,
         branch_phone=branch.phone,
-        today_hours=branch.today_hours(),
         subtotal_cutting_tiyin=pricing.subtotal_cutting_tiyin,
         subtotal_materials_tiyin=pricing.subtotal_materials_tiyin,
         subtotal_edge_banding_tiyin=pricing.subtotal_edge_banding_tiyin,
@@ -785,7 +829,6 @@ async def list_workshop_orders(
     assigned_edger_user_id: uuid.UUID | None = None,
     limit: int = 30,
     offset: int = 0,
-    max_limit: int = 100,
 ) -> list[OrderSummaryResponse]:
     _require_workshop(principal)
     query = select(Order).order_by(Order.created_at.desc(), Order.order_number.desc())
@@ -805,9 +848,42 @@ async def list_workshop_orders(
     # Keep the summary builder's per-order enrichment bounded. A fuller batch
     # summary path can still replace this later, but the API no longer downloads
     # or enriches an unbounded order history.
-    query = query.limit(max(1, min(limit, max_limit))).offset(max(0, offset))
+    query = query.limit(max(1, min(limit, 100))).offset(max(0, offset))
     rows = (await db.scalars(query)).all()
     return await _order_summary_responses(db, rows)
+
+
+async def count_new_workshop_orders(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
+) -> NewOrderCountResponse:
+    """Backs the sidebar's `+N` badge (QAD-156): how many orders still sit in
+    NEW and are waiting for someone to confirm them. Scoped to the branches the
+    caller may manage orders in, so the number always agrees with the list the
+    badge links to. Omitting `branch_id` counts the whole workshop."""
+    _require_workshop(principal)
+    query = select(func.count())
+    query = query.select_from(Order).where(
+        Order.workshop_id == principal.workshop_id,
+        Order.status == OrderStatus.NEW,
+    )
+    if principal.is_owner:
+        if branch_id is not None:
+            query = query.where(Order.branch_id == branch_id)
+    else:
+        managed_branch_ids = {
+            grant.branch_id
+            for grant in principal.grants
+            if grant.permission is Permission.MANAGE_ORDERS
+        }
+        if branch_id is not None:
+            managed_branch_ids &= {branch_id}
+        if not managed_branch_ids:
+            return NewOrderCountResponse(count=0)
+        query = query.where(Order.branch_id.in_(managed_branch_ids))
+    return NewOrderCountResponse(count=await db.scalar(query) or 0)
 
 
 async def get_order_finance_target(
@@ -833,6 +909,99 @@ async def get_order_finance_target(
         branch_id=order.branch_id,
         total_tiyin=order.total_tiyin,
     )
+
+
+async def list_payable_orders(
+    db: AsyncSession,
+    *,
+    workshop_id: uuid.UUID,
+    branch_ids: frozenset[uuid.UUID] | None,
+    search: str | None = None,
+    limit: int = 20,
+) -> list[PayableOrder]:
+    """Orders that still owe money, newest first — the finance order picker.
+
+    Deliberately unfiltered by status apart from `cancelled`: money is most
+    often taken at pickup, so a `completed` order is the single most likely
+    payment target and hiding it is what made operators say "my order isn't
+    there". A cancelled order stays out because v1 has no refund flow
+    (`docs/scope.md`) — its recorded advance is settled off-system.
+
+    The unpaid predicate runs in SQL, before LIMIT. Trimming a page in Python
+    would silently return fewer rows than asked for whenever the newest orders
+    happen to be settled, which reads to the operator as "not found".
+    """
+    if branch_ids is not None and not branch_ids:
+        return []
+    recorded = _recorded_income_total(Order.id).correlate(Order).scalar_subquery()
+    query = (
+        select(Order, recorded.label("recorded_tiyin"))
+        .where(
+            Order.workshop_id == workshop_id,
+            Order.status != OrderStatus.CANCELLED,
+            Order.total_tiyin > recorded,
+        )
+        .order_by(Order.created_at.desc(), Order.order_number.desc())
+        .limit(max(1, min(limit, 100)))
+    )
+    if branch_ids is not None:
+        query = query.where(Order.branch_id.in_(branch_ids))
+    search_condition = _order_search_condition(search)
+    if search_condition is not None:
+        query = query.where(search_condition)
+    rows = (await db.execute(query)).all()
+    return [
+        PayableOrder(
+            order_id=order.id,
+            order_number=order.order_number,
+            contact_name=order.contact_name,
+            contact_phone=order.contact_phone,
+            status=order.status,
+            created_at=order.created_at,
+            total_tiyin=order.total_tiyin,
+            recorded_tiyin=int(recorded_tiyin),
+            balance_tiyin=_settlement_balance(order.total_tiyin, int(recorded_tiyin)),
+        )
+        for order, recorded_tiyin in rows
+    ]
+
+
+async def list_order_settlements(
+    db: AsyncSession,
+    *,
+    workshop_ids: frozenset[uuid.UUID],
+    order_ids: frozenset[uuid.UUID],
+) -> list[OrderSettlementRef]:
+    """Identity + settlement for a whole set of orders, in one round trip.
+
+    The finance ledger resolves every order-linked row of a listed page through
+    this — one aggregate over the set, never a query per row. Unlike
+    `list_payable_orders` it applies no candidacy filter: the caller names the
+    orders it already holds, and a settled or cancelled one still needs a label.
+
+    Tenant-scoped by `workshop_ids` rather than permission-gated: the caller
+    resolves rows it has already been authorized to read, and the ids come from
+    those rows, not from user input.
+    """
+    if not order_ids or not workshop_ids:
+        return []
+    recorded = _recorded_income_total(Order.id).correlate(Order).scalar_subquery()
+    query = select(Order, recorded.label("recorded_tiyin")).where(
+        Order.workshop_id.in_(workshop_ids),
+        Order.id.in_(order_ids),
+    )
+    rows = (await db.execute(query)).all()
+    return [
+        OrderSettlementRef(
+            order_id=order.id,
+            order_number=order.order_number,
+            contact_name=order.contact_name,
+            total_tiyin=order.total_tiyin,
+            recorded_tiyin=int(recorded_tiyin),
+            balance_tiyin=_settlement_balance(order.total_tiyin, int(recorded_tiyin)),
+        )
+        for order, recorded_tiyin in rows
+    ]
 
 
 async def list_worker_production_records(
@@ -1100,8 +1269,10 @@ async def assign_order_workers(
         raise APIError("worker_required", "Choose a worker")
 
     if payload.cutter_user_id is not None:
-        if order.cut_completed_at is not None:
-            raise APIError("cutting_already_done", "Cutting is already complete")
+        # The cutter locks the moment cutting starts — after that the fix path is
+        # revert (which clears the start stamp), not a silent swap mid-job.
+        if order.status is not OrderStatus.CONFIRMED:
+            raise APIError("cutting_already_started", "Cutting has already started")
         await _validate_production_worker(
             db,
             workshop_id=order.workshop_id,
@@ -1114,8 +1285,10 @@ async def assign_order_workers(
     if payload.edger_user_id is not None:
         if not await _order_has_banding(db, order.id):
             raise APIError("edger_not_required", "This order has no edge banding")
-        if order.edge_completed_at is not None:
-            raise APIError("banding_already_done", "Banding is already complete")
+        # The edger locks once banding starts; until then (queued, or still at
+        # the saw) the office may still swap the assignee.
+        if order.banding_started_at is not None:
+            raise APIError("banding_already_started", "Banding has already started")
         await _validate_production_worker(
             db,
             workshop_id=order.workshop_id,
@@ -1161,8 +1334,6 @@ async def start_cutting(
     _expect_status(order, {OrderStatus.CONFIRMED})
     if order.assigned_cutter_user_id is None:
         raise APIError("cutter_required", "Assign a cutter first")
-    if await _order_has_banding(db, order.id) and order.assigned_edger_user_id is None:
-        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_cutter_user_id, job="cutting"
     )
@@ -1195,6 +1366,10 @@ async def start_banding(
     _expect_status(order, {OrderStatus.EDGE_BANDING})
     if order.banding_started_at is not None:
         raise APIError("banding_already_started", "Banding is already started")
+    # Each stage gates on its own worker at its own start — cutting is never
+    # held up by the edger slot; the edger becomes mandatory here.
+    if order.assigned_edger_user_id is None:
+        raise APIError("edger_required", "Choose an edge bander for this order")
     _require_production_actor(
         principal, order, assigned_user_id=order.assigned_edger_user_id, job="banding"
     )
@@ -1238,17 +1413,19 @@ async def list_production_queue(
     base_query = select(Order).where(Order.workshop_id == principal.workshop_id)
     if branch_id is not None:
         base_query = base_query.where(Order.branch_id == branch_id)
+    # The station queue is personal for everyone — owner included: only jobs
+    # assigned to the caller, only the caller's own completions. On-behalf
+    # management lives on the office order page, not at the station terminal.
+    _require_station_access(principal)
     active_query = base_query.where(
-        assigned_column.is_not(None),
+        assigned_column == principal.principal_id,
         Order.status.in_(active_statuses),
     )
     completed_since = datetime.now(UTC) - timedelta(hours=24)
-    completed_query = base_query.where(completed_column >= completed_since)
-    if not principal.is_owner:
-        active_scope = _production_visibility(principal, worker_column=assigned_column)
-        completed_scope = _production_visibility(principal, worker_column=credited_column)
-        active_query = active_query.where(active_scope)
-        completed_query = completed_query.where(completed_scope)
+    completed_query = base_query.where(
+        credited_column == principal.principal_id,
+        completed_column >= completed_since,
+    )
 
     active_orders = list((await db.scalars(active_query)).all())
     completed_orders = list((await db.scalars(completed_query)).all())
@@ -1293,32 +1470,17 @@ async def get_production_job(
     )
 
 
-def _production_visibility(
-    principal: AuthenticatedPrincipal,
-    *,
-    worker_column: Any,
-) -> ColumnElement[bool]:
-    """Station visibility for non-owners: whole branch where the principal can
-    manage orders, own jobs only where they merely process production."""
-    manage_branch_ids = {
-        grant.branch_id
+def _require_station_access(principal: AuthenticatedPrincipal) -> None:
+    """The station pages need some production standing — the owner, or any
+    process_production / manage_orders grant. Assignment does the real scoping."""
+    if principal.is_owner:
+        return
+    if any(
+        grant.permission in {Permission.PROCESS_PRODUCTION, Permission.MANAGE_ORDERS}
         for grant in principal.grants
-        if grant.permission is Permission.MANAGE_ORDERS
-    }
-    process_branch_ids = _production_branch_ids(principal) - manage_branch_ids
-    conditions: list[ColumnElement[bool]] = []
-    if manage_branch_ids:
-        conditions.append(Order.branch_id.in_(manage_branch_ids))
-    if process_branch_ids:
-        conditions.append(
-            and_(
-                Order.branch_id.in_(process_branch_ids),
-                worker_column == principal.principal_id,
-            )
-        )
-    if not conditions:
-        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
-    return or_(*conditions)
+    ):
+        return
+    raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
 
 
 async def _production_job_cards(
@@ -1456,14 +1618,16 @@ async def complete_cutting(
     )
     result = await _order_result(db, order)
     panel_demands = _panel_stock_demands(result)
+    shortfall = False
     for material_id, quantity in panel_demands.items():
-        await consume_order_stock(
+        transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
             material_id=material_id,
             order_id=order.id,
             quantity=quantity,
         )
+        shortfall = shortfall or transaction.balance_after < 0
     order.cutter_user_id = worker_id
     order.cut_completed_at = datetime.now(UTC)
     order.panels_used_snapshot = sum(
@@ -1484,7 +1648,9 @@ async def complete_cutting(
             "panel_demands": {str(key): value for key, value in panel_demands.items()},
         },
     )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
 
 
 async def complete_banding(
@@ -1507,14 +1673,16 @@ async def complete_banding(
     )
     result = await _order_result(db, order)
     edge_demands = _edge_stock_demands(result)
+    shortfall = False
     for material_id, quantity in edge_demands.items():
-        await consume_order_stock(
+        transaction = await consume_order_stock(
             db,
             branch_id=order.branch_id,
             material_id=material_id,
             order_id=order.id,
             quantity=quantity,
         )
+        shortfall = shortfall or transaction.balance_after < 0
     order.edger_user_id = worker_id
     order.edge_completed_at = datetime.now(UTC)
     order.edge_length_snapshot = {str(key): value for key, value in edge_demands.items()}
@@ -1529,7 +1697,9 @@ async def complete_banding(
             "edge_demands": {str(key): value for key, value in edge_demands.items()},
         },
     )
-    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response = cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+    response.stock_shortfall = shortfall
+    return response
 
 
 async def mark_collected(
@@ -1656,6 +1826,8 @@ async def apply_discount(
     subtotal = _pre_discount_total(order)
     if payload.value < 0:
         raise APIError("invalid_discount", "Discount must be non-negative")
+    if payload.kind == "percent" and payload.value > 100:
+        raise APIError("invalid_discount", "Percent must be between 0 and 100")
     discount = payload.value if payload.kind == "fixed" else subtotal * payload.value // 100
     if discount > subtotal:
         raise APIError("invalid_discount", "Discount cannot exceed subtotal")
@@ -1666,7 +1838,7 @@ async def apply_discount(
     else:
         order.discount_reason = reason
         order.discount_applied_by_user_id = principal.principal_id
-    order.total_tiyin = subtotal - discount
+    order.total_tiyin = subtotal - discount + order.surcharge_tiyin
     _bump_order(order)
     await record_action(
         db,
@@ -1678,6 +1850,55 @@ async def apply_discount(
         branch_id=order.branch_id,
         summary=f"Applied discount to {order.order_number}",
         details={"discount_tiyin": discount, "reason": reason},
+    )
+    return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
+
+
+async def apply_surcharge(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    order_id: uuid.UUID,
+    payload: WorkshopOrderSurchargeRequest,
+) -> OrderDetailResponse:
+    """Set the order's surcharge (ustama) — symmetric to apply_discount but
+    additive and uncapped (orders.md: "Pricing"). Allowed on new/confirmed
+    orders by manage_orders; percent resolves against the computed subtotal."""
+    order = await _locked_workshop_order_for_action(
+        db,
+        principal=principal,
+        order_id=order_id,
+        permission=Permission.MANAGE_ORDERS,
+    )
+    _expect_version(order, payload.version)
+    if order.status not in {OrderStatus.NEW, OrderStatus.CONFIRMED}:
+        raise APIError("surcharge_not_allowed", "Surcharge is not allowed at this status")
+    reason = _required_reason(payload.reason)
+    subtotal = _pre_discount_total(order)
+    if payload.value < 0:
+        raise APIError("invalid_surcharge", "Surcharge must be non-negative")
+    if payload.kind == "percent" and payload.value > 100:
+        raise APIError("invalid_surcharge", "Percent must be between 0 and 100")
+    surcharge = payload.value if payload.kind == "fixed" else subtotal * payload.value // 100
+    order.surcharge_tiyin = surcharge
+    if surcharge == 0:
+        order.surcharge_reason = None
+        order.surcharge_applied_by_user_id = None
+    else:
+        order.surcharge_reason = reason
+        order.surcharge_applied_by_user_id = principal.principal_id
+    order.total_tiyin = subtotal - order.discount_tiyin + surcharge
+    _bump_order(order)
+    await record_action(
+        db,
+        actor=actor_from_principal(principal),
+        action="orders.surcharge",
+        entity_type="order",
+        entity_id=order.id,
+        workshop_id=order.workshop_id,
+        branch_id=order.branch_id,
+        summary=f"Applied surcharge to {order.order_number}",
+        details={"surcharge_tiyin": surcharge, "reason": reason},
     )
     return cast(OrderDetailResponse, await _order_response(db, order, include_detail=True))
 
@@ -2030,7 +2251,6 @@ def _order_summary_base(
         "branch_name": branch.name,
         "branch_address": branch.address,
         "branch_phone": branch.phone,
-        "today_hours": branch.today_hours(),
         "cutting_result_id": order.cutting_result_id,
         "status": order.status,
         "version": order.version,
@@ -2042,6 +2262,9 @@ def _order_summary_base(
         "discount_tiyin": order.discount_tiyin,
         "discount_reason": order.discount_reason,
         "discount_applied_by_user_id": order.discount_applied_by_user_id,
+        "surcharge_tiyin": order.surcharge_tiyin,
+        "surcharge_reason": order.surcharge_reason,
+        "surcharge_applied_by_user_id": order.surcharge_applied_by_user_id,
         "total_tiyin": order.total_tiyin,
         "currency": order.currency,
         "assigned_cutter_user_id": order.assigned_cutter_user_id,
@@ -2112,6 +2335,7 @@ async def _order_response(
     return OrderDetailResponse(
         **base,
         items=[OrderItemResponse.model_validate(item) for item in items],
+        price_lines=_order_price_lines(items, result),
         events=[
             OrderStatusEventResponse(
                 id=event.id,
@@ -2169,6 +2393,62 @@ def _planned_edge_lines(result: CuttingResult | None) -> list[OrderEdgeMaterialD
     return lines
 
 
+def _order_price_lines(
+    items: Sequence[OrderItem],
+    result: CuttingResult | None,
+) -> list[OrderPriceLine]:
+    """Itemized material lines for the order money breakdown. Prices come from
+    the snapshots frozen on the order items at placement — not live branch
+    pricing — so panel lines sum exactly to subtotal_materials and edge lines
+    to the material share of subtotal_edge_banding."""
+    if result is None:
+        return []
+    panel_prices: dict[uuid.UUID, int] = {}
+    edge_prices: dict[uuid.UUID, int] = {}
+    for item in items:
+        if item.material_source is MaterialSource.SHOP:
+            panel_prices.setdefault(
+                item.material_id, int(item.material_snapshot.get("price_tiyin") or 0)
+            )
+        for edge in (item.edge_top, item.edge_bottom, item.edge_left, item.edge_right):
+            if edge is None or MaterialSource(str(edge["source"])) is not MaterialSource.SHOP:
+                continue
+            snapshot = edge.get("snapshot") or {}
+            edge_prices.setdefault(
+                uuid.UUID(str(edge["material_id"])), int(snapshot.get("price_tiyin") or 0)
+            )
+
+    def _line_label(material_id: uuid.UUID) -> str:
+        return _material_label(
+            result.material_snapshots.get(str(material_id), {}),
+            fallback=f"Material {str(material_id)[:8]}",
+        )
+
+    panel_lines = [
+        OrderPriceLine(
+            material_id=material_id,
+            material_name=_line_label(material_id),
+            kind="panel",
+            panels_used=quantity,
+            line_total_tiyin=panel_prices.get(material_id, 0) * quantity,
+        )
+        for material_id, quantity in _panel_stock_demands(result).items()
+    ]
+    edge_lines = [
+        OrderPriceLine(
+            material_id=material_id,
+            material_name=_line_label(material_id),
+            kind="edge",
+            consumed_mm=consumed_mm,
+            line_total_tiyin=_millimetre_price(consumed_mm, edge_prices.get(material_id, 0)),
+        )
+        for material_id, consumed_mm in _edge_stock_demands(result).items()
+    ]
+    panel_lines.sort(key=lambda line: line.material_name)
+    edge_lines.sort(key=lambda line: line.material_name)
+    return panel_lines + edge_lines
+
+
 def _material_label(snapshot: dict[str, Any], *, fallback: str = "Material") -> str:
     manufacturer = _snapshot_text(snapshot.get("manufacturer_name")) or ""
     name = _snapshot_text(snapshot.get("name")) or ""
@@ -2199,20 +2479,31 @@ def _snapshot_text(value: object) -> str | None:
     return text or None
 
 
-async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
-    recorded = int(
-        await db.scalar(
-            select(func.coalesce(func.sum(Income.amount_tiyin), 0)).where(
-                Income.order_id == order.id,
-                Income.status == LedgerStatus.RECORDED,
-            )
-        )
-        or 0
+def _recorded_income_total(order_id: Any) -> Select[tuple[int]]:
+    """Σ of an order's `recorded` income — the single definition of "paid".
+
+    Takes a value or a column so the same statement serves a one-order lookup
+    and a correlated subquery inside a list query; a voided row leaves the sum
+    by itself, which is why no balance is ever stored.
+    """
+    return select(func.coalesce(func.sum(Income.amount_tiyin), 0)).where(
+        Income.order_id == order_id,
+        Income.status == LedgerStatus.RECORDED,
     )
+
+
+def _settlement_balance(total_tiyin: int, recorded_tiyin: int) -> int:
+    """What is still owed. Clamped at zero — an overpayment is not a debt."""
+
+    return max(total_tiyin - recorded_tiyin, 0)
+
+
+async def _order_settlement(db: AsyncSession, order: Order) -> OrderSettlementResponse:
+    recorded = int(await db.scalar(_recorded_income_total(order.id)) or 0)
     return OrderSettlementResponse(
         total_tiyin=order.total_tiyin,
         recorded_tiyin=recorded,
-        balance_tiyin=max(order.total_tiyin - recorded, 0),
+        balance_tiyin=_settlement_balance(order.total_tiyin, recorded),
     )
 
 
@@ -2739,15 +3030,45 @@ def _apply_order_filters(
         query = query.where(
             or_(Order.order_number.ilike(pattern), Order.contact_name.ilike(pattern))
         )
-    # Phone filtering is digits-contains: the operator types whatever the client
-    # dictates ("90 111 22 33", "+998901112233", the last four digits) and we
-    # match it against the stored normalized +998XXXXXXXXX. Non-digits in the
-    # input are formatting, never signal — strip them; an input with no digits
-    # filters nothing rather than everything.
-    phone_digits = re.sub(r"\D", "", contact_phone) if contact_phone else ""
-    if phone_digits:
-        query = query.where(Order.contact_phone.like(f"%{phone_digits}%"))
+    phone_condition = _phone_digits_condition(contact_phone)
+    if phone_condition is not None:
+        query = query.where(phone_condition)
     return query
+
+
+def _phone_digits_condition(value: str | None) -> ColumnElement[bool] | None:
+    """Digits-contains match against the stored normalized +998XXXXXXXXX.
+
+    The operator types whatever the client dictates ("90 111 22 33",
+    "+998901112233", the last four digits); non-digits in the input are
+    formatting, never signal. An input with no digits matches nothing here and
+    the caller drops the clause, so it filters nothing rather than everything.
+    """
+    digits = re.sub(r"\D", "", value) if value else ""
+    if not digits:
+        return None
+    return Order.contact_phone.like(f"%{digits}%")
+
+
+def _order_search_condition(search: str | None) -> ColumnElement[bool] | None:
+    """One search box over order number, contact name, and contact phone.
+
+    The finance order picker gets a single field rather than the list page's
+    separate search + phone filters: at the counter the operator has one thing
+    the client just said, and doesn't know which field it lands in.
+    """
+    normalized = search.strip() if search else ""
+    if not normalized:
+        return None
+    pattern = f"%{normalized.lower()}%"
+    conditions: list[ColumnElement[bool]] = [
+        Order.order_number.ilike(pattern),
+        Order.contact_name.ilike(pattern),
+    ]
+    phone_condition = _phone_digits_condition(normalized)
+    if phone_condition is not None:
+        conditions.append(phone_condition)
+    return or_(*conditions)
 
 
 def _can_view_workshop_order(principal: AuthenticatedPrincipal, order: Order) -> bool:
@@ -2983,15 +3304,27 @@ def _bump_order(order: Order) -> None:
     order.updated_at = datetime.now(UTC)
 
 
-async def _next_order_number(db: AsyncSession, now: datetime) -> str:
-    prefix = f"ORD-{now.year}-"
+async def _next_order_number(db: AsyncSession, now: datetime, branch_no: int) -> str:
+    """`#26-14-0003` — 2-digit year, branch number, per-branch/per-year sequence.
+
+    The sequence is scoped to one branch so a workshop's numbers have no holes:
+    branch 14's third order of 2026 is `#26-14-0003` no matter how busy the rest
+    of the platform is. The trailing dash in the prefix is load-bearing — without
+    it `#26-1-` would also match branch 14's numbers.
+
+    Counting rows is only safe because orders are never deleted (architecture.md);
+    the advisory lock is what makes concurrent creation in the same branch safe.
+    Orders placed before this format keep their legacy `ORD-2026-000123` numbers
+    and are excluded by the prefix (sales.md).
+    """
+    prefix = f"#{now.year % 100:02d}-{branch_no}-"
     bind = db.get_bind()
     if bind.dialect.name == "postgresql":
         await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"orders:{prefix}"))))
     count = await db.scalar(
         select(func.count(Order.id)).where(Order.order_number.like(f"{prefix}%"))
     )
-    return f"{prefix}{int(count or 0) + 1:06d}"
+    return f"{prefix}{int(count or 0) + 1:04d}"
 
 
 def _pre_discount_total(order: Order) -> int:

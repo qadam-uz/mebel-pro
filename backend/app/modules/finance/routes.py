@@ -1,24 +1,33 @@
 """Workshop finance ledger and report routes."""
 
+import re
+import unicodedata
 import uuid
 from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from app.api.deps import AccountReadyPrincipal, Session
 from app.models.enums import ExpenseCategory, IncomeType, LedgerStatus, MoneyMethod
 from app.modules.finance.api import (
+    StatementPdfContext,
     create_adjustment,
     create_expense,
     create_income,
     finance_summary,
     get_client_statement,
     get_supplier_statement,
+    income_response,
+    income_responses,
+    invoice_numbers_for,
     list_client_debts,
     list_expenses,
     list_incomes,
+    list_payable_orders,
+    list_payable_supplier_invoices,
     list_supplier_debts,
+    render_statement_pdf,
     update_expense,
     update_income,
     void_adjustment,
@@ -26,6 +35,7 @@ from app.modules.finance.api import (
     void_income,
     worker_production,
 )
+from app.modules.finance.contracts import Expense
 from app.modules.finance.schemas import (
     AdjustmentCreateRequest,
     CounterpartyAdjustmentResponse,
@@ -38,9 +48,12 @@ from app.modules.finance.schemas import (
     IncomeCreateRequest,
     IncomePatchRequest,
     IncomeResponse,
+    PayableInvoiceResponse,
+    PayableOrderResponse,
     VoidLedgerRequest,
     WorkerProductionResponse,
 )
+from app.modules.finance.statement_pdf import StatementSide
 
 router = APIRouter(prefix="/workshop/finance", tags=["finance"])
 IncomeTypeQuery = Annotated[IncomeType | None, Query(alias="type")]
@@ -91,7 +104,25 @@ async def income_index(
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
-    return [IncomeResponse.model_validate(row) for row in rows]
+    return await income_responses(db, incomes=rows)
+
+
+@router.get("/payable-orders", response_model=list[PayableOrderResponse])
+async def payable_orders_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    branch_id: uuid.UUID | None = None,
+    search: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[PayableOrderResponse]:
+    rows = await list_payable_orders(
+        db,
+        principal=principal,
+        branch_id=branch_id,
+        search=search,
+        limit=limit,
+    )
+    return [PayableOrderResponse.model_validate(row) for row in rows]
 
 
 @router.post("/income", response_model=IncomeResponse, status_code=status.HTTP_201_CREATED)
@@ -101,7 +132,7 @@ async def income_create(
     db: Session,
 ) -> IncomeResponse:
     row = await create_income(db, principal=principal, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.patch("/income/{income_id}", response_model=IncomeResponse)
@@ -112,7 +143,7 @@ async def income_update(
     db: Session,
 ) -> IncomeResponse:
     row = await update_income(db, principal=principal, income_id=income_id, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.post("/income/{income_id}/void", response_model=IncomeResponse)
@@ -123,7 +154,7 @@ async def income_void(
     db: Session,
 ) -> IncomeResponse:
     row = await void_income(db, principal=principal, income_id=income_id, payload=payload)
-    return IncomeResponse.model_validate(row)
+    return await income_response(db, income=row)
 
 
 @router.get("/expenses", response_model=list[ExpenseResponse])
@@ -150,7 +181,7 @@ async def expenses_index(
         min_amount_tiyin=min_amount_tiyin,
         max_amount_tiyin=max_amount_tiyin,
     )
-    return [ExpenseResponse.model_validate(row) for row in rows]
+    return await _expense_responses(db, rows)
 
 
 @router.post("/expenses", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
@@ -160,7 +191,7 @@ async def expenses_create(
     db: Session,
 ) -> ExpenseResponse:
     row = await create_expense(db, principal=principal, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
 
 
 @router.patch("/expenses/{expense_id}", response_model=ExpenseResponse)
@@ -171,7 +202,7 @@ async def expenses_update(
     db: Session,
 ) -> ExpenseResponse:
     row = await update_expense(db, principal=principal, expense_id=expense_id, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
 
 
 @router.post("/expenses/{expense_id}/void", response_model=ExpenseResponse)
@@ -182,7 +213,16 @@ async def expenses_void(
     db: Session,
 ) -> ExpenseResponse:
     row = await void_expense(db, principal=principal, expense_id=expense_id, payload=payload)
-    return ExpenseResponse.model_validate(row)
+    return (await _expense_responses(db, [row]))[0]
+
+
+@router.get("/payable-invoices", response_model=list[PayableInvoiceResponse])
+async def payable_invoices_index(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    search: str | None = None,
+) -> list[PayableInvoiceResponse]:
+    return await list_payable_supplier_invoices(db, principal=principal, search=search)
 
 
 @router.get("/debts/suppliers", response_model=DebtListResponse)
@@ -217,6 +257,24 @@ async def supplier_debt_statement(
     )
 
 
+@router.get("/debts/suppliers/{supplier_id}/statement.pdf")
+async def supplier_debt_statement_pdf(
+    supplier_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> Response:
+    statement = await get_supplier_statement(
+        db,
+        principal=principal,
+        supplier_id=supplier_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return _statement_pdf_response(statement, side="suppliers")
+
+
 @router.get("/debts/clients", response_model=DebtListResponse)
 async def client_debts_index(
     principal: AccountReadyPrincipal,
@@ -247,6 +305,24 @@ async def client_debt_statement(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+@router.get("/debts/clients/{client_id}/statement.pdf")
+async def client_debt_statement_pdf(
+    client_id: uuid.UUID,
+    principal: AccountReadyPrincipal,
+    db: Session,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> Response:
+    statement = await get_client_statement(
+        db,
+        principal=principal,
+        client_id=client_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return _statement_pdf_response(statement, side="clients")
 
 
 @router.post(
@@ -298,6 +374,38 @@ async def production_show(
         date_to=end,
         branch_id=branch_id,
     )
+
+
+def _statement_pdf_response(statement: DebtStatementResponse, *, side: StatementSide) -> Response:
+    """The akt sverka as a file. Rendered in-process, same as the cutting maps."""
+
+    slug = _ascii_slug(statement.name) or statement.counterparty_id.hex[:8]
+    filename = f"akt-sverka-{slug}.pdf"
+    return Response(
+        render_statement_pdf(statement, StatementPdfContext(side=side)),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+def _ascii_slug(value: str) -> str:
+    """A filename-safe stem. Uzbek names carry apostrophes and non-ASCII letters,
+    which a bare `filename=` header cannot express — those characters drop out."""
+
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()[:40]
+
+
+async def _expense_responses(db: Session, rows: list[Expense]) -> list[ExpenseResponse]:
+    """Expense rows plus the `K-…` label of whatever invoice each one pays."""
+
+    numbers = await invoice_numbers_for(db, expenses=rows)
+    return [
+        ExpenseResponse.model_validate(row).model_copy(
+            update={"invoice_no": numbers.get(row.invoice_id) if row.invoice_id else None}
+        )
+        for row in rows
+    ]
 
 
 def _period(date_from: date | None, date_to: date | None) -> tuple[date, date]:

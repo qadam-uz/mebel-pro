@@ -35,6 +35,7 @@ from app.modules.access.contracts import Client, PlatformUser, WorkshopUser
 from app.modules.catalog.contracts import BranchPricing
 from app.modules.platform.contracts import ErrorOccurrence, ErrorRecord, JobDefinition, JobRun
 from app.modules.platform.errors import refresh_error_record_counts
+from app.modules.platform.metrics import MetricCounts, count_by_period
 from app.modules.platform.notifications import notify_platform_users
 from app.modules.platform.scheduler import RegisteredJob, registry
 from app.modules.platform.schemas import (
@@ -42,6 +43,7 @@ from app.modules.platform.schemas import (
     PlatformUserPatchRequest,
     ProvisionWorkshopRequest,
 )
+from app.modules.sales.contracts import Order
 from app.modules.support.api import (
     list_action_logs,
     list_status_change_logs,
@@ -49,7 +51,6 @@ from app.modules.support.api import (
     record_status_change,
 )
 from app.modules.workshop.contracts import Branch, Workshop
-from app.modules.workshop.schemas import dump_working_hours
 
 JOB_SCHEDULE_INTERVALS = {"hourly": timedelta(hours=1)}
 PLATFORM_SCHEDULER_POLL_SECONDS = 60.0
@@ -90,6 +91,9 @@ class PlatformOverview:
     branches_total: int
     clients_total: int
     platform_users_active: int
+    orders: MetricCounts
+    workshop_signups: MetricCounts
+    client_signups: MetricCounts
 
 
 @dataclass(frozen=True)
@@ -166,6 +170,16 @@ async def get_platform_overview(
         .select_from(PlatformUser)
         .where(PlatformUser.status == UserStatus.ACTIVE)
     )
+    # AB-119: the lifetime totals above answer "how big is the platform"; these
+    # answer "how is it moving". Calendar periods, Tashkent-aligned, counted in
+    # SQL — one extra scan per table, no analytics store (see metrics.py).
+    # Orders are counted as *placed*, cancellations included: the metric is
+    # demand, not fulfilment. Counts only — an operator still never reads order
+    # contents (`docs/scope.md`).
+    now = datetime.now(UTC)
+    orders = await count_by_period(db, Order, Order.created_at, now=now)
+    workshop_signups = await count_by_period(db, Workshop, Workshop.created_at, now=now)
+    client_signups = await count_by_period(db, Client, Client.created_at, now=now)
     return PlatformOverview(
         workshops_total=int(workshops_total or 0),
         workshops_active=int(workshops_active or 0),
@@ -173,6 +187,9 @@ async def get_platform_overview(
         branches_total=int(branches_total or 0),
         clients_total=int(clients_total or 0),
         platform_users_active=int(platform_users_active or 0),
+        orders=orders,
+        workshop_signups=workshop_signups,
+        client_signups=client_signups,
     )
 
 
@@ -232,6 +249,10 @@ async def provision_workshop(
     principal: AuthenticatedPrincipal,
     payload: ProvisionWorkshopRequest,
 ) -> ProvisionedWorkshop:
+    # Imported inside the function: `workshop.api` reaches back into
+    # `platform.api` at import time, so a module-level import would cycle.
+    from app.modules.workshop.api import next_branch_no
+
     require_platform_operator(principal)
     temp_password = payload.temp_password or generate_temp_password()
     try:
@@ -243,6 +264,8 @@ async def provision_workshop(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         ) from exc
     owner_login = _required_text(payload.owner.login, "owner_login_required")
+    if await _workshop_login_exists(db, login=owner_login):
+        raise APIError("login_exists", "Login already exists", status_code=status.HTTP_409_CONFLICT)
     workshop_id = uuid.uuid4()
     owner_id = uuid.uuid4()
     workshop = Workshop(
@@ -257,12 +280,12 @@ async def provision_workshop(
 
     branch = Branch(
         workshop_id=workshop.id,
+        branch_no=await next_branch_no(db),
         name=_required_text(payload.branch.name, "branch_name_required"),
         address=_required_text(payload.branch.address, "branch_address_required"),
         phone=normalize_uz_phone(payload.branch.phone),
         latitude=None,
         longitude=None,
-        working_hours=dump_working_hours(payload.branch.working_hours),
         status=BranchStatus.ACTIVE,
     )
     db.add(branch)
@@ -957,6 +980,14 @@ async def list_platform_status_change_logs(
 async def _platform_login_exists(db: AsyncSession, *, login: str) -> bool:
     existing = await db.scalar(
         select(PlatformUser.id).where(func.lower(PlatformUser.login) == login.lower())
+    )
+    return existing is not None
+
+
+async def _workshop_login_exists(db: AsyncSession, *, login: str) -> bool:
+    """Workshop logins are unique platform-wide, so a new owner can collide with any workshop."""
+    existing = await db.scalar(
+        select(WorkshopUser.id).where(func.lower(WorkshopUser.login) == login.lower())
     )
     return existing is not None
 

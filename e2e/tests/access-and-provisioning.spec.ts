@@ -8,10 +8,9 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { expectOk } from "./helpers";
+import { databaseUrl, expectOk } from "./helpers";
 
 const execFileAsync = promisify(execFile);
-const databaseUrl = "postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e";
 const adminPassword = "AdminPass123";
 const ownerReadyPassword = "OwnerReady123";
 const staffReadyPassword = "StaffReady123";
@@ -31,18 +30,6 @@ function phoneFor(id: string, offset: number) {
   let hash = offset;
   for (const char of id) hash = (hash * 33 + char.charCodeAt(0)) % 10_000_000;
   return `+99890${String(hash).padStart(7, "0")}`;
-}
-
-function defaultWorkingHours() {
-  return {
-    monday: { open: "09:00", close: "18:00" },
-    tuesday: { open: "09:00", close: "18:00" },
-    wednesday: { open: "09:00", close: "18:00" },
-    thursday: { open: "09:00", close: "18:00" },
-    friday: { open: "09:00", close: "18:00" },
-    saturday: { open: "10:00", close: "16:00" },
-    sunday: { open: null, close: null },
-  };
 }
 
 async function seedPlatform(login: string) {
@@ -103,7 +90,6 @@ async function provisionWorkshop(
         name: `Branch ${id}`,
         address: "Tashkent, Test",
         phone: phoneFor(id, 3),
-        working_hours: defaultWorkingHours(),
       },
       owner: {
         login: ownerLogin,
@@ -173,7 +159,7 @@ test("admin provisions and blocks a workshop", async ({ page }, testInfo) => {
   await provisionForm.getByLabel("Birinchi filial").fill(`Branch ${id}`);
   await provisionForm.getByLabel("Filial manzili").fill("Tashkent, Test");
   await provisionForm.getByLabel("Filial telefoni").fill(phoneFor(id, 11));
-  await provisionForm.getByLabel("Ega login").fill(`ui-owner-${id}`);
+  await provisionForm.getByLabel("Rahbar login").fill(`ui-owner-${id}`);
   await provisionForm.getByLabel("Vaqtinchalik parol").fill("OwnerTemp123");
   await provisionForm.getByRole("button", { name: "Qo'shish", exact: true }).click();
 
@@ -300,7 +286,17 @@ test("owner manages branches from a simple system table and detail view", async 
   await seedPlatform(adminLogin);
   const token = await platformToken(request, adminLogin);
   const setup = await provisionWorkshop(request, token, id);
-  await readyOwnerToken(request, setup);
+  const ownerToken = await readyOwnerToken(request, setup);
+  // Prices are set up front so the branch-detail onboarding spotlight stays out
+  // of this test's way — the guided first-run flow owns onboarding.spec.ts.
+  const priced = await request.put(
+    `/api/v1/workshop/branches/${setup.branch.id}/pricing`,
+    {
+      headers: { Authorization: `Bearer ${ownerToken}` },
+      data: { cutting_rate_tiyin: 50_000, edge_banding_rate_tiyin: 20_000 },
+    },
+  );
+  await expectOk(priced);
 
   await page.goto("/workshop/");
   await page.getByLabel("Login").fill(setup.ownerLogin);
@@ -308,8 +304,19 @@ test("owner manages branches from a simple system table and detail view", async 
   await page.getByRole("button", { name: continueButton }).click();
   await expect(page.getByRole("heading", { name: "Asosiy" })).toBeVisible();
 
+  // QAD-176: `branch_no` is the middle segment of every order number and
+  // cutting map this branch prints (`#26-1-0003`); the owner must be able to
+  // look it up somewhere, and these two screens are that somewhere.
+  const branchNo = String(setup.branch.branch_no);
+
   await page.goto("/workshop/branches");
   await expect(page.getByRole("heading", { name: "Filiallar" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Raqam" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("row", { name: new RegExp(`Branch ${id}`) })
+      .getByRole("cell", { name: branchNo, exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("columnheader", { name: "Filial" }),
   ).toBeVisible();
@@ -331,6 +338,14 @@ test("owner manages branches from a simple system table and detail view", async 
   );
   await expect(
     page.getByRole("heading", { name: `Branch ${id}` }),
+  ).toBeVisible();
+  // The detail header spells out what the number means, so a deep link to one
+  // branch is enough to decode a printed order number.
+  const yy = String(new Date().getFullYear() % 100).padStart(2, "0");
+  await expect(
+    page.getByText(
+      new RegExp(`Filial raqami\\s*${branchNo}.*#${yy}-${branchNo}-`),
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Filial ma'lumotlari" }),

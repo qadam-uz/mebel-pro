@@ -13,10 +13,12 @@ import {
 } from '@/shared/app/adminValidation'
 import {
   adminDate,
+  adminErrorMessage,
   dropdownOption,
   workshopStatusLabel,
   workshopStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -28,7 +30,6 @@ import { useFocusTrap } from '@/shared/composables/useFocusTrap'
 import { useToast } from '@/shared/composables/useToast'
 import { useAdminStore, type WorkshopSummary } from '@/shared/stores/admin'
 
-type WorkingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 type ProvisionField =
   | 'name'
   | 'branchName'
@@ -36,8 +37,6 @@ type ProvisionField =
   | 'branchPhone'
   | 'ownerLogin'
   | 'tempPassword'
-
-type WorkingHoursForm = Record<WorkingDay, { open: string; close: string }>
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
@@ -78,7 +77,7 @@ async function confirmBlock() {
       blockFieldErrors,
       fieldErrorsFromApi<'blockReason'>(error, { reason_required: 'blockReason' }),
     )
-    toast.danger("Ustaxonani bloklab bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani bloklab bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -91,8 +90,8 @@ async function confirmUnblock() {
     await admin.unblockWorkshop(unblockTarget.value.id)
     toast.success('Ustaxona blokdan chiqarildi')
     unblockTarget.value = null
-  } catch {
-    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+  } catch (error) {
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani blokdan chiqarib bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -102,7 +101,7 @@ const secretRows = computed(() => {
   const provision = admin.lastProvision
   if (!provision) return []
   return [
-    { label: 'Ega login', value: provision.owner.login },
+    { label: 'Rahbar login', value: provision.owner.login },
     { label: 'Vaqtinchalik parol', value: provision.temp_password },
   ]
 })
@@ -157,25 +156,6 @@ const provisionApiLocMap: Partial<Record<string, ProvisionField>> = {
   'body.owner.login': 'ownerLogin',
   'body.temp_password': 'tempPassword',
 }
-const workingHours = reactive<WorkingHoursForm>({
-  monday: { open: '09:00', close: '18:00' },
-  tuesday: { open: '09:00', close: '18:00' },
-  wednesday: { open: '09:00', close: '18:00' },
-  thursday: { open: '09:00', close: '18:00' },
-  friday: { open: '09:00', close: '18:00' },
-  saturday: { open: '10:00', close: '16:00' },
-  sunday: { open: '', close: '' },
-})
-const workingDayOptions: Array<{ key: WorkingDay; label: string }> = [
-  { key: 'monday', label: 'Dushanba' },
-  { key: 'tuesday', label: 'Seshanba' },
-  { key: 'wednesday', label: 'Chorshanba' },
-  { key: 'thursday', label: 'Payshanba' },
-  { key: 'friday', label: 'Juma' },
-  { key: 'saturday', label: 'Shanba' },
-  { key: 'sunday', label: 'Yakshanba' },
-]
-
 const statusOptions = [
   dropdownOption('all', 'Hammasi', 'barcha holatlar'),
   dropdownOption('active', 'Faol', 'kirish mumkin'),
@@ -190,35 +170,6 @@ const filtered = computed(() => {
   })
 })
 
-function resetWorkingHours() {
-  workingHours.monday.open = '09:00'
-  workingHours.monday.close = '18:00'
-  workingHours.tuesday.open = '09:00'
-  workingHours.tuesday.close = '18:00'
-  workingHours.wednesday.open = '09:00'
-  workingHours.wednesday.close = '18:00'
-  workingHours.thursday.open = '09:00'
-  workingHours.thursday.close = '18:00'
-  workingHours.friday.open = '09:00'
-  workingHours.friday.close = '18:00'
-  workingHours.saturday.open = '10:00'
-  workingHours.saturday.close = '16:00'
-  workingHours.sunday.open = ''
-  workingHours.sunday.close = ''
-}
-
-function workingHoursPayload() {
-  return Object.fromEntries(
-    workingDayOptions.map(({ key }) => [
-      key,
-      {
-        open: workingHours[key].open || null,
-        close: workingHours[key].close || null,
-      },
-    ]),
-  )
-}
-
 function resetForm() {
   form.name = ''
   form.branchName = ''
@@ -226,7 +177,6 @@ function resetForm() {
   form.branchPhone = ''
   form.ownerLogin = ''
   form.tempPassword = ''
-  resetWorkingHours()
   clearFieldErrors(provisionFieldErrors)
   createError.value = null
 }
@@ -262,7 +212,6 @@ async function createWorkshop() {
         name: form.branchName,
         address: form.branchAddress,
         phone: form.branchPhone,
-        working_hours: workingHoursPayload(),
       },
       owner: {
         login: form.ownerLogin,
@@ -285,7 +234,7 @@ async function createWorkshop() {
       focusFirstFieldError(provisionFieldErrors, provisionFieldOrder, provisionFieldIds)
     } else {
       createError.value = 'workshop_create_failed'
-      toast.danger("Ustaxona qo'shilmadi")
+      toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxona qo'shilmadi."))
     }
   } finally {
     creating.value = false
@@ -318,7 +267,7 @@ onMounted(async () => {
     <div class="admin-filters">
       <label class="admin-filter-input">
         <span>Qidirish</span>
-        <input v-model="search" placeholder="Ustaxona nomi yoki egasi" />
+        <input v-model="search" placeholder="Ustaxona nomi yoki rahbari" />
       </label>
       <FormSelect
         v-model="statusFilter"
@@ -353,7 +302,7 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>Ustaxona</th>
-              <th>Egasi</th>
+              <th>Rahbar</th>
               <th>Filiallar</th>
               <th>Yaratildi</th>
               <th>Holat</th>
@@ -420,7 +369,7 @@ onMounted(async () => {
         @keydown="provisionTrap.onKeydown"
       >
         <div class="admin-modal-h">
-          <h3 id="new-workshop-title">Yangi ustaxona va egasi</h3>
+          <h3 id="new-workshop-title">Yangi ustaxona va rahbari</h3>
           <button
             type="button"
             class="admin-icon-button"
@@ -507,7 +456,7 @@ onMounted(async () => {
                 </span>
               </label>
               <label class="admin-field" for="o-login">
-                <span>Ega login</span>
+                <span>Rahbar login</span>
                 <input
                   id="o-login"
                   v-model="form.ownerLogin"
@@ -544,34 +493,6 @@ onMounted(async () => {
                   {{ provisionFieldErrors.tempPassword }}
                 </span>
               </label>
-              <fieldset class="admin-full admin-working-hours">
-                <legend>Birinchi filial ish vaqti</legend>
-                <div class="admin-working-hours-grid">
-                  <div
-                    v-for="day in workingDayOptions"
-                    :key="day.key"
-                    class="admin-working-hours-row"
-                  >
-                    <span>{{ day.label }}</span>
-                    <label :for="`hours-${day.key}-open`">
-                      <span class="sr-only">{{ day.label }} ochilish vaqti</span>
-                      <input
-                        :id="`hours-${day.key}-open`"
-                        v-model="workingHours[day.key].open"
-                        type="time"
-                      />
-                    </label>
-                    <label :for="`hours-${day.key}-close`">
-                      <span class="sr-only">{{ day.label }} yopilish vaqti</span>
-                      <input
-                        :id="`hours-${day.key}-close`"
-                        v-model="workingHours[day.key].close"
-                        type="time"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </fieldset>
             </div>
             <p
               v-if="createError"
@@ -640,7 +561,7 @@ onMounted(async () => {
     <AdminSecretModal
       :open="secretOpen && !!admin.lastProvision"
       title="Ustaxona qo'shildi — bir martalik maxfiy ma'lumot"
-      intro="Ega login va vaqtinchalik parolni ustaxona egasiga yetkazing."
+      intro="Rahbar login va vaqtinchalik parolni ustaxona rahbariga yetkazing."
       :rows="secretRows"
       @close="closeSecret"
     />

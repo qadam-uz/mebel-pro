@@ -5,12 +5,21 @@ import { safeRedirectPath } from '@/shared/app/redirect'
 import { useRoleConfig } from '@/shared/app/roleConfig'
 import { useAuthStore } from '@/shared/stores/auth'
 
+/**
+ * Sign-in failures, in Uzbek — the only shipped locale. This used to be an
+ * English map that both consuming views shadowed with byte-identical Uzbek
+ * copies of their own; one map, one voice, and a forgotten call site can no
+ * longer render English (QAD-163).
+ */
 const STAFF_ERROR_TEXT: Record<string, string> = {
-  invalid_credentials: 'Credentials do not match an active account.',
-  account_locked: 'Account is locked. Try again later.',
-  account_blocked: 'Account is blocked.',
-  network_error: 'API is not reachable.',
+  invalid_credentials: "Login yoki parol noto'g'ri.",
+  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
+  account_blocked: 'Hisob bloklangan — ustaxona rahbariga murojaat qiling.',
+  login_rate_limited: "Juda ko'p urinish. Birozdan so'ng urinib ko'ring.",
+  network_error: "Server bilan bog'lanib bo'lmadi. Internet aloqasini tekshiring.",
 }
+
+export const STAFF_LOGIN_FALLBACK = "Kirib bo'lmadi. Qayta urinib ko'ring."
 
 /**
  * Password-login logic shared by the admin + workshop sign-in views (CB-94). The
@@ -30,7 +39,7 @@ export function useStaffLogin() {
 
   const redirectTo = computed(() => safeRedirectPath(route.query.redirect, config.homePath))
   const errorText = computed(() =>
-    error.value ? (STAFF_ERROR_TEXT[error.value] ?? 'Sign-in failed.') : null,
+    error.value ? (STAFF_ERROR_TEXT[error.value] ?? STAFF_LOGIN_FALLBACK) : null,
   )
 
   async function submit() {

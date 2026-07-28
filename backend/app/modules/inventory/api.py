@@ -1,5 +1,14 @@
 """Public inventory API used by routes and other modules."""
 
+from app.modules.inventory.invoices import (
+    InvoiceLineRecord,
+    InvoiceRecord,
+    create_invoice,
+    get_invoice,
+    invoice_for_payment,
+    list_invoices,
+    list_payable_invoices,
+)
 from app.modules.inventory.service import (
     LastPriceRecord,
     StockRecord,
@@ -24,14 +33,21 @@ from app.modules.inventory.service import (
 )
 
 __all__ = [
+    "InvoiceLineRecord",
+    "InvoiceRecord",
     "LastPriceRecord",
     "StockRecord",
     "TransactionRecord",
     "consume_order_stock",
+    "create_invoice",
     "create_supplier",
     "display_unit",
     "ensure_stock_item_for_branch_material",
+    "get_invoice",
     "get_last_price",
+    "invoice_for_payment",
+    "list_invoices",
+    "list_payable_invoices",
     "list_stock",
     "list_suppliers",
     "list_transactions",

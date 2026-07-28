@@ -37,8 +37,12 @@ async def _platform_access(db_session: AsyncSession) -> str:
     return tokens.access_token
 
 
-async def _owner_fixture(db_session: AsyncSession) -> tuple[str, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+async def _owner_fixture(
+    db_session: AsyncSession,
+    *,
+    login: str = "owner",
+) -> tuple[str, uuid.UUID, uuid.UUID]:
+    workshop, branch, owner = await seed_workshop_with_owner(db_session, login=login)
     owner.password_reset_required = False
     tokens = await create_session(
         db_session,
@@ -224,12 +228,22 @@ async def test_supplier_debt_fold_statement_and_voids(
         -4_500_000,
         -4_000_000,
     ]
+    # A delivery term is now one invoice, not one stock-in line: same money,
+    # the grain the supplier's own document is written in.
     assert body["rows"][1]["amount_tiyin"] == -10_300_000
-    assert body["rows"][1]["quantity"] == 20
-    assert body["rows"][1]["display_unit"] == "panel"
+    assert body["rows"][1]["invoice_no"] == "K-0001"
+    assert body["rows"][1]["line_count"] == 1
+    assert body["rows"][1]["discount_tiyin"] == 0
     assert body["opening_balance_tiyin"] == 0
     assert body["closing_balance_tiyin"] == -4_000_000
     assert body["current_balance_tiyin"] == -4_000_000
+    # The document names both parties, not just the counterparty.
+    assert body["workshop_name"]
+    assert body["workshop_phone"]
+    # Period turnover, in the stored sign convention: 10.5M grew their side of
+    # the balance (payment + discount), 14.5M shrank it (opening + delivery).
+    assert body["period_increase_tiyin"] == 10_500_000
+    assert body["period_decrease_tiyin"] == 14_500_000
 
     ranged = await client.get(
         f"/api/v1/workshop/finance/debts/suppliers/{supplier_id}/statement?date_from={today}",
@@ -238,6 +252,16 @@ async def test_supplier_debt_fold_statement_and_voids(
     assert ranged.json()["opening_balance_tiyin"] == -4_200_000
     assert len(ranged.json()["rows"]) == 3
     assert ranged.json()["closing_balance_tiyin"] == -4_000_000
+    assert ranged.json()["period_increase_tiyin"] == 10_500_000
+    assert ranged.json()["period_decrease_tiyin"] == 10_300_000
+
+    document = await client.get(
+        f"/api/v1/workshop/finance/debts/suppliers/{supplier_id}/statement.pdf",
+        headers=_auth(owner_access),
+    )
+    assert document.status_code == 200
+    assert document.headers["content-type"] == "application/pdf"
+    assert document.content.startswith(b"%PDF-")
 
     # Voids self-correct the fold — no cleanup, no sync.
     voided_discount = await client.post(
@@ -411,6 +435,17 @@ async def test_client_debt_fold_statement_and_cancelled_advance(
     assert body["rows"][2]["order_number"] == doomed_order.order_number
     assert body["rows"][1]["method"] == "cash"
     assert body["current_balance_tiyin"] == 2_250_000
+    # 5M order + 250k adjustment grew her debt; 3M of payments shrank it.
+    assert body["period_increase_tiyin"] == 5_250_000
+    assert body["period_decrease_tiyin"] == 3_000_000
+
+    document = await client.get(
+        f"/api/v1/workshop/finance/debts/clients/{aziza.id}/statement.pdf",
+        headers=_auth(owner_access),
+    )
+    assert document.status_code == 200
+    assert document.headers["content-type"] == "application/pdf"
+    assert document.content.startswith(b"%PDF-")
 
     unknown_client = await client.get(
         f"/api/v1/workshop/finance/debts/clients/{uuid.uuid4()}/statement",
@@ -424,7 +459,7 @@ async def test_adjustment_validation_and_scope(
     db_session: AsyncSession,
 ) -> None:
     owner_access, workshop_id, branch_id = await _owner_fixture(db_session)
-    other_owner_access, _, other_branch_id = await _owner_fixture(db_session)
+    other_owner_access, _, other_branch_id = await _owner_fixture(db_session, login="owner_b")
     supplier = await client.post(
         f"/api/v1/workshop/branches/{branch_id}/suppliers",
         headers=_auth(owner_access),

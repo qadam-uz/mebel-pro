@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { api } from '@/shared/api/client'
-import { downloadBlob } from '@/shared/app/downloadBlob'
+import { openBlobInNewTab } from '@/shared/app/downloadBlob'
 import {
   partFitError,
   useCuttingStore,
@@ -16,7 +16,7 @@ vi.mock('@/shared/app/authInit', () => ({
 }))
 
 vi.mock('@/shared/app/downloadBlob', () => ({
-  downloadBlob: vi.fn(),
+  openBlobInNewTab: vi.fn(),
 }))
 
 vi.mock('@/shared/api/client', () => {
@@ -56,6 +56,8 @@ function draft(id = 'draft-1'): CuttingDraft {
     client_id: 'client-1',
     name: null,
     preferred_branch_id: null,
+    kerf_mm: 4,
+    edge_trim_mm: 5,
     parts_snapshot: [],
     chosen_result_id: null,
     revision_of_order_id: null,
@@ -93,14 +95,14 @@ async function exerciseEveryPath(store: ReturnType<typeof useCuttingStore>) {
   await store.optimizeDraft('draft-1')
   await store.chooseResult('draft-1', 'result-1')
   await store.loadMaterials({ kind: 'panel', force: true })
-  await store.downloadClientPdf('result-1')
+  await store.openClientPdf('result-1')
 
   return {
     get: vi.mocked(api.get).mock.calls.map((call) => call[0]),
     post: vi.mocked(api.post).mock.calls.map((call) => call[0]),
     patch: vi.mocked(api.patch).mock.calls.map((call) => call[0]),
     del: vi.mocked(api.del).mock.calls.map((call) => call[0]),
-    blob: vi.mocked(downloadBlob).mock.calls.map((call) => call[0]),
+    blob: vi.mocked(openBlobInNewTab).mock.calls.map((call) => call[0]),
   }
 }
 
@@ -111,7 +113,7 @@ describe('cutting store scope', () => {
     vi.mocked(api.post).mockReset()
     vi.mocked(api.patch).mockReset()
     vi.mocked(api.del).mockReset()
-    vi.mocked(downloadBlob).mockReset()
+    vi.mocked(openBlobInNewTab).mockReset()
   })
 
   it('routes every action through /client/* by default', async () => {
@@ -296,7 +298,15 @@ describe('partFitError', () => {
     (materialGrain, followGrain, expected) => {
       const panel = { ...basePanel, grain_direction: materialGrain }
 
-      expect(partFitError(360, 500, panel, followGrain)).toBe(expected)
+      expect(partFitError(360, 500, panel, followGrain, 10)).toBe(expected)
     },
   )
+
+  // Two branches with different edge trims (kerf/trim are per-branch settings,
+  // not a shared constant — cutting.md) must reach different verdicts for the
+  // identical part on the identical panel.
+  it('gives different verdicts for the same part at different branch trims', () => {
+    expect(partFitError(500, 300, basePanel, false, 5)).toBeNull()
+    expect(partFitError(500, 300, basePanel, false, 90)).toBe('part_too_large')
+  })
 })

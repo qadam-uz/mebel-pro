@@ -43,7 +43,16 @@ export interface ProvisionWorkshopResponse {
 
 export interface PlatformWorkshopDetail {
   workshop: WorkshopSummary
-  branches: Array<{ id: string; name: string; status: string; address: string; phone: string }>
+  // `branch_no` is the immutable middle segment of the branch's order numbers
+  // (`#26-1-0003`) — read-only, and the only way to decode a printed document.
+  branches: Array<{
+    id: string
+    branch_no: number
+    name: string
+    status: string
+    address: string
+    phone: string
+  }>
   owner: { id: string; login: string }
   // AB-20: the reason captured when the workshop was blocked (null when active).
   block_reason: string | null
@@ -54,6 +63,30 @@ export interface WorkshopOwnerTempPasswordResponse {
   temp_password: string
 }
 
+// AB-119: bucket counts, oldest first; the last entry is the current, partial
+// period. Registrations carry no weekly rate — orders alone are weekly.
+export interface SignupSpark {
+  daily: number[]
+  monthly: number[]
+  yearly: number[]
+}
+
+export interface OrderSpark extends SignupSpark {
+  weekly: number[]
+}
+
+export interface SignupMetrics {
+  daily: number
+  monthly: number
+  yearly: number
+  spark: SignupSpark
+}
+
+export interface OrderMetrics extends SignupMetrics {
+  weekly: number
+  spark: OrderSpark
+}
+
 export interface PlatformOverview {
   workshops_total: number
   workshops_active: number
@@ -61,6 +94,9 @@ export interface PlatformOverview {
   branches_total: number
   clients_total: number
   platform_users_active: number
+  orders: OrderMetrics
+  workshop_signups: SignupMetrics
+  client_signups: SignupMetrics
 }
 
 export interface Manufacturer {
@@ -229,7 +265,6 @@ export interface ProvisionWorkshopRequest {
     name: string
     address: string
     phone: string
-    working_hours: Record<string, { open: string | null; close: string | null }>
   }
   owner: { login: string }
   temp_password?: string

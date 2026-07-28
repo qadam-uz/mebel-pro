@@ -100,7 +100,10 @@ web/
   initial route. Keep the `:pathMatch(.*)*` 404 route last. For links inside shared
   views, use `useRolePath()` from `src/shared/app/paths.ts` instead of hard-coded
   role-prefixed URLs; dev mounts apps under `/client`, `/workshop`, and `/admin`, while
-  production is host-routed.
+  production is host-routed. Inside a role route file, write **absolute production paths**
+  (`/workshop/orders/new`) everywhere — `path`, `redirect`, and any target a `beforeEnter`
+  guard returns. `normalizeRoleRoutes` strips the dev base off all three, so a raw literal is
+  correct in both environments; a `useRolePath()` call there would double the base.
 - **State**: Pinia setup stores — `defineStore('name', () => { const x = ref(...); ... return { x, ... } })`. One store per domain in `src/shared/stores/`. Component-local state stays in the component; reach for a store only when state is shared across routes/components.
 - **Data fetching**: go through `src/shared/api/client.ts` (`api.get<T>('/path')`). Paths are relative to `/api/v1`. It throws `ApiError(status, body)` on non-2xx — handle it where you call. Don't `fetch()` directly in components.
 - **Styling**: Tailwind utility classes in templates. Design tokens (`@theme { --color-... }`) and any global CSS go in `src/assets/main.css`. Tailwind v4 has **no `tailwind.config.js`** — it's driven by the CSS file and the Vite plugin. Avoid `<style>` blocks unless genuinely component-scoped and not expressible with utilities.

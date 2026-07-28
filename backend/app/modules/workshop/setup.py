@@ -5,14 +5,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
 from app.models.enums import BranchStatus
 from app.modules.access.api import normalize_uz_phone
-from app.modules.catalog.contracts import BranchPricing
+from app.modules.catalog.contracts import BranchMaterial, BranchPricing
 from app.modules.support.api import (
     IMAGE_CONTENT_TYPES,
     record_action,
@@ -25,10 +25,30 @@ from app.modules.workshop.schemas import (
     BranchPatchRequest,
     BranchPricingPutRequest,
     BranchStatusRequest,
+    WorkshopOnboardingResponse,
     WorkshopSettingsPatchRequest,
-    dump_working_hours,
 )
 from app.modules.workshop.users import require_workshop_owner, require_workshop_principal
+
+_BRANCH_NO_LOCK_KEY = "branches:branch_no"
+
+# A branch publishes one primary number plus at most this many extras (4 total).
+MAX_ADDITIONAL_BRANCH_PHONES = 3
+
+
+async def next_branch_no(db: AsyncSession) -> int:
+    """Allocate the next platform-wide branch number.
+
+    `max(branch_no) + 1` under an advisory lock held for the rest of the
+    transaction — never a row count, because a count would reuse a number the
+    moment the sequence is read concurrently, and `branch_no` is baked into
+    every order number the branch ever prints (workshop.md).
+    """
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(_BRANCH_NO_LOCK_KEY))))
+    highest = await db.scalar(select(func.max(Branch.branch_no)))
+    return int(highest or 0) + 1
 
 
 async def get_settings(
@@ -98,15 +118,19 @@ async def create_branch(
 ) -> Branch:
     workshop_id = require_workshop_owner(principal)
     _validate_coordinates(payload.latitude, payload.longitude)
+    phone = normalize_uz_phone(payload.phone)
     branch = Branch(
         workshop_id=workshop_id,
+        branch_no=await next_branch_no(db),
         name=_required_text(payload.name, "branch_name_required"),
         address=_required_text(payload.address, "branch_address_required"),
-        phone=normalize_uz_phone(payload.phone),
+        phone=phone,
+        additional_phones=_normalized_additional_phones(payload.additional_phones, primary=phone),
         latitude=payload.latitude,
         longitude=payload.longitude,
-        working_hours=dump_working_hours(payload.working_hours),
         status=BranchStatus.ACTIVE,
+        kerf_mm=payload.kerf_mm,
+        edge_trim_mm=payload.edge_trim_mm,
     )
     db.add(branch)
     await db.flush()
@@ -164,14 +188,24 @@ async def update_branch(
         branch.name = _required_text(payload.name, "branch_name_required")
     if "address" in payload.model_fields_set and payload.address is not None:
         branch.address = _required_text(payload.address, "branch_address_required")
+    # Primary and extras are validated as one set: changing either can collide
+    # with the other, so the effective final list is what gets checked.
+    phone = branch.phone
     if "phone" in payload.model_fields_set and payload.phone is not None:
-        branch.phone = normalize_uz_phone(payload.phone)
+        phone = normalize_uz_phone(payload.phone)
+    additional = branch.additional_phones
+    if "additional_phones" in payload.model_fields_set and payload.additional_phones is not None:
+        additional = payload.additional_phones
+    branch.additional_phones = _normalized_additional_phones(additional, primary=phone)
+    branch.phone = phone
     if "latitude" in payload.model_fields_set:
         branch.latitude = latitude
     if "longitude" in payload.model_fields_set:
         branch.longitude = longitude
-    if "working_hours" in payload.model_fields_set and payload.working_hours is not None:
-        branch.working_hours = dump_working_hours(payload.working_hours)
+    if "kerf_mm" in payload.model_fields_set and payload.kerf_mm is not None:
+        branch.kerf_mm = payload.kerf_mm
+    if "edge_trim_mm" in payload.model_fields_set and payload.edge_trim_mm is not None:
+        branch.edge_trim_mm = payload.edge_trim_mm
     await record_action(
         db,
         actor=actor_from_principal(principal),
@@ -245,6 +279,49 @@ async def get_branch_pricing(
     return row
 
 
+async def get_onboarding_status(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+) -> WorkshopOnboardingResponse:
+    workshop_id = require_workshop_owner(principal)
+    first_branch_id = await db.scalar(
+        select(Branch.id)
+        .where(Branch.workshop_id == workshop_id, Branch.status == BranchStatus.ACTIVE)
+        .order_by(Branch.created_at, Branch.id)
+        .limit(1)
+    )
+    branch_configured = (
+        await db.scalar(
+            select(Branch.id)
+            .join(BranchPricing, BranchPricing.branch_id == Branch.id)
+            .where(
+                Branch.workshop_id == workshop_id,
+                Branch.status == BranchStatus.ACTIVE,
+                BranchPricing.cutting_rate_tiyin.is_not(None),
+                BranchPricing.edge_banding_rate_tiyin.is_not(None),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+    materials_added = (
+        await db.scalar(
+            select(BranchMaterial.id)
+            .join(Branch, Branch.id == BranchMaterial.branch_id)
+            .where(Branch.workshop_id == workshop_id)
+            .limit(1)
+        )
+        is not None
+    )
+    return WorkshopOnboardingResponse(
+        branch_configured=branch_configured,
+        materials_added=materials_added,
+        setup_complete=branch_configured and materials_added,
+        first_branch_id=first_branch_id,
+    )
+
+
 async def update_branch_pricing(
     db: AsyncSession,
     *,
@@ -283,6 +360,31 @@ async def _owner_branch(
     if branch is None or branch.workshop_id != workshop_id:
         raise APIError("branch_not_found", "Branch not found", status_code=404)
     return branch
+
+
+def _normalized_additional_phones(values: list[str], *, primary: str) -> list[str]:
+    """Validate the extra published numbers against the primary and each other.
+
+    Array order is display order, so it is preserved as given. Every entry goes
+    through the same ``+998XXXXXXXXX`` rule as the primary number.
+    """
+    if len(values) > MAX_ADDITIONAL_BRANCH_PHONES:
+        raise APIError(
+            "too_many_branch_phones",
+            f"A branch can have at most {MAX_ADDITIONAL_BRANCH_PHONES} additional phone numbers",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    normalized: list[str] = []
+    for value in values:
+        phone = normalize_uz_phone(value)
+        if phone == primary or phone in normalized:
+            raise APIError(
+                "duplicate_branch_phone",
+                f"Phone number {phone} is already listed for this branch",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        normalized.append(phone)
+    return normalized
 
 
 def _validate_coordinates(latitude: Decimal | None, longitude: Decimal | None) -> None:

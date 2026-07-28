@@ -30,7 +30,8 @@ class ClientBranchOption(APIModel):
     address: str
     status: BranchStatus
     closed_reason: str | None
-    today_hours: dict[str, str | None]
+    kerf_mm: int
+    edge_trim_mm: int
 
 
 class ClientBranchMaterialPreview(APIModel):
@@ -48,10 +49,11 @@ class ClientBranchResponse(APIModel):
     workshop_logo_file_id: uuid.UUID | None
     branch_name: str
     address: str
+    # The primary number first, then the branch's extras in display order.
     phone: str
+    additional_phones: list[str]
     latitude: Decimal | None
     longitude: Decimal | None
-    working_hours: dict[str, object]
     status: BranchStatus
     closed_reason: str | None
     # Inline material preview so the branches list needs ONE request, not 1+N

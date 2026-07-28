@@ -29,8 +29,9 @@ from app.modules.cutting.contracts import (
 )
 from app.modules.cutting.imports.base import ImportMapLayout, ImportMapPlacement
 from app.modules.cutting.optimizer import (
-    EDGE_TRIM_MM,
+    DEFAULT_CUT_PARAMS,
     MAX_PARTS_PER_RUN,
+    CutParams,
     EdgeBandInput,
     OffcutResult,
     OptimizerError,
@@ -54,10 +55,22 @@ from app.modules.cutting.schemas import (
 from app.modules.inventory.api import display_unit
 from app.modules.sales.contracts import Order
 from app.modules.support.api import record_action
+from app.modules.workshop.contracts import Branch
 
 DRAFT_LIMIT = 50
 IMPORTED_MAP_ALGORITHM_NAME = "imported-2dplace-map"
 IMPORTED_MAP_ALGORITHM_VERSION = "map-1"
+
+
+async def _resolve_cut_params(db: AsyncSession, branch_id: uuid.UUID | None) -> CutParams:
+    """The draft's branch owns kerf/trim (workshop.md, cutting.md) — a
+    branch-less draft falls back to the platform defaults."""
+    if branch_id is None:
+        return DEFAULT_CUT_PARAMS
+    branch = await db.get(Branch, branch_id)
+    if branch is None:
+        return DEFAULT_CUT_PARAMS
+    return CutParams(kerf_mm=branch.kerf_mm, edge_trim_mm=branch.edge_trim_mm)
 
 
 async def create_draft(
@@ -142,10 +155,12 @@ async def _commit_imported_map_for_draft(
     workshop_id: uuid.UUID | None = None,
 ) -> CuttingDraftResponse:
     """Persist the common MAP snapshot/result for an already-authorized draft."""
+    params = await _resolve_cut_params(db, draft.preferred_branch_id)
     parts, optimizer_parts, _, material_snapshots = await _validate_parts(
         db,
         payload.parts,
         require_non_empty=True,
+        params=params,
     )
     panel_materials = await _map_panel_materials(db, payload.panel_picks)
     _validate_map_layout(payload.map_layout, optimizer_parts, panel_materials)
@@ -331,8 +346,9 @@ async def _refresh_candidate_results_for_neutral_parts(
     parts: list[dict[str, Any]],
 ) -> None:
     strict_parts = [CuttingPart.model_validate(part) for part in parts]
+    params = await _resolve_cut_params(db, draft.preferred_branch_id)
     _, optimizer_parts, _, material_snapshots = await _validate_parts(
-        db, strict_parts, require_non_empty=True
+        db, strict_parts, require_non_empty=True, params=params
     )
     metrics = edge_metrics(optimizer_parts)
     edge_snapshot_ids = {
@@ -413,14 +429,16 @@ async def _apply_optimize(
 ) -> CuttingDraftResponse:
     if not draft.parts_snapshot:
         raise APIError("empty_parts", "At least one part is required")
+    params = await _resolve_cut_params(db, draft.preferred_branch_id)
     parts, optimizer_parts, panel_specs, material_snapshots = await _validate_parts(
         db,
         [CuttingPart.model_validate(part) for part in draft.parts_snapshot],
         require_non_empty=True,
+        params=params,
     )
     draft.parts_snapshot = parts
     try:
-        optimizer_results = run_all_algorithms(optimizer_parts, panel_specs)
+        optimizer_results = run_all_algorithms(optimizer_parts, panel_specs, params=params)
     except OptimizerError as exc:
         raise APIError(
             exc.code,
@@ -971,6 +989,7 @@ async def _validate_parts(
     db: AsyncSession,
     parts: list[CuttingPart],
     *,
+    params: CutParams,
     require_non_empty: bool = False,
 ) -> tuple[
     list[dict[str, Any]],
@@ -1019,8 +1038,8 @@ async def _validate_parts(
         if panel.panel_length_mm is None or panel.panel_width_mm is None:
             errors.append(_row_error(part, row_index, "invalid_panel_material", panel.id))
             continue
-        usable_length = panel.panel_length_mm - 2 * EDGE_TRIM_MM
-        usable_width = panel.panel_width_mm - 2 * EDGE_TRIM_MM
+        usable_length = panel.panel_length_mm - 2 * params.edge_trim_mm
+        usable_width = panel.panel_width_mm - 2 * params.edge_trim_mm
         fits_normal = part.length_mm <= usable_length and part.width_mm <= usable_width
         fits_rotated = part.width_mm <= usable_length and part.length_mm <= usable_width
         locked = part.follow_grain
@@ -1289,11 +1308,14 @@ async def _draft_response(
             .order_by(CuttingResult.waste_percentage.asc(), CuttingResult.algorithm_name.asc())
         )
     ).scalars()
+    params = await _resolve_cut_params(db, draft.preferred_branch_id)
     return CuttingDraftResponse(
         id=draft.id,
         client_id=draft.client_id,
         name=draft.name,
         preferred_branch_id=draft.preferred_branch_id,
+        kerf_mm=params.kerf_mm,
+        edge_trim_mm=params.edge_trim_mm,
         parts_snapshot=_parts_snapshot_response(draft.parts_snapshot),
         chosen_result_id=draft.chosen_result_id,
         revision_of_order_id=draft.revision_of_order_id,

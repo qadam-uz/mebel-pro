@@ -79,18 +79,60 @@ test('owner applies a discount and it persists after reload', async ({ page, req
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
 
-  await page.getByLabel('Qiymat').fill('12345')
-  await page.getByLabel('Sabab').fill('E2E discount persists')
+  // Discount lives behind the header overflow menu now, in a modal. The fixed
+  // value is entered in so'm and stored as tiyin (1 000 so'm = 100 000 tiyin),
+  // safely within the order subtotal.
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
+  await page.getByRole('button', { name: "Chegirma qo'shish" }).click()
+  const discountDialog = page.getByRole('dialog', { name: 'Chegirma' })
+  await discountDialog.getByLabel('Qiymat').fill('1000')
+  await discountDialog.getByLabel('Sabab').fill('E2E discount persists')
   const discounted = page.waitForResponse(
     (response) => response.url().includes('/discount') && response.ok(),
   )
-  await page.getByRole('button', { name: "Chegirma qo'shish" }).click()
+  await discountDialog.getByRole('button', { name: "Chegirma qo'shish" }).click()
   await discounted
   await expect(page.getByText('E2E discount persists')).toBeVisible()
 
   await page.reload()
   await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
   await expect(page.getByText('E2E discount persists')).toBeVisible()
+})
+
+test('owner applies a surcharge and it persists after reload', async ({
+  page,
+  request,
+}, testInfo) => {
+  const id = runId(testInfo)
+  const seeded = await seedOrderableBranch(request, id)
+  const placed = await placeClientOrderViaApi(request, {
+    phone: phoneFor(id, 41),
+    name: `Surcharge Client ${id}`,
+    branchId: seeded.branchId,
+    panelId: seeded.panel.id,
+    edgeId: seeded.edge.id,
+  })
+
+  await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
+  await page.goto(`/workshop/orders/${placed.order.id}`)
+  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
+  await page.getByRole('button', { name: "Ustama qo'shish" }).click()
+  const surchargeDialog = page.getByRole('dialog', { name: 'Ustama' })
+  await surchargeDialog.getByLabel('Qiymat').fill('2000')
+  await surchargeDialog.getByLabel('Sabab').fill('E2E rush surcharge')
+  const surcharged = page.waitForResponse(
+    (response) => response.url().includes('/surcharge') && response.ok(),
+  )
+  await surchargeDialog.getByRole('button', { name: "Ustama qo'shish" }).click()
+  await surcharged
+  // The breakdown shows the surcharge as an additive line with its reason.
+  await expect(page.getByText('E2E rush surcharge')).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: placed.order.order_number })).toBeVisible()
+  await expect(page.getByText('E2E rush surcharge')).toBeVisible()
 })
 
 test('owner records order income and standalone expense', async ({ page, request }, testInfo) => {
@@ -115,8 +157,14 @@ test('owner records order income and standalone expense', async ({ page, request
     .getByRole('combobox', { name: 'Buyurtma', exact: true })
     .fill(placed.order.order_number)
   await page.getByRole('option', { name: new RegExp(placed.order.order_number) }).click()
-  await expect(incomePanel.getByText('Qoldiq:')).toBeVisible()
-  await incomePanel.getByRole('button', { name: 'Qoldiqni kiritish' }).click()
+  // QAD-123: picking an order seeds the amount with its remaining balance, and
+  // refilling it moved out of the old balance panel onto the amount field as a
+  // "Qoldiq" suffix button.
+  const incomeAmount = incomePanel.getByLabel("Summa (to'liq yoki qisman)")
+  await expect(incomeAmount).not.toHaveValue('')
+  await incomeAmount.fill('1000')
+  await incomePanel.getByRole('button', { name: 'Qoldiq', exact: true }).click()
+  await expect(incomeAmount).not.toHaveValue('1000')
   await incomePanel.getByLabel('Izoh').fill('E2E order payment')
   await incomePanel.getByRole('button', { name: 'Yozish' }).click()
   await expect(page.getByText('E2E order payment')).toBeVisible()
@@ -124,6 +172,10 @@ test('owner records order income and standalone expense', async ({ page, request
   await page.getByRole('tab', { name: 'Xarajatlar' }).click()
   await page.getByRole('button', { name: '+ Xarajat' }).click()
   const expensePanel = page.getByRole('dialog', { name: 'Xarajat yozish' })
+  // QAD-149 gave the expense form a Turi toggle. A standalone expense is one
+  // branch of it, so pick it explicitly rather than relying on whichever side
+  // happens to be the default (which is «Boshqa xarajat» today).
+  await expensePanel.getByRole('radio', { name: 'Boshqa xarajat' }).click()
   await expensePanel.getByLabel('Tavsif').fill('E2E standalone expense')
   await expensePanel.getByLabel("Summa (so'm)").fill('1000')
   await expensePanel.getByRole('button', { name: 'Yozish' }).click()
@@ -161,6 +213,8 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   await loginWorkshop(page, seeded.setup.ownerLogin, ownerReadyPassword)
   await page.goto(`/workshop/orders/${placed.order.id}`)
   await expect(page.getByText('Kesilmoqda', { exact: true }).first()).toBeVisible()
+  // Revert sits in the header overflow menu.
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: 'tasdiqlangan holatiga qaytarish' }).click()
   const revertDialog = page.getByRole('dialog', { name: 'Buyurtmani qaytarish' })
   await revertDialog.getByLabel('Sabab').fill('E2E revert reason')
@@ -174,6 +228,7 @@ test('owner reverts with a reason and retries a stale cancel after 409', async (
   })
   await expectOk(note)
 
+  await page.getByRole('button', { name: 'Boshqa amallar' }).click()
   await page.getByRole('button', { name: 'Buyurtmani bekor qilish' }).click()
   const cancelDialog = page.getByRole('dialog', { name: 'Buyurtmani bekor qilish' })
   await cancelDialog.getByLabel('Sabab').fill('E2E stale cancel')

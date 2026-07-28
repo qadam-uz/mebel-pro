@@ -1,9 +1,13 @@
+from datetime import UTC, datetime
 from http.cookies import SimpleCookie
 
+import pytest
 from app.core.security import hash_password
-from app.models.enums import UserStatus
+from app.models.enums import Permission, UserStatus
+from app.modules.access.contracts import PermissionGrant, WorkshopUser
 from app.modules.access.routes import REFRESH_COOKIE_NAME
 from httpx import AsyncClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.factories import seed_platform_user, seed_workshop_with_owner
@@ -45,6 +49,7 @@ async def test_platform_login_sets_refresh_cookie_and_returns_me(
         "session_id": body["me"]["session_id"],
         "password_reset_required": True,
         "workshop_id": None,
+        "workshop_name": None,
         "is_owner": False,
         "grants": [],
         "login": "admin-auth",
@@ -88,24 +93,84 @@ async def test_workshop_login_resolves_by_login_and_password(
     assert wrong.json()["code"] == "invalid_credentials"
 
 
-async def test_workshop_login_disambiguates_same_login_across_workshops(
+async def test_staff_me_carries_the_workshop_name_they_cannot_read_from_settings(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    # Two workshops both have an owner whose login is "owner" (logins are unique
-    # only per workshop). The password resolves which account logs in.
-    ws_a, _, owner_a = await seed_workshop_with_owner(db_session)
-    ws_b, _, owner_b = await seed_workshop_with_owner(db_session)
+    """QAD-168: every workshop surface shows the tenant's name, but
+    `/workshop/settings` is owner-only — so the name rides on the principal."""
+    workshop, branch, owner = await seed_workshop_with_owner(db_session)
+    workshop.name = "Mebel Master"
+    staff = WorkshopUser(
+        workshop_id=workshop.id,
+        login="staff-tenant-name",
+        password_hash=hash_password("Staff123"),
+        full_name="Order Desk",
+        phone="+998904444444",
+        is_owner=False,
+        home_branch_id=branch.id,
+        password_reset_required=False,
+    )
+    db_session.add(staff)
+    await db_session.flush()
+    db_session.add(
+        PermissionGrant(
+            workshop_user_id=staff.id,
+            permission=Permission.MANAGE_ORDERS,
+            branch_id=branch.id,
+            granted_by_user_id=owner.id,
+            granted_at=datetime.now(UTC),
+        )
+    )
+    await db_session.flush()
+
+    login = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "staff-tenant-name", "password": "Staff123"},
+    )
+    assert login.status_code == 200
+    access_token = login.json()["access_token"]
+    me = await client.get("/api/v1/auth/me", headers=_auth(access_token))
+    settings = await client.get("/api/v1/workshop/settings", headers=_auth(access_token))
+
+    assert login.json()["me"]["workshop_name"] == "Mebel Master"
+    assert me.status_code == 200
+    assert me.json()["workshop_name"] == "Mebel Master"
+    assert settings.status_code == 403
+
+
+async def test_workshop_login_is_globally_unique(db_session: AsyncSession) -> None:
+    # The login alone names the account platform-wide: a second workshop cannot
+    # take a login another workshop already uses.
+    await seed_workshop_with_owner(db_session, login="owner")
+
+    with pytest.raises(IntegrityError):
+        await seed_workshop_with_owner(db_session, login="OWNER")
+
+
+async def test_workshop_login_resolves_one_account_across_workshops(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Two workshops, two distinct logins — each resolves to its own workshop
+    # from the login alone, with no password-driven candidate scan.
+    ws_a, _, owner_a = await seed_workshop_with_owner(db_session, login="owner_a")
+    ws_b, _, owner_b = await seed_workshop_with_owner(db_session, login="owner_b")
     owner_b.password_hash = hash_password("Different456")
     await db_session.flush()
 
     a = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"login": "owner", "password": "Owner123"},
+        json={"login": "owner_a", "password": "Owner123"},
     )
     b = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"login": "owner", "password": "Different456"},
+        json={"login": "OWNER_B", "password": "Different456"},
+    )
+    # Another workshop's password is never accepted for this login.
+    crossed = await client.post(
+        "/api/v1/auth/workshop/login",
+        json={"login": "owner_a", "password": "Different456"},
     )
 
     assert a.status_code == 200
@@ -114,17 +179,34 @@ async def test_workshop_login_disambiguates_same_login_across_workshops(
     assert b.status_code == 200
     assert b.json()["me"]["principal_id"] == str(owner_b.id)
     assert b.json()["me"]["workshop_id"] == str(ws_b.id)
+    assert crossed.status_code == 401
+    assert crossed.json()["code"] == "invalid_credentials"
 
-    # Same login AND same password in both workshops is ambiguous → generic 401,
-    # never an accidental login to the wrong workshop.
-    owner_b.password_hash = hash_password("Owner123")
-    await db_session.flush()
-    ambiguous = await client.post(
+
+async def test_workshop_login_lockout_holds_for_every_login(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Lockout used to be defeatable by sharing a login across workshops: a failed
+    # attempt recorded against nobody. With one account per login it always lands.
+    await seed_workshop_with_owner(db_session, login="owner")
+    await seed_workshop_with_owner(db_session, login="admin")
+
+    for _ in range(5):
+        miss = await client.post(
+            "/api/v1/auth/workshop/login",
+            json={"login": "admin", "password": "Wrong123"},
+        )
+        assert miss.status_code == 401
+        assert miss.json()["code"] == "invalid_credentials"
+
+    locked = await client.post(
         "/api/v1/auth/workshop/login",
-        json={"login": "owner", "password": "Owner123"},
+        json={"login": "admin", "password": "Owner123"},
     )
-    assert ambiguous.status_code == 401
-    assert ambiguous.json()["code"] == "invalid_credentials"
+
+    assert locked.status_code == 423
+    assert locked.json()["code"] == "account_locked"
 
 
 async def test_bad_credentials_lockout_discloses_status_only_after_valid_password(

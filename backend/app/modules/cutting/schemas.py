@@ -189,6 +189,11 @@ class CuttingDraftResponse(APIModel):
     client_id: uuid.UUID
     name: str | None
     preferred_branch_id: uuid.UUID | None
+    # Effective kerf/edge-trim for this draft, resolved from its branch (or the
+    # platform defaults for a branch-less draft) on every read — never a
+    # snapshot; a branch edit changes these on the next fetch.
+    kerf_mm: int
+    edge_trim_mm: int
     parts_snapshot: list[dict[str, Any]]
     chosen_result_id: uuid.UUID | None
     # Set only on an order's revision draft (orders.md: "Revising a placed

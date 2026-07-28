@@ -95,7 +95,7 @@ async function place() {
     const code = apiErrorCode(caught)
     placeError.value =
       code === 'missing_cutting_rate' || code === 'missing_edge_banding_rate'
-        ? 'Bu filialda kesish/kromka narxi belgilanmagan — avval egasi narxlarni kiritishi kerak.'
+        ? 'Bu filialda kesish/kromka narxi belgilanmagan — avval rahbar narxlarni kiritishi kerak.'
         : workshopErrorMessage(code)
   } finally {
     placing.value = false

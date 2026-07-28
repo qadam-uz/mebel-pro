@@ -1,9 +1,7 @@
 """Client and workshop order routes."""
 
 import uuid
-from csv import writer
 from datetime import date
-from io import StringIO
 
 from fastapi import APIRouter, Query, Response, status
 from fastapi.responses import JSONResponse
@@ -15,6 +13,7 @@ from app.modules.cutting.schemas import CuttingDraftResponse
 from app.modules.sales.api import (
     apply_discount,
     apply_order_edit,
+    apply_surcharge,
     approve_order,
     assign_order_workers,
     begin_order_edit,
@@ -22,6 +21,7 @@ from app.modules.sales.api import (
     cancel_workshop_order,
     complete_banding,
     complete_cutting,
+    count_new_workshop_orders,
     get_client_order,
     get_client_order_cutting_result,
     get_production_job,
@@ -46,6 +46,7 @@ from app.modules.sales.schemas import (
     BatchOrderQuoteRequest,
     BatchOrderQuoteResponse,
     ClientOrderCreateRequest,
+    NewOrderCountResponse,
     OrderDetailResponse,
     OrderQuoteResponse,
     OrderSummaryResponse,
@@ -59,6 +60,7 @@ from app.modules.sales.schemas import (
     WorkshopOrderDiscountRequest,
     WorkshopOrderEditApplyRequest,
     WorkshopOrderNoteRequest,
+    WorkshopOrderSurchargeRequest,
     WorkshopWorkerOption,
 )
 
@@ -165,7 +167,7 @@ async def client_order_cutting_pdf(
 ) -> Response:
     order = await get_client_order(db, principal=principal, order_id=order_id)
     result = await get_client_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),
@@ -211,64 +213,6 @@ async def workshop_orders_index(
     )
 
 
-@router.get("/workshop/orders/export.csv")
-async def workshop_orders_export_csv(
-    principal: AccountReadyPrincipal,
-    db: Session,
-    branch_id: uuid.UUID | None = None,
-    status: str | None = None,
-    search: str | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-    contact_phone: str | None = None,
-    assigned_cutter_user_id: uuid.UUID | None = None,
-    assigned_edger_user_id: uuid.UUID | None = None,
-    limit: int = Query(default=1000, ge=1, le=1000),
-) -> Response:
-    rows = await list_workshop_orders(
-        db,
-        principal=principal,
-        branch_id=branch_id,
-        status_filter=status,
-        search=search,
-        date_from=date_from,
-        date_to=date_to,
-        contact_phone=contact_phone,
-        assigned_cutter_user_id=assigned_cutter_user_id,
-        assigned_edger_user_id=assigned_edger_user_id,
-        limit=limit,
-        offset=0,
-        max_limit=1000,
-    )
-    output = StringIO()
-    csv_writer = writer(output)
-    csv_writer.writerow(
-        [
-            "order_number",
-            "client_name",
-            "client_phone",
-            "branch_name",
-            "status",
-            "total_tiyin",
-            "created_at",
-        ]
-    )
-    for row in rows:
-        csv_writer.writerow(
-            [
-                row.order_number,
-                row.client_name,
-                row.client_phone,
-                row.branch_name,
-                row.status.value,
-                row.total_tiyin,
-                row.created_at.isoformat(),
-            ]
-        )
-    headers = {"Content-Disposition": 'attachment; filename="workshop-orders.csv"'}
-    return Response(output.getvalue(), media_type="text/csv; charset=utf-8", headers=headers)
-
-
 @router.get("/workshop/orders/workers", response_model=list[WorkshopWorkerOption])
 async def workshop_order_workers(
     branch_id: uuid.UUID,
@@ -276,6 +220,17 @@ async def workshop_order_workers(
     db: Session,
 ) -> list[WorkshopWorkerOption]:
     return await list_worker_options(db, principal=principal, branch_id=branch_id)
+
+
+# Ambient count behind the sidebar badge (QAD-156). Declared BEFORE `/{order_id}`
+# so the literal `new-count` segment isn't captured as an order id.
+@router.get("/workshop/orders/new-count", response_model=NewOrderCountResponse)
+async def workshop_orders_new_count(
+    principal: AccountReadyPrincipal,
+    db: Session,
+    branch_id: uuid.UUID | None = None,
+) -> NewOrderCountResponse:
+    return await count_new_workshop_orders(db, principal=principal, branch_id=branch_id)
 
 
 # Staff create + quote for walk-in orders. Declared BEFORE `/{order_id}` so the
@@ -460,6 +415,16 @@ async def workshop_orders_discount(
     return await apply_discount(db, principal=principal, order_id=order_id, payload=payload)
 
 
+@router.post("/workshop/orders/{order_id}/surcharge", response_model=OrderDetailResponse)
+async def workshop_orders_surcharge(
+    order_id: uuid.UUID,
+    payload: WorkshopOrderSurchargeRequest,
+    principal: AccountReadyPrincipal,
+    db: Session,
+) -> OrderDetailResponse:
+    return await apply_surcharge(db, principal=principal, order_id=order_id, payload=payload)
+
+
 @router.patch("/workshop/orders/{order_id}/note", response_model=OrderDetailResponse)
 async def workshop_orders_note(
     order_id: uuid.UUID,
@@ -478,7 +443,7 @@ async def workshop_order_cutting_pdf(
 ) -> Response:
     order = await get_workshop_order(db, principal=principal, order_id=order_id)
     result = await get_workshop_order_cutting_result(db, principal=principal, order_id=order_id)
-    headers = {"Content-Disposition": f'attachment; filename="cutting-{result.id}.pdf"'}
+    headers = {"Content-Disposition": f'inline; filename="cutting-{result.id}.pdf"'}
     return Response(
         render_cutting_pdf(
             await cutting_result_response(db, result),

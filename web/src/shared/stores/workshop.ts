@@ -1,7 +1,13 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import {
+  api,
+  apiTraceId,
+  captureApiError,
+  isPermissionDenied,
+  withQuery,
+} from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
 import {
   CATALOG_PICKER_LIMIT,
@@ -27,6 +33,8 @@ export interface BranchContextItem {
   phone: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
+  kerf_mm: number
+  edge_trim_mm: number
   permissions: string[]
 }
 
@@ -64,14 +72,21 @@ export interface WorkshopSettings {
 export interface ManagedBranch {
   id: string
   workshop_id: string
+  // Platform-wide branch number, assigned at creation and immutable — it is the
+  // middle segment of every order number the branch prints, `#26-1-0003`
+  // (QAD-146). Read-only: it is never sent back in a create or patch payload.
+  branch_no: number
   name: string
   address: string
   phone: string
+  // Extra published numbers in display order; the primary stays `phone` (QAD-158).
+  additional_phones: string[]
   latitude: string | null
   longitude: string | null
-  working_hours: Record<string, unknown>
   status: BranchStatus
   closed_reason: string | null
+  kerf_mm: number
+  edge_trim_mm: number
   created_at: string
   updated_at: string
 }
@@ -98,7 +113,24 @@ export interface BranchMaterial {
 
 export interface BranchCatalogOption {
   material: Material
-  already_selected: boolean
+}
+
+// QAD-159: the picker excludes materials the branch already carries, so `total`
+// counts exactly what "Filtrdagi hammasi (N)" would select — page included.
+export interface BranchCatalogOptionsPage {
+  items: BranchCatalogOption[]
+  total: number
+}
+
+export interface BranchCatalogFilters {
+  manufacturers: { id: string; name: string }[]
+  thicknesses: string[]
+}
+
+export interface BranchMaterialBulkItem {
+  material_id: string
+  price_tiyin: number
+  min_stock: number
 }
 
 export interface Supplier {
@@ -146,6 +178,50 @@ export interface StockTransaction {
   created_at: string
 }
 
+export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export interface SupplierInvoiceLine {
+  transaction_id: string
+  material_id: string
+  material_name: string
+  kind: MaterialKind
+  display_unit: string
+  quantity: number
+  unit_price_tiyin: number | null
+  total_price_tiyin: number | null
+  note: string | null
+}
+
+export interface SupplierInvoice {
+  id: string
+  workshop_id: string
+  branch_id: string
+  branch_name: string | null
+  supplier_id: string | null
+  supplier_name: string | null
+  invoice_no: string
+  invoice_date: string
+  subtotal_tiyin: number
+  discount_tiyin: number
+  surcharge_tiyin: number
+  total_tiyin: number
+  note: string | null
+  line_count: number
+  paid_tiyin: number
+  outstanding_tiyin: number
+  payment_status: InvoicePaymentStatus
+  recorded_by_user_id: string
+  recorded_by_name: string | null
+  created_at: string
+  lines: SupplierInvoiceLine[]
+}
+
+export interface SupplierInvoiceFilters {
+  supplier_id?: string | null
+  search?: string | null
+  payment_status?: InvoicePaymentStatus | null
+}
+
 export interface StockLastPrice {
   unit_price_tiyin: number | null
   recorded_at: string | null
@@ -167,11 +243,13 @@ export interface BranchMaterialFilters {
   status?: MaterialStatus | null
   manufacturer_id?: string | null
   material_type?: PanelMaterialType | null
+  thickness_mm?: string | null
   offset?: number
+  limit?: number
 }
 
 export const permissionCatalog = [
-  'view_dashboard',
+  'view_orders',
   'manage_orders',
   'process_production',
   'manage_catalog',
@@ -188,6 +266,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const selectedBranch = ref<ManagedBranch | null>(null)
   const selectedBranchPricing = ref<BranchPricing | null>(null)
   const catalogOptions = ref<BranchCatalogOption[]>([])
+  const catalogOptionsTotal = ref(0)
+  const catalogFilters = ref<BranchCatalogFilters>({ manufacturers: [], thicknesses: [] })
   const branchMaterials = ref<BranchMaterial[]>([])
   const branchMaterialsHasMore = ref(false)
   const suppliers = ref<Supplier[]>([])
@@ -196,6 +276,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
   const stockValueTiyin = ref<number | null>(null)
   const stockTransactions = ref<StockTransaction[]>([])
   const stockTransactionsHasMore = ref(false)
+  const supplierInvoices = ref<SupplierInvoice[]>([])
   const users = ref<WorkshopUser[]>([])
   const selectedUser = ref<WorkshopUser | null>(null)
   const sessions = ref<SessionResponse[]>([])
@@ -227,6 +308,22 @@ export const useWorkshopStore = defineStore('workshop', () => {
     const captured = captureApiError(errorValue, fallback)
     actionError.value = captured.code
     actionTraceId.value = captured.traceId
+  }
+
+  /**
+   * A refused read means the grant behind the rows on screen is gone. Drop them
+   * instead of leaving them under an error line — a table the server just said
+   * you may not read has no business staying visible (QAD-172). Other failures
+   * (offline, 5xx) keep the last good rows: the data is still the viewer's, it
+   * merely failed to refresh.
+   */
+  async function readOrDrop<T>(read: () => Promise<T>, drop: () => void): Promise<T> {
+    try {
+      return await read()
+    } catch (errorValue) {
+      if (isPermissionDenied(errorValue)) drop()
+      throw errorValue
+    }
   }
 
   function setSelectedBranchContext(value: string | null) {
@@ -347,18 +444,37 @@ export const useWorkshopStore = defineStore('workshop', () => {
   }
 
   // The add-material picker is server-searched and capped — never the whole
-  // catalog — so opening the modal on the full material set doesn't freeze.
-  async function loadCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
-    catalogOptions.value = await api.get<BranchCatalogOption[]>(
+  // catalog — so opening the sheet on the full material set doesn't freeze.
+  // Returns the page so callers can page through "select everything in the
+  // filter" without the store holding more than the visible list.
+  async function fetchCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
+    return api.get<BranchCatalogOptionsPage>(
       withQuery(`/workshop/branches/${id}/catalog/materials`, {
         search: filters.search,
         kind: filters.kind,
         manufacturer_id: filters.manufacturer_id,
         material_type: filters.material_type,
-        limit: CATALOG_PICKER_LIMIT,
+        thickness_mm: filters.thickness_mm,
+        limit: filters.limit ?? CATALOG_PICKER_LIMIT,
+        offset: filters.offset,
       }),
       authInit(),
     )
+  }
+
+  async function loadCatalogOptions(id: string, filters: BranchMaterialFilters = {}) {
+    const page = await fetchCatalogOptions(id, filters)
+    catalogOptions.value = page.items
+    catalogOptionsTotal.value = page.total
+    return page
+  }
+
+  async function loadCatalogFilters(id: string) {
+    catalogFilters.value = await api.get<BranchCatalogFilters>(
+      `/workshop/branches/${id}/catalog/filters`,
+      authInit(),
+    )
+    return catalogFilters.value
   }
 
   // Paginated with append (offset 0 replaces, higher offset appends the next
@@ -391,6 +507,10 @@ export const useWorkshopStore = defineStore('workshop', () => {
       if (requestId === catalogLoadRequestId) {
         catalogError.value = 'catalog_load_failed'
         catalogTraceId.value = apiTraceId(errorValue)
+        if (isPermissionDenied(errorValue)) {
+          branchMaterials.value = []
+          branchMaterialsHasMore.value = false
+        }
       }
       throw errorValue
     } finally {
@@ -408,6 +528,17 @@ export const useWorkshopStore = defineStore('workshop', () => {
     await loadStock(id).catch(() => undefined)
     await loadCatalogOptions(id).catch(() => undefined)
     return created
+  }
+
+  // Bulk attach is atomic server-side: either every row lands or the call throws
+  // naming the offending material, so there is no partial state to reconcile here.
+  async function addBranchMaterialsBulk(id: string, items: BranchMaterialBulkItem[]) {
+    const result = await api.post<{
+      created: BranchMaterial[]
+      skipped_material_ids: string[]
+    }>(`/workshop/branches/${id}/materials/bulk`, { items }, authInit())
+    await loadStock(id).catch(() => undefined)
+    return result
   }
 
   async function updateBranchMaterial(id: string, branchMaterialId: string, payload: unknown) {
@@ -441,12 +572,18 @@ export const useWorkshopStore = defineStore('workshop', () => {
     id: string,
     filters: { search?: string; low_stock?: boolean | null } = {},
   ) {
-    stockItems.value = await api.get<StockItem[]>(
-      withQuery(`/workshop/branches/${id}/stock`, {
-        search: filters.search,
-        low_stock: filters.low_stock ? true : undefined,
-      }),
-      authInit(),
+    stockItems.value = await readOrDrop(
+      () =>
+        api.get<StockItem[]>(
+          withQuery(`/workshop/branches/${id}/stock`, {
+            search: filters.search,
+            low_stock: filters.low_stock ? true : undefined,
+          }),
+          authInit(),
+        ),
+      () => {
+        stockItems.value = []
+      },
     )
   }
 
@@ -455,15 +592,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       lowStockItems.value = []
       return
     }
-    const pages = await Promise.all(
-      [...new Set(branchIds)].map((id) =>
-        api.get<StockItem[]>(
-          withQuery(`/workshop/branches/${id}/stock`, {
-            low_stock: true,
-          }),
-          authInit(),
+    const pages = await readOrDrop(
+      () =>
+        Promise.all(
+          [...new Set(branchIds)].map((id) =>
+            api.get<StockItem[]>(
+              withQuery(`/workshop/branches/${id}/stock`, {
+                low_stock: true,
+              }),
+              authInit(),
+            ),
+          ),
         ),
-      ),
+      () => {
+        lowStockItems.value = []
+      },
     )
     lowStockItems.value = pages.flat()
   }
@@ -475,10 +618,16 @@ export const useWorkshopStore = defineStore('workshop', () => {
       stockValueTiyin.value = null
       return
     }
-    const values = await Promise.all(
-      [...new Set(branchIds)].map((id) =>
-        api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
-      ),
+    const values = await readOrDrop(
+      () =>
+        Promise.all(
+          [...new Set(branchIds)].map((id) =>
+            api.get<{ value_tiyin: number }>(`/workshop/branches/${id}/stock-value`, authInit()),
+          ),
+        ),
+      () => {
+        stockValueTiyin.value = null
+      },
     )
     stockValueTiyin.value = values.reduce((sum, row) => sum + row.value_tiyin, 0)
   }
@@ -486,24 +635,37 @@ export const useWorkshopStore = defineStore('workshop', () => {
   async function loadStockTransactions(id: string, filters: StockTransactionFilters = {}) {
     const limit = filters.limit ?? INVENTORY_TX_PAGE_LIMIT
     const offset = filters.offset ?? 0
-    const page = await api.get<StockTransaction[]>(
-      withQuery(`/workshop/branches/${id}/stock-transactions`, {
-        material_id: filters.material_id,
-        date_from: filters.date_from,
-        date_to: filters.date_to,
-        limit,
-        offset,
-      }),
-      authInit(),
+    const page = await readOrDrop(
+      () =>
+        api.get<StockTransaction[]>(
+          withQuery(`/workshop/branches/${id}/stock-transactions`, {
+            material_id: filters.material_id,
+            date_from: filters.date_from,
+            date_to: filters.date_to,
+            limit,
+            offset,
+          }),
+          authInit(),
+        ),
+      () => {
+        stockTransactions.value = []
+        stockTransactionsHasMore.value = false
+      },
     )
     stockTransactions.value = offset === 0 ? page : [...stockTransactions.value, ...page]
     stockTransactionsHasMore.value = page.length === limit
   }
 
   async function loadSuppliers(id: string, status?: SupplierStatus | null) {
-    suppliers.value = await api.get<Supplier[]>(
-      withQuery(`/workshop/branches/${id}/suppliers`, { status }),
-      authInit(),
+    suppliers.value = await readOrDrop(
+      () =>
+        api.get<Supplier[]>(
+          withQuery(`/workshop/branches/${id}/suppliers`, { status }),
+          authInit(),
+        ),
+      () => {
+        suppliers.value = []
+      },
     )
   }
 
@@ -521,12 +683,31 @@ export const useWorkshopStore = defineStore('workshop', () => {
     }
   }
 
+  async function loadSupplierInvoices(id: string, filters: SupplierInvoiceFilters = {}) {
+    supplierInvoices.value = await readOrDrop(
+      () =>
+        api.get<SupplierInvoice[]>(
+          withQuery('/workshop/inventory/invoices', {
+            branch_id: id,
+            supplier_id: filters.supplier_id,
+            search: filters.search,
+            payment_status: filters.payment_status,
+          }),
+          authInit(),
+        ),
+      () => {
+        supplierInvoices.value = []
+      },
+    )
+  }
+
   function clearInventory() {
     suppliers.value = []
     stockItems.value = []
     lowStockItems.value = []
     stockTransactions.value = []
     stockTransactionsHasMore.value = false
+    supplierInvoices.value = []
     inventoryError.value = null
     inventoryTraceId.value = null
   }
@@ -576,6 +757,21 @@ export const useWorkshopStore = defineStore('workshop', () => {
       }),
       authInit(),
     )
+  }
+
+  // One arrival document and all its lines, committed together server-side.
+  // The stock and transaction views are refreshed after it so the page never
+  // shows a half-applied arrival.
+  async function createSupplierInvoice(id: string, payload: unknown) {
+    const invoice = await api.post<SupplierInvoice>(
+      '/workshop/inventory/invoices',
+      { ...(payload as object), branch_id: id },
+      authInit(),
+    )
+    supplierInvoices.value = [invoice, ...supplierInvoices.value]
+    await loadStock(id).catch(() => undefined)
+    if ((payload as { supplier?: unknown }).supplier) await loadSuppliers(id).catch(() => undefined)
+    return invoice
   }
 
   async function recordStockIn(id: string, payload: unknown) {
@@ -830,6 +1026,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranch.value = null
     selectedBranchPricing.value = null
     catalogOptions.value = []
+    catalogOptionsTotal.value = 0
+    catalogFilters.value = { manufacturers: [], thicknesses: [] }
     branchMaterials.value = []
     suppliers.value = []
     stockItems.value = []
@@ -866,6 +1064,8 @@ export const useWorkshopStore = defineStore('workshop', () => {
     selectedBranch,
     selectedBranchPricing,
     catalogOptions,
+    catalogOptionsTotal,
+    catalogFilters,
     branchMaterials,
     branchMaterialsHasMore,
     suppliers,
@@ -874,6 +1074,7 @@ export const useWorkshopStore = defineStore('workshop', () => {
     stockValueTiyin,
     stockTransactions,
     stockTransactionsHasMore,
+    supplierInvoices,
     users,
     selectedUser,
     sessions,
@@ -903,6 +1104,9 @@ export const useWorkshopStore = defineStore('workshop', () => {
     setBranchStatus,
     updateBranchPricing,
     loadCatalogOptions,
+    fetchCatalogOptions,
+    loadCatalogFilters,
+    addBranchMaterialsBulk,
     loadBranchMaterials,
     addBranchMaterial,
     updateBranchMaterial,
@@ -912,12 +1116,14 @@ export const useWorkshopStore = defineStore('workshop', () => {
     loadStockValue,
     loadStockTransactions,
     loadSuppliers,
+    loadSupplierInvoices,
     loadInventory,
     clearInventory,
     createSupplier,
     updateSupplier,
     setSupplierStatus,
     fetchMaterialLastPrice,
+    createSupplierInvoice,
     recordStockIn,
     recordAdjustment,
     loadUsers,

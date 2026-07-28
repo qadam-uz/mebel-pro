@@ -2,7 +2,7 @@
 title: Sales
 status: draft
 owner: shape
-updated: 2026-07-11
+updated: 2026-07-26
 order: 50
 ---
 
@@ -27,7 +27,7 @@ Material source is **per item** for the panel and **per side** for each edge —
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `order_number` | text | human-readable, `ORD-2026-000123` (per-year sequence); unique |
+| `order_number` | text | human-readable, `#26-14-0003` — 2-digit year · the branch's `branch_no` · a per-branch, per-year sequence (4 digits, resets each January); globally unique |
 | `client_id` | UUID | the client the order belongs to — its placer, or the walk-in it was placed for |
 | `workshop_id` / `branch_id` | UUID | required (branch in the workshop) |
 | `cutting_result_id` | UUID | the confirmed (current) cutting result |
@@ -37,6 +37,18 @@ Material source is **per item** for the panel and **per side** for each edge —
 | `note_client` / `note_workshop` | text? | client and staff notes |
 | `created_at` / `updated_at` / `confirmed_at` / `completed_at` / `cancelled_at` | timestamps | as the lifecycle moves |
 
+**Order number** — `#26-14-0003` is the third 2026 order of branch 14. The sequence is scoped
+to the branch because a client orders from a branch, and that is the unit staff count in; the
+`branch_no` segment ([`workshop.md`](workshop.md)) carries both the branch's identity and the
+number's platform-wide uniqueness, so there is no workshop segment. `branch_no` is never
+zero-padded and the prefix keeps its trailing dash, which is what stops branch 1's numbers
+from being read as branch 14's. Numbers are minted under an advisory lock and counted from
+existing rows — safe only because orders are never deleted.
+
+*Legacy era:* orders placed before this format keep their `ORD-2026-000123` numbers — clients
+hold screenshots and printed cutting maps of them. The two formats coexist permanently; order
+search is a substring match, so both stay findable.
+
 **Pricing snapshot** (frozen at creation against the chosen branch's rates; there is no
 post-placement modification, so it is never re-priced)
 
@@ -45,9 +57,11 @@ post-placement modification, so it is never re-priced)
 | `subtotal_cutting_tiyin` | bigint | snapshot subtotal — `Σ panels × cutting_rate_tiyin` at this branch; ≥ 0 |
 | `subtotal_materials_tiyin` | bigint | snapshot subtotal — `shop`-source panel cost; ≥ 0 |
 | `subtotal_edge_banding_tiyin` | bigint | snapshot subtotal — `shop`-source edge cost; ≥ 0 |
-| `discount_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; ≤ pre-discount total |
+| `discount_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; ≤ pre-adjustment subtotal (never makes the price negative) |
 | `discount_reason` / `discount_applied_by_user_id` | text? / UUID? | required if `discount_tiyin > 0` |
-| `total_tiyin` | bigint | `cutting + materials + edge banding − discount`; ≥ 0 |
+| `surcharge_tiyin` | bigint | applied by a `manage_orders` user; ≥ 0; no cap (reason + audit are the control) |
+| `surcharge_reason` / `surcharge_applied_by_user_id` | text? / UUID? | required if `surcharge_tiyin > 0` |
+| `total_tiyin` | bigint | `cutting + materials + edge banding − discount + surcharge`; ≥ 0 |
 | `currency` | enum | `UZS` (only value in v1) |
 
 **Worker assignment + production stamps** (assignment is mutable until the job is done;
@@ -75,7 +89,10 @@ draft with a `chosen` result (which becomes `confirmed` and bound); a staff-crea
 lands `confirmed` with `confirmed_at` set at creation; the checkout contact snapshot is
 frozen at creation so later client profile edits do not rewrite the workshop-facing order;
 all money fields are integer
-tiyin; `total_tiyin` follows the formula and can't go negative; the price snapshot is frozen
+tiyin; `total_tiyin` follows the formula and can't go negative; the discount and surcharge
+are independent manual adjustments (either, both, or neither), each requiring a reason and
+applied-by stamp when non-zero, settable only while `new`/`confirmed` and cleared by a
+revision; the price snapshot is otherwise frozen
 at creation (no re-pricing — there is no modification); status transitions follow the state
 machine only; concurrent transitions serialize by `version`; `cutter_user_id` /
 `edger_user_id` reference workshop users who hold `process_production` on `branch_id`;

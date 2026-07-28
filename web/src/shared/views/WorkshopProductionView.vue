@@ -4,7 +4,6 @@ import { RouterLink, useRouter } from 'vue-router'
 
 import { useRolePath } from '@/shared/app/paths'
 import {
-  groupProductionJobsByAssignee,
   partitionProductionJobs,
   productionJobAssignee,
   productionJobMetaLine,
@@ -47,34 +46,22 @@ const station = computed(() => props.station)
 const stationTitle = computed(() => (station.value === 'cutting' ? 'Kesish' : 'Krom'))
 
 const queue = computed(() => production.queues[station.value] ?? null)
-const isManagerView = computed(
-  () => auth.me?.is_owner === true || permissions.canAny([p.manageOrders]),
-)
 const canProcessAny = computed(() => permissions.canAny([p.processProduction, p.manageOrders]))
-const multiBranch = computed(() => workshop.branches.length > 1)
 
 const partitioned = computed(() => partitionProductionJobs(queue.value?.jobs ?? [], station.value))
 const currentJobs = computed(() => partitioned.value.current)
 const queuedJobs = computed(() => partitioned.value.queued)
 const completedToday = computed(() => queue.value?.completed_today ?? [])
-const queuedGroups = computed(() =>
-  isManagerView.value ? groupProductionJobsByAssignee(queuedJobs.value, station.value) : null,
-)
 
 function jobMeta(job: ProductionJobCard) {
   return productionJobMetaLine(job, station.value)
 }
 
-function assigneeName(job: ProductionJobCard) {
-  return productionJobAssignee(job, station.value)?.full_name ?? null
-}
-
-function isMine(job: ProductionJobCard) {
-  return productionJobAssignee(job, station.value)?.id === auth.me?.principal_id
-}
-
+// The station page is the worker's own task list — the backend already scopes
+// the queue to the caller's assignments, so "can act" is just "it's mine".
+// Owners and operators manage statuses on-behalf from the office order page.
 function canActOn(job: ProductionJobCard) {
-  return isMine(job) || permissions.canOnBranch(p.manageOrders, job.branch_id)
+  return productionJobAssignee(job, station.value)?.id === auth.me?.principal_id
 }
 
 function startedLabel(job: ProductionJobCard) {
@@ -95,7 +82,8 @@ function completedLabel(job: ProductionJobCard) {
 }
 
 async function refresh() {
-  await production.loadQueues(['cutting', 'banding'])
+  // Scoped to the topbar branch picker, same as every other branch page.
+  await production.loadQueues(['cutting', 'banding'], workshop.selectedBranchContext)
 }
 
 // The queue stays fresh on its own: a slow poll plus an immediate refresh when
@@ -188,6 +176,13 @@ onBeforeUnmount(() => {
 watch(station, () => {
   actionError.value = null
 })
+
+watch(
+  () => workshop.selectedBranchContext,
+  () => {
+    void refresh()
+  },
+)
 </script>
 
 <template>
@@ -195,15 +190,6 @@ watch(station, () => {
     <div class="page-head">
       <div>
         <h1>{{ stationTitle }}</h1>
-      </div>
-      <div class="tools">
-        <RouterLink
-          v-if="isManagerView"
-          :to="rolePath('/workshop/orders')"
-          class="mp-button mp-button-outline min-h-9 px-3 text-xs"
-        >
-          Buyurtmalar
-        </RouterLink>
       </div>
     </div>
 
@@ -245,11 +231,8 @@ watch(station, () => {
       </div>
 
       <section v-if="currentJobs.length === 0 && queuedJobs.length === 0" class="st-empty mt-4">
-        <h3>
-          {{ isManagerView ? "Bu stanokda ish yo'q" : "Sizga tayinlangan ish yo'q" }}
-        </h3>
-        <p v-if="isManagerView">Buyurtma tasdiqlanib ustaga tayinlangach, u shu yerda ko'rinadi.</p>
-        <p v-else>
+        <h3>Sizga tayinlangan ish yo'q</h3>
+        <p>
           Rahbar buyurtmani sizga tayinlagach, u shu yerda ko'rinadi — sahifa o'zi yangilanib
           turadi.
         </p>
@@ -264,13 +247,7 @@ watch(station, () => {
               <h4>{{ job.order_number }}</h4>
               <span class="text-xs text-ink-muted">{{ startedLabel(job) }}</span>
             </div>
-            <div class="meta">
-              {{ jobMeta(job) }} · {{ job.client_first_name }} uchun
-              <template v-if="isManagerView && assigneeName(job)">
-                · {{ assigneeName(job) }}</template
-              >
-              <template v-if="isManagerView && multiBranch"> · {{ job.branch_name }}</template>
-            </div>
+            <div class="meta">{{ jobMeta(job) }} · {{ job.client_first_name }} uchun</div>
             <div class="mt-4 flex flex-wrap gap-2">
               <button
                 v-if="canActOn(job)"
@@ -291,7 +268,7 @@ watch(station, () => {
           </article>
         </div>
 
-        <!-- The queue, FIFO by assignment. Managers see it grouped by master. -->
+        <!-- The queue, FIFO by assignment. -->
         <div class="prod-sec-h">
           <span>Navbatda</span>
           <span>{{ queuedJobs.length }} ta</span>
@@ -300,38 +277,6 @@ watch(station, () => {
           <h3>Navbatda ish yo'q</h3>
           <p>Yangi tayinlangan ishlar shu yerda chiqadi.</p>
         </div>
-        <template v-else-if="queuedGroups">
-          <div v-for="group in queuedGroups" :key="group.worker?.id ?? 'unassigned'">
-            <div class="prod-group-h">{{ group.worker?.full_name ?? 'Tayinlanmagan' }}</div>
-            <article v-for="job in group.jobs" :key="job.id" class="prod-card">
-              <div class="flex items-baseline justify-between gap-3">
-                <h4>{{ job.order_number }}</h4>
-                <span class="text-xs text-ink-muted">{{ queuedLabel(job) }}</span>
-              </div>
-              <div class="meta">
-                {{ jobMeta(job) }} · {{ job.client_first_name }} uchun
-                <template v-if="multiBranch"> · {{ job.branch_name }}</template>
-              </div>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <button
-                  v-if="canActOn(job)"
-                  type="button"
-                  class="mp-button mp-button-primary min-h-11 px-4"
-                  :disabled="orders.actionLoading || pendingJobId === job.id"
-                  @click="startJob(job)"
-                >
-                  {{ pendingJobId === job.id ? 'Boshlanmoqda…' : 'Boshlash' }}
-                </button>
-                <RouterLink
-                  :to="rolePath(`/workshop/production/${job.id}`)"
-                  class="mp-button mp-button-outline min-h-11 px-4"
-                >
-                  Chizma
-                </RouterLink>
-              </div>
-            </article>
-          </div>
-        </template>
         <template v-else>
           <article v-for="job in queuedJobs" :key="job.id" class="prod-card">
             <div class="flex items-baseline justify-between gap-3">

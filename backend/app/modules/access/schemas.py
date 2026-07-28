@@ -74,6 +74,10 @@ class MeResponse(APIModel):
     session_id: uuid.UUID
     password_reset_required: bool = False
     workshop_id: uuid.UUID | None = None
+    # The tenant's display name, carried on the principal so every workshop user
+    # can render it — `/workshop/settings`, the only other source, is owner-only
+    # and staff took a 403 asking for it (QAD-168).
+    workshop_name: str | None = None
     is_owner: bool = False
     grants: list[PermissionGrantResponse] = Field(default_factory=list)
     login: str | None = None

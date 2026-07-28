@@ -38,7 +38,7 @@ test("client sees a localized order notification in the bell and opens it", asyn
   await loginClient(page, clientPhone, `Notify Client ${id}`);
 
   // The bell badges the unread notification (aria-label carries the count).
-  const bell = page.getByRole("button", { name: /Bildirishnomalar - 1/ });
+  const bell = page.getByRole("button", { name: /Bildirishnomalar — 1/ });
   await expect(bell).toBeVisible();
   await bell.click();
 
@@ -58,6 +58,6 @@ test("client sees a localized order notification in the bell and opens it", asyn
     page.getByRole("heading", { name: order.order_number }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Bildirishnomalar - 0/ }),
+    page.getByRole("button", { name: /Bildirishnomalar — 0/ }),
   ).toBeVisible();
 });

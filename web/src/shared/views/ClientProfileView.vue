@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 
 import { apiTraceId } from '@/shared/api/client'
 import { clientErrorLabel, formatPhone } from '@/shared/app/clientUi'
+import { traceLine } from '@/shared/app/errorTrace'
 import { formatDate } from '@/shared/formatters'
 import Icon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -101,7 +102,7 @@ onMounted(reloadProfile)
       <div class="client-error-icon"><Icon name="alert" /></div>
       <h3>Profilni yuklab bo'lmadi</h3>
       <p>Ulanishda xatolik yuz berdi. Birozdan so'ng qayta urinib ko'ring.</p>
-      <p class="client-trace">trace_id: {{ profileTraceId ?? 'unavailable' }}</p>
+      <p class="client-trace">{{ traceLine(profileTraceId) }}</p>
       <button type="button" class="mp-button mp-button-outline mt-4" @click="reloadProfile">
         Qayta urinish
       </button>
@@ -199,7 +200,7 @@ onMounted(reloadProfile)
         </div>
         <div class="client-card-b">
           <div v-if="sessions.length === 0" class="text-sm text-ink-muted">
-            Faol sessiya topilmadi.
+            Faol sessiya yo'q — joriy sessiya keyingi yangilashda ko'rinadi.
           </div>
           <template v-else>
             <div v-for="session in sessions" :key="session.id" class="client-row-item">

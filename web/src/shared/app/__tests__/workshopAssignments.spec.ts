@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { assignmentChipsForOrder, workerInitials } from '@/shared/app/workshopAssignments'
+import {
+  assignmentChipsForOrder,
+  edgerMissingForOrder,
+  workerInitials,
+} from '@/shared/app/workshopAssignments'
 
 describe('workshop assignment chips', () => {
   it('builds cutter and edger chips with role labels and initials', () => {
@@ -51,5 +55,27 @@ describe('workshop assignment chips', () => {
 
   it('handles one-part names without dropping the chip text', () => {
     expect(workerInitials('Dilshod')).toBe('DI')
+  })
+})
+
+describe('edger gap warning', () => {
+  const banded = { has_banding: true, assigned_edger_user_id: null }
+
+  it('flags a banded order without an edger once production is running', () => {
+    expect(edgerMissingForOrder({ ...banded, status: 'cutting' })).toBe(true)
+    expect(edgerMissingForOrder({ ...banded, status: 'edge_banding' })).toBe(true)
+  })
+
+  it('stays quiet before the saw starts and after the slot is filled', () => {
+    expect(edgerMissingForOrder({ ...banded, status: 'confirmed' })).toBe(false)
+    expect(
+      edgerMissingForOrder({ ...banded, status: 'cutting', assigned_edger_user_id: 'user-1' }),
+    ).toBe(false)
+  })
+
+  it('never fires on an order with no banding at all', () => {
+    expect(
+      edgerMissingForOrder({ has_banding: false, assigned_edger_user_id: null, status: 'cutting' }),
+    ).toBe(false)
   })
 })

@@ -18,6 +18,9 @@ export interface MeResponse {
   session_id: string
   password_reset_required: boolean
   workshop_id: string | null
+  // The tenant's display name, served to every workshop principal — staff can't
+  // read `/workshop/settings`, which is owner-only (QAD-168).
+  workshop_name: string | null
   is_owner: boolean
   grants: PermissionGrant[]
   login: string | null
@@ -121,6 +124,29 @@ export const useAuthStore = defineStore('auth', () => {
       clear()
       return null
     }
+  }
+
+  // Re-read the principal without rotating the session. Grants can be revoked
+  // while a tab is open, and the shell is built from the `me` captured at
+  // sign-in — so a refused request is the app's cue to re-read it (QAD-172).
+  // Concurrent callers (a screen firing several requests at once) share one
+  // round-trip; a failed re-read leaves the last known principal in place
+  // rather than logging a working session out.
+  let meInFlight: Promise<void> | null = null
+  async function refreshMe(): Promise<void> {
+    if (!accessToken.value) return
+    if (!meInFlight) {
+      meInFlight = api
+        .get<MeResponse>('/auth/me', authInit())
+        .then((response) => {
+          me.value = response
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          meInFlight = null
+        })
+    }
+    return meInFlight
   }
 
   function isAllowedFor(role: RoleKey) {
@@ -253,6 +279,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     restore,
     refreshSession,
+    refreshMe,
     isAllowedFor,
     platformLogin,
     workshopLogin,

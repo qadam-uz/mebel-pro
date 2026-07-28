@@ -1,46 +1,34 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import Icon from '@/shared/components/AppIcon.vue'
 import { useStaffLogin } from '@/shared/composables/useStaffLogin'
+import workshopSceneUrl from '@/assets/login-workshop-scene.svg'
 
-const { config, login, password, isSubmitting, error, submit } = useStaffLogin()
+// The shared composable owns the Uzbek sign-in copy (QAD-163) — this view used
+// to re-declare a byte-identical map of its own.
+const { config, login, password, isSubmitting, errorText, submit } = useStaffLogin()
 
 const showPassword = ref(false)
-
-// useStaffLogin keeps backend error codes in English; map them to Uzbek locally
-// so the workshop SPA stays fully Uzbek.
-const LOGIN_ERROR_UZ: Record<string, string> = {
-  invalid_credentials: "Login yoki parol noto'g'ri.",
-  account_locked: "Hisob vaqtincha bloklangan. Birozdan so'ng urinib ko'ring.",
-  account_blocked: 'Hisob bloklangan.',
-  network_error: "Server bilan bog'lanib bo'lmadi.",
-}
-const errorText = computed(() =>
-  error.value ? (LOGIN_ERROR_UZ[error.value] ?? "Kirib bo'lmadi.") : null,
-)
 
 const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va moliya']
 </script>
 
 <template>
-  <main class="grid min-h-screen text-ink lg:grid-cols-[1.05fr_1fr]">
+  <main class="grid min-h-[var(--app-vh)] text-ink lg:grid-cols-[1.05fr_1fr]">
     <!-- Brand panel — hidden below lg; the form carries the brand on mobile. -->
     <section
-      class="relative hidden flex-col justify-center gap-10 bg-accent px-12 py-12 text-white lg:flex xl:px-16"
+      class="relative hidden flex-col overflow-hidden bg-accent px-12 py-12 text-white lg:flex xl:px-16"
     >
-      <RouterLink
-        :to="config.homePath"
-        class="absolute left-12 top-12 flex items-center gap-3 xl:left-16 xl:top-16"
-      >
+      <RouterLink :to="config.homePath" class="flex items-center gap-3">
         <span class="inline-flex size-9 items-center justify-center rounded-lg bg-white">
           <img src="/favicon.svg" alt="" class="size-6" />
         </span>
         <span class="font-serif text-xl font-semibold">{{ config.productLabel }}</span>
       </RouterLink>
 
-      <div class="max-w-md">
+      <div class="z-10 my-auto max-w-md py-10">
         <h1 class="font-serif text-4xl font-semibold leading-tight">
           Ustaxonangizni bir joydan boshqaring
         </h1>
@@ -59,6 +47,14 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
           </li>
         </ul>
       </div>
+
+      <!-- Flat workshop illustration, bottom-anchored band (aspect locked). -->
+      <img
+        :src="workshopSceneUrl"
+        alt=""
+        class="pointer-events-none mt-8 w-full select-none"
+        aria-hidden="true"
+      />
     </section>
 
     <!-- Form panel -->
@@ -71,7 +67,6 @@ const valuePoints = ['Buyurtmalar oqimi', 'Ishlab chiqarish navbati', 'Ombor va 
 
         <div class="mp-surface p-6 md:p-7" aria-labelledby="signin-title">
           <h2 id="signin-title" class="font-serif text-2xl font-semibold">Kirish</h2>
-          <p class="mt-1 text-sm text-ink-soft">Login va parol bilan kiring.</p>
 
           <form class="mt-6 space-y-4" @submit.prevent="submit">
             <label class="block">

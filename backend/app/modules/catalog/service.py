@@ -21,6 +21,8 @@ from app.models.enums import (
 from app.modules.access.api import BranchScope, resolve_branch_scope
 from app.modules.catalog.contracts import BranchMaterial, Manufacturer, Material
 from app.modules.catalog.schemas import (
+    BranchMaterialBulkCreateRequest,
+    BranchMaterialBulkItem,
     BranchMaterialCreateRequest,
     BranchMaterialPatchRequest,
     ManufacturerCreateRequest,
@@ -62,10 +64,27 @@ class BranchMaterialRecord:
 
 
 @dataclass(frozen=True)
+class BranchMaterialBulkResult:
+    created: list[BranchMaterialRecord]
+    skipped_material_ids: list[uuid.UUID]
+
+
+@dataclass(frozen=True)
 class BranchCatalogOption:
     material: Material
     manufacturer: Manufacturer
-    already_selected: bool
+
+
+@dataclass(frozen=True)
+class BranchCatalogOptionsPage:
+    items: list[BranchCatalogOption]
+    total: int
+
+
+@dataclass(frozen=True)
+class BranchCatalogFacets:
+    manufacturers: list[Manufacturer]
+    thicknesses: list[Decimal]
 
 
 def compose_material_name(
@@ -485,9 +504,17 @@ async def list_branch_catalog_options(
     kind: MaterialKind | None = None,
     manufacturer_id: uuid.UUID | None = None,
     material_type: PanelMaterialType | None = None,
+    thickness_mm: Decimal | None = None,
     limit: int | None = None,
     offset: int = 0,
-) -> list[BranchCatalogOption]:
+) -> BranchCatalogOptionsPage:
+    """Attachable platform materials for a branch, plus the unpaginated total.
+
+    QAD-159: materials the branch already carries are excluded server-side rather
+    than flagged, so paging, the total, and the picker's `Filtrdagi hammasi (N)`
+    master checkbox all count the same set.
+    """
+
     _require_workshop_user(principal)
     scope = await resolve_branch_scope(
         db,
@@ -495,41 +522,94 @@ async def list_branch_catalog_options(
         branch_id=branch_id,
         permission=Permission.MANAGE_CATALOG,
     )
-    existing_ids = set(
-        (
-            await db.scalars(
-                select(BranchMaterial.material_id).where(
-                    BranchMaterial.branch_id == scope.branch_id
-                )
-            )
-        ).all()
-    )
-    query = (
-        select(Material, Manufacturer)
-        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
-        .where(
-            Material.status == MaterialStatus.ACTIVE,
-            Manufacturer.status == MaterialStatus.ACTIVE,
-        )
-        .order_by(Manufacturer.name, Material.name, Material.id)
-    )
-    query = _material_filters(
-        query,
+    attachable = _attachable_materials_query(scope.branch_id)
+    filtered = _material_filters(
+        attachable,
         search=search,
         kind=kind,
         manufacturer_id=manufacturer_id,
         material_type=material_type,
+        thickness_mm=thickness_mm,
         status_filter=None,
     )
-    query = _paginate(query, limit=limit, offset=offset)
-    return [
-        BranchCatalogOption(
-            material=material,
-            manufacturer=manufacturer,
-            already_selected=material.id in existing_ids,
-        )
-        for material, manufacturer in (await db.execute(query)).all()
+    total = await db.scalar(filtered.with_only_columns(func.count(Material.id)))
+    query = _paginate(
+        filtered.with_only_columns(Material, Manufacturer).order_by(
+            Manufacturer.name, Material.name, Material.id
+        ),
+        limit=limit,
+        offset=offset,
+    )
+    return BranchCatalogOptionsPage(
+        items=[
+            BranchCatalogOption(material=material, manufacturer=manufacturer)
+            for material, manufacturer in (await db.execute(query)).all()
+        ],
+        total=int(total or 0),
+    )
+
+
+async def list_branch_catalog_facets(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+) -> BranchCatalogFacets:
+    """Manufacturer and thickness values present in the branch's attachable set.
+
+    Deliberately unfiltered by the picker's own filters: dropdown options that
+    reshuffle as you pick from them are worse than a couple of empty results.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    attachable = _attachable_materials_query(scope.branch_id)
+    manufacturers = list(
+        (
+            await db.scalars(
+                attachable.with_only_columns(Manufacturer)
+                .distinct()
+                .order_by(Manufacturer.name, Manufacturer.id)
+            )
+        ).all()
+    )
+    # Trailing-zero scale differs by driver (Postgres gives "2", SQLite
+    # "2.0000000000"); normalize so the picker's dropdown labels are stable.
+    thicknesses = [
+        Decimal(_fmt_mm(value))
+        for value in (
+            await db.scalars(
+                attachable.with_only_columns(Material.thickness_mm)
+                .distinct()
+                .order_by(Material.thickness_mm)
+            )
+        ).all()
     ]
+    return BranchCatalogFacets(manufacturers=manufacturers, thicknesses=thicknesses)
+
+
+def _attachable_materials_query(branch_id: uuid.UUID) -> Any:
+    """Active platform materials from active manufacturers this branch does not carry."""
+
+    return (
+        select(Material.id)
+        .join(Manufacturer, Manufacturer.id == Material.manufacturer_id)
+        .where(
+            Material.status == MaterialStatus.ACTIVE,
+            Manufacturer.status == MaterialStatus.ACTIVE,
+            ~select(BranchMaterial.id)
+            .where(
+                BranchMaterial.branch_id == branch_id,
+                BranchMaterial.material_id == Material.id,
+            )
+            .exists(),
+        )
+    )
 
 
 async def list_branch_materials(
@@ -634,6 +714,113 @@ async def add_branch_material(
         branch_material=row,
         material=material_record.material,
         manufacturer=material_record.manufacturer,
+    )
+
+
+async def add_branch_materials_bulk(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID,
+    payload: BranchMaterialBulkCreateRequest,
+) -> BranchMaterialBulkResult:
+    """Attach many platform materials to a branch in one transaction.
+
+    QAD-159: every row is validated before anything is written, so an invalid row
+    attaches nothing and the error names the offending material. Materials the
+    branch already carries are skipped rather than rejected — the picker excludes
+    them, so a duplicate here is a concurrent attach, not user error.
+    """
+
+    _require_workshop_user(principal)
+    scope = await resolve_branch_scope(
+        db,
+        principal,
+        branch_id=branch_id,
+        permission=Permission.MANAGE_CATALOG,
+    )
+    if not payload.items:
+        raise APIError(
+            "branch_materials_empty",
+            "No materials selected",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    seen: set[uuid.UUID] = set()
+    for item in payload.items:
+        if item.material_id in seen:
+            raise APIError(
+                "branch_material_duplicate",
+                "The same material appears twice in the batch",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        seen.add(item.material_id)
+
+    # Validate the whole batch first — nothing is added to the session until every
+    # row passes, so a rejection leaves the transaction untouched.
+    validated: list[tuple[BranchMaterialBulkItem, MaterialRecord]] = []
+    for item in payload.items:
+        record = await _active_material_record(db, item.material_id)
+        _validate_branch_material_numbers_named(
+            item.price_tiyin, item.min_stock, material_name=record.material.name
+        )
+        validated.append((item, record))
+
+    existing_ids = set(
+        (
+            await db.scalars(
+                select(BranchMaterial.material_id).where(
+                    BranchMaterial.branch_id == scope.branch_id,
+                    BranchMaterial.material_id.in_(seen),
+                )
+            )
+        ).all()
+    )
+
+    from app.modules.inventory.api import ensure_stock_item_for_branch_material
+
+    created: list[BranchMaterialRecord] = []
+    for item, record in validated:
+        if item.material_id in existing_ids:
+            continue
+        row = BranchMaterial(
+            branch_id=scope.branch_id,
+            material_id=item.material_id,
+            price_tiyin=item.price_tiyin,
+            min_stock=item.min_stock,
+            status=MaterialStatus.ACTIVE,
+        )
+        db.add(row)
+        await db.flush()
+        await ensure_stock_item_for_branch_material(
+            db,
+            branch_id=scope.branch_id,
+            material_id=item.material_id,
+            min_stock=item.min_stock,
+        )
+        created.append(
+            BranchMaterialRecord(
+                branch_material=row,
+                material=record.material,
+                manufacturer=record.manufacturer,
+            )
+        )
+    if created:
+        await record_action(
+            db,
+            actor=actor_from_principal(principal),
+            action="catalog.branch_material.bulk_create",
+            entity_type="branch",
+            entity_id=scope.branch_id,
+            workshop_id=scope.workshop_id,
+            branch_id=scope.branch_id,
+            summary=f"Added {len(created)} materials to branch",
+            details={"material_ids": [str(row.branch_material.material_id) for row in created]},
+        )
+    return BranchMaterialBulkResult(
+        created=created,
+        skipped_material_ids=[
+            item.material_id for item, _ in validated if item.material_id in existing_ids
+        ],
     )
 
 
@@ -860,9 +1047,12 @@ def _material_filters(
     status_filter: MaterialStatus | None,
     manufacturer_ids: list[uuid.UUID] | None = None,
     material_types: list[PanelMaterialType] | None = None,
+    thickness_mm: Decimal | None = None,
 ) -> Any:
     if kind is not None:
         query = query.where(Material.kind == kind)
+    if thickness_mm is not None:
+        query = query.where(Material.thickness_mm == thickness_mm)
     if manufacturer_id is not None:
         query = query.where(Material.manufacturer_id == manufacturer_id)
     if manufacturer_ids:
@@ -934,6 +1124,27 @@ def _validate_material_shape(
 def _validate_branch_material_numbers(price_tiyin: int, min_stock: int) -> None:
     _validate_nonnegative(price_tiyin, "invalid_price")
     _validate_nonnegative(min_stock, "invalid_min_stock")
+
+
+def _validate_branch_material_numbers_named(
+    price_tiyin: int, min_stock: int, *, material_name: str
+) -> None:
+    """Bulk-attach validation. The batch is all-or-nothing, so the message has to
+    name the row that killed it — an anonymous `invalid_price` over 40 materials is
+    useless to the person who has to fix it."""
+
+    if price_tiyin <= 0:
+        raise APIError(
+            "invalid_price",
+            f"«{material_name}» uchun narx kiritilmagan",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if min_stock < 0:
+        raise APIError(
+            "invalid_min_stock",
+            f"«{material_name}» uchun chegara noto'g'ri",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 def _validate_nonnegative(value: int, code: str) -> None:

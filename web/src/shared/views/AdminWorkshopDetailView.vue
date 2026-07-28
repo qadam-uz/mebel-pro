@@ -10,10 +10,12 @@ import {
 } from '@/shared/app/adminValidation'
 import {
   adminDate,
+  adminErrorMessage,
   branchStatusLabel,
   workshopStatusLabel,
   workshopStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
@@ -70,7 +72,7 @@ async function block() {
       focusFirstFieldError(blockFieldErrors, ['reason'], { reason: 'block-reason' })
     } else {
       actionError.value = 'workshop_block_failed'
-      toast.danger("Ustaxonani bloklab bo'lmadi")
+      toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani bloklab bo'lmadi."))
     }
   } finally {
     acting.value = false
@@ -84,9 +86,9 @@ async function unblock() {
   try {
     await admin.unblockWorkshop(admin.detail.workshop.id)
     toast.success('Ustaxona blokdan chiqarildi')
-  } catch {
+  } catch (error) {
     actionError.value = 'workshop_unblock_failed'
-    toast.danger("Ustaxonani blokdan chiqarib bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Ustaxonani blokdan chiqarib bo'lmadi."))
   } finally {
     acting.value = false
   }
@@ -119,9 +121,9 @@ async function confirmOwnerReset() {
     await admin.resetWorkshopOwnerPassword(admin.detail.workshop.id)
     resetConfirmOpen.value = false
     secretOpen.value = true
-  } catch {
+  } catch (error) {
     resetConfirmOpen.value = false
-    toast.danger("Egasining parolini tiklab bo'lmadi")
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Rahbarning parolini tiklab bo'lmadi."))
   } finally {
     resetting.value = false
   }
@@ -235,13 +237,13 @@ onMounted(() => admin.loadWorkshop(workshopId))
             <dd class="mt-1 text-base font-bold text-ink">{{ admin.detail.workshop.name }}</dd>
           </div>
           <div>
-            <dt class="text-xs font-extrabold uppercase text-ink-muted">Ega</dt>
+            <dt class="text-xs font-extrabold uppercase text-ink-muted">Rahbar</dt>
             <dd class="mt-1 flex flex-wrap items-center gap-3 text-base font-bold text-ink">
               <span class="font-mono text-sm">{{ admin.detail.owner.login }}</span>
               <button
                 type="button"
                 class="mp-button mp-button-outline min-h-8 px-2.5 text-xs"
-                :aria-label="`${admin.detail.owner.login} egasining parolini tiklash`"
+                :aria-label="`${admin.detail.owner.login} rahbarining parolini tiklash`"
                 @click="resetConfirmOpen = true"
               >
                 Parolni tiklash
@@ -281,6 +283,9 @@ onMounted(() => admin.loadWorkshop(workshopId))
           <table class="admin-table">
             <thead>
               <tr>
+                <!-- Middle segment of every order number this branch prints
+                     (#26-1-0003) — what support needs to trace a document. -->
+                <th>Raqam</th>
                 <th>Filial</th>
                 <th>Telefon</th>
                 <th>Manzil</th>
@@ -289,6 +294,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
             </thead>
             <tbody>
               <tr v-for="branch in admin.detail.branches" :key="branch.id">
+                <td class="admin-mono text-ink-muted">{{ branch.branch_no }}</td>
                 <td class="nm">
                   {{ branch.name }}
                   <small>{{ branch.id.slice(0, 8) }}</small>
@@ -324,7 +330,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
       </div>
       <div class="admin-card-b">
         <article class="admin-row-item">
-          <span class="admin-pill admin-pill-success">Egasi</span>
+          <span class="admin-pill admin-pill-success">Rahbar</span>
           <span>
             <b class="font-mono">{{ admin.detail.owner.login }}</b>
           </span>
@@ -402,7 +408,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
 
     <ConfirmDialog
       :open="resetConfirmOpen"
-      title="Egasining parolini tiklash"
+      title="Rahbarning parolini tiklash"
       :message="`${admin.detail.owner.login} uchun yangi vaqtinchalik parol yaratiladi va uning barcha sessiyalari darhol bekor qilinadi.`"
       confirm-label="Parolni tiklash"
       busy-label="Tiklanmoqda"
@@ -416,7 +422,7 @@ onMounted(() => admin.loadWorkshop(workshopId))
     <AdminSecretModal
       :open="secretOpen && !!admin.lastOwnerSecret"
       title="Vaqtinchalik parol — bir martalik maxfiy ma'lumot"
-      intro="Login va vaqtinchalik parolni ustaxona egasiga yetkazing. Ega birinchi kirishda uni almashtiradi."
+      intro="Login va vaqtinchalik parolni ustaxona rahbariga yetkazing. Rahbar birinchi kirishda uni almashtiradi."
       :rows="secretRows"
       @close="closeSecret"
     />

@@ -53,7 +53,7 @@ async def test_owner_scope_resolves_branch_from_stored_data(db_session: AsyncSes
 
 async def test_claimed_workshop_spoofing_is_rejected(db_session: AsyncSession) -> None:
     _, branch, owner = await seed_workshop_with_owner(db_session)
-    other_workshop, _, _ = await seed_workshop_with_owner(db_session)
+    other_workshop, _, _ = await seed_workshop_with_owner(db_session, login="other_owner")
     principal = await _principal_for_owner(db_session, owner)
 
     with pytest.raises(APIError) as exc_info:
@@ -117,7 +117,7 @@ async def test_staff_needs_branch_permission_grant(db_session: AsyncSession) -> 
 
 async def test_cross_workshop_branch_is_forbidden(db_session: AsyncSession) -> None:
     _, _, owner = await seed_workshop_with_owner(db_session)
-    _, other_branch, _ = await seed_workshop_with_owner(db_session)
+    _, other_branch, _ = await seed_workshop_with_owner(db_session, login="other_owner")
     principal = await _principal_for_owner(db_session, owner)
 
     with pytest.raises(APIError) as exc_info:

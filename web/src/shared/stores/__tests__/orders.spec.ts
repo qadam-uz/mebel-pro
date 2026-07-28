@@ -9,7 +9,7 @@ vi.mock('@/shared/app/authInit', () => ({
 }))
 
 vi.mock('@/shared/app/downloadBlob', () => ({
-  downloadBlob: vi.fn(),
+  openBlobInNewTab: vi.fn(),
 }))
 
 vi.mock('@/shared/api/client', () => {
@@ -51,6 +51,7 @@ vi.mock('@/shared/api/client', () => {
       code: fallback,
       traceId: null,
     })),
+    isPermissionDenied: (error: unknown) => error instanceof ApiError && error.status === 403,
     withQuery: (path: string) => path,
   }
 })
@@ -62,7 +63,6 @@ function quote(branchId: string): OrderQuote {
     branch_name: `Branch ${branchId}`,
     branch_address: 'Tashkent',
     branch_phone: '+998901234567',
-    today_hours: { open: '09:00', close: '18:00' },
     subtotal_cutting_tiyin: 1,
     subtotal_materials_tiyin: 2,
     subtotal_edge_banding_tiyin: 3,
@@ -175,5 +175,21 @@ describe('orders store', () => {
     expect(store.currentOrder).toMatchObject({ id: 'order-1' })
     expect(store.workshopOrders).toHaveLength(1)
     expect(store.workshopOrders[0]).toMatchObject({ id: 'order-1' })
+  })
+
+  // QAD-156: the sidebar badge is ambient decoration. A failing count must leave
+  // no error state and no stale number behind — the badge simply stops rendering.
+  it('keeps the new-order count silent when it fails to load', async () => {
+    const store = useOrdersStore()
+    vi.mocked(api.get).mockResolvedValueOnce({ count: 4 })
+    await store.loadNewOrderCount('branch-1')
+    expect(store.newOrderCount).toBe(4)
+
+    vi.mocked(api.get).mockRejectedValueOnce(new ApiError(500, { code: 'boom' }))
+    await store.refreshNewOrderCount()
+
+    expect(store.newOrderCount).toBe(0)
+    expect(store.error).toBeNull()
+    expect(store.actionError).toBeNull()
   })
 })

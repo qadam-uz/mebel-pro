@@ -13,14 +13,12 @@ which is also reportlab's page convention.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, NamedTuple
 
 from reportlab.lib.colors import HexColor
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
+from app.core.pdf import FONT_BOLD, FONT_REGULAR, register_pdf_fonts
 from app.modules.cutting.schemas import (
     CuttingOffcutResponse,
     CuttingPanelResponse,
@@ -53,19 +51,11 @@ _PANEL_TYPE_LABELS = {
     "other": "Panel",
 }
 
-# DejaVu Sans is vendored because the built-in PDF fonts are latin-1 only:
-# material and part names can be Cyrillic, and the rotation marker is U+21BB.
-_FONTS_DIR = Path(__file__).parent / "fonts"
-_FONT_REGULAR = "DejaVuSans"
-_FONT_BOLD = "DejaVuSans-Bold"
-
-
-def _register_fonts() -> None:
-    registered = pdfmetrics.getRegisteredFontNames()
-    if _FONT_REGULAR not in registered:
-        pdfmetrics.registerFont(TTFont(_FONT_REGULAR, str(_FONTS_DIR / "DejaVuSans.ttf")))
-    if _FONT_BOLD not in registered:
-        pdfmetrics.registerFont(TTFont(_FONT_BOLD, str(_FONTS_DIR / "DejaVuSans-Bold.ttf")))
+# The vendored Unicode font pair is shared with the other in-process documents
+# (app/core/pdf.py); these aliases keep the module-local naming.
+_FONT_REGULAR = FONT_REGULAR
+_FONT_BOLD = FONT_BOLD
+_register_fonts = register_pdf_fonts
 
 
 class _BandedSides(NamedTuple):

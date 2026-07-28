@@ -3,10 +3,9 @@ import { promisify } from 'node:util'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { expectOk } from './helpers'
+import { databaseUrl, expectOk, expectPdfOpensInTab } from './helpers'
 
 const execFileAsync = promisify(execFile)
-const databaseUrl = 'postgresql+asyncpg://mebel:mebel@localhost:5432/mebel_e2e'
 const adminPassword = 'AdminPass123'
 const ownerReadyPassword = 'OwnerReady123'
 const passwordLabel = /^(Password|Parol)$/
@@ -39,18 +38,6 @@ function phoneFor(id: string, offset: number) {
   let hash = offset
   for (const char of id) hash = (hash * 33 + char.charCodeAt(0)) % 10_000_000
   return `+99890${String(hash).padStart(7, '0')}`
-}
-
-function defaultWorkingHours() {
-  return {
-    monday: { open: '09:00', close: '18:00' },
-    tuesday: { open: '09:00', close: '18:00' },
-    wednesday: { open: '09:00', close: '18:00' },
-    thursday: { open: '09:00', close: '18:00' },
-    friday: { open: '09:00', close: '18:00' },
-    saturday: { open: '10:00', close: '16:00' },
-    sunday: { open: null, close: null },
-  }
 }
 
 async function seedPlatform(login: string) {
@@ -107,7 +94,6 @@ async function provisionWorkshop(request: APIRequestContext, token: string, id: 
         name: `Cutting Branch ${id}`,
         address: 'Tashkent, Test',
         phone: phoneFor(id, 3),
-        working_hours: defaultWorkingHours(),
       },
       owner: {
         login: ownerLogin,
@@ -322,7 +308,6 @@ async def main() -> None:
         await db.commit()
         print(order.id)
 
-
 asyncio.run(main())
 `
   const { stdout } = await execFileAsync(
@@ -371,7 +356,7 @@ async function chooseEdgeBanding(page: Page, edgeName: string) {
   await dialog.getByRole('button', { name: 'Kromka oynasini yopish' }).click()
 }
 
-test('client signs in with Telegram OTP, optimizes a cutting draft, and downloads PDF', async ({
+test('client signs in with Telegram OTP, optimizes a cutting draft, and opens the PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -436,13 +421,19 @@ test('client signs in with Telegram OTP, optimizes a cutting draft, and download
   // The sheet strip groups thumbnails per material, captioned "List {index}".
   await expect(page.getByRole('button', { name: /List 1$/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
+  // The sheet is height-capped (`fit="viewport"`) so a whole panel fits one
+  // screen — without it the drawing stretches to the full container width.
+  await expect(page.locator('svg.cutting-svg-fit')).toHaveCount(1)
   await expect(page.getByRole('heading', { name: 'Kromka' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Shu variantni tanlash/ })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Buyurtmaga davom etish' })).toBeVisible()
 
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'PDF yuklab olish' }).click()
-  expect((await download).suggestedFilename()).toMatch(/^cutting-[0-9a-f-]+\.pdf$/)
+  // QAD-160: the PDF opens in a new tab instead of downloading.
+  await expectPdfOpensInTab(
+    page,
+    page.getByRole('button', { name: 'PDF ochish' }),
+    /\/cutting-results\/[0-9a-f-]+\/pdf$/,
+  )
 })
 
 test('client resumes a saved cutting draft after reload and from the drafts list', async ({
@@ -532,7 +523,7 @@ test('client resumes a saved cutting draft after reload and from the drafts list
   await expect(page.getByRole('button', { name: 'Davom etish' })).toHaveCount(1)
 })
 
-test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
+test('workshop opens a confirmed order cutting plan and opens the PDF', async ({
   page,
   request,
 }, testInfo) => {
@@ -568,13 +559,17 @@ test('workshop opens a confirmed order cutting plan and downloads PDF', async ({
   await page.goto(`/workshop/orders/${orderId}`)
   await expect(page.getByRole('heading', { name: orderNumber })).toBeVisible()
 
-  // The cutting plan lives under the order's "Chizma" tab.
-  await page.getByRole('tab', { name: 'Chizma' }).click()
-  await expect(page.getByRole('heading', { name: 'Chizma rejasi' })).toBeVisible()
-  await expect(page.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
-  await expect(page.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
+  // The cutting plan lives in the "Chizma va tarkib" modal now.
+  await page.getByRole('button', { name: 'Chizma va tarkib' }).click()
+  const chizmaDialog = page.getByRole('dialog', { name: 'Chizma va tarkib' })
+  await expect(chizmaDialog.getByRole('button', { name: new RegExp(panel.name) })).toBeVisible()
+  await expect(chizmaDialog.getByRole('img', { name: /List 1 joylashuvi/ })).toBeVisible()
 
-  const download = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Chizma (PDF)' }).click()
-  expect((await download).suggestedFilename()).toMatch(/^order-[0-9a-f-]+-cutting\.pdf$/)
+  // QAD-160 changed every PDF entry point, including this one, from a download
+  // to a new tab.
+  await expectPdfOpensInTab(
+    page,
+    page.getByRole('button', { name: 'Chizma (PDF)' }),
+    /\/workshop\/orders\/[0-9a-f-]+\/cutting\/pdf$/,
+  )
 })

@@ -10,8 +10,10 @@ import {
   clientStatusPillClass,
   formatPercent,
   formatRelativeDate,
-  formatTodayHours,
 } from '@/shared/app/clientUi'
+import { partDisplayName } from '@/shared/app/cuttingEditorDerived'
+import { orphanPartIndexByRef } from '@/shared/app/cuttingResultsDisplay'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
 import { useToast } from '@/shared/composables/useToast'
@@ -122,6 +124,23 @@ function materialName(snapshot: Record<string, unknown>) {
 function panelTitle(current: CuttingResult, panel: CuttingPanel) {
   const snapshot = current.material_snapshots[panel.material_id]
   return `${String(snapshot?.name ?? 'Panel')} · ${panel.panel_index}`
+}
+
+// Placement rows name parts like the drawing does — detail names with the
+// editor's D-numbering as fallback, never the raw part_ref uuid.
+const partNamesByRef = computed(() => {
+  const current = result.value
+  const names = new Map<string, string>()
+  if (!current) return names
+  ;(current.parts_snapshot ?? []).forEach((part, index) => {
+    names.set(part.part_ref, partDisplayName(part, index))
+  })
+  for (const [ref, index] of orphanPartIndexByRef(current)) names.set(ref, `D${index + 1}`)
+  return names
+})
+
+function placementName(placement: CuttingPlacement) {
+  return partNamesByRef.value.get(placement.part_ref) ?? 'D1'
 }
 
 function selectPlacement(placement: CuttingPlacement) {
@@ -267,11 +286,23 @@ onMounted(() => {
             type="button"
             class="mp-button mp-button-outline min-h-8 px-3 text-xs"
             :disabled="orders.downloadingId === order.id"
-            @click="orders.downloadClientPdf(order.id)"
+            @click="orders.openClientPdf(order.id)"
           >
-            {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'Chizmani PDF olish' }}
+            {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'Chizmani PDF ochish' }}
           </button>
         </div>
+        <!-- The header PDF button is reachable from every tab, so its failure
+             needs a banner here too — the Chizma tab's one isn't on screen. -->
+        <p
+          v-if="orders.downloadError"
+          class="mt-3 rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
+          role="alert"
+        >
+          {{ orders.downloadError }}
+          <span v-if="orders.downloadTraceId" class="block text-xs font-normal opacity-80">
+            trace {{ orders.downloadTraceId }}
+          </span>
+        </p>
       </section>
 
       <div v-if="order.status === 'cancelled'" class="client-banner warn">
@@ -403,6 +434,13 @@ onMounted(() => {
                     <div class="client-row-meta">{{ formatTiyin(edgeCostSplit.service) }}</div>
                   </div>
                 </template>
+                <div v-if="order.surcharge_tiyin > 0" class="client-row-item">
+                  <div>
+                    <div class="client-row-name">Ustama</div>
+                    <div class="text-sm text-ink-muted">{{ order.surcharge_reason ?? '' }}</div>
+                  </div>
+                  <div class="client-row-meta">+ {{ formatTiyin(order.surcharge_tiyin) }}</div>
+                </div>
                 <div v-if="order.discount_tiyin > 0" class="client-row-item">
                   <div>
                     <div class="client-row-name">Chegirma</div>
@@ -446,6 +484,15 @@ onMounted(() => {
                     </div>
                   </template>
                   <div
+                    v-if="order.surcharge_tiyin > 0"
+                    class="flex justify-between py-1 text-ink-soft"
+                  >
+                    <span>Ustama</span
+                    ><span class="font-mono text-ink"
+                      >+ {{ formatTiyin(order.surcharge_tiyin) }}</span
+                    >
+                  </div>
+                  <div
                     v-if="order.discount_tiyin > 0"
                     class="flex justify-between py-1 text-success"
                   >
@@ -474,9 +521,6 @@ onMounted(() => {
                       {{ order.workshop_name }} · {{ order.branch_name }}
                     </div>
                     <div class="text-sm text-ink-muted">{{ order.branch_address }}</div>
-                    <div class="mt-1 text-sm text-ink-soft">
-                      Bugun: {{ formatTodayHours(order.today_hours) }}
-                    </div>
                   </div>
                   <div class="client-row-meta">{{ order.branch_phone }}</div>
                 </div>
@@ -519,9 +563,9 @@ onMounted(() => {
                 type="button"
                 class="text-sm font-bold text-accent"
                 :disabled="orders.downloadingId === order.id"
-                @click="orders.downloadClientPdf(order.id)"
+                @click="orders.openClientPdf(order.id)"
               >
-                {{ orders.downloadingId === order.id ? 'Yuklanmoqda…' : 'PDF olish →' }}
+                {{ orders.downloadingId === order.id ? 'Ochilmoqda…' : 'PDF ochish →' }}
               </button>
             </div>
             <div class="client-card-b">
@@ -588,7 +632,7 @@ onMounted(() => {
                         "
                         @click="selectPlacement(placement)"
                       >
-                        {{ placement.part_ref }} #{{ placement.part_quantity_index }}
+                        {{ placementName(placement) }} #{{ placement.part_quantity_index }}
                         <span v-if="placement.rotated" class="font-bold">R</span>
                       </button>
                     </div>
@@ -732,9 +776,9 @@ onMounted(() => {
           <section class="client-card">
             <div class="client-card-h"><h2 class="!text-base">Qismlar</h2></div>
             <div class="client-card-b">
-              <div v-for="item in order.items" :key="item.id" class="client-row-item">
+              <div v-for="(item, index) in order.items" :key="item.id" class="client-row-item">
                 <div>
-                  <div class="client-row-name">{{ item.part_ref }}</div>
+                  <div class="client-row-name">D{{ index + 1 }}</div>
                   <div class="text-sm text-ink-muted">
                     {{ materialName(item.material_snapshot) }} · {{ item.length_mm }}x{{
                       item.width_mm
@@ -748,7 +792,7 @@ onMounted(() => {
           </section>
 
           <p v-if="actionError" class="rounded-md bg-danger-soft p-3 text-sm font-bold text-danger">
-            {{ clientErrorLabel(actionError) }} · trace {{ orders.actionTraceId ?? 'unavailable' }}
+            {{ clientErrorLabel(actionError) }}{{ traceSuffix(orders.actionTraceId) }}
           </p>
         </aside>
       </div>

@@ -24,6 +24,11 @@ export function apiTraceId(error: unknown): string | null {
   return typeof traceId === 'string' ? traceId : null
 }
 
+/** A refusal, as opposed to a transport failure or a server fault (QAD-172). */
+export function isPermissionDenied(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403
+}
+
 export function apiErrorCode(error: unknown): string | null {
   if (!(error instanceof ApiError) || typeof error.body !== 'object' || error.body === null) {
     return null
@@ -82,6 +87,11 @@ export interface SessionHooks {
   refresh: () => Promise<string | null>
   // Called when refresh fails — clear auth and route to login.
   onExpired: () => void
+  // Called when an authed call is refused (403). The grant set the shell was
+  // built from may be out of date, so the app re-reads the principal and
+  // re-tests the current route (QAD-172). Fire-and-forget: the caller still
+  // gets its ApiError and renders its own failure.
+  onForbidden?: () => void
 }
 
 let sessionHooks: SessionHooks | null = null
@@ -138,6 +148,12 @@ async function request<T>(path: string, init: ApiRequestInit = {}, retrying = fa
       const newToken = await runRefresh()
       if (newToken) return request<T>(path, { ...init, accessToken: newToken }, true)
       sessionHooks.onExpired()
+    }
+    // A refusal means the shell's cached grant set disagrees with the server —
+    // ask the app to re-read it (QAD-172). `/auth/*` is excluded so the
+    // revalidation round-trip can never re-enter this branch.
+    if (res.status === 403 && accessToken && !path.startsWith('/auth/')) {
+      sessionHooks?.onForbidden?.()
     }
     throw new ApiError(res.status, body)
   }

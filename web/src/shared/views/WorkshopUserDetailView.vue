@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { apiErrorCode } from '@/shared/api/client'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
@@ -11,6 +12,7 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { copyText } from '@/shared/app/clipboard'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import { initials, permissionLabels, workshopErrorMessage } from '@/shared/app/workshopUi'
 import AppTabs from '@/shared/components/AppTabs.vue'
@@ -199,6 +201,9 @@ async function saveProfile() {
     if (profileFieldOrder.some((field) => Boolean(profileFieldErrors[field]))) {
       focusFirstFieldError(profileFieldErrors, profileFieldOrder, profileFieldIds)
     }
+    // The field message already names the problem and the fix; the generic
+    // save-failed banner would only add noise next to it.
+    if (apiErrorCode(caught) === 'login_exists') return
     profileError.value = workshopErrorMessage(workshop.actionError ?? 'user_save_failed')
     profileTraceId.value = workshop.actionTraceId
   } finally {
@@ -319,8 +324,8 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
     <RouterLink :to="rolePath('/workshop/settings/users')" class="back">← Xodimlar</RouterLink>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
-      <p>Ruxsatlar va sessiyalarni egasi boshqaradi.</p>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
+      <p>Ruxsatlar va sessiyalarni rahbar boshqaradi.</p>
     </section>
 
     <section v-else-if="workshop.loading" class="card p-5" aria-live="polite">
@@ -333,7 +338,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
 
     <section v-else-if="workshop.error" class="st-error">
       <h3>Xodimni yuklab bo'lmadi</h3>
-      <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+      <p>{{ traceLine(workshop.traceId) }}</p>
     </section>
 
     <section v-else-if="!user" class="st-empty">
@@ -352,7 +357,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
             <div>
               <h1>
                 {{ user.full_name }}
-                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Egasi</span>
+                <span v-if="user.is_owner" class="pill p-cut ml-2 align-middle">Rahbar</span>
                 <span
                   v-else
                   class="ml-2 align-middle"
@@ -426,7 +431,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         </div>
       </div>
       <div v-else-if="user.is_owner" class="banner info mt-3">
-        <div class="grow">Egasi bloklanmaydi va barcha ruxsatlarga ega.</div>
+        <div class="grow">Rahbar bloklanmaydi va barcha ruxsatlarga ega.</div>
       </div>
 
       <AppTabs
@@ -530,7 +535,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
                 v-if="profileError"
                 class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
               >
-                {{ profileError }} · trace_id: {{ profileTraceId ?? 'unavailable' }}
+                {{ profileError }}{{ traceSuffix(profileTraceId) }}
               </p>
             </form>
             <div v-else>
@@ -577,7 +582,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         </div>
         <div class="card-b">
           <div v-if="user.is_owner" class="banner info">
-            <div class="grow">Egasi avtomatik tarzda barcha filialda barcha ruxsatga ega.</div>
+            <div class="grow">Rahbar avtomatik tarzda barcha filialda barcha ruxsatga ega.</div>
           </div>
           <div class="table-wrap">
             <table class="matrix">
@@ -634,6 +639,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
         <div class="card-b">
           <div v-if="workshop.sessions.length === 0" class="st-empty !border-0 !py-8">
             <h3>Faol sessiya yo'q</h3>
+            <p>Xodim tizimga kirgach sessiyalari shu yerda ko'rinadi.</p>
           </div>
           <div v-for="session in workshop.sessions" v-else :key="session.id" class="row-item">
             <div>
@@ -661,7 +667,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedResetTimer))
       </section>
 
       <div v-if="actionError" class="banner danger mt-4">
-        <div class="grow">{{ actionError }} · trace_id: {{ actionTraceId ?? 'unavailable' }}</div>
+        <div class="grow">{{ actionError }}{{ traceSuffix(actionTraceId) }}</div>
       </div>
 
       <ConfirmDialog

@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import (
     ActorType,
@@ -16,7 +16,6 @@ from app.models.enums import (
     UserStatus,
     WorkshopStatus,
 )
-from app.modules.workshop.schemas import WorkingHours, validate_working_hours
 from app.schemas.common import APIModel
 
 
@@ -33,12 +32,6 @@ class FirstBranchInput(BaseModel):
     name: str
     address: str
     phone: str
-    working_hours: WorkingHours
-
-    @field_validator("working_hours")
-    @classmethod
-    def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
-        return validate_working_hours(value)
 
 
 class OwnerInput(BaseModel):
@@ -75,12 +68,12 @@ class WorkshopListItem(WorkshopSummary):
 class BranchSummary(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    branch_no: int
     name: str
     address: str
     phone: str
     latitude: Decimal | None
     longitude: Decimal | None
-    working_hours: dict[str, Any]
     status: BranchStatus
     closed_reason: str | None
     created_at: datetime
@@ -114,6 +107,34 @@ class PlatformWorkshopDetail(APIModel):
     block_reason: str | None = None
 
 
+class SignupSpark(APIModel):
+    # Bucket counts, oldest first; the last entry is the current partial period.
+    daily: list[int]
+    monthly: list[int]
+    yearly: list[int]
+
+
+class OrderSpark(SignupSpark):
+    weekly: list[int]
+
+
+class SignupMetrics(APIModel):
+    # Registrations are reported daily / monthly / yearly — a weekly signup rate
+    # is noise at this volume, so it is deliberately absent (orders carry it).
+    daily: int
+    monthly: int
+    yearly: int
+    spark: SignupSpark
+
+
+class OrderMetrics(APIModel):
+    daily: int
+    weekly: int
+    monthly: int
+    yearly: int
+    spark: OrderSpark
+
+
 class PlatformOverviewResponse(APIModel):
     workshops_total: int
     workshops_active: int
@@ -121,6 +142,9 @@ class PlatformOverviewResponse(APIModel):
     branches_total: int
     clients_total: int
     platform_users_active: int
+    orders: OrderMetrics
+    workshop_signups: SignupMetrics
+    client_signups: SignupMetrics
 
 
 class BlockWorkshopRequest(BaseModel):

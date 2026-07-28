@@ -3,18 +3,22 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
+  adminCount,
   adminDate,
   adminDateTime,
+  adminErrorMessage,
   adminJobNameLabel,
   errorStatusLabel,
   errorStatusTone,
   workshopStatusLabel,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import { useRolePath } from '@/shared/app/paths'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
+import TrendSparkline from '@/shared/components/TrendSparkline.vue'
 import { useToast } from '@/shared/composables/useToast'
-import { useAdminStore } from '@/shared/stores/admin'
+import { useAdminStore, type SignupMetrics } from '@/shared/stores/admin'
 
 const admin = useAdminStore()
 const rolePath = useRolePath()
@@ -34,6 +38,64 @@ const hasError = computed(() => admin.error && !overview.value)
 const partialFailure = ref(false)
 const running = ref(false)
 const confirmJob = ref<string | null>(null)
+
+// AB-119: the KPI row above answers "how big is the platform"; this grid answers
+// "how is it moving". Every calendar period is on screen at once — a period
+// switcher would hide two thirds of the data behind a click for no gain, and
+// registrations genuinely have no weekly column to switch to.
+interface TrendCell {
+  value: number
+  spark: number[]
+}
+
+interface TrendRow {
+  key: string
+  label: string
+  cells: (TrendCell | null)[]
+}
+
+const trendColumns = [
+  { key: 'daily', label: 'Kunlik', window: "so'nggi 14 kun" },
+  { key: 'weekly', label: 'Haftalik', window: "so'nggi 12 hafta" },
+  { key: 'monthly', label: 'Oylik', window: "so'nggi 12 oy" },
+  { key: 'yearly', label: 'Yillik', window: "so'nggi 5 yil" },
+]
+
+function signupCells(metrics: SignupMetrics): (TrendCell | null)[] {
+  return [
+    { value: metrics.daily, spark: metrics.spark.daily },
+    null,
+    { value: metrics.monthly, spark: metrics.spark.monthly },
+    { value: metrics.yearly, spark: metrics.spark.yearly },
+  ]
+}
+
+const trendRows = computed<TrendRow[]>(() => {
+  const data = overview.value
+  if (!data) return []
+  return [
+    {
+      key: 'orders',
+      label: 'Buyurtmalar',
+      cells: [
+        { value: data.orders.daily, spark: data.orders.spark.daily },
+        { value: data.orders.weekly, spark: data.orders.spark.weekly },
+        { value: data.orders.monthly, spark: data.orders.spark.monthly },
+        { value: data.orders.yearly, spark: data.orders.spark.yearly },
+      ],
+    },
+    {
+      key: 'workshop_signups',
+      label: 'Ustaxona registratsiyalari',
+      cells: signupCells(data.workshop_signups),
+    },
+    {
+      key: 'client_signups',
+      label: 'Mijoz registratsiyalari',
+      cells: signupCells(data.client_signups),
+    },
+  ]
+})
 
 // AB-14 / AB-46: the dashboard only needs overview + workshops + jobs + errors
 // (the operator count comes from `overview`, so the full catalog/operator lists
@@ -59,9 +121,9 @@ async function rerun(name: string) {
     const run = await admin.runJob(name)
     if (run.status === 'skipped')
       toast.warn("Fon vazifa allaqachon ishlamoqda — o'tkazib yuborildi")
-    else toast.success('Ish qayta ishga tushirildi')
-  } catch {
-    toast.danger('Ish ishga tushmadi')
+    else toast.success('Fon vazifa qayta ishga tushirildi')
+  } catch (error) {
+    toast.danger(adminErrorMessage(apiErrorCode(error), 'Fon vazifa ishga tushmadi.'))
   } finally {
     running.value = false
   }
@@ -166,6 +228,52 @@ onMounted(loadAll)
         </RouterLink>
       </div>
 
+      <section class="admin-card mb-5">
+        <div class="admin-card-h">
+          <h2>Dinamika</h2>
+          <span class="text-xs text-ink-muted"> Toshkent vaqti · joriy davr hali tugamagan </span>
+        </div>
+        <div class="admin-card-b flush">
+          <div v-if="trendRows.length === 0" class="admin-empty m-5">
+            <h3>Ko'rsatkichlar yuklanmadi</h3>
+            <p>Sahifani qayta yuklang — dinamika ma'lumotlari kelmadi.</p>
+          </div>
+          <div v-else class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Ko'rsatkich</th>
+                  <th v-for="column in trendColumns" :key="column.key">
+                    <span class="admin-trend-head">
+                      {{ column.label }}
+                      <small>{{ column.window }}</small>
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in trendRows" :key="row.key">
+                  <td class="nm">{{ row.label }}</td>
+                  <td v-for="(cell, index) in row.cells" :key="trendColumns[index]?.key">
+                    <div v-if="cell" class="admin-trend-cell">
+                      <span class="admin-trend-value">{{ adminCount(cell.value) }}</span>
+                      <TrendSparkline :values="cell.spark" />
+                    </div>
+                    <span
+                      v-else
+                      class="admin-trend-void"
+                      title="Registratsiyalar haftalik kesimda yuritilmaydi"
+                    >
+                      —
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <div class="admin-grid-two">
         <section class="admin-card">
           <div class="admin-card-h">
@@ -182,7 +290,7 @@ onMounted(loadAll)
                 <thead>
                   <tr>
                     <th>Ustaxona</th>
-                    <th>Egasi</th>
+                    <th>Rahbar</th>
                     <th>Filiallar</th>
                     <th>Yaratildi</th>
                     <th>Holat</th>
@@ -224,7 +332,7 @@ onMounted(loadAll)
             <div class="admin-card-b">
               <div v-if="failedJobs.length === 0" class="admin-empty">
                 <h3>Muvaffaqiyatsiz vazifa yo'q</h3>
-                <p>Scheduler oxirgi natijalari normal.</p>
+                <p>Oxirgi ishga tushirishlar xatoliksiz tugagan.</p>
               </div>
               <article
                 v-for="job in failedJobs"

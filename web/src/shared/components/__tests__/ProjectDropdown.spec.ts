@@ -133,6 +133,37 @@ describe('ProjectDropdown', () => {
     wrapper.unmount()
   })
 
+  // QAD-148: the workshop topbar keeps the branch picker visible on pages the
+  // branch context doesn't reach, but it must be inert and say why — an enabled
+  // picker that silently does nothing is the bug this replaced.
+  it('disabled: refuses to open by click or keyboard and exposes the hint', async () => {
+    const wrapper = mount(ProjectDropdown, {
+      props: {
+        label: 'Branch',
+        modelValue: 'a',
+        options,
+        disabled: true,
+        hint: "Bu sahifa butun ustaxona bo'yicha",
+      },
+      attachTo: document.body,
+    })
+    const button = wrapper.get('button')
+    expect(button.attributes('disabled')).toBeDefined()
+
+    await button.trigger('click')
+    await button.trigger('keydown', { key: 'ArrowDown' })
+    await nextTick()
+    expect(document.querySelector('[role="listbox"]')).toBeNull()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    const hint = wrapper.get('.mp-dd-hint')
+    expect(hint.text()).toBe("Bu sahifa butun ustaxona bo'yicha")
+    expect(button.attributes('aria-describedby')).toBe(hint.attributes('id'))
+    // The selection still reads as the current context — it's inert, not blank.
+    expect(button.text()).toContain('A branch')
+    wrapper.unmount()
+  })
+
   it('stops Escape from bubbling out of an open listbox (two-stage close)', async () => {
     const wrapper = mount(ProjectDropdown, {
       props: { label: 'Branch', modelValue: 'a', options },

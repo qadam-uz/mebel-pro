@@ -3,69 +3,12 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import BranchStatus, Currency, Permission, UserStatus, WorkshopStatus
 from app.modules.access.schemas import PermissionGrantResponse, SessionResponse
 from app.schemas.common import APIModel
-
-WEEKDAYS = frozenset(
-    {
-        "monday",
-        "tuesday",
-        "wednesday",
-        "thursday",
-        "friday",
-        "saturday",
-        "sunday",
-    }
-)
-
-
-class WorkingHoursDay(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    open: str | None = None
-    close: str | None = None
-
-    @model_validator(mode="after")
-    def validate_day(self) -> "WorkingHoursDay":
-        if self.open is None and self.close is None:
-            return self
-        if self.open is None or self.close is None:
-            raise ValueError("open and close must both be set or both be null")
-        open_minutes = _time_minutes(self.open)
-        close_minutes = _time_minutes(self.close)
-        if open_minutes >= close_minutes:
-            raise ValueError("open must be before close")
-        return self
-
-
-WorkingHours = dict[str, WorkingHoursDay]
-
-
-def validate_working_hours(value: WorkingHours) -> WorkingHours:
-    keys = set(value)
-    if keys != WEEKDAYS:
-        raise ValueError("working_hours must include every weekday")
-    return value
-
-
-def dump_working_hours(value: WorkingHours) -> dict[str, dict[str, str | None]]:
-    return {weekday: hours.model_dump() for weekday, hours in value.items()}
-
-
-def _time_minutes(value: str) -> int:
-    parts = value.split(":")
-    if len(parts) != 2 or not all(part.isdigit() for part in parts):
-        raise ValueError("time must use HH:MM")
-    hours = int(parts[0])
-    minutes = int(parts[1])
-    if hours < 0 or hours > 23 or minutes < 0 or minutes > 59:
-        raise ValueError("time must use HH:MM")
-    return hours * 60 + minutes
 
 
 class BranchContextItem(APIModel):
@@ -75,6 +18,8 @@ class BranchContextItem(APIModel):
     phone: str
     status: BranchStatus
     closed_reason: str | None
+    kerf_mm: int
+    edge_trim_mm: int
     permissions: list[Permission] = Field(default_factory=list)
 
 
@@ -104,30 +49,23 @@ class BranchCreateRequest(BaseModel):
     name: str
     address: str
     phone: str
+    additional_phones: list[str] = Field(default_factory=list)
     latitude: Decimal | None = None
     longitude: Decimal | None = None
-    working_hours: WorkingHours
-
-    @field_validator("working_hours")
-    @classmethod
-    def _validate_working_hours(cls, value: WorkingHours) -> WorkingHours:
-        return validate_working_hours(value)
+    # Physical saw properties (cutting.md); platform defaults when omitted.
+    kerf_mm: int = Field(default=4, ge=1, le=20)
+    edge_trim_mm: int = Field(default=5, ge=0, le=50)
 
 
 class BranchPatchRequest(BaseModel):
     name: str | None = None
     address: str | None = None
     phone: str | None = None
+    additional_phones: list[str] | None = None
     latitude: Decimal | None = None
     longitude: Decimal | None = None
-    working_hours: WorkingHours | None = None
-
-    @field_validator("working_hours")
-    @classmethod
-    def _validate_working_hours(cls, value: WorkingHours | None) -> WorkingHours | None:
-        if value is None:
-            return None
-        return validate_working_hours(value)
+    kerf_mm: int | None = Field(default=None, ge=1, le=20)
+    edge_trim_mm: int | None = Field(default=None, ge=0, le=50)
 
 
 class BranchStatusRequest(BaseModel):
@@ -138,14 +76,18 @@ class BranchStatusRequest(BaseModel):
 class BranchResponse(APIModel):
     id: uuid.UUID
     workshop_id: uuid.UUID
+    # Read-only: assigned once at creation, never patchable (workshop.md).
+    branch_no: int
     name: str
     address: str
     phone: str
+    additional_phones: list[str]
     latitude: Decimal | None
     longitude: Decimal | None
-    working_hours: dict[str, Any]
     status: BranchStatus
     closed_reason: str | None
+    kerf_mm: int
+    edge_trim_mm: int
     created_at: datetime
     updated_at: datetime
 
@@ -161,6 +103,13 @@ class BranchPricingResponse(APIModel):
 class BranchPricingPutRequest(BaseModel):
     cutting_rate_tiyin: int | None = None
     edge_banding_rate_tiyin: int | None = None
+
+
+class WorkshopOnboardingResponse(APIModel):
+    branch_configured: bool
+    materials_added: bool
+    setup_complete: bool
+    first_branch_id: uuid.UUID | None
 
 
 class GrantInput(BaseModel):

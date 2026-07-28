@@ -2,7 +2,11 @@
 title: Cutting optimization
 status: draft
 owner: shape
+<<<<<<< HEAD
 updated: 2026-07-23
+=======
+updated: 2026-07-27
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
 order: 80
 ---
 
@@ -142,8 +146,11 @@ a draft slot; a usable detail is saved without requiring the optimiser.
 - **One catalog material → one standard panel size.** The same spec in another size is a
   separate catalog material (size is part of its identity and name); custom panel sizes
   per run are future.
-- **Global constants.** Kerf 4 mm. Edge trim 10 mm per side (usable area = panel − 2× edge
-  trim).
+- **Kerf and edge trim are per-branch settings**, not global constants — each branch owns its
+  saw's kerf and its own edge trim (usable area = panel − 2× edge trim), editable by the
+  workshop owner on the branch form ([`workshop.md`](workshop.md)). Platform defaults for a new
+  branch: kerf 4 mm, edge trim 5 mm. Every optimisation run resolves both from the draft's
+  branch; a branch-less draft falls back to the platform defaults.
 - **Edge-banding length is computed here.** For each part edge with a banding material set,
   the edge length is the part's length (top/bottom) or width (left/right). Totals roll up
   **by edge material** (`edge_length_by_material`, integer millimetres) — this is the
@@ -462,15 +469,25 @@ The result stage has three desktop columns: materials and details at left, the l
 in the centre, and **Buyurtmangiz** alone at right. Narrow screens stack the visualiser, details,
 then order summary.
 
+**768px is the line between the two readings of a result.** A 2800 mm sheet inside a 390 px
+viewport draws at roughly a 7× reduction, where no part label and no dimension in the drawing
+survives — that is the fitting thresholds working as designed, not a rendering defect, and no
+sizing change wins it back. So below 768px the drawing demotes to a navigational overview and a
+text parts list beneath it carries the numbers; from 768px up the drawing is legible and the
+per-sheet rail beside it carries the detail. The two never show together: one screen, one
+authoritative reading of the result. 768px is the app's own desktop boundary (the root paints
+at `zoom: 90%` from 769px), so the switch lands where the layout already changes character
+rather than inventing a third regime.
+
 1. **Panel layout visualiser.**
    - The result header shows the imported-layout and placement state. Only the chosen result is
      shown; legacy or previous candidates are not offered as variants.
    - A sheet thumbnail strip grouped by panel material. Each group header shows the material
      type, fuller material label, and that material's sheet count; compact thumbnails below
      it show drawing-wide `List N` numbering and a bottom-right fill badge.
-   - The active panel renders as an interactive SVG (pan / zoom on mobile); each placed
-     part carries one centred label — display name + dimensions + a `↻` marker when the
-     placement is rotated (e.g. `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
+   - The active panel renders as an interactive SVG; each placed part carries one centred
+     label — display name + dimensions + a `↻` marker when the placement is rotated (e.g.
+     `Polka 1500×800 ↻`) — rather than an opaque part id. Labels
      hide on placements too small to carry them. Offcut rectangles overlay as dashed
      outlines: green with a `Qoldiq …×…` label when usable, red `chiqit` when waste.
      Offcut labels use the same fitting ladder in SVG and PDF: horizontal label, rotated
@@ -484,25 +501,52 @@ then order summary.
      sees which edges take tape at a glance. The side mapping follows the part's own edges;
      a rotated placement maps them 90° clockwise. Tick inset, length and weight are
      normalised, so banding reads the same on a large and a small panel.
-   - The left rail is grouped by part for the active sheet (`Detallar — List N`), showing
-     name, dimensions, quantity, and rotated count. Result data is frozen from that result's
-     `parts_snapshot`, so it remains self-contained after later editor changes.
+   - From 768px up, the left rail is grouped by part for the active sheet
+     (`Detallar — List N`), showing name, dimensions, quantity, and rotated count. Result data
+     is frozen from that result's `parts_snapshot`, so it remains self-contained after later
+     editor changes.
    - The left rail first lists every panel material and its sheet count with a plain bullet,
      then its Kromka block shows a dot in the same colour as the drawing, fuller material label
      such as `Egger H1334 ST9 · Sanoma · 0.4×20 mm`, and consumed metres. These two cards have
      border-only surfaces.
+   - Below 768px the per-sheet rail is replaced by a **`Detallar` parts list directly beneath
+     the drawing**, covering the whole result rather than only the active sheet: one `List N`
+     group per sheet — the material label printed once per run of sheets that share it — and
+     one row per part carrying name, `length × width mm`, and quantity, plus a rotated count
+     where there is one. Rows read in `parts_snapshot` order (the editor's and the PDF's `#`
+     order), not the optimizer's placement order, so a screen reader walks the parts the way
+     the user wrote them. It is ordinary selectable text — the point is that these numbers can
+     be read and copied when the drawing's cannot. Tapping a row selects that part, switching
+     the drawing to its sheet first when the row belongs to another one, and centres the
+     drawing so the highlight is on screen; tapping a placement in the drawing scrolls its row
+     into view and selects it.
 
 2. **Buyurtmangiz.** The dedicated right-side card shows the orderable chosen result's panel
    count, consumed edge length, and the active branch quote split into
    cutting, materials, edge-banding, and total. It does not show waste. Until a branch is
    available, it asks the user to select one instead of inventing a price.
    - **Buyurtmaga davom etish** → routes into the order wizard (see [`orders.md`](orders.md)).
+<<<<<<< HEAD
    - **Download PDF** — the print-ready cutting document for the saw operator. It starts on
      one or more A4 portrait **Xulosa** pages: drawing/order identity, client, branch, date,
      total sheets/details/cut/edge length, per-panel-material KIM stats, edge-tape
      specification, and usable-offcut inventory. Sections paginate at rows with their heading
      repeated. Consecutive identical layouts remain one `List 1–2 · 2 dona` layout unit while
      summary counts include every physical sheet.
+=======
+   - **PDF ochish** — the print-ready cutting document for the saw operator, opened in a new
+     browser tab rather than saved to disk: the reader wants to look at or print the plan, and
+     the browser's own viewer already offers both plus a download. Every PDF entry point
+     behaves this way; there is no separate download action. The endpoints are Bearer-authed,
+     so the client fetches the bytes with its access token and hands the tab an object URL —
+     the tab is opened synchronously in the click handler, because a popup opened after an
+     await is blocked. A blocked popup surfaces a message telling the user to allow popups; it
+     never silently falls back to downloading. The document is fixed
+     A4 portrait and starts with a **Xulosa** page: title block, per-panel-material stats,
+     edge-tape specification, and usable-offcut inventory. Sheet pages follow; consecutive
+     identical layouts are grouped (`List 1–2`, `2 dona list`) while summary counts still
+     include every physical sheet.
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
    - The PDF carries two area-derived KIM figures. `KIM` is parts area divided by sheet
      area; `KIM (qoldiq bilan)` adds usable offcut area before dividing. The sheet stat
      line shows `To'ldirish`, detail area, usable offcut area, and waste area.
@@ -545,12 +589,16 @@ the branch selector is hidden, the branch is locked to the branch the flow was e
 and frozen into the draft at creation (a later topbar branch switch never retargets an
 in-progress draft), and a persistent **identity strip** in the editor header names the
 walk-in client (name + phone). The strip is rehydrated when a saved draft is **resumed** (not
-just during the continuous create flow), so a re-opened draft still names who it's for.
-Everything else — parts editor, edge picker, optimise, results — is this page, unchanged.
+just during the continuous create flow), so a re-opened draft still names who it's for. A
+draft that somehow carries no branch falls back to the current topbar context rather than
+demanding a fresh pick. Everything else — parts editor, edge picker, optimise, results — is
+this page, unchanged.
 
 **Saqlangan chizmalar** (`/workshop/orders/drafts`, `manage_orders`) — the workshop's
 unfinished walk-in cuttings, reached from a **Chizmalar** entry beside **+ Yangi buyurtma** on
-the Orders screen (the entry carries a count of open drafts). Each row shows the walk-in
+the Orders screen (the entry carries a count of open drafts). The list follows the topbar
+branch context and reloads when it changes — a draft is frozen to one branch, so the page
+shows the branch you're standing in, and the Chizmalar count matches. Each row shows the walk-in
 client (name + phone), the locked branch, part / panel / waste figures, and a **derived status
 label** — *Tayyor — buyurtma berish mumkin* once a result is chosen, else *Tahrirlanmoqda*.
 A draft carries no status column of its own; the label is derived from whether a cutting
@@ -559,7 +607,7 @@ routes on to checkout once a result is picked); a per-row delete discards it wit
 confirmation. States: loading / empty (*Saqlangan chizma yo'q* → start via **+ Yangi
 buyurtma**) / error, each recoverable.
 
-An order's **Cutting** tab embeds the SVG of the order's confirmed result and a PDF link.
+An order's **Cutting** tab embeds the SVG of the order's confirmed result and a button that opens the PDF in a new tab.
 
 ## Edge cases
 

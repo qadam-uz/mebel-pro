@@ -124,13 +124,38 @@ describe('workshop store — branch materials pagination', () => {
   })
 
   it('caps the add-material picker instead of loading the whole catalog', async () => {
-    vi.mocked(api.get).mockResolvedValueOnce(page(CATALOG_PICKER_LIMIT, 'opt'))
+    vi.mocked(api.get).mockResolvedValueOnce({
+      items: page(CATALOG_PICKER_LIMIT, 'opt'),
+      total: 512,
+    })
     const store = useWorkshopStore()
 
     await store.loadCatalogOptions('branch-1', { search: 'egger' })
 
     expect(store.catalogOptions).toHaveLength(CATALOG_PICKER_LIMIT)
+    // The total counts the whole filtered set, not the capped page — that is what
+    // the picker's "Filtrdagi hammasi (N)" master checkbox promises to select.
+    expect(store.catalogOptionsTotal).toBe(512)
     expect(lastGetUrl()).toContain(`limit=${CATALOG_PICKER_LIMIT}`)
     expect(lastGetUrl()).toContain('search=egger')
+  })
+
+  it('passes the picker filters through to the catalog options query', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({ items: [], total: 0 })
+    const store = useWorkshopStore()
+
+    await store.fetchCatalogOptions('branch-1', {
+      manufacturer_id: 'mfr-9',
+      kind: 'edge',
+      thickness_mm: '0.8',
+      limit: 100,
+      offset: 100,
+    })
+
+    const url = lastGetUrl()
+    expect(url).toContain('manufacturer_id=mfr-9')
+    expect(url).toContain('kind=edge')
+    expect(url).toContain('thickness_mm=0.8')
+    expect(url).toContain('offset=100')
   })
 })

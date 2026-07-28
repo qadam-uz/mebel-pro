@@ -6,7 +6,14 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
-from app.models.enums import ExpenseCategory, IncomeType, LedgerStatus, MoneyMethod
+from app.models.enums import (
+    ExpenseCategory,
+    IncomeType,
+    InvoicePaymentStatus,
+    LedgerStatus,
+    MoneyMethod,
+    OrderStatus,
+)
 from app.schemas.common import APIModel
 
 
@@ -31,6 +38,9 @@ class IncomePatchRequest(BaseModel):
 
 
 class ExpenseCreateRequest(BaseModel):
+    """A cost. With `invoice_id` set it is a payment against a supplier faktura,
+    and supplier + branch are taken from the invoice, not from the caller."""
+
     branch_id: uuid.UUID | None = None
     category: ExpenseCategory
     amount_tiyin: int
@@ -38,6 +48,7 @@ class ExpenseCreateRequest(BaseModel):
     description: str
     vendor: str | None = None
     supplier_id: uuid.UUID | None = None
+    invoice_id: uuid.UUID | None = None
     receipt_file_id: uuid.UUID | None = None
 
 
@@ -54,6 +65,23 @@ class ExpensePatchRequest(BaseModel):
 
 class VoidLedgerRequest(BaseModel):
     reason: str
+
+
+class IncomeOrderRef(APIModel):
+    """The order an order-payment income points at, resolved on the income row.
+
+    Carried here so the ledger and the edit form never read the order back
+    through `sales`: that read is gated on order permissions the accountant
+    doesn't hold, and a settled order can never reappear in the payable-orders
+    picker to supply its own label.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
 
 
 class IncomeResponse(APIModel):
@@ -74,6 +102,9 @@ class IncomeResponse(APIModel):
     voided_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Null for a non-order income, and for the (unreachable) case of an order
+    # that no longer resolves — the client falls back to the raw id there.
+    order: IncomeOrderRef | None = None
 
 
 class ExpenseResponse(APIModel):
@@ -86,6 +117,8 @@ class ExpenseResponse(APIModel):
     description: str
     vendor: str | None
     supplier_id: uuid.UUID | None
+    invoice_id: uuid.UUID | None
+    invoice_no: str | None = None
     receipt_file_id: uuid.UUID | None
     status: LedgerStatus
     voided_reason: str | None
@@ -94,6 +127,41 @@ class ExpenseResponse(APIModel):
     voided_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class PayableInvoiceResponse(APIModel):
+    """One row of the expense form's invoice picker — what is still owed on it."""
+
+    id: uuid.UUID
+    invoice_no: str
+    invoice_date: date
+    supplier_id: uuid.UUID | None
+    supplier_name: str | None
+    branch_id: uuid.UUID
+    branch_name: str | None
+    line_count: int
+    total_tiyin: int
+    paid_tiyin: int
+    outstanding_tiyin: int
+    payment_status: InvoicePaymentStatus
+
+
+class PayableOrderResponse(APIModel):
+    """One order-payment candidate, with its settlement already folded in.
+
+    `balance_tiyin` is the number the operator acts on; `total` and `recorded`
+    are shown beside it so the figure can be checked without opening the order.
+    """
+
+    order_id: uuid.UUID
+    order_number: str
+    contact_name: str
+    contact_phone: str
+    status: OrderStatus
+    created_at: datetime
+    total_tiyin: int
+    recorded_tiyin: int
+    balance_tiyin: int
 
 
 class FinanceBranchSummary(APIModel):
@@ -171,8 +239,9 @@ class DebtStatementRow(APIModel):
     """One dated statement line with the running balance after it.
 
     `amount_tiyin` is the signed fold term (positive = their debt grew).
-    Optional detail fields depend on `kind`: deliveries carry material info,
-    payments carry the money detail, orders carry the order number.
+    Optional detail fields depend on `kind`: deliveries carry the invoice
+    (number, line count, and the document's own skidka/ustama), payments carry
+    the money detail, orders carry the order number.
     """
 
     kind: str
@@ -182,21 +251,36 @@ class DebtStatementRow(APIModel):
     amount_tiyin: int
     balance_after_tiyin: int
     note: str | None = None
-    material_name: str | None = None
-    quantity: int | None = None
-    display_unit: str | None = None
+    invoice_no: str | None = None
+    line_count: int | None = None
+    discount_tiyin: int | None = None
+    surcharge_tiyin: int | None = None
     category: ExpenseCategory | None = None
     method: MoneyMethod | None = None
     order_number: str | None = None
 
 
 class DebtStatementResponse(APIModel):
+    """An akt sverka: both parties, the period, and the fold that spans it.
+
+    Sign convention throughout: positive = they owe us. `period_increase_tiyin`
+    sums the in-range terms that grew their debt, `period_decrease_tiyin` the
+    absolute value of those that shrank it — the two turnover columns of the
+    document, before either side's wording is applied to them.
+    """
+
     counterparty_id: uuid.UUID
     name: str
     phone: str | None
+    # Our side of the reconciliation. A statement is workshop-level, so the
+    # phone is the primary branch's — the workshop record carries no number.
+    workshop_name: str
+    workshop_phone: str | None
     date_from: date | None
     date_to: date | None
     opening_balance_tiyin: int
+    period_increase_tiyin: int
+    period_decrease_tiyin: int
     closing_balance_tiyin: int
     current_balance_tiyin: int
     rows: list[DebtStatementRow]

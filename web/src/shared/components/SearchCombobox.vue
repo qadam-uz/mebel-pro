@@ -25,6 +25,21 @@ const props = withDefaults(
     // Show a trailing ✕ that clears the current selection and reopens the list
     // for a fresh search — opt-in, since most pickers expect a value to stay set.
     clearable?: boolean
+    // The parent already filtered `options` server-side (it owns the query).
+    // Filtering them again here would hide rows the server matched on a field
+    // the option text doesn't carry — a phone number, say.
+    serverFiltered?: boolean
+    // A fetch is in flight for the current query.
+    loading?: boolean
+    loadingText?: string
+    // Wait this long after the last keystroke before emitting `search`. Default
+    // 0 keeps every existing client-filtered call site emitting synchronously;
+    // a server-backed picker sets it so typing doesn't become one request per
+    // character.
+    searchDebounceMs?: number
+    // Standing footnote under the list — what the picker offers and what it
+    // searches. Not an error and not a result, so it sits outside the options.
+    hint?: string
   }>(),
   {
     placeholder: 'Qidiring',
@@ -35,6 +50,11 @@ const props = withDefaults(
     compact: false,
     swatchColor: null,
     clearable: false,
+    serverFiltered: false,
+    loading: false,
+    loadingText: 'Qidirilmoqda…',
+    searchDebounceMs: 0,
+    hint: '',
   },
 )
 
@@ -58,6 +78,7 @@ const {
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue))
 const showClear = computed(() => props.clearable && !!props.modelValue && !props.disabled)
 const filteredOptions = computed(() => {
+  if (props.serverFiltered) return props.options
   const value = query.value.trim().toLowerCase()
   if (!value) return props.options
   return props.options.filter((option) =>
@@ -127,9 +148,36 @@ function choose(option: ChoiceOption) {
   suppressFocusOpen = false
 }
 
+// One pending `search` emit at a time. A server-backed picker sets
+// `searchDebounceMs` so a six-character order number costs one request, not
+// six; with the default 0 the emit still goes out synchronously, so existing
+// client-filtered call sites are unchanged.
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+function cancelPendingSearch() {
+  if (searchTimer === undefined) return
+  clearTimeout(searchTimer)
+  searchTimer = undefined
+}
+
+function emitSearch(value: string) {
+  cancelPendingSearch()
+  if (props.searchDebounceMs <= 0) {
+    emit('search', value)
+    return
+  }
+  searchTimer = setTimeout(() => {
+    searchTimer = undefined
+    emit('search', value)
+  }, props.searchDebounceMs)
+}
+
 async function clearSelection() {
   emit('update:modelValue', null)
   query.value = ''
+  // Clearing is a deliberate act, not typing — the fresh list must not wait
+  // out a debounce the user can't see.
+  cancelPendingSearch()
   emit('search', '')
   await openList()
   inputRef.value?.focus()
@@ -139,7 +187,7 @@ function onInput(event: Event) {
   const target = event.target
   if (!(target instanceof HTMLInputElement)) return
   query.value = target.value
-  emit('search', query.value)
+  emitSearch(query.value)
   if (props.modelValue) emit('update:modelValue', null)
   void openList()
 }
@@ -203,12 +251,22 @@ watch(
   () => syncQueryFromModel(),
 )
 
+// A rejected submit has to put the caret on the field it rejected — the host
+// form owns that decision, so the trigger is exposed rather than guessed at
+// through a generated id.
+function focus() {
+  inputRef.value?.focus()
+}
+
+defineExpose({ focus })
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
+  cancelPendingSearch()
 })
 </script>
 
@@ -222,56 +280,70 @@ onBeforeUnmount(() => {
     >
       {{ label }}
     </label>
+    <!-- The listbox anchors to this box, which holds the input *and* the error
+         message — so `top-full` opens the list below the message instead of on
+         top of it. Focusing the field still opens the list (every call site
+         expects that); an absolutely positioned overlay simply has nowhere to
+         cover the words from. The inner box keeps the swatch and the clear
+         button glued to the input itself, whatever the message does to the
+         outer height. -->
     <div class="relative">
-      <span
-        v-if="swatchColor"
-        class="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 rounded border border-hairline"
-        :class="compact ? 'left-2' : 'left-2.5'"
-        :style="{ background: swatchColor }"
-        aria-hidden="true"
-      ></span>
-      <input
-        :id="id"
-        ref="inputRef"
-        class="w-full rounded-md border bg-elevated text-sm font-semibold text-ink placeholder:font-normal"
-        :class="[
-          error ? 'border-danger' : 'border-hairline-strong',
-          compact ? 'min-h-9' : 'min-h-11',
-          swatchColor ? (compact ? 'pl-8' : 'pl-9') : compact ? 'pl-2.5' : 'pl-3',
-          showClear ? (compact ? 'pr-8' : 'pr-9') : compact ? 'pr-2.5' : 'pr-3',
-        ]"
-        :value="query"
-        :placeholder="placeholder"
-        :disabled="disabled"
-        :aria-expanded="open"
-        :aria-controls="`${id}-listbox`"
-        :aria-activedescendant="open ? activeOptionId : undefined"
-        :aria-describedby="errorId"
-        role="combobox"
-        autocomplete="off"
-        aria-autocomplete="list"
-        @focus="openList"
-        @input="onInput"
-        @keydown="onKeydown"
-      />
-      <button
-        v-if="showClear"
-        type="button"
-        class="absolute top-1/2 grid -translate-y-1/2 place-items-center rounded-full text-ink-muted transition hover:bg-sunk hover:text-ink"
-        :class="compact ? 'right-1.5 size-6' : 'right-2 size-7'"
-        :aria-label="`${label} tanlovini tozalash`"
-        @click="clearSelection"
-      >
-        <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
-          <path
-            d="M6 6l8 8M14 6l-8 8"
-            fill="none"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-width="1.8"
-          />
-        </svg>
-      </button>
+      <div class="relative">
+        <span
+          v-if="swatchColor"
+          class="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 rounded border border-hairline"
+          :class="compact ? 'left-2' : 'left-2.5'"
+          :style="{ background: swatchColor }"
+          aria-hidden="true"
+        ></span>
+        <input
+          :id="id"
+          ref="inputRef"
+          class="w-full rounded-md border bg-elevated text-sm font-semibold text-ink placeholder:font-normal"
+          :class="[
+            error ? 'border-danger' : 'border-hairline-strong',
+            compact ? 'min-h-9' : 'min-h-11',
+            swatchColor ? (compact ? 'pl-8' : 'pl-9') : compact ? 'pl-2.5' : 'pl-3',
+            showClear ? (compact ? 'pr-8' : 'pr-9') : compact ? 'pr-2.5' : 'pr-3',
+          ]"
+          :value="query"
+          :placeholder="placeholder"
+          :disabled="disabled"
+          :aria-expanded="open"
+          :aria-controls="`${id}-listbox`"
+          :aria-activedescendant="open ? activeOptionId : undefined"
+          :aria-describedby="errorId"
+          :aria-invalid="error ? 'true' : undefined"
+          :aria-busy="loading ? 'true' : undefined"
+          role="combobox"
+          autocomplete="off"
+          aria-autocomplete="list"
+          @focus="openList"
+          @input="onInput"
+          @keydown="onKeydown"
+        />
+        <button
+          v-if="showClear"
+          type="button"
+          class="absolute top-1/2 grid -translate-y-1/2 place-items-center rounded-full text-ink-muted transition hover:bg-sunk hover:text-ink"
+          :class="compact ? 'right-1.5 size-6' : 'right-2 size-7'"
+          :aria-label="`${label} tanlovini tozalash`"
+          @click="clearSelection"
+        >
+          <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
+            <path
+              d="M6 6l8 8M14 6l-8 8"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-width="1.8"
+            />
+          </svg>
+        </button>
+      </div>
+      <p v-if="error" :id="errorId" class="mt-1 text-sm font-bold text-danger">
+        {{ error }}
+      </p>
       <ul
         v-if="open"
         :id="`${id}-listbox`"
@@ -297,10 +369,12 @@ onBeforeUnmount(() => {
           @click="choose(option)"
         >
           <span class="min-w-0">
-            <span class="block truncate font-bold">{{ option.label }}</span>
-            <span v-if="option.meta" class="block truncate font-mono text-[11px] text-ink-muted">
-              {{ option.meta }}
-            </span>
+            <slot name="option" :option="option" :selected="option.value === modelValue">
+              <span class="block truncate font-bold">{{ option.label }}</span>
+              <span v-if="option.meta" class="block truncate font-mono text-[11px] text-ink-muted">
+                {{ option.meta }}
+              </span>
+            </slot>
           </span>
           <svg
             v-if="option.value === modelValue"
@@ -318,13 +392,28 @@ onBeforeUnmount(() => {
             />
           </svg>
         </li>
-        <li v-if="filteredOptions.length === 0" class="px-3 py-3 text-sm font-bold text-ink-muted">
+        <li
+          v-if="loading"
+          class="px-3 py-3 text-sm font-bold text-ink-muted"
+          role="status"
+          aria-live="polite"
+        >
+          {{ loadingText }}
+        </li>
+        <li
+          v-else-if="filteredOptions.length === 0"
+          class="px-3 py-3 text-sm font-bold text-ink-muted"
+        >
           {{ noResultsText }}
+        </li>
+        <li
+          v-if="hint"
+          role="presentation"
+          class="mt-1 border-t border-hairline px-3 pb-1 pt-2 text-[11px] leading-tight text-ink-muted"
+        >
+          {{ hint }}
         </li>
       </ul>
     </div>
-    <p v-if="error" :id="errorId" class="mt-1 text-sm font-bold text-danger">
-      {{ error }}
-    </p>
   </div>
 </template>

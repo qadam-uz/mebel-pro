@@ -756,57 +756,56 @@ onBeforeUnmount(() => {
             <p v-if="tapeEntries.length === 0" class="text-xs text-ink-muted">
               Chizmada hali kromka yo'q.
             </p>
-            <button
-              v-for="entry in tapeEntries"
-              :key="entry.materialId"
-              type="button"
-              class="flex items-center gap-3 rounded-xl border bg-elevated p-3 text-left transition hover:border-ink-soft"
-              :class="
-                activeEdgeId === entry.materialId
-                  ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
-                  : 'border-hairline'
-              "
-              @click="setActiveTape(entry.materialId)"
-            >
-              <span
-                class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-black"
-                :class="{ 'border border-dashed border-current': entry.tentative }"
-                :style="badgeStyle(entry)"
-                :title="tentativeTitle(entry)"
+            <!-- The tape list scrolls on its own (~3 rows) so the part diagram,
+                 `Shablonlar` and the footer never scroll away (QAD-152). The
+                 outer `.client-edge-modal-b` stays the fallback scroller for
+                 very short viewports. -->
+            <div v-else class="grid max-h-[200px] gap-2 overflow-y-auto overscroll-contain p-0.5">
+              <button
+                v-for="entry in tapeEntries"
+                :key="entry.materialId"
+                type="button"
+                class="flex items-center gap-3 rounded-xl border bg-elevated p-3 text-left transition hover:border-ink-soft"
+                :class="
+                  activeEdgeId === entry.materialId
+                    ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
+                    : 'border-hairline'
+                "
+                @click="setActiveTape(entry.materialId)"
               >
-                {{ entry.number }}
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="flex min-w-0 items-center gap-2">
-                  <span class="truncate text-sm font-bold text-ink">{{
-                    edgeShortLabel(entry.material)
-                  }}</span>
-                  <span
-                    v-if="activeEdgeId === entry.materialId"
-                    class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
-                  >
-                    Joriy
+                <span
+                  class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-black"
+                  :class="{ 'border border-dashed border-current': entry.tentative }"
+                  :style="badgeStyle(entry)"
+                  :title="tentativeTitle(entry)"
+                >
+                  {{ entry.number }}
+                </span>
+                <span class="min-w-0 flex-1">
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span class="truncate text-sm font-bold text-ink">{{
+                      edgeShortLabel(entry.material)
+                    }}</span>
+                    <span
+                      v-if="activeEdgeId === entry.materialId"
+                      class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-accent"
+                    >
+                      Joriy
+                    </span>
+                    <span
+                      v-if="narrowWarning(entry.material)"
+                      class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
+                      :title="narrowWarning(entry.material) ?? undefined"
+                    >
+                      Qirradan tor
+                    </span>
                   </span>
-                  <span
-                    v-if="narrowWarning(entry.material)"
-                    class="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-black text-warning"
-                    :title="narrowWarning(entry.material) ?? undefined"
-                  >
-                    Qirradan tor
+                  <span class="font-mono text-[11.5px] text-ink-muted">
+                    {{ entry.meta.join(' · ') }}
                   </span>
                 </span>
-                <span class="font-mono text-[11.5px] text-ink-muted">
-                  {{ entry.meta.join(' · ') }}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              class="rounded-xl border border-dashed border-hairline-strong bg-sunk px-3 py-2 text-sm font-bold text-accent transition hover:border-accent"
-              @click="openCatalogForAdd"
-            >
-              + Yana kromka qo'shish
-            </button>
+              </button>
+            </div>
           </div>
 
           <div v-if="edgePickerBranchNote" class="ep-branch-note">
@@ -815,24 +814,13 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="mp-action-icon-button shrink-0"
-              aria-label="Orqaga"
-              title="Orqaga"
-              @click="showTapeList = false"
-            >
-              ←
-            </button>
-            <input
-              v-model="edgePickerSearch"
-              class="mp-input min-w-0 flex-1"
-              type="search"
-              placeholder="Kromka qidirish…"
-              aria-label="Kromka qidirish"
-            />
-          </div>
+          <input
+            v-model="edgePickerSearch"
+            class="mp-input"
+            type="search"
+            placeholder="Kromka nomi yoki dekor kodi"
+            aria-label="Kromka qidirish"
+          />
 
           <div class="flex flex-wrap gap-2" role="group" aria-label="Qalinlik filtri">
             <button
@@ -932,6 +920,31 @@ onBeforeUnmount(() => {
             Mos kromka topilmadi. Qidiruv yoki qalinlikni o'zgartiring.
           </p>
         </template>
+      </div>
+
+      <!-- Fixed footer, rendered in both panels so the modal height doesn't
+           jump when switching between them (QAD-153). `Tayyor` only closes —
+           every side click already writes onto the part live. -->
+      <div class="client-edge-modal-f">
+        <button
+          v-if="!showTapeList"
+          type="button"
+          class="mp-button mp-button-outline mr-auto"
+          @click="openCatalogForAdd"
+        >
+          + Yana kromka
+        </button>
+        <button
+          v-else
+          type="button"
+          class="mp-button mp-button-outline mr-auto"
+          @click="showTapeList = false"
+        >
+          ← Orqaga
+        </button>
+        <button type="button" class="mp-button mp-button-primary" @click="emit('close')">
+          Tayyor
+        </button>
       </div>
     </section>
   </template>

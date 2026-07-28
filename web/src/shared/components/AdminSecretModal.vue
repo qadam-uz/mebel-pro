@@ -60,7 +60,7 @@ async function copyAll() {
           class="mb-4 rounded-md bg-warning-soft px-3 py-2 text-sm font-bold text-warning"
           role="alert"
         >
-          Bu maxfiy ma'lumot faqat shu yerda bir marta ko'rsatiladi — egasiga yetkazib, saqlab
+          Bu maxfiy ma'lumot faqat shu yerda bir marta ko'rsatiladi — rahbariga yetkazib, saqlab
           oling.
         </p>
         <p v-if="intro" class="mb-3 text-sm text-ink-soft">{{ intro }}</p>

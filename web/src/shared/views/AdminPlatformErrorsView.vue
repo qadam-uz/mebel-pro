@@ -4,10 +4,12 @@ import { useRoute } from 'vue-router'
 
 import {
   adminDateTime,
+  adminErrorMessage,
   dropdownOption,
   errorStatusLabel,
   errorStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -148,9 +150,11 @@ async function resolveSelected() {
   try {
     await admin.resolveError(selectedId.value)
     toast.success('Xatolik tasdiqlandi')
-  } catch {
+  } catch (error) {
     actionError.value = 'error_resolve_failed'
-    toast.danger('Amal bajarilmadi')
+    toast.danger(
+      adminErrorMessage(apiErrorCode(error), "Xatolikni hal qilingan deb belgilab bo'lmadi."),
+    )
   } finally {
     resolvingId.value = null
   }
@@ -165,9 +169,9 @@ async function reopenSelected() {
   try {
     await admin.reopenError(selectedId.value)
     toast.success('Xatolik qayta ochildi')
-  } catch {
+  } catch (error) {
     actionError.value = 'error_reopen_failed'
-    toast.danger('Amal bajarilmadi')
+    toast.danger(adminErrorMessage(apiErrorCode(error), "Xatolikni qayta ochib bo'lmadi."))
   } finally {
     resolvingId.value = null
   }
@@ -240,7 +244,7 @@ watch(
 
     <section v-else-if="filtered.length === 0" class="admin-empty">
       <h3>Xatolik yozilmagan</h3>
-      <p>Xatolik yo'q.</p>
+      <p>Monitor toza — yangi xatolik paydo bo'lsa shu yerda ko'rinadi.</p>
     </section>
 
     <section v-else class="admin-card">

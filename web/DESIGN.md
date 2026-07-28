@@ -179,6 +179,21 @@ Two overlay layers, and the order matters: dropdown/popover panels teleport at *
 the modal layer sits at **z-80**. `body.modal-open` locks scroll (position-fixed pin so iOS
 Safari can't scroll behind).
 
+Desktop paints at `zoom: 90%` on the root (≥769px), which splits the units the DOM reports:
+`getBoundingClientRect()` and `window.inner*` are **painted** pixels, while `offsetHeight` and
+anything written into `style.top/left` are **local** pixels the browser then scales. An overlay
+positioned straight from a measured rect therefore lands at 90% of its anchor. Measure through
+`overlayRect()` / `overlayViewport()` (`shared/app/overlayGeometry.ts`) — never
+`getBoundingClientRect()` directly — so the whole calculation stays in one unit.
+
+Viewport units have the same split and no helper can hide it: `100dvh` / `100vw` resolve
+against the **unzoomed** viewport and the result is then scaled by the zoom, so a `100dvh`
+panel paints 90% of the screen. Full-bleed surfaces use the **`--app-vh` / `--app-vw`**
+tokens (`assets/main.css`, declared beside the `zoom` rule) instead of raw viewport units —
+they carry the compensation, and the ratio behind it (`--app-zoom`) is written down once.
+Raw `vh` / `vw` are still fine for a *cap* that only needs to stay under the viewport
+(`max-height: min(90vh, …)` on a modal).
+
 ## Shapes
 
 Radius scale: **6px** for buttons and inputs, **8px** for cards and popover items, **12px**
@@ -197,7 +212,16 @@ touching them; don't add new off-scale values.
   The primitive matches the app surface: crisp radius, elevated popover, visible focus
   ring, selected check mark, hover/active states, keyboard operation (`Enter`/`Space`,
   arrows, `Esc`, `Tab` close). Native controls remain acceptable for text inputs,
-  textareas, checkboxes, radios, and file inputs until a project primitive exists.
+  textareas, checkboxes, radios, and file inputs until a project primitive exists —
+  but **never `<input type="date">`**, which renders in the browser's OS locale
+  (`07/19/2026` on en-US) and so can't hold the app's date convention.
+- **Server-backed pickers** — when the candidate set is too large or too live to preload, the
+  combobox queries the server instead of filtering a page it already holds (`SearchCombobox`
+  with `serverFiltered` + `loading` + `searchDebounceMs`). Non-negotiable: the query is
+  **debounced** (never a request per keystroke), the panel shows a loading row and a
+  no-results row, an explicit clear skips the debounce, and a standing footer hint names what
+  the list contains and what it searches. Rich rows go through the `#option` slot — the plain
+  label still drives the input's text.
 - **Modals** — create/edit forms open in `AppModal` dialogs, never as inline on-page cards;
   reason-gated confirmations (void, revert, cancel) use `ConfirmDialog`. Inside modals use
   the inline-listbox selects (`FormSelect`, `SearchCombobox`, `MultiSelectFilter`) —
@@ -214,8 +238,13 @@ touching them; don't add new off-scale values.
 - **Image upload** — the shared preview primitive: framed preview, native file input
   triggered by labelled buttons, upload/error state in the field, a remove action when an
   image is set.
-- **Date ranges** — the shared date-range picker: one trigger opening a popover with preset
-  shortcuts and a calendar; selections auto-apply (no apply button).
+- **Dates** — one calendar serves the whole app (`CalendarMonths`: Monday-first grid, arrow
+  keys, `PageUp`/`PageDown` by month, `Esc` closes and returns focus). Two hosts wrap it:
+  `DateRangePicker` for filters — one trigger opening a popover with preset shortcuts and the
+  calendar, selections auto-apply (no apply button) — and `DateField` for a single date on a
+  form, which types and displays **dd.mm.yyyy** in every locale while speaking the API's
+  `yyyy-mm-dd`, honours `min`/`max` (out-of-range days are unclickable, a typed one blocks
+  submit), and drops into the usual `<label class="field">` wrapper.
 - **Filter bars** (`.mp-filters`) — filters **auto-apply** (debounced for text) with no apply
   button, and because auto-apply is invisible by itself, the bar must prove it worked: while
   any filter is active, a `role="status"` line under the bar shows the live result count
@@ -227,12 +256,108 @@ touching them; don't add new off-scale values.
   active filter on, because with one filter active it would duplicate that filter's own clear
   sitting right beside it. **No two visible controls may do the same thing.** Filtered-empty
   keeps the no-results empty state, never first-run copy.
+- **Segmented control** (`SegmentedControl`) — a **closed set of two or three** form choices,
+  all visible at once on a `sunk` track, selected segment filled `accent-soft` with
+  `accent-deep` text. A dropdown for two options is a click that reveals nothing; past three
+  or four segments the row stops fitting and it goes back to `FormSelect`. Keyboard contract
+  is the radiogroup one: `role="radiogroup"` + `role="radio"`/`aria-checked`, one tab stop
+  with a roving tabindex, arrows wrap, `Home`/`End` jump, focus follows the selection.
 - **Status toggles** — in-place toggles are `role="switch"` buttons: track + thumb plus the
   current state's word as a visible text label (never color alone), disabled while the row
   saves.
 - **Icons** — `AppIcon` (one SVG set); icon-only buttons always carry an accessible name.
 - **Cursor honesty** — pointer cursor and row hover belong only on clickable controls or
   clickable rows; static table rows stay visually still with the default cursor.
+- **Headline figures** — two treatments, and the page picks by weight. `.kpi` cards are for a
+  dashboard, where the numbers *are* the page. `.figs` is the lighter row for a page whose
+  numbers are context above a table: no border, radius, shadow or background tint — hairlines
+  above, below and between, sentence-case labels at normal weight, and the value in mono
+  ~22px with tabular numerals. **Colour lands on the figure only**; the label stays
+  `ink-muted`, and a figure whose colour carries meaning also states it in words.
+- **Documents that leave the building** (the akt sverka today) are laid out on screen the way
+  they print — title, both parties, period, totals — so print is a restyle of the same DOM,
+  not a second implementation. A print stylesheet cannot number pages (no browser implements
+  `@page` margin boxes); when page numbers matter, the file comes from the server renderer.
+
+## Copy
+
+Uzbek (Latin) is the only shipped locale. Copy is part of the design contract, not a
+finishing touch: one failure explained two different ways is the same defect as two
+different button radii. The rules below are the standard; the glossary under them is the
+whole vocabulary.
+
+**1. Say what happened, then what to do.** One sentence where it fits.
+`Summa buyurtma qoldig'idan oshib ketdi.` beats `Amal bajarilmadi.` A message the operator
+cannot act on is a log line, not copy.
+
+**2. No generic fallback where a specific message is possible.** Every `APIError` code a
+user can realistically trigger gets its own entry in the role's error map —
+`workshopErrorMessages` (`app/workshopUi.ts`), `CLIENT_ERROR_LABELS` (`app/clientUi.ts`),
+`ADMIN_ERROR_MESSAGES` (`app/adminUi.ts`), plus the field-level `apiValidationMessage`
+(`app/adminValidation.ts`) and `cuttingImportErrorLabel` (`stores/cuttingImport.ts`). The
+generic string is reserved for genuinely unexpected failures — unhandled 500s, transport
+errors. A code that reaches the fallback is a missing entry, not a shrug. When a call site
+catches an error, it passes `apiErrorCode(error)` through the map and keeps its own
+action-specific sentence as the fallback; a bare `catch {}` that throws the code away is
+the bug QAD-123 found and QAD-163 swept.
+
+**3. No blame, no apology, no filler.** No `Iltimos`, no exclamation marks, no
+`muvaffaqiyatli` — a success toast *is* the success, so it states the outcome
+(`Kirim K-0007 yozildi.`), never the fact that something worked.
+
+**4. Verb-first, sentence case.** Buttons are actions: `Buyurtma yaratish`, never
+`Yaratish uchun bosing`. Sentence case everywhere — never ALL CAPS, never Title Case; only
+the first word and proper nouns are capitalised. A destructive confirm names its
+consequence rather than saying `OK`.
+
+**5. Empty states invite, not apologise.** Name the space, then offer the action:
+`Bu chizmada qism yo'q` + `Material tanlang`. `Hech narsa topilmadi` alone is not an empty
+state, and a body that restates its own title is not a body. **First-run and
+filtered-empty are different copy** — "change the filter" is useless advice when nothing
+exists yet, so a list that can be filtered branches on whether a filter is active.
+
+**6. Placeholders show a real example**, not a repeat of the label: `+998 90 123 45 67`,
+not `Telefon raqamini kiriting`. Search inputs are the one exception — their placeholder
+names what the search covers (`Ism yoki login`) and carries **no trailing ellipsis**.
+
+**7. One term per concept.** The glossary below is the list. When a new concept needs a
+word, it goes in the glossary in the same commit that introduces it.
+
+**8. Uzbek Latin orthography.** The tutuq belgisi is the **ASCII apostrophe `'`** (U+0027)
+throughout — `bo'ladi`, `yo'q`, `to'lov`, `ta'minotchi`. Never a backtick (`` ` ``), never
+a curly `'`/`'`, never the modifier letters `ʻ`/`ʼ`; they render as visibly different
+glyphs and there is no reason for a screen to show four of them. Ellipsis is the single
+character `…` and belongs only to progress labels (`Saqlanmoqda…`). Separators are `—` (em
+dash) between clauses and `·` between fields, never a hyphen. No Russian transliteration
+(`chegirma`, not `skidka`) and no developer shorthand in anything a user can see.
+
+### Glossary
+
+One term per concept, across client, workshop and admin.
+
+| Concept                                | Term                | Not                       |
+| -------------------------------------- | ------------------- | ------------------------- |
+| A client's cutting order               | `buyurtma`          | `zakaz`                   |
+| A cut piece on a drawing               | `qism` / `detal`    | — _owner's ruling pending_ |
+| A saved cutting drawing                | `chizma`            | `eskiz`, `draft`          |
+| A panel sheet                          | `list`              | `plita`                   |
+| Edge tape (the material)               | `kromka`            | `krom`                    |
+| The edge-banding station / stage       | `Krom` / `Kromka`   | — _owner's ruling pending_ |
+| A workshop location                    | `filial`            | `bo'lim` (= a UI section) |
+| A supplier                             | `ta'minotchi` / `yetkazib beruvchi` | `postavshik` — _owner's ruling pending_ |
+| Goods arriving into stock (a faktura)  | `kirim` (`K-…`)     | `tushum`                  |
+| Money coming in (the finance ledger)   | `tushum`            | `kirim`                   |
+| Money going out                        | `xarajat`           | `rasxod`                  |
+| A price reduction                      | `chegirma`          | `skidka`                  |
+| A price addition                       | `ustama`            | `nadbavka`                |
+| A background job                       | `fon vazifa`        | `ish`, `scheduler`        |
+| A signed statement of account          | `akt sverka`        | —                         |
+| A printed/served document              | `hujjat`            | `xujjat`                  |
+
+`kirim` and `tushum` are **not** synonyms and must never be unified: `Kirim` is a stock
+arrival carrying a `K-…` invoice number and lives in Ombor; `Tushum` is a finance-ledger
+income row and lives beside `Xarajat`. Likewise `filial` (a place) and `bo'lim` (a section
+of the interface) are different words for different things.
 
 ## Do's and Don'ts
 
@@ -250,6 +375,8 @@ touching them; don't add new off-scale values.
 - Don't hardcode hex — no raw colors outside `@theme`.
 - Don't use native `<select>` as visible UI, or `ProjectDropdown` inside a modal.
 - Don't use placeholders as labels, or clear a form on a validation error.
+- Don't swallow an error code in a bare `catch {}`, or ship a string with a backtick
+  apostrophe, an English fallback, or a term that isn't in the glossary.
 - Don't put hover/pointer affordances on non-clickable rows.
 - Don't use serif for operational UI, or add font sizes below 10.5px.
 - Don't invent off-scale radii or spacing; don't add a dark theme ad hoc — it doesn't exist.
@@ -263,12 +390,19 @@ choosing components or colors. Never polish a screen whose structure is wrong.
   results), loading (skeletons sized like the real content — reserve space so nothing jumps),
   error (named cause + retry), success. Every load that can hang gets a timeout → error path;
   no infinite spinners.
+- **An empty-state icon names the thing that is missing — a noun** (`box`, `inbox`, `layers`,
+  `scissors`). Never an action glyph (`plus`, `edit`, `arrow`). `.client-empty-icon` uses
+  accent-on-accent-soft, the same language as a primary button, so an action glyph inside it
+  reads as a control and gets clicked.
 - **The keyboard reaches and operates everything** a mouse can, in an order matching the
   layout. Visible `:focus-visible` ring with ≥3:1 contrast — never `outline: none` with
   nothing in its place. Modals trap focus and return it to the trigger on close.
 - **Every input has a visible, persistent label** — a placeholder is a hint, never a label.
   Errors sit next to their field, name the fix in plain language, and never clear the form.
-  Validate on blur or submit, not per keystroke.
+  Validate on blur or submit, not per keystroke. A rejected field carries all three signals —
+  the danger border, `aria-invalid`, and an `aria-describedby` message — and the message stays
+  **readable**: a field that opens a popover anchors it clear of its own error text, because a
+  message the operator can't see is the same as no message.
 - **Every action gives visible feedback within ~100ms**; submit buttons disable + show
   progress during async work so they can't double-fire. Destructive actions name their
   consequence ("Delete 3 files", not "OK"); prefer undo over a confirmation nag.

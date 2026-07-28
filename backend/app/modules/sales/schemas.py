@@ -55,7 +55,6 @@ class OrderQuoteResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
-    today_hours: dict[str, str | None]
     subtotal_cutting_tiyin: int
     subtotal_materials_tiyin: int
     subtotal_edge_banding_tiyin: int
@@ -97,10 +96,22 @@ class WorkshopOrderCompleteRequest(VersionedRequest):
     completed_by_user_id: uuid.UUID | None = None
 
 
-class WorkshopOrderDiscountRequest(VersionedRequest):
+class WorkshopOrderAdjustmentRequest(VersionedRequest):
+    """A manual price adjustment — a discount or a surcharge. `value` is tiyin
+    when `kind="fixed"`, or a whole percent (0-100) when `kind="percent"`,
+    resolved against the order's computed subtotal at apply time."""
+
     kind: Literal["fixed", "percent"]
     value: int
     reason: str
+
+
+class WorkshopOrderDiscountRequest(WorkshopOrderAdjustmentRequest):
+    pass
+
+
+class WorkshopOrderSurchargeRequest(WorkshopOrderAdjustmentRequest):
+    pass
 
 
 class WorkshopOrderNoteRequest(BaseModel):
@@ -163,6 +174,21 @@ class OrderEdgeMaterialDemand(APIModel):
     consumed_mm: int
 
 
+class OrderPriceLine(APIModel):
+    """One material's share of the order price, rebuilt from order-time
+    snapshots (item snapshot prices x cutting-result demands) so the itemized
+    breakdown reconciles with the stored subtotals even after price-list
+    changes. Panel lines carry panels_used; edge lines carry consumed_mm and
+    only the material share (edge labor stays an aggregate)."""
+
+    material_id: uuid.UUID
+    material_name: str
+    kind: Literal["panel", "edge"]
+    panels_used: int | None = None
+    consumed_mm: int | None = None
+    line_total_tiyin: int
+
+
 class OrderSettlementResponse(APIModel):
     total_tiyin: int
     recorded_tiyin: int
@@ -174,6 +200,12 @@ class WorkshopWorkerOption(APIModel):
     full_name: str
     is_owner: bool
     home_branch_id: uuid.UUID
+
+
+class NewOrderCountResponse(APIModel):
+    """Ambient count behind the workshop sidebar's `+N` badge."""
+
+    count: int
 
 
 class OrderSummaryResponse(APIModel):
@@ -190,7 +222,6 @@ class OrderSummaryResponse(APIModel):
     branch_name: str
     branch_address: str
     branch_phone: str
-    today_hours: dict[str, str | None]
     cutting_result_id: uuid.UUID
     status: OrderStatus
     version: int
@@ -202,6 +233,9 @@ class OrderSummaryResponse(APIModel):
     discount_tiyin: int
     discount_reason: str | None
     discount_applied_by_user_id: uuid.UUID | None
+    surcharge_tiyin: int
+    surcharge_reason: str | None
+    surcharge_applied_by_user_id: uuid.UUID | None
     total_tiyin: int
     currency: Currency
     assigned_cutter_user_id: uuid.UUID | None
@@ -233,11 +267,16 @@ class OrderSummaryResponse(APIModel):
 class OrderDetailResponse(OrderSummaryResponse):
     items: list[OrderItemResponse] = Field(default_factory=list)
     events: list[OrderStatusEventResponse] = Field(default_factory=list)
+    price_lines: list[OrderPriceLine] = Field(default_factory=list)
     cutting_result: CuttingResultResponse | None = None
     settlement: OrderSettlementResponse | None = None
     # The order's open revision draft, surfaced on the workshop detail only —
     # lets the UI offer resume/discard instead of starting a fresh revision.
     revision_draft_id: uuid.UUID | None = None
+    # Set only by the two production-completion endpoints, when the consume they
+    # just recorded drove a branch balance below zero. Informational: the
+    # transition already succeeded (QAD-150).
+    stock_shortfall: bool = False
 
 
 # --- Production terminal (worker-scoped, money-free) -------------------------

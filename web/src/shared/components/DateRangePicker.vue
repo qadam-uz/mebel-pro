@@ -4,13 +4,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   DATE_RANGE_PRESET_LABELS,
   isoDate,
-  monthGrid,
   presetRange,
-  UZ_MONTHS,
-  UZ_WEEKDAYS,
   type DateRangePreset,
 } from '@/shared/app/dateRange'
 import { nextStableId } from '@/shared/app/listboxNav'
+import { overlayRect, overlayViewport } from '@/shared/app/overlayGeometry'
+import CalendarMonths from '@/shared/components/CalendarMonths.vue'
 
 // Filter-bar date range control: one compact trigger opening a popover with
 // preset shortcuts and a real calendar. Preset clicks and completed calendar
@@ -37,17 +36,15 @@ const emit = defineEmits<{
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const panelRef = ref<HTMLDivElement | null>(null)
+const calendarRef = ref<InstanceType<typeof CalendarMonths> | null>(null)
 const panelId = nextStableId('mp-daterange')
 const open = ref(false)
 const panelStyle = ref<Record<string, string>>({})
 // First visible month; a second month renders beside it on wide viewports.
-const viewYear = ref(0)
-const viewMonth = ref(0)
 const monthCount = ref(1)
 // In-flight calendar selection: first click anchors, second click completes.
 const draftStart = ref<string | null>(null)
 const hovered = ref<string | null>(null)
-const focusedDay = ref<string | null>(null)
 const GUTTER = 8
 
 // A non-custom preset owns its window: whenever the preset changes to one —
@@ -65,13 +62,6 @@ watch(
   },
 )
 
-function parseIso(value: string): Date | null {
-  if (!value) return null
-  const [year, month, day] = value.split('-').map(Number)
-  if (!year || !month || !day) return null
-  return new Date(year, month - 1, day)
-}
-
 function formatDotted(value: string): string {
   const [year, month, day] = value.split('-')
   return `${day}.${month}.${year}`
@@ -85,17 +75,6 @@ const triggerText = computed(() => {
     return "Sana oralig'i"
   }
   return DATE_RANGE_PRESET_LABELS[props.preset]
-})
-
-const visibleMonths = computed(() => {
-  const months: { year: number; month: number; key: string; weeks: (string | null)[][] }[] = []
-  for (let index = 0; index < monthCount.value; index += 1) {
-    const total = viewYear.value * 12 + viewMonth.value + index
-    const year = Math.floor(total / 12)
-    const month = total % 12
-    months.push({ year, month, key: `${year}-${month}`, weeks: monthGrid(year, month) })
-  }
-  return months
 })
 
 // What the calendar highlights: the in-flight draft while picking, otherwise
@@ -117,9 +96,8 @@ function updatePanelPosition() {
   const button = buttonRef.value
   const panel = panelRef.value
   if (!button || !panel) return
-  const rect = button.getBoundingClientRect()
-  const viewportWidth = window.visualViewport?.width ?? window.innerWidth
-  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const rect = overlayRect(button)
+  const { width: viewportWidth, height: viewportHeight } = overlayViewport()
   const panelWidth = Math.min(panel.offsetWidth, viewportWidth - GUTTER * 2)
   const panelHeight = panel.offsetHeight
   const spaceBelow = viewportHeight - rect.bottom - GUTTER - 6
@@ -136,28 +114,12 @@ function updatePanelPosition() {
 }
 
 async function openPanel() {
-  // Anchor the LAST visible month on the range end (or today): date filters
-  // look backwards, so the extra month should show the past, not the future.
-  const base = parseIso(props.dateTo) ?? parseIso(props.dateFrom) ?? new Date()
   monthCount.value =
     typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 768px)').matches
       ? 2
       : 1
-  const firstTotal = base.getFullYear() * 12 + base.getMonth() - (monthCount.value - 1)
-  viewYear.value = Math.floor(firstTotal / 12)
-  viewMonth.value = firstTotal % 12
   draftStart.value = null
   hovered.value = null
-  // The roving tab stop must land on a RENDERED cell — prefer the range start,
-  // but it can sit before the visible window (e.g. "Oxirgi 30 kun" on a
-  // one-month view); fall back to the anchor end, which is always visible.
-  const preferredFocus = props.dateFrom || today.value
-  const focusDate = parseIso(preferredFocus)
-  const focusTotal = focusDate ? focusDate.getFullYear() * 12 + focusDate.getMonth() : Number.NaN
-  focusedDay.value =
-    focusDate && focusTotal >= firstTotal && focusTotal < firstTotal + monthCount.value
-      ? preferredFocus
-      : props.dateTo || today.value
   open.value = true
   await nextTick()
   updatePanelPosition()
@@ -187,7 +149,7 @@ function onDayClick(day: string) {
   if (!draftStart.value || day < draftStart.value) {
     draftStart.value = day
     hovered.value = null
-    focusedDay.value = day
+    calendarRef.value?.focusDay(day)
     return
   }
   const from = draftStart.value
@@ -195,32 +157,6 @@ function onDayClick(day: string) {
   if (from !== props.dateFrom) emit('update:dateFrom', from)
   if (day !== props.dateTo) emit('update:dateTo', day)
   closePanel({ returnFocus: true })
-}
-
-function shiftMonths(delta: number) {
-  const total = viewYear.value * 12 + viewMonth.value + delta
-  viewYear.value = Math.floor(total / 12)
-  viewMonth.value = total % 12
-}
-
-function focusDay(day: string) {
-  const date = parseIso(day)
-  if (!date) return
-  const dayTotal = date.getFullYear() * 12 + date.getMonth()
-  const firstTotal = viewYear.value * 12 + viewMonth.value
-  const lastTotal = firstTotal + monthCount.value - 1
-  if (dayTotal < firstTotal) shiftMonths(dayTotal - firstTotal)
-  else if (dayTotal > lastTotal) shiftMonths(dayTotal - lastTotal)
-  focusedDay.value = day
-  void nextTick(() => {
-    panelRef.value?.querySelector<HTMLButtonElement>(`[data-day="${day}"]`)?.focus()
-  })
-}
-
-function moveFocus(deltaDays: number) {
-  const date = parseIso(focusedDay.value ?? today.value) ?? new Date()
-  date.setDate(date.getDate() + deltaDays)
-  focusDay(isoDate(date))
 }
 
 function onPanelKeydown(event: KeyboardEvent) {
@@ -231,58 +167,7 @@ function onPanelKeydown(event: KeyboardEvent) {
     closePanel({ returnFocus: true })
     return
   }
-  const inGrid = event.target instanceof HTMLElement && event.target.hasAttribute('data-day')
-  if (event.key === 'PageUp' || event.key === 'PageDown') {
-    event.preventDefault()
-    const delta = event.key === 'PageUp' ? -1 : 1
-    if (inGrid) {
-      // Clamp to the target month's last day so Jan 31 + PageDown lands on
-      // Feb 28/29, not Mar 3 (APG grid convention).
-      const date = parseIso(focusedDay.value ?? today.value) ?? new Date()
-      const targetTotal = date.getFullYear() * 12 + date.getMonth() + delta
-      const targetYear = Math.floor(targetTotal / 12)
-      const targetMonth = targetTotal % 12
-      const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate()
-      focusDay(isoDate(new Date(targetYear, targetMonth, Math.min(date.getDate(), lastDay))))
-    } else {
-      shiftMonths(delta)
-    }
-    return
-  }
-  if (!inGrid) return
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    moveFocus(-1)
-  } else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    moveFocus(1)
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    moveFocus(-7)
-  } else if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    moveFocus(7)
-  }
-}
-
-function dayClass(cell: string): string[] {
-  const range = displayRange.value
-  const isStart = cell === range.from
-  const isEnd = cell === range.to
-  const inRange = Boolean(range.from && range.to && cell > range.from && cell < range.to)
-  const classes = [
-    'grid size-9 cursor-pointer place-items-center rounded-md text-[13px] transition',
-  ]
-  if (isStart || isEnd) classes.push('bg-accent font-semibold text-white')
-  else if (inRange) classes.push('bg-accent-soft text-ink')
-  else if (cell === today.value) classes.push('font-bold text-accent hover:bg-sunk')
-  else classes.push('text-ink hover:bg-sunk')
-  return classes
-}
-
-function dayAriaLabel(cell: string): string {
-  const [year, month, day] = cell.split('-').map(Number)
-  return `${day} ${UZ_MONTHS[(month ?? 1) - 1]} ${year}`
+  calendarRef.value?.onKeydown(event)
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
@@ -393,95 +278,20 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="flex items-start gap-4" @mouseleave="hovered = null">
-            <div v-for="(monthView, monthIndex) in visibleMonths" :key="monthView.key">
-              <div class="mb-2 flex items-center justify-between">
-                <button
-                  v-if="monthIndex === 0"
-                  type="button"
-                  class="grid size-8 place-items-center rounded-md text-ink-soft transition hover:bg-sunk hover:text-ink"
-                  aria-label="Oldingi oy"
-                  @click="shiftMonths(-1)"
-                >
-                  <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
-                    <path
-                      d="M12.5 5 8 10l4.5 5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.8"
-                    />
-                  </svg>
-                </button>
-                <span v-else class="size-8" aria-hidden="true"></span>
-                <span class="text-[13px] font-bold text-ink">
-                  {{ UZ_MONTHS[monthView.month] }} {{ monthView.year }}
-                </span>
-                <button
-                  v-if="monthIndex === visibleMonths.length - 1"
-                  type="button"
-                  class="grid size-8 place-items-center rounded-md text-ink-soft transition hover:bg-sunk hover:text-ink"
-                  aria-label="Keyingi oy"
-                  @click="shiftMonths(1)"
-                >
-                  <svg class="size-4" viewBox="0 0 20 20" aria-hidden="true">
-                    <path
-                      d="m7.5 5 4.5 5-4.5 5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="1.8"
-                    />
-                  </svg>
-                </button>
-                <span v-else class="size-8" aria-hidden="true"></span>
-              </div>
-              <div class="mb-1 grid grid-cols-7">
-                <span
-                  v-for="weekday in UZ_WEEKDAYS"
-                  :key="weekday"
-                  class="grid size-9 place-items-center text-[11px] font-bold text-ink-muted"
-                >
-                  {{ weekday }}
-                </span>
-              </div>
-              <div role="grid" :aria-label="`${UZ_MONTHS[monthView.month]} ${monthView.year}`">
-                <div
-                  v-for="(week, weekIndex) in monthView.weeks"
-                  :key="weekIndex"
-                  role="row"
-                  class="grid grid-cols-7"
-                >
-                  <template v-for="(cell, cellIndex) in week">
-                    <button
-                      v-if="cell"
-                      :key="cell"
-                      type="button"
-                      role="gridcell"
-                      :data-day="cell"
-                      :tabindex="cell === focusedDay ? 0 : -1"
-                      :aria-selected="cell === displayRange.from || cell === displayRange.to"
-                      :aria-label="dayAriaLabel(cell)"
-                      :class="dayClass(cell)"
-                      @click="onDayClick(cell)"
-                      @mouseenter="draftStart ? (hovered = cell) : undefined"
-                    >
-                      {{ Number(cell.slice(8)) }}
-                    </button>
-                    <span
-                      v-else
-                      :key="`blank-${weekIndex}-${cellIndex}`"
-                      role="gridcell"
-                      class="size-9"
-                      aria-hidden="true"
-                    ></span>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
+          <!-- Anchor the LAST visible month on the range end (or today): date
+               filters look backwards, so the extra month shows the past, not
+               the future. The tab stop prefers the range start. -->
+          <CalendarMonths
+            ref="calendarRef"
+            v-model:hovered="hovered"
+            :anchor="dateTo || dateFrom || today"
+            :initial-focus="dateFrom || today"
+            :month-count="monthCount"
+            :from="displayRange.from"
+            :to="displayRange.to"
+            :track-hover="draftStart !== null"
+            @select="onDayClick"
+          />
         </div>
       </div>
     </Teleport>

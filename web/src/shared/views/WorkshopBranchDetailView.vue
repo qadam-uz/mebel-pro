@@ -11,30 +11,44 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { additionalPhoneErrors } from '@/shared/app/branchPhones'
+import { traceSuffix } from '@/shared/app/errorTrace'
 import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
+import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
+import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
 import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-type WorkingDay = {
-  key: string
-  label: string
-  open: boolean
-  from: string
-  to: string
-}
-type BranchField = 'name' | 'address' | 'phone' | 'cuttingRate' | 'edgeBandingRate'
+type BranchField =
+  | 'name'
+  | 'address'
+  | 'phone'
+  | 'phones'
+  | 'cuttingRate'
+  | 'edgeBandingRate'
+  | 'kerfMm'
+  | 'edgeTrimMm'
 type StatusField = 'reason'
 
 const route = useRoute()
 const rolePath = useRolePath()
 const workshop = useWorkshopStore()
 const toast = useToast()
+const { notifyProgress } = useOnboardingContinuation()
 const branchId = computed(() => String(route.params.branch_id ?? ''))
+// Order numbers read `#<2-digit year>-<branch_no>-<per-year sequence>`
+// (docs/ref/entities/sales.md). Showing the live prefix turns the branch number
+// from a bare integer into the thing the owner actually reads off a cutting map.
+const orderNumberPrefix = computed(() => {
+  const branch = workshop.selectedBranch
+  if (!branch) return ''
+  return `#${String(new Date().getFullYear() % 100).padStart(2, '0')}-${branch.branch_no}-…`
+})
 const loading = ref(false)
 const pageError = ref<string | null>(null)
 const pageTraceId = ref<string | null>(null)
@@ -51,7 +65,28 @@ const branchForm = reactive({
   name: '',
   address: '',
   phone: '',
+  kerfMm: '',
+  edgeTrimMm: '',
 })
+const additionalPhones = ref<string[]>([])
+// Per-row phone errors surface from the first save attempt on, then stay live so
+// fixing or removing a row clears its message.
+const phonesValidated = ref(false)
+const phoneRowErrors = computed(() =>
+  phonesValidated.value ? additionalPhoneErrors(additionalPhones.value, branchForm.phone) : [],
+)
+// Integers only — kerf/trim are millimetres, never fractional (bounds mirror
+// the backend CheckConstraints: kerf 1-20, trim 0-50).
+const KERF_MM_MIN = 1
+const KERF_MM_MAX = 20
+const EDGE_TRIM_MM_MIN = 0
+const EDGE_TRIM_MM_MAX = 50
+function parseMm(value: string): number | null {
+  if (!/^\d+$/.test(value.trim())) return null
+  return Number(value.trim())
+}
+const kerfMmValue = computed(() => parseMm(branchForm.kerfMm))
+const edgeTrimMmValue = computed(() => parseMm(branchForm.edgeTrimMm))
 const pricingForm = reactive({
   cuttingRateSom: '',
   edgeBandingRateSom: '',
@@ -90,47 +125,36 @@ const branchFieldOrder: BranchField[] = [
   'name',
   'address',
   'phone',
+  'phones',
   'cuttingRate',
   'edgeBandingRate',
+  'kerfMm',
+  'edgeTrimMm',
 ]
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-detail-name',
   address: 'branch-detail-address',
   phone: 'branch-detail-phone',
+  phones: 'branch-detail-additional-phone-0',
   cuttingRate: 'branch-detail-cutting-rate',
   edgeBandingRate: 'branch-detail-edge-rate',
+  kerfMm: 'branch-detail-kerf-mm',
+  edgeTrimMm: 'branch-detail-edge-trim-mm',
 }
 const statusFieldErrors = reactive<FieldErrors<StatusField>>({})
 const statusFieldOrder: StatusField[] = ['reason']
 const statusFieldIds: Record<StatusField, string> = {
   reason: 'branch-status-reason',
 }
-const hours = reactive<WorkingDay[]>([
-  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
-  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
-  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
-  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
-  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
-  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
-  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
-])
 const statusOptions = [
   { value: 'active', label: 'Faol', meta: "mijozlarga ko'rinadi" },
-  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: 'sabab bilan ko`rinadi' },
+  { value: 'temporarily_closed', label: 'Vaqtincha yopiq', meta: "sabab bilan ko'rinadi" },
   { value: 'inactive', label: 'Faol emas', meta: 'mijozlardan yashirilgan' },
 ]
 
-function workingHoursPayload() {
-  return Object.fromEntries(
-    hours.map((day) => [
-      day.key,
-      day.open ? { open: day.from, close: day.to } : { open: null, close: null },
-    ]),
-  )
-}
-
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
+  phonesValidated.value = true
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
@@ -142,9 +166,23 @@ function validateBranchForm() {
     pricingForm.edgeBandingRateSom.trim() && edgeBandingRateTiyin.value === null
       ? "Kromka narxini to'g'ri kiriting — masalan: 5 000."
       : undefined
+  branchFieldErrors.kerfMm =
+    kerfMmValue.value === null || kerfMmValue.value < KERF_MM_MIN || kerfMmValue.value > KERF_MM_MAX
+      ? `Arra kesigini ${KERF_MM_MIN}–${KERF_MM_MAX} mm oralig'ida kiriting.`
+      : undefined
+  branchFieldErrors.edgeTrimMm =
+    edgeTrimMmValue.value === null ||
+    edgeTrimMmValue.value < EDGE_TRIM_MM_MIN ||
+    edgeTrimMmValue.value > EDGE_TRIM_MM_MAX
+      ? `Chetki qirqimni ${EDGE_TRIM_MM_MIN}–${EDGE_TRIM_MM_MAX} mm oralig'ida kiriting.`
+      : undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
-  return !hasErrors
+  const firstPhoneRowError = phoneRowErrors.value.findIndex(Boolean)
+  if (!hasErrors && firstPhoneRowError >= 0) {
+    document.getElementById(`branch-detail-additional-phone-${firstPhoneRowError}`)?.focus()
+  }
+  return !hasErrors && firstPhoneRowError < 0
 }
 
 function validateStatusForm() {
@@ -163,17 +201,12 @@ function syncForms() {
   branchForm.name = branch.name
   branchForm.address = branch.address
   branchForm.phone = branch.phone
+  additionalPhones.value = [...branch.additional_phones]
+  phonesValidated.value = false
+  branchForm.kerfMm = String(branch.kerf_mm)
+  branchForm.edgeTrimMm = String(branch.edge_trim_mm)
   statusForm.status = branch.status
   statusForm.reason = branch.closed_reason ?? ''
-  for (const day of hours) {
-    const raw = branch.working_hours[day.key]
-    const entry = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
-    const open = typeof entry?.open === 'string' ? entry.open : ''
-    const close = typeof entry?.close === 'string' ? entry.close : ''
-    day.open = Boolean(open && close)
-    if (open) day.from = open
-    if (close) day.to = close
-  }
   // The rate fields are entered in so'm; the backend stores tiyin (1 so'm = 100
   // tiyin). Show so'm on load; convert back on submit.
   const pricing = workshop.selectedBranchPricing
@@ -212,14 +245,16 @@ async function saveBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      working_hours: workingHoursPayload(),
+      additional_phones: additionalPhones.value,
+      kerf_mm: kerfMmValue.value,
+      edge_trim_mm: edgeTrimMmValue.value,
     })
     await workshop.updateBranchPricing(branchId.value, {
       cutting_rate_tiyin: cuttingRateTiyin.value,
       edge_banding_rate_tiyin: edgeBandingRateTiyin.value,
     })
     saved.value = true
-    toast.success('Filial saqlandi.')
+    if (!(await notifyProgress())) toast.success('Filial saqlandi.')
   } catch (caught) {
     Object.assign(
       branchFieldErrors,
@@ -229,11 +264,16 @@ async function saveBranch() {
           branch_name_required: 'name',
           branch_address_required: 'address',
           invalid_phone: 'phone',
+          too_many_branch_phones: 'phones',
+          duplicate_branch_phone: 'phones',
         },
         {
           name: 'name',
           address: 'address',
           phone: 'phone',
+          additional_phones: 'phones',
+          kerf_mm: 'kerfMm',
+          edge_trim_mm: 'edgeTrimMm',
         },
       ),
     )
@@ -293,6 +333,15 @@ onMounted(refreshBranch)
     <div class="page-head">
       <div>
         <h1>{{ workshop.selectedBranch?.name ?? 'Filial' }}</h1>
+        <!-- The branch number is printed on every order and cutting map that
+             leaves the building; this is the only place it can be looked up. -->
+        <p v-if="workshop.selectedBranch" class="sub">
+          Filial raqami
+          <span class="id">{{ workshop.selectedBranch.branch_no }}</span>
+          — bu filial buyurtmalari
+          <span class="id">{{ orderNumberPrefix }}</span>
+          bilan boshlanadi.
+        </p>
       </div>
       <span
         v-if="workshop.selectedBranch"
@@ -388,14 +437,19 @@ onMounted(refreshBranch)
             </label>
           </div>
           <label class="field" for="branch-detail-phone">
-            <span>Telefon</span>
+            <span>Asosiy telefon</span>
             <PhoneInput
               id="branch-detail-phone"
               v-model="branchForm.phone"
               required
               :aria-invalid="!!branchFieldErrors.phone"
-              :aria-describedby="branchFieldErrors.phone ? 'branch-detail-phone-error' : undefined"
+              :aria-describedby="
+                branchFieldErrors.phone ? 'branch-detail-phone-error' : 'branch-detail-phone-hint'
+              "
             />
+            <small id="branch-detail-phone-hint" class="text-ink-muted">
+              Mijozlar buyurtmalarida shu raqam ko'rinadi.
+            </small>
             <span
               v-if="branchFieldErrors.phone"
               id="branch-detail-phone-error"
@@ -404,36 +458,15 @@ onMounted(refreshBranch)
               {{ branchFieldErrors.phone }}
             </span>
           </label>
-          <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              <div
-                v-for="day in hours"
-                :key="day.key"
-                class="rounded-md border border-hairline bg-sunk p-3"
-              >
-                <label class="flex items-center gap-2 text-sm font-extrabold text-ink">
-                  <input v-model="day.open" type="checkbox" class="size-4 accent-accent" />
-                  {{ day.label }}
-                </label>
-                <div class="mt-2 grid grid-cols-2 gap-2">
-                  <input
-                    v-model="day.from"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                  <input
-                    v-model="day.to"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
-          <div class="grid gap-3 md:grid-cols-2">
+          <BranchPhonesField
+            v-model="additionalPhones"
+            id-prefix="branch-detail-additional-phone"
+            :errors="phoneRowErrors"
+          />
+          <p v-if="branchFieldErrors.phones" class="mp-field-error">
+            {{ branchFieldErrors.phones }}
+          </p>
+          <div class="grid gap-3 md:grid-cols-2" data-onboard="branch-pricing">
             <label class="field" for="branch-detail-cutting-rate">
               <span>Kesish narxi (so'm)</span>
               <input
@@ -481,10 +514,60 @@ onMounted(refreshBranch)
               </span>
             </label>
           </div>
+          <fieldset>
+            <legend class="mb-2 text-sm font-extrabold text-ink">Kesish sozlamalari</legend>
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="field" for="branch-detail-kerf-mm">
+                <span>Arra kesigi (kerf), mm</span>
+                <input
+                  id="branch-detail-kerf-mm"
+                  v-model="branchForm.kerfMm"
+                  class="mp-input"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!branchFieldErrors.kerfMm"
+                  :aria-describedby="
+                    branchFieldErrors.kerfMm ? 'branch-detail-kerf-mm-error' : undefined
+                  "
+                />
+                <span
+                  v-if="branchFieldErrors.kerfMm"
+                  id="branch-detail-kerf-mm-error"
+                  class="mp-field-error"
+                >
+                  {{ branchFieldErrors.kerfMm }}
+                </span>
+              </label>
+              <label class="field" for="branch-detail-edge-trim-mm">
+                <span>Chetki qirqim, mm</span>
+                <input
+                  id="branch-detail-edge-trim-mm"
+                  v-model="branchForm.edgeTrimMm"
+                  class="mp-input"
+                  inputmode="numeric"
+                  required
+                  :aria-invalid="!!branchFieldErrors.edgeTrimMm"
+                  :aria-describedby="
+                    branchFieldErrors.edgeTrimMm ? 'branch-detail-edge-trim-mm-error' : undefined
+                  "
+                />
+                <span
+                  v-if="branchFieldErrors.edgeTrimMm"
+                  id="branch-detail-edge-trim-mm-error"
+                  class="mp-field-error"
+                >
+                  {{ branchFieldErrors.edgeTrimMm }}
+                </span>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-ink-muted">
+              Panelning ishlatiladigan yuzasi = panel − 2× chetki qirqim.
+            </p>
+          </fieldset>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
             <p v-else-if="saveError" class="text-sm font-bold text-danger">
-              Saqlab bo'lmadi · trace_id: {{ saveTraceId ?? 'unavailable' }}
+              Saqlab bo'lmadi{{ traceSuffix(saveTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
               {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}
@@ -526,7 +609,7 @@ onMounted(refreshBranch)
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="statusSaved" class="text-sm font-bold text-success">Holat saqlandi</p>
             <p v-else-if="statusError" class="text-sm font-bold text-danger">
-              Holat saqlanmadi · trace_id: {{ statusTraceId ?? 'unavailable' }}
+              Holat saqlanmadi{{ traceSuffix(statusTraceId) }}
             </p>
             <button class="mp-button mp-button-primary" type="submit" :disabled="statusSaving">
               {{ statusSaving ? "O'zgartirilmoqda" : "Holatni o'zgartirish" }}

@@ -23,6 +23,8 @@ from app.modules.finance.contracts import Income
 from app.modules.inventory.contracts import StockItem, StockTransaction
 from app.modules.sales.contracts import Order, OrderItem
 from app.modules.support.contracts import Notification
+from app.modules.workshop.api import next_branch_no
+from app.modules.workshop.contracts import Branch
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,8 +50,10 @@ async def _client_access(db: AsyncSession, *, phone: str = "+998901555000") -> t
 
 async def _workshop_setup(
     db: AsyncSession,
+    *,
+    login: str = "owner",
 ) -> tuple[str, uuid.UUID, uuid.UUID, uuid.UUID]:
-    workshop, branch, owner = await seed_workshop_with_owner(db)
+    workshop, branch, owner = await seed_workshop_with_owner(db, login=login)
     owner.password_reset_required = False
     db.add(
         BranchPricing(
@@ -74,6 +78,7 @@ async def _staff(
     *,
     workshop_id: uuid.UUID,
     branch_id: uuid.UUID,
+    permission: Permission = Permission.PROCESS_PRODUCTION,
 ) -> WorkshopUser:
     staff = WorkshopUser(
         workshop_id=workshop_id,
@@ -91,7 +96,7 @@ async def _staff(
     db.add(
         PermissionGrant(
             workshop_user_id=staff.id,
-            permission=Permission.PROCESS_PRODUCTION,
+            permission=permission,
             branch_id=branch_id,
             granted_by_user_id=staff.id,
             granted_at=datetime.now(UTC),
@@ -210,8 +215,10 @@ async def _optimized_draft(
 async def _placed_order(
     client: AsyncClient,
     db: AsyncSession,
+    *,
+    login: str = "owner",
 ) -> tuple[dict[str, object], str, str, uuid.UUID, uuid.UUID, uuid.UUID]:
-    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db)
+    owner_access, workshop_id, branch_id, _ = await _workshop_setup(db, login=login)
     panel, edge = await _materials(db, branch_id=branch_id)
     client_access, _ = await _client_access(db, phone=f"+99890{uuid.uuid4().int % 10**7:07d}")
     draft = await _optimized_draft(
@@ -281,6 +288,18 @@ async def test_client_places_order_and_confirms_cutting_snapshot(
     assert planned_edge_line["thickness_mm"] == "2"
     assert planned_edge_line["color"] == "White"
     assert planned_edge_line["consumed_mm"] == 1000
+    # Itemized money lines rebuilt from order-time snapshots: the panel line
+    # reconciles with subtotal_materials, the edge line carries only the
+    # material share of subtotal_edge_banding (labor stays an aggregate).
+    panel_line, edge_line = order["price_lines"]
+    assert panel_line["kind"] == "panel"
+    assert panel_line["panels_used"] == 1
+    assert panel_line["line_total_tiyin"] == 250_000
+    assert panel_line["material_name"].startswith("Phase 5 Maker ")
+    assert edge_line["kind"] == "edge"
+    assert edge_line["material_id"] == str(edge_id)
+    assert edge_line["consumed_mm"] == 1000
+    assert edge_line["line_total_tiyin"] == 10_000
     assert result is not None
     assert result.status is CuttingResultStatus.CONFIRMED
     assert result.order_id == order_id
@@ -660,6 +679,106 @@ async def test_workshop_transitions_consume_restore_stock_and_lock_versions(
     assert edge_restored == 10000
 
 
+async def test_assignment_locks_per_role_once_the_stage_starts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The cutter locks when cutting starts and the edger when banding is
+    stamped started; revert clears the start stamp and unlocks again."""
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    cutter = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    edger = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    substitute = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(cutter.id),
+            "edger_user_id": str(edger.id),
+        },
+    )
+    assert assigned.status_code == 200
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    assert started.status_code == 200
+
+    cutter_swap = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "cutter_user_id": str(substitute.id)},
+    )
+    assert cutter_swap.status_code == 400
+    assert cutter_swap.json()["code"] == "cutting_already_started"
+
+    # The edger's work hasn't started — swapping them mid-cut is still allowed.
+    edger_swap = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_swap.status_code == 200
+    assert edger_swap.json()["assigned_edger_user_id"] == str(substitute.id)
+
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": edger_swap.json()["version"], "completed_by_user_id": str(cutter.id)},
+    )
+    assert cut_done.status_code == 200
+    assert cut_done.json()["status"] == "edge_banding"
+
+    # Queued at the banding station the edger is still swappable...
+    edger_back = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": cut_done.json()["version"], "edger_user_id": str(edger.id)},
+    )
+    assert edger_back.status_code == 200
+
+    banding_started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-banding",
+        headers=_auth(owner_access),
+        json={"version": edger_back.json()["version"]},
+    )
+    assert banding_started.status_code == 200
+
+    # ...but not once banding is stamped started.
+    edger_late = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": banding_started.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_late.status_code == 400
+    assert edger_late.json()["code"] == "banding_already_started"
+
+    # Revert clears the start stamp — the deliberate unlock path.
+    reverted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/revert",
+        headers=_auth(owner_access),
+        json={"version": banding_started.json()["version"], "reason": "Swap the edger"},
+    )
+    assert reverted.status_code == 200
+    assert reverted.json()["status"] == "cutting"
+    edger_after_revert = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={"version": reverted.json()["version"], "edger_user_id": str(substitute.id)},
+    )
+    assert edger_after_revert.status_code == 200
+    assert edger_after_revert.json()["assigned_edger_user_id"] == str(substitute.id)
+
+
 async def test_discount_requires_version_and_client_cancel_only_new(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -714,6 +833,137 @@ async def test_discount_requires_version_and_client_cancel_only_new(
     assert stock_tx_count == 0
 
 
+async def test_surcharge_adds_to_total_and_coexists_with_discount(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    order_id = order["id"]  # pre-adjustment total is 330_000
+
+    surcharged = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "fixed", "value": 20_000, "reason": "Rush job"},
+    )
+    assert surcharged.status_code == 200
+    assert surcharged.json()["surcharge_tiyin"] == 20_000
+    assert surcharged.json()["surcharge_reason"] == "Rush job"
+    assert surcharged.json()["surcharge_applied_by_user_id"] is not None
+    assert surcharged.json()["total_tiyin"] == 350_000  # 330_000 + 20_000
+
+    # A discount stacks with the surcharge: 330_000 - 30_000 + 20_000 = 320_000.
+    discounted = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/discount",
+        headers=_auth(owner_access),
+        json={
+            "version": surcharged.json()["version"],
+            "kind": "fixed",
+            "value": 30_000,
+            "reason": "Loyalty",
+        },
+    )
+    assert discounted.status_code == 200
+    assert discounted.json()["discount_tiyin"] == 30_000
+    assert discounted.json()["surcharge_tiyin"] == 20_000
+    assert discounted.json()["total_tiyin"] == 320_000
+
+    # Percent surcharge resolves against the subtotal (330_000), not the discounted
+    # total: 10% → 33_000, so total = 330_000 - 30_000 + 33_000 = 333_000.
+    percent = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": discounted.json()["version"],
+            "kind": "percent",
+            "value": 10,
+            "reason": "10% custom work",
+        },
+    )
+    assert percent.status_code == 200
+    assert percent.json()["surcharge_tiyin"] == 33_000
+    assert percent.json()["total_tiyin"] == 333_000
+
+    # Removing the surcharge clears its metadata and returns the total to the
+    # discounted figure (330_000 - 30_000 = 300_000).
+    removed = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": percent.json()["version"],
+            "kind": "fixed",
+            "value": 0,
+            "reason": "Remove surcharge",
+        },
+    )
+    assert removed.status_code == 200
+    assert removed.json()["surcharge_tiyin"] == 0
+    assert removed.json()["surcharge_reason"] is None
+    assert removed.json()["surcharge_applied_by_user_id"] is None
+    assert removed.json()["total_tiyin"] == 300_000
+
+    stale = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "fixed", "value": 5_000, "reason": "Stale"},
+    )
+    assert stale.status_code == 409
+
+
+async def test_surcharge_rejects_bad_percent_terminal_status_and_unprivileged(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    order, client_access, owner_access, workshop_id, branch_id, _ = await _placed_order(
+        client, db_session
+    )
+    order_id = order["id"]
+
+    # A percent above 100 is rejected outright (not silently resolved to >100%).
+    bad_percent = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={"version": order["version"], "kind": "percent", "value": 150, "reason": "Too much"},
+    )
+    assert bad_percent.status_code == 400
+    assert bad_percent.json()["code"] == "invalid_surcharge"
+
+    # A production-scoped staffer without manage_orders can't set a surcharge.
+    staff = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    staff_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=staff.id,
+    )
+    forbidden = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(staff_tokens.access_token),
+        json={"version": order["version"], "kind": "fixed", "value": 5_000, "reason": "Nope"},
+    )
+    # Denied for lack of manage_orders — the scoped lookup declines the order
+    # (403 forbidden, or 404 to avoid an existence oracle) — never applies it.
+    assert forbidden.status_code in (403, 404)
+
+    # Once the order is terminal (cancelled), a surcharge is not allowed.
+    cancelled = await client.post(
+        f"/api/v1/client/orders/{order_id}/cancel",
+        headers=_auth(client_access),
+        json={"version": order["version"], "reason": "Changed plans"},
+    )
+    assert cancelled.status_code == 200
+    surcharge_after = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/surcharge",
+        headers=_auth(owner_access),
+        json={
+            "version": cancelled.json()["version"],
+            "kind": "fixed",
+            "value": 5_000,
+            "reason": "Late",
+        },
+    )
+    assert surcharge_after.status_code == 400
+    assert surcharge_after.json()["code"] == "surcharge_not_allowed"
+
+
 async def test_client_orders_active_filter_expands_to_status_union(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -752,7 +1002,48 @@ async def test_client_orders_active_filter_expands_to_status_union(
     assert order_id in _ids(await _list("cancelled"))
 
 
-async def test_workshop_orders_date_filter_and_csv_export(
+async def test_view_orders_grant_reads_the_branch_orders_but_cannot_act(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-166: `view_orders` is exactly what its name says — read access to the
+    branch's orders, including the client contact and the money on them, and no
+    office action. The grant was called `view_dashboard` while doing this, so an
+    owner ticking it thought they were unlocking a KPI page.
+    """
+    order, _, _, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    reader = await _staff(
+        db_session,
+        workshop_id=workshop_id,
+        branch_id=branch_id,
+        permission=Permission.VIEW_ORDERS,
+    )
+    tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=reader.id,
+    )
+    reader_access = tokens.access_token
+
+    listed = await client.get("/api/v1/workshop/orders", headers=_auth(reader_access))
+    detail = await client.get(
+        f"/api/v1/workshop/orders/{order['id']}",
+        headers=_auth(reader_access),
+    )
+    approve = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(reader_access),
+        json={"version": order["version"]},
+    )
+
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [order["id"]]
+    assert detail.status_code == 200
+    assert detail.json()["contact_phone"] == "+998901555222"
+    assert approve.status_code == 403
+
+
+async def test_workshop_orders_date_filter(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
@@ -778,26 +1069,10 @@ async def test_workshop_orders_date_filter_and_csv_export(
             "date_to": tomorrow.isoformat(),
         },
     )
-    csv_export = await client.get(
-        "/api/v1/workshop/orders/export.csv",
-        headers=_auth(owner_access),
-        params={
-            "branch_id": str(branch_id),
-            "date_from": today.isoformat(),
-            "date_to": today.isoformat(),
-        },
-    )
-
     assert today_rows.status_code == 200
     assert [row["id"] for row in today_rows.json()] == [order["id"]]
     assert future_rows.status_code == 200
     assert future_rows.json() == []
-    assert csv_export.status_code == 200
-    assert csv_export.headers["content-type"].startswith("text/csv")
-    assert "order_number,client_name,client_phone,branch_name,status,total_tiyin,created_at" in (
-        csv_export.text
-    )
-    assert str(order["order_number"]) in csv_export.text
 
 
 async def test_workshop_orders_contact_phone_filter(
@@ -824,14 +1099,6 @@ async def test_workshop_orders_contact_phone_filter(
     assert await rows("998977777777") == []
     # An input with no digits is formatting-only — it must not filter at all.
     assert await rows("++--") == [order["id"]]
-
-    csv_export = await client.get(
-        "/api/v1/workshop/orders/export.csv",
-        headers=_auth(owner_access),
-        params={"branch_id": str(branch_id), "contact_phone": "998977777777"},
-    )
-    assert csv_export.status_code == 200
-    assert str(order["order_number"]) not in csv_export.text
 
 
 async def _client_order_notifications(db: AsyncSession, order_id: str) -> list[Notification]:
@@ -927,7 +1194,11 @@ async def test_client_self_cancel_does_not_notify_self_but_workshop_cancel_does(
     assert cancelled.status_code == 200
     assert await _client_order_notifications(db_session, self_id) == []
 
-    shop_cancel, _, owner_access, _, _, _ = await _placed_order(client, db_session)
+    shop_cancel, _, owner_access, _, _, _ = await _placed_order(
+        client,
+        db_session,
+        login="owner_b",
+    )
     shop_id = shop_cancel["id"]
     shop_cancelled = await client.post(
         f"/api/v1/workshop/orders/{shop_id}/cancel",
@@ -1014,3 +1285,164 @@ async def test_client_order_with_indivisible_panel_price_and_quantity(
     # and the order's authoritative material subtotal stays the exact, un-floored cost.
     assert order.subtotal_materials_tiyin % 3 != 0
     assert item.unit_material_price_tiyin == order.subtotal_materials_tiyin // 3
+
+
+async def test_workshop_new_order_count_is_branch_scoped_and_tenant_isolated(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The sidebar badge (QAD-156) counts only NEW orders the caller may manage,
+    in the branch they are looking at — and never another workshop's orders."""
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+
+    async def count(access: str, **params: str) -> int:
+        response = await client.get(
+            "/api/v1/workshop/orders/new-count",
+            headers=_auth(access),
+            params=params,
+        )
+        assert response.status_code == 200, response.text
+        return int(response.json()["count"])
+
+    # The fresh order is NEW, so the owner sees it workshop-wide and in its branch.
+    assert await count(owner_access) == 1
+    assert await count(owner_access, branch_id=str(branch_id)) == 1
+    # A branch with no orders of its own reports zero, not the workshop total.
+    other_branch = Branch(
+        workshop_id=workshop_id,
+        branch_no=await next_branch_no(db_session),
+        name="Chilonzor",
+        address="Tashkent, Chilonzor",
+        phone="+998902222333",
+        latitude=Decimal("41.28"),
+        longitude=Decimal("69.20"),
+    )
+    db_session.add(other_branch)
+    await db_session.flush()
+    assert await count(owner_access, branch_id=str(other_branch.id)) == 0
+
+    # Production-only staff can't manage orders, so they get no badge at all.
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    worker_tokens = await create_session(
+        db_session,
+        principal_type=AuthenticatedPrincipalType.WORKSHOP_USER,
+        principal_id=worker.id,
+    )
+    assert await count(worker_tokens.access_token) == 0
+
+    # A different workshop never sees these orders in its own count.
+    outsider_access, _, _, _ = await _workshop_setup(db_session, login="outsider-owner")
+    assert await count(outsider_access) == 0
+
+    # Confirming the order takes it out of NEW, and the count falls on its own.
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order['id']}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assert approved.status_code == 200, approved.text
+    assert await count(owner_access, branch_id=str(branch_id)) == 0
+
+
+async def test_cutting_done_is_not_blocked_by_missing_or_unrecorded_stock(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """QAD-150: the panels are cut; a bookkeeping gap must not refuse to record it."""
+
+    order, _, owner_access, workshop_id, branch_id, _ = await _placed_order(client, db_session)
+    worker = await _staff(db_session, workshop_id=workshop_id, branch_id=branch_id)
+    order_id = order["id"]
+
+    # The two blocking states at once: nothing on the shelf, and the material was
+    # dropped from the branch catalog after the order was placed.
+    panel_item = await db_session.scalar(
+        select(StockItem)
+        .join(Material, Material.id == StockItem.material_id)
+        .where(StockItem.branch_id == branch_id, Material.kind == MaterialKind.PANEL)
+    )
+    assert panel_item is not None
+    panel_item.on_hand = 0
+    panel_branch_material = await db_session.scalar(
+        select(BranchMaterial).where(
+            BranchMaterial.branch_id == branch_id,
+            BranchMaterial.material_id == panel_item.material_id,
+        )
+    )
+    assert panel_branch_material is not None
+    await db_session.delete(panel_branch_material)
+    await db_session.flush()
+
+    approved = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/approve",
+        headers=_auth(owner_access),
+        json={"version": order["version"]},
+    )
+    assigned = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/assign",
+        headers=_auth(owner_access),
+        json={
+            "version": approved.json()["version"],
+            "cutter_user_id": str(worker.id),
+            "edger_user_id": str(worker.id),
+        },
+    )
+    started = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/start-cutting",
+        headers=_auth(owner_access),
+        json={"version": assigned.json()["version"]},
+    )
+    cut_done = await client.post(
+        f"/api/v1/workshop/orders/{order_id}/cutting-done",
+        headers=_auth(owner_access),
+        json={"version": started.json()["version"], "completed_by_user_id": str(worker.id)},
+    )
+
+    assert cut_done.status_code == 200
+    assert cut_done.json()["status"] == "edge_banding"
+    # Informational, not a failure — the worker gets a warning toast, not an error.
+    assert cut_done.json()["stock_shortfall"] is True
+    await db_session.refresh(panel_item)
+    assert panel_item.on_hand == -1
+    # The material is NOT silently re-added to the branch catalog.
+    assert (
+        await db_session.scalar(
+            select(BranchMaterial).where(
+                BranchMaterial.branch_id == branch_id,
+                BranchMaterial.material_id == panel_item.material_id,
+            )
+        )
+        is None
+    )
+
+    # Recording the arrival afterwards lands the balance on the right number with
+    # no manual adjustment: 1 was consumed, 4 arrive, 3 remain.
+    supplier = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/suppliers",
+        headers=_auth(owner_access),
+        json={"name": "Late Arrival Supplier"},
+    )
+    assert supplier.status_code == 201
+    # Stock-in still needs the material in the branch catalog, so put it back the
+    # way a human would — deliberately, through the catalog.
+    db_session.add(
+        BranchMaterial(
+            branch_id=branch_id,
+            material_id=panel_item.material_id,
+            price_tiyin=250_000,
+            min_stock=1,
+        )
+    )
+    await db_session.flush()
+    stock_in = await client.post(
+        f"/api/v1/workshop/branches/{branch_id}/stock-in",
+        headers=_auth(owner_access),
+        json={
+            "material_id": str(panel_item.material_id),
+            "quantity": 4,
+            "unit_price_tiyin": 100_000,
+            "supplier_id": supplier.json()["id"],
+        },
+    )
+    assert stock_in.status_code == 201
+    assert stock_in.json()["balance_after"] == 3

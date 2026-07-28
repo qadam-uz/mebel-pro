@@ -3,12 +3,14 @@
 from app.modules.cutting.imports import parse_import_file
 from app.modules.cutting.optimizer import (
     ALGORITHM_VERSION,
+    DEFAULT_CUT_PARAMS,
+    DEFAULT_EDGE_TRIM_MM,
+    DEFAULT_KERF_MM,
     EDGE_OVERHANG_MM,
-    EDGE_TRIM_MM,
-    KERF_MM,
     MAX_PANELS_PER_MATERIAL,
     MAX_PARTS_PER_RUN,
     OPTIMIZATION_TIMEOUT_SECONDS,
+    CutParams,
     EdgeBandInput,
     OffcutResult,
     OptimizationResult,
@@ -48,12 +50,14 @@ from app.modules.cutting.workshop_service import (
 
 __all__ = [
     "ALGORITHM_VERSION",
+    "DEFAULT_CUT_PARAMS",
+    "DEFAULT_EDGE_TRIM_MM",
+    "DEFAULT_KERF_MM",
     "EDGE_OVERHANG_MM",
-    "EDGE_TRIM_MM",
-    "KERF_MM",
     "MAX_PANELS_PER_MATERIAL",
     "MAX_PARTS_PER_RUN",
     "OPTIMIZATION_TIMEOUT_SECONDS",
+    "CutParams",
     "EdgeBandInput",
     "OffcutResult",
     "OptimizationResult",

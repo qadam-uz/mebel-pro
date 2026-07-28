@@ -4,12 +4,14 @@ import { useRoute } from 'vue-router'
 
 import {
   adminDateTime,
+  adminErrorMessage,
   adminJobLogText,
   adminJobNameLabel,
   adminJobScheduleLabel,
   jobStatusLabel,
   jobStatusTone,
 } from '@/shared/app/adminUi'
+import { apiErrorCode } from '@/shared/api/client'
 import AdminErrorState from '@/shared/components/AdminErrorState.vue'
 import AdminModalCloseIcon from '@/shared/components/AdminModalCloseIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -52,11 +54,12 @@ async function confirmRun() {
     const run = await admin.runJob(target.name)
     if (run.status === 'skipped')
       toast.warn("Fon vazifa allaqachon ishlamoqda — o'tkazib yuborildi")
-    else if (run.status === 'failed') toast.danger('Ish muvaffaqiyatsiz tugadi')
-    else toast.success('Ish ishga tushirildi')
-  } catch {
+    else if (run.status === 'failed')
+      toast.danger("Fon vazifa xatolik bilan tugadi — jurnalni ko'ring.")
+    else toast.success('Fon vazifa ishga tushirildi')
+  } catch (error) {
     runError.value = 'job_run_failed'
-    toast.danger('Ish ishga tushmadi')
+    toast.danger(adminErrorMessage(apiErrorCode(error), 'Fon vazifa ishga tushmadi.'))
   } finally {
     runningJob.value = null
   }

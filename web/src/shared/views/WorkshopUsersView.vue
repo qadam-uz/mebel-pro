@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import { apiErrorCode } from '@/shared/api/client'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
@@ -12,11 +13,13 @@ import {
   uzPhone,
 } from '@/shared/app/adminValidation'
 import { copyText } from '@/shared/app/clipboard'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import {
   grantSummary,
   initials,
+  loginPrefix,
   permissionLabels,
   workshopErrorMessage,
 } from '@/shared/app/workshopUi'
@@ -182,8 +185,31 @@ function ensureCreateBranches() {
   if (form.branchIds.length === 0) form.branchIds = defaultBranchIds()
 }
 
+// Logins are unique platform-wide, so a bare "admin" is usually taken by now.
+// Prefill the workshop's own prefix and drop the caret after it: the owner types
+// "akmal" and gets "mebelmaster_akmal". Editable and clearable — never enforced.
+const suggestedLoginPrefix = computed(() => loginPrefix(workshop.settings?.name))
+
+function resetLoginToPrefix() {
+  form.login = suggestedLoginPrefix.value
+}
+
+// Focusing an input by Tab selects its whole value in most browsers, so the
+// first keystroke would wipe the suggestion. While the field still holds nothing
+// but the untouched prefix, collapse the caret to the end so typing extends it.
+// Once the owner has edited the value, focus behaves natively again — select-all
+// and replace has to keep working.
+function collapseLoginCaret(event: FocusEvent) {
+  const input = event.target
+  if (!(input instanceof HTMLInputElement)) return
+  if (!suggestedLoginPrefix.value || input.value !== suggestedLoginPrefix.value) return
+  const caret = input.value.length
+  input.setSelectionRange(caret, caret)
+}
+
 function openCreateForm() {
   ensureCreateBranches()
+  if (!form.login) resetLoginToPrefix()
   showCreate.value = true
 }
 
@@ -211,6 +237,15 @@ watch(search, scheduleUsersRefresh)
 watch([branchFilter, statusFilter], () => {
   void refreshUsers()
 })
+
+// A rejected login is only rejected as typed — editing it clears the verdict,
+// so the field never argues with what the owner is currently looking at.
+watch(
+  () => form.login,
+  () => {
+    staffFieldErrors.login = undefined
+  },
+)
 
 watch(
   () => form.branchIds.slice(),
@@ -244,7 +279,7 @@ async function createStaff() {
     })
     form.fullName = ''
     form.phone = ''
-    form.login = ''
+    resetLoginToPrefix()
     form.branchIds = defaultBranchIds()
     form.tempPassword = ''
     selected.value = new Set()
@@ -277,6 +312,9 @@ async function createStaff() {
     if (staffFieldOrder.some((field) => Boolean(staffFieldErrors[field]))) {
       focusFirstFieldError(staffFieldErrors, staffFieldOrder, staffFieldIds)
     }
+    // A taken login is fully explained on the field itself — a second, vaguer
+    // banner under the submit button would only compete with it.
+    if (apiErrorCode(caught) === 'login_exists') return
     createError.value = workshopErrorMessage(workshop.actionError ?? 'user_create_failed')
     createTraceId.value = workshop.actionTraceId
   } finally {
@@ -288,7 +326,10 @@ onMounted(async () => {
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
   ensureCreateBranches()
-  if (auth.me?.is_owner) void refreshUsers()
+  if (!auth.me?.is_owner) return
+  // Owner-only endpoint; the workshop name feeds the login prefix suggestion.
+  await workshop.loadSettings().catch(() => undefined)
+  void refreshUsers()
 })
 
 onBeforeUnmount(() => {
@@ -306,8 +347,8 @@ onBeforeUnmount(() => {
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
-      <p>Xodimlar va ruxsatlar matritsasini egasi boshqaradi.</p>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
+      <p>Xodimlar va ruxsatlar matritsasini rahbar boshqaradi.</p>
     </section>
 
     <template v-else>
@@ -362,8 +403,14 @@ onBeforeUnmount(() => {
                 autocomplete="username"
                 required
                 :aria-invalid="!!staffFieldErrors.login"
-                :aria-describedby="staffFieldErrors.login ? 'staff-login-error' : undefined"
+                :aria-describedby="
+                  staffFieldErrors.login ? 'staff-login-error' : 'staff-login-hint'
+                "
+                @focus="collapseLoginCaret"
               />
+              <span v-if="!staffFieldErrors.login" id="staff-login-hint" class="mp-field-hint">
+                Ustaxona prefiksi — o'zgartirish mumkin.
+              </span>
               <span v-if="staffFieldErrors.login" id="staff-login-error" class="mp-field-error">
                 {{ staffFieldErrors.login }}
               </span>
@@ -390,7 +437,7 @@ onBeforeUnmount(() => {
                 v-model="form.tempPassword"
                 class="mp-input"
                 autocomplete="new-password"
-                placeholder="bo'sh qoldirilsa avtomatik yaratiladi"
+                placeholder="Bo'sh qoldirilsa avtomatik yaratiladi"
                 :aria-invalid="!!staffFieldErrors.tempPassword"
                 :aria-describedby="
                   staffFieldErrors.tempPassword ? 'staff-temp-password-error' : undefined
@@ -460,7 +507,7 @@ onBeforeUnmount(() => {
             v-if="createError"
             class="rounded-md bg-danger-soft px-3 py-2 text-sm font-bold text-danger"
           >
-            {{ createError }} · trace_id: {{ createTraceId ?? 'unavailable' }}
+            {{ createError }}{{ traceSuffix(createTraceId) }}
           </p>
         </form>
       </AppModal>
@@ -491,7 +538,7 @@ onBeforeUnmount(() => {
       <div class="mp-filters">
         <label class="mp-filter-input">
           <span>Qidirish</span>
-          <input v-model="search" placeholder="Ism yoki login..." />
+          <input v-model="search" placeholder="Ism yoki login" />
         </label>
         <ProjectDropdown
           v-model="branchFilter"
@@ -515,7 +562,7 @@ onBeforeUnmount(() => {
 
       <section v-else-if="workshop.error" class="st-error">
         <h3>Xodimlarni yuklab bo'lmadi</h3>
-        <p>trace_id: {{ workshop.traceId ?? 'unavailable' }}</p>
+        <p>{{ traceLine(workshop.traceId) }}</p>
       </section>
 
       <section v-else class="card">
@@ -540,7 +587,7 @@ onBeforeUnmount(() => {
                     <span class="min-w-0">
                       <span class="nm">
                         {{ user.full_name }}
-                        <span v-if="user.is_owner" class="pill p-cut ml-1">Egasi</span>
+                        <span v-if="user.is_owner" class="pill p-cut ml-1">Rahbar</span>
                       </span>
                       <small class="block truncate text-ink-muted">{{ user.phone }}</small>
                     </span>
@@ -570,7 +617,16 @@ onBeforeUnmount(() => {
               </tr>
               <tr v-if="workshop.users.length === 0">
                 <td colspan="7">
-                  <div class="st-empty !border-0 !py-8"><h3>Mos xodim topilmadi</h3></div>
+                  <div class="st-empty !border-0 !py-8">
+                    <h3>{{ search.trim() ? 'Mos xodim topilmadi' : "Hali xodim yo'q" }}</h3>
+                    <p>
+                      {{
+                        search.trim()
+                          ? "Ism yoki login bo'yicha qidiruvni o'zgartiring."
+                          : "«+ Yangi xodim» orqali birinchi xodimni qo'shing."
+                      }}
+                    </p>
+                  </div>
                 </td>
               </tr>
             </tbody>

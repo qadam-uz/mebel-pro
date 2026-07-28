@@ -1,8 +1,10 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
+import { api, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
+import { downloadBlob } from '@/shared/app/downloadBlob'
+import type { OrderStatus } from '@/shared/stores/orders'
 
 export type IncomeType = 'order_payment' | 'other'
 export type MoneyMethod = 'cash' | 'bank_transfer' | 'other'
@@ -18,6 +20,21 @@ export type ExpenseCategory =
   | 'taxes_and_fees'
   | 'salary'
   | 'other'
+
+/**
+ * The order an order-payment income points at, resolved by the server onto the
+ * income row itself. Nothing in the finance views reads an order back through
+ * the sales API: that read is permission-gated away from the accountant, and a
+ * settled order never returns to the payable-orders picker.
+ */
+export interface IncomeOrderRef {
+  order_id: string
+  order_number: string
+  contact_name: string
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
+}
 
 export interface Income {
   id: string
@@ -37,6 +54,7 @@ export interface Income {
   voided_at: string | null
   created_at: string
   updated_at: string
+  order: IncomeOrderRef | null
 }
 
 export interface Expense {
@@ -49,6 +67,8 @@ export interface Expense {
   description: string
   vendor: string | null
   supplier_id: string | null
+  invoice_id: string | null
+  invoice_no: string | null
   receipt_file_id: string | null
   status: LedgerStatus
   voided_reason: string | null
@@ -81,9 +101,10 @@ export interface DebtStatementRow {
   amount_tiyin: number
   balance_after_tiyin: number
   note: string | null
-  material_name: string | null
-  quantity: number | null
-  display_unit: string | null
+  invoice_no: string | null
+  line_count: number | null
+  discount_tiyin: number | null
+  surcharge_tiyin: number | null
   category: ExpenseCategory | null
   method: MoneyMethod | null
   order_number: string | null
@@ -93,9 +114,15 @@ export interface DebtStatement {
   counterparty_id: string
   name: string
   phone: string | null
+  /** Our side of the reconciliation — the document names both parties. */
+  workshop_name: string
+  workshop_phone: string | null
   date_from: string | null
   date_to: string | null
   opening_balance_tiyin: number
+  /** In-period movements that grew their debt / shrank it (stored convention). */
+  period_increase_tiyin: number
+  period_decrease_tiyin: number
   closing_balance_tiyin: number
   current_balance_tiyin: number
   rows: DebtStatementRow[]
@@ -116,6 +143,19 @@ export interface CounterpartyAdjustment {
   voided_at: string | null
   created_at: string
   updated_at: string
+}
+
+/** An order that still owes money — a candidate for an order-payment income. */
+export interface PayableOrder {
+  order_id: string
+  order_number: string
+  contact_name: string
+  contact_phone: string
+  status: OrderStatus
+  created_at: string
+  total_tiyin: number
+  recorded_tiyin: number
+  balance_tiyin: number
 }
 
 export interface FinanceBranchSummary {
@@ -168,6 +208,24 @@ export interface WorkerProduction {
   rows: WorkerProductionRow[]
 }
 
+export type InvoicePaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+/** A supplier faktura the workshop still owes on — the expense form's picker. */
+export interface PayableInvoice {
+  id: string
+  invoice_no: string
+  invoice_date: string
+  supplier_id: string | null
+  supplier_name: string | null
+  branch_id: string
+  branch_name: string | null
+  line_count: number
+  total_tiyin: number
+  paid_tiyin: number
+  outstanding_tiyin: number
+  payment_status: InvoicePaymentStatus
+}
+
 export const useFinanceStore = defineStore('finance', () => {
   const summary = ref<FinanceSummary | null>(null)
   const incomes = ref<Income[]>([])
@@ -176,6 +234,10 @@ export const useFinanceStore = defineStore('finance', () => {
   const supplierDebts = ref<DebtList | null>(null)
   const clientDebts = ref<DebtList | null>(null)
   const statement = ref<DebtStatement | null>(null)
+  const statementPdfLoading = ref(false)
+  const payableInvoices = ref<PayableInvoice[]>([])
+  const payableOrders = ref<PayableOrder[]>([])
+  const payableOrdersLoading = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
@@ -183,8 +245,9 @@ export const useFinanceStore = defineStore('finance', () => {
   const actionTraceId = ref<string | null>(null)
 
   function capture(errorValue: unknown, fallback: string) {
-    error.value = fallback
-    traceId.value = apiTraceId(errorValue)
+    const captured = captureApiError(errorValue, fallback)
+    error.value = captured.code
+    traceId.value = captured.traceId
   }
 
   function captureAction(errorValue: unknown, fallback: string) {
@@ -371,6 +434,22 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  // Only unpaid and partially paid invoices come back, newest first — the
+  // picker offers what can still be paid, never a settled faktura.
+  async function loadPayableInvoices(search?: string | null) {
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      payableInvoices.value = await api.get<PayableInvoice[]>(
+        withQuery('/workshop/finance/payable-invoices', { search: search || undefined }),
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'payable_invoices_load_failed')
+      payableInvoices.value = []
+    }
+  }
+
   async function loadClientDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
     loading.value = true
     error.value = null
@@ -413,6 +492,34 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  // The signed document itself, rendered by the server so the file a
+  // counterparty keeps is identical whoever generated it.
+  async function downloadStatementPdf(
+    side: 'suppliers' | 'clients',
+    counterpartyId: string,
+    filters: { date_from?: string | null; date_to?: string | null } = {},
+    filename = 'akt-sverka.pdf',
+  ) {
+    statementPdfLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      await downloadBlob(
+        withQuery(`/workshop/finance/debts/${side}/${counterpartyId}/statement.pdf`, {
+          date_from: filters.date_from || undefined,
+          date_to: filters.date_to || undefined,
+        }),
+        filename,
+        authInit(),
+      )
+    } catch (errorValue) {
+      captureAction(errorValue, 'statement_pdf_failed')
+      throw errorValue
+    } finally {
+      statementPdfLoading.value = false
+    }
+  }
+
   async function createAdjustment(payload: unknown) {
     actionError.value = null
     actionTraceId.value = null
@@ -440,6 +547,38 @@ export const useFinanceStore = defineStore('finance', () => {
     } catch (errorValue) {
       captureAction(errorValue, 'ledger_void_failed')
       throw errorValue
+    }
+  }
+
+  // The order picker searches server-side, so answers can land out of order
+  // when a slow early query resolves after a fast later one. Only the newest
+  // request may write — a stale list under a newer query is a wrong list.
+  let payableRequestId = 0
+
+  async function loadPayableOrders(
+    filters: { branch_id?: string | null; search?: string | null; limit?: number } = {},
+  ) {
+    const requestId = ++payableRequestId
+    payableOrdersLoading.value = true
+    actionError.value = null
+    actionTraceId.value = null
+    try {
+      const rows = await api.get<PayableOrder[]>(
+        withQuery('/workshop/finance/payable-orders', {
+          branch_id: filters.branch_id || undefined,
+          search: filters.search || undefined,
+          limit: filters.limit,
+        }),
+        authInit(),
+      )
+      if (requestId !== payableRequestId) return
+      payableOrders.value = rows
+    } catch (errorValue) {
+      if (requestId !== payableRequestId) return
+      payableOrders.value = []
+      captureAction(errorValue, 'payable_orders_load_failed')
+    } finally {
+      if (requestId === payableRequestId) payableOrdersLoading.value = false
     }
   }
 
@@ -471,6 +610,10 @@ export const useFinanceStore = defineStore('finance', () => {
     supplierDebts.value = null
     clientDebts.value = null
     statement.value = null
+    payableInvoices.value = []
+    payableOrders.value = []
+    payableOrdersLoading.value = false
+    statementPdfLoading.value = false
     loading.value = false
     error.value = null
     traceId.value = null
@@ -486,6 +629,10 @@ export const useFinanceStore = defineStore('finance', () => {
     supplierDebts,
     clientDebts,
     statement,
+    statementPdfLoading,
+    payableInvoices,
+    payableOrders,
+    payableOrdersLoading,
     loading,
     error,
     traceId,
@@ -501,10 +648,13 @@ export const useFinanceStore = defineStore('finance', () => {
     updateExpense,
     voidExpense,
     loadSupplierDebts,
+    loadPayableInvoices,
     loadClientDebts,
     loadStatement,
+    downloadStatementPdf,
     createAdjustment,
     voidAdjustment,
+    loadPayableOrders,
     loadProduction,
     reset,
   }

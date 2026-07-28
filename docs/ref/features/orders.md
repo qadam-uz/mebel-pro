@@ -2,7 +2,7 @@
 title: Orders
 status: draft
 owner: shape
-updated: 2026-07-22
+updated: 2026-07-26
 order: 30
 ---
 
@@ -118,8 +118,8 @@ The revision is a **scratchpad draft, applied atomically**:
 3. **Review & save** shows the current frozen price next to the new quote at the order's
    branch. Saving atomically: rebinds the order to the new chosen result (the superseded
    confirmed result and its panels are deleted), replaces the item snapshots, **re-freezes
-   pricing at the branch's current rates**, clears any discount, clears the edger assignment
-   when no side needs banding any more, bumps the order `version`, appends an `edited`
+   pricing at the branch's current rates**, clears any discount and surcharge, clears the
+   edger assignment when no side needs banding any more, bumps the order `version`, appends an `edited`
    status event (same-status, staff actor, old/new totals in metadata), mirrors to the audit
    log, and notifies the client (`order.updated`).
 4. **Discard** deletes the revision draft; the order never notices.
@@ -132,8 +132,8 @@ Rules:
 - **Re-pricing is whole-snapshot, at current rates.** A revision replaces the frozen price;
   it never patches line items. If catalog prices moved since placement the new freeze
   reflects them — the review screen makes the delta explicit before saving.
-- **The discount never survives a revision.** It was granted against the old contents;
-  re-apply it (reason + audit, as always) if still warranted.
+- **Neither the discount nor the surcharge survives a revision.** Both were granted against
+  the old contents; re-apply either (reason + audit, as always) if still warranted.
 - **Save is guarded like a transition**: optimistic `version` check, status re-checked at
   save (`order_edit_not_allowed` once production started or the order went terminal), and
   the same pricing/carry error codes as placement. A revision that outlived its window can
@@ -180,7 +180,7 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 | — → `new` | client places the order from a chosen cutting result · or `manage_orders` staff place it for a walk-in ([Staff-created orders](#staff-created-orders-walk-in-clients)) | price snapshot frozen |
 | `new → confirmed` | **Approve** · `manage_orders` (reviewed, client called) · automatic on a staff-created order (same staff actor, same operation) | — |
 | `new → cancelled` | **Cancel** · client (only while `new`) or `manage_orders` + reason | — |
-| `confirmed → cutting` | **Start cutting** · `process_production` (the assigned cutter), or `manage_orders` on-behalf — requires a cutter assigned, and an edger too if any part is banded | stamp `cutting_started_at` |
+| `confirmed → cutting` | **Start cutting** · `process_production` (the assigned cutter), or `manage_orders` on-behalf — requires a cutter assigned | stamp `cutting_started_at` |
 | `cutting → edge_banding` | **Cutting done** · `process_production`, or `manage_orders` on-behalf — *gateway: a part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
 | `cutting → ready` | **Cutting done** · same — *gateway: no part is banded* | stamp the cutter + snapshot; **decrement panel stock** (`shop` panels) |
 | `edge_banding → ready` | **Banding done** · `process_production`, or `manage_orders` on-behalf | stamp the edger + snapshot; **decrement edge stock per edge material** (`shop` sides only) |
@@ -191,7 +191,7 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
 ### Rules
 
 - **Assignment is metadata, not a trigger.** `manage_orders` staff assign the cutter and
-  edger from `confirmed` onward; assigning stamps `cutter_assigned_at` /
+  edger once the order is `confirmed`; assigning stamps `cutter_assigned_at` /
   `edger_assigned_at` and orders the station queue, but the order **stays `confirmed`**
   until the cutter starts. There is **no self-claiming** — a worker only sees and starts
   work already assigned to them. *Why the split:* when assignment itself flipped the
@@ -203,13 +203,24 @@ Who triggers each step (by per-branch grant — there are no fixed roles), and i
   assigned worker — or `manage_orders` on-behalf. "In production" therefore means a
   machine is actually running — including for the client, whose tracker enters *In
   production* only at the start, not at assignment.
+- **Each stage gates on its own worker, at its own start.** Start cutting requires only
+  the assigned cutter (`cutter_required`); Start banding requires an assigned edger
+  (`edger_required`). A banded order may start cutting with the edger slot still open —
+  the saw never waits on a later stage's staffing; the office fills the slot while
+  cutting runs, and the board and order detail flag the open slot from `cutting` on. An
+  order can therefore sit in `edge_banding` unassigned; banding cannot start until the
+  slot is filled.
 - **One button per job; no per-item work.** Workers don't manage line items. The cutter
   views the cutting plan read-only and marks **Cutting done** once; the edger marks
   **Banding done** once. A `manage_orders` user may complete a job **on behalf** (worker
-  absent / system issue) — the dialog asks **"Who did this work?"**, defaulting to the
-  assignee; the chosen user is who gets **credited** for the production reports
-  ([`finance.md`](finance.md)).
-- **Re-assignment** of the cutter or edger is allowed until that job is marked done.
+  absent / system issue) — completion always **credits the assigned worker** in the
+  production reports ([`finance.md`](finance.md)); changing who gets credit is a
+  deliberate revert → reassign, never a completion-time pick.
+- **Re-assignment locks when the stage starts.** The cutter can be changed only while the
+  order is `confirmed`; the edger until banding is stamped started (so still swappable while
+  cutting runs). After the lock the deliberate path is a **revert** — it clears the start
+  stamp and reopens assignment — never a silent mid-job swap that would re-credit running
+  work.
 - **Revert is mistake-correction only** — one step, never out of `completed` or
   `cancelled`.
 - **Every transition is an `order_status_event`** (actor, from → to, reason, metadata),
@@ -276,9 +287,10 @@ counter. No in-system payment, no gateway, no payment-driven status.
 - **One disclosure rule.** Split the order's money into two parts and gate them
   differently:
   - The **frozen total + price breakdown** is visible to the client **from placement
-    onward** (the Overview tab). The client already saw these figures in the order
-    wizard; pricing is frozen at creation and never re-priced, so there is nothing to
-    hide and hiding it only confuses ("what will this cost?").
+    onward** (the Overview tab) — including any workshop-applied discount (−) and
+    surcharge (+) lines, each with its reason. The client already saw the computed
+    figures in the order wizard; pricing is frozen at creation and never re-priced, so
+    there is nothing to hide and hiding it only confuses ("what will this cost?").
   - The **settlement figures** — recorded-so-far and balance — appear to the client
     **only at `ready` and `completed`** (the Finance tab), the moment they need to settle
     on collection and the receipt afterwards. There is no in-app payment action; a
@@ -294,11 +306,12 @@ counter. No in-system payment, no gateway, no payment-driven status.
 
 ## Pricing
 
-The system computes everything; the **discount is the only human input** and needs a
-reason. Frozen onto the order at creation against the chosen branch's rates; later catalog
-or pricing changes never reach an existing order on their own — the one re-pricing path is
-a workshop [revision](#revising-a-placed-order), which replaces the whole freeze at the
-branch's current rates.
+The system computes everything; the **two manual adjustments — a discount and a surcharge —
+are the only human inputs**, each needing a reason. Frozen onto the order at creation
+against the chosen branch's rates; later catalog or pricing changes never reach an existing
+order on their own — the one re-pricing path is a workshop
+[revision](#revising-a-placed-order), which replaces the whole freeze at the branch's
+current rates.
 
 | Component | When | Source |
 |---|---|---|
@@ -306,9 +319,17 @@ branch's current rates.
 | Panel materials | parts with `material_source = shop` | Σ (the branch's per-panel price × panels attributable to that material's `shop` parts) |
 | Edge materials | per side, when the side has an edge material and `source = shop` | Σ (**consumed metres** of that edge material × the branch's per-metre **raw material** price on its Branch material `edge` selection) |
 | Edge banding labour | when any `shop` side has banding | total `shop` **consumed metres** of banding × the branch's `edge_banding_rate_tiyin` (one labour rate, all thicknesses) |
-| Discount | when a `manage_orders` user adds one | percent or fixed sum; subtracted; **reason + the user id recorded** (audited); no enforced cap in v1 — the reason + audit are the control |
+| Discount (chegirma) | when a `manage_orders` user adds one | percent or fixed sum; **subtracted**; capped at the computed subtotal (a discount never makes the price negative); **reason + the user id recorded** (audited) |
+| Surcharge (ustama) | when a `manage_orders` user adds one | percent or fixed sum; **added**; no enforced cap in v1 — the reason + audit are the control; **reason + the user id recorded** (audited) |
 
-**Total = cutting + panel materials + edge materials + edge banding labour − discount.**
+**Total = cutting + panel materials + edge materials + edge banding labour − discount + surcharge.**
+
+Discount and surcharge are **independent** — an order may carry both (e.g. a rush surcharge
+and a loyalty discount), each with its own reason and applied-by stamp. Each is applied on a
+`new` or `confirmed` order by a `manage_orders` user; both lock once production starts.
+Setting an adjustment to zero clears its reason and stamp. The percent form resolves against
+the computed subtotal at apply time and is stored as the resolved sum — the order keeps the
+absolute tiyin figure, not the percentage.
 
 **Consumed metres.** A banded side eats more tape than its visible edge: the master glues
 it long and trims it flush after — ~3 cm per side (15 mm at each end). So edge metres — the
@@ -388,7 +409,7 @@ chosen at placement, against a specific cutting — defaulted from the draft's
   The client-facing status is **five phases**: Placed → **Confirmed** → **In production**
   → **Ready** → Done — collapsing `cutting`/`edge_banding` into "In production" with
   optional sub-text. Tabs: Overview (item snapshots, price breakdown, notes), Cutting
-  (the SVG + PDF link), **Finance**
+  (the SVG + a button opening the PDF in a new tab), **Finance**
   (visible **only at `ready` and `completed`** — total, recorded so far, balance;
   read-only; "contact the workshop about a payment" hint), Timeline. "Cancel" shows only
   while `new`.
@@ -401,20 +422,31 @@ chosen at placement, against a specific cutting — defaulted from the draft's
 Permission names below are the per-branch grants from
 [`access-management.md`](access-management.md); a single user may hold all of them.
 
-- **Orders** (`/workshop/orders`, `view_dashboard` to see; `manage_orders` to act) —
+- **New-order badge** (`manage_orders`) — the sidebar's **Orders** item carries a red `+N`
+  pill: how many orders sit in `new` for the selected branch, so an arrival is visible from
+  any screen. It is a live count, not an unread marker — no read state, no per-user
+  tracking; it falls on its own as staff confirm. Hidden entirely at zero, `99+` above 99,
+  and branch-scoped so it always agrees with the list it links to. Refreshes on shell load,
+  on a branch switch, when the tab returns to the foreground, and after any order mutation;
+  a failed count renders no badge and never disturbs the shell.
+- **Orders** (`/workshop/orders`, `manage_orders`; a `view_orders` holder reads individual
+  orders by link or search, not this board) —
   branch-scoped, two modes:
   - **Board** — columns `new` / `confirmed` / `cutting` / `edge_banding` / `ready`; each
     header has a count; cards: order #, client name + phone, total, item count, age, the
-    assigned cutter / edger chip when set. **No drag between status columns** — status
-    changes go through the card's action menu.
+    assigned cutter / edger chip when set — plus a warning chip when a banded order in
+    `cutting` / `edge_banding` still has no edger. **No drag between status columns** —
+    status changes go through the card's action menu.
   - **Table** — sortable; columns: order #, branch (if multi-branch), client, status,
-    total, items, created, action menu. Filters: status dropdown, the app-wide
+    total, items, created, action menu. Filters: a status dropdown of lifecycle buckets
+    (active default · completed · cancelled · all) — per-status drill-down is the board's
+    columns, not the filter — plus the app-wide
     date-range picker (preset shortcuts + a calendar for custom spans), and a **client
     phone** field — digits-contains against the order's contact phone, so a partial tail
     or a formatted number both match (non-digits in the input are ignored); branch and
-    search come from the topbar. The filters apply to both modes and to the CSV export.
-    Empty: "No orders in your
-    branch(es)." Zero branches: "No branches assigned — ask your workshop owner."
+    search come from the topbar. The filters apply to both modes.
+    Empty: "No orders — nothing matches the selected filters." Zero branches: "No branches
+    assigned — ask your workshop owner."
 - **New order — walk-in flow** (`manage_orders`) — the **+ New order** button on the Orders
   screen starts the [staff-creation flow](#staff-created-orders-walk-in-clients); it's
   enabled per the entry gate there, disabled with a "switch branch" hint otherwise. Screens:
@@ -435,30 +467,53 @@ Permission names below are the per-branch grants from
   atomically, returns to the detail) and **Discard**. While a revision sits open the order
   detail surfaces it (resume + discard); mechanics and guards:
   [Revising a placed order](#revising-a-placed-order).
-- **Order detail** (`/workshop/orders/:id`) — header (order #, branch chip, client
-  mini-card link, status badge, total) with the status-appropriate actions:
+- **Order detail** (`/workshop/orders/:id`) — one command header card: order #, status
+  pill, client + total on a meta line, the internal workshop note inline beneath it
+  (added/edited in place, saved on blur; a quiet "add note" ghost when empty), a compact
+  phase strip along the bottom, and exactly **one status-appropriate primary action**;
+  the status history opens from a header clock button as a modal timeline; rarer actions
+  (edit, discount and surcharge — each a modal, revert, cancel) fold into an overflow menu. The
+  status-appropriate actions:
 
   | Status | Actions | Permission |
   |---|---|---|
-  | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount (reason) | `manage_orders` |
-  | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount · Cancel (reason) | assign/edit/discount/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
-  | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
-  | `edge_banding` | Start banding (stamp) · Banding done (→ `ready`; decrements edges per material) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · revert/cancel: `manage_orders` |
+  | `new` | Approve (→ `confirmed`) · Edit ([revision](#revising-a-placed-order)) · Cancel (reason) · Apply discount / surcharge (reason) | `manage_orders` |
+  | `confirmed` | Assign / change cutter and edger (metadata) · Edit ([revision](#revising-a-placed-order)) · Start cutting (→ `cutting`) · Apply discount / surcharge · Cancel (reason) | assign/edit/discount/surcharge/cancel: `manage_orders` · start: the assigned cutter (`process_production`) or `manage_orders` on-behalf |
+  | `cutting` | Cutting done (→ `edge_banding`/`ready`; decrements panels) · Change edger (metadata; the cutter is locked) · Revert → `confirmed` (reason) · Cancel (reason) | done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
+  | `edge_banding` | Start banding (stamp; requires an assigned edger) · Banding done (→ `ready`; decrements edges per material) · Change edger (until banding starts) · Revert → `cutting` (reason) · Cancel (reason) | start/done: `process_production` or `manage_orders` on-behalf · edger/revert/cancel: `manage_orders` |
   | `ready` | Mark collected (→ `completed`) · Revert → `edge_banding`/`cutting` (reason) · Cancel (reason) | `manage_orders` |
   | `completed` / `cancelled` | (read-only) | — |
 
-  On-behalf job completion asks **"Who did this work?"** (defaults to the assignee; the
-  chosen user is credited). Destructive actions (cancel, revert) and "Mark collected"
-  use a danger / confirm dialog that names the effect ("client collected everything?").
+  Completion (own or on-behalf) credits the assigned worker. Destructive actions
+  (cancel, revert) and "Mark collected" use a danger / confirm dialog that names the
+  effect ("client collected everything?").
 
-  Tabs: Overview (item snapshots showing per-side edge materials, price breakdown, a
-  **read-only settlement summary** — total / recorded / balance, sourced from the
-  finance module, shown at any status to staff with
-  `view_finance_reports`/`manage_finance`; hidden otherwise — the warehouse warning if a
-  `shop` material is short, the internal note — inline editable), Cutting (SVG + PDF),
-  Timeline (status events + audit), Notes. There is
-  **no** Payments or Refunds tab here — recording and correcting money is the finance
-  module; the summary is a read-only mirror.
+  Below the header the page splits into two equal cards that fill the viewport (no page
+  scroll at desktop heights; short or narrow windows fall back to normal scrolling): the
+  **production card** — instant-apply assignment selects per the lock rules, full-width,
+  with the kromka slot always rendered (a quiet disabled box when the order has no
+  banding), completion sub-lines carrying the cut snapshot counters, and a **"Chizma va
+  tarkib"** button opening a modal with the cutting SVG + PDF, the item snapshots showing
+  per-side edge materials, and edge-material consumption — and the **money card**: total,
+  the **read-only settlement summary** (recorded / balance, sourced from the finance
+  module, shown at any status to staff with `view_finance_reports`/`manage_finance`,
+  hidden otherwise), and an always-expanded itemized price breakdown — one line per
+  material actually used (each `shop` panel material with its panels, each `shop` kromka
+  material with its consumed metres), the services (cutting, banding labour) with their
+  quantities, then the surcharge (+) and discount (−) adjustments last. The material lines are rebuilt from order-time snapshots
+  (item snapshot prices × cutting-result demands), so they reconcile exactly with the
+  frozen subtotals even after later price-list changes. The warehouse warning banner (if
+  a `shop` material is short) sits above the cards. There is **no** Payments or Refunds
+  surface here — recording and correcting money is the finance module; the summary is a
+  read-only mirror.
+
+  **An order the reader may not open is not a loading failure.** The route admits
+  `process_production`, but the data rule behind it admits only the assignee, and an order in
+  another branch answers 404 rather than confirming it exists. Both land on their own state —
+  "Bu buyurtmaga ruxsatingiz yo'q", explaining that the order belongs to another branch, is not
+  assigned to this user, or does not exist — with no retry button, because the request that was
+  refused will be refused again. The connection-failure state with its retry stays for a
+  genuine transport error.
 
 - **Production stations** (`/workshop/cutting` "Kesish", `/workshop/banding` "Krom",
   `process_production`) — the shop-floor terminal, tablet-first, as **two separate sidebar
@@ -467,25 +522,33 @@ Permission names below are the per-branch grants from
   the assigned queue below in **FIFO by assignment
   time** (`cutter_assigned_at` / `edger_assigned_at`), today's completed jobs collapsed at
   the bottom. The page stays fresh on its own (~15 s poll + refresh on focus) — no manual
-  refresh button. Cards: order #, material, panel / part counts (cutting station) or
-  metres by edge material (banding station), assignment age, and the client's **first
-  name only** — production surfaces never show prices, discounts, or client phone
-  numbers; the payload is **server-trimmed**, not hidden client-side. A non-owner sees
-  only their own assignments; an **owner / `manage_orders`** user sees the whole branch
-  queue grouped by assignee, with unassigned `confirmed` work surfaced as a call to
-  action into Orders, and may start / complete **on behalf**. **Boshlash** on a queued
+  refresh button. Cards: order #, part / panel counts (cutting station) or metres of
+  tape + parts (banding station), assignment age, and the client's **first name only**
+  — material names live on the Chizma sheet, one tap away, and production surfaces
+  never show prices, discounts, or client phone numbers; the payload is
+  **server-trimmed**, not hidden client-side. The queue is
+  **personal for everyone, owner included**: only jobs assigned to the signed-in user,
+  scoped to the topbar branch picker, and "completed today" is the caller's own tally —
+  the server enforces the scope. Owners / `manage_orders` users manage statuses
+  **on-behalf from the office order page**, not at the station. **Boshlash** on a queued
   card starts the job and opens its Chizma sheet in one tap. Empty: "Nothing assigned —
   nice."
 - **"Chizma" job sheet** (`/workshop/production/:order_id`) — the worker-grade job view
-  and the pure-`process_production` replacement for the office order detail: the cutting
-  plan SVG (zoomable) with a **panels rail** beside it — panels stacked vertically, each
-  with a mark toggle the worker uses as their own cut checkpoints (stored on the tablet
-  only, never synced; marking a panel advances the drawing to the next unmarked one), the
-  parts list under it (part **names**, never refs; dimensions in large mono type; a
-  per-part edge glyph marking which sides get banding), and a sticky action bar with the
-  single state-appropriate action (**Boshlash** / **Tugatdim**). The sheet stays fresh
-  like the queues and re-fetches right before start / complete so a stale version can't
-  conflict. The PDF lives on the office order page, not here.
+  and the pure-`process_production` replacement for the office order detail: a head of
+  **stat chips** (client first name, parts, panels, total tape metres — no material
+  text), the cutting plan SVG (zoomable, height-capped so the whole panel fits the
+  screen without scrolling; on the banding station a **tape legend** under it names
+  each roll with a swatch matching the drawing's edge ticks and its metres) with a
+  **panels rail** beside it — panels stacked vertically; on the
+  **cutting station only**, each panel carries an icon mark toggle the worker uses as
+  their own cut checkpoints (stored on the tablet only, never synced; marking a panel
+  advances the drawing to the next unmarked one — the banding view shows the rail
+  without marks), the parts list under it (part **names**, never refs; dimensions in
+  large mono type; a per-part edge glyph marking which sides get banding), and a sticky
+  action bar with the single state-appropriate action (**Boshlash** / **Tugatdim**),
+  shown **to the assignee only**. The sheet stays fresh like the queues and re-fetches
+  right before start / complete so a stale version can't conflict. The PDF lives on the
+  office order page, not here.
 - **Completion** — a success-styled confirm (not danger) naming the order and what
   happens next ("moves to banding — <edger>'s queue"); the manager-revert-only caveat is
   a quiet secondary line. The terminal credits **the assignee**; the on-behalf "who did
@@ -532,10 +595,10 @@ actions are danger-styled and name their effect; modal focus is managed.
 - **Assigned but not started** → the order stays `confirmed`: queued in the assignee's
   station, grouped under them in the owner's view, still "Confirmed" to the client. No
   auto-start, no timeout.
-- **Start guards** → starting cutting without an assigned cutter (`cutter_required`), or
-  on a banded order without an edger (`edger_required`), is rejected; a non-assigned
-  `process_production` user starting someone else's job is rejected; **Start banding**
-  twice is rejected (`banding_already_started`).
+- **Start guards** → starting cutting without an assigned cutter (`cutter_required`) is
+  rejected — the edger slot never blocks the saw; **Start banding** without an assigned
+  edger (`edger_required`) or twice (`banding_already_started`) is rejected; a
+  non-assigned `process_production` user starting someone else's job is rejected.
 - **One person holds `manage_orders` + `process_production`** → fine; they approve,
   assign themselves, start, and complete the jobs (credited to themselves). v1 assumes
   **no separation of duties**.

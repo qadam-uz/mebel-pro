@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 
 import { apiTraceId } from '@/shared/api/client'
+import { traceLine, traceSuffix } from '@/shared/app/errorTrace'
 import {
   clearFieldErrors,
   fieldErrorsFromApi,
@@ -118,8 +119,8 @@ onMounted(() => {
     </div>
 
     <div v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu sahifa faqat ustaxona egasiga ochiq</h3>
-      <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona egasiga murojaat qiling.</p>
+      <h3>Bu sahifa faqat ustaxona rahbariga ochiq</h3>
+      <p>Sizda bu bo'limni ko'rish uchun ruxsat yo'q — ustaxona rahbariga murojaat qiling.</p>
     </div>
 
     <div v-else-if="workshop.setupLoading" class="card max-w-[720px] p-5" aria-live="polite">
@@ -130,7 +131,7 @@ onMounted(() => {
 
     <div v-else-if="workshop.setupError" class="st-error max-w-[720px]">
       <h3>Sozlamalarni yuklab bo'lmadi</h3>
-      <p>trace_id: {{ workshop.setupTraceId ?? 'unavailable' }}</p>
+      <p>{{ traceLine(workshop.setupTraceId) }}</p>
     </div>
 
     <form v-else class="card max-w-[720px]" novalidate @submit.prevent="save">
@@ -166,7 +167,7 @@ onMounted(() => {
         <div class="mt-5 flex items-center justify-end gap-3">
           <p v-if="saved" class="text-sm font-bold text-success">Saqlandi</p>
           <p v-else-if="saveError" class="text-sm font-bold text-danger">
-            Saqlab bo'lmadi · trace_id: {{ saveTraceId ?? 'unavailable' }}
+            Saqlab bo'lmadi{{ traceSuffix(saveTraceId) }}
           </p>
           <button class="mp-button mp-button-primary" type="submit" :disabled="saving">
             {{ saving ? 'Saqlanmoqda' : 'Saqlash' }}

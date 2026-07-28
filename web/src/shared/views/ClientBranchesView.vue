@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
+import { formatPhone } from '@/shared/app/clientUi'
 import { SEARCH_DEBOUNCE_MS } from '@/shared/app/constants'
 import Icon from '@/shared/components/AppIcon.vue'
 import ClientErrorState from '@/shared/components/ClientErrorState.vue'
@@ -18,11 +19,9 @@ async function refreshBranches() {
   await catalog.loadBranches(search.value)
 }
 
-function hours(branch: ClientBranch) {
-  const values = Object.values(branch.working_hours ?? {}).filter(
-    (value): value is string => typeof value === 'string' && value.trim().length > 0,
-  )
-  return values[0] ?? "Ish vaqti ko'rsatilmagan"
+/** Every published number, primary first — all of them tap-to-call (QAD-158). */
+function phones(branch: ClientBranch) {
+  return [branch.phone, ...(branch.additional_phones ?? [])]
 }
 
 watch(search, () => {
@@ -60,7 +59,7 @@ onMounted(refreshBranches)
         v-model="search"
         class="mp-input pl-10"
         aria-label="Ustaxona yoki shahar nomi"
-        placeholder="Ustaxona yoki shahar nomi bo'yicha qidirish..."
+        placeholder="Ustaxona yoki shahar nomi"
       />
     </div>
 
@@ -116,8 +115,22 @@ onMounted(refreshBranches)
           <h2 class="m-0 truncate font-serif text-lg font-semibold text-ink">
             {{ branch.workshop_name }} · {{ branch.branch_name }}
           </h2>
-          <p class="mt-1 font-mono text-xs text-ink-muted">
-            {{ branch.address }} · {{ hours(branch) }} · {{ branch.phone }}
+          <p class="mt-1 font-mono text-xs text-ink-muted">{{ branch.address }}</p>
+          <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a
+              v-for="(phone, index) in phones(branch)"
+              :key="phone"
+              class="inline-flex min-h-11 items-center font-mono text-xs font-bold text-accent underline underline-offset-2"
+              :href="`tel:${phone}`"
+            >
+              {{ formatPhone(phone) }}
+              <span
+                v-if="index === 0 && phones(branch).length > 1"
+                class="ml-1 font-sans text-[11px] text-ink-muted"
+              >
+                (asosiy)
+              </span>
+            </a>
           </p>
           <p v-if="branch.status !== 'active'" class="mt-2 text-sm font-bold text-warning">
             {{ branch.closed_reason ?? 'Vaqtincha yopiq' }}

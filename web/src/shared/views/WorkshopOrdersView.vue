@@ -2,19 +2,24 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { apiTraceId } from '@/shared/api/client'
 import { ORDERS_PAGE_LIMIT } from '@/shared/app/constants'
-import { isoDate, type DateRangePreset } from '@/shared/app/dateRange'
+import type { DateRangePreset } from '@/shared/app/dateRange'
+import { traceLine } from '@/shared/app/errorTrace'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { useRolePath } from '@/shared/app/paths'
-import { assignmentChipsForOrder } from '@/shared/app/workshopAssignments'
+import { assignmentChipsForOrder, edgerMissingForOrder } from '@/shared/app/workshopAssignments'
 import {
   revertTargetLabelForOrder,
   workshopOrderListActions,
   type WorkshopOrderListAction,
 } from '@/shared/app/workshopOrderDetail'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
-import { orderPillClass, workshopErrorMessage, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  STOCK_SHORTFALL_MESSAGE,
+  orderPillClass,
+  workshopErrorMessage,
+  workshopStatusUz,
+} from '@/shared/app/workshopUi'
 import AppIcon from '@/shared/components/AppIcon.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
@@ -68,12 +73,8 @@ const phoneFilter = ref('')
 const datePreset = ref<DateRangePreset>('all')
 const dateFrom = ref('')
 const dateTo = ref('')
-const openActionMenuId = ref<string | null>(null)
 const listActionError = ref<string | null>(null)
 const listActionTraceId = ref<string | null>(null)
-const csvDownloading = ref(false)
-const csvError = ref<string | null>(null)
-const csvTraceId = ref<string | null>(null)
 const pendingConfirmAction = ref<{
   action: WorkshopOrderListAction
   order: OrderSummary
@@ -101,17 +102,15 @@ let timer: number | undefined
 // doesn't double-fetch.
 const hydrated = ref(false)
 
-// Dots mirror the order-status pill palette (orderPillClass).
+// Lifecycle buckets, not a per-status picker — the board's columns already
+// break down the active statuses, so listing them here only duplicated that.
+// "Hammasi" stays (last) so a search can span old orders. Dots mirror the
+// order-status pill palette (orderPillClass).
 const statusOptions: DropdownOption[] = [
-  { value: 'all', label: 'Hammasi' },
   { value: 'active', label: 'Faol', dot: 'accent' },
-  { value: 'new', label: 'Yangi', dot: 'muted' },
-  { value: 'confirmed', label: 'Tasdiqlangan', dot: 'info' },
-  { value: 'cutting', label: 'Kesilmoqda', dot: 'accent' },
-  { value: 'edge_banding', label: 'Kromkada', dot: 'accent' },
-  { value: 'ready', label: 'Tayyor', dot: 'success' },
   { value: 'completed', label: 'Tugatilgan', dot: 'muted' },
   { value: 'cancelled', label: 'Bekor qilingan', dot: 'danger' },
+  { value: 'all', label: 'Hammasi' },
 ]
 const boardColumns = computed(() =>
   activeWorkshopStatuses.map((state) => ({
@@ -120,9 +119,15 @@ const boardColumns = computed(() =>
   })),
 )
 const terminalStatus = computed(() => ['completed', 'cancelled'].includes(status.value))
-const visibleOrderBranchIds = computed(() => [
-  ...new Set(orders.workshopOrders.map((order) => order.branch_id)),
-])
+// Branches whose worker list this reader may actually fetch. The board admits
+// anyone with `manage_orders` *somewhere*, and then lists orders from every
+// branch they can read — so a `view_orders`-only branch would otherwise have its
+// worker lookup requested and refused (QAD-173).
+const visibleOrderBranchIds = computed(() =>
+  [...new Set(orders.workshopOrders.map((order) => order.branch_id))].filter((branchId) =>
+    permissions.canOnBranch(p.manageOrders, branchId),
+  ),
+)
 // Branch and search are driven by the topbar (context + global search), so the
 // in-page reset only counts the status / date / phone controls.
 const activeFilterCount = computed(
@@ -191,9 +196,9 @@ function listFilters() {
 // "{item_count} qism", so returning the count here too double-printed it.
 function assignedText(order: OrderSummary) {
   if (order.status === 'cutting')
-    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : 'kesuvchi yo‘q'
+    return order.assigned_cutter_user_id ? 'kesuvchi tayinlangan' : "kesuvchi yo'q"
   if (order.status === 'edge_banding')
-    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : 'kromka ustasi yo‘q'
+    return order.assigned_edger_user_id ? 'kromka ustasi tayinlangan' : "kromka ustasi yo'q"
   if (order.status === 'confirmed') return 'tayinlash kerak'
   return ''
 }
@@ -252,63 +257,15 @@ function actionsFor(order: OrderSummary) {
   return workshopOrderListActions(order, actionAccess(order))
 }
 
-// Board menu: the card body already opens detail, so drop the duplicate
-// "Tafsilotlar" item, and mark a separator before the first destructive action.
-function boardMenuItems(order: OrderSummary) {
-  const list = actionsFor(order).filter((action) => action.kind !== 'detail')
-  return list.map((action, index) => ({
-    action,
-    showSep: Boolean(action.danger) && index > 0 && !list[index - 1].danger,
-  }))
-}
-
-const actionMenuStyle = ref<Record<string, string>>({})
-
-function toggleActionMenu(orderId: string, event?: Event) {
-  if (openActionMenuId.value === orderId) {
-    closeActionMenu()
-    return
-  }
-  openActionMenuId.value = orderId
-  const trigger = event?.currentTarget
-  if (!(trigger instanceof HTMLElement)) return
-  // The menu is teleported to <body> with fixed positioning so it escapes the
-  // board/card/table overflow clipping; flip upward when there's no room below.
-  const rect = trigger.getBoundingClientRect()
-  const openUp = window.innerHeight - rect.bottom < 260
-  actionMenuStyle.value = {
-    position: 'fixed',
-    left: `${Math.round(rect.right)}px`,
-    right: 'auto',
-    transform: 'translateX(-100%)',
-    ...(openUp
-      ? { bottom: `${Math.round(window.innerHeight - rect.top + 6)}px`, top: 'auto' }
-      : { top: `${Math.round(rect.bottom + 6)}px`, bottom: 'auto' }),
-  }
-}
-
-function closeActionMenu() {
-  openActionMenuId.value = null
-}
-
-function onMenuDismissScroll() {
-  if (openActionMenuId.value) closeActionMenu()
-}
-
-function onMenuDismissKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && openActionMenuId.value) closeActionMenu()
-}
-
-// Whole table row opens detail (the board card body is already a link); the
-// action cell stops propagation so the kebab menu still works.
+// Whole table row opens detail (the board card body is already a link).
 function openOrder(orderId: string) {
   void router.push(rolePath(`/workshop/orders/${orderId}`))
 }
 
 // --- Kanban drag-and-drop (desktop). Status transitions are guarded, so a drop
 // doesn't move the card directly — it triggers that order's forward action
-// (approve / assign / done) or revert, reusing the existing dialogs. The kebab
-// menu stays the accessible / touch fallback.
+// (approve / assign / done) or revert, reusing the existing dialogs. All other
+// actions live on the order detail page.
 const draggingOrderId = ref<string | null>(null)
 const dragOverState = ref<OrderStatus | null>(null)
 
@@ -366,14 +323,14 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
   if (to < from) {
     const revert = list.find((action) => action.kind === 'revert')
     if (!revert) {
-      toast.danger('Bu buyurtmani orqaga qaytarib bo‘lmaydi.')
+      toast.danger("Bu buyurtmani orqaga qaytarib bo'lmaydi.")
       return
     }
     startListAction(revert, order)
     return
   }
   if (to > from + 1) {
-    toast.danger('Faqat keyingi bosqichga o‘tkazish mumkin.')
+    toast.danger("Faqat keyingi bosqichga o'tkazish mumkin.")
     return
   }
   // Forward one stage: the order's primary forward action, falling back to
@@ -382,7 +339,7 @@ function moveOrderToColumn(order: OrderSummary, targetState: OrderStatus) {
     list.find((item) => item.kind === FORWARD_ACTION_KIND[order.status]) ??
     list.find((item) => item.kind === 'assign')
   if (!action) {
-    toast.danger('Bu o‘tishni hozir bajarib bo‘lmaydi (ruxsat yoki tayinlash kerak).')
+    toast.danger("Bu o'tishni hozir bajarib bo'lmaydi — ruxsat yoki tayinlash kerak.")
     return
   }
   if (action.kind === 'assign') {
@@ -472,7 +429,6 @@ function listActionSuccessMessage(action: WorkshopOrderListAction) {
 }
 
 function startListAction(action: WorkshopOrderListAction, order: OrderSummary) {
-  closeActionMenu()
   listActionError.value = null
   listActionTraceId.value = null
   if (action.kind === 'detail' || action.kind === 'assign') return
@@ -509,6 +465,9 @@ async function confirmListAction() {
   if (!pending) return
   const { action, order } = pending
   let ok = false
+  // Set by the two completion branches when the consume they recorded drove a
+  // branch balance below zero — informational, raised after the success toast.
+  let shortfall = false
   if (action.kind === 'approve') {
     ok = await runListMutation(order, () => orders.approve(order.id, order.version))
   } else if (action.kind === 'start_cutting') {
@@ -522,12 +481,13 @@ async function confirmListAction() {
       listActionTraceId.value = null
       ok = false
     } else {
-      ok = await runListMutation(order, () =>
-        orders.cuttingDone(order.id, {
+      ok = await runListMutation(order, async () => {
+        const updated = await orders.cuttingDone(order.id, {
           version: order.version,
           completed_by_user_id: completedBy,
-        }),
-      )
+        })
+        shortfall = updated.stock_shortfall
+      })
     }
   } else if (action.kind === 'complete_banding') {
     const completedBy = order.assigned_edger_user_id
@@ -536,18 +496,20 @@ async function confirmListAction() {
       listActionTraceId.value = null
       ok = false
     } else {
-      ok = await runListMutation(order, () =>
-        orders.bandingDone(order.id, {
+      ok = await runListMutation(order, async () => {
+        const updated = await orders.bandingDone(order.id, {
           version: order.version,
           completed_by_user_id: completedBy,
-        }),
-      )
+        })
+        shortfall = updated.stock_shortfall
+      })
     }
   } else if (action.kind === 'mark_collected') {
     ok = await runListMutation(order, () => orders.markCollected(order.id, order.version))
   }
   if (ok) {
     toast.success(listActionSuccessMessage(action))
+    if (shortfall) toast.warn(STOCK_SHORTFALL_MESSAGE)
     pendingConfirmAction.value = null
   }
 }
@@ -589,37 +551,15 @@ async function loadMore() {
   await loadWorkerOptionsForBranches(visibleOrderBranchIds.value)
 }
 
-async function exportCsv() {
-  csvDownloading.value = true
-  csvError.value = null
-  csvTraceId.value = null
-  try {
-    await orders.downloadWorkshopOrdersCsv(
-      listFilters(),
-      `workshop-orders-${isoDate(new Date())}.csv`,
-    )
-    toast.success('CSV yuklandi.')
-  } catch (caught) {
-    csvError.value = "CSV yuklab bo'lmadi. Qayta urinib ko'ring."
-    csvTraceId.value = apiTraceId(caught)
-  } finally {
-    csvDownloading.value = false
-  }
-}
-
-function onDocumentClick(event: MouseEvent) {
-  if (!(event.target instanceof Element)) return
-  if (!event.target.closest('[data-order-action-menu]')) closeActionMenu()
-}
-
 watch(status, () => {
   if (terminalStatus.value) mode.value = 'table'
 })
 
 watch(
   () => workshop.selectedBranchContext,
-  () => {
+  (value) => {
     applyContextBranch()
+    if (canViewDrafts.value) void cutting.loadWorkshopDrafts(value)
   },
 )
 
@@ -648,10 +588,6 @@ watch([branchId, status, search, phoneFilter, dateFrom, dateTo], () => {
 })
 
 onMounted(async () => {
-  document.addEventListener('click', onDocumentClick)
-  document.addEventListener('keydown', onMenuDismissKeydown)
-  window.addEventListener('scroll', onMenuDismissScroll, true)
-  window.addEventListener('resize', closeActionMenu)
   applyRouteSearch()
   await workshop.loadBranchContext().catch(() => undefined)
   if (!applyRouteBranch()) applyContextBranch()
@@ -660,16 +596,13 @@ onMounted(async () => {
   // Now that the first load has landed, let user-driven filter edits refresh.
   hydrated.value = true
   // Ambient count for the Chizmalar entry; non-blocking so it never delays the
-  // board/table.
-  if (canViewDrafts.value) void cutting.loadWorkshopDrafts()
+  // board/table. Scoped to the topbar branch so the badge matches what the
+  // drafts page (also branch-scoped) will actually list.
+  if (canViewDrafts.value) void cutting.loadWorkshopDrafts(workshop.selectedBranchContext)
 })
 
 onBeforeUnmount(() => {
   window.clearTimeout(timer)
-  document.removeEventListener('click', onDocumentClick)
-  document.removeEventListener('keydown', onMenuDismissKeydown)
-  window.removeEventListener('scroll', onMenuDismissScroll, true)
-  window.removeEventListener('resize', closeActionMenu)
 })
 </script>
 
@@ -690,54 +623,43 @@ onBeforeUnmount(() => {
             >· {{ draftCount }}</span
           >
         </RouterLink>
-        <RouterLink
-          v-if="canCreateWalkIn"
-          :to="rolePath('/workshop/orders/new')"
-          class="mp-button mp-button-primary min-h-11 px-3 text-xs"
+        <!-- Icon-only segmented view switch; each segment carries its accessible
+             name (DESIGN.md icon rule) and a hover tooltip. -->
+        <div
+          class="flex gap-0.5 rounded-lg border border-hairline-strong bg-sunk p-0.5"
+          role="group"
+          aria-label="Ko'rinish"
         >
-          + Yangi buyurtma
-        </RouterLink>
-        <button
-          v-else
-          class="mp-button mp-button-outline min-h-11 px-3 text-xs"
-          type="button"
-          disabled
-          title="Yangi buyurtma yaratish uchun tegishli filialni tanlang (buyurtma boshqaruvi ruxsati bilan)"
-        >
-          + Yangi buyurtma
-        </button>
-        <div class="flex gap-1" role="group" aria-label="Ko'rinish">
           <button
-            class="mp-button min-h-11 px-3 text-xs"
-            :class="mode === 'board' ? 'mp-button-primary' : 'mp-button-outline'"
             type="button"
+            class="grid size-10 place-items-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50"
+            :class="
+              mode === 'board' ? 'bg-accent text-white' : 'text-ink-soft hover:bg-bg hover:text-ink'
+            "
             :disabled="terminalStatus"
             :aria-pressed="mode === 'board'"
-            :title="terminalStatus ? 'Yakunlangan buyurtmalar faqat jadval rejimida' : undefined"
+            aria-label="Doska ko'rinishi"
+            :title="
+              terminalStatus ? 'Yakunlangan buyurtmalar faqat jadval rejimida' : `Doska ko'rinishi`
+            "
             @click="setMode('board')"
           >
-            Doska
+            <AppIcon name="board" class="size-5" />
           </button>
           <button
-            class="mp-button min-h-11 px-3 text-xs"
-            :class="mode === 'table' ? 'mp-button-primary' : 'mp-button-outline'"
             type="button"
+            class="grid size-10 place-items-center rounded-md transition"
+            :class="
+              mode === 'table' ? 'bg-accent text-white' : 'text-ink-soft hover:bg-bg hover:text-ink'
+            "
             :aria-pressed="mode === 'table'"
+            aria-label="Jadval ko'rinishi"
+            title="Jadval ko'rinishi"
             @click="setMode('table')"
           >
-            Jadval
+            <AppIcon name="table" class="size-5" />
           </button>
         </div>
-        <span class="mx-1 h-6 w-px self-center bg-hairline" aria-hidden="true"></span>
-        <button
-          class="mp-button mp-button-outline min-h-11 gap-1.5 px-3 text-xs text-ink-soft"
-          type="button"
-          :disabled="csvDownloading"
-          @click="exportCsv"
-        >
-          <AppIcon name="inbox" class="size-4" />
-          {{ csvDownloading ? 'Yuklanmoqda...' : 'CSV yuklab olish' }}
-        </button>
       </div>
     </div>
 
@@ -772,6 +694,24 @@ onBeforeUnmount(() => {
       </label>
       <button v-if="showResetAll" type="button" class="mp-filter-reset" @click="resetFilters">
         Hammasini tozalash
+      </button>
+      <!-- Primary action lives on the filter line; the `.mp-filters > .mp-button`
+           rule aligns it to the control baseline and pushes it to the far end. -->
+      <RouterLink
+        v-if="canCreateWalkIn"
+        :to="rolePath('/workshop/orders/new')"
+        class="mp-button mp-button-primary"
+      >
+        + Yangi buyurtma
+      </RouterLink>
+      <button
+        v-else
+        class="mp-button mp-button-outline"
+        type="button"
+        disabled
+        title="Yangi buyurtma yaratish uchun tegishli filialni tanlang (buyurtma boshqaruvi ruxsati bilan)"
+      >
+        + Yangi buyurtma
       </button>
     </div>
 
@@ -817,12 +757,11 @@ onBeforeUnmount(() => {
                 <th>Mas'ul</th>
                 <th class="right">Summa</th>
                 <th>Vaqt</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="n in 6" :key="n">
-                <td colspan="8"><span class="sk sk-line" style="width: 100%"></span></td>
+                <td colspan="7"><span class="sk sk-line" style="width: 100%"></span></td>
               </tr>
             </tbody>
           </table>
@@ -851,20 +790,27 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="workshop.branches.length === 0" class="st-empty">
-      <h3>Filial biriktirilmagan — ustaxona egasiga murojaat qiling</h3>
+      <h3>Filial biriktirilmagan — ustaxona rahbariga murojaat qiling</h3>
       <p>Filial biriktirilgach, buyurtmalar shu yerda ko'rinadi.</p>
     </section>
 
+    <!-- Filtered-empty and first-run are different situations and get different
+         copy: "change the filter" is useless advice when no order exists yet. -->
     <section v-else-if="orders.workshopOrders.length === 0" class="st-empty">
-      <h3>Filial(lar)ingizda buyurtma yo'q</h3>
-      <p>Tanlangan filtrga mos buyurtma yo'q.</p>
+      <h3>{{ hasActiveFilters ? 'Filtrga mos buyurtma topilmadi' : "Hali buyurtma yo'q" }}</h3>
+      <p>
+        {{
+          hasActiveFilters
+            ? "Filtrlarni o'zgartiring yoki tozalang."
+            : "Mijoz buyurtma bergach yoki «+ Yangi buyurtma» orqali yozilgach shu yerda ko'rinadi."
+        }}
+      </p>
     </section>
 
     <template v-else>
       <div v-if="orders.error" class="banner danger mb-4" aria-live="polite">
         <div class="grow">
-          Buyurtmalarni yuklashda xato yuz berdi · trace_id:
-          {{ orders.traceId ?? 'unavailable' }}
+          Buyurtmalarni yuklashda xato yuz berdi · {{ traceLine(orders.traceId) }}
         </div>
       </div>
 
@@ -872,13 +818,6 @@ onBeforeUnmount(() => {
         <div class="grow">
           {{ listActionError }}
           <span v-if="listActionTraceId"> · trace_id: {{ listActionTraceId }}</span>
-        </div>
-      </div>
-
-      <div v-if="csvError" class="banner danger mb-4" role="alert">
-        <div class="grow">
-          {{ csvError }}
-          <span v-if="csvTraceId"> · trace_id: {{ csvTraceId }}</span>
         </div>
       </div>
 
@@ -950,7 +889,7 @@ onBeforeUnmount(() => {
                 </span>
               </span>
               <span
-                v-if="assignmentChips(order).length > 0"
+                v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
                 class="worker-chips mt-3"
                 :aria-label="`${order.order_number} mas'ullari`"
               >
@@ -965,59 +904,15 @@ onBeforeUnmount(() => {
                   <AppIcon :name="chip.icon" />
                   {{ chip.initials }}
                 </span>
-              </span>
-            </div>
-            <div
-              class="mp-action-menu-wrap mt-3 ml-auto block w-fit"
-              data-order-action-menu
-              @click.stop
-              @keydown.esc.stop.prevent="closeActionMenu"
-            >
-              <button
-                type="button"
-                class="mp-action-icon-button"
-                :aria-expanded="openActionMenuId === order.id"
-                :aria-controls="`order-actions-${order.id}`"
-                :aria-label="`${order.order_number} amallari`"
-                @click="toggleActionMenu(order.id, $event)"
-              >
-                <span aria-hidden="true">...</span>
-              </button>
-              <Teleport to="body">
-                <div
-                  v-if="openActionMenuId === order.id"
-                  :id="`order-actions-${order.id}`"
-                  class="mp-action-menu"
-                  :style="actionMenuStyle"
-                  data-order-action-menu
+                <span
+                  v-if="edgerMissingForOrder(order)"
+                  class="pill p-warn"
+                  title="Kromka ustasi tayinlanmagan"
                 >
-                  <template
-                    v-for="{ action, showSep } in boardMenuItems(order)"
-                    :key="`${order.id}-${action.kind}`"
-                  >
-                    <div v-if="showSep" class="mp-action-menu-sep" aria-hidden="true"></div>
-                    <RouterLink
-                      v-if="action.kind === 'assign'"
-                      :to="rolePath(`/workshop/orders/${order.id}`)"
-                      class="mp-action-menu-item"
-                      :class="{ danger: action.danger }"
-                      @click="closeActionMenu"
-                    >
-                      {{ action.label }}
-                    </RouterLink>
-                    <button
-                      v-else
-                      type="button"
-                      class="mp-action-menu-item"
-                      :class="{ danger: action.danger }"
-                      :disabled="orders.actionLoading"
-                      @click="startListAction(action, order)"
-                    >
-                      {{ action.label }}
-                    </button>
-                  </template>
-                </div>
-              </Teleport>
+                  <AppIcon name="alert" />
+                  kromka ustasi yo'q
+                </span>
+              </span>
             </div>
           </article>
         </div>
@@ -1035,7 +930,6 @@ onBeforeUnmount(() => {
                 <th>Mas'ul</th>
                 <th class="right">Summa</th>
                 <th>Vaqt</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -1060,7 +954,10 @@ onBeforeUnmount(() => {
                   </span>
                 </td>
                 <td>
-                  <span v-if="assignmentChips(order).length > 0" class="worker-chips">
+                  <span
+                    v-if="assignmentChips(order).length > 0 || edgerMissingForOrder(order)"
+                    class="worker-chips"
+                  >
                     <span
                       v-for="chip in assignmentChips(order)"
                       :key="`${order.id}-table-${chip.key}-${chip.userId}`"
@@ -1072,68 +969,19 @@ onBeforeUnmount(() => {
                       <AppIcon :name="chip.icon" />
                       {{ chip.initials }}
                     </span>
+                    <span
+                      v-if="edgerMissingForOrder(order)"
+                      class="pill p-warn"
+                      title="Kromka ustasi tayinlanmagan"
+                    >
+                      <AppIcon name="alert" />
+                      kromka ustasi yo'q
+                    </span>
                   </span>
                   <small v-else class="text-ink-soft">{{ assignedText(order) || '—' }}</small>
                 </td>
                 <td class="amt">{{ formatTiyin(order.total_tiyin) }}</td>
                 <td class="num text-[11px] text-ink-muted">{{ formatDate(order.created_at) }}</td>
-                <td class="right" @click.stop>
-                  <div
-                    class="mp-action-menu-wrap"
-                    data-order-action-menu
-                    @keydown.esc.stop.prevent="closeActionMenu"
-                  >
-                    <button
-                      type="button"
-                      class="mp-action-icon-button"
-                      :aria-expanded="openActionMenuId === order.id"
-                      :aria-controls="`order-actions-table-${order.id}`"
-                      :aria-label="`${order.order_number} amallari`"
-                      @click="toggleActionMenu(order.id, $event)"
-                    >
-                      <span aria-hidden="true">...</span>
-                    </button>
-                    <Teleport to="body">
-                      <div
-                        v-if="openActionMenuId === order.id"
-                        :id="`order-actions-table-${order.id}`"
-                        class="mp-action-menu"
-                        :style="actionMenuStyle"
-                        data-order-action-menu
-                      >
-                        <template
-                          v-for="(action, index) in actionsFor(order)"
-                          :key="`${order.id}-${action.kind}`"
-                        >
-                          <div
-                            v-if="action.kind === 'detail' && index > 0"
-                            class="mp-action-menu-sep"
-                            aria-hidden="true"
-                          ></div>
-                          <RouterLink
-                            v-if="action.kind === 'detail' || action.kind === 'assign'"
-                            :to="rolePath(`/workshop/orders/${order.id}`)"
-                            class="mp-action-menu-item"
-                            :class="{ danger: action.danger }"
-                            @click="closeActionMenu"
-                          >
-                            {{ action.label }}
-                          </RouterLink>
-                          <button
-                            v-else
-                            type="button"
-                            class="mp-action-menu-item"
-                            :class="{ danger: action.danger }"
-                            :disabled="orders.actionLoading"
-                            @click="startListAction(action, order)"
-                          >
-                            {{ action.label }}
-                          </button>
-                        </template>
-                      </div>
-                    </Teleport>
-                  </div>
-                </td>
               </tr>
             </tbody>
           </table>

@@ -10,25 +10,36 @@ import {
 import { useRolePath } from '@/shared/app/paths'
 import { useRoleConfig, type NavItem } from '@/shared/app/roleConfig'
 import { lockBodyScroll, unlockBodyScroll } from '@/shared/app/scrollLock'
+import { branchScopeHints, branchScopeOf } from '@/shared/app/branchScope'
 import {
   adminInitials,
   adminNavMetrics,
   groupedNav,
   iconPath as adminIconPath,
 } from '@/shared/app/adminUi'
-import { grantSummary, initials, workshopStatusUz } from '@/shared/app/workshopUi'
+import {
+  grantSummary,
+  initials,
+  workshopStatusUz,
+  workshopTenantName,
+} from '@/shared/app/workshopUi'
 import { workshopNavItems } from '@/shared/app/workshopNav'
 import NotificationsMenu from '@/shared/components/NotificationsMenu.vue'
+import OnboardingSpotlight from '@/shared/components/OnboardingSpotlight.vue'
 import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import ToastHost from '@/shared/components/ToastHost.vue'
 import { useAdminStore } from '@/shared/stores/admin'
 import { useAuthStore } from '@/shared/stores/auth'
+import { useOnboardingStore } from '@/shared/stores/onboarding'
+import { useOrdersStore } from '@/shared/stores/orders'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 import { useWorkshopSearchStore } from '@/shared/stores/workshopSearch'
 
 const config = useRoleConfig()
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
+const onboarding = useOnboardingStore()
+const orders = useOrdersStore()
 const workshopSearch = useWorkshopSearchStore()
 const admin = useAdminStore()
 const route = useRoute()
@@ -36,6 +47,11 @@ const router = useRouter()
 const rolePath = useRolePath()
 const selectedContext = ref(config.dropdownOptions[0]?.value ?? '')
 const mobileNavOpen = ref(false)
+// Desktop icon-rail collapse: production workers mostly live in Kesish/Krom,
+// so the sidebar can shrink to icons for a wider workspace. Device-level
+// preference (floor tablets); mobile keeps the drawer instead.
+const SIDEBAR_COLLAPSED_KEY = 'mp-workshop-sidebar-collapsed'
+const sidebarCollapsed = ref(browserStorage()?.getItem(SIDEBAR_COLLAPSED_KEY) === '1')
 const mobileTriggerRef = ref<HTMLButtonElement | null>(null)
 const drawerPanelRef = ref<HTMLElement | null>(null)
 const workshopSearchRootRef = ref<HTMLElement | null>(null)
@@ -61,14 +77,19 @@ const profileSubtitle = computed(() =>
   auth.me?.password_reset_required ? "parolni o'zgartirish kerak" : auth.displayName,
 )
 const tenantLabel = computed(() => {
-  if (config.role === 'workshop') return workshop.settings?.name ?? config.tenantLabel
+  // Settings first so an owner's rename shows without a reload; `me` is the
+  // source everyone else has, because `/workshop/settings` is owner-only and
+  // staff used to fall through to the generic label (QAD-168).
+  if (config.role === 'workshop') {
+    return workshopTenantName(workshop.settings?.name, auth.me?.workshop_name) ?? config.tenantLabel
+  }
   if (config.role === 'client' && auth.isAllowedFor('client')) return auth.displayName
   return config.tenantLabel
 })
 const tenantMeta = computed(() => {
   if (!auth.me) return config.tenantMeta
   if (config.role === 'workshop') {
-    return auth.me.is_owner ? 'Egasi · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
+    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : grantSummary(false, auth.me.grants)
   }
   if (config.role === 'client') return auth.me.phone ?? auth.displayName
   if (config.role === 'admin') return auth.displayName
@@ -119,12 +140,22 @@ const selectedWorkshopBranch = computed(() =>
 const showBranchSwitcher = computed(
   () => config.role === 'workshop' && workshop.branches.length > 1,
 )
+// Not every page reads the branch context: some are workshop-wide by design
+// (debts, settings, branches, notifications, profile), others take their branch
+// from the record being viewed. Each route declares which it is; on the two
+// non-branch kinds the picker renders disabled with a hint rather than sitting
+// there looking live and silently doing nothing.
+const branchScope = computed(() => branchScopeOf(route.meta.branchScope))
+const branchPickerDisabled = computed(() => branchScope.value !== 'branch')
+const branchPickerHint = computed(() =>
+  branchScope.value === 'branch' ? null : branchScopeHints[branchScope.value],
+)
 const normalizedSearchBranchId = computed(() => selectedWorkshopBranch.value?.id ?? null)
 const searchPermissions = computed(() => new Set(selectedWorkshopBranch.value?.permissions ?? []))
 const canSearchOrders = computed(
   () =>
     auth.me?.is_owner === true ||
-    searchPermissions.value.has('view_dashboard') ||
+    searchPermissions.value.has('view_orders') ||
     searchPermissions.value.has('manage_orders'),
 )
 const canSearchCatalog = computed(
@@ -162,6 +193,23 @@ const groupedWorkshopNav = computed(() => {
   }
   return groups
 })
+// Sidebar `+N` badge on Buyurtmalar (QAD-156): a live count of orders still in
+// NEW for the selected branch, so staff notice an arrival without being on the
+// board. Not an unread counter — it falls on its own as orders get confirmed.
+const ordersNavPath = computed(() => rolePath('/workshop/orders'))
+const canSeeOrdersNav = computed(() =>
+  visibleNav.value.some((item) => item.to === ordersNavPath.value),
+)
+const newOrderBadge = computed(() => {
+  if (config.role !== 'workshop' || !canSeeOrdersNav.value || orders.newOrderCount < 1) return null
+  return orders.newOrderCount > 99 ? '99+' : String(orders.newOrderCount)
+})
+// The badge itself is decorative; the count belongs to the link's own name so a
+// screen reader hears "Buyurtmalar — 4 ta yangi buyurtma" in one go.
+function navAriaLabel(item: NavItem) {
+  if (item.to !== ordersNavPath.value || !newOrderBadge.value) return undefined
+  return `${item.label} — ${orders.newOrderCount} ta yangi buyurtma`
+}
 const groupedAdminNav = computed(() => groupedNav(visibleNav.value))
 const adminMetrics = computed(() =>
   adminNavMetrics({
@@ -235,6 +283,18 @@ function openMobileNav() {
 function closeMobileNav() {
   if (!mobileNavOpen.value) return
   mobileNavOpen.value = false
+}
+
+// One trigger for both worlds: on desktop it toggles the sidebar between full
+// and icon-rail; on mobile it opens the drawer.
+function onNavTrigger() {
+  const isDesktop = window.matchMedia('(min-width: 921px)').matches
+  if (config.role === 'workshop' && isDesktop) {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+    browserStorage()?.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
+    return
+  }
+  openMobileNav()
 }
 
 function onDrawerKeydown(event: KeyboardEvent) {
@@ -341,6 +401,18 @@ function browserStorage() {
   return typeof window === 'undefined' ? null : window.localStorage
 }
 
+// No polling: the count refreshes on the moments it can actually change for this
+// user — shell mount, a branch switch, the tab coming back into view, and every
+// order mutation (that last one lives in the orders store).
+function reloadNewOrderCount() {
+  if (config.role !== 'workshop' || !canLoadWorkshopContext.value || !canSeeOrdersNav.value) return
+  void orders.loadNewOrderCount(selectedWorkshopBranch.value?.id ?? null)
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') reloadNewOrderCount()
+}
+
 watch(
   [dropdownOptions, contextStorageKey],
   ([options, storageKey], oldValue) => {
@@ -384,7 +456,11 @@ watch(
 watch(
   canLoadWorkshopContext,
   (canLoad) => {
-    if (canLoad) void workshop.loadBranchContext().catch(() => undefined)
+    if (canLoad) {
+      void workshop.loadBranchContext().catch(() => undefined)
+      // Guided first-run setup — owner-only; the store no-ops for staff.
+      void onboarding.ensureLoaded()
+    }
   },
   { immediate: true },
 )
@@ -431,26 +507,34 @@ watch(
   { flush: 'post' },
 )
 
+// The branch (or the right to see orders at all) only settles once the branch
+// context has loaded, so drive the count off that instead of a bare onMounted.
+watch([() => selectedWorkshopBranch.value?.id, canSeeOrdersNav], reloadNewOrderCount, {
+  immediate: true,
+})
+
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   window.clearTimeout(workshopSearchTimer)
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   window.removeEventListener('keydown', onGlobalKeydown)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (mobileNavOpen.value) unlockBodyScroll()
   previousMobileFocus = null
 })
 </script>
 
 <template>
-  <div v-if="isAuthRoute" class="min-h-screen bg-bg text-ink">
+  <div v-if="isAuthRoute" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <RouterView />
   </div>
 
-  <div v-else-if="config.role === 'client'" class="min-h-screen bg-bg text-ink">
+  <div v-else-if="config.role === 'client'" class="min-h-[var(--app-vh)] bg-bg text-ink">
     <header class="client-header">
       <div class="client-container client-header-row">
         <RouterLink :to="config.homePath" class="client-brand" aria-label="Bosh sahifa">
@@ -486,8 +570,12 @@ onBeforeUnmount(() => {
     </main>
   </div>
 
-  <div v-else-if="config.role === 'workshop'" class="workshop-app">
-    <aside class="workshop-sidebar" aria-label="Workshop navigation">
+  <div
+    v-else-if="config.role === 'workshop'"
+    class="workshop-app"
+    :class="{ 'nav-collapsed': sidebarCollapsed }"
+  >
+    <aside class="workshop-sidebar" aria-label="Ustaxona navigatsiyasi">
       <RouterLink :to="config.homePath" class="workshop-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="workshop-brand-mark" />
         <span class="workshop-brand-copy">
@@ -513,11 +601,19 @@ onBeforeUnmount(() => {
             :to="item.to"
             class="workshop-nav-item"
             active-class="on"
+            :title="item.label"
+            :aria-label="navAriaLabel(item)"
           >
             <span class="workshop-nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
             </span>
             <span>{{ item.label }}</span>
+            <span
+              v-if="newOrderBadge && item.to === ordersNavPath"
+              class="workshop-nav-badge"
+              aria-hidden="true"
+              >{{ newOrderBadge }}</span
+            >
           </RouterLink>
         </section>
       </nav>
@@ -569,11 +665,18 @@ onBeforeUnmount(() => {
               :to="item.to"
               class="workshop-nav-item"
               active-class="on"
+              :aria-label="navAriaLabel(item)"
             >
               <span class="workshop-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" v-html="iconPath(item.icon)"></svg>
               </span>
               <span>{{ item.label }}</span>
+              <span
+                v-if="newOrderBadge && item.to === ordersNavPath"
+                class="workshop-nav-badge"
+                aria-hidden="true"
+                >{{ newOrderBadge }}</span
+              >
             </RouterLink>
           </section>
         </nav>
@@ -586,10 +689,10 @@ onBeforeUnmount(() => {
           ref="mobileTriggerRef"
           class="workshop-mobile-button"
           type="button"
-          @click="openMobileNav"
+          aria-label="Menyu"
+          @click="onNavTrigger"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="iconPath('menu')"></svg>
-          Menyu
         </button>
 
         <ProjectDropdown
@@ -598,6 +701,8 @@ onBeforeUnmount(() => {
           class="workshop-branch-dd"
           :label="config.dropdownLabel"
           :options="dropdownOptions"
+          :disabled="branchPickerDisabled"
+          :hint="branchPickerHint"
           hide-label
         />
 
@@ -612,7 +717,7 @@ onBeforeUnmount(() => {
               id="workshop-global-search"
               ref="workshopSearchInputRef"
               v-model="workshopSearchQuery"
-              placeholder="Buyurtma, mijoz, xodim yoki material..."
+              placeholder="Buyurtma, mijoz, xodim yoki material"
               autocomplete="off"
               :aria-expanded="workshopSearchOpen"
               aria-controls="workshop-global-search-panel"
@@ -637,7 +742,7 @@ onBeforeUnmount(() => {
               Kamida 2 ta belgi kiriting.
             </div>
             <div v-else-if="workshopSearch.loading" class="workshop-search-empty">
-              Qidirilmoqda...
+              Qidirilmoqda…
             </div>
             <template v-else>
               <p v-if="workshopSearch.error" class="workshop-search-error">
@@ -765,12 +870,13 @@ onBeforeUnmount(() => {
       <section class="workshop-page">
         <RouterView />
       </section>
+      <OnboardingSpotlight />
     </main>
   </div>
 
   <div v-else class="admin-app">
     <a class="admin-skip-link" href="#admin-content">Kontentga o'tish</a>
-    <aside class="admin-sidebar" aria-label="Superadmin navigation">
+    <aside class="admin-sidebar" aria-label="Platforma navigatsiyasi">
       <RouterLink :to="config.homePath" class="admin-brand" @click="closeMobileNav">
         <img src="/favicon.svg" alt="" class="admin-brand-mark" />
         <span class="admin-brand-copy">
@@ -964,7 +1070,7 @@ onBeforeUnmount(() => {
           @click="openMobileNav"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" v-html="adminIconPath('menu')"></svg>
-          Menu
+          Menyu
         </button>
 
         <div class="admin-top-actions">

@@ -24,8 +24,8 @@ from cutting_engine import (
 
 from app.models.enums import MaterialSource
 
-KERF_MM = 4
-EDGE_TRIM_MM = 10
+DEFAULT_KERF_MM = 4
+DEFAULT_EDGE_TRIM_MM = 5
 EDGE_OVERHANG_MM = 30
 MAX_PARTS_PER_RUN = 300
 MAX_PANELS_PER_MATERIAL = 20
@@ -46,23 +46,32 @@ class OptimizerError(Exception):
 
 
 @dataclass(frozen=True)
+class CutParams:
+    """Kerf and edge trim for one optimisation run — resolved by the caller from
+    the draft's branch (cutting.md); never read from a module-level constant."""
+
+    kerf_mm: int
+    edge_trim_mm: int
+
+
+DEFAULT_CUT_PARAMS = CutParams(kerf_mm=DEFAULT_KERF_MM, edge_trim_mm=DEFAULT_EDGE_TRIM_MM)
+
+
+@dataclass(frozen=True)
 class PanelSpec:
     material_id: uuid.UUID
     length_mm: int
     width_mm: int
     grain_direction: bool
 
-    @property
-    def usable_length_mm(self) -> int:
-        return self.length_mm - 2 * EDGE_TRIM_MM
+    def usable_length_mm(self, edge_trim_mm: int) -> int:
+        return self.length_mm - 2 * edge_trim_mm
 
-    @property
-    def usable_width_mm(self) -> int:
-        return self.width_mm - 2 * EDGE_TRIM_MM
+    def usable_width_mm(self, edge_trim_mm: int) -> int:
+        return self.width_mm - 2 * edge_trim_mm
 
-    @property
-    def usable_area_mm2(self) -> int:
-        return self.usable_length_mm * self.usable_width_mm
+    def usable_area_mm2(self, edge_trim_mm: int) -> int:
+        return self.usable_length_mm(edge_trim_mm) * self.usable_width_mm(edge_trim_mm)
 
 
 @dataclass(frozen=True)
@@ -157,6 +166,7 @@ def run_all_algorithms(
     parts: list[PartInput],
     materials: dict[uuid.UUID, PanelSpec],
     *,
+    params: CutParams,
     timeout_seconds: float = OPTIMIZATION_TIMEOUT_SECONDS,
 ) -> list[OptimizationResult]:
     """Return the single best deterministic result from ``cutting-engine``.
@@ -164,16 +174,20 @@ def run_all_algorithms(
     The service layer still expects a list because older UI/API flows supported
     comparing algorithms. The product now keeps only the best result, so this
     adapter returns a one-item list while preserving the existing persistence
-    contract.
+    contract. ``params`` is resolved by the caller from the draft's branch —
+    every reader of kerf/trim in this module takes it as an argument.
     """
 
-    return [_run_best_engine_result(parts, materials, timeout_seconds=timeout_seconds)]
+    return [
+        _run_best_engine_result(parts, materials, params=params, timeout_seconds=timeout_seconds)
+    ]
 
 
 def _run_best_engine_result(
     parts: list[PartInput],
     materials: dict[uuid.UUID, PanelSpec],
     *,
+    params: CutParams,
     timeout_seconds: float,
 ) -> OptimizationResult:
     if timeout_seconds <= 0:
@@ -183,7 +197,7 @@ def _run_best_engine_result(
     if not parts:
         raise OptimizerError("empty_parts", "At least one part is required")
 
-    _ensure_inputs(parts, materials)
+    _ensure_inputs(parts, materials, params=params)
 
     deadline = time.monotonic() + timeout_seconds
     panels: list[PanelResult] = []
@@ -199,7 +213,7 @@ def _run_best_engine_result(
 
         material = materials[material_id]
         material_parts = parts_by_material[material_id]
-        engine_result = _optimize_material(material, material_parts)
+        engine_result = _optimize_material(material, material_parts, params=params)
 
         if engine_result.unplaced_parts:
             unplaced = engine_result.unplaced_parts[0]
@@ -249,9 +263,13 @@ def _run_best_engine_result(
                 PanelResult(
                     material_id=material_id,
                     panel_index=sheet_result.index,
+<<<<<<< HEAD
                     waste_area_mm2=material.usable_area_mm2 - used_area,
                     cut_count=len(sheet_result.cuts),
                     cut_length_mm=cut_length_mm,
+=======
+                    waste_area_mm2=material.usable_area_mm2(params.edge_trim_mm) - used_area,
+>>>>>>> 1029575d89811c9955199e32c9f1abe50aee66c6
                     offcuts=[
                         OffcutResult(
                             x_mm=offcut.x,
@@ -270,16 +288,20 @@ def _run_best_engine_result(
         if time.monotonic() > deadline:
             raise OptimizerError("optimization_timeout", "Optimization timed out")
 
-    return _build_result(parts, panels, materials, total_cut_length_mm=total_cut_length)
+    return _build_result(
+        parts, panels, materials, params=params, total_cut_length_mm=total_cut_length
+    )
 
 
-def _optimize_material(material: PanelSpec, parts: list[PartInput]) -> EngineCuttingResult:
+def _optimize_material(
+    material: PanelSpec, parts: list[PartInput], *, params: CutParams
+) -> EngineCuttingResult:
     request = CuttingRequest(
         sheet=Sheet(width=material.length_mm, height=material.width_mm),
         parts=tuple(_engine_part(material, part) for part in parts),
         settings=CuttingSettings(
-            kerf=KERF_MM,
-            trim=EDGE_TRIM_MM,
+            kerf=params.kerf_mm,
+            trim=params.edge_trim_mm,
             optimization_level=OptimizationLevel.NORMAL,
         ),
     )
@@ -308,7 +330,9 @@ def _engine_part(material: PanelSpec, part: PartInput) -> Part:
     )
 
 
-def _ensure_inputs(parts: list[PartInput], materials: dict[uuid.UUID, PanelSpec]) -> None:
+def _ensure_inputs(
+    parts: list[PartInput], materials: dict[uuid.UUID, PanelSpec], *, params: CutParams
+) -> None:
     seen_part_refs: set[str] = set()
     for part in parts:
         if part.part_ref in seen_part_refs:
@@ -336,10 +360,10 @@ def _ensure_inputs(parts: list[PartInput], materials: dict[uuid.UUID, PanelSpec]
                 row_index=part.row_index,
                 material_id=part.material_id,
             )
-        _ensure_part_can_fit(part, materials[part.material_id])
+        _ensure_part_can_fit(part, materials[part.material_id], edge_trim_mm=params.edge_trim_mm)
 
 
-def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
+def _ensure_part_can_fit(part: PartInput, material: PanelSpec, *, edge_trim_mm: int) -> None:
     if part.length_mm < 10 or part.width_mm < 10:
         raise OptimizerError(
             "part_too_small",
@@ -348,12 +372,10 @@ def _ensure_part_can_fit(part: PartInput, material: PanelSpec) -> None:
             row_index=part.row_index,
             material_id=part.material_id,
         )
-    fits_normal = (
-        part.length_mm <= material.usable_length_mm and part.width_mm <= material.usable_width_mm
-    )
-    fits_rotated = (
-        part.width_mm <= material.usable_length_mm and part.length_mm <= material.usable_width_mm
-    )
+    usable_length_mm = material.usable_length_mm(edge_trim_mm)
+    usable_width_mm = material.usable_width_mm(edge_trim_mm)
+    fits_normal = part.length_mm <= usable_length_mm and part.width_mm <= usable_width_mm
+    fits_rotated = part.width_mm <= usable_length_mm and part.length_mm <= usable_width_mm
     locked = _rotation_locked(material, part)
     if locked and not fits_normal:
         raise OptimizerError(
@@ -382,6 +404,7 @@ def _build_result(
     panels: list[PanelResult],
     materials: dict[uuid.UUID, PanelSpec],
     *,
+    params: CutParams,
     total_cut_length_mm: int,
 ) -> OptimizationResult:
     panels_used: dict[str, int] = {}
@@ -392,7 +415,7 @@ def _build_result(
         material_key = str(panel.material_id)
         panels_used[material_key] = panels_used.get(material_key, 0) + 1
         total_waste += panel.waste_area_mm2
-        total_usable_area += material.usable_area_mm2
+        total_usable_area += material.usable_area_mm2(params.edge_trim_mm)
 
     metrics = edge_metrics(parts)
     waste_percentage = (
@@ -401,8 +424,8 @@ def _build_result(
     return OptimizationResult(
         algorithm_name=ALGORITHM_NAME,
         algorithm_version=ALGORITHM_VERSION,
-        kerf_mm=KERF_MM,
-        edge_trim_mm=EDGE_TRIM_MM,
+        kerf_mm=params.kerf_mm,
+        edge_trim_mm=params.edge_trim_mm,
         panels=panels,
         panels_used_by_material=panels_used,
         waste_percentage=waste_percentage,

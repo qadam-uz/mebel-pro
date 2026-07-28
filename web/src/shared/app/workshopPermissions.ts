@@ -1,7 +1,9 @@
 import type { PermissionGrant } from '@/shared/stores/auth'
 
 export const workshopPermissions = {
-  viewDashboard: 'view_dashboard',
+  // Read-only order access, named for what the server actually enforces
+  // (QAD-166). It grants no dashboard section of its own.
+  viewOrders: 'view_orders',
   manageOrders: 'manage_orders',
   processProduction: 'process_production',
   manageCatalog: 'manage_catalog',

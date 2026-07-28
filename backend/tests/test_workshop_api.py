@@ -1,12 +1,13 @@
 import uuid
 from decimal import Decimal
 
+import pytest
 from app.modules.support.contracts import ActionLog, StatusChangeLog
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.factories import default_working_hours, seed_workshop_with_owner
+from tests.factories import seed_workshop_with_owner
 
 
 def _auth(access_token: str) -> dict[str, str]:
@@ -101,6 +102,8 @@ async def test_owner_creates_staff_with_initial_grants_and_staff_gets_branch_con
             "phone": "+998902222222",
             "status": "active",
             "closed_reason": None,
+            "kerf_mm": 4,
+            "edge_trim_mm": 5,
             "permissions": ["manage_orders"],
         }
     ]
@@ -120,7 +123,6 @@ async def test_staff_branch_context_includes_multiple_active_grant_branches(
             "phone": "+998904040404",
             "latitude": "41.28",
             "longitude": "69.20",
-            "working_hours": default_working_hours(),
         },
     )
     second_branch_id = second_branch.json()["id"]
@@ -257,7 +259,6 @@ async def test_owner_filters_users_and_sees_last_login(
             "phone": "+998906262600",
             "latitude": "41.22",
             "longitude": "69.22",
-            "working_hours": default_working_hours(),
         },
     )
     assert second_branch.status_code == 201
@@ -340,7 +341,6 @@ async def test_owner_can_create_and_clear_branch_without_coordinates(
             "name": "Optional Coords",
             "address": "Tashkent, Optional",
             "phone": "+998907777777",
-            "working_hours": default_working_hours(),
         },
     )
     branch_id = created.json()["id"]
@@ -378,6 +378,141 @@ async def test_owner_can_create_and_clear_branch_without_coordinates(
     assert cleared.status_code == 200
     assert cleared.json()["latitude"] is None
     assert cleared.json()["longitude"] is None
+
+
+async def test_branch_keeps_up_to_three_additional_phones_alongside_its_primary(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, _branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Chilonzor",
+            "address": "Tashkent, Chilonzor",
+            "phone": "+998901111111",
+        },
+    )
+    branch_id = created.json()["id"]
+    filled = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998902222222", "+998903333333", "+998904444444"]},
+    )
+    removed = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998902222222", "+998904444444"]},
+    )
+    untouched = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"name": "Chilonzor 2"},
+    )
+
+    assert created.status_code == 201
+    # An existing branch loads and saves with an empty list — no null, no absence.
+    assert created.json()["additional_phones"] == []
+    assert filled.status_code == 200
+    # Array order is display order, so it survives the round trip verbatim.
+    assert filled.json()["additional_phones"] == [
+        "+998902222222",
+        "+998903333333",
+        "+998904444444",
+    ]
+    assert removed.status_code == 200
+    assert removed.json()["additional_phones"] == ["+998902222222", "+998904444444"]
+    # Removing an extra never disturbs the primary.
+    assert removed.json()["phone"] == "+998901111111"
+    assert untouched.status_code == 200
+    assert untouched.json()["additional_phones"] == ["+998902222222", "+998904444444"]
+    assert untouched.json()["phone"] == "+998901111111"
+
+
+async def test_branch_rejects_a_fourth_additional_phone(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    refused = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={
+            "additional_phones": [
+                "+998902222222",
+                "+998903333333",
+                "+998904444444",
+                "+998905555555",
+            ]
+        },
+    )
+    stored = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "too_many_branch_phones"
+    assert stored.json()["additional_phones"] == []
+
+
+async def test_branch_rejects_badly_formatted_additional_phone(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    refused = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["901234567"]},
+    )
+
+    assert refused.status_code == 400
+    assert refused.json()["code"] == "invalid_phone"
+
+
+async def test_branch_rejects_additional_phone_duplicating_the_primary_or_a_sibling(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, _branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/branches",
+        headers=_auth(owner_access),
+        json={
+            "name": "Yunusobod",
+            "address": "Tashkent, Yunusobod",
+            "phone": "+998901111111",
+            "additional_phones": ["+998902222222"],
+        },
+    )
+    branch_id = created.json()["id"]
+    same_as_primary = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998901111111"]},
+    )
+    same_as_sibling = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"additional_phones": ["+998903333333", "+998903333333"]},
+    )
+    # Promoting an extra to primary would collide with the extra it came from.
+    primary_moved_onto_extra = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"phone": "+998902222222"},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["additional_phones"] == ["+998902222222"]
+    assert same_as_primary.status_code == 400
+    assert same_as_primary.json()["code"] == "duplicate_branch_phone"
+    assert same_as_sibling.status_code == 400
+    assert same_as_sibling.json()["code"] == "duplicate_branch_phone"
+    assert primary_moved_onto_extra.status_code == 400
+    assert primary_moved_onto_extra.json()["code"] == "duplicate_branch_phone"
 
 
 async def test_owner_updates_staff_profile_fields(
@@ -428,6 +563,32 @@ async def test_owner_updates_staff_profile_fields(
     assert null_home_branch.json()["code"] == "home_branch_required"
     assert duplicate.status_code == 409
     assert duplicate.json()["code"] == "login_exists"
+
+
+async def test_staff_login_collides_across_workshops(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Logins are unique platform-wide, so the second workshop to reach for a name
+    # is refused — the owner sees a specific `login_exists`, never a 500.
+    owner_access, branch_id = await _owner_login(client, db_session)
+    await seed_workshop_with_owner(db_session, login="taken")
+
+    collision = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Office Staff",
+            "phone": "+998906060606",
+            "login": "TAKEN",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [],
+        },
+    )
+
+    assert collision.status_code == 409
+    assert collision.json()["code"] == "login_exists"
 
 
 async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
@@ -521,6 +682,88 @@ async def test_owner_resets_blocks_unblocks_and_revokes_staff_sessions(
         ("active", "blocked"),
         ("blocked", "active"),
     ]
+
+
+async def test_owner_edits_branch_cutting_settings_within_bounds(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+
+    defaults = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}", headers=_auth(owner_access)
+    )
+    updated = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json={"kerf_mm": 3, "edge_trim_mm": 12},
+    )
+    reloaded = await client.get(
+        f"/api/v1/workshop/branches/{branch_id}", headers=_auth(owner_access)
+    )
+
+    assert defaults.json()["kerf_mm"] == 4
+    assert defaults.json()["edge_trim_mm"] == 5
+    assert updated.status_code == 200
+    assert updated.json()["kerf_mm"] == 3
+    assert updated.json()["edge_trim_mm"] == 12
+    assert reloaded.json()["kerf_mm"] == 3
+    assert reloaded.json()["edge_trim_mm"] == 12
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"kerf_mm": 0},
+        {"kerf_mm": 21},
+        {"edge_trim_mm": -1},
+        {"edge_trim_mm": 51},
+    ],
+)
+async def test_owner_branch_patch_rejects_out_of_bounds_cutting_settings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    payload: dict[str, int],
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+
+    response = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(owner_access),
+        json=payload,
+    )
+
+    assert response.status_code == 422
+
+
+async def test_non_owner_staff_cannot_edit_branch_cutting_settings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    owner_access, branch_id = await _owner_login(client, db_session)
+    created = await client.post(
+        "/api/v1/workshop/users",
+        headers=_auth(owner_access),
+        json={
+            "full_name": "Staff",
+            "phone": "+998908080809",
+            "login": "cuttersetting",
+            "home_branch_id": branch_id,
+            "temp_password": "StaffTemp123",
+            "grants": [{"permission": "manage_orders", "branch_id": branch_id}],
+        },
+    )
+    assert created.status_code == 201
+    staff_access = await _ready_staff_access(client, login="cuttersetting")
+
+    response = await client.patch(
+        f"/api/v1/workshop/branches/{branch_id}",
+        headers=_auth(staff_access),
+        json={"kerf_mm": 3, "edge_trim_mm": 12},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "forbidden"
 
 
 async def test_non_owner_staff_cannot_manage_users(

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { api, apiTraceId, captureApiError, withQuery } from '@/shared/api/client'
 import { authInit } from '@/shared/app/authInit'
-import { downloadBlob } from '@/shared/app/downloadBlob'
+import { openBlobInNewTab, PopupBlockedError } from '@/shared/app/downloadBlob'
 import type { MaterialKind, PanelMaterialType } from '@/shared/stores/admin'
 import type { ImportMapLayout } from '@/shared/stores/cuttingImport'
 
@@ -105,6 +105,10 @@ export interface CuttingDraft {
   client_id: string
   name: string | null
   preferred_branch_id: string | null
+  // Effective kerf/edge-trim for this draft, resolved server-side from its
+  // branch (or the platform defaults for a branch-less draft) on every read.
+  kerf_mm: number
+  edge_trim_mm: number
   parts_snapshot: CuttingPart[]
   chosen_result_id: string | null
   // Set only on an order's revision draft — the editor switches to revision
@@ -169,7 +173,8 @@ export interface ClientBranchOption {
   address: string
   status: 'active' | 'temporarily_closed'
   closed_reason: string | null
-  today_hours: { open: string | null; close: string | null }
+  kerf_mm: number
+  edge_trim_mm: number
 }
 
 export function materialLabel(material: ClientCatalogMaterialOption | null | undefined) {
@@ -181,14 +186,13 @@ export function metres(mm: number) {
   return `${(mm / 1000).toFixed(2)} m`
 }
 
-// Mirrors the backend cutting optimizer (app/modules/cutting/optimizer.py).
-export const EDGE_TRIM_MM = 10
-
 /**
  * Pure check of whether a part fits its chosen panel, mirroring the backend
  * validation (panel usable area = panel − 2×edge-trim; rotation is locked when
- * this part follows texture). Returns the matching
- * backend error code, or null when the part fits (or the panel size is unknown).
+ * this part follows texture). `trimMm` is the branch's own edge trim (no
+ * platform-wide default exists client-side — see cutting.md). Returns the
+ * matching backend error code, or null when the part fits (or the panel size
+ * is unknown).
  */
 export function partFitError(
   lengthMm: number,
@@ -198,7 +202,7 @@ export function partFitError(
     'panel_length_mm' | 'panel_width_mm' | 'grain_direction'
   >,
   followGrain: boolean,
-  trimMm: number = EDGE_TRIM_MM,
+  trimMm: number,
 ): 'impossible_grain' | 'part_too_large' | null {
   if (panel.panel_length_mm == null || panel.panel_width_mm == null) return null
   const length = Number(lengthMm)
@@ -302,8 +306,8 @@ export const useCuttingStore = defineStore('cutting', () => {
   const materialsLoading = ref(false)
   const error = ref<string | null>(null)
   const traceId = ref<string | null>(null)
-  // PDF download feedback (CB-17): id of the result currently downloading, plus
-  // a transient error + trace for the last failed download.
+  // PDF feedback (CB-17): id of the result whose PDF is being fetched, plus a
+  // transient error + trace for the last failed open.
   const downloadingId = ref<string | null>(null)
   const downloadError = ref<string | null>(null)
   const downloadTraceId = ref<string | null>(null)
@@ -331,15 +335,16 @@ export const useCuttingStore = defineStore('cutting', () => {
 
   // The workshop's unfinished walk-in drafts (saved but never ordered). Always a
   // workshop endpoint, so it doesn't go through scopedPath; delete reuses the
-  // scope-aware deleteDraft below.
+  // scope-aware deleteDraft below. `branchId` is the topbar branch context —
+  // omit it (or pass null) for the whole workshop.
   const workshopDrafts = ref<WorkshopDraftSummary[]>([])
-  async function loadWorkshopDrafts() {
+  async function loadWorkshopDrafts(branchId: string | null = null) {
     loading.value = true
     error.value = null
     traceId.value = null
     try {
       workshopDrafts.value = await api.get<WorkshopDraftSummary[]>(
-        '/workshop/cutting-drafts',
+        withQuery('/workshop/cutting-drafts', { branch_id: branchId }),
         authInit(),
       )
     } catch (errorValue) {
@@ -550,22 +555,21 @@ export const useCuttingStore = defineStore('cutting', () => {
     }
   }
 
-  async function downloadClientPdf(resultId: string) {
-    await downloadPdf(
-      scopedPath(`/cutting-results/${resultId}/pdf`),
-      `cutting-${resultId}.pdf`,
-      resultId,
-    )
+  async function openClientPdf(resultId: string) {
+    await openPdf(scopedPath(`/cutting-results/${resultId}/pdf`), resultId)
   }
 
-  async function downloadPdf(path: string, filename: string, id: string) {
+  async function openPdf(path: string, id: string) {
     downloadingId.value = id
     downloadError.value = null
     downloadTraceId.value = null
     try {
-      await downloadBlob(path, filename, authInit())
+      await openBlobInNewTab(path, authInit())
     } catch (errorValue) {
-      downloadError.value = "PDF'ni yuklab bo'lmadi. Qayta urinib ko'ring."
+      downloadError.value =
+        errorValue instanceof PopupBlockedError
+          ? "Brauzer yangi oynani bloklab qo'ydi. Ushbu sayt uchun qalqib chiquvchi oynalarga ruxsat bering."
+          : "PDF'ni ochib bo'lmadi. Qayta urinib ko'ring."
       downloadTraceId.value = apiTraceId(errorValue)
     } finally {
       downloadingId.value = null
@@ -637,7 +641,7 @@ export const useCuttingStore = defineStore('cutting', () => {
     loadBranchOptions,
     loadMaterials,
     clearMaterials,
-    downloadClientPdf,
+    openClientPdf,
     reset,
   }
 })

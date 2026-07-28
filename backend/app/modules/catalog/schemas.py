@@ -89,6 +89,16 @@ class BranchMaterialCreateRequest(BaseModel):
     min_stock: int = 0
 
 
+class BranchMaterialBulkItem(BaseModel):
+    material_id: uuid.UUID
+    price_tiyin: int
+    min_stock: int = 0
+
+
+class BranchMaterialBulkCreateRequest(BaseModel):
+    items: list[BranchMaterialBulkItem]
+
+
 class BranchMaterialPatchRequest(BaseModel):
     price_tiyin: int | None = None
     min_stock: int | None = None
@@ -108,4 +118,32 @@ class BranchMaterialResponse(APIModel):
 
 class BranchCatalogMaterialOption(APIModel):
     material: MaterialResponse
-    already_selected: bool
+
+
+class BranchCatalogOptionsPage(APIModel):
+    """QAD-159: the attach picker needs an honest `Filtrdagi hammasi (N)` count, so
+    this endpoint breaks the house bare-list convention and returns the page plus
+    the total number of attachable materials matching the same filters."""
+
+    items: list[BranchCatalogMaterialOption]
+    total: int
+
+
+class BranchCatalogManufacturerOption(APIModel):
+    id: uuid.UUID
+    name: str
+
+
+class BranchCatalogFiltersResponse(APIModel):
+    """Facet values for the attach picker's dropdowns, over the materials this
+    branch could still attach."""
+
+    manufacturers: list[BranchCatalogManufacturerOption]
+    thicknesses: list[Decimal]
+
+
+class BranchMaterialBulkResponse(APIModel):
+    created: list[BranchMaterialResponse]
+    # Materials a concurrent attach already linked to the branch: the picker excludes
+    # attached materials, so these are races, not user error — skipped, not rejected.
+    skipped_material_ids: list[uuid.UUID]

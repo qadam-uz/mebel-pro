@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import {
@@ -10,15 +10,17 @@ import {
   type FieldErrors,
   uzPhone,
 } from '@/shared/app/adminValidation'
+import { additionalPhoneErrors } from '@/shared/app/branchPhones'
 import { useRolePath } from '@/shared/app/paths'
 import { branchPillClass, branchStatusUz } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
+import BranchPhonesField from '@/shared/components/BranchPhonesField.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useToast } from '@/shared/composables/useToast'
 import { useAuthStore } from '@/shared/stores/auth'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
-type BranchField = 'name' | 'address' | 'phone'
+type BranchField = 'name' | 'address' | 'phone' | 'phones'
 
 const auth = useAuthStore()
 const workshop = useWorkshopStore()
@@ -33,40 +35,34 @@ const branchForm = reactive({
   address: '',
   phone: '',
 })
+const additionalPhones = ref<string[]>([])
+// Per-row phone errors only start showing once the owner has tried to submit —
+// then they stay live so fixing or removing a row clears its message.
+const phonesValidated = ref(false)
+const phoneRowErrors = computed(() =>
+  phonesValidated.value ? additionalPhoneErrors(additionalPhones.value, branchForm.phone) : [],
+)
 const branchFieldErrors = reactive<FieldErrors<BranchField>>({})
-const branchFieldOrder: BranchField[] = ['name', 'address', 'phone']
+const branchFieldOrder: BranchField[] = ['name', 'address', 'phone', 'phones']
 const branchFieldIds: Record<BranchField, string> = {
   name: 'branch-name',
   phone: 'branch-phone',
   address: 'branch-address',
+  phones: 'branch-additional-phone-0',
 }
-const hours = reactive([
-  { key: 'monday', label: 'Du', open: true, from: '09:00', to: '18:00' },
-  { key: 'tuesday', label: 'Se', open: true, from: '09:00', to: '18:00' },
-  { key: 'wednesday', label: 'Cho', open: true, from: '09:00', to: '18:00' },
-  { key: 'thursday', label: 'Pa', open: true, from: '09:00', to: '18:00' },
-  { key: 'friday', label: 'Ju', open: true, from: '09:00', to: '18:00' },
-  { key: 'saturday', label: 'Sha', open: true, from: '10:00', to: '16:00' },
-  { key: 'sunday', label: 'Yak', open: false, from: '10:00', to: '16:00' },
-])
-
-function workingHoursPayload() {
-  return Object.fromEntries(
-    hours.map((day) => [
-      day.key,
-      day.open ? { open: day.from, close: day.to } : { open: null, close: null },
-    ]),
-  )
-}
-
 function validateBranchForm() {
   clearFieldErrors(branchFieldErrors)
+  phonesValidated.value = true
   branchFieldErrors.name = requiredText(branchForm.name) ?? undefined
   branchFieldErrors.address = requiredText(branchForm.address) ?? undefined
   branchFieldErrors.phone = requiredText(branchForm.phone) ?? uzPhone(branchForm.phone) ?? undefined
   const hasErrors = branchFieldOrder.some((field) => Boolean(branchFieldErrors[field]))
   if (hasErrors) focusFirstFieldError(branchFieldErrors, branchFieldOrder, branchFieldIds)
-  return !hasErrors
+  const firstPhoneRowError = phoneRowErrors.value.findIndex(Boolean)
+  if (!hasErrors && firstPhoneRowError >= 0) {
+    document.getElementById(`branch-additional-phone-${firstPhoneRowError}`)?.focus()
+  }
+  return !hasErrors && firstPhoneRowError < 0
 }
 
 async function createBranch() {
@@ -78,11 +74,13 @@ async function createBranch() {
       name: branchForm.name,
       address: branchForm.address,
       phone: branchForm.phone,
-      working_hours: workingHoursPayload(),
+      additional_phones: additionalPhones.value,
     })
     branchForm.name = ''
     branchForm.address = ''
     branchForm.phone = ''
+    additionalPhones.value = []
+    phonesValidated.value = false
     showCreate.value = false
     // The branch is live for client orders the moment it exists, but with no
     // cutting/banding pricing yet — land the owner on the detail page where
@@ -98,11 +96,14 @@ async function createBranch() {
           branch_name_required: 'name',
           branch_address_required: 'address',
           invalid_phone: 'phone',
+          too_many_branch_phones: 'phones',
+          duplicate_branch_phone: 'phones',
         },
         {
           name: 'name',
           phone: 'phone',
           address: 'address',
+          additional_phones: 'phones',
         },
       ),
     )
@@ -129,7 +130,7 @@ onMounted(() => {
     </div>
 
     <section v-if="!auth.me?.is_owner" class="st-empty">
-      <h3>Bu bo'lim faqat ustaxona egasi uchun</h3>
+      <h3>Bu bo'lim faqat ustaxona rahbari uchun</h3>
       <p>Filial qo'shish va holatini boshqarish egaga tegishli.</p>
     </section>
 
@@ -187,47 +188,31 @@ onMounted(() => {
             </label>
           </div>
           <label class="field" for="branch-phone">
-            <span>Telefon</span>
+            <span>Asosiy telefon</span>
             <PhoneInput
               id="branch-phone"
               v-model="branchForm.phone"
               required
               :aria-invalid="!!branchFieldErrors.phone"
-              :aria-describedby="branchFieldErrors.phone ? 'branch-phone-error' : undefined"
+              :aria-describedby="
+                branchFieldErrors.phone ? 'branch-phone-error' : 'branch-phone-hint'
+              "
             />
+            <small id="branch-phone-hint" class="text-ink-muted">
+              Mijozlar buyurtmalarida shu raqam ko'rinadi.
+            </small>
             <span v-if="branchFieldErrors.phone" id="branch-phone-error" class="mp-field-error">
               {{ branchFieldErrors.phone }}
             </span>
           </label>
-          <fieldset>
-            <legend class="mb-2 text-sm font-extrabold text-ink">Ish vaqti</legend>
-            <div class="grid gap-2 md:grid-cols-2">
-              <div
-                v-for="day in hours"
-                :key="day.key"
-                class="rounded-md border border-hairline bg-sunk p-3"
-              >
-                <label class="flex items-center gap-2 text-sm font-extrabold text-ink">
-                  <input v-model="day.open" type="checkbox" class="size-4 accent-accent" />
-                  {{ day.label }}
-                </label>
-                <div class="mt-2 grid grid-cols-2 gap-2">
-                  <input
-                    v-model="day.from"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                  <input
-                    v-model="day.to"
-                    class="mp-input min-h-9 px-2 text-sm"
-                    type="time"
-                    :disabled="!day.open"
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
+          <BranchPhonesField
+            v-model="additionalPhones"
+            id-prefix="branch-additional-phone"
+            :errors="phoneRowErrors"
+          />
+          <p v-if="branchFieldErrors.phones" class="mp-field-error">
+            {{ branchFieldErrors.phones }}
+          </p>
           <div class="flex flex-wrap items-center justify-end gap-3">
             <p v-if="branchError" class="text-sm font-bold text-danger">Filial qo'shilmadi.</p>
             <button type="button" class="mp-button mp-button-outline" @click="showCreate = false">
@@ -274,6 +259,10 @@ onMounted(() => {
           <table class="tbl">
             <thead>
               <tr>
+                <!-- The number printed in the middle of this branch's order
+                     numbers (#26-1-0003). First and mono so an owner holding a
+                     cutting map can scan straight down it. -->
+                <th>Raqam</th>
                 <th>Filial</th>
                 <th>Manzil</th>
                 <th>Telefon</th>
@@ -283,6 +272,7 @@ onMounted(() => {
             </thead>
             <tbody>
               <tr v-for="branch in workshop.managedBranches" :key="branch.id">
+                <td class="id">{{ branch.branch_no }}</td>
                 <td class="nm">{{ branch.name }}</td>
                 <td>{{ branch.address }}</td>
                 <td class="num">{{ branch.phone }}</td>
