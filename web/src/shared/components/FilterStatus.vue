@@ -13,7 +13,11 @@
  */
 withDefaults(
   defineProps<{
-    /** Hidden entirely when no filter is active — an unfiltered list needs no receipt. */
+    /**
+     * Whether the list is narrowed. Drives the "Filtr bo'yicha N ta … topildi"
+     * sentence. With no `total` and no active filter the line is hidden — an
+     * unfiltered list needs no receipt.
+     */
     active: boolean
     loading?: boolean
     count: number
@@ -21,7 +25,12 @@ withDefaults(
     hasMore?: boolean
     /** Plural noun for what was counted: `buyurtma`, `xarajat`, `material`. */
     noun: string
-    /** Pre-formatted money for the same rows, or null to leave it off. */
+    /**
+     * Pre-formatted money for the same rows, or null to leave it off. When set,
+     * the line renders even at rest: on a ledger the total is a fact about the
+     * period, not feedback about a filter, and finding 14 was that the finance
+     * module never stated it at all.
+     */
     total?: string | null
     /** Shown from the second active filter on — with one, it duplicates that filter's own clear. */
     onReset?: (() => void) | null
@@ -37,19 +46,23 @@ withDefaults(
 
 <template>
   <p
-    v-if="active"
+    v-if="active || total"
     class="mb-3 -mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs font-bold text-ink-soft"
     role="status"
     aria-live="polite"
   >
     <template v-if="loading">Yangilanmoqda…</template>
     <template v-else>
-      <span>
+      <span v-if="active">
         Filtr bo'yicha
         <b class="font-mono text-ink">{{ count }}{{ hasMore ? '+' : '' }}</b>
         ta {{ noun }} topildi
       </span>
-      <span v-if="total" class="text-ink-muted">·</span>
+      <span v-else-if="total">
+        <b class="font-mono text-ink">{{ count }}</b>
+        ta {{ noun }}
+      </span>
+      <span v-if="active && total" class="text-ink-muted">·</span>
       <span v-if="total">
         jami
         <b class="font-mono text-ink">{{ total }}</b>
