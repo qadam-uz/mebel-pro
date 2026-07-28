@@ -268,12 +268,12 @@ export const workshopRoutes: WorkshopRouteRecord[] = [
     name: 'workshop-finance-production',
     component: () => import('@/shared/views/WorkshopFinanceProductionView.vue'),
     meta: {
-      // One name in the nav, the tab title and the heading (QAD-182). The
-      // report covers every branch — comparing two branches' workers is the
-      // point of it — so the topbar picker steps aside here.
+      // One name in the nav, the tab title and the heading (QAD-182). Branch
+      // scope like the rest of the finance module — the picker governs, and the
+      // page carries no branch control of its own.
       title: 'Xodimlar mehnati',
       workshopAccess: { any: financeAccess },
-      branchScope: 'workshop',
+      branchScope: 'branch',
     },
   },
   {

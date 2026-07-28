@@ -24,7 +24,12 @@ const dateTo = ref(initialRange.to ?? '')
 const financePermissions = [p.manageFinance, p.viewFinanceReports]
 const canViewFinance = computed(() => permissions.canAny(financePermissions))
 
-// What the whole workshop produced in the period, under the per-worker rows.
+// The topbar picker is the only branch control on the page (QAD-182): the
+// duplicate page dropdown is gone, and the report reads the same context every
+// other branch-scoped page reads.
+const activeBranchId = computed(() => workshop.selectedBranchContext ?? null)
+
+// What this branch produced in the period, under the per-worker rows.
 const productionTotals = computed(() => {
   const rows = finance.production?.rows ?? []
   return {
@@ -69,12 +74,10 @@ function edgeLabel(line: WorkerProductionEdgeLine) {
 
 async function refresh() {
   if (!canViewFinance.value) return
-  // Workshop-wide by design (QAD-182): the report exists to compare workers,
-  // and a worker with grants in two branches has one body of work, not two.
   await finance.loadProduction({
     date_from: dateFrom.value,
     date_to: dateTo.value,
-    branch_id: null,
+    branch_id: activeBranchId.value,
   })
 }
 
@@ -82,6 +85,10 @@ onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
   if (canViewFinance.value) await refresh()
 })
+
+// Switching branch in the topbar reloads the report — the figures must never
+// lag behind the picker above them.
+watch(activeBranchId, () => void refresh())
 
 // Date range auto-applies now that the explicit "Qo'llash" button is gone.
 let dateTimer: number | undefined

@@ -523,15 +523,16 @@ that declaration, so a new route has to state where it stands.
 
 | Scope | What it means | Picker | Pages |
 | --- | --- | --- | --- |
-| `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Saqlangan chizmalar · Kesish · Krom · Ombor · Material katalogi · Tushum va xarajat · Qarzdorlik · Yangi buyurtma |
-| `workshop` | Workshop-wide by design | disabled, with the reason | Xodimlar mehnati · Filiallar · Xodimlar ro'yxati · Sozlamalar · Bildirishnomalar · Profil |
+| `branch` | Reads the context and reloads when it changes | live | Asosiy · Buyurtmalar · Saqlangan chizmalar · Kesish · Krom · Ombor · Material katalogi · Tushum va xarajat · Qarzdorlik · Xodimlar mehnati · Yangi buyurtma |
+| `workshop` | Workshop-wide by design | disabled, with the reason | Filiallar · Xodimlar ro'yxati · Sozlamalar · Bildirishnomalar · Profil |
 | `entity` | Takes its branch from the record on screen | disabled, with the reason | Buyurtma tafsilotlari · Chizma (ish) · Kesim chizmasi + natija + rasmiylashtirish · Filial tafsilotlari · Xodim tafsilotlari |
 
-`Qarzdorlik` follows the picker: every term in the debt fold — invoice, supplier payment,
-order, adjustment — names a branch, so a branch's balance is a real number and the branches sum
-to the workshop. `Xodimlar mehnati` is the opposite case: the report exists to compare workers,
-and a worker with grants in two branches has one body of work, so it spans the workshop and the
-picker steps aside. An `entity` page must never let the topbar override the branch stored on the record —
+**The whole finance module is `branch`.** `Qarzdorlik` included: every term in the debt fold —
+invoice, supplier payment, order, adjustment — names a branch, so a branch's balance is a real
+number and the branches sum to the workshop. Only the three **Tizim** pages are workshop-wide,
+because a branch list, a staff list and the workshop's own settings have no branch to be scoped
+to; `Bildirishnomalar` and `Profil` join them as personal surfaces reached from the topbar
+rather than the nav. An `entity` page must never let the topbar override the branch stored on the record —
 a cutting draft in particular is frozen to the branch it was started on, and the editor keeps
 its own in-page branch control for that reason. It seeds that control from the current context
 when the draft has no branch bound yet, so the user isn't asked twice for a choice they already
