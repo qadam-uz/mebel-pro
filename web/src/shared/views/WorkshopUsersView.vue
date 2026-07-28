@@ -600,17 +600,23 @@ onBeforeUnmount(() => {
                 <th>Ruxsatlar</th>
                 <th>Oxirgi kirish</th>
                 <th>Holat</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="user in workshop.users" :key="user.id">
+              <tr v-for="user in workshop.users" :key="user.id" class="row-clickable">
                 <td>
                   <div class="flex min-w-0 items-center gap-3">
                     <span class="user-avatar">{{ initials(user.full_name, 'U') }}</span>
                     <span class="min-w-0">
                       <span class="nm">
-                        {{ user.full_name }}
+                        <!-- The name is the link, stretched over the row (QAD-184):
+                             the whole row opens the xodim, ⌘-click still opens a tab. -->
+                        <RouterLink
+                          :to="rolePath(`/workshop/settings/users/${user.id}`)"
+                          class="row-open row-open-text"
+                        >
+                          {{ user.full_name }}
+                        </RouterLink>
                         <span v-if="user.is_owner" class="pill p-cut ml-1">Rahbar</span>
                       </span>
                       <small class="block truncate text-ink-muted">{{ user.phone }}</small>
@@ -630,17 +636,9 @@ onBeforeUnmount(() => {
                     <span class="pd"></span>{{ user.status === 'active' ? 'Faol' : 'Bloklangan' }}
                   </span>
                 </td>
-                <td class="right">
-                  <RouterLink
-                    :to="rolePath(`/workshop/settings/users/${user.id}`)"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                  >
-                    Ochish
-                  </RouterLink>
-                </td>
               </tr>
               <tr v-if="workshop.users.length === 0">
-                <td colspan="7">
+                <td colspan="6">
                   <div class="st-empty !border-0 !py-8">
                     <h3>{{ search.trim() ? 'Mos xodim topilmadi' : "Hali xodim yo'q" }}</h3>
                     <p>

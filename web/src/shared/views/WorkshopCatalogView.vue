@@ -463,11 +463,10 @@ onBeforeUnmount(() => {
                 <th class="nowrap right hidden sm:table-cell">Narx</th>
                 <th class="nowrap right hidden sm:table-cell">{{ LOW_STOCK_THRESHOLD_COLUMN }}</th>
                 <th class="nowrap">Holat</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in workshop.branchMaterials" :key="row.id">
+              <tr v-for="row in workshop.branchMaterials" :key="row.id" class="row-clickable">
                 <td>
                   <div class="flex min-w-0 items-start gap-3">
                     <span
@@ -475,7 +474,16 @@ onBeforeUnmount(() => {
                       :class="materialSwatchClass(row.material)"
                     ></span>
                     <span class="grid min-w-0 gap-0.5">
-                      <span class="nm break-words">{{ row.material.name }}</span>
+                      <!-- The name is the edit control, stretched over the row
+                           (QAD-184) — the row no longer ends in a button column. -->
+                      <button
+                        type="button"
+                        class="nm row-open row-open-text break-words"
+                        :aria-label="`${row.material.name} — tahrirlash`"
+                        @click="editBranchMaterial(row)"
+                      >
+                        {{ row.material.name }}
+                      </button>
                       <small class="block break-words text-ink-muted">{{
                         materialMeta(row)
                       }}</small>
@@ -507,7 +515,9 @@ onBeforeUnmount(() => {
                   {{ thresholdParts(row).value }}
                   <small class="block font-normal">{{ thresholdParts(row).unit }}</small>
                 </td>
-                <td class="nowrap">
+                <!-- `row-above` lifts the switch over the row's stretched click
+                     layer, so toggling Faol never opens the edit modal. -->
+                <td class="nowrap row-above">
                   <button
                     type="button"
                     role="switch"
@@ -538,18 +548,9 @@ onBeforeUnmount(() => {
                     </span>
                   </button>
                 </td>
-                <td class="nowrap right">
-                  <button
-                    type="button"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="editBranchMaterial(row)"
-                  >
-                    Tahrirlash
-                  </button>
-                </td>
               </tr>
               <tr v-if="workshop.branchMaterials.length === 0">
-                <td colspan="6">
+                <td colspan="5">
                   <div class="st-empty !border-0 !py-8">
                     <template v-if="catalogFiltered">
                       <h3>Filtrga mos material topilmadi</h3>

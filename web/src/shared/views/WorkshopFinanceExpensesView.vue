@@ -14,6 +14,7 @@ import { sanitizeMoneyInput } from '@/shared/app/inputSanitizers'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopErrorMessage } from '@/shared/app/workshopUi'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
+import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
@@ -402,6 +403,23 @@ function onPayableOrderSearch(value: string) {
 
 // Names the record the void will hit — date · category/type · sum — so the
 // confirmation identifies its target instead of a bare reason box.
+// QAD-184: the row itself is the edit control, so it is clickable exactly where
+// editing is allowed — a voided row, or a viewer without the permission, keeps
+// the default cursor and no hover tint.
+function canEditLedgerRow(status: LedgerStatus): boolean {
+  return canManageFinance.value && status === 'recorded'
+}
+
+// Bekor qilish left the row for the ⋯ menu but keeps its word: a bare glyph is
+// all that would stand between a mis-click and a voided money row.
+const voidMenuItems: ActionMenuItem[] = [{ label: 'Bekor qilish', icon: 'ban', danger: true }]
+
+// A tushum has no description column, so the type and the sum are what name the
+// row for the control that acts on it.
+function incomeRowLabel(income: Income): string {
+  return `${incomeTypeLabel[income.type] ?? income.type} ${formatTiyin(income.amount_tiyin)}`
+}
+
 const voidTargetLabel = computed(() => {
   const target = voidTarget.value
   if (!target) return ''
@@ -1268,7 +1286,12 @@ onMounted(async () => {
               <tr
                 v-for="expense in finance.expenses"
                 :key="expense.id"
-                :class="{ muted: expense.status === 'voided' }"
+                :class="{
+                  muted: expense.status === 'voided',
+                  // Only an editable row is clickable — a voided one, or a
+                  // viewer without the permission, keeps the default cursor.
+                  'row-clickable': canEditLedgerRow(expense.status),
+                }"
               >
                 <td class="num text-ink-muted">
                   {{ formatDate(expense.incurred_on) }}
@@ -1283,7 +1306,18 @@ onMounted(async () => {
                   </small>
                 </td>
                 <td class="nm">
-                  {{ expense.description }}
+                  <!-- The description runs the row's primary action — edit
+                       (QAD-184); bekor qilish moved into the ⋯ menu. -->
+                  <button
+                    v-if="canEditLedgerRow(expense.status)"
+                    type="button"
+                    class="row-open row-open-text"
+                    :aria-label="`${expense.description} — tahrirlash`"
+                    @click="editExpense(expense)"
+                  >
+                    {{ expense.description }}
+                  </button>
+                  <template v-else>{{ expense.description }}</template>
                   <small v-if="expense.voided_reason">bekor: {{ expense.voided_reason }}</small>
                   <small v-if="expense.receipt_file_id" class="block text-[11px] text-ink-muted">
                     Chek biriktirilgan
@@ -1308,22 +1342,12 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td class="right">
-                  <button
-                    v-if="canManageFinance && expense.status === 'recorded'"
-                    type="button"
-                    class="mp-button mp-button-outline mr-2 min-h-8 px-2 text-xs"
-                    @click="editExpense(expense)"
-                  >
-                    Tahrirlash
-                  </button>
-                  <button
-                    v-if="canManageFinance && expense.status === 'recorded'"
-                    type="button"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="openVoidForm('expense', expense.id)"
-                  >
-                    Bekor qilish
-                  </button>
+                  <ActionMenu
+                    v-if="canEditLedgerRow(expense.status)"
+                    :items="voidMenuItems"
+                    :label="`${expense.description} amallari`"
+                    @select="openVoidForm('expense', expense.id)"
+                  />
                 </td>
               </tr>
               <tr v-if="finance.expenses.length === 0">
@@ -1366,7 +1390,10 @@ onMounted(async () => {
               <tr
                 v-for="income in finance.incomes"
                 :key="income.id"
-                :class="{ muted: income.status === 'voided' }"
+                :class="{
+                  muted: income.status === 'voided',
+                  'row-clickable': canEditLedgerRow(income.status),
+                }"
               >
                 <td class="num text-ink-muted">
                   {{ formatDate(income.received_on) }}
@@ -1375,7 +1402,18 @@ onMounted(async () => {
                   </small>
                 </td>
                 <td>
-                  {{ incomeTypeLabel[income.type] ?? income.type }}
+                  <!-- The type runs the row's primary action — edit (QAD-184);
+                       bekor qilish moved into the ⋯ menu. -->
+                  <button
+                    v-if="canEditLedgerRow(income.status)"
+                    type="button"
+                    class="row-open row-open-text"
+                    :aria-label="`${incomeRowLabel(income)} — tahrirlash`"
+                    @click="editIncome(income)"
+                  >
+                    {{ incomeTypeLabel[income.type] ?? income.type }}
+                  </button>
+                  <template v-else>{{ incomeTypeLabel[income.type] ?? income.type }}</template>
                   <small v-if="!income.branch_id" class="block text-[11px] text-ink-muted">
                     Barcha filiallar
                   </small>
@@ -1405,22 +1443,12 @@ onMounted(async () => {
                   </span>
                 </td>
                 <td class="right">
-                  <button
-                    v-if="canManageFinance && income.status === 'recorded'"
-                    type="button"
-                    class="mp-button mp-button-outline mr-2 min-h-8 px-2 text-xs"
-                    @click="editIncome(income)"
-                  >
-                    Tahrirlash
-                  </button>
-                  <button
-                    v-if="canManageFinance && income.status === 'recorded'"
-                    type="button"
-                    class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                    @click="openVoidForm('income', income.id)"
-                  >
-                    Bekor qilish
-                  </button>
+                  <ActionMenu
+                    v-if="canEditLedgerRow(income.status)"
+                    :items="voidMenuItems"
+                    :label="`${incomeRowLabel(income)} amallari`"
+                    @select="openVoidForm('income', income.id)"
+                  />
                 </td>
               </tr>
               <tr v-if="finance.incomes.length === 0">
