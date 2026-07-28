@@ -432,10 +432,27 @@ async def test_a_supplier_expense_without_an_invoice_still_pays_the_supplier(
         },
     )
     today = invoice.json()["invoice_date"]
+    # A supplier advance is a term in that supplier's per-branch balance
+    # (QAD-182), so it has to name the branch it belongs to.
+    unbranched = await client.post(
+        "/api/v1/workshop/finance/expenses",
+        headers=_auth(owner_access),
+        json={
+            "category": "raw_materials",
+            "amount_tiyin": 400_000,
+            "incurred_on": today,
+            "description": "Avans",
+            "supplier_id": supplier_id,
+        },
+    )
+    assert unbranched.status_code == 400
+    assert unbranched.json()["code"] == "branch_required_for_supplier_expense"
+
     advance = await client.post(
         "/api/v1/workshop/finance/expenses",
         headers=_auth(owner_access),
         json={
+            "branch_id": str(branch_id),
             "category": "raw_materials",
             "amount_tiyin": 400_000,
             "incurred_on": today,

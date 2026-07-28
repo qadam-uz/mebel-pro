@@ -7,11 +7,12 @@ adjustments). Sign convention everywhere: positive = they owe us.
 
 import uuid
 from datetime import UTC, date, datetime
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.core.errors import APIError
 from app.core.principal import AuthenticatedPrincipal, actor_from_principal
@@ -34,10 +35,12 @@ from app.modules.finance.schemas import (
     VoidLedgerRequest,
 )
 from app.modules.finance.service import (
+    FinanceScope,
     _not_future,
     _optional_text,
     _required_text,
     _workshop_principal_id,
+    _write_scope,
 )
 from app.modules.inventory.api import list_payable_invoices
 from app.modules.inventory.contracts import StockTransaction, Supplier, SupplierInvoice
@@ -57,15 +60,49 @@ def _statement_sort_key(row: DebtStatementRow) -> tuple[date, datetime, int, dat
     return (row.on, at.replace(microsecond=0), _KIND_RANK.get(row.kind, 3), at)
 
 
-async def debts_scope(db: AsyncSession, *, principal: AuthenticatedPrincipal) -> uuid.UUID:
-    """Debts are workshop-level; owner or any manage_finance grant may read/write."""
+async def debts_scope(
+    db: AsyncSession,
+    *,
+    principal: AuthenticatedPrincipal,
+    branch_id: uuid.UUID | None = None,
+) -> FinanceScope:
+    """Debts are held per branch; owner or any manage_finance grant may read/write.
+
+    `branch_ids is None` means every branch the principal can reach — the
+    workshop total, which is exactly the sum of its branches now that every
+    term in the fold (invoice, supplier payment, order, adjustment) names one.
+    """
 
     workshop_id = _workshop_principal_id(principal)
-    if principal.is_owner:
-        return workshop_id
-    if any(grant.permission is Permission.MANAGE_FINANCE for grant in principal.grants):
-        return workshop_id
-    raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    if not principal.is_owner and not any(
+        grant.permission is Permission.MANAGE_FINANCE for grant in principal.grants
+    ):
+        raise APIError("forbidden", "Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    if branch_id is None:
+        if principal.is_owner:
+            return FinanceScope(workshop_id=workshop_id, branch_ids=None)
+        return FinanceScope(
+            workshop_id=workshop_id,
+            branch_ids=frozenset(
+                grant.branch_id
+                for grant in principal.grants
+                if grant.permission is Permission.MANAGE_FINANCE
+            ),
+        )
+    return await _write_scope(db, principal=principal, branch_id=branch_id)
+
+
+def _branch_filter(scope: FinanceScope, column: InstrumentedAttribute[Any]) -> ColumnElement[bool]:
+    """`TRUE` for a workshop-wide read, otherwise `column IN (…)`.
+
+    Unlike the ledger lists there is no `IS NULL` escape hatch: every debt term
+    carries a branch by construction, so a row without one would be a bug, not
+    an HQ cost to keep visible.
+    """
+
+    if scope.branch_ids is None:
+        return true()
+    return column.in_(scope.branch_ids)
 
 
 async def list_supplier_debts(
@@ -74,11 +111,12 @@ async def list_supplier_debts(
     principal: AuthenticatedPrincipal,
     search: str | None = None,
     only_with_debt: bool = True,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtListResponse:
-    workshop_id = await debts_scope(db, principal=principal)
-    balances = await _supplier_balances(db, workshop_id=workshop_id)
+    scope = await debts_scope(db, principal=principal, branch_id=branch_id)
+    balances = await _supplier_balances(db, scope=scope)
 
-    query = select(Supplier).where(Supplier.workshop_id == workshop_id)
+    query = select(Supplier).where(Supplier.workshop_id == scope.workshop_id)
     normalized = _optional_text(search)
     if normalized:
         query = query.where(Supplier.name.ilike(f"%{normalized}%"))
@@ -112,18 +150,19 @@ async def get_supplier_statement(
     supplier_id: uuid.UUID,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtStatementResponse:
-    workshop_id = await debts_scope(db, principal=principal)
+    scope = await debts_scope(db, principal=principal, branch_id=branch_id)
     supplier = await db.get(Supplier, supplier_id)
-    if supplier is None or supplier.workshop_id != workshop_id:
+    if supplier is None or supplier.workshop_id != scope.workshop_id:
         raise APIError("supplier_not_found", "Supplier not found", status_code=404)
-    terms = await _supplier_terms(db, workshop_id=workshop_id, supplier_id=supplier_id)
+    terms = await _supplier_terms(db, scope=scope, supplier_id=supplier_id)
     return _build_statement(
         terms,
         counterparty_id=supplier.id,
         name=supplier.name,
         phone=supplier.phone,
-        party=await _workshop_party(db, workshop_id=workshop_id),
+        party=await _workshop_party(db, workshop_id=scope.workshop_id),
         date_from=date_from,
         date_to=date_to,
     )
@@ -141,8 +180,8 @@ async def list_payable_supplier_invoices(
     movement and belong there; finance only folds money over them.
     """
 
-    workshop_id = await debts_scope(db, principal=principal)
-    records = await list_payable_invoices(db, workshop_id=workshop_id, search=search)
+    scope = await debts_scope(db, principal=principal)
+    records = await list_payable_invoices(db, workshop_id=scope.workshop_id, search=search)
     return [
         PayableInvoiceResponse(
             id=record.invoice.id,
@@ -168,9 +207,10 @@ async def list_client_debts(
     principal: AuthenticatedPrincipal,
     search: str | None = None,
     only_with_debt: bool = True,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtListResponse:
-    workshop_id = await debts_scope(db, principal=principal)
-    balances = await _client_balances(db, workshop_id=workshop_id)
+    scope = await debts_scope(db, principal=principal, branch_id=branch_id)
+    balances = await _client_balances(db, scope=scope)
     if not balances:
         return DebtListResponse(rows=[], we_owe_total_tiyin=0, they_owe_total_tiyin=0)
 
@@ -209,18 +249,19 @@ async def get_client_statement(
     client_id: uuid.UUID,
     date_from: date | None = None,
     date_to: date | None = None,
+    branch_id: uuid.UUID | None = None,
 ) -> DebtStatementResponse:
-    workshop_id = await debts_scope(db, principal=principal)
+    scope = await debts_scope(db, principal=principal, branch_id=branch_id)
     client = await db.get(Client, client_id)
     if client is None:
         raise APIError("client_not_found", "Client not found", status_code=404)
-    terms = await _client_terms(db, workshop_id=workshop_id, client_id=client_id)
+    terms = await _client_terms(db, scope=scope, client_id=client_id)
     return _build_statement(
         terms,
         counterparty_id=client.id,
         name=client.name,
         phone=client.phone,
-        party=await _workshop_party(db, workshop_id=workshop_id),
+        party=await _workshop_party(db, workshop_id=scope.workshop_id),
         date_from=date_from,
         date_to=date_to,
     )
@@ -232,7 +273,10 @@ async def create_adjustment(
     principal: AuthenticatedPrincipal,
     payload: AdjustmentCreateRequest,
 ) -> CounterpartyAdjustment:
-    workshop_id = await debts_scope(db, principal=principal)
+    # An adjustment names its branch: it corrects one branch's balance with the
+    # counterparty, so the write scope is that branch and nothing wider.
+    scope = await debts_scope(db, principal=principal, branch_id=payload.branch_id)
+    workshop_id = scope.workshop_id
     if (payload.supplier_id is None) == (payload.client_id is None):
         raise APIError(
             "invalid_party",
@@ -252,6 +296,7 @@ async def create_adjustment(
             raise APIError("client_not_found", "Client not found", status_code=404)
     adjustment = CounterpartyAdjustment(
         workshop_id=workshop_id,
+        branch_id=payload.branch_id,
         supplier_id=payload.supplier_id,
         client_id=payload.client_id,
         amount_tiyin=payload.amount_tiyin,
@@ -269,7 +314,7 @@ async def create_adjustment(
         entity_type="counterparty_adjustment",
         entity_id=adjustment.id,
         workshop_id=workshop_id,
-        branch_id=None,
+        branch_id=adjustment.branch_id,
         summary=f"Recorded debt adjustment {adjustment.amount_tiyin}",
         details={
             "supplier_id": str(payload.supplier_id) if payload.supplier_id else None,
@@ -287,9 +332,14 @@ async def void_adjustment(
     adjustment_id: uuid.UUID,
     payload: VoidLedgerRequest,
 ) -> CounterpartyAdjustment:
-    workshop_id = await debts_scope(db, principal=principal)
     adjustment = await db.get(CounterpartyAdjustment, adjustment_id)
-    if adjustment is None or adjustment.workshop_id != workshop_id:
+    if adjustment is None:
+        raise APIError("adjustment_not_found", "Adjustment not found", status_code=404)
+    # Scope on the row's own branch, so voiding is refused for a principal who
+    # cannot write that branch rather than silently allowed workshop-wide.
+    scope = await debts_scope(db, principal=principal, branch_id=adjustment.branch_id)
+    workshop_id = scope.workshop_id
+    if adjustment.workshop_id != workshop_id:
         raise APIError("adjustment_not_found", "Adjustment not found", status_code=404)
     if adjustment.status is not LedgerStatus.RECORDED:
         raise APIError("ledger_not_recorded", "Only recorded entries can change", status_code=409)
@@ -306,7 +356,7 @@ async def void_adjustment(
         entity_type="counterparty_adjustment",
         entity_id=adjustment.id,
         workshop_id=workshop_id,
-        branch_id=None,
+        branch_id=adjustment.branch_id,
         summary=f"Voided debt adjustment {adjustment.id}",
         details={"reason": reason},
     )
@@ -316,7 +366,7 @@ async def void_adjustment(
         entity_type="counterparty_adjustment",
         entity_id=adjustment.id,
         workshop_id=workshop_id,
-        branch_id=None,
+        branch_id=adjustment.branch_id,
         from_status=from_status,
         to_status=adjustment.status.value,
         reason=reason,
@@ -326,13 +376,17 @@ async def void_adjustment(
     return adjustment
 
 
-async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[uuid.UUID, int]:
+async def _supplier_balances(db: AsyncSession, *, scope: FinanceScope) -> dict[uuid.UUID, int]:
     """Per supplier: balance = sum(payments) - sum(deliveries) + sum(adjustments).
 
     Deliveries fold over invoice totals — post skidka/ustama — so the number the
     accountant sees is the number the supplier's own document says. Invoices
     without a supplier (historical arrivals that never had one) take no part.
+    Every term is filtered to the scope's branches, so the per-branch balances
+    of one supplier add up to the workshop balance exactly.
     """
+
+    workshop_id = scope.workshop_id
 
     deliveries = {
         row[0]: int(row[1])
@@ -345,6 +399,7 @@ async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dic
                 .where(
                     SupplierInvoice.workshop_id == workshop_id,
                     SupplierInvoice.supplier_id.is_not(None),
+                    _branch_filter(scope, SupplierInvoice.branch_id),
                 )
                 .group_by(SupplierInvoice.supplier_id)
             )
@@ -360,6 +415,7 @@ async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dic
                     Expense.workshop_id == workshop_id,
                     Expense.supplier_id.is_not(None),
                     Expense.status == LedgerStatus.RECORDED,
+                    _branch_filter(scope, Expense.branch_id),
                 )
                 .group_by(Expense.supplier_id)
             )
@@ -378,6 +434,7 @@ async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dic
                     CounterpartyAdjustment.workshop_id == workshop_id,
                     CounterpartyAdjustment.supplier_id.is_not(None),
                     CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+                    _branch_filter(scope, CounterpartyAdjustment.branch_id),
                 )
                 .group_by(CounterpartyAdjustment.supplier_id)
             )
@@ -400,8 +457,14 @@ async def _supplier_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dic
 _CLIENT_DEBT_EXCLUDED = (OrderStatus.NEW, OrderStatus.CANCELLED)
 
 
-async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[uuid.UUID, int]:
-    """Per client: balance = sum(order totals) - sum(payments) + sum(adjustments)."""
+async def _client_balances(db: AsyncSession, *, scope: FinanceScope) -> dict[uuid.UUID, int]:
+    """Per client: balance = sum(order totals) - sum(payments) + sum(adjustments).
+
+    Payments are filtered by the *order's* branch, not the income row's, so a
+    payment can never land in a different branch from the order it settles.
+    """
+
+    workshop_id = scope.workshop_id
 
     orders = {
         row[0]: int(row[1])
@@ -411,6 +474,7 @@ async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[
                 .where(
                     Order.workshop_id == workshop_id,
                     Order.status.not_in(_CLIENT_DEBT_EXCLUDED),
+                    _branch_filter(scope, Order.branch_id),
                 )
                 .group_by(Order.client_id)
             )
@@ -426,6 +490,7 @@ async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[
                     Income.workshop_id == workshop_id,
                     Income.type == IncomeType.ORDER_PAYMENT,
                     Income.status == LedgerStatus.RECORDED,
+                    _branch_filter(scope, Order.branch_id),
                 )
                 .group_by(Order.client_id)
             )
@@ -443,6 +508,7 @@ async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[
                     CounterpartyAdjustment.workshop_id == workshop_id,
                     CounterpartyAdjustment.client_id.is_not(None),
                     CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+                    _branch_filter(scope, CounterpartyAdjustment.branch_id),
                 )
                 .group_by(CounterpartyAdjustment.client_id)
             )
@@ -458,10 +524,11 @@ async def _client_balances(db: AsyncSession, *, workshop_id: uuid.UUID) -> dict[
 
 
 async def _client_terms(
-    db: AsyncSession, *, workshop_id: uuid.UUID, client_id: uuid.UUID
+    db: AsyncSession, *, scope: FinanceScope, client_id: uuid.UUID
 ) -> list[DebtStatementRow]:
     """Every fold term for one client, unsorted, without running balances."""
 
+    workshop_id = scope.workshop_id
     rows: list[DebtStatementRow] = []
     orders = (
         await db.scalars(
@@ -469,6 +536,7 @@ async def _client_terms(
                 Order.workshop_id == workshop_id,
                 Order.client_id == client_id,
                 Order.status.not_in(_CLIENT_DEBT_EXCLUDED),
+                _branch_filter(scope, Order.branch_id),
             )
         )
     ).all()
@@ -494,6 +562,7 @@ async def _client_terms(
                 Order.client_id == client_id,
                 Income.type == IncomeType.ORDER_PAYMENT,
                 Income.status == LedgerStatus.RECORDED,
+                _branch_filter(scope, Order.branch_id),
             )
         )
     ).all()
@@ -517,6 +586,7 @@ async def _client_terms(
                 CounterpartyAdjustment.workshop_id == workshop_id,
                 CounterpartyAdjustment.client_id == client_id,
                 CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+                _branch_filter(scope, CounterpartyAdjustment.branch_id),
             )
         )
     ).all()
@@ -536,10 +606,11 @@ async def _client_terms(
 
 
 async def _supplier_terms(
-    db: AsyncSession, *, workshop_id: uuid.UUID, supplier_id: uuid.UUID
+    db: AsyncSession, *, scope: FinanceScope, supplier_id: uuid.UUID
 ) -> list[DebtStatementRow]:
     """Every fold term for one supplier, unsorted, without running balances."""
 
+    workshop_id = scope.workshop_id
     rows: list[DebtStatementRow] = []
     deliveries = (
         await db.execute(
@@ -548,6 +619,7 @@ async def _supplier_terms(
             .where(
                 SupplierInvoice.workshop_id == workshop_id,
                 SupplierInvoice.supplier_id == supplier_id,
+                _branch_filter(scope, SupplierInvoice.branch_id),
             )
             .group_by(SupplierInvoice.id)
         )
@@ -574,6 +646,7 @@ async def _supplier_terms(
                 Expense.workshop_id == workshop_id,
                 Expense.supplier_id == supplier_id,
                 Expense.status == LedgerStatus.RECORDED,
+                _branch_filter(scope, Expense.branch_id),
             )
         )
     ).all()
@@ -596,6 +669,7 @@ async def _supplier_terms(
                 CounterpartyAdjustment.workshop_id == workshop_id,
                 CounterpartyAdjustment.supplier_id == supplier_id,
                 CounterpartyAdjustment.status == LedgerStatus.RECORDED,
+                _branch_filter(scope, CounterpartyAdjustment.branch_id),
             )
         )
     ).all()
