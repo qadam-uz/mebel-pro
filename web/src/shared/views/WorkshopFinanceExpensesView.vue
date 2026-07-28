@@ -18,6 +18,7 @@ import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import ConfirmDialog from '@/shared/components/ConfirmDialog.vue'
 import DateField from '@/shared/components/DateField.vue'
+import FilterStatus from '@/shared/components/FilterStatus.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FilePicker from '@/shared/components/FilePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
@@ -91,6 +92,37 @@ const dateTo = ref(initialRange.to ?? '')
 const expenseCategory = ref('all')
 const incomeType = ref('all')
 const statusFilter = ref<LedgerStatus | 'all'>('recorded')
+
+// «Narrowed» means narrower than the page's own defaults — the current month,
+// every category, recorded rows. Those defaults are the resting state, so they
+// must not make the status line claim a filter is on (QAD-182).
+const DEFAULT_STATUS: LedgerStatus | 'all' = 'recorded'
+const narrowingFilters = computed(() => {
+  const applied: string[] = []
+  if (datePreset.value !== 'month') applied.push('date')
+  if (activeTab.value === 'expense' && expenseCategory.value !== 'all') applied.push('category')
+  if (activeTab.value === 'income' && incomeType.value !== 'all') applied.push('type')
+  if (statusFilter.value !== DEFAULT_STATUS) applied.push('status')
+  return applied
+})
+
+// The sum of exactly the rows on screen. A ledger that lists eight expenses and
+// never states what they add up to is asking the accountant to do arithmetic
+// the page already did (QAD-182).
+const periodTotalTiyin = computed(() => {
+  const rows = activeTab.value === 'expense' ? finance.expenses : finance.incomes
+  return rows.reduce((sum, row) => sum + row.amount_tiyin, 0)
+})
+
+function resetLedgerFilters() {
+  const range = presetRange('month', new Date())
+  datePreset.value = 'month'
+  dateFrom.value = range.from ?? ''
+  dateTo.value = range.to ?? ''
+  expenseCategory.value = 'all'
+  incomeType.value = 'all'
+  statusFilter.value = DEFAULT_STATUS
+}
 
 // Select-bound fields are `string | null` (FormSelect/SearchCombobox model type,
 // same convention as the inventory modals); payloads coerce before sending.
@@ -1186,6 +1218,15 @@ onMounted(async () => {
         </button>
       </div>
 
+      <FilterStatus
+        :active="narrowingFilters.length > 0"
+        :loading="finance.loading"
+        :count="activeTab === 'expense' ? finance.expenses.length : finance.incomes.length"
+        :noun="activeTab === 'expense' ? 'xarajat' : 'tushum'"
+        :total="formatTiyin(periodTotalTiyin)"
+        :on-reset="narrowingFilters.length > 1 ? resetLedgerFilters : null"
+      />
+
       <section v-if="finance.loading" class="card p-5" aria-live="polite">
         <div class="grid gap-3">
           <span class="sk-line"></span>
@@ -1236,7 +1277,7 @@ onMounted(async () => {
                 <td>
                   {{ categoryLabel[expense.category] ?? expense.category }}
                   <small v-if="!expense.branch_id" class="block text-[11px] text-ink-muted">
-                    ustaxona-keng
+                    Barcha filiallar
                   </small>
                 </td>
                 <td class="nm">
@@ -1288,7 +1329,11 @@ onMounted(async () => {
               </tr>
               <tr v-if="finance.expenses.length === 0">
                 <td colspan="8">
-                  <div class="st-empty !border-0 !py-8"><h3>Bu davrda xarajat yo'q</h3></div>
+                  <div class="st-empty !border-0 !py-8">
+                    <h3 v-if="narrowingFilters.length">Filtrga mos xarajat topilmadi</h3>
+                    <h3 v-else>Bu davrda xarajat yo'q</h3>
+                    <p v-if="narrowingFilters.length">Filtrni o'zgartiring yoki tozalang.</p>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1334,7 +1379,7 @@ onMounted(async () => {
                 <td>
                   {{ incomeTypeLabel[income.type] ?? income.type }}
                   <small v-if="!income.branch_id" class="block text-[11px] text-ink-muted">
-                    ustaxona-keng
+                    Barcha filiallar
                   </small>
                 </td>
                 <td>{{ financeIncomeOrderLabel(income.order_id, income.order) }}</td>
@@ -1382,7 +1427,11 @@ onMounted(async () => {
               </tr>
               <tr v-if="finance.incomes.length === 0">
                 <td colspan="9">
-                  <div class="st-empty !border-0 !py-8"><h3>Bu davrda tushum yo'q</h3></div>
+                  <div class="st-empty !border-0 !py-8">
+                    <h3 v-if="narrowingFilters.length">Filtrga mos tushum topilmadi</h3>
+                    <h3 v-else>Bu davrda tushum yo'q</h3>
+                    <p v-if="narrowingFilters.length">Filtrni o'zgartiring yoki tozalang.</p>
+                  </div>
                 </td>
               </tr>
             </tbody>

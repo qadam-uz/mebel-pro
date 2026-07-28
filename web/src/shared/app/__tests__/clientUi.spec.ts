@@ -183,7 +183,7 @@ describe('client UI helpers', () => {
     expect(clientNotificationIconName(notification({ event_code: 'order.ready' }))).toBe('box')
     expect(
       clientNotificationIconName(
-        notification({ event_code: 'inventory.low_stock', entity_type: 'stock_item' }),
+        notification({ event_code: 'inventory.negative_stock', entity_type: 'stock_item' }),
       ),
     ).toBe('alert')
   })

@@ -415,7 +415,9 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
-  async function loadSupplierDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
+  async function loadSupplierDebts(
+    filters: { search?: string; only_with_debt?: boolean; branch_id?: string | null } = {},
+  ) {
     loading.value = true
     error.value = null
     traceId.value = null
@@ -424,6 +426,7 @@ export const useFinanceStore = defineStore('finance', () => {
         withQuery('/workshop/finance/debts/suppliers', {
           search: filters.search || undefined,
           only_with_debt: filters.only_with_debt,
+          branch_id: filters.branch_id || undefined,
         }),
         authInit(),
       )
@@ -450,7 +453,9 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
-  async function loadClientDebts(filters: { search?: string; only_with_debt?: boolean } = {}) {
+  async function loadClientDebts(
+    filters: { search?: string; only_with_debt?: boolean; branch_id?: string | null } = {},
+  ) {
     loading.value = true
     error.value = null
     traceId.value = null
@@ -459,6 +464,7 @@ export const useFinanceStore = defineStore('finance', () => {
         withQuery('/workshop/finance/debts/clients', {
           search: filters.search || undefined,
           only_with_debt: filters.only_with_debt,
+          branch_id: filters.branch_id || undefined,
         }),
         authInit(),
       )
@@ -472,7 +478,7 @@ export const useFinanceStore = defineStore('finance', () => {
   async function loadStatement(
     side: 'suppliers' | 'clients',
     counterpartyId: string,
-    filters: { date_from?: string | null; date_to?: string | null } = {},
+    filters: { date_from?: string | null; date_to?: string | null; branch_id?: string | null } = {},
   ) {
     loading.value = true
     error.value = null
@@ -482,6 +488,7 @@ export const useFinanceStore = defineStore('finance', () => {
         withQuery(`/workshop/finance/debts/${side}/${counterpartyId}/statement`, {
           date_from: filters.date_from || undefined,
           date_to: filters.date_to || undefined,
+          branch_id: filters.branch_id || undefined,
         }),
         authInit(),
       )
@@ -497,7 +504,7 @@ export const useFinanceStore = defineStore('finance', () => {
   async function downloadStatementPdf(
     side: 'suppliers' | 'clients',
     counterpartyId: string,
-    filters: { date_from?: string | null; date_to?: string | null } = {},
+    filters: { date_from?: string | null; date_to?: string | null; branch_id?: string | null } = {},
     filename = 'akt-sverka.pdf',
   ) {
     statementPdfLoading.value = true
@@ -508,6 +515,7 @@ export const useFinanceStore = defineStore('finance', () => {
         withQuery(`/workshop/finance/debts/${side}/${counterpartyId}/statement.pdf`, {
           date_from: filters.date_from || undefined,
           date_to: filters.date_to || undefined,
+          branch_id: filters.branch_id || undefined,
         }),
         filename,
         authInit(),

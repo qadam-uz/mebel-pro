@@ -37,12 +37,13 @@ const error = ref<string | null>(null)
 const isSaving = ref(false)
 
 const accountLabel = computed(() => auth.displayName)
-const scopeLabel = computed(() => {
-  if (auth.me?.principal_type === 'workshop_user') {
-    return auth.me.is_owner ? 'Rahbar · barcha ruxsatlar' : `${auth.me.grants.length} ruxsat`
-  }
-  if (auth.me?.principal_type === 'platform_user') return 'Platforma operatori'
-  return auth.me?.preferred_branch_id ? 'Afzal filial tanlangan' : 'Afzal filial tanlanmagan'
+// The API's own words never reach the screen (QAD-182): `active` is a value in
+// a column, «Faol» is what a person reads.
+const accountStatusLabel = computed(() => {
+  const status = auth.me?.status ?? 'active'
+  if (status === 'active') return 'Faol'
+  if (status === 'blocked') return 'Bloklangan'
+  return status
 })
 const workshopProfileSubtitle = computed(() => {
   const role = auth.me?.is_owner ? 'Rahbar' : 'Xodim'
@@ -199,15 +200,9 @@ onMounted(async () => {
           </div>
           <div class="row-item">
             <div>
-              <div class="nm">Scope</div>
+              <div class="nm">Holat</div>
             </div>
-            <div class="meta">{{ scopeLabel }}</div>
-          </div>
-          <div class="row-item">
-            <div>
-              <div class="nm">Status</div>
-            </div>
-            <div class="meta">{{ auth.me?.status ?? 'active' }}</div>
+            <div class="meta">{{ accountStatusLabel }}</div>
           </div>
         </div>
       </div>

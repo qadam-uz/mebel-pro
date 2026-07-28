@@ -1,3 +1,4 @@
+import { formatStockUnit } from '@/shared/formatters'
 import type { MaterialKind } from '@/shared/stores/admin'
 
 // QAD-159: the branch material's `min_stock` is the **low-stock alert threshold**,
@@ -17,8 +18,9 @@ export function defaultLowStockThreshold(kind: MaterialKind): number {
   return DEFAULTS[kind] ?? DEFAULTS.panel
 }
 
-// Display unit for the threshold input: panels count in pieces, edge tape in
-// metres (the API stores edge stock in millimetres).
+// Display unit for the threshold input. Defers to `formatStockUnit` so the
+// threshold is never named differently from the quantity it is compared
+// against — «5 dona» beside «5 panel» for one number was the QAD-182 defect.
 export function thresholdUnit(kind: MaterialKind): string {
-  return kind === 'edge' ? 'm' : 'dona'
+  return formatStockUnit(kind === 'edge' ? 'metre' : 'panel')
 }

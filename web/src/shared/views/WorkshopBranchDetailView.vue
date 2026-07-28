@@ -21,7 +21,7 @@ import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
 import { useOnboardingContinuation } from '@/shared/composables/useOnboardingContinuation'
 import { useToast } from '@/shared/composables/useToast'
-import { formatTiyin, parseSomToTiyin } from '@/shared/formatters'
+import { parseSomToTiyin } from '@/shared/formatters'
 import { useWorkshopStore } from '@/shared/stores/workshop'
 
 type BranchField =
@@ -467,8 +467,11 @@ onMounted(refreshBranch)
             {{ branchFieldErrors.phones }}
           </p>
           <div class="grid gap-3 md:grid-cols-2" data-onboard="branch-pricing">
+            <!-- The unit is the price. `subtotal_cutting = panels_used ×
+                 cutting_rate` and edge labour is `length_mm × rate ÷ 1000`, so
+                 one is per panel and the other per metre (QAD-182). -->
             <label class="field" for="branch-detail-cutting-rate">
-              <span>Kesish narxi (so'm)</span>
+              <span>Kesish narxi (so'm / panel)</span>
               <input
                 id="branch-detail-cutting-rate"
                 v-model="pricingForm.cuttingRateSom"
@@ -479,9 +482,6 @@ onMounted(refreshBranch)
                   branchFieldErrors.cuttingRate ? 'branch-detail-cutting-rate-error' : undefined
                 "
               />
-              <small v-if="cuttingRateTiyin !== null" class="text-ink-muted">
-                = {{ formatTiyin(cuttingRateTiyin) }}
-              </small>
               <span
                 v-if="branchFieldErrors.cuttingRate"
                 id="branch-detail-cutting-rate-error"
@@ -491,7 +491,7 @@ onMounted(refreshBranch)
               </span>
             </label>
             <label class="field" for="branch-detail-edge-rate">
-              <span>Kromka yopishtirish narxi (so'm)</span>
+              <span>Kromka yopishtirish narxi (so'm / m)</span>
               <input
                 id="branch-detail-edge-rate"
                 v-model="pricingForm.edgeBandingRateSom"
@@ -502,9 +502,6 @@ onMounted(refreshBranch)
                   branchFieldErrors.edgeBandingRate ? 'branch-detail-edge-rate-error' : undefined
                 "
               />
-              <small v-if="edgeBandingRateTiyin !== null" class="text-ink-muted">
-                = {{ formatTiyin(edgeBandingRateTiyin) }}
-              </small>
               <span
                 v-if="branchFieldErrors.edgeBandingRate"
                 id="branch-detail-edge-rate-error"

@@ -243,6 +243,32 @@
     border-color: var(--color-accent);
   }
 
+  /* A unit that stays put. Where the unit changes the meaning of the number by
+     orders of magnitude — so'm per metre vs so'm per panel — it cannot be a
+     placeholder, because a placeholder is gone the moment the operator types
+     (QAD-182). The suffix sits inside the field and the input reserves room for
+     it, so the digits never run underneath. */
+  .mp-unit-field {
+    position: relative;
+    display: block;
+  }
+
+  .mp-unit-field > .mp-input {
+    padding-right: 4.75rem;
+  }
+
+  .mp-unit-suffix {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+  }
+
   /* iOS Safari auto-zooms when focusing a sub-16px control; pin form controls
      to 16px on phones so dimension/material entry doesn't jolt the page (CB-68).
      No maximum-scale on the viewport — that would block accessibility zoom. */

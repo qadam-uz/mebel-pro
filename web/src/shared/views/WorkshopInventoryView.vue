@@ -18,6 +18,8 @@ import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
+import DateField from '@/shared/components/DateField.vue'
+import FilterStatus from '@/shared/components/FilterStatus.vue'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
 import FormSelect from '@/shared/components/FormSelect.vue'
 import PhoneInput from '@/shared/components/PhoneInput.vue'
@@ -62,6 +64,11 @@ const inventoryTabs: ChoiceOption[] = [
 ]
 const search = ref('')
 const lowOnly = ref(false)
+
+// A branch with 30 materials told the operator it had none, because the empty
+// state did not know a search was active (QAD-182). First-run and
+// filtered-empty are different facts and get different copy.
+const stockFiltered = computed(() => search.value.trim().length > 0 || lowOnly.value)
 const txPreset = ref<DateRangePreset>('days30')
 const initialTxRange = presetRange('days30')
 const txDateFrom = ref(initialTxRange.from ?? '')
@@ -235,11 +242,14 @@ watch(
   },
 )
 
-// The unit a line's price is entered per — panel piece for panels, metre for edges.
+// The unit a line's price is entered per — one panel for panels, one metre for
+// edges. Rendered as a persistent suffix inside the field, never as a
+// placeholder: the difference between 18 so'm/m and 1 800 so'm/m is the whole
+// cost base, and a hint that disappears when you type is not a label (QAD-182).
 function linePriceUnit(line: InvoiceLineDraft) {
   const item = stockItemByMaterial(line.materialId)
   if (!item) return "so'm"
-  return isMetreUnit(item.display_unit) ? "1 metr, so'm" : "1 dona, so'm"
+  return isMetreUnit(item.display_unit) ? "so'm/m" : "so'm/panel"
 }
 
 function lineQuantityUnit(line: InvoiceLineDraft) {
@@ -874,6 +884,22 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <FilterStatus
+        v-if="activeTab === 'stock'"
+        :active="stockFiltered"
+        :loading="workshop.loading"
+        :count="workshop.stockItems.length"
+        noun="material"
+        :on-reset="
+          search.trim() && lowOnly
+            ? () => {
+                search = ''
+                lowOnly = false
+              }
+            : null
+        "
+      />
+
       <div v-if="activeTab === 'stock'" class="mb-4 grid grid-cols-2 gap-2">
         <button type="button" class="mp-button mp-button-primary" @click="openInvoiceModal">
           Kirim
@@ -901,13 +927,10 @@ onBeforeUnmount(() => {
             />
             <label class="field">
               <span>Kirim sanasi</span>
-              <input
-                v-model="invoiceForm.invoiceDate"
-                type="date"
-                class="mp-input"
-                :max="today"
-                required
-              />
+              <!-- The last native date input in the app (QAD-182). It rendered
+                   in the browser's OS locale, so the same faktura read
+                   28/07/2026 here and 07/28/2026 on an en-US machine. -->
+              <DateField v-model="invoiceForm.invoiceDate" :max="today" required />
             </label>
             <div class="field">
               <span>Raqam</span>
@@ -950,23 +973,33 @@ onBeforeUnmount(() => {
                       />
                     </td>
                     <td class="min-w-28">
-                      <input
-                        v-model="line.quantity"
-                        class="mp-input text-right"
-                        inputmode="decimal"
-                        :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
-                        :placeholder="lineQuantityUnit(line) || 'miqdor'"
-                      />
+                      <span class="mp-unit-field">
+                        <input
+                          v-model="line.quantity"
+                          class="mp-input text-right"
+                          inputmode="decimal"
+                          :aria-label="`Miqdor ${lineQuantityUnit(line)}`"
+                          placeholder="0"
+                        />
+                        <span class="mp-unit-suffix" aria-hidden="true">{{
+                          lineQuantityUnit(line)
+                        }}</span>
+                      </span>
                     </td>
                     <td class="min-w-32">
-                      <input
-                        v-model="line.unitPrice"
-                        class="mp-input text-right"
-                        inputmode="decimal"
-                        :aria-label="`Narx ${linePriceUnit(line)}`"
-                        :placeholder="linePriceUnit(line)"
-                        @input="line.priceEdited = true"
-                      />
+                      <span class="mp-unit-field">
+                        <input
+                          v-model="line.unitPrice"
+                          class="mp-input text-right"
+                          inputmode="decimal"
+                          :aria-label="`Narx ${linePriceUnit(line)}`"
+                          placeholder="0"
+                          @input="line.priceEdited = true"
+                        />
+                        <span class="mp-unit-suffix" aria-hidden="true">{{
+                          linePriceUnit(line)
+                        }}</span>
+                      </span>
                       <small
                         v-if="lineLastPriceHint(line)"
                         class="block text-[11px] text-ink-muted"
@@ -1193,15 +1226,21 @@ onBeforeUnmount(() => {
                     "
                   >
                     <span class="pd"></span
-                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'OK' }}
+                    >{{ isNegative(item) ? 'Manfiy' : item.is_low_stock ? 'Kam' : 'Yetarli' }}
                   </span>
                 </td>
               </tr>
               <tr v-if="workshop.stockItems.length === 0">
                 <td colspan="4">
                   <div class="st-empty !border-0 !py-8">
-                    <h3>Bu filialga material qo'shilmagan</h3>
-                    <p>Katalogdan material qo'shing.</p>
+                    <template v-if="stockFiltered">
+                      <h3>Filtrga mos material topilmadi</h3>
+                      <p>Qidiruvni o'zgartiring yoki tozalang.</p>
+                    </template>
+                    <template v-else>
+                      <h3>Bu filialga material qo'shilmagan</h3>
+                      <p>Katalogdan material qo'shing.</p>
+                    </template>
                   </div>
                 </td>
               </tr>

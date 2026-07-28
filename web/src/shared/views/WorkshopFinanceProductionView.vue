@@ -2,10 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { presetRange, type DateRangePreset } from '@/shared/app/dateRange'
-import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import DateRangePicker from '@/shared/components/DateRangePicker.vue'
-import ProjectDropdown from '@/shared/components/ProjectDropdown.vue'
 import { useWorkshopPermissions } from '@/shared/composables/useWorkshopPermissions'
 import { formatStockQuantity } from '@/shared/formatters'
 import {
@@ -23,25 +21,8 @@ const initialRange = presetRange('month', today)
 const datePreset = ref<DateRangePreset>('month')
 const dateFrom = ref(initialRange.from ?? '')
 const dateTo = ref(initialRange.to ?? '')
-const branchId = ref('all')
-
 const financePermissions = [p.manageFinance, p.viewFinanceReports]
 const canViewFinance = computed(() => permissions.canAny(financePermissions))
-const accessibleBranches = computed(() =>
-  permissions.accessibleBranches(workshop.branches, financePermissions),
-)
-
-const branchOptions = computed<DropdownOption[]>(() => [
-  { value: 'all', label: 'Barcha filiallar' },
-  ...accessibleBranches.value.map((branch) => ({ value: branch.id, label: branch.name })),
-])
-
-function applyContextBranch() {
-  const contextBranchId = workshop.selectedBranchContext
-  if (!contextBranchId) return
-  if (!accessibleBranches.value.some((branch) => branch.id === contextBranchId)) return
-  branchId.value = contextBranchId
-}
 
 // One entry per edge material / thickness so the cell can stack them as lines
 // (label left, metres right) instead of one unreadable `·`-joined string.
@@ -78,22 +59,18 @@ function edgeLabel(line: WorkerProductionEdgeLine) {
 
 async function refresh() {
   if (!canViewFinance.value) return
+  // Workshop-wide by design (QAD-182): the report exists to compare workers,
+  // and a worker with grants in two branches has one body of work, not two.
   await finance.loadProduction({
     date_from: dateFrom.value,
     date_to: dateTo.value,
-    branch_id: branchId.value === 'all' ? null : branchId.value,
+    branch_id: null,
   })
 }
 
 onMounted(async () => {
   await workshop.loadBranchContext().catch(() => undefined)
-  applyContextBranch()
   if (canViewFinance.value) await refresh()
-})
-
-watch(branchId, (value) => {
-  if (value !== 'all') workshop.setSelectedBranchContext(value)
-  void refresh()
 })
 
 // Date range auto-applies now that the explicit "Qo'llash" button is gone.
@@ -102,13 +79,6 @@ watch([dateFrom, dateTo], () => {
   window.clearTimeout(dateTimer)
   dateTimer = window.setTimeout(() => void refresh(), 250)
 })
-
-watch(
-  () => workshop.selectedBranchContext,
-  () => {
-    applyContextBranch()
-  },
-)
 </script>
 
 <template>
@@ -126,7 +96,6 @@ watch(
     <!-- Bare filter row on the page background, like every other page — this was
          the only view wrapping its filters in a surface card. -->
     <div v-else class="mp-filters">
-      <ProjectDropdown v-model="branchId" label="Filial" :options="branchOptions" top-label />
       <DateRangePicker
         v-model:preset="datePreset"
         v-model:date-from="dateFrom"
