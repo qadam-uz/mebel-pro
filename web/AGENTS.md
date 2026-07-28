@@ -176,6 +176,22 @@ the compensation, and the ratio behind it (`--app-zoom`) is written down once. R
 are still fine for a *cap* that only needs to stay under the viewport
 (`max-height: min(90vh, …)` on a modal).
 
+### Popovers escape their container
+
+Anything that opens over the page — dropdown, action menu, date picker — **teleports to
+`<body>`, is `position: fixed`, and is placed from `overlayRect()` of its trigger**
+(`ProjectDropdown`, `DateField`, `ActionMenu`). Rendering it absolutely inside its own row or
+card looks fine until the ancestor clips: `.table-wrap` is `overflow-x: auto`, and per spec one
+non-`visible` axis makes the other a scroll container too, so a panel inside it both **grows the
+wrapper's `scrollHeight`** — focusing an item then scrolls rows under the opaque sticky header —
+and **gets clipped**. Flipping the panel up doesn't save it: on a short table there is no room
+in either direction. Leaving the container is the only fix that holds at every table height.
+
+Teleporting moves the panel out of the trigger's subtree, so two things stop working unless you
+carry them across: an outside-click handler that tests only the wrapper will close the menu on
+the panel's own `pointerdown` (test the panel too), and a `keydown` handler bound to the wrapper
+never sees Esc pressed with focus inside the panel (bind it on both).
+
 ### Verifying UI work
 
 The check gates are necessary, not sufficient. Run the app, seed realistic data

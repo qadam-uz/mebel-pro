@@ -3234,11 +3234,12 @@
     color: var(--color-accent);
   }
 
+  /* Fixed, and teleported to `<body>` — a row's panel must escape `.table-wrap`,
+     which clips on both axes because it scrolls on one. `top`/`left`/`max-height`
+     come from `ActionMenu`'s own measurement (QAD-184). */
   .mp-action-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 30;
+    position: fixed;
+    z-index: 60;
     min-width: 210px;
     max-height: 320px;
     overflow-y: auto;
@@ -3247,14 +3248,6 @@
     background: var(--color-elevated);
     box-shadow: 0 18px 44px -24px color-mix(in srgb, var(--color-ink) 48%, transparent);
     padding: 5px;
-  }
-
-  /* Flipped up when the panel would not fit below the trigger — on the last row
-     of a table it otherwise opens into the scroll container's hidden overflow
-     and only its top few pixels are visible (QAD-184). */
-  .mp-action-menu.is-above {
-    top: auto;
-    bottom: calc(100% + 6px);
   }
 
   .mp-action-menu-item {
