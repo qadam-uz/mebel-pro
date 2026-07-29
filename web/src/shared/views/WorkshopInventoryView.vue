@@ -16,6 +16,8 @@ import { useRolePath } from '@/shared/app/paths'
 import type { DropdownOption } from '@/shared/app/roleConfig'
 import { workshopPermissions as p } from '@/shared/app/workshopPermissions'
 import { stockTransactionTypeLabel } from '@/shared/app/workshopUi'
+import ActionMenu, { type ActionMenuItem } from '@/shared/components/ActionMenu.vue'
+import AppIcon from '@/shared/components/AppIcon.vue'
 import AppModal from '@/shared/components/AppModal.vue'
 import AppTabs from '@/shared/components/AppTabs.vue'
 import DateField from '@/shared/components/DateField.vue'
@@ -660,6 +662,18 @@ async function saveSupplier() {
   }
 }
 
+// The row itself edits (QAD-184), so the menu holds the one remaining action —
+// still worded, never a bare glyph, because it changes who can be paid.
+function supplierMenuItems(supplier: Supplier): ActionMenuItem[] {
+  return [
+    {
+      label: supplier.status === 'active' ? 'Bloklash' : 'Faollashtirish',
+      icon: supplier.status === 'active' ? 'ban' : 'check',
+      disabled: supplierSaving.value,
+    },
+  ]
+}
+
 async function toggleSupplierStatus(supplier: Supplier) {
   if (!selectedBranchId.value) return
   supplierSaving.value = true
@@ -1277,7 +1291,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody>
               <template v-for="invoice in workshop.supplierInvoices" :key="invoice.id">
-                <tr>
+                <tr class="row-clickable">
                   <td class="nm font-mono">{{ invoice.invoice_no }}</td>
                   <td>
                     {{ invoice.supplier_name ?? '—' }}
@@ -1313,14 +1327,21 @@ onBeforeUnmount(() => {
                     </small>
                   </td>
                   <td class="right">
+                    <!-- The chevron is the whole row's control (QAD-184): it
+                         stretches over the row and states the row it expands,
+                         while `aria-expanded` carries open/closed. -->
                     <button
                       type="button"
-                      class="mp-button mp-button-outline min-h-8 px-2 text-xs"
+                      class="mp-row-icon row-open"
+                      :aria-label="`${invoice.invoice_no} qatorlari`"
                       :aria-expanded="isInvoiceExpanded(invoice.id)"
                       :aria-controls="`invoice-lines-${invoice.id}`"
                       @click="toggleInvoice(invoice.id)"
                     >
-                      {{ isInvoiceExpanded(invoice.id) ? 'Yopish' : 'Qatorlar' }}
+                      <AppIcon
+                        name="chevron-down"
+                        :class="isInvoiceExpanded(invoice.id) ? 'rotate-180' : ''"
+                      />
                     </button>
                   </td>
                 </tr>
@@ -1575,8 +1596,20 @@ onBeforeUnmount(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="supplier in workshop.suppliers" :key="supplier.id">
-                  <td class="nm">{{ supplier.name }}</td>
+                <tr v-for="supplier in workshop.suppliers" :key="supplier.id" class="row-clickable">
+                  <td class="nm">
+                    <!-- The name runs the row's primary action — edit (QAD-184);
+                         blocking lives in the ⋯ menu, with its word intact. -->
+                    <button
+                      type="button"
+                      class="row-open row-open-text"
+                      :aria-label="`${supplier.name} — tahrirlash`"
+                      :disabled="supplierSaving"
+                      @click="editSupplier(supplier)"
+                    >
+                      {{ supplier.name }}
+                    </button>
+                  </td>
                   <td class="num">{{ supplier.phone ?? '—' }}</td>
                   <td>{{ supplier.note ?? '—' }}</td>
                   <td v-if="canSeeDebts" class="right">
@@ -1595,22 +1628,11 @@ onBeforeUnmount(() => {
                     </span>
                   </td>
                   <td class="right">
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline mr-2 min-h-8 px-2 text-xs"
-                      :disabled="supplierSaving"
-                      @click="editSupplier(supplier)"
-                    >
-                      Tahrirlash
-                    </button>
-                    <button
-                      type="button"
-                      class="mp-button mp-button-outline min-h-8 px-2 text-xs"
-                      :disabled="supplierSaving"
-                      @click="toggleSupplierStatus(supplier)"
-                    >
-                      {{ supplier.status === 'active' ? 'Bloklash' : 'Faollashtirish' }}
-                    </button>
+                    <ActionMenu
+                      :items="supplierMenuItems(supplier)"
+                      :label="`${supplier.name} amallari`"
+                      @select="toggleSupplierStatus(supplier)"
+                    />
                   </td>
                 </tr>
                 <tr v-if="workshop.suppliers.length === 0">

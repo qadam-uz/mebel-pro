@@ -287,7 +287,9 @@ test('owner adds a branch material and records priced stock movement with prefil
     .filter({ has: page.getByRole('cell', { name: `Supplier ${id}` }) })
   await expect(invoiceRow).toContainText('1 pozitsiya')
   await expect(invoiceRow.getByText("To'lanmagan")).toBeVisible()
-  await invoiceRow.getByRole('button', { name: 'Qatorlar' }).click()
+  // QAD-184: the row expands itself — the control is an icon-only chevron named
+  // after the faktura it opens, not a "Qatorlar" label.
+  await invoiceRow.getByRole('button', { name: /qatorlari/ }).click()
   // `exact` matters: the expanded-lines container is itself a cell whose
   // accessible name contains the material name, so a loose match hits two.
   await expect(page.getByRole('cell', { name: material.name, exact: true })).toBeVisible()

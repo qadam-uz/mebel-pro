@@ -3037,6 +3037,77 @@
     background: var(--color-accent-soft);
   }
 
+  /* QAD-184 — a row whose primary action is reachable from anywhere in it. The
+     control stays a real link/button inside one cell and is stretched across
+     the row by a pseudo-element; `@click` on `<tr>` would have no tab stop, no
+     Enter/Space, and would kill ⌘-click and middle-click on navigation rows.
+     Opt-in class: `.tbl` itself is shared by all three SPAs. */
+  .tbl tr.row-clickable {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .tbl tr.row-clickable:hover {
+    background: var(--color-sunk);
+  }
+
+  .tbl tr.row-clickable .row-open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  /* A control that keeps its own job inside a clickable row (the Faol switch,
+     the ⋯ menu) has to sit above the stretched layer. Never put this on the
+     cell holding `.row-open` — a positioned ancestor becomes the containing
+     block and shrinks the stretch to that one cell. */
+  .tbl tr.row-clickable .row-above,
+  .tbl tr.row-clickable .mp-action-menu-wrap {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* The stretched control wears its cell's own type — the row is the
+     affordance, so button chrome here would read as a second control. Declared
+     above `.nm`/`.id` so a cell class still wins on colour and weight. */
+  .tbl .row-open-text {
+    display: inline;
+    border: 0;
+    background: none;
+    color: inherit;
+    padding: 0;
+    text-align: inherit;
+  }
+
+  /* Icon-only row control (QAD-184): the glyph alone, because the row around it
+     is the hit target — a button box here would only add noise back. Position
+     stays static on purpose: a `.row-open` element must not become a containing
+     block, or its stretched ::after would cover the control instead of the row. */
+  .mp-row-icon {
+    display: inline-grid;
+    min-width: 24px;
+    min-height: 24px;
+    place-items: center;
+    border: 0;
+    background: none;
+    color: var(--color-ink-muted);
+    padding: 0;
+  }
+
+  .mp-row-icon .client-icon {
+    width: 16px;
+    height: 16px;
+    /* `rotate`, not `transform`: Tailwind v4's `rotate-180` emits the standalone
+       `rotate` property, so a transition on `transform` never fires and the
+       chevron snaps instead of turning. */
+    transition: rotate 160ms ease;
+  }
+
+  .mp-row-icon:hover,
+  .tbl tr:hover .mp-row-icon {
+    color: var(--color-accent);
+  }
+
   .tbl .id,
   .id,
   .num {
@@ -3135,10 +3206,23 @@
   }
 
   .mp-action-icon-button {
+    position: relative;
     width: 34px;
     justify-content: center;
     font-size: 1rem;
     letter-spacing: 1px;
+  }
+
+  /* The visible box stays 34×32 so table rows keep their density, but the tap
+     target under it is the 44×44 the UX bar asks for (QAD-184). */
+  .mp-action-icon-button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
   }
 
   .mp-action-menu-button:hover,
@@ -3150,11 +3234,12 @@
     color: var(--color-accent);
   }
 
+  /* Fixed, and teleported to `<body>` — a row's panel must escape `.table-wrap`,
+     which clips on both axes because it scrolls on one. `top`/`left`/`max-height`
+     come from `ActionMenu`'s own measurement (QAD-184). */
   .mp-action-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 30;
+    position: fixed;
+    z-index: 60;
     min-width: 210px;
     max-height: 320px;
     overflow-y: auto;
@@ -3180,6 +3265,14 @@
     text-align: left;
     text-decoration: none;
     white-space: nowrap;
+  }
+
+  /* A menu item may lead with a glyph — the word still carries the meaning, the
+     icon only makes the danger item readable as more than red text (QAD-184). */
+  .mp-action-menu-item .client-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
   }
 
   .mp-action-menu-item:hover,

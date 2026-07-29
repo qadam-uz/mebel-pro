@@ -180,6 +180,36 @@ test('owner records order income and standalone expense', async ({ page, request
   await expensePanel.getByLabel("Summa (so'm)").fill('1000')
   await expensePanel.getByRole('button', { name: 'Yozish' }).click()
   await expect(page.getByText('E2E standalone expense')).toBeVisible()
+
+  // `.table-wrap` is `overflow-x: auto`, so it clips on both axes. A row's ⋯
+  // panel rendered inside it grew the wrapper's scrollHeight — the focus-on-open
+  // then scrolled rows under the opaque sticky header — and was clipped besides.
+  // It is teleported out now, so opening it must leave the table exactly where
+  // it was and put the panel somewhere fully on screen (QAD-184).
+  await page.locator('tbody tr').last().getByRole('button', { name: /amallari/ }).click()
+  await expect(page.getByRole('menu')).toBeVisible()
+  const geometry = await page.evaluate(() => {
+    const wrap = document.querySelector('.table-wrap')!
+    const panel = document.querySelector('.mp-action-menu')!.getBoundingClientRect()
+    const header = document.querySelector('thead th')!.getBoundingClientRect()
+    const firstRow = document.querySelector('tbody tr')!.getBoundingClientRect()
+    return {
+      wrapScrollTop: wrap.scrollTop,
+      rowHiddenUnderHeader: Math.round(header.bottom - firstRow.top),
+      panelEscapedTheClip: !wrap.contains(document.querySelector('.mp-action-menu')),
+      panelOnScreen:
+        panel.top >= 0 &&
+        panel.left >= 0 &&
+        panel.bottom <= window.innerHeight &&
+        panel.right <= window.innerWidth,
+    }
+  })
+  expect(geometry).toEqual({
+    wrapScrollTop: 0,
+    rowHiddenUnderHeader: 0,
+    panelEscapedTheClip: true,
+    panelOnScreen: true,
+  })
 })
 
 test('owner reverts with a reason and retries a stale cancel after 409', async ({
